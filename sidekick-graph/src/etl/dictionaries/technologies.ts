@@ -1,0 +1,60 @@
+export interface TechnologyEntry {
+  name: string;
+  category: "protocol" | "platform" | "framework" | "infrastructure" | "ai" | "language" | "database" | "tool";
+  aliases?: string[];
+}
+
+export const technologies: TechnologyEntry[] = [
+  // Protocols & Standards
+  { name: "FHIR", category: "protocol", aliases: ["FHIR R4", "HL7 FHIR"] },
+  { name: "HL7", category: "protocol", aliases: ["HL7 V2", "HL7v2"] },
+  { name: "SMART on FHIR", category: "protocol", aliases: ["SMART"] },
+  { name: "CDS Hooks", category: "protocol" },
+  { name: "OAuth 2.0", category: "protocol", aliases: ["OAuth"] },
+  { name: "Bulk FHIR", category: "protocol" },
+
+  // Platforms
+  { name: "Medplum CDR", category: "platform" },
+  { name: "Vercel", category: "platform" },
+  { name: "AWS", category: "platform", aliases: ["Amazon Web Services"] },
+  { name: "GCP", category: "platform", aliases: ["Google Cloud", "Google Cloud Platform"] },
+  { name: "BigQuery", category: "database" },
+  { name: "Expo Push Service", category: "platform", aliases: ["Expo Push", "Expo Notifications"] },
+
+  // Frameworks
+  { name: "Next.js", category: "framework", aliases: ["NextJS", "Next"] },
+  { name: "React", category: "framework", aliases: ["ReactJS"] },
+  { name: "React Native", category: "framework" },
+  { name: "Electron", category: "framework" },
+  { name: "Express.js", category: "framework", aliases: ["Express"] },
+  { name: "Expo", category: "framework", aliases: ["Expo SDK"] },
+  { name: "Ruby on Rails", category: "framework", aliases: ["Rails"] },
+
+  // Infrastructure
+  { name: "Docker", category: "infrastructure" },
+  { name: "Redis", category: "infrastructure" },
+  { name: "Memgraph", category: "database", aliases: ["Memgraph DB"] },
+  { name: "PostgreSQL", category: "database", aliases: ["Postgres", "Neon Postgres"] },
+  { name: "Firestore", category: "database", aliases: ["Google Firestore"] },
+
+  // AI
+  { name: "Claude", category: "ai", aliases: ["Claude AI", "Anthropic Claude"] },
+  { name: "GPT-4", category: "ai", aliases: ["ChatGPT", "OpenAI"] },
+  { name: "Sonnet", category: "ai", aliases: ["Claude Sonnet"] },
+  { name: "Opus", category: "ai", aliases: ["Claude Opus"] },
+  { name: "Ollama", category: "ai" },
+  { name: "Google Vertex AI", category: "ai", aliases: ["Vertex AI", "Vertex"] },
+  { name: "AWS Bedrock", category: "ai", aliases: ["Bedrock"] },
+
+  // Tools
+  { name: "Tailwind CSS", category: "framework", aliases: ["Tailwind"] },
+  { name: "TypeScript", category: "language" },
+  { name: "Zod", category: "tool" },
+  { name: "Prisma", category: "tool" },
+  { name: "Vitest", category: "tool" },
+  { name: "Playwright", category: "tool" },
+  { name: "expo-notifications", category: "tool" },
+  { name: "MCP", category: "protocol", aliases: ["Model Context Protocol"] },
+  { name: "CDK", category: "tool", aliases: ["AWS CDK"] },
+  { name: "GraphQL", category: "protocol" },
+];

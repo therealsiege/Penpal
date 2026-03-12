@@ -1,0 +1,553 @@
+import fs from "fs";
+import path from "path";
+import { glob } from "glob";
+import { config, resolveVaultPath } from "../shared/config.js";
+import { verifyConnection, closeConnections } from "../shared/connections.js";
+import { createSchema, dropAll } from "./db/schema.js";
+import { GraphImporter } from "./graph/importer.js";
+import { parseMarkdownFile } from "./parsers/markdown-parser.js";
+import { parseLeadFromDocument } from "./parsers/lead-parser.js";
+import { parseCRMCsv } from "./parsers/csv-parser.js";
+import { extractLinks, buildFilenameIndex } from "./parsers/link-extractor.js";
+import { extractEntities } from "./parsers/entity-extractor.js";
+import { chunkDocument, freeEncoder } from "./parsers/chunker.js";
+import { generateEmbeddings } from "./embeddings/embedder.js";
+import { EmbeddingCache } from "./embeddings/embedding-cache.js";
+import {
+  ensureCollections,
+  upsertChunks,
+  upsertSummaries,
+  ChunkPoint,
+  SummaryPoint,
+} from "./db/qdrant-client.js";
+import { extractWithLLM, saveExtractionCache } from "./extraction/llm-extractor.js";
+import { reconcileEntities, writeNewEntitiesReport, NewEntitiesReport } from "./extraction/entity-reconciler.js";
+import { seedSalesStages, trackLeadStage } from "./sales/pipeline-tracker.js";
+import { mapLeadToTerritory } from "./sales/territory-mapper.js";
+import { scoreLead } from "./sales/lead-scorer.js";
+import { runAllAnalytics } from "./graph/analytics.js";
+import {
+  buildDocumentNode,
+  buildFolderNode,
+  buildTagNode,
+  buildPersonNode,
+  buildCompanyNode,
+  buildTechnologyNode,
+  buildEHRNode,
+  buildSkillNode,
+  buildRegulationNode,
+  buildLeadNodeFromDoc,
+  buildLeadNodeFromCRM,
+  buildChunkNode,
+  buildMarketNode,
+  buildEventNode,
+} from "./graph/node-builder.js";
+import {
+  buildInFolderRel,
+  buildParentFolderRel,
+  buildTaggedWithRel,
+  buildLinksToRel,
+  buildMentionRels,
+  buildAboutLeadRel,
+  buildWorksAtRels,
+  buildCompetesWithRels,
+  buildLeadUsesEHRRel,
+  buildHasChunkRel,
+  buildNextChunkRel,
+  buildOperatesInRel,
+  buildHadEventRel,
+  buildReportedInRel,
+  resolveEHRName,
+} from "./graph/rel-builder.js";
+import { stableId } from "../shared/utils/id.js";
+import { normalizeName } from "../shared/utils/normalize.js";
+import { companies } from "./dictionaries/companies.js";
+import { people } from "./dictionaries/people.js";
+import { technologies } from "./dictionaries/technologies.js";
+import { ehrSystems } from "./dictionaries/ehr-systems.js";
+import { regulations } from "./dictionaries/regulations.js";
+import { skills } from "./dictionaries/skills.js";
+
+const isClean = process.argv.includes("--clean");
+const skipEmbeddings = process.argv.includes("--skip-embeddings");
+const skipLLM = process.argv.includes("--skip-llm");
+const skipAnalytics = process.argv.includes("--skip-analytics");
+
+async function main() {
+  console.log("Sidekick Knowledge Base → Memgraph + Qdrant Import");
+  console.log(`Vault: ${config.vaultPath}`);
+  console.log(`Mode: ${isClean ? "CLEAN (drop + reimport)" : "UPSERT (merge)"}`);
+  if (skipEmbeddings) console.log("  Skipping embeddings (--skip-embeddings)");
+  if (skipLLM) console.log("  Skipping LLM extraction (--skip-llm)");
+  if (skipAnalytics) console.log("  Skipping MAGE analytics (--skip-analytics)");
+  console.log();
+
+  // 1. Connect
+  await verifyConnection();
+
+  // 2. Clean if requested
+  if (isClean) {
+    await dropAll();
+  }
+
+  // 3. Create schema
+  await createSchema();
+
+  const importer = new GraphImporter();
+
+  // 4. Seed dictionary nodes (companies, people, technologies, etc.)
+  console.log("\n--- Seeding dictionary nodes ---");
+  for (const c of companies) importer.addNode(buildCompanyNode(c));
+  for (const p of people) importer.addNode(buildPersonNode(p));
+  for (const t of technologies) importer.addNode(buildTechnologyNode(t));
+  for (const e of ehrSystems) importer.addNode(buildEHRNode(e));
+  for (const r of regulations) importer.addNode(buildRegulationNode(r));
+  for (const s of skills) importer.addNode(buildSkillNode(s));
+
+  // Phase 3: Seed sales stages
+  seedSalesStages(importer);
+
+  await importer.flushNodes();
+
+  // 5. Build cross-entity relationships from dictionaries
+  console.log("\n--- Building dictionary relationships ---");
+  importer.addRels(buildWorksAtRels());
+  importer.addRels(buildCompetesWithRels());
+
+  // 6. Walk vault directory → Folder nodes + PARENT_FOLDER
+  console.log("\n--- Walking vault directories ---");
+  const allDirs = new Set<string>();
+
+  const mdFiles = await glob("**/*.md", {
+    cwd: config.vaultPath,
+    ignore: config.skipDirs.map((d) => `${d}/**`),
+  });
+
+  // Collect all directories
+  for (const file of mdFiles) {
+    let dir = path.dirname(file);
+    while (dir && dir !== ".") {
+      allDirs.add(dir);
+      dir = path.dirname(dir);
+    }
+  }
+
+  // Create folder nodes and parent relationships
+  for (const dirPath of allDirs) {
+    const name = path.basename(dirPath);
+    const depth = dirPath.split(path.sep).length;
+    importer.addNode(buildFolderNode(dirPath, name, depth));
+
+    const parentPath = path.dirname(dirPath);
+    if (parentPath !== "." && allDirs.has(parentPath)) {
+      importer.addRel(buildParentFolderRel(dirPath, parentPath));
+    }
+  }
+  await importer.flushNodes();
+
+  // 7. Build filename index for Obsidian-style link resolution, then parse
+  buildFilenameIndex(mdFiles);
+  console.log(`\n--- Parsing ${mdFiles.length} markdown files ---`);
+  const tagSet = new Set<string>();
+  const docRelPaths = new Set<string>(); // for link resolution later
+  const pendingInternalLinks: { source: string; target: string }[] = [];
+
+  // Phase 1: Chunking + embedding data collection
+  const allChunks: { doc: ReturnType<typeof parseMarkdownFile>; chunks: ReturnType<typeof chunkDocument> }[] = [];
+
+  // Phase 2: Documents for LLM extraction
+  const docsForLLM: { relPath: string; rawContent: string; documentType: string }[] = [];
+
+  // Phase 3: Lead scoring data
+  const leadScoreUpdates: { leadName: string; leadCompany: string; score: number }[] = [];
+
+  for (const relPath of mdFiles) {
+    const absPath = path.join(config.vaultPath, relPath);
+    const doc = parseMarkdownFile(absPath);
+    docRelPaths.add(doc.relativePath);
+
+    // Document node
+    importer.addNode(buildDocumentNode(doc));
+
+    // IN_FOLDER relationship
+    const folderPath = path.dirname(doc.relativePath);
+    if (folderPath !== "." && allDirs.has(folderPath)) {
+      importer.addRel(buildInFolderRel(doc.relativePath, folderPath));
+    }
+
+    // Tags
+    for (const tag of doc.tags) {
+      tagSet.add(tag);
+      importer.addRel(buildTaggedWithRel(doc.relativePath, tag));
+    }
+
+    // Lead parsing
+    const lead = parseLeadFromDocument(doc);
+    if (lead) {
+      importer.addNode(buildLeadNodeFromDoc(lead, doc.relativePath));
+      importer.addRel(buildAboutLeadRel(doc.relativePath, lead.name, lead.company || ""));
+
+      // Lead → EHR
+      if (lead.emr) {
+        const ehrName = resolveEHRName(lead.emr);
+        if (ehrName) {
+          importer.addRel(buildLeadUsesEHRRel(lead.name, lead.company || "", ehrName));
+        }
+      }
+
+      // Phase 3: Track sales stage
+      if (lead.salesFunnel) {
+        trackLeadStage(importer, lead.name, lead.company || "", lead.salesFunnel);
+      }
+
+      // Phase 3: Map territory
+      if (lead.location) {
+        mapLeadToTerritory(importer, lead.name, lead.company || "", lead.location);
+      }
+
+      // Phase 3: Score lead
+      const score = scoreLead({
+        createdAt: lead.createdAt || "",
+        notes: lead.notes || "",
+        bio: lead.bio || "",
+        emr: lead.emr || "",
+        htnMember: lead.htnMember,
+        businessArm: lead.businessArm || "",
+        salesFunnel: lead.salesFunnel || "",
+        priority: lead.priority || "",
+      });
+      leadScoreUpdates.push({ leadName: lead.name, leadCompany: lead.company || "", score });
+    }
+
+    // Entity extraction (skip leads to avoid noise from template fields)
+    if (doc.documentType !== "lead") {
+      const entities = extractEntities(doc.rawContent);
+      importer.addRels(buildMentionRels(doc.relativePath, entities));
+    }
+
+    // Link extraction
+    const links = extractLinks(doc.rawContent, doc.relativePath);
+    for (const link of links.internal) {
+      pendingInternalLinks.push({
+        source: doc.relativePath,
+        target: link.target,
+      });
+    }
+
+    // Phase 1: Chunk document
+    const chunks = chunkDocument(doc.relativePath, doc.rawContent);
+    if (chunks.length > 0) {
+      allChunks.push({ doc, chunks });
+
+      // Add chunk nodes and relationships to graph
+      const docId = stableId("Document", doc.relativePath);
+      for (const chunk of chunks) {
+        importer.addNode(buildChunkNode(chunk, docId));
+        importer.addRel(buildHasChunkRel(doc.relativePath, chunk.documentPath, chunk.chunkIndex));
+      }
+      // NEXT_CHUNK chain
+      for (let i = 0; i < chunks.length - 1; i++) {
+        importer.addRel(buildNextChunkRel(doc.relativePath, i, i + 1));
+      }
+    }
+
+    // Phase 2: Collect for LLM extraction
+    if ((config.llmExtractionDocTypes as readonly string[]).includes(doc.documentType)) {
+      docsForLLM.push({
+        relPath: doc.relativePath,
+        rawContent: doc.rawContent,
+        documentType: doc.documentType,
+      });
+    }
+  }
+
+  // Free tiktoken encoder memory
+  freeEncoder();
+
+  // Create tag nodes
+  for (const tag of tagSet) {
+    importer.addNode(buildTagNode(tag));
+  }
+  await importer.flush();
+
+  // 8. Resolve internal links → LINKS_TO
+  console.log("\n--- Resolving internal links ---");
+  for (const { source, target } of pendingInternalLinks) {
+    if (docRelPaths.has(target)) {
+      importer.addRel(buildLinksToRel(source, target));
+    }
+  }
+
+  // 9. Parse CRM CSV
+  console.log("\n--- Parsing CRM CSV ---");
+  const crmPath = resolveVaultPath(config.crmCsvPath);
+  if (fs.existsSync(crmPath)) {
+    const crmRecords = parseCRMCsv(crmPath);
+    console.log(`  Found ${crmRecords.length} CRM records`);
+
+    for (const crm of crmRecords) {
+      importer.addNode(buildLeadNodeFromCRM(crm));
+
+      // Lead → EHR
+      if (crm.emr) {
+        const ehrName = resolveEHRName(crm.emr);
+        if (ehrName) {
+          importer.addRel(buildLeadUsesEHRRel(crm.name, crm.company || "", ehrName));
+        }
+      }
+
+      // Phase 3: Track sales stage from CRM
+      if (crm.salesFunnel) {
+        trackLeadStage(importer, crm.name, crm.company || "", crm.salesFunnel);
+      }
+
+      // Phase 3: Map territory from CRM
+      if (crm.location) {
+        mapLeadToTerritory(importer, crm.name, crm.company || "", crm.location);
+      }
+
+      // Phase 3: Score CRM leads
+      const score = scoreLead({
+        createdAt: crm.createdAt || "",
+        notes: crm.notes || "",
+        bio: crm.bio || "",
+        emr: crm.emr || "",
+        htnMember: crm.htnMember,
+        businessArm: crm.businessArm || "",
+        salesFunnel: crm.salesFunnel || "",
+        priority: crm.priority || "",
+      });
+      leadScoreUpdates.push({ leadName: crm.name, leadCompany: crm.company || "", score });
+    }
+  } else {
+    console.log("  CRM CSV not found, skipping");
+  }
+
+  // 10. Update lead scores as node properties
+  console.log("\n--- Updating lead scores ---");
+  for (const { leadName, leadCompany, score } of leadScoreUpdates) {
+    // Add score to existing Lead node via a property update node
+    importer.addNode({
+      label: "Lead",
+      properties: {
+        id: stableId("Lead", normalizeName(leadName), normalizeName(leadCompany)),
+        leadScore: score,
+      },
+    });
+  }
+  console.log(`  Scored ${leadScoreUpdates.length} leads`);
+
+  // 11. Final graph flush
+  console.log("\n--- Final graph flush ---");
+  await importer.flush();
+
+  // 12. Phase 1: Embeddings + Qdrant
+  if (!skipEmbeddings && config.openaiApiKey) {
+    console.log("\n--- Phase 1: Generating embeddings + Qdrant upsert ---");
+    await ensureCollections();
+
+    const embeddingCache = new EmbeddingCache(config.embeddingCachePath);
+    let totalChunks = 0;
+    let cachedChunks = 0;
+
+    // Process chunks in batches by document
+    const chunkPoints: ChunkPoint[] = [];
+    const summaryPoints: SummaryPoint[] = [];
+
+    for (const { doc, chunks } of allChunks) {
+      const docId = stableId("Document", doc.relativePath);
+
+      // Embed chunks
+      const chunkItems = chunks.map((c) => ({
+        key: `chunk:${c.documentPath}:${c.chunkIndex}`,
+        text: `${c.headingPath}\n\n${c.content}`,
+      }));
+
+      const chunkResults = await generateEmbeddings(chunkItems, embeddingCache);
+      for (let i = 0; i < chunkResults.length; i++) {
+        const result = chunkResults[i];
+        const chunk = chunks[i];
+        if (result.cached) cachedChunks++;
+        totalChunks++;
+
+        chunkPoints.push({
+          id: stableId("DocumentChunk", chunk.documentPath, String(chunk.chunkIndex)),
+          vector: result.embedding,
+          payload: {
+            documentId: docId,
+            documentPath: chunk.documentPath,
+            documentType: doc.documentType,
+            headingPath: chunk.headingPath,
+            content: chunk.content,
+            chunkIndex: chunk.chunkIndex,
+          },
+        });
+      }
+
+      // Embed document summary (using content preview)
+      const summaryItems = [{
+        key: `summary:${doc.relativePath}`,
+        text: `${doc.title}\n\n${doc.contentPreview}`,
+      }];
+      const summaryResults = await generateEmbeddings(summaryItems, embeddingCache);
+      summaryPoints.push({
+        id: docId,
+        vector: summaryResults[0].embedding,
+        payload: {
+          documentId: docId,
+          documentPath: doc.relativePath,
+          documentType: doc.documentType,
+          title: doc.title,
+          contentPreview: doc.contentPreview,
+        },
+      });
+
+      // Batch upsert to Qdrant every 50 documents
+      if (chunkPoints.length >= 500) {
+        await upsertChunks(chunkPoints);
+        chunkPoints.length = 0;
+      }
+      if (summaryPoints.length >= 50) {
+        await upsertSummaries(summaryPoints);
+        summaryPoints.length = 0;
+      }
+    }
+
+    // Flush remaining
+    await upsertChunks(chunkPoints);
+    await upsertSummaries(summaryPoints);
+
+    embeddingCache.save();
+    console.log(`  Embedded ${totalChunks} chunks (${cachedChunks} from cache)`);
+    console.log(`  Embedded ${allChunks.length} document summaries`);
+  } else if (!config.openaiApiKey) {
+    console.log("\n--- Skipping embeddings (OPENAI_API_KEY not set) ---");
+  }
+
+  // 13. Phase 2: LLM Entity Extraction
+  if (!skipLLM && config.anthropicApiKey && docsForLLM.length > 0) {
+    console.log(`\n--- Phase 2: LLM entity extraction (${docsForLLM.length} documents) ---`);
+
+    const newEntitiesReport: NewEntitiesReport = {
+      companies: [],
+      people: [],
+      technologies: [],
+      markets: [],
+      events: [],
+    };
+
+    const seenMarkets = new Set<string>();
+    let extractedCount = 0;
+
+    const CONCURRENCY = 10;
+
+    function processExtractionResult(
+      doc: { relPath: string },
+      result: Awaited<ReturnType<typeof extractWithLLM>>,
+    ) {
+      // Reconcile entities
+      const reconciled = reconcileEntities(result.entities);
+      for (const entity of reconciled) {
+        if (entity.isNew) {
+          const report = { name: entity.name, context: entity.context, confidence: entity.confidence };
+          if (entity.type === "company") newEntitiesReport.companies.push(report);
+          else if (entity.type === "person") newEntitiesReport.people.push(report);
+          else if (entity.type === "technology") newEntitiesReport.technologies.push(report);
+        }
+      }
+
+      // Process markets
+      for (const market of result.markets) {
+        if (!seenMarkets.has(normalizeName(market))) {
+          seenMarkets.add(normalizeName(market));
+          importer.addNode(buildMarketNode({ name: market }));
+          newEntitiesReport.markets.push({ name: market, sources: [doc.relPath] });
+        }
+
+        for (const entity of result.entities) {
+          if (entity.type === "company") {
+            importer.addRel(buildOperatesInRel(entity.name, market));
+          }
+        }
+      }
+
+      // Process events
+      for (const event of result.events) {
+        importer.addNode(buildEventNode({
+          type: event.type,
+          description: event.description,
+          date: event.date,
+          sourceDocumentId: stableId("Document", doc.relPath),
+        }));
+
+        importer.addRel(buildReportedInRel(event.description, event.date || "", doc.relPath));
+
+        for (const company of event.companies) {
+          importer.addRel(buildHadEventRel(company, event.description, event.date || ""));
+        }
+
+        newEntitiesReport.events.push({
+          description: event.description,
+          type: event.type,
+          date: event.date,
+        });
+      }
+    }
+
+    // Process in concurrent batches
+    for (let i = 0; i < docsForLLM.length; i += CONCURRENCY) {
+      const batch = docsForLLM.slice(i, i + CONCURRENCY);
+      const results = await Promise.allSettled(
+        batch.map(async (doc) => {
+          const result = await extractWithLLM(doc.relPath, doc.rawContent);
+          return { doc, result };
+        }),
+      );
+
+      for (const settled of results) {
+        if (settled.status === "fulfilled") {
+          processExtractionResult(settled.value.doc, settled.value.result);
+          extractedCount++;
+        } else {
+          console.warn(`  Warning: LLM extraction failed:`, settled.reason?.message || settled.reason);
+        }
+      }
+
+      if (extractedCount % 50 < CONCURRENCY) {
+        console.log(`  Processed ${extractedCount}/${docsForLLM.length} documents`);
+      }
+
+      // Save cache periodically
+      if (i % 200 === 0 && i > 0) {
+        saveExtractionCache();
+      }
+    }
+
+    saveExtractionCache();
+    await importer.flush();
+
+    // Write new entities report
+    const reportPath = resolveVaultPath("sidekick-graph/new_entities.json");
+    writeNewEntitiesReport(newEntitiesReport, reportPath);
+    console.log(`  Extracted from ${extractedCount} documents`);
+  } else if (!config.anthropicApiKey) {
+    console.log("\n--- Skipping LLM extraction (ANTHROPIC_API_KEY not set) ---");
+  }
+
+  // 14. Phase 3: MAGE Analytics
+  if (!skipAnalytics) {
+    await runAllAnalytics();
+  }
+
+  // 15. Print stats
+  importer.printStats();
+
+  // Cleanup
+  await closeConnections();
+  console.log("\nImport complete.");
+}
+
+main().catch((err) => {
+  console.error("Import failed:", err);
+  process.exit(1);
+});
