@@ -1,0 +1,2 @@
+# sidekick
+AI Sidekick
