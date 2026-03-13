@@ -19,6 +19,7 @@ const CONSTRAINTS = [
   "CREATE CONSTRAINT ON (n:BillingCode) ASSERT n.id IS UNIQUE",
   "CREATE CONSTRAINT ON (n:Program) ASSERT n.id IS UNIQUE",
   "CREATE CONSTRAINT ON (n:Specialty) ASSERT n.id IS UNIQUE",
+  "CREATE CONSTRAINT ON (n:CompetitorProduct) ASSERT n.id IS UNIQUE",
 ];
 
 const INDEXES = [
@@ -46,6 +47,8 @@ const INDEXES = [
   "CREATE INDEX ON :BillingCode(program)",
   "CREATE INDEX ON :Program(name)",
   "CREATE INDEX ON :Specialty(name)",
+  "CREATE INDEX ON :CompetitorProduct(name)",
+  "CREATE INDEX ON :CompetitorProduct(category)",
 ];
 
 export async function createSchema(): Promise<void> {
