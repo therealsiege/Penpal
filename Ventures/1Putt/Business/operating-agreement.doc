@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+    body {
+        font-family: "Times New Roman", Times, serif;
+        width: 8.5in;
+    }
+
+    h1 {
+        font-size: 14pt;
+        font-weight: bold;
+        text-align: center;
+        text-transform: uppercase;
+        margin: 0;
+        padding: 0;
+    }
+
+    h2 {
+        font-size: 12pt;
+        font-weight: bold;
+        text-align: left;
+        text-transform: uppercase;
+        text-decoration: underline;
+    }
+
+    p {
+        font-size: 12pt;
+        text-align: left;
+    }
+
+    em {
+        text-transform: lowercase;
+        font-style: italic;
+    }
+
+    #sig {
+        margin: 0;
+        padding: 0;
+        width: 300px;
+        height: 69px;
+        background-image: url('ms-sig-14.gif');
+        background-repeat: no-repeat;
+        float: right;
+    }
+
+    #title {
+        margin: 0;
+        padding: 0;
+        width: 300px;
+        font-weight: bold;
+        text-align: center;
+        float: right;
+        clear: both;
+    }
+</style>
+</head>
+<style>
+    @media  print {
+        td#title {
+            padding-bottom: 60px !important;
+        }
+    }
+
+    .operating-agreement p {
+        page-break-inside: avoid;
+    }
+
+</style>
+<body>
+<div class="operating-agreement" style="position: relative">
+<h1>LIMITED LIABILITY COMPANY</h1>
+<h1>OPERATING AGREEMENT OF</h1>
+<h1>1PUTTHEALTH LLC</h1>
+<br />
+<br />
+<p>
+This agreement is made effective on the ________ day of _________________, ___________ among the
+member(s) and
+the company.
+</p>
+<p><strong>1. Formation.</strong> A limited liability company (LLC) of the above name has been formed under
+the laws
+of the
+State of Delaware by filing Articles of Organization (or
+similar
+organizing document)
+with the Secretary of State (or other appropriate office)
+on 12/20/2021.
+The purpose of the business shall
+be to carry on any activity which is lawful under the jurisdiction in which it operates. The LLC may
+operate
+under a fictitious
+name or names as long as the LLC is in compliance with applicable fictitious name registration laws. The
+term of
+the LLC shall be perpetual or until dissolved as provided by law or by vote of the member(s) as provided
+in this
+agreement.
+Upon dissolution the remaining members shall have the power to continue the operation of the LLC as long
+as
+necessary and allowable under state law until the winding up of the affairs of the business has been
+completed.
+</p>
+<p>
+<strong>2. Members.</strong> The name and address of each initial limited liability company member is:
+</p>
+<table class="mems-info">
+<tr>
+<td width="300px" style="text-transform:uppercase;">
+Clint Johnson
+<br>
+3317 Nevada Ave <br>
+Nashville
+, TN 37209
+</td>
+<td width="300px" style="text-transform:uppercase;">
+Matt Wimberley
+<br>
+3800 Pinetop Rd <br>
+Coden
+, AL 36523
+</td>
+</tr>
+</table>
+<table class="mems-info">
+<tr>
+<td width="300px" style="text-transform:uppercase;">
+</td>
+<td width="300px" style="text-transform:uppercase;">
+</td>
+</tr>
+</table>
+<table class="mems-info">
+<tr>
+<td width="300px" style="text-transform:uppercase;">
+</td>
+<td width="300px" style="text-transform:uppercase;">
+</td>
+</tr>
+</table>
+<p>
+<strong>3. Contributions.</strong>
+The capital contribution of each limited liability company member in exchange for their LLC ownership
+is:
+</p>
+<table>
+<tr>
+<td id="tdshname" style="width:300px;"><strong>Name</strong></td>
+<td id="tdshnum"><strong>LLC Ownership</strong></td>
+<td id="tdshnum"><strong>Capital Contribution</strong></td>
+</tr>
+<tr>
+<td><br /></td>
+</tr>
+<tr>
+<td id="tdshname" style="text-transform:uppercase">
+Clint Johnson
+</td>
+<td id="tdshnum">
+50%
+</td>
+<td id="tdshcon"><strong>$</strong>_____________</td>
+</tr>
+<tr>
+<td><br></td>
+</tr>
+<tr>
+<td id="tdshname" style="text-transform:uppercase">
+Matt Wimberley
+</td>
+<td id="tdshnum">
+50%
+</td>
+<td id="tdshcon"><strong>$</strong>_____________</td>
+</tr>
+<tr>
+<td><br></td>
+</tr>
+</table>
+<p><strong>NOTE:</strong> The capital contribution may be in the form of cash (or cash equivalents), labor
+or
+services (past or future), or property/equipment/assets other than cash. Regardless of the type of
+capital
+contribution, it should be expressed above in a dollar equivalent value that is agreed upon by all
+limited
+liability company members. Additionally, there may be accounting/tax ramifications for individuals
+contributing
+capital other than cash.</p>
+<p><strong>4. Profit and Loss.</strong> The profits and losses of the limited liability company shall be
+distributed
+amongst the members in proportion with the ownership of each member by default, but this may be changed
+at any
+time upon a unanimous vote of the members.</p>
+<p><strong>5. Distributions.</strong> The limited liability company shall have the power to make
+distributions to
+its members in such amounts and at such intervals
+as a majority of the members deem appropriate according to law.</p>
+<p><strong>6. Management.</strong> The limited liability company shall be managed by all LLC members. Any
+member may
+bind the LLC in all matters in the ordinary course of LLC
+business. In the event of a dispute between members, final determination shall be made with a vote by
+the
+members, votes
+being proportioned according to capital contributions.</p>
+<p><strong>7. Registered Agent.</strong> For receipt of official legal and tax correspondence from the State
+of Delaware, the registered agent of the limited liability
+company
+(sometimes
+known as a resident agent, statutory agent, agent for service of process, or delivery of service
+address) shall
+be maintained in accordance with the requirements of the State
+of Delaware.</p>
+<p><strong>8. Assets.</strong> The assets of the limited liability company shall be registered in the legal
+name of
+the LLC and not in the names of the individual members, unless approved by a majority vote of the
+members.</p>
+<p><strong>9. Records and Accounting.</strong> The limited liability company shall keep an accurate
+accounting of
+its affairs using any method of accounting
+allowed by law. All members shall have a right to inspect the records during normal business hours. The
+members
+shall have
+the power to hire such accountants as they deem necessary or desirable.</p>
+<p><strong>10. Banking.</strong> The members of the limited liability company shall be authorized to set up
+bank
+accounts as in their sole discretion are deemed
+necessary and are authorized to execute any banking resolutions provided by the institution in which the
+accounts are being
+set up, or by adopting their own resolution.</p>
+<p><strong>11. Taxes.</strong> The limited liability company shall file such tax returns as required by law.
+The LLC
+shall elect to be taxed as a majority of the
+members decide is in their best interests. The &quot;tax matters partner,&quot; as required by the
+Internal
+Revenue Code, shall be appointed by unanimous consent of the members.</p>
+<p><strong>12. Separate Entity.</strong> The limited liability company is a legal entity separate from its
+members.
+No member shall have any separate liability for
+any debts, obligations, or liability of the LLC except as provided in this agreement.</p>
+<p><strong>13. Indemnity and Exculpation.</strong> The limited liability company shall indemnify and hold
+harmless
+its members, managers,
+employees, officers, and agents to the fullest extent allowed by law for acts or omissions done as part
+of their
+duties to or for the LLC.
+Indemnification shall include all liabilities, expenses, attorney and accountant fees, and other costs
+reasonably
+expended. No member shall be liable to the LLC for acts done in good faith.
+</p>
+<p>
+<strong>14. Meetings.</strong> The members shall have no obligation to hold annual or any other meeting,
+but may hold such meetings if they deem them necessary or desirable.
+</p>
+<p>
+<strong>15. Amendment of this Agreement.</strong> This agreement may not be amended except in writing
+signed by
+all of the members.
+</p>
+<p>
+<strong>16. Conflict of Interest.</strong> No member shall be involved with any business or undertaking
+which
+competes with the interests of
+the limited liability company except upon agreement in writing by all of the members.
+</p>
+<p>
+<strong>17. Deadlock.</strong> In the event that the members cannot come to an agreement on any matter
+the
+members agree to submit the
+issue to mediation to be paid for by the limited liability company. In the event the mediation is
+unsuccessful,
+they agree to seek arbitration
+under the rules of the American Arbitration Association.
+</p>
+<p>
+<strong>18. Dissociation of a Member.</strong> A member shall have the right to discontinue membership
+upon
+giving thirty days notice. A
+member shall cease to have the right to membership upon death, court-ordered incapacity, bankruptcy or
+expulsion. The
+limited liability company shall have the right to buy the interest of any dissociated member at fair
+market
+value.
+</p>
+<p>
+<strong>19. Dissolution.</strong> The limited liability company shall dissolve upon the unanimous
+consent
+of all
+the members or upon any event requiring
+dissolution under state law. In the event of the death, bankruptcy, permanent incapacity, or withdrawal
+of a
+member the
+remaining members may elect to dissolve or to continue the operation of the LLC.
+</p>
+<div style="position: relative;">
+<p>
+<strong>20. General Provisions.</strong> This agreement is intended to represent the entire
+agreement
+between the
+parties. In the event that
+any party of this agreement is held to be contrary to law or unenforceable, said party shall be
+considered
+amended to comply
+with the law and such holding shall not affect the enforceability of other terms of this agreement.
+This
+agreement shall be
+binding upon the heirs, successors, and assigns of the members.
+</p>
+<p>
+<strong>IN WITNESS whereof, the members of the limited liability company sign this agreement and
+adopt
+it
+as
+their operating
+agreement this ______ day of ______________, ______.
+</strong>
+</p>
+</div>
+<div class="sigbox">
+CLINT JOHNSON , MEMBER
+</div>
+<div class="sigbox">
+MATT WIMBERLEY , MEMBER
+</div>
+</div>
+</body>
+</html>

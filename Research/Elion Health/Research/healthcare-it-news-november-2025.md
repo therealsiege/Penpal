@@ -1,0 +1,70 @@
+# What You Missed in Healthcare IT: November Edition
+
+**Date:** December 1, 2025
+
+---
+
+Colin DuRant
+
+In November 2025, we tracked 58 health tech vendor product, partnership, and funding announcements. This month’s news cycle marks the lowest volume we’ve seen since November of last month, as the fall conference schedule comes to a close and adoptions and releases wind down leading up to the end of the year. However, we still saw enough activity to draw out a few trends: rural and critical access hospitals are taking center stage as potential innovation hotspots while pediatrics is beginning to standout as a specialty for AI adoption; digital front door and patient education platforms are locking arms to create a seamless end-to-end experience from first contact to post-appointment followup; interoperability improvements are starting to show up as actual product features; and the chasm between large and small funding rounds widens.
+
+# **1\. Innovation Expands at Rural and Critical-Access Hospitals**
+
+Several November announcements show rural and critical-access hospitals (CAHs) emerging as strong adopters of AI clinician assistants, virtual nursing, and RCM modernization. [Baraga County Memorial Hospital](https://www.oracle.com/news/announcement/baraga-county-memorial-hospital-selects-oracle-health-communityworks-2025-11-10/) and [Marshall Browning Hospital](https://www.oracle.com/news/announcement/marshall-browning-hospital-selects-oracle-health-communityworks-2025-11-14/) both selected Oracle Health CommunityWorks with plans to expand use of its Clinical AI Agent capabilities. Sauk Prairie Healthcare [chose](https://www.accessnewswire.com/newsroom/en/healthcare-and-pharmaceutical/jorie-ai-announces-partnership-with-sauk-prairie-healthcare-to-advanc-1105154) [Jorie AI](https://elion.health/products/jorie-ai) for end-to-end revenue cycle automation, while DRH Health [adopted](https://www.commure.com/press-releases/commure-partners-with-drh-health-to-reduce-clinician-documentation-burden-with-meditech-integrated-ambient-ai) [Commure’s ambient scribe](https://elion.health/products/commure-scribe). And AdventHealth Manchester, a certified CAH, [deployed](https://www.adventhealth.com/news/adventhealth-launch-virtual-care-smart-rooms-powered-hellocare) [HelloCare](https://elion.health/products/hellocare)’s virtual smart room and virtual nursing platform to bolster workforce capacity.
+
+Rural and CAH facilities face persistent clinical and administrative staffing shortages, making AI and virtual care technologies all but operationally necessary. However, in a resource-constrained and AI-forward environment, it’s essential that AI governance programs are in place. In [our conversation with Girish Nadkarni](https://elion.health/resources/ai-research-healthcare-girish-nadkarni-mount-sinai-health-system) this month, we touched on how smaller systems can ensure model safety. For larger health systems with rural affiliates, these sites can increasingly function as innovation testbeds where new models of care, virtual staffing, and AI-driven workflows can be validated before broader system adoption.
+
+# **2\. Innovation in Pediatric Workflows**
+
+A year ago, we were told that pediatrics could be a challenge for AI scribes, as children’s voices might be more difficult to transcribe. As a testament to the pace of model development, this month, pediatrics was a leading specialty for AI deployment and development.
+
+Some new deployments include Children’s Hospital of Philadelphia [implementing](https://www.linkedin.com/posts/stephon-proctor_%F0%9D%97%9C%F0%9D%97%BA-%F0%9D%98%81%F0%9D%97%B5%F0%9D%97%BF%F0%9D%97%B6%F0%9D%97%B9%F0%9D%97%B9%F0%9D%97%B2%F0%9D%97%B1-%F0%9D%98%81%F0%9D%97%BC-%F0%9D%97%AE%F0%9D%97%BB%F0%9D%97%BB%F0%9D%97%BC%F0%9D%98%82%F0%9D%97%BB%F0%9D%97%B0%F0%9D%97%B2-activity-7396397441228603392-vXr3/) [Epic](https://elion.health/products/epic)’s AI-powered Text Assistant. This solution focuses on translating complex, clinical jargon into more parent and patient friendly language, a use case well suited to pediatrics given the multi-layered communication needs between clinicians, caregivers, and young patients. Additionally, [Rady Children’s Hospital](https://inside.choc.org/virtual-nursing-program-at-rady-childrens-hospital/) rolled out [care.ai](http://care.ai/)’s virtual nursing and continuous monitoring solution.
+
+On the vendor side, [Owlet](https://elion.health/products/owlet) and [Rhapsody](https://elion.health/products/rhapsody) [partnered](https://investors.owletcare.com/news/news-details/2025/Owlet-Partners-with-Rhapsody-to-Connect-Remote-Baby-Monitoring-Data-to-EHRs/default.aspx) to send home infant monitoring data directly into the EHR, and [Elation Health](https://elion.health/products/elation) [expanded](https://www.elationhealth.com/resources/blogs/elation-health-expands-pediatrics-capabilities) pediatrics capabilities spanning documentation, orders, and population workflows for pediatric practices.
+
+# **3\. Patient Education and Experience Solutions Remain Core to the Digital Front Door and the Clinical Journey**
+
+Patient experience and clinical outcomes are increasingly shaped by the specific information patients receive, how, and when they receive it. Solutions that can integrate both better patient experience through streamlined digital front door technology and better outcomes through improved education and follow-up saw a small but meaningful uptick in both development and adoption in November. For example, vendors are moving beyond simply fielding inbound queries through text and voice agents and toward comprehensive digital entry points and more digestible education before and after care. Solutions like [Vital](https://elion.health/products/vital-urgent-care)’s [urgent care engagement platform](https://vital.io/newsroom/vital-launches-real-time-urgent-care-platform-that-elevates-patient), [PocketHealth](https://elion.health/products/pockethealth-conductor)’s [Conductor](https://hitconsultant.net/2025/11/07/pockethealth-launches-agentic-ai-system-conductor/) (which is both admin- and patient-facing), and [Luma](https://elion.health/products/luma)’s [acquisition](https://www.prnewswire.com/news-releases/luma-acquires-tonic-taking-on-healthcare-bottlenecks-for-over-1-000-health-systems-and-100-million-patients-302611514.html) of [Tonic Health](https://elion.health/products/tonic-health) are reshaping the digital front door by offering real-time updates, transparency around wait times, and automated outreach and scheduling workflows.
+
+On the clinical side, the month’s announcements show a parallel trend toward education-rich, outcomes-oriented engagement. [InteliChart](https://elion.health/products/intelichart)’s [InteliSense](https://www.prnewswire.com/news-releases/intelichart-launches-intelisense-to-power-a-new-era-of-patient-engagement-302617529.html?tc=eml_cleartime) agents can guide patients with proactive information and tailored instructions, while CHOP’s aforementioned [adoption](https://www.linkedin.com/posts/stephon-proctor_%F0%9D%97%9C%F0%9D%97%BA-%F0%9D%98%81%F0%9D%97%B5%F0%9D%97%BF%F0%9D%97%B6%F0%9D%97%B9%F0%9D%97%B9%F0%9D%97%B2%F0%9D%97%B1-%F0%9D%98%81%F0%9D%97%BC-%F0%9D%97%AE%F0%9D%97%BB%F0%9D%97%BB%F0%9D%97%BC%F0%9D%98%82%F0%9D%97%BB%F0%9D%97%B0%F0%9D%97%B2-activity-7396397441228603392-vXr3/) of Epic’s AI Text Assistant highlights how AI can translate clinical jargon into patient- and caregiver-friendly language. SimonMed’s investment in a patient-facing [mammography results explainer](https://hitconsultant.net/2025/11/25/simonmed-imaging-launches-ai-powered-mobile-reports/) built on [Cascaid](https://elion.health/products/cascaid-health)’s technology is emblematic of a renewed focus on breaking down communication barriers that undermine follow-up and outcomes.
+
+# 4\. The “Future of Healthcare” Vision, Enabled by Interoperability
+
+This month’s announcements show a meaningful shift from interoperability as _plumbing_ to interoperability as product capability, fueling real patient-facing functionality, clinical workflows, and analytics infrastructure.
+
+UF Health’s [launch](https://ufhealth.org/stories/2025/introducing-mychart-central-a-one-login-hub-for-patients-in-florida) of MyChart Central ( [following in the footsteps of Louisiana](https://www.epic.com/epic/post/louisiana-health-systems-launch-mychart-central-statewide-enabling-a-unified-patient-experience-across-organizations/)) creates a single-login hub connecting patient records across Florida’s Epic-participating systems, and the Greek government’s nationwide [partnership](https://swordhealth.com/newsroom/sword-health-and-greek-government-partner-to-deliver-one-of-europe-s-first-national-healthcare-transformation-initiatives-using-ai) with [Sword Health](https://elion.health/products/sword-health) reflects a fully integrated, national virtual care model built on shared digital infrastructure. Additionally, [InterSystems](https://elion.health/products/intersystems) [launched](https://www.businesswire.com/news/home/20251112864064/en/InterSystems-Launches-HealthShare-AI-Assistant-to-Optimize-Data-Retrieval-and-Clinical-Engagement-with-Conversational-Intelligence) HealthShare AI Assistant to support data retrieval and clinical engagement through conversational AI, relying on a “Unified Care Record” that combines longitudinal health records from across care sites.
+
+In parallel, specialty workflows are being redesigned around direct integrations: [Flatiron’s oncology EHR](https://elion.health/products/flatiron-oncoemr) [integrated](https://www.natera.com/company/news/natera-integrates-with-flatiron-healths-oncoemr-platform/) Natera testing, [Innovaccer](https://elion.health/products/innovaccer-gravity) [partnered](https://innovaccer.com/resources/news/innovaccer-and-longitude-rx-partner-to-transform-health-system-specialty-pharmacy-with-the-gravity-platform) with [Longitude Rx](https://elion.health/products/longitude-health) on specialty pharmacy data exchange, and [Net Health](https://elion.health/products/net-health) [expanded](https://www.prnewswire.com/news-releases/net-health-expands-strategic-partnership-with-kno2-302612233.html?tc=eml_cleartime) [Kno2](https://elion.health/products/kno2) connectivity to streamline post-acute clinical data flow.
+
+It would seem that—after years of legislation and enforcement— interoperability may finally be delivering on its long-promised advantages, enabling health systems to build connected, patient-centered experiences and to adopt AI tools that rely on clean, multi-source data.
+
+# **5\. Funding Bifurcation: Big-Bet Platforms vs. Narrow, Workflow-Specific AI**
+
+November’s funding activity reflects a stark divide: very large rounds ($50M+) concentrated in platform-scale launches, contrasted with small seed/Series A rounds ($2-10M) targeting narrowly defined workflow automations. On the high end, [Arbiter](https://elion.health/products/arbiter) ($52M seed), which notably also [launched out of stealth](https://www.businessinsider.com/health-startup-arbiter-grabs-52-million-at-400-million-valuation-2025-11) with this funding announcement, and [Voize](https://elion.health/products/voize) ( [$50M Series A](https://www.balderton.com/news/voize-raises-50-million-to-power-the-ai-companion-transforming-nursing-care/)) are being funded as horizontal platforms, where presumably investors believe the TAM and operational leverage justify unusually large early investments. These are bets that AI can meaningfully reshape labor models or care delivery infrastructure.
+
+On the other side of the bell curve, smaller rounds like [Ember](https://elion.health/products/ember)’s [$4.3M seed](https://www.embercopilot.ai/nexus-venture-partners-leads-4-3m-seed-funding-in-healthcare-ai-startup-ember) (AI medical coding), [Olli Health](https://elion.health/products/olli-health)’s [$10M Series A](https://homehealthcarenews.com/2025/11/home-health-ai-platform-olli-health-raises-10m/) (home health coding and quality review), and [Planbase](https://elion.health/products/planbase)’s [$2.1M seed](https://pulse2.com/planbase-2-1-million-raised-to-launch-ai-native-employee-management-platform-for-healthcare/) (workforce management automation) reinforce the appetite for tight, ROI-driven automation wedges.
+
+What’s missing is the mid-sized $15-40M round, signaling that investors are either backing disruptive platforms or capital-efficient tools, not incremental SaaS. For health system execs, this suggests a vendor landscape bifurcating into:
+
+- Well-capitalized platforms likely to expand aggressively across workflows, and
+
+- Small, sharp tools that solve specific problems but may carry durability risks.
+
+Vendor evaluation should account for each category’s trajectory, integration demands, and long-term viability.
+
+# Other Resources You May Have Missed
+
+In case you missed it, here’s a quick roundup of other resources we shared this month:
+
+- [_AI Governance Playbook: Insights and Tools for Building Oversight That Works_](https://aigovernance.elion.health/)
+
+- This month’s Market Maps: [AI Agent Assistants](https://elion.health/resources/ai-agent-assistant-market-map), [AI Governance Platforms](https://elion.health/resources/healthcare-ai-governance-platforms), [DME Order Management](https://elion.health/resources/dme-order-management-market-map)
+
+- This month’s conversations with healthcare leaders:
+
+  - [This Disconnect Between AI Research and Application in Healthcare with Girish Nadkarni of Mount Sinai Health System](https://elion.health/resources/ai-research-healthcare-girish-nadkarni-mount-sinai-health-system)
+
+  - [Teaching AI Literacy and Improving Adoption with Esther Kim of Mass General Brigham](https://elion.health/resources/ai-literacy-adoption-esther-kim-mass-general-brigham)
+
+---
+*Source: [Elion Health](https://elion.health/resources/healthcare-it-news-november-2025)*

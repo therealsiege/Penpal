@@ -1,7 +1,12 @@
 import path from "path";
+import { fileURLToPath } from "url";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+// config.ts lives at sidekick-graph/src/shared/ — vault root is 3 levels up
+const defaultVaultPath = path.resolve(__dirname, "..", "..", "..");
 
 export const config = {
-  vaultPath: process.env.VAULT_PATH || "/Users/cj/SideKick",
+  vaultPath: process.env.VAULT_PATH || defaultVaultPath,
   memgraphUri: process.env.MEMGRAPH_URI || "bolt://localhost:7687",
   memgraphUser: process.env.MEMGRAPH_USER || "",
   memgraphPassword: process.env.MEMGRAPH_PASSWORD || "",

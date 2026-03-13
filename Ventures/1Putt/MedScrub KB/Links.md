@@ -1,0 +1,13 @@
+- [PostHog Analytics](https://app.posthog.com)
+- [Vercel Dashboard](https://vercel.com/dashboard)
+- [CloudFlare Dashboard](https://dash.cloudflare.com)
+- [GitHub — MedScrub](https://github.com) (repo)
+- [Medplum Console](https://app.medplum.com)
+- [Synthea Patient Generator](https://synthetichealth.github.io/synthea/)
+- [MCP Server (npm)](https://www.npmjs.com)
+- [athenahealth Developer Portal](https://developer.athenahealth.com)
+- [Epic App Market / FHIR](https://open.epic.com)
+- [Vim Canvas Developer Docs](https://docs.getvim.com) 
+- [Fathom](https://app.usefathom.com/?comparison=none&range=last_7_days&site=NUVEMSWS)
+- [Reddit Thread](https://www.reddit.com/r/healthIT/comments/1peu69q/caught_staff_using_consumer_ai_tools_for_patient/?share_id=DAnMLRW5iTSc2WRrj5Ikb&utm_medium=ios_app&utm_name=iossmf&utm_source=share&utm_term=4)
+

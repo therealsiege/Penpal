@@ -1,0 +1,20 @@
+﻿Name,Category,Created,Notes,Status,Tags,URL,employment
+Medplum CDR,Medplum,"March 1, 2026 7:13 PM",,Reviewed,,,No
+Healthie EMR,Healthie,"March 1, 2026 7:13 PM",,Reviewed,,,No
+Medplum GitHub Repo,Medplum,"March 2, 2026 12:25 AM",Open-source Apache 2.0 — TypeScript/Node.js/PostgreSQL,Reviewed,,https://github.com/medplum/medplum,No
+Medplum FHIR Basics,Medplum,"March 2, 2026 12:25 AM","FHIR R4 fundamentals — resources, references, bundles",Reviewed,,https://www.medplum.com/docs/fhir-basics,No
+Medplum MCP Integration,Medplum,"March 2, 2026 12:25 AM","fhir-request, search, and fetch tools with OAuth 2.0",Reviewed,,https://www.medplum.com/docs/ai/mcp,No
+Medplum Migration Guides,Migration,"March 2, 2026 12:25 AM","Planning, sequencing, converting data to FHIR, building pipelines",Reviewed,,https://www.medplum.com/docs/migration,No
+Medplum CDK Settings,Medplum,"March 2, 2026 12:25 AM",CDK configuration reference for AWS deployment,Reviewed,,https://www.medplum.com/docs/self-hosting/aws-cdk-settings,No
+Medplum AWS Install,Medplum,"March 2, 2026 12:25 AM",Recommended path — aligns with OpenLoop's AWS/CDK stack,Reviewed,,https://www.medplum.com/docs/self-hosting/install-on-aws,No
+Medplum Self-Hosting Guide,Medplum,"March 2, 2026 12:25 AM",Self-hosting overview — multiple cloud provider options,Reviewed,,https://www.medplum.com/docs/self-hosting,No
+Medplum Documentation,Medplum,"March 2, 2026 12:25 AM",Main documentation hub for Medplum platform,Reviewed,,https://www.medplum.com/docs,No
+Healthie MCP Dev Assist,Healthie,"March 2, 2026 12:25 AM",MCP tool for AI-assisted Healthie development,Reviewed,,https://github.com/healthie/healthie-dev-assist,No
+Healthie Healthcare API,Healthie,"March 2, 2026 12:25 AM",General healthcare API concepts and Healthie implementation,Reviewed,,https://www.gethealthie.com/glossary/healthcare-api,No
+Healthie API & SDKs Overview,Healthie,"March 2, 2026 12:25 AM",API product overview — same API used by Healthie's own frontend,Reviewed,,https://help.gethealthie.com/article/943-healthies-api,No
+Healthie EMR Integration APIs,Healthie,"March 2, 2026 12:25 AM",EMR integration guide and API patterns,Reviewed,,https://www.gethealthie.com/glossary/emr-integration-apis,No
+Healthie Developer Resources,Healthie,"March 2, 2026 12:25 AM","SDKs, APIs, and developer tools overview",Reviewed,,https://www.gethealthie.com/plus/developers,No
+Healthie API Docs,Healthie,"March 2, 2026 12:25 AM",Primary GraphQL API documentation for Healthie platform,Reviewed,,https://docs.gethealthie.com/,No
+OpenLoop Overview,,"March 1, 2026 11:16 PM",,,,,No
+Open Loop Tech Stack,,"March 1, 2026 11:18 PM",,,,,No
+Medplum Transition,,"March 1, 2026 11:52 PM",,,,,No
