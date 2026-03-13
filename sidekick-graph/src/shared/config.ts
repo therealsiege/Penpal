@@ -1,7 +1,11 @@
 import path from "path";
 import { fileURLToPath } from "url";
+import dotenv from "dotenv";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+// Load .env from sidekick-graph root (two levels up from src/shared/)
+dotenv.config({ path: path.resolve(__dirname, "..", "..", ".env") });
 // config.ts lives at sidekick-graph/src/shared/ — vault root is 3 levels up
 const defaultVaultPath = path.resolve(__dirname, "..", "..", "..");
 

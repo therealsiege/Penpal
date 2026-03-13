@@ -13,6 +13,7 @@ import { findSimilarSchema, findSimilar } from "./tools/find-similar.js";
 import { pipelineStatusSchema, pipelineStatus } from "./tools/pipeline-status.js";
 import { discoverConnectionsSchema, discoverConnections } from "./tools/discover-connections.js";
 import { listCommunitiesSchema, listCommunities } from "./tools/list-communities.js";
+import { revenueOpportunitySchema, revenueOpportunity } from "./tools/revenue-opportunity.js";
 
 const server = new Server(
   {
@@ -38,6 +39,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       pipelineStatusSchema,
       discoverConnectionsSchema,
       listCommunitiesSchema,
+      revenueOpportunitySchema,
     ],
   };
 });
@@ -73,6 +75,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         break;
       case "list_communities":
         result = await listCommunities(args as Parameters<typeof listCommunities>[0]);
+        break;
+      case "revenue_opportunity":
+        result = await revenueOpportunity(args as Parameters<typeof revenueOpportunity>[0]);
         break;
       default:
         return {

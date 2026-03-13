@@ -11,11 +11,14 @@ const CONSTRAINTS = [
   "CREATE CONSTRAINT ON (n:Skill) ASSERT n.id IS UNIQUE",
   "CREATE CONSTRAINT ON (n:Regulation) ASSERT n.id IS UNIQUE",
   "CREATE CONSTRAINT ON (n:Lead) ASSERT n.id IS UNIQUE",
-  "CREATE CONSTRAINT ON (n:DocumentChunk) ASSERT n.id IS UNIQUE",
   "CREATE CONSTRAINT ON (n:Market) ASSERT n.id IS UNIQUE",
   "CREATE CONSTRAINT ON (n:Event) ASSERT n.id IS UNIQUE",
   "CREATE CONSTRAINT ON (n:SalesStage) ASSERT n.id IS UNIQUE",
   "CREATE CONSTRAINT ON (n:Territory) ASSERT n.id IS UNIQUE",
+  "CREATE CONSTRAINT ON (n:Practice) ASSERT n.id IS UNIQUE",
+  "CREATE CONSTRAINT ON (n:BillingCode) ASSERT n.id IS UNIQUE",
+  "CREATE CONSTRAINT ON (n:Program) ASSERT n.id IS UNIQUE",
+  "CREATE CONSTRAINT ON (n:Specialty) ASSERT n.id IS UNIQUE",
 ];
 
 const INDEXES = [
@@ -30,8 +33,6 @@ const INDEXES = [
   "CREATE INDEX ON :Technology(name)",
   "CREATE INDEX ON :EHRSystem(name)",
   "CREATE INDEX ON :Folder(path)",
-  "CREATE INDEX ON :DocumentChunk(documentPath)",
-  "CREATE INDEX ON :DocumentChunk(chunkIndex)",
   "CREATE INDEX ON :Market(name)",
   "CREATE INDEX ON :Event(type)",
   "CREATE INDEX ON :Event(date)",
@@ -39,6 +40,12 @@ const INDEXES = [
   "CREATE INDEX ON :SalesStage(order)",
   "CREATE INDEX ON :Territory(name)",
   "CREATE INDEX ON :Territory(type)",
+  "CREATE INDEX ON :Practice(name)",
+  "CREATE INDEX ON :Practice(npi)",
+  "CREATE INDEX ON :BillingCode(code)",
+  "CREATE INDEX ON :BillingCode(program)",
+  "CREATE INDEX ON :Program(name)",
+  "CREATE INDEX ON :Specialty(name)",
 ];
 
 export async function createSchema(): Promise<void> {

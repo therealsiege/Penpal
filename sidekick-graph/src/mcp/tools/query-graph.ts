@@ -3,7 +3,7 @@ import { getDriver } from "../../shared/connections.js";
 export const queryGraphSchema = {
   name: "query_graph",
   description:
-    "Run a Cypher query against the Memgraph knowledge graph. Use this for structured graph traversals, relationship queries, and analytics. Available node types: Document, Folder, Tag, Person, Company, Technology, EHRSystem, Skill, Regulation, Lead, DocumentChunk, Market, Event, SalesStage, Territory. Relationship types: IN_FOLDER, PARENT_FOLDER, TAGGED_WITH, LINKS_TO, MENTIONS_COMPANY, MENTIONS_PERSON, MENTIONS_TECH, MENTIONS_EHR, MENTIONS_SKILL, MENTIONS_REGULATION, ABOUT_LEAD, WORKS_AT, COMPETES_WITH, CONTACT_AT, USES_EHR, HAS_CHUNK, NEXT_CHUNK, OPERATES_IN, ADDRESSES, HAD_EVENT, REPORTED_IN, MENTIONS_ENTITY, CURRENT_STAGE, ENTERED_STAGE, LOCATED_IN, PART_OF.",
+    "Run a Cypher query against the Memgraph knowledge graph. Use this for structured graph traversals, relationship queries, and analytics. Available node types: Document, Folder, Tag, Person, Company, Technology, EHRSystem, Skill, Regulation, Lead, Market, Event, SalesStage, Territory, Practice, BillingCode, Program, Specialty. Relationship types: IN_FOLDER, PARENT_FOLDER, TAGGED_WITH, LINKS_TO, MENTIONS_COMPANY, MENTIONS_PERSON, MENTIONS_TECH, MENTIONS_EHR, MENTIONS_SKILL, MENTIONS_REGULATION, ABOUT_LEAD, WORKS_AT, COMPETES_WITH, CONTACT_AT, USES_EHR, OPERATES_IN, ADDRESSES, HAD_EVENT, REPORTED_IN, CURRENT_STAGE, ENTERED_STAGE, LOCATED_IN, PART_OF, ENABLES_BILLING, PART_OF_PROGRAM, ELIGIBLE_FOR, PRACTICES_AT, IN_SPECIALTY, ELIGIBLE_SPECIALTY.",
   inputSchema: {
     type: "object" as const,
     properties: {

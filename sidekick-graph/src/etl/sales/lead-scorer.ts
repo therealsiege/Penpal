@@ -9,6 +9,9 @@ export interface LeadScoreInput {
   businessArm: string;
   salesFunnel: string;
   priority: string;
+  jobTitle?: string;
+  type?: string;
+  location?: string;
 }
 
 /** Score a lead based on multiple signals. Returns 0-100. */
@@ -58,6 +61,40 @@ export function scoreLead(input: LeadScoreInput): number {
   const priority = (input.priority || "").toLowerCase();
   if (priority.includes("high") || priority === "1") score += 5;
   else if (priority.includes("medium") || priority === "2") score += 3;
+
+  // --- Revenue-oriented scoring factors ---
+
+  // Medicare-heavy specialty (up to 15 points): higher CCM/RPM/APCM potential
+  const titleAndType = `${input.jobTitle || ""} ${input.type || ""}`.toLowerCase();
+  const medicareHeavySpecialties = [
+    "family medicine", "internal medicine", "geriatrics",
+    "cardiology", "endocrinology", "pulmonology", "nephrology",
+  ];
+  const ccmHighSpecialties = [
+    "family medicine", "internal medicine", "geriatrics",
+    "cardiology", "endocrinology",
+  ];
+
+  if (ccmHighSpecialties.some((s) => titleAndType.includes(s))) {
+    score += 15; // high CCM potential
+  } else if (medicareHeavySpecialties.some((s) => titleAndType.includes(s))) {
+    score += 10; // moderate Medicare revenue potential
+  } else if (titleAndType.includes("concierge")) {
+    score += 8; // tech-forward, willing to pay
+  }
+
+  // Practice size signal (up to 5 points): "solo", "group", "practice" in notes/bio
+  const allText = `${input.notes || ""} ${input.bio || ""}`.toLowerCase();
+  if (allText.includes("solo") || allText.includes("independent")) {
+    score += 5; // ideal ICP — small independent practice
+  } else if (allText.includes("group practice") || allText.includes("small practice")) {
+    score += 4;
+  }
+
+  // MIPS eligibility signal (up to 5 points)
+  if (allText.includes("mips") || allText.includes("quality") || allText.includes("medicare")) {
+    score += 5;
+  }
 
   return Math.min(100, score);
 }

@@ -9,7 +9,8 @@ import { TechnologyEntry } from "../dictionaries/technologies.js";
 import { EHREntry } from "../dictionaries/ehr-systems.js";
 import { RegulationEntry } from "../dictionaries/regulations.js";
 import { SkillEntry } from "../dictionaries/skills.js";
-import { DocumentChunk } from "../parsers/chunker.js";
+import { BillingCodeEntry } from "../dictionaries/cms-codes.js";
+import { ProgramEntry, SpecialtyEntry } from "../dictionaries/revenue-model.js";
 import { normalizeName } from "../../shared/utils/normalize.js";
 
 export function buildDocumentNode(doc: ParsedDocument): NodeRecord {
@@ -175,23 +176,6 @@ export function buildLeadNodeFromCRM(crm: CRMRecord): NodeRecord {
   };
 }
 
-// --- Phase 1: DocumentChunk ---
-
-export function buildChunkNode(chunk: DocumentChunk, documentId: string): NodeRecord {
-  return {
-    label: "DocumentChunk",
-    properties: {
-      id: stableId("DocumentChunk", chunk.documentPath, String(chunk.chunkIndex)),
-      documentPath: chunk.documentPath,
-      chunkIndex: chunk.chunkIndex,
-      headingPath: chunk.headingPath,
-      content: chunk.content,
-      tokenCount: chunk.tokenCount,
-      documentId,
-    },
-  };
-}
-
 // --- Phase 2: Market, Event ---
 
 export interface MarketData {
@@ -260,6 +244,72 @@ export function buildTerritoryNode(territory: TerritoryData): NodeRecord {
       id: stableId("Territory", normalizeName(territory.name)),
       name: territory.name,
       type: territory.type,
+    },
+  };
+}
+
+// --- Phase 4: Revenue Intelligence ---
+
+export interface PracticeData {
+  name: string;
+  npi?: string;
+  address?: string;
+  specialty?: string;
+  organizationType?: string;
+}
+
+export function buildPracticeNode(practice: PracticeData): NodeRecord {
+  return {
+    label: "Practice",
+    properties: {
+      id: stableId("Practice", normalizeName(practice.name)),
+      name: practice.name,
+      npi: practice.npi || "",
+      address: practice.address || "",
+      specialty: practice.specialty || "",
+      organizationType: practice.organizationType || "",
+    },
+  };
+}
+
+export function buildBillingCodeNode(code: BillingCodeEntry): NodeRecord {
+  return {
+    label: "BillingCode",
+    properties: {
+      id: stableId("BillingCode", code.code),
+      code: code.code,
+      description: code.description,
+      rate: code.rate,
+      program: code.program,
+      frequency: code.frequency,
+      eligibility: code.eligibility,
+    },
+  };
+}
+
+export function buildProgramNode(program: ProgramEntry): NodeRecord {
+  return {
+    label: "Program",
+    properties: {
+      id: stableId("Program", program.programId),
+      programId: program.programId,
+      name: program.name,
+      fullName: program.fullName,
+      annualRevenuePerPatient: program.annualRevenuePerPatient,
+      payerRequirement: program.payerRequirement,
+      description: program.description,
+    },
+  };
+}
+
+export function buildSpecialtyNode(specialty: SpecialtyEntry): NodeRecord {
+  return {
+    label: "Specialty",
+    properties: {
+      id: stableId("Specialty", normalizeName(specialty.name)),
+      name: specialty.name,
+      medicareHeavy: specialty.medicareHeavy,
+      ccmPotential: specialty.ccmPotential,
     },
   };
 }

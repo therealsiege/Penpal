@@ -200,31 +200,6 @@ export function resolveEHRName(emrValue: string): string | null {
   return null;
 }
 
-// --- Phase 1: DocumentChunk relationships ---
-
-/** Document → DocumentChunk (HAS_CHUNK) */
-export function buildHasChunkRel(docRelPath: string, chunkDocPath: string, chunkIndex: number): RelRecord {
-  return {
-    fromLabel: "Document",
-    fromId: stableId("Document", docRelPath),
-    toLabel: "DocumentChunk",
-    toId: stableId("DocumentChunk", chunkDocPath, String(chunkIndex)),
-    type: "HAS_CHUNK",
-    properties: { chunkIndex },
-  };
-}
-
-/** DocumentChunk → DocumentChunk (NEXT_CHUNK) */
-export function buildNextChunkRel(docPath: string, fromIndex: number, toIndex: number): RelRecord {
-  return {
-    fromLabel: "DocumentChunk",
-    fromId: stableId("DocumentChunk", docPath, String(fromIndex)),
-    toLabel: "DocumentChunk",
-    toId: stableId("DocumentChunk", docPath, String(toIndex)),
-    type: "NEXT_CHUNK",
-  };
-}
-
 // --- Phase 2: Entity extraction relationships ---
 
 /** Company → Market (OPERATES_IN) */
@@ -268,24 +243,6 @@ export function buildReportedInRel(eventDescription: string, eventDate: string, 
     toLabel: "Document",
     toId: stableId("Document", docRelPath),
     type: "REPORTED_IN",
-  };
-}
-
-/** DocumentChunk → Entity (MENTIONS_ENTITY) with confidence/context/sentiment */
-export function buildChunkMentionsEntityRel(
-  chunkDocPath: string,
-  chunkIndex: number,
-  entityLabel: string,
-  entityId: string,
-  properties: { confidence: number; context: string; sentiment?: string },
-): RelRecord {
-  return {
-    fromLabel: "DocumentChunk",
-    fromId: stableId("DocumentChunk", chunkDocPath, String(chunkIndex)),
-    toLabel: entityLabel,
-    toId: entityId,
-    type: "MENTIONS_ENTITY",
-    properties,
   };
 }
 
@@ -347,5 +304,86 @@ export function buildPartOfRel(childTerritory: string, parentTerritory: string):
     toLabel: "Territory",
     toId: stableId("Territory", normalizeName(parentTerritory)),
     type: "PART_OF",
+  };
+}
+
+// --- Phase 4: Revenue Intelligence relationships ---
+
+/** Skill → BillingCode (ENABLES_BILLING) */
+export function buildEnablesBillingRel(
+  skillId: string,
+  billingCode: string,
+  role: string,
+): RelRecord {
+  return {
+    fromLabel: "Skill",
+    fromId: stableId("Skill", skillId),
+    toLabel: "BillingCode",
+    toId: stableId("BillingCode", billingCode),
+    type: "ENABLES_BILLING",
+    properties: { role },
+  };
+}
+
+/** BillingCode → Program (PART_OF_PROGRAM) */
+export function buildPartOfProgramRel(billingCode: string, programId: string): RelRecord {
+  return {
+    fromLabel: "BillingCode",
+    fromId: stableId("BillingCode", billingCode),
+    toLabel: "Program",
+    toId: stableId("Program", programId),
+    type: "PART_OF_PROGRAM",
+  };
+}
+
+/** Lead → Program (ELIGIBLE_FOR) */
+export function buildEligibleForRel(
+  leadName: string,
+  leadCompany: string,
+  programId: string,
+): RelRecord {
+  return {
+    fromLabel: "Lead",
+    fromId: stableId("Lead", normalizeName(leadName), normalizeName(leadCompany)),
+    toLabel: "Program",
+    toId: stableId("Program", programId),
+    type: "ELIGIBLE_FOR",
+  };
+}
+
+/** Lead → Practice (PRACTICES_AT) */
+export function buildPracticesAtRel(
+  leadName: string,
+  leadCompany: string,
+  practiceName: string,
+): RelRecord {
+  return {
+    fromLabel: "Lead",
+    fromId: stableId("Lead", normalizeName(leadName), normalizeName(leadCompany)),
+    toLabel: "Practice",
+    toId: stableId("Practice", normalizeName(practiceName)),
+    type: "PRACTICES_AT",
+  };
+}
+
+/** Practice → Specialty (IN_SPECIALTY) */
+export function buildInSpecialtyRel(practiceName: string, specialtyName: string): RelRecord {
+  return {
+    fromLabel: "Practice",
+    fromId: stableId("Practice", normalizeName(practiceName)),
+    toLabel: "Specialty",
+    toId: stableId("Specialty", normalizeName(specialtyName)),
+    type: "IN_SPECIALTY",
+  };
+}
+
+/** Program → Specialty (ELIGIBLE_SPECIALTY) */
+export function buildEligibleSpecialtyRel(programId: string, specialtyName: string): RelRecord {
+  return {
+    fromLabel: "Program",
+    fromId: stableId("Program", programId),
+    toLabel: "Specialty",
+    toId: stableId("Specialty", normalizeName(specialtyName)),
+    type: "ELIGIBLE_SPECIALTY",
   };
 }

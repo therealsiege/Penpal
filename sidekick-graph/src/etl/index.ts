@@ -38,9 +38,12 @@ import {
   buildRegulationNode,
   buildLeadNodeFromDoc,
   buildLeadNodeFromCRM,
-  buildChunkNode,
   buildMarketNode,
   buildEventNode,
+  buildBillingCodeNode,
+  buildProgramNode,
+  buildSpecialtyNode,
+  buildPracticeNode,
 } from "./graph/node-builder.js";
 import {
   buildInFolderRel,
@@ -52,12 +55,16 @@ import {
   buildWorksAtRels,
   buildCompetesWithRels,
   buildLeadUsesEHRRel,
-  buildHasChunkRel,
-  buildNextChunkRel,
   buildOperatesInRel,
   buildHadEventRel,
   buildReportedInRel,
   resolveEHRName,
+  buildEnablesBillingRel,
+  buildPartOfProgramRel,
+  buildEligibleForRel,
+  buildPracticesAtRel,
+  buildInSpecialtyRel,
+  buildEligibleSpecialtyRel,
 } from "./graph/rel-builder.js";
 import { stableId } from "../shared/utils/id.js";
 import { normalizeName } from "../shared/utils/normalize.js";
@@ -67,6 +74,8 @@ import { technologies } from "./dictionaries/technologies.js";
 import { ehrSystems } from "./dictionaries/ehr-systems.js";
 import { regulations } from "./dictionaries/regulations.js";
 import { skills } from "./dictionaries/skills.js";
+import { billingCodes } from "./dictionaries/cms-codes.js";
+import { programs, skillRevenueMap, specialties } from "./dictionaries/revenue-model.js";
 
 const isClean = process.argv.includes("--clean");
 const skipEmbeddings = process.argv.includes("--skip-embeddings");
@@ -104,6 +113,11 @@ async function main() {
   for (const r of regulations) importer.addNode(buildRegulationNode(r));
   for (const s of skills) importer.addNode(buildSkillNode(s));
 
+  // Phase 4: Seed revenue intelligence nodes
+  for (const bc of billingCodes) importer.addNode(buildBillingCodeNode(bc));
+  for (const p of programs) importer.addNode(buildProgramNode(p));
+  for (const sp of specialties) importer.addNode(buildSpecialtyNode(sp));
+
   // Phase 3: Seed sales stages
   seedSalesStages(importer);
 
@@ -113,6 +127,33 @@ async function main() {
   console.log("\n--- Building dictionary relationships ---");
   importer.addRels(buildWorksAtRels());
   importer.addRels(buildCompetesWithRels());
+
+  // Phase 4: Revenue intelligence relationships
+  console.log("\n--- Building revenue intelligence relationships ---");
+
+  // BillingCode → Program
+  for (const bc of billingCodes) {
+    importer.addRel(buildPartOfProgramRel(bc.code, bc.program));
+  }
+
+  // Program → Specialty (eligible specialties)
+  for (const prog of programs) {
+    for (const spec of prog.eligibleSpecialties) {
+      const matchedSpec = specialties.find(
+        (s) => s.name.toLowerCase() === spec.toLowerCase()
+      );
+      if (matchedSpec) {
+        importer.addRel(buildEligibleSpecialtyRel(prog.programId, matchedSpec.name));
+      }
+    }
+  }
+
+  // Skill → BillingCode (ENABLES_BILLING)
+  for (const bridge of skillRevenueMap) {
+    for (const code of bridge.billingCodes) {
+      importer.addRel(buildEnablesBillingRel(bridge.skillId, code, bridge.revenueRole));
+    }
+  }
 
   // 6. Walk vault directory → Folder nodes + PARENT_FOLDER
   console.log("\n--- Walking vault directories ---");
@@ -215,8 +256,39 @@ async function main() {
         businessArm: lead.businessArm || "",
         salesFunnel: lead.salesFunnel || "",
         priority: lead.priority || "",
+        jobTitle: lead.jobTitle || "",
+        type: lead.type || "",
+        location: lead.location || "",
       });
       leadScoreUpdates.push({ leadName: lead.name, leadCompany: lead.company || "", score });
+
+      // Phase 4: Practice node + Lead → Practice + eligibility
+      if (lead.company) {
+        importer.addNode(buildPracticeNode({
+          name: lead.company,
+          specialty: lead.type || "",
+        }));
+        importer.addRel(buildPracticesAtRel(lead.name, lead.company, lead.company));
+
+        // Link practice to specialty if type matches
+        if (lead.type) {
+          const matchedSpec = specialties.find(
+            (s) => normalizeName(s.name) === normalizeName(lead.type!)
+              || normalizeName(lead.type!).includes(normalizeName(s.name))
+          );
+          if (matchedSpec) {
+            importer.addRel(buildInSpecialtyRel(lead.company, matchedSpec.name));
+          }
+        }
+      }
+
+      // Phase 4: Lead → Program eligibility based on specialty
+      const leadSpecialty = (lead.type || lead.jobTitle || "").toLowerCase();
+      for (const prog of programs) {
+        if (prog.eligibleSpecialties.some((s) => leadSpecialty.includes(s))) {
+          importer.addRel(buildEligibleForRel(lead.name, lead.company || "", prog.programId));
+        }
+      }
     }
 
     // Entity extraction (skip leads to avoid noise from template fields)
@@ -234,21 +306,10 @@ async function main() {
       });
     }
 
-    // Phase 1: Chunk document
+    // Phase 1: Chunk document (for Qdrant embeddings only)
     const chunks = chunkDocument(doc.relativePath, doc.rawContent);
     if (chunks.length > 0) {
       allChunks.push({ doc, chunks });
-
-      // Add chunk nodes and relationships to graph
-      const docId = stableId("Document", doc.relativePath);
-      for (const chunk of chunks) {
-        importer.addNode(buildChunkNode(chunk, docId));
-        importer.addRel(buildHasChunkRel(doc.relativePath, chunk.documentPath, chunk.chunkIndex));
-      }
-      // NEXT_CHUNK chain
-      for (let i = 0; i < chunks.length - 1; i++) {
-        importer.addRel(buildNextChunkRel(doc.relativePath, i, i + 1));
-      }
     }
 
     // Phase 2: Collect for LLM extraction
@@ -316,8 +377,37 @@ async function main() {
         businessArm: crm.businessArm || "",
         salesFunnel: crm.salesFunnel || "",
         priority: crm.priority || "",
+        jobTitle: crm.jobTitle || "",
+        type: crm.type || "",
+        location: crm.location || "",
       });
       leadScoreUpdates.push({ leadName: crm.name, leadCompany: crm.company || "", score });
+
+      // Phase 4: Practice + eligibility for CRM leads
+      if (crm.company) {
+        importer.addNode(buildPracticeNode({
+          name: crm.company,
+          specialty: crm.type || "",
+        }));
+        importer.addRel(buildPracticesAtRel(crm.name, crm.company, crm.company));
+
+        if (crm.type) {
+          const matchedSpec = specialties.find(
+            (s) => normalizeName(s.name) === normalizeName(crm.type!)
+              || normalizeName(crm.type!).includes(normalizeName(s.name))
+          );
+          if (matchedSpec) {
+            importer.addRel(buildInSpecialtyRel(crm.company, matchedSpec.name));
+          }
+        }
+      }
+
+      const crmSpecialty = (crm.type || crm.jobTitle || "").toLowerCase();
+      for (const prog of programs) {
+        if (prog.eligibleSpecialties.some((s) => crmSpecialty.includes(s))) {
+          importer.addRel(buildEligibleForRel(crm.name, crm.company || "", prog.programId));
+        }
+      }
     }
   } else {
     console.log("  CRM CSV not found, skipping");
