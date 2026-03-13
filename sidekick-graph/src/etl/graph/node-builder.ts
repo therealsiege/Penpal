@@ -12,6 +12,7 @@ import { SkillEntry } from "../dictionaries/skills.js";
 import { BillingCodeEntry } from "../dictionaries/cms-codes.js";
 import { ProgramEntry, SpecialtyEntry } from "../dictionaries/revenue-model.js";
 import { normalizeName } from "../../shared/utils/normalize.js";
+import { WebIntelRecord } from "../parsers/web-intel-parser.js";
 
 export function buildDocumentNode(doc: ParsedDocument): NodeRecord {
   return {
@@ -256,6 +257,13 @@ export interface PracticeData {
   address?: string;
   specialty?: string;
   organizationType?: string;
+  taxonomyCode?: string;
+  practiceCity?: string;
+  practiceState?: string;
+  practiceZip?: string;
+  isSoleProprietor?: string;
+  enumerationDate?: string;
+  source?: string;
 }
 
 export function buildPracticeNode(practice: PracticeData): NodeRecord {
@@ -268,6 +276,13 @@ export function buildPracticeNode(practice: PracticeData): NodeRecord {
       address: practice.address || "",
       specialty: practice.specialty || "",
       organizationType: practice.organizationType || "",
+      taxonomyCode: practice.taxonomyCode || "",
+      practiceCity: practice.practiceCity || "",
+      practiceState: practice.practiceState || "",
+      practiceZip: practice.practiceZip || "",
+      isSoleProprietor: practice.isSoleProprietor || "",
+      enumerationDate: practice.enumerationDate || "",
+      source: practice.source || "",
     },
   };
 }
@@ -310,6 +325,29 @@ export function buildSpecialtyNode(specialty: SpecialtyEntry): NodeRecord {
       name: specialty.name,
       medicareHeavy: specialty.medicareHeavy,
       ccmPotential: specialty.ccmPotential,
+    },
+  };
+}
+
+// --- Phase 5: External Intelligence ---
+
+export function buildCompetitorProductNode(record: WebIntelRecord): NodeRecord {
+  return {
+    label: "CompetitorProduct",
+    properties: {
+      id: stableId("CompetitorProduct", normalizeName(record.company), normalizeName(record.product || record.company)),
+      name: record.product || record.company,
+      company: record.company,
+      category: record.category,
+      pricing: record.pricing || "",
+      features: (record.features || []).join("; "),
+      doesNotDo: (record.doesNotDo || []).join("; "),
+      customerCount: record.customerCount || "",
+      notableCustomers: (record.notableCustomers || []).join("; "),
+      positioning: record.positioning || "",
+      fundingInfo: record.fundingInfo || "",
+      source: record.source,
+      scrapedAt: record.scrapedAt,
     },
   };
 }

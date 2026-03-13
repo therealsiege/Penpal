@@ -52,6 +52,18 @@ export const config = {
     "extraction-cache.json",
   ),
 
+  // NPI Registry
+  npiFilePath: process.env.NPI_FILE_PATH || "/Users/fuzeelogik/Downloads/NPPES/npidata_pfile_20050523-20260308.csv",
+  npiCachePath: path.join(
+    process.env.HOME || "/tmp",
+    ".sidekick",
+    "npi-cache.json",
+  ),
+  npiApiBaseUrl: "https://npiregistry.cms.hhs.gov/api/",
+
+  // Web intelligence
+  webIntelPath: path.resolve(__dirname, "..", "..", "data", "web-intel.json"),
+
   // Document types to run LLM extraction on
   llmExtractionDocTypes: [
     "competitor",
