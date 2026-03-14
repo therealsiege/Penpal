@@ -65,16 +65,22 @@ export async function extractCompanies(
     messages: [
       {
         role: "user",
-        content: `Extract company names from these news articles.
-Only extract companies that are ${venture.companyExtractionPrompt}.
-Do NOT include large established companies (Google, Microsoft, Epic, Cerner, etc.) or news outlets.
+        content: `Extract company names from these news articles that could be potential sales leads.
+
+TARGET COMPANIES: ${venture.companyExtractionPrompt}
+
+CRITICAL RULES:
+1. Only extract companies that are POTENTIAL CUSTOMERS — companies we could sell to.
+2. The article must contain a BUYING SIGNAL: fundraising, hiring, building integrations, migrating platforms, seeking vendors, launching products.
+3. Do NOT extract companies merely mentioned in passing, quoted as sources, or referenced as industry examples.
+4. Do NOT extract companies from promotional/spam content (self-promotion posts, press releases about awards, "best of" listicles).
+5. For each company, include a 1-sentence "signal" explaining WHY this company might be a lead.
 
 Articles:
 ${articleTexts}
 
-Return ONLY a JSON array of objects: [{"company": "Name", "articles": [0, 2]}]
-where "articles" contains the index numbers of articles mentioning that company.
-If no relevant companies found, return [].`,
+Return ONLY a JSON array: [{"company": "Name", "signal": "Just raised Series A, building FHIR integration", "articles": [0, 2]}]
+If no qualifying companies found, return [].`,
       },
     ],
   });
@@ -84,7 +90,7 @@ If no relevant companies found, return [].`,
   if (!jsonMatch) return new Map();
 
   try {
-    const extracted: Array<{ company: string; articles: number[] }> = JSON.parse(jsonMatch[0]);
+    const extracted: Array<{ company: string; signal?: string; articles: number[] }> = JSON.parse(jsonMatch[0]);
     const companyMap = new Map<string, SourceArticle[]>();
 
     for (const entry of extracted) {
@@ -93,6 +99,10 @@ If no relevant companies found, return [].`,
         .filter((i) => i >= 0 && i < articles.length)
         .map((i) => articles[i]);
       if (relatedArticles.length > 0) {
+        // Attach the signal to the first article's snippet for downstream use
+        if (entry.signal && relatedArticles[0]) {
+          relatedArticles[0] = { ...relatedArticles[0], snippet: `${entry.signal}. ${relatedArticles[0].snippet}` };
+        }
         companyMap.set(entry.company, relatedArticles);
       }
     }

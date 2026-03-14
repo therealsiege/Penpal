@@ -1,0 +1,18 @@
+# HARNEY, RODNEY
+
+Location: DECATUR, AL 356031538
+Company: HARNEY, RODNEY
+NPI: 1053392795
+JobTitle: Provider
+CreatedTime: March 14, 2026 at 12:06 PM
+Type: Prospect
+Sales Funnel: Outreach
+Bio: Family Medicine practice in DECATUR, AL. 
+Business Arm: 🟢 MedScrub
+HTN Member: No
+Lead Source: NPI Registry
+Lead Score: 55
+Notes: Activated from NPPES registry. NPI: 1053392795. Specialty: Family Medicine. Address: 2828 HIGHWAY 31 S, DECATUR, AL 356031538. Enumerated: 11/09/2005.
+Previous Attempts: No
+Priority: 🔥 Hot
+Next Action: Research practice size and EHR via web search
