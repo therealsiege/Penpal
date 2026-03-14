@@ -9,6 +9,9 @@
     "mcp:dev": "tsx src/mcp/index.ts",
     "mcp:build": "tsc",
     "mcp:start": "node dist/mcp/index.js",
+    "alerts:ingest": "tsx src/etl/sales/google-alerts-ingester.ts",
+    "rss:ingest": "tsx src/etl/sales/rss-ingester.ts",
+    "ingest:all": "tsx src/etl/sales/ingest-all.ts",
     "infra:up": "docker compose up -d",
     "infra:down": "docker compose down"
   },
@@ -21,6 +24,7 @@
     "glob": "^11.0.1",
     "neo4j-driver": "^5.27.0",
     "openai": "^4.77.0",
+    "rss-parser": "^3.13.0",
     "tiktoken": "^1.0.18"
   },
   "devDependencies": {
