@@ -89,7 +89,7 @@ async function fetchFeed(feedUrl: string, feedName: string): Promise<RssArticle[
         title: item.title,
         url: item.link,
         source: feedName,
-        snippet: (item.contentSnippet || item.content || "").slice(0, 500).replace(/<[^>]*>/g, ""),
+        snippet: String(item.contentSnippet || item.content || "").slice(0, 500).replace(/<[^>]*>/g, ""),
         feedName,
         pubDate: item.pubDate,
       });
@@ -246,7 +246,11 @@ async function main() {
   console.log(`  New leads written: ${stats.leadsWritten}`);
 }
 
-main().catch((err) => {
-  console.error("RSS ingestion failed:", err);
-  process.exit(1);
-});
+// Only run main() when invoked directly (not imported by ingest-all)
+const isDirectRun = process.argv[1]?.includes("rss-ingester");
+if (isDirectRun) {
+  main().catch((err) => {
+    console.error("RSS ingestion failed:", err);
+    process.exit(1);
+  });
+}

@@ -1,0 +1,195 @@
+[
+  {
+    "source": "athenahealth.com/ai",
+    "scrapedAt": "2026-03-12",
+    "company": "athenahealth",
+    "product": "athenaAmbient",
+    "category": "ambient_scribe",
+    "pricing": "Free (bundled with athenaOne)",
+    "features": [
+      "Ambient listening during patient encounters",
+      "Auto-generates SOAP notes within athenaOne",
+      "Pre-populates ICD-10 and CPT suggestions",
+      "Zero incremental cost for athenaOne subscribers"
+    ],
+    "doesNotDo": [
+      "No CCM/RPM/APCM workflow automation",
+      "No MIPS quality measure dashboards",
+      "No payer policy intelligence or prior auth automation",
+      "No between-visit patient outreach",
+      "No multi-EHR support (athenaOne only)",
+      "No revenue capture beyond basic E/M coding"
+    ],
+    "customerCount": "170,000 providers on athenaOne",
+    "notableCustomers": [],
+    "positioning": "Ambient is a feature, not a business. Free bundled capability for athenaOne users.",
+    "fundingInfo": "Part of athenahealth (acquired by Bain Capital/Hellman & Friedman)"
+  },
+  {
+    "source": "athenahealth.com/ai",
+    "scrapedAt": "2026-03-12",
+    "company": "athenahealth",
+    "product": "Sage AI Copilot",
+    "category": "clinical_ai",
+    "pricing": "Bundled with athenaOne",
+    "features": [
+      "Chart QA chatbot",
+      "Natural language queries against patient chart",
+      "Separate from ambient scribing"
+    ],
+    "doesNotDo": [
+      "Not an ambient scribe",
+      "No revenue cycle features",
+      "No cross-EHR support"
+    ],
+    "positioning": "AI copilot companion to athenaAmbient for chart intelligence"
+  },
+  {
+    "source": "bastiongpt.com",
+    "scrapedAt": "2026-03-12",
+    "company": "BastionGPT",
+    "product": "BastionGPT",
+    "category": "safe_ai",
+    "pricing": "$20-65/month per user",
+    "features": [
+      "HIPAA-compliant ChatGPT wrapper",
+      "BAA included",
+      "SOC 2 Type II certified",
+      "Custom AI assistants",
+      "Team collaboration features"
+    ],
+    "doesNotDo": [
+      "No EHR data sync",
+      "No FHIR integration",
+      "No ambient scribing",
+      "No clinical workflow automation",
+      "No revenue cycle management"
+    ],
+    "customerCount": "9,000+ organizations",
+    "notableCustomers": ["Mayo Clinic", "UCSF"],
+    "positioning": "Safe AI for healthcare — HIPAA-compliant ChatGPT, not a clinical workflow tool",
+    "fundingInfo": "Bootstrapped, Dallas-based"
+  },
+  {
+    "source": "ambience.com",
+    "scrapedAt": "2026-03-12",
+    "company": "Ambience Healthcare",
+    "product": "Ambience AutoScribe",
+    "category": "ambient_scribe",
+    "pricing": "Enterprise pricing (undisclosed)",
+    "features": [
+      "Real-time ambient documentation",
+      "ICD-10 CDI module (inpatient)",
+      "Revenue cycle integration",
+      "Multi-specialty support",
+      "EHR-integrated workflows"
+    ],
+    "customerCount": "Unknown",
+    "notableCustomers": ["Cleveland Clinic"],
+    "positioning": "Enterprise ambient AI with revenue cycle expansion",
+    "fundingInfo": "$243M Series C (Jul 2025)"
+  },
+  {
+    "source": "suki.ai",
+    "scrapedAt": "2026-03-12",
+    "company": "Suki",
+    "product": "Suki Assistant",
+    "category": "ambient_scribe",
+    "pricing": "Undisclosed (per-provider subscription)",
+    "features": [
+      "Voice-powered clinical documentation",
+      "Ambient mode",
+      "CPT/E&M code generation",
+      "Multi-specialty note templates",
+      "EHR integrations (Epic, Cerner, athena)"
+    ],
+    "doesNotDo": [
+      "No CCM/RPM workflow automation",
+      "No payer intelligence",
+      "No MIPS dashboards"
+    ],
+    "positioning": "Expanding from scribing into revenue cycle (CPT code generation)",
+    "fundingInfo": "Undisclosed funding"
+  },
+  {
+    "source": "freed.ai",
+    "scrapedAt": "2026-03-12",
+    "company": "Freed",
+    "product": "Freed AI Scribe",
+    "category": "ambient_scribe",
+    "pricing": "Undisclosed",
+    "features": [
+      "Ambient clinical documentation",
+      "SOAP note generation",
+      "Multi-specialty support"
+    ],
+    "notableCustomers": ["US Acute Care Solutions (USACS)"],
+    "positioning": "Fast-growing ambient scribe focused on ease of use",
+    "fundingInfo": "Undisclosed funding, USACS partnership"
+  },
+  {
+    "source": "deepscribe.ai",
+    "scrapedAt": "2026-03-12",
+    "company": "DeepScribe",
+    "product": "DeepScribe",
+    "category": "ambient_scribe",
+    "pricing": "Undisclosed",
+    "features": [
+      "Ambient medical documentation",
+      "Pre-charting product",
+      "AI-generated clinical notes"
+    ],
+    "positioning": "Differentiated by pre-charting (pre-visit intelligence)",
+    "fundingInfo": "Undisclosed funding"
+  },
+  {
+    "source": "bunkerhillhealth.com",
+    "scrapedAt": "2026-03-12",
+    "company": "Bunkerhill Health",
+    "product": "Bunkerhill",
+    "category": "clinical_ai",
+    "pricing": "Undisclosed",
+    "features": [
+      "AI-powered clinical decision support",
+      "Medical imaging AI",
+      "Clinical workflow automation"
+    ],
+    "positioning": "Clinical AI with strong investor backing (Sequoia, Y Combinator)",
+    "fundingInfo": "$30M (Sequoia + Y Combinator, Feb 2026)"
+  },
+  {
+    "source": "abridge.com",
+    "scrapedAt": "2026-03-12",
+    "company": "Abridge",
+    "product": "Abridge",
+    "category": "ambient_scribe",
+    "pricing": "Enterprise pricing (undisclosed)",
+    "features": [
+      "Real-time ambient clinical documentation",
+      "Structured note generation",
+      "Epic EHR integration",
+      "Multi-language support",
+      "Enterprise deployment"
+    ],
+    "customerCount": "Major health systems",
+    "positioning": "Market leader in ambient scribing, enterprise-focused",
+    "fundingInfo": "$800M+ total ($300M Series E from a16z, Jun 2025)"
+  },
+  {
+    "source": "nuance.com/dax",
+    "scrapedAt": "2026-03-12",
+    "company": "Nuance",
+    "product": "DAX Copilot",
+    "category": "ambient_scribe",
+    "pricing": "Enterprise licensing (Microsoft-backed)",
+    "features": [
+      "Ambient clinical documentation",
+      "Microsoft integration (Teams, Azure)",
+      "Multi-specialty support",
+      "Dragon Medical vocabulary",
+      "Enterprise EHR integrations"
+    ],
+    "positioning": "Incumbent ambient documentation, Microsoft-backed enterprise play",
+    "fundingInfo": "Microsoft subsidiary (acquired $19.7B)"
+  }
+]

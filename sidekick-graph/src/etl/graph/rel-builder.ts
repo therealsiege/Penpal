@@ -387,3 +387,16 @@ export function buildEligibleSpecialtyRel(programId: string, specialtyName: stri
     type: "ELIGIBLE_SPECIALTY",
   };
 }
+
+// --- Phase 5: External Intelligence relationships ---
+
+/** Company → CompetitorProduct (HAS_PRODUCT) */
+export function buildHasProductRel(companyName: string, productName: string, productCompany: string): RelRecord {
+  return {
+    fromLabel: "Company",
+    fromId: stableId("Company", normalizeName(companyName)),
+    toLabel: "CompetitorProduct",
+    toId: stableId("CompetitorProduct", normalizeName(productCompany), normalizeName(productName)),
+    type: "HAS_PRODUCT",
+  };
+}

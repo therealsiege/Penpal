@@ -372,7 +372,11 @@ async function main() {
   console.log(`  New leads written: ${stats.leadsWritten}`);
 }
 
-main().catch((err) => {
-  console.error("Google Alerts ingestion failed:", err);
-  process.exit(1);
-});
+// Only run main() when invoked directly (not imported by ingest-all)
+const isDirectRun = process.argv[1]?.includes("google-alerts-ingester");
+if (isDirectRun) {
+  main().catch((err) => {
+    console.error("Google Alerts ingestion failed:", err);
+    process.exit(1);
+  });
+}
