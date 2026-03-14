@@ -127,7 +127,7 @@ export function routeAlertKeyword(keyword: string): VentureProfile[] {
  * Used by RSS ingester to determine which ventures an article is relevant to.
  */
 export function routeArticleToVentures(title: string, content: string): VentureProfile[] {
-  const text = `${title} ${content}`.toLowerCase();
+  const text = `${String(title || "")} ${String(content || "")}`.toLowerCase();
   const matches: VentureProfile[] = [];
 
   // MedScrub signals

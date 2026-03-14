@@ -14,6 +14,8 @@ import { pipelineStatusSchema, pipelineStatus } from "./tools/pipeline-status.js
 import { discoverConnectionsSchema, discoverConnections } from "./tools/discover-connections.js";
 import { listCommunitiesSchema, listCommunities } from "./tools/list-communities.js";
 import { revenueOpportunitySchema, revenueOpportunity } from "./tools/revenue-opportunity.js";
+import { updateLeadSchema, updateLead } from "./tools/update-lead.js";
+import { getPipelineSchema, getPipeline } from "./tools/get-pipeline.js";
 
 const server = new Server(
   {
@@ -40,6 +42,8 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       discoverConnectionsSchema,
       listCommunitiesSchema,
       revenueOpportunitySchema,
+      updateLeadSchema,
+      getPipelineSchema,
     ],
   };
 });
@@ -78,6 +82,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         break;
       case "revenue_opportunity":
         result = await revenueOpportunity(args as Parameters<typeof revenueOpportunity>[0]);
+        break;
+      case "update_lead":
+        result = await updateLead(args as Parameters<typeof updateLead>[0]);
+        break;
+      case "get_pipeline":
+        result = await getPipeline(args as Parameters<typeof getPipeline>[0]);
         break;
       default:
         return {

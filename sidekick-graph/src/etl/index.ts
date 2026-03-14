@@ -44,6 +44,7 @@ import {
   buildProgramNode,
   buildSpecialtyNode,
   buildPracticeNode,
+  buildCompetitorProductNode,
 } from "./graph/node-builder.js";
 import {
   buildInFolderRel,
@@ -65,6 +66,7 @@ import {
   buildPracticesAtRel,
   buildInSpecialtyRel,
   buildEligibleSpecialtyRel,
+  buildHasProductRel,
 } from "./graph/rel-builder.js";
 import { stableId } from "../shared/utils/id.js";
 import { normalizeName } from "../shared/utils/normalize.js";
@@ -76,11 +78,14 @@ import { regulations } from "./dictionaries/regulations.js";
 import { skills } from "./dictionaries/skills.js";
 import { billingCodes } from "./dictionaries/cms-codes.js";
 import { programs, skillRevenueMap, specialties } from "./dictionaries/revenue-model.js";
+import { streamNPIProspects, batchQueryNPIApi } from "./parsers/npi-parser.js";
+import { parseWebIntel } from "./parsers/web-intel-parser.js";
 
 const isClean = process.argv.includes("--clean");
 const skipEmbeddings = process.argv.includes("--skip-embeddings");
 const skipLLM = process.argv.includes("--skip-llm");
 const skipAnalytics = process.argv.includes("--skip-analytics");
+const skipNPI = process.argv.includes("--skip-npi");
 
 async function main() {
   console.log("Sidekick Knowledge Base → Memgraph + Qdrant Import");
@@ -89,6 +94,7 @@ async function main() {
   if (skipEmbeddings) console.log("  Skipping embeddings (--skip-embeddings)");
   if (skipLLM) console.log("  Skipping LLM extraction (--skip-llm)");
   if (skipAnalytics) console.log("  Skipping MAGE analytics (--skip-analytics)");
+  if (skipNPI) console.log("  Skipping NPI enrichment (--skip-npi)");
   console.log();
 
   // 1. Connect
@@ -202,6 +208,9 @@ async function main() {
   // Phase 3: Lead scoring data
   const leadScoreUpdates: { leadName: string; leadCompany: string; score: number }[] = [];
 
+  // Phase 5: NPI enrichment data
+  const leadsForNPI: Array<{ name: string; company: string; state: string }> = [];
+
   for (const relPath of mdFiles) {
     const absPath = path.join(config.vaultPath, relPath);
     const doc = parseMarkdownFile(absPath);
@@ -261,6 +270,14 @@ async function main() {
         location: lead.location || "",
       });
       leadScoreUpdates.push({ leadName: lead.name, leadCompany: lead.company || "", score });
+
+      // Phase 5: Collect for NPI enrichment
+      if (lead.company && lead.location) {
+        const stateAbbr = extractStateAbbr(lead.location);
+        if (stateAbbr) {
+          leadsForNPI.push({ name: lead.name, company: lead.company, state: stateAbbr });
+        }
+      }
 
       // Phase 4: Practice node + Lead → Practice + eligibility
       if (lead.company) {
@@ -383,6 +400,14 @@ async function main() {
       });
       leadScoreUpdates.push({ leadName: crm.name, leadCompany: crm.company || "", score });
 
+      // Phase 5: Collect CRM leads for NPI enrichment
+      if (crm.company && crm.location) {
+        const stateAbbr = extractStateAbbr(crm.location);
+        if (stateAbbr) {
+          leadsForNPI.push({ name: crm.name, company: crm.company, state: stateAbbr });
+        }
+      }
+
       // Phase 4: Practice + eligibility for CRM leads
       if (crm.company) {
         importer.addNode(buildPracticeNode({
@@ -427,11 +452,96 @@ async function main() {
   }
   console.log(`  Scored ${leadScoreUpdates.length} leads`);
 
-  // 11. Final graph flush
+  // 11. Phase 5: NPI Enrichment
+  if (!skipNPI) {
+    console.log("\n--- Phase 5: NPI Enrichment ---");
+
+    // 11a. Enrich existing leads via NPI API
+    if (leadsForNPI.length > 0) {
+      console.log(`  Enriching ${leadsForNPI.length} leads via NPI API...`);
+      const npiMatches = await batchQueryNPIApi(leadsForNPI);
+
+      for (const [key, npiRecord] of npiMatches) {
+        // Update existing Practice node with NPI data
+        const orgName = npiRecord.organizationName || key.split("|")[0];
+        importer.addNode(buildPracticeNode({
+          name: orgName,
+          npi: npiRecord.npi,
+          address: npiRecord.practiceAddress,
+          taxonomyCode: npiRecord.taxonomyCode,
+          practiceCity: npiRecord.practiceCity,
+          practiceState: npiRecord.practiceState,
+          practiceZip: npiRecord.practiceZip,
+          isSoleProprietor: npiRecord.isSoleProprietor,
+          enumerationDate: npiRecord.enumerationDate,
+          specialty: npiRecord.taxonomyDescription,
+        }));
+      }
+      console.log(`  Enriched ${npiMatches.size} practices with NPI data`);
+    }
+
+    // 11b. Source new prospects from NPPES CSV (if file exists)
+    if (config.npiFilePath) {
+      try {
+        const prospects = await streamNPIProspects();
+        let newProspects = 0;
+
+        for (const prospect of prospects) {
+          const name = prospect.organizationName || `${prospect.providerLastName}, ${prospect.providerFirstName}`;
+          if (!name || name === ", ") continue;
+
+          importer.addNode(buildPracticeNode({
+            name,
+            npi: prospect.npi,
+            address: prospect.practiceAddress,
+            taxonomyCode: prospect.taxonomyCode,
+            practiceCity: prospect.practiceCity,
+            practiceState: prospect.practiceState,
+            practiceZip: prospect.practiceZip,
+            isSoleProprietor: prospect.isSoleProprietor,
+            enumerationDate: prospect.enumerationDate,
+            specialty: prospect.taxonomyDescription,
+            source: "npi-registry",
+          }));
+          newProspects++;
+        }
+        console.log(`  Added ${newProspects} NPI-sourced prospect Practice nodes`);
+      } catch (err) {
+        console.warn(`  Warning: NPI CSV streaming failed:`, (err as Error).message);
+      }
+    }
+  } else {
+    console.log("\n--- Skipping NPI enrichment (--skip-npi) ---");
+  }
+
+  // 12. Phase 5: Web Intel Ingestion
+  console.log("\n--- Phase 5: Web Intelligence Ingestion ---");
+  const webIntelRecords = parseWebIntel();
+  if (webIntelRecords.length > 0) {
+    for (const record of webIntelRecords) {
+      importer.addNode(buildCompetitorProductNode(record));
+
+      // Link to existing Company node if it exists in our dictionaries
+      const companyMatch = companies.find(
+        (c) => normalizeName(c.name) === normalizeName(record.company)
+          || c.aliases?.some((a) => normalizeName(a) === normalizeName(record.company))
+      );
+      if (companyMatch) {
+        importer.addRel(buildHasProductRel(
+          companyMatch.name,
+          record.product || record.company,
+          record.company,
+        ));
+      }
+    }
+    console.log(`  Ingested ${webIntelRecords.length} competitor product records`);
+  }
+
+  // 13. Final graph flush
   console.log("\n--- Final graph flush ---");
   await importer.flush();
 
-  // 12. Phase 1: Embeddings + Qdrant
+  // 14. Phase 1: Embeddings + Qdrant
   if (!skipEmbeddings && config.openaiApiKey) {
     console.log("\n--- Phase 1: Generating embeddings + Qdrant upsert ---");
     await ensureCollections();
@@ -514,7 +624,7 @@ async function main() {
     console.log("\n--- Skipping embeddings (OPENAI_API_KEY not set) ---");
   }
 
-  // 13. Phase 2: LLM Entity Extraction
+  // 15. Phase 2: LLM Entity Extraction
   if (!skipLLM && config.anthropicApiKey && docsForLLM.length > 0) {
     console.log(`\n--- Phase 2: LLM entity extraction (${docsForLLM.length} documents) ---`);
 
@@ -624,17 +734,50 @@ async function main() {
     console.log("\n--- Skipping LLM extraction (ANTHROPIC_API_KEY not set) ---");
   }
 
-  // 14. Phase 3: MAGE Analytics
+  // 16. Phase 3: MAGE Analytics
   if (!skipAnalytics) {
     await runAllAnalytics();
   }
 
-  // 15. Print stats
+  // 17. Print stats
   importer.printStats();
 
   // Cleanup
   await closeConnections();
   console.log("\nImport complete.");
+}
+
+// US state name → abbreviation mapping for NPI enrichment
+const STATE_ABBRS: Record<string, string> = {
+  alabama: "AL", alaska: "AK", arizona: "AZ", arkansas: "AR", california: "CA",
+  colorado: "CO", connecticut: "CT", delaware: "DE", florida: "FL", georgia: "GA",
+  hawaii: "HI", idaho: "ID", illinois: "IL", indiana: "IN", iowa: "IA",
+  kansas: "KS", kentucky: "KY", louisiana: "LA", maine: "ME", maryland: "MD",
+  massachusetts: "MA", michigan: "MI", minnesota: "MN", mississippi: "MS", missouri: "MO",
+  montana: "MT", nebraska: "NE", nevada: "NV", "new hampshire": "NH", "new jersey": "NJ",
+  "new mexico": "NM", "new york": "NY", "north carolina": "NC", "north dakota": "ND",
+  ohio: "OH", oklahoma: "OK", oregon: "OR", pennsylvania: "PA", "rhode island": "RI",
+  "south carolina": "SC", "south dakota": "SD", tennessee: "TN", texas: "TX", utah: "UT",
+  vermont: "VT", virginia: "VA", washington: "WA", "west virginia": "WV",
+  wisconsin: "WI", wyoming: "WY",
+};
+
+function extractStateAbbr(location: string): string | null {
+  const lower = location.toLowerCase().trim();
+
+  // Check for full state name
+  for (const [name, abbr] of Object.entries(STATE_ABBRS)) {
+    if (lower.includes(name)) return abbr;
+  }
+
+  // Check for 2-letter abbreviation at end (e.g., "Dallas, TX")
+  const match = location.match(/\b([A-Z]{2})\b/);
+  if (match) {
+    const abbr = match[1];
+    if (Object.values(STATE_ABBRS).includes(abbr)) return abbr;
+  }
+
+  return null;
 }
 
 main().catch((err) => {

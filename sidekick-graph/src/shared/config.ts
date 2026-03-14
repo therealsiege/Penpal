@@ -38,6 +38,9 @@ export const config = {
   // Anthropic (entity extraction + RAG)
   anthropicApiKey: process.env.ANTHROPIC_API_KEY || "",
 
+  // Firecrawl (company enrichment for lead ingestion)
+  firecrawlApiKey: process.env.FIRECRAWL_API_KEY || "",
+
   // Embedding cache location
   embeddingCachePath: path.join(
     process.env.HOME || "/tmp",
@@ -60,6 +63,9 @@ export const config = {
     "npi-cache.json",
   ),
   npiApiBaseUrl: "https://npiregistry.cms.hhs.gov/api/",
+
+  // Brave Search (company enrichment)
+  braveApiKey: process.env.BRAVE_API_KEY || "",
 
   // Web intelligence
   webIntelPath: path.resolve(__dirname, "..", "..", "data", "web-intel.json"),

@@ -1,7 +1,7 @@
 
 > Auto-generated from the Sidekick Knowledge Graph (Memgraph + Qdrant)
 > Date: 2026-03-12 | Nodes: 9,906+ | Relationships: 30,827+
-> Updated: 2026-03-12 — Revenue Intelligence expansion (Phase 4)
+> Updated: 2026-03-12 — External Intelligence expansion (Phase 5: NPI enrichment, competitive scraping, design partner sourcing)
 
 ---
 
@@ -42,7 +42,7 @@ MedScrub operates across 25 identified markets. The core positioning spans:
 | Bunkerhill Health   | $30M (Sequoia, Y Combinator) | 31,550           | Medium                   |
 | Freed               | Undisclosed                  | 30,923           | Medium                   |
 | Corti               | $87M ($260M valuation)       | 26,551           | Medium                   |
-| BastionGPT          | Bootstrapped, Dallas         | 23,183           | Low — closest analog     |
+| BastionGPT          | Bootstrapped, Dallas ($20-65/mo, 9K+ orgs) | 23,183 | Low — NOT a direct competitor (HIPAA ChatGPT wrapper) |
 | Tortus              | $4.2M seed (Khosla)          | 14,641           | Low                      |
 | DeepScribe          | Undisclosed                  | 12,785           | Low                      |
 | Secai               | $6.2M Series A               | 520              | Low                      |
@@ -90,10 +90,13 @@ MedScrub operates across 25 identified markets. The core positioning spans:
 
 athenahealth is launching **athenaAmbient** — free ambient clinical note generation bundled into athenaOne. This directly commoditizes MedScrub's core scribing/SOAP note feature for the primary lead base.
 
-### Timeline
+### Timeline (Confirmed)
 
-- **Beta**: Rolling out to select practices in early 2026
+- **User testing**: Began February 2026 with select practices
 - **GA**: Expected mid-to-late 2026
+- **CEO quote**: "Ambient is a feature, not a business"
+- **Reach**: 170,000 providers on athenaOne platform
+- **Companion**: Sage AI copilot (chart QA chatbot, separate product)
 - **Impact window**: 6-12 months before widespread adoption
 
 ### What athenaAmbient Does
@@ -352,16 +355,16 @@ These scored highly but have no presence in MedScrub's current feature roadmap:
 - No NPS or satisfaction scores
 - No churn data or risk signals
 
-#### Practice Firmographics
+#### Practice Firmographics (Partially Filled -- Phase 5)
 
-- No NPI data (practice size, provider count, taxonomy codes)
+- ~~No NPI data (practice size, provider count, taxonomy codes)~~ **FILLED**: NPI Registry enrichment via API + 11GB NPPES CSV scan. Practice nodes now include NPI, taxonomy codes, addresses, sole proprietor status, enumeration date.
 - No panel size estimates per lead/practice
 - No Medicare patient volume per practice
 - No practice technology stack beyond EHR (PM system, billing software)
 
-#### Market Intelligence
+#### Market Intelligence (Partially Filled -- Phase 5)
 
-- No real-time competitor pricing data
+- ~~No real-time competitor pricing data~~ **FILLED**: Pricing data collected for BastionGPT ($20-65/mo), athenaAmbient (free), Heidi (~$99/mo). Enterprise pricing for Abridge, Ambience, Nuance remains undisclosed.
 - No athena Marketplace app download counts or ratings
 - No CMS PECOS enrollment data (which practices bill which programs)
 - No geographic demand heatmaps for specific services
@@ -594,3 +597,63 @@ The MAGE community detection algorithm identified these natural groupings:
 - **Enterprise Patient Communications at scale** — 10+ well-funded competitors
 - **Healthcare AI Infrastructure platform play** — too broad, stay focused on clinical workflows
 - **Build RPM before CCM/APCM** — RPM requires hardware partnerships; CCM/APCM are software-only
+
+---
+
+## 17. External Intelligence Sources (Phase 5)
+
+### Data Sources Integrated
+
+| Source | Type | Date | Key Findings |
+|---|---|---|---|
+| NPI Registry (NPPES CSV) | 11GB provider database | 2026-03-12 | Practice enrichment: NPI, taxonomy codes, addresses, sole proprietor status for leads |
+| NPI Registry API | Real-time API (no auth) | 2026-03-12 | Organization-level NPI lookup for 443 CRM leads |
+| athenahealth.com | Web intelligence | 2026-03-12 | athenaAmbient confirmed: free, Feb 2026 user testing, 170K providers, Sage AI copilot |
+| bastiongpt.com | Web intelligence | 2026-03-12 | NOT a competitor: $20-65/mo HIPAA ChatGPT wrapper, 9K+ orgs, no EHR integration |
+| ambience.com | Web intelligence | 2026-03-12 | $243M Series C, Cleveland Clinic partnership, inpatient ICD-10 CDI module |
+| suki.ai | Web intelligence | 2026-03-12 | Expanding into CPT/E&M code generation (revenue cycle adjacent) |
+| freed.ai | Web intelligence | 2026-03-12 | USACS partnership, fast-growing ambient scribe |
+| deepscribe.ai | Web intelligence | 2026-03-12 | Pre-charting product differentiation |
+| bunkerhillhealth.com | Web intelligence | 2026-03-12 | $30M Sequoia/YC (Feb 2026) |
+| Market research | Secondary research | 2026-03-12 | 66% physicians using AI, 77% cite immature tools, CMS ACCESS Model July 2026 |
+
+### New Graph Nodes Added
+
+| Node Type | Count | Source |
+|---|---|---|
+| CompetitorProduct | 10 | Web intelligence scraping |
+| Practice (NPI-enriched) | Pending ETL run | NPI Registry |
+| Practice (NPI-sourced) | Pending ETL run | NPPES CSV (FM/IM in target states) |
+
+### New Relationships Added
+
+| Relationship | Description |
+|---|---|
+| Company -[:HAS_PRODUCT]-> CompetitorProduct | Links competitor companies to their specific products |
+
+### Market Signals
+
+- **66% of physicians** now using AI tools (up from ~20% in 2024)
+- **77% cite "immature tools"** as primary barrier to adoption -- opportunity for "it just works" positioning
+- **CMS ACCESS Model** launching July 2026 -- adds incentives for practices using technology for chronic care management
+- **Stanford research** validates ambient scribing reduces burnout -- table stakes validation, not differentiation
+- **athenahealth CEO**: "Ambient is a feature, not a business" -- confirms scribing commoditization thesis
+
+### Blindspots Remaining
+
+| Blindspot | Priority | Next Step |
+|---|---|---|
+| Ambience detailed feature list + pricing | High | Deep scrape of ambience.com product pages |
+| Suki pricing confirmation | Medium | G2 reviews or direct inquiry |
+| Competitor customer counts | Medium | Monitor press releases, LinkedIn |
+| CMS PECOS data (which practices bill CCM) | High | Integrate PECOS public data |
+| athena Marketplace ratings | Low | Manual check or scrape |
+| Corti, Augmedix, Secai profiles | Low | Web scraping when capacity allows |
+
+### Output Documents Generated
+
+| Document | Location | Purpose |
+|---|---|---|
+| Competitive Intelligence Matrix | `Product/Competitive Intelligence Matrix.md` | Feature/pricing comparison across 9 products |
+| Design Partner Shortlist | `Sales/Design Partner Shortlist.md` | Top 15 pilot candidates with criteria + outreach strategy |
+| Messaging Playbook | `Product/Messaging Playbook.md` | Revenue Engine positioning, persona pitches, objection handlers |

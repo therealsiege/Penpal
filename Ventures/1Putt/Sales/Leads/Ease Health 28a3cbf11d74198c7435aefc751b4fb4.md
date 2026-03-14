@@ -1,0 +1,16 @@
+# Ease Health
+
+Location: KeyCare Raises ...
+Company: Ease Health
+JobTitle: Zach Cohen
+CreatedTime: March 13, 2026 at 10:19 PM
+Type: Prospect
+Sales Funnel: Outreach
+Bio: Ease Health, a U.S.-based digital health startup, has officially emerged from stealth mode with the announcement of a $41 million Series A funding round led by . Funding: seed round. Tech signals: EHR, interoperability
+Business Arm: 🟠 1Putt Health
+HTN Member: No
+Lead Source: Google Alerts
+Notes: Discovered via Google Alerts. Keywords: healthcare, AI, digital health, series A, series B. Sources: [Ease Health Emerges from Stealth with $41M from Andreessen Horowitz |](https://www.healthcareittoday.com/2026/03/13/ease-health-emerges-from-stealth-with-41m-from-andreessen-horowitz-keycare-raises-27-4-million/)
+Previous Attempts: No
+Priority: 🔥 Hot
+Next Action: Research and qualify

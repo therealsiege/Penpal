@@ -6,7 +6,7 @@
 
 MedScrub's lead generation system identifies healthcare companies that need FHIR integration, SMART on FHIR apps, clinical documentation tools, or interoperability consulting. We monitor multiple sources, qualify leads against our ICP, and push them into the CRM for structured outreach.
 
-The system runs on a weekly cycle: scan sources → research companies → qualify → add to CRM → outreach. A weekly cron job (Mondays 9 AM CT) automates the scanning phase.
+The system runs on a daily cycle: scan sources → research companies → qualify → add to SideKick (CRM) → outreach. A daily cron job (8 AM CT) automates the scanning phase.
 
 ---
 
@@ -14,20 +14,31 @@ The system runs on a weekly cycle: scan sources → research companies → quali
 
 ## Google Alerts
 
-12 alert terms configured, weekly digest to [fuzeelogik@gmail.com](mailto:fuzeelogik@gmail.com) in 'Google Alerts' folder:
+15 alert terms configured, delivered ad-hoc to [fuzeelogik@gmail.com](mailto:fuzeelogik@gmail.com) in 'Google Alerts' folder (emails arrive as Google finds articles — ingester queries `newer_than:2d` daily to catch everything):
 
+**Company/hiring signals (high yield):**
 - FHIR integration startup
 - SMART on FHIR app development
 - healthcare interoperability company
 - clinical documentation AI
 - EHR integration startup
 - Medplum developer
+- Medplum implementation
 - fractional CTO healthcare
 - healthcare API startup funding
 - FHIR engineer hiring
-- CMS interoperability rule compliance
 - healthcare data exchange platform
 - digital health FHIR
+- HL7 FHIR developer
+- Epic App Orchard developer
+- digital health Series A
+
+**Removed:** `CMS interoperability rule compliance` — pulls regulatory news, not company signals. Handle regulatory intel separately (see below).
+
+> **Note on regulatory alerts:** Terms like "prior authorization API" or "TEFCA onboarding" surface CMS press releases and policy blogs, not small companies. Better sources:
+> - TEFCA participant list (sequoiaproject.org) — check monthly for new orgs joining
+> - CMS enforcement timeline — set calendar reminders at mandate deadlines, then proactively search
+> - Health IT newsletters (HIMSS Daily, Politico Health) for regulatory context
 
 ## LinkedIn Jobs
 
@@ -48,16 +59,33 @@ The system runs on a weekly cycle: scan sources → research companies → quali
 - HL7/FHIR consulting gigs
 - Signal: Companies posting projects need help NOW
 
-## HN Who's Hiring
+## Hacker News (Automated)
 
-- Monthly thread on Hacker News
-- Search for: FHIR, healthcare, EHR, clinical, interoperability
-- Early-stage startups often post here
+Automated via `sources/hn-source.ts` — no API key required (Algolia API).
 
-## Reddit
+**Queries:**
+- `healthcare FHIR` (tag: job, last 30 days)
+- `health tech HIPAA` (tag: story, last 7 days)
+- `clinical AI startup` (tag: story, last 7 days)
+- `EHR integration startup` (tag: story, last 7 days)
+- `digital health FHIR` (tag: story, last 7 days)
 
+Also monitor the monthly "Who's Hiring" thread manually for FHIR/healthcare/EHR/clinical/interoperability mentions.
+
+## Reddit (Automated)
+
+Automated via `sources/reddit-source.ts` — no API key required (public JSON API).
+
+**Subreddits monitored:**
 - r/healthIT — industry discussions, vendor complaints, integration questions
-- r/FamilyMedicine — physician pain points with EHR/documentation
+- r/medicine — physician perspectives on health tech
+- r/EHR — EHR-specific discussions
+- r/healthinformatics — informatics and interoperability topics
+- r/FamilyMedicine — physician pain points with EHR/documentation (manual)
+
+**Search terms (per subreddit, last 7 days):**
+- "AI HIPAA", "PHI AI", "AI documentation physician"
+- "FHIR startup", "EHR integration", "clinical AI", "ambient scribe"
 
 ## Other Sources
 
@@ -146,12 +174,17 @@ Leads flow through these stages in the Notion CRM:
 
 # Automation
 
-Weekly cron job runs Mondays at 9 AM CT:
+Daily cron job runs at 8 AM CT on Clint's Mac Studio:
 
-- Scans all lead sources for new signals
-- Researches companies found (CEO/CTO, funding, tech stack)
-- Checks for duplicates against existing CRM entries
-- Adds qualified leads to Notion CRM with full details
-- Uses Firecrawl for deep research (~30-40 searches per run, budget ~3k credits/cycle)
+- Fetches last 2 days of Google Alert emails from fuzeelogik@gmail.com
+- Parses HTML digests, extracts company mentions via Claude Haiku
+- Deduplicates against existing leads in vault
+- Enriches each company via Firecrawl (search + homepage scrape) — ~2 credits/company
+- Scores against MedScrub ICP (0-100)
+- Writes markdown lead files to vault → SideKick ETL picks up → Memgraph + Qdrant
+- Run manually: `cd ~/sidekick/sidekick-graph && npm run alerts:ingest`
+- Logs: `~/sidekick/sidekick-graph/logs/alerts-ingest.log`
+
+**SideKick is the CRM** (replaced Notion). Use MCP tools `get_pipeline` and `update_lead` to manage leads.
 
 Manual review follows each automated run to prioritize outreach.
