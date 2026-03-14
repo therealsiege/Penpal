@@ -69,10 +69,14 @@ export const ventureProfiles: Record<string, VentureProfile> = {
     slug: "1putt",
     leadsDir: "Ventures/1Putt/Sales/Leads",
     alertKeywords: [
-      "healthcare IT consulting",
-      "health tech implementation",
-      "EHR migration",
+      "healthcare CTO hire",
+      "FHIR consultant",
+      "EHR migration consulting",
       "healthcare interoperability mandate",
+      "health tech implementation partner",
+      "healthcare IT consulting RFP",
+      "digital health technical advisor",
+      "Epic implementation consulting",
     ],
     rssFeeds: [
       { url: "https://histalk2.com/feed/", name: "HIStalk" },
