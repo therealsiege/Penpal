@@ -12,6 +12,7 @@
     "alerts:ingest": "tsx src/etl/sales/google-alerts-ingester.ts",
     "rss:ingest": "tsx src/etl/sales/rss-ingester.ts",
     "ingest:all": "tsx src/etl/sales/ingest-all.ts",
+    "npi:activate": "tsx src/etl/sales/npi-activator.ts",
     "infra:up": "docker compose up -d",
     "infra:down": "docker compose down"
   },

@@ -41,8 +41,13 @@ export const ventureProfiles: Record<string, VentureProfile> = {
       { url: "https://www.cms.gov/newsroom/rss-feeds", name: "CMS Newsroom" },
     ],
     scoringProfile: "clinical",
-    companyExtractionPrompt:
-      "healthcare startups, clinical AI companies, practice management tools, or companies serving independent physician practices",
+    companyExtractionPrompt: `early-stage healthcare startups (Seed to Series C) that are:
+- Building clinical AI or ambient scribe tools for primary care or independent practices
+- Practice management platforms targeting small/independent physician groups
+- Population health or screening compliance tools
+
+EXCLUDE: large established companies (Epic, Cerner, Google, Amazon, UnitedHealth), news outlets, hospitals/health systems themselves, orthodontists, dental practices, specialty clinics, pharmaceutical companies, and insurance companies.
+Only include a company if the article suggests they are BUILDING technology, not just USING it.`,
   },
   medhook: {
     name: "MedHook",
@@ -62,8 +67,14 @@ export const ventureProfiles: Record<string, VentureProfile> = {
       { url: "https://www.fiercehealthcare.com/rss/xml", name: "Fierce Healthcare" },
     ],
     scoringProfile: "integration",
-    companyExtractionPrompt:
-      "health tech startups, digital health companies building EHR integrations, healthcare data platforms, or companies needing HL7/FHIR/X12 connectivity",
+    companyExtractionPrompt: `health tech startups or digital health companies (Seed to Series C) that show signals of NEEDING integration help:
+- Actively building or struggling with EHR integrations (Epic, Cerner, athena)
+- Using or replacing Mirth Connect, Rhapsody, or legacy HL7v2 infrastructure
+- Building healthcare data platforms that need FHIR/HL7/X12 connectivity
+- Hiring integration engineers or posting about integration challenges
+
+EXCLUDE: large established companies (Epic, Cerner, Google, Amazon, Microsoft, Palantir), EHR vendors themselves, news outlets, hospitals, health systems, insurers, and pharmaceutical companies.
+Only include companies that appear to be BUILDING integration technology or STRUGGLING with connectivity — not companies merely mentioned in passing.`,
   },
   "1putt": {
     name: "1Putt Health",
@@ -84,8 +95,14 @@ export const ventureProfiles: Record<string, VentureProfile> = {
       { url: "https://www.healthit.gov/buzz-blog/feed", name: "ONC HealthIT" },
     ],
     scoringProfile: "consulting",
-    companyExtractionPrompt:
-      "healthcare organizations, hospitals, health systems, or companies seeking technology consulting, EHR implementations, or interoperability solutions",
+    companyExtractionPrompt: `digital health companies or healthcare organizations that show signals of NEEDING consulting help:
+- Companies announcing EHR migrations, platform re-architectures, or vendor transitions
+- Startups that just raised funding and need to build a technical team or strategy
+- Organizations issuing RFPs for healthcare IT implementation or interoperability
+- Companies mentioned as hiring a CTO, VP of Engineering, or seeking technical advisors
+
+EXCLUDE: large established consultancies (Deloitte, Accenture, McKinsey), EHR vendors, news outlets, government agencies, and companies merely mentioned in policy or regulatory news.
+Only include companies with a clear signal they need EXTERNAL technical help — not companies reporting quarterly earnings or making acquisitions.`,
   },
 };
 
