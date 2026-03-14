@@ -37,6 +37,7 @@ export const ventureProfiles: Record<string, VentureProfile> = {
     rssFeeds: [
       { url: "https://histalk2.com/feed/", name: "HIStalk" },
       { url: "https://medcitynews.com/feed/", name: "MedCity News" },
+      // CMS feed embeds HTML anchor tags in <link> elements; handled by cleanItemLink()
       { url: "https://www.cms.gov/newsroom/rss-feeds", name: "CMS Newsroom" },
     ],
     scoringProfile: "clinical",

@@ -22,11 +22,19 @@ const SEEN_PATH = path.resolve(__dirname, "..", "..", "..", "data", "rss-seen.js
 
 // ─── Dedup Cache ─────────────────────────────────────────────────────────────
 
+const SEEN_CAP = 500;
+const POLLUTED_RE = /%3c|%22|%3e/i;
+
 function loadSeenUrls(): Set<string> {
   try {
     if (fs.existsSync(SEEN_PATH)) {
-      const data = JSON.parse(fs.readFileSync(SEEN_PATH, "utf-8"));
-      return new Set(data);
+      const data: string[] = JSON.parse(fs.readFileSync(SEEN_PATH, "utf-8"));
+      const clean = data.filter((u) => !POLLUTED_RE.test(u));
+      const removed = data.length - clean.length;
+      if (removed > 0) {
+        console.log(`  Cleaned ${removed} polluted entries from seen cache`);
+      }
+      return new Set(clean);
     }
   } catch {
     // Corrupted file — start fresh
@@ -39,7 +47,12 @@ function saveSeenUrls(seen: Set<string>): void {
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true });
   }
-  fs.writeFileSync(SEEN_PATH, JSON.stringify([...seen], null, 2), "utf-8");
+  // Cap at SEEN_CAP entries, keeping the most recent (Set insertion order)
+  let entries = [...seen];
+  if (entries.length > SEEN_CAP) {
+    entries = entries.slice(entries.length - SEEN_CAP);
+  }
+  fs.writeFileSync(SEEN_PATH, JSON.stringify(entries, null, 2), "utf-8");
 }
 
 function urlHash(url: string): string {
@@ -49,6 +62,21 @@ function urlHash(url: string): string {
     return `${u.hostname}${u.pathname}`.toLowerCase().replace(/\/$/, "");
   } catch {
     return url.toLowerCase();
+  }
+}
+
+/** Extract a clean URL from link values that may contain embedded HTML anchors. */
+function cleanItemLink(raw: string, feedUrl: string): string {
+  const trimmed = raw.trim();
+  const anchorMatch = trimmed.match(/<a\s[^>]*href=["']([^"']+)["'][^>]*>/i);
+  if (!anchorMatch) return trimmed;
+
+  const href = anchorMatch[1];
+  try {
+    // Resolve relative URLs against the feed's origin
+    return new URL(href, feedUrl).href;
+  } catch {
+    return href;
   }
 }
 
@@ -71,13 +99,14 @@ async function fetchFeed(feedUrl: string, feedName: string): Promise<RssArticle[
     },
   });
 
-  try {
+  async function attempt(): Promise<RssArticle[]> {
     const feed = await parser.parseURL(feedUrl);
     const articles: RssArticle[] = [];
 
     for (const item of feed.items || []) {
       const itemTitle = typeof item.title === "string" ? item.title : (item.title as any)?._ ?? JSON.stringify(item.title ?? "");
-      const itemLink = typeof item.link === "string" ? item.link : (item.link as any)?.href ?? "";
+      const rawLink = typeof item.link === "string" ? item.link : (item.link as any)?.href ?? "";
+      const itemLink = cleanItemLink(rawLink, feedUrl);
       if (!itemTitle || !itemLink) continue;
 
       // Only process articles from last 7 days
@@ -98,9 +127,19 @@ async function fetchFeed(feedUrl: string, feedName: string): Promise<RssArticle[
     }
 
     return articles;
+  }
+
+  try {
+    return await attempt();
   } catch (err) {
-    console.warn(`  Failed to fetch ${feedName} (${feedUrl}): ${(err as Error).message}`);
-    return [];
+    console.warn(`  ${feedName}: fetch failed, retrying in 2s... (${(err as Error).message})`);
+    await new Promise((r) => setTimeout(r, 2000));
+    try {
+      return await attempt();
+    } catch (retryErr) {
+      console.warn(`  ${feedName}: retry failed, skipping. (${(retryErr as Error).message})`);
+      return [];
+    }
   }
 }
 
@@ -127,13 +166,24 @@ export async function ingestRss(targetVentures?: VentureProfile[]): Promise<{
     }
   }
 
-  // 1. Fetch all feeds
+  // 1. Fetch all feeds in parallel
   console.log(`Fetching ${feedMap.size} RSS feeds...`);
   const allArticles: RssArticle[] = [];
+  const feeds = [...feedMap.values()];
 
-  for (const feed of feedMap.values()) {
-    const articles = await fetchFeed(feed.url, feed.name);
-    console.log(`  ${feed.name}: ${articles.length} articles`);
+  const results = await Promise.allSettled(
+    feeds.map((feed) => fetchFeed(feed.url, feed.name)),
+  );
+
+  for (let i = 0; i < feeds.length; i++) {
+    const feed = feeds[i];
+    const result = results[i];
+    const articles = result.status === "fulfilled" ? result.value : [];
+    if (articles.length === 0) {
+      console.warn(`  ⚠ ${feed.name}: 0 articles (possibly misconfigured URL)`);
+    } else {
+      console.log(`  ${feed.name}: ${articles.length} articles`);
+    }
     allArticles.push(...articles);
     stats.feedsFetched++;
   }
