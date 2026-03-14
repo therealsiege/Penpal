@@ -36,8 +36,8 @@ export const ventureProfiles: Record<string, VentureProfile> = {
     ],
     rssFeeds: [
       { url: "https://histalk2.com/feed/", name: "HIStalk" },
-      { url: "https://www.beckershospitalreview.com/rss/health-it.xml", name: "Becker's Health IT" },
-      { url: "https://www.cms.gov/blog/rss", name: "CMS Blog" },
+      { url: "https://medcitynews.com/feed/", name: "MedCity News" },
+      { url: "https://www.cms.gov/newsroom/rss-feeds", name: "CMS Newsroom" },
     ],
     scoringProfile: "clinical",
     companyExtractionPrompt:
@@ -57,7 +57,7 @@ export const ventureProfiles: Record<string, VentureProfile> = {
       "health data exchange platform",
     ],
     rssFeeds: [
-      { url: "https://www.healthcareitnews.com/rss", name: "Healthcare IT News" },
+      { url: "https://www.healthcareitnews.com/feed", name: "Healthcare IT News" },
       { url: "https://www.fiercehealthcare.com/rss/xml", name: "Fierce Healthcare" },
     ],
     scoringProfile: "integration",
@@ -126,8 +126,15 @@ export function routeAlertKeyword(keyword: string): VentureProfile[] {
  * Route article text content to matching venture(s) by keyword signals.
  * Used by RSS ingester to determine which ventures an article is relevant to.
  */
-export function routeArticleToVentures(title: string, content: string): VentureProfile[] {
-  const text = `${String(title || "")} ${String(content || "")}`.toLowerCase();
+function toStr(val: unknown): string {
+  if (val == null) return "";
+  if (typeof val === "string") return val;
+  if (typeof val === "object" && "_" in (val as Record<string, unknown>)) return String((val as Record<string, unknown>)._);
+  try { return JSON.stringify(val); } catch { return ""; }
+}
+
+export function routeArticleToVentures(title: unknown, content: unknown): VentureProfile[] {
+  const text = `${toStr(title)} ${toStr(content)}`.toLowerCase();
   const matches: VentureProfile[] = [];
 
   // MedScrub signals
