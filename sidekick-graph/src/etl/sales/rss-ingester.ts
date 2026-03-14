@@ -18,7 +18,7 @@ import {
 } from "./shared-pipeline.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const SEEN_PATH = path.resolve(__dirname, "..", "..", "data", "rss-seen.json");
+const SEEN_PATH = path.resolve(__dirname, "..", "..", "..", "data", "rss-seen.json");
 
 // ─── Dedup Cache ─────────────────────────────────────────────────────────────
 
@@ -76,7 +76,9 @@ async function fetchFeed(feedUrl: string, feedName: string): Promise<RssArticle[
     const articles: RssArticle[] = [];
 
     for (const item of feed.items || []) {
-      if (!item.title || !item.link) continue;
+      const itemTitle = typeof item.title === "string" ? item.title : (item.title as any)?._ ?? JSON.stringify(item.title ?? "");
+      const itemLink = typeof item.link === "string" ? item.link : (item.link as any)?.href ?? "";
+      if (!itemTitle || !itemLink) continue;
 
       // Only process articles from last 7 days
       if (item.pubDate) {
@@ -86,8 +88,8 @@ async function fetchFeed(feedUrl: string, feedName: string): Promise<RssArticle[
       }
 
       articles.push({
-        title: item.title,
-        url: item.link,
+        title: itemTitle,
+        url: itemLink,
         source: feedName,
         snippet: String(item.contentSnippet || item.content || "").slice(0, 500).replace(/<[^>]*>/g, ""),
         feedName,
