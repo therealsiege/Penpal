@@ -225,6 +225,56 @@ export async function getGraphStats(): Promise<GraphStats> {
   }
 }
 
+// ── Lead Search ─────────────────────────────────────────────────────────────
+
+export interface LeadSearchResult {
+  name: string
+  company: string
+  score: number
+  businessArm: string
+  stage: string
+  ehr: string
+  location: string
+  nextAction: string
+  source: string
+}
+
+export async function searchLeads(query: string): Promise<LeadSearchResult[]> {
+  const session = getDriver().session()
+  try {
+    const result = await session.run(
+      `MATCH (l:Lead)
+       WHERE toLower(l.name) CONTAINS toLower($q)
+          OR toLower(l.company) CONTAINS toLower($q)
+          OR toLower(l.location) CONTAINS toLower($q)
+       OPTIONAL MATCH (l)-[:CURRENT_STAGE]->(s:SalesStage)
+       OPTIONAL MATCH (l)-[:USES_EHR]->(e:EHRSystem)
+       RETURN l.name AS name, l.company AS company,
+              l.leadScore AS score, l.businessArm AS businessArm,
+              l.nextAction AS nextAction, s.name AS stage,
+              e.name AS ehr, l.location AS location,
+              l.leadSource AS source
+       ORDER BY l.leadScore DESC
+       LIMIT 30`,
+      { q: query },
+    )
+
+    return result.records.map(r => ({
+      name: toStr(r.get('name')),
+      company: toStr(r.get('company')),
+      score: toNum(r.get('score')),
+      businessArm: toStr(r.get('businessArm')),
+      stage: toStr(r.get('stage')),
+      ehr: toStr(r.get('ehr')),
+      location: toStr(r.get('location')),
+      nextAction: toStr(r.get('nextAction')),
+      source: toStr(r.get('source')),
+    }))
+  } finally {
+    await session.close()
+  }
+}
+
 // ── Cleanup ─────────────────────────────────────────────────────────────────
 
 export async function closeGraph() {

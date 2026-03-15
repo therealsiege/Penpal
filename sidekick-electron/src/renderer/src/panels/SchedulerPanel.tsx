@@ -27,6 +27,7 @@ export function SchedulerPanel() {
   )
 
   const [running, setRunning] = useState<string | null>(null)
+  const [expandedRun, setExpandedRun] = useState<number | null>(null)
 
   const handleRun = async (jobName: string) => {
     setRunning(jobName)
@@ -137,13 +138,42 @@ export function SchedulerPanel() {
         ) : (
           <div className="divide-y divide-slate-800/50">
             {history.slice(-10).reverse().map((run, i) => (
-              <div key={i} className="flex items-center gap-3 px-4 py-2.5 text-xs">
-                <StatusBadge status={run.success ? 'ok' : 'fail'} />
-                <span className="font-medium text-slate-300 w-28">{run.job}</span>
-                <span className="text-slate-500">{formatTime(run.started_at)}</span>
-                <span className="text-slate-600">{formatDuration(run.duration_ms)}</span>
-                {!run.success && run.stderr_tail && (
-                  <span className="text-red-400 truncate flex-1">{run.stderr_tail.split('\n')[0]}</span>
+              <div key={i}>
+                <div
+                  className="flex items-center gap-3 px-4 py-2.5 text-xs cursor-pointer hover:bg-slate-800/30"
+                  onClick={() => setExpandedRun(expandedRun === i ? null : i)}
+                >
+                  <StatusBadge status={run.success ? 'ok' : 'fail'} />
+                  <span className="font-medium text-slate-300 w-28">{run.job}</span>
+                  <span className="text-slate-500">{formatTime(run.started_at)}</span>
+                  <span className="text-slate-600">{formatDuration(run.duration_ms)}</span>
+                  {!run.success && run.stderr_tail && expandedRun !== i && (
+                    <span className="text-red-400 truncate flex-1">{run.stderr_tail.split('\n')[0]}</span>
+                  )}
+                  <span className="text-slate-600 ml-auto">{expandedRun === i ? '\u25B2' : '\u25BC'}</span>
+                </div>
+                {expandedRun === i && (
+                  <div className="px-4 pb-3">
+                    {run.stdout_tail && (
+                      <div className="mb-2">
+                        <p className="text-[10px] text-slate-600 mb-1">stdout</p>
+                        <pre className="text-[11px] text-slate-400 bg-slate-950 rounded p-2 overflow-x-auto whitespace-pre-wrap max-h-48 overflow-y-auto font-mono leading-relaxed">
+                          {run.stdout_tail}
+                        </pre>
+                      </div>
+                    )}
+                    {run.stderr_tail && (
+                      <div>
+                        <p className="text-[10px] text-slate-600 mb-1">stderr</p>
+                        <pre className="text-[11px] text-red-400/80 bg-slate-950 rounded p-2 overflow-x-auto whitespace-pre-wrap max-h-32 overflow-y-auto font-mono leading-relaxed">
+                          {run.stderr_tail}
+                        </pre>
+                      </div>
+                    )}
+                    {!run.stdout_tail && !run.stderr_tail && (
+                      <p className="text-[11px] text-slate-600 italic">No output captured.</p>
+                    )}
+                  </div>
                 )}
               </div>
             ))}
