@@ -71,6 +71,18 @@ export interface GraphStats {
   relsByType: Record<string, number>
 }
 
+export interface LeadSearchResult {
+  name: string
+  company: string
+  score: number
+  businessArm: string
+  stage: string
+  ehr: string
+  location: string
+  nextAction: string
+  source: string
+}
+
 export interface ClaudeSession {
   pid: number
   sessionId: string

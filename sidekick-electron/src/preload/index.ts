@@ -11,4 +11,5 @@ contextBridge.exposeInMainWorld('api', {
   getNewLeads: () => ipcRenderer.invoke('pipeline:new-leads'),
   getClaudeSessions: () => ipcRenderer.invoke('sessions:list'),
   getGraphStats: () => ipcRenderer.invoke('graph:stats'),
+  searchLeads: (query: string) => ipcRenderer.invoke('leads:search', query),
 })

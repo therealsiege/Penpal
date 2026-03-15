@@ -10,6 +10,7 @@ import type {
   NewLead,
   ClaudeSession,
   GraphStats,
+  LeadSearchResult,
 } from './types'
 
 declare global {
@@ -25,6 +26,7 @@ declare global {
       getNewLeads: () => Promise<NewLead[]>
       getClaudeSessions: () => Promise<ClaudeSession[]>
       getGraphStats: () => Promise<GraphStats>
+      searchLeads: (query: string) => Promise<LeadSearchResult[]>
     }
   }
 }
