@@ -13,6 +13,13 @@
     "rss:ingest": "tsx src/etl/sales/rss-ingester.ts",
     "ingest:all": "tsx src/etl/sales/ingest-all.ts",
     "npi:activate": "tsx src/etl/sales/npi-activator.ts",
+    "npi:enrich": "tsx src/etl/sales/npi-enricher.ts",
+    "briefing": "tsx src/etl/sales/daily-briefing.ts",
+    "health": "tsx src/scheduler/health.ts",
+    "scheduler": "tsx src/scheduler/runner.ts",
+    "scheduler:status": "tsx src/scheduler/runner.ts --status",
+    "scheduler:run": "tsx src/scheduler/runner.ts --run",
+    "scheduler:history": "tsx src/scheduler/runner.ts --history",
     "infra:up": "docker compose up -d",
     "infra:down": "docker compose down"
   },

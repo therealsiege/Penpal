@@ -145,10 +145,10 @@ For the 3 deals that said no. Offer $50 Amazon gift card for 15 minutes.
 
 ## Sequencing
 
-| Priority | Who | When | Goal |
-|---|---|---|---|
-| 1 | Patrick Carter | This week | Validate or kill CCM/APCM/Revenue Engine thesis. Get real enrollment numbers. |
-| 2 | 3 closed-lost leads | This week | Understand why they said no. Most valuable 45 minutes in the company. |
-| 3 | Rob Trachtman | Next week | Activate Polus Mui connection. Validate PA evidence gathering scope. |
-| 4 | Maurice Hill | Next week | Activate collaboration offer. Validate denial response use case scope. |
-| 5 | 5 design partner candidates | Within 2 weeks | Test revenue pitch vs. compliance pitch. Get Medicare % data. |
+| Priority | Who                         | When           | Goal                                                                          |
+| -------- | --------------------------- | -------------- | ----------------------------------------------------------------------------- |
+| 1        | Patrick Carter              | This week      | Validate or kill CCM/APCM/Revenue Engine thesis. Get real enrollment numbers. |
+| 2        | 3 closed-lost leads         | This week      | Understand why they said no. Most valuable 45 minutes in the company.         |
+| 3        | Rob Trachtman               | Next week      | Activate Polus Mui connection. Validate PA evidence gathering scope.          |
+| 4        | Maurice Hill                | Next week      | Activate collaboration offer. Validate denial response use case scope.        |
+| 5        | 5 design partner candidates | Within 2 weeks | Test revenue pitch vs. compliance pitch. Get Medicare % data.                 |
