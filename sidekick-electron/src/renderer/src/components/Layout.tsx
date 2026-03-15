@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 
 const NAV_ITEMS = [
   { id: 'health', label: 'Health', icon: 'H' },
+  { id: 'sessions', label: 'Sessions', icon: 'C' },
   { id: 'scheduler', label: 'Scheduler', icon: 'S' },
   { id: 'pipeline', label: 'Pipeline', icon: 'P' },
   { id: 'activity', label: 'Activity', icon: 'A' },

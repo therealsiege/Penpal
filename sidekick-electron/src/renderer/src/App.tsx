@@ -4,9 +4,11 @@ import { HealthPanel } from './panels/HealthPanel'
 import { SchedulerPanel } from './panels/SchedulerPanel'
 import { PipelinePanel } from './panels/PipelinePanel'
 import { ActivityPanel } from './panels/ActivityPanel'
+import { SessionsPanel } from './panels/SessionsPanel'
 
 const PANELS: Record<string, () => JSX.Element> = {
   health: HealthPanel,
+  sessions: SessionsPanel,
   scheduler: SchedulerPanel,
   pipeline: PipelinePanel,
   activity: ActivityPanel,

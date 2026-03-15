@@ -9,4 +9,6 @@ contextBridge.exposeInMainWorld('api', {
   getHotLeads: () => ipcRenderer.invoke('pipeline:hot-leads'),
   getTerritories: () => ipcRenderer.invoke('pipeline:territories'),
   getNewLeads: () => ipcRenderer.invoke('pipeline:new-leads'),
+  getClaudeSessions: () => ipcRenderer.invoke('sessions:list'),
+  getGraphStats: () => ipcRenderer.invoke('graph:stats'),
 })
