@@ -71,9 +71,10 @@ export async function updateLead(args: {
   const company = args.company || leadName;
   const updates: string[] = [];
 
-  // 1. Find the lead markdown file in vault
+  // 1. Find the lead markdown file in vault (search all venture lead directories)
   const leadsDirs = [
     resolveVaultPath("Ventures/1Putt/MedScrub KB/Sales/Leads"),
+    resolveVaultPath("Ventures/1Putt/MedHook KB/Sales/Leads"),
     resolveVaultPath("Ventures/1Putt/Sales/Leads"),
   ];
 

@@ -1,0 +1,65 @@
+export interface HealthCheck {
+  name: string
+  status: 'ok' | 'fail'
+  latency_ms: number
+  message?: string
+}
+
+export interface HealthResult {
+  timestamp: string
+  overall: 'healthy' | 'degraded' | 'down'
+  checks: HealthCheck[]
+}
+
+export interface JobStatus {
+  name: string
+  description: string
+  cron: string
+  enabled: boolean
+  last_run: string | null
+  last_success: boolean | null
+  next_run: string
+  depends_on: string[]
+}
+
+export interface JobRun {
+  job: string
+  started_at: string
+  finished_at: string
+  duration_ms: number
+  exit_code: number | null
+  success: boolean
+  stdout_tail: string
+  stderr_tail: string
+}
+
+export interface StageSummary {
+  stage: string
+  total: number
+  avgScore: number
+  byArm: Record<string, number>
+}
+
+export interface HotLead {
+  name: string
+  company: string
+  score: number
+  businessArm: string
+  stage: string
+  ehr: string
+  nextAction: string
+}
+
+export interface TerritoryData {
+  territory: string
+  leads: number
+  avgScore: number
+}
+
+export interface NewLead {
+  name: string
+  company: string
+  businessArm: string
+  score: number
+  source: string
+}
