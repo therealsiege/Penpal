@@ -1,11 +1,11 @@
 import type { ReactNode } from 'react'
 
 const NAV_ITEMS = [
-  { id: 'health', label: 'Health', icon: 'H' },
-  { id: 'sessions', label: 'Sessions', icon: 'C' },
-  { id: 'scheduler', label: 'Scheduler', icon: 'S' },
-  { id: 'pipeline', label: 'Pipeline', icon: 'P' },
-  { id: 'activity', label: 'Activity', icon: 'A' },
+  { id: 'health', label: 'Health', icon: 'H', shortcut: '1' },
+  { id: 'sessions', label: 'Sessions', icon: 'C', shortcut: '2' },
+  { id: 'scheduler', label: 'Scheduler', icon: 'S', shortcut: '3' },
+  { id: 'pipeline', label: 'Pipeline', icon: 'P', shortcut: '4' },
+  { id: 'activity', label: 'Activity', icon: 'A', shortcut: '5' },
 ]
 
 interface LayoutProps {
@@ -42,7 +42,8 @@ export function Layout({ activePanel, onNavigate, children }: LayoutProps) {
               }`}>
                 {item.icon}
               </span>
-              {item.label}
+              <span className="flex-1">{item.label}</span>
+              <kbd className="text-[9px] text-slate-600 font-mono">{item.shortcut}</kbd>
             </button>
           ))}
         </nav>
