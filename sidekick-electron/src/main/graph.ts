@@ -175,6 +175,56 @@ export async function getNewLeads(): Promise<NewLead[]> {
   }
 }
 
+// ── Graph Stats ─────────────────────────────────────────────────────────────
+
+export interface GraphStats {
+  totalNodes: number
+  totalRelationships: number
+  nodesByLabel: Record<string, number>
+  relsByType: Record<string, number>
+}
+
+export async function getGraphStats(): Promise<GraphStats> {
+  const session = getDriver().session()
+  try {
+    const [nodeResult, relResult] = await Promise.all([
+      session.run(`
+        MATCH (n)
+        RETURN labels(n)[0] AS label, count(n) AS cnt
+        ORDER BY cnt DESC
+      `),
+      session.run(`
+        MATCH ()-[r]->()
+        RETURN type(r) AS relType, count(r) AS cnt
+        ORDER BY cnt DESC
+        LIMIT 15
+      `),
+    ])
+
+    const nodesByLabel: Record<string, number> = {}
+    let totalNodes = 0
+    for (const r of nodeResult.records) {
+      const label = toStr(r.get('label'))
+      const cnt = toNum(r.get('cnt'))
+      nodesByLabel[label] = cnt
+      totalNodes += cnt
+    }
+
+    const relsByType: Record<string, number> = {}
+    let totalRelationships = 0
+    for (const r of relResult.records) {
+      const relType = toStr(r.get('relType'))
+      const cnt = toNum(r.get('cnt'))
+      relsByType[relType] = cnt
+      totalRelationships += cnt
+    }
+
+    return { totalNodes, totalRelationships, nodesByLabel, relsByType }
+  } finally {
+    await session.close()
+  }
+}
+
 // ── Cleanup ─────────────────────────────────────────────────────────────────
 
 export async function closeGraph() {

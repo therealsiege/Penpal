@@ -8,6 +8,8 @@ import type {
   HotLead,
   TerritoryData,
   NewLead,
+  ClaudeSession,
+  GraphStats,
 } from './types'
 
 declare global {
@@ -21,6 +23,8 @@ declare global {
       getHotLeads: () => Promise<HotLead[]>
       getTerritories: () => Promise<TerritoryData[]>
       getNewLeads: () => Promise<NewLead[]>
+      getClaudeSessions: () => Promise<ClaudeSession[]>
+      getGraphStats: () => Promise<GraphStats>
     }
   }
 }

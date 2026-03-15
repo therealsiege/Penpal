@@ -63,3 +63,24 @@ export interface NewLead {
   score: number
   source: string
 }
+
+export interface GraphStats {
+  totalNodes: number
+  totalRelationships: number
+  nodesByLabel: Record<string, number>
+  relsByType: Record<string, number>
+}
+
+export interface ClaudeSession {
+  pid: number
+  sessionId: string
+  project: string
+  cwd: string
+  startedAt: number
+  uptime: string
+  cpu: string
+  memoryMB: number
+  alive: boolean
+  lastUserMessage: string
+  tty: string
+}

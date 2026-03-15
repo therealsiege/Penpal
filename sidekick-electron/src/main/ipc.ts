@@ -1,7 +1,8 @@
 import { ipcMain } from 'electron'
 import { checkHealth } from './health'
 import { getJobStatuses, getJobHistory, forceRunJob } from './scheduler-bridge'
-import { getPipelineSummary, getHotLeads, getTerritories, getNewLeads } from './graph'
+import { getPipelineSummary, getHotLeads, getTerritories, getNewLeads, getGraphStats } from './graph'
+import { getClaudeSessions } from './sessions'
 
 function wrapHandler<T>(fn: (...args: unknown[]) => Promise<T> | T) {
   return async (_event: Electron.IpcMainInvokeEvent, ...args: unknown[]) => {
@@ -27,4 +28,6 @@ export function registerIpcHandlers() {
   ipcMain.handle('pipeline:hot-leads', wrapHandler(() => getHotLeads()))
   ipcMain.handle('pipeline:territories', wrapHandler(() => getTerritories()))
   ipcMain.handle('pipeline:new-leads', wrapHandler(() => getNewLeads()))
+  ipcMain.handle('sessions:list', wrapHandler(() => getClaudeSessions()))
+  ipcMain.handle('graph:stats', wrapHandler(() => getGraphStats()))
 }
