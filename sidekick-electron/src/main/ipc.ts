@@ -1,7 +1,7 @@
 import { ipcMain } from 'electron'
 import { checkHealth } from './health'
 import { getJobStatuses, getJobHistory, forceRunJob } from './scheduler-bridge'
-import { getPipelineSummary, getHotLeads, getTerritories, getNewLeads, getGraphStats, searchLeads } from './graph'
+import { getPipelineSummary, getHotLeads, getTerritories, getNewLeads, getGraphStats, searchLeads, getLeadDetail } from './graph'
 import {
   getClaudeSessions,
   getSessionConversation,
@@ -60,5 +60,9 @@ export function registerIpcHandlers() {
   ipcMain.handle('leads:search', wrapHandler((query: unknown) => {
     if (typeof query !== 'string') throw new Error('query must be a string')
     return searchLeads(query)
+  }))
+  ipcMain.handle('leads:detail', wrapHandler((name: unknown) => {
+    if (typeof name !== 'string') throw new Error('name must be a string')
+    return getLeadDetail(name)
   }))
 }

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { usePolling } from '../hooks/usePolling'
 import { StatusBadge } from '../components/StatusBadge'
+import { useToast } from '../components/Toast'
 import type { JobStatus, JobRun } from '../types'
 
 function formatTime(iso: string | null): string {
@@ -28,13 +29,20 @@ export function SchedulerPanel() {
 
   const [running, setRunning] = useState<string | null>(null)
   const [expandedRun, setExpandedRun] = useState<number | null>(null)
+  const { toast } = useToast()
 
   const handleRun = async (jobName: string) => {
     setRunning(jobName)
     try {
-      await window.api.runJob(jobName)
+      const result = await window.api.runJob(jobName)
+      toast(
+        result.success ? `${jobName} completed in ${formatDuration(result.duration_ms)}` : `${jobName} failed`,
+        result.success ? 'success' : 'error',
+      )
       refresh()
       refreshHistory()
+    } catch {
+      toast(`Failed to start ${jobName}`, 'error')
     } finally {
       setRunning(null)
     }

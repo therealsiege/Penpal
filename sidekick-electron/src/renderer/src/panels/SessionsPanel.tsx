@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { usePolling } from '../hooks/usePolling'
 import { StatusBadge } from '../components/StatusBadge'
+import { useToast } from '../components/Toast'
 import type { ClaudeSession, ConversationMessage } from '../types'
 
 function memColor(mb: number): string {
@@ -297,7 +298,7 @@ function SessionCard({
 function BroadcastBar() {
   const [message, setMessage] = useState('')
   const [broadcasting, setBroadcasting] = useState(false)
-  const [result, setResult] = useState<string | null>(null)
+  const { toast } = useToast()
 
   const presets = [
     { label: 'Commit', msg: '/commit' },
@@ -308,14 +309,15 @@ function BroadcastBar() {
   const handleBroadcast = async (msg: string) => {
     if (!msg.trim() || broadcasting) return
     setBroadcasting(true)
-    setResult(null)
     try {
       const res = await window.api.broadcastToSessions(msg.trim())
-      setResult(`Sent to ${res.sent} sessions${res.failed > 0 ? `, ${res.failed} failed` : ''}`)
+      toast(
+        `Sent to ${res.sent} session${res.sent !== 1 ? 's' : ''}${res.failed > 0 ? `, ${res.failed} failed` : ''}`,
+        res.failed > 0 ? 'error' : 'success',
+      )
       setMessage('')
     } finally {
       setBroadcasting(false)
-      setTimeout(() => setResult(null), 3000)
     }
   }
 
@@ -333,7 +335,6 @@ function BroadcastBar() {
             {p.label}
           </button>
         ))}
-        {result && <span className="text-[10px] text-emerald-400 ml-auto">{result}</span>}
       </div>
       <div className="flex gap-2">
         <input

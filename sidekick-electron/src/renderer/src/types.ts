@@ -112,3 +112,22 @@ export interface BroadcastResult {
   sent: number
   failed: number
 }
+
+export interface LeadDetail {
+  name: string
+  company: string
+  score: number
+  businessArm: string
+  stage: string
+  ehr: string
+  location: string
+  nextAction: string
+  source: string
+  npi: string
+  phone: string
+  specialty: string
+  website: string
+  events: { type: string; date: string; detail: string }[]
+  documents: { title: string; path: string }[]
+  stageHistory: { stage: string; enteredAt: string }[]
+}
