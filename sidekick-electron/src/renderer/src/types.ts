@@ -95,4 +95,15 @@ export interface ClaudeSession {
   alive: boolean
   lastUserMessage: string
   tty: string
+  terminalName: string
+}
+
+export interface ConversationMessage {
+  role: 'user' | 'assistant'
+  text: string
+}
+
+export interface SessionActionResult {
+  success: boolean
+  error?: string
 }

@@ -10,6 +10,10 @@ contextBridge.exposeInMainWorld('api', {
   getTerritories: () => ipcRenderer.invoke('pipeline:territories'),
   getNewLeads: () => ipcRenderer.invoke('pipeline:new-leads'),
   getClaudeSessions: () => ipcRenderer.invoke('sessions:list'),
+  getSessionConversation: (sessionId: string) => ipcRenderer.invoke('sessions:conversation', sessionId),
+  sendToSession: (tty: string, message: string) => ipcRenderer.invoke('sessions:send', tty, message),
+  focusSession: (tty: string) => ipcRenderer.invoke('sessions:focus', tty),
+  createNewSession: (cwd: string) => ipcRenderer.invoke('sessions:create', cwd),
   getGraphStats: () => ipcRenderer.invoke('graph:stats'),
   searchLeads: (query: string) => ipcRenderer.invoke('leads:search', query),
 })
