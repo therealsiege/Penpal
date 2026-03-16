@@ -49,8 +49,12 @@ export function Layout({ activePanel, onNavigate, children }: LayoutProps) {
         </nav>
 
         {/* Footer */}
-        <div className="p-3 border-t border-slate-800">
-          <p className="text-[10px] text-slate-600 text-center">v0.1.0</p>
+        <div className="p-3 border-t border-slate-800 space-y-1.5">
+          <div className="flex items-center justify-center gap-1.5 text-[10px] text-slate-600">
+            <kbd className="bg-slate-800 px-1.5 py-0.5 rounded border border-slate-700">⌘K</kbd>
+            <span>Command Palette</span>
+          </div>
+          <p className="text-[10px] text-slate-600 text-center">v0.2.0</p>
         </div>
       </aside>
 
