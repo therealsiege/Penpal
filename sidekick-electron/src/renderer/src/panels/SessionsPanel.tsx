@@ -9,11 +9,11 @@ function memColor(mb: number): string {
   return 'text-slate-400'
 }
 
-function cpuColor(cpu: string): string {
+function cpuBadge(cpu: string): { color: string; bg: string } {
   const val = parseFloat(cpu)
-  if (val >= 10) return 'text-emerald-400'
-  if (val >= 1) return 'text-blue-400'
-  return 'text-slate-500'
+  if (val >= 10) return { color: 'text-emerald-400', bg: 'bg-emerald-500/10' }
+  if (val >= 1) return { color: 'text-blue-400', bg: 'bg-blue-500/10' }
+  return { color: 'text-slate-500', bg: 'bg-slate-800' }
 }
 
 // ── Chat View ───────────────────────────────────────────────────────────────
@@ -54,15 +54,10 @@ function SessionChat({
     setSending(true)
     try {
       await window.api.sendToSession(session.tty, msg)
-      // Optimistically add the message
       setMessages(prev => [...prev, { role: 'user', text: msg }])
     } finally {
       setSending(false)
     }
-  }
-
-  const handleFocus = async () => {
-    await window.api.focusSession(session.tty)
   }
 
   return (
@@ -72,7 +67,7 @@ function SessionChat({
         <div className="flex items-center gap-3">
           <button
             onClick={onBack}
-            className="px-2 py-1 text-xs bg-slate-800 hover:bg-slate-700 rounded border border-slate-700 text-slate-400"
+            className="px-2.5 py-1.5 text-xs bg-slate-800 hover:bg-slate-700 rounded-md border border-slate-700 text-slate-400"
           >
             Back
           </button>
@@ -85,7 +80,7 @@ function SessionChat({
           </div>
         </div>
         <button
-          onClick={handleFocus}
+          onClick={() => window.api.focusSession(session.tty)}
           className="px-3 py-1.5 text-xs bg-blue-600 hover:bg-blue-500 rounded-md text-white transition-colors"
         >
           Open in Terminal
@@ -185,12 +180,8 @@ function NewSessionDialog({ onClose }: { onClose: () => void }) {
     <div className="bg-slate-900 border border-slate-800 rounded-lg p-4 mb-4">
       <div className="flex items-center justify-between mb-3">
         <h3 className="text-sm font-medium">New Claude Session</h3>
-        <button onClick={onClose} className="text-slate-500 hover:text-slate-300 text-sm">
-          Cancel
-        </button>
+        <button onClick={onClose} className="text-slate-500 hover:text-slate-300 text-sm">Cancel</button>
       </div>
-
-      {/* Preset project buttons */}
       <div className="flex flex-wrap gap-1.5 mb-3">
         {presets.map(p => (
           <button
@@ -206,8 +197,6 @@ function NewSessionDialog({ onClose }: { onClose: () => void }) {
           </button>
         ))}
       </div>
-
-      {/* Custom path */}
       <div className="flex gap-2">
         <input
           type="text"
@@ -225,13 +214,85 @@ function NewSessionDialog({ onClose }: { onClose: () => void }) {
           {creating ? 'Creating...' : 'Launch'}
         </button>
       </div>
-
       {error && <p className="text-xs text-red-400 mt-2">{error}</p>}
     </div>
   )
 }
 
-// ── Sessions List ───────────────────────────────────────────────────────────
+// ── Session Card ────────────────────────────────────────────────────────────
+
+function SessionCard({
+  session,
+  onClick,
+}: {
+  session: ClaudeSession
+  onClick: () => void
+}) {
+  const cpu = cpuBadge(session.cpu)
+  const isActive = parseFloat(session.cpu) >= 1
+
+  return (
+    <div
+      onClick={onClick}
+      className={`bg-slate-900 border rounded-xl p-4 cursor-pointer transition-all hover:scale-[1.01] hover:shadow-lg hover:shadow-slate-950/50 ${
+        isActive
+          ? 'border-blue-500/30 hover:border-blue-500/50'
+          : 'border-slate-800 hover:border-slate-700'
+      }`}
+    >
+      {/* Top: project + status */}
+      <div className="flex items-start justify-between mb-3">
+        <div className="flex items-center gap-2">
+          <StatusBadge status={isActive ? 'ok' : 'none'} size="md" />
+          <h3 className="text-sm font-bold text-white truncate">{session.project}</h3>
+        </div>
+        <button
+          onClick={e => {
+            e.stopPropagation()
+            window.api.focusSession(session.tty)
+          }}
+          className="shrink-0 px-2 py-0.5 text-[10px] bg-slate-800 hover:bg-slate-700 rounded border border-slate-700 text-slate-400 transition-colors"
+        >
+          Focus
+        </button>
+      </div>
+
+      {/* Terminal name */}
+      {session.terminalName && (
+        <p className="text-[11px] text-blue-400/60 truncate mb-2 -mt-1">
+          {session.terminalName}
+        </p>
+      )}
+
+      {/* Stats row */}
+      <div className="flex items-center gap-2 mb-3">
+        <span className={`text-[10px] px-1.5 py-0.5 rounded ${cpu.bg} ${cpu.color}`}>
+          CPU {session.cpu}
+        </span>
+        <span className={`text-[10px] ${memColor(session.memoryMB)}`}>
+          {session.memoryMB} MB
+        </span>
+        <span className="text-[10px] text-slate-600 ml-auto">{session.uptime}</span>
+      </div>
+
+      {/* Last prompt */}
+      {session.lastUserMessage ? (
+        <div className="bg-slate-800/60 rounded-lg px-3 py-2">
+          <p className="text-[10px] text-slate-600 mb-0.5">Last prompt</p>
+          <p className="text-[11px] text-slate-400 leading-relaxed line-clamp-2">
+            {session.lastUserMessage}
+          </p>
+        </div>
+      ) : (
+        <div className="bg-slate-800/30 rounded-lg px-3 py-2">
+          <p className="text-[10px] text-slate-600 italic">No recent messages</p>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Sessions Panel ──────────────────────────────────────────────────────────
 
 export function SessionsPanel() {
   const { data: sessions, loading, refresh } = usePolling<ClaudeSession[]>(
@@ -242,7 +303,6 @@ export function SessionsPanel() {
   const [activeSession, setActiveSession] = useState<ClaudeSession | null>(null)
   const [showNewSession, setShowNewSession] = useState(false)
 
-  // If viewing a chat, show the chat view
   if (activeSession) {
     return (
       <SessionChat
@@ -257,15 +317,20 @@ export function SessionsPanel() {
   }
 
   const totalMem = sessions?.reduce((sum, s) => sum + s.memoryMB, 0) || 0
+  const activeSessions = sessions?.filter(s => parseFloat(s.cpu) >= 1) || []
 
   return (
     <div>
+      {/* Header */}
       <div className="flex items-center justify-between mb-4">
         <div>
           <h2 className="text-lg font-semibold">Claude Sessions</h2>
           <p className="text-xs text-slate-500 mt-0.5">
-            {sessions?.length || 0} active
-            {totalMem > 0 && <span className="ml-2">({(totalMem / 1024).toFixed(1)} GB)</span>}
+            {sessions?.length || 0} sessions
+            {activeSessions.length > 0 && (
+              <span className="text-emerald-400 ml-1">({activeSessions.length} active)</span>
+            )}
+            {totalMem > 0 && <span className="ml-2 text-slate-600">{(totalMem / 1024).toFixed(1)} GB</span>}
           </p>
         </div>
         <div className="flex gap-2">
@@ -286,86 +351,26 @@ export function SessionsPanel() {
 
       {showNewSession && <NewSessionDialog onClose={() => setShowNewSession(false)} />}
 
+      {/* Cards grid */}
       {!sessions || sessions.length === 0 ? (
-        <div className="bg-slate-900 border border-slate-800 rounded-lg p-6 text-center">
+        <div className="bg-slate-900 border border-slate-800 rounded-lg p-8 text-center">
           <p className="text-slate-500 text-sm">No active Claude sessions found.</p>
+          <button
+            onClick={() => setShowNewSession(true)}
+            className="mt-3 px-4 py-2 text-xs bg-emerald-600 hover:bg-emerald-500 rounded-md text-white transition-colors"
+          >
+            Launch one
+          </button>
         </div>
       ) : (
-        <div className="space-y-2">
+        <div className="grid grid-cols-2 gap-3">
           {sessions.map(session => (
-            <div
+            <SessionCard
               key={session.pid}
-              className="bg-slate-900 border border-slate-800 rounded-lg p-4 hover:border-slate-700 transition-colors cursor-pointer"
+              session={session}
               onClick={() => setActiveSession(session)}
-            >
-              {/* Header row */}
-              <div className="flex items-center justify-between mb-1.5">
-                <div className="flex items-center gap-3">
-                  <StatusBadge status="ok" size="md" />
-                  <span className="text-sm font-semibold text-white">{session.project}</span>
-                  <span className="text-[10px] text-slate-600 font-mono bg-slate-800 px-1.5 py-0.5 rounded">
-                    PID {session.pid}
-                  </span>
-                </div>
-                <div className="flex items-center gap-4 text-xs">
-                  <span className="text-slate-500">{session.uptime}</span>
-                  <span className={cpuColor(session.cpu)}>CPU {session.cpu}</span>
-                  <span className={memColor(session.memoryMB)}>{session.memoryMB} MB</span>
-                  <button
-                    onClick={e => {
-                      e.stopPropagation()
-                      window.api.focusSession(session.tty)
-                    }}
-                    className="px-2 py-0.5 text-[10px] bg-slate-800 hover:bg-slate-700 rounded border border-slate-700 text-slate-400"
-                  >
-                    Focus
-                  </button>
-                </div>
-              </div>
-
-              {/* Terminal name from iTerm2 */}
-              {session.terminalName && (
-                <div className="text-[11px] text-blue-400/70 mb-1 truncate">
-                  {session.terminalName}
-                </div>
-              )}
-
-              {/* CWD */}
-              <div className="text-[11px] text-slate-600 font-mono truncate">
-                {session.cwd}
-              </div>
-
-              {/* Last message */}
-              {session.lastUserMessage && (
-                <div className="bg-slate-800/50 rounded px-3 py-2 mt-2">
-                  <p className="text-[10px] text-slate-600 mb-0.5">Last prompt</p>
-                  <p className="text-xs text-slate-300 leading-relaxed truncate">
-                    {session.lastUserMessage}
-                  </p>
-                </div>
-              )}
-            </div>
+            />
           ))}
-        </div>
-      )}
-
-      {/* Summary stats */}
-      {sessions && sessions.length > 0 && (
-        <div className="mt-4 grid grid-cols-3 gap-3">
-          <div className="bg-slate-900 border border-slate-800 rounded-lg p-3 text-center">
-            <p className="text-lg font-bold text-white">{sessions.length}</p>
-            <p className="text-[10px] text-slate-500 uppercase">Sessions</p>
-          </div>
-          <div className="bg-slate-900 border border-slate-800 rounded-lg p-3 text-center">
-            <p className="text-lg font-bold text-white">{(totalMem / 1024).toFixed(1)} GB</p>
-            <p className="text-[10px] text-slate-500 uppercase">Memory</p>
-          </div>
-          <div className="bg-slate-900 border border-slate-800 rounded-lg p-3 text-center">
-            <p className="text-lg font-bold text-white">
-              {new Set(sessions.map(s => s.project)).size}
-            </p>
-            <p className="text-[10px] text-slate-500 uppercase">Projects</p>
-          </div>
         </div>
       )}
     </div>
