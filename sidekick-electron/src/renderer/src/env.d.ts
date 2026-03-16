@@ -37,6 +37,9 @@ declare global {
       getGraphStats: () => Promise<GraphStats>
       searchLeads: (query: string) => Promise<LeadSearchResult[]>
       getLeadDetail: (name: string) => Promise<LeadDetail | null>
+      getLatestBriefing: () => Promise<{ date: string; content: string } | null>
+      listBriefings: () => Promise<string[]>
+      getBriefing: (date: string) => Promise<string | null>
     }
   }
 }

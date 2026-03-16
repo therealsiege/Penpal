@@ -1,7 +1,6 @@
 import neo4j from 'neo4j-driver'
 import { exec } from 'child_process'
 import { promisify } from 'util'
-import { app } from 'electron'
 import path from 'path'
 
 const execAsync = promisify(exec)
@@ -61,7 +60,7 @@ export async function checkHealth(): Promise<HealthResult> {
       return `${data.result?.collections?.length ?? 0} collections`
     }),
     timedCheck('docker', async () => {
-      const cwd = path.resolve(app.getAppPath(), '..', 'sidekick-graph')
+      const cwd = path.resolve(__dirname, '..', '..', 'sidekick-graph')
       const { stdout } = await execAsync(
         'docker compose ps --format json 2>/dev/null',
         { cwd, timeout: 10000 },

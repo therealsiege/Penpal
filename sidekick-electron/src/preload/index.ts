@@ -18,4 +18,7 @@ contextBridge.exposeInMainWorld('api', {
   getGraphStats: () => ipcRenderer.invoke('graph:stats'),
   searchLeads: (query: string) => ipcRenderer.invoke('leads:search', query),
   getLeadDetail: (name: string) => ipcRenderer.invoke('leads:detail', name),
+  getLatestBriefing: () => ipcRenderer.invoke('briefing:latest'),
+  listBriefings: () => ipcRenderer.invoke('briefing:list'),
+  getBriefing: (date: string) => ipcRenderer.invoke('briefing:get', date),
 })
