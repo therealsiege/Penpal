@@ -11,6 +11,7 @@ import type {
   ClaudeSession,
   ConversationMessage,
   SessionActionResult,
+  BroadcastResult,
   GraphStats,
   LeadSearchResult,
 } from './types'
@@ -31,6 +32,7 @@ declare global {
       sendToSession: (tty: string, message: string) => Promise<SessionActionResult>
       focusSession: (tty: string) => Promise<SessionActionResult>
       createNewSession: (cwd: string) => Promise<SessionActionResult>
+      broadcastToSessions: (message: string) => Promise<BroadcastResult>
       getGraphStats: () => Promise<GraphStats>
       searchLeads: (query: string) => Promise<LeadSearchResult[]>
     }

@@ -5,7 +5,9 @@ import { registerIpcHandlers } from './ipc'
 import { closeGraph } from './graph'
 
 // Load sidekick-graph's .env for Memgraph/Qdrant connection strings
-const SIDEKICK_GRAPH = path.resolve(app.getAppPath(), '..', 'sidekick-graph')
+// In dev: __dirname is src/main, in prod build: __dirname is out/main
+// Either way, go up to sidekick-electron/ then sibling sidekick-graph/
+const SIDEKICK_GRAPH = path.resolve(__dirname, '..', '..', 'sidekick-graph')
 dotenv.config({ path: path.join(SIDEKICK_GRAPH, '.env') })
 
 let mainWindow: BrowserWindow | null = null

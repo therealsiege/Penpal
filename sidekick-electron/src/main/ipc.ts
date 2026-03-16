@@ -8,6 +8,7 @@ import {
   sendToSession,
   focusSession,
   createNewSession,
+  broadcastToSessions,
 } from './sessions'
 
 function wrapHandler<T>(fn: (...args: unknown[]) => Promise<T> | T) {
@@ -50,6 +51,10 @@ export function registerIpcHandlers() {
   ipcMain.handle('sessions:create', wrapHandler((cwd: unknown) => {
     if (typeof cwd !== 'string') throw new Error('cwd must be a string')
     return createNewSession(cwd)
+  }))
+  ipcMain.handle('sessions:broadcast', wrapHandler((message: unknown) => {
+    if (typeof message !== 'string') throw new Error('message must be a string')
+    return broadcastToSessions(message)
   }))
   ipcMain.handle('graph:stats', wrapHandler(() => getGraphStats()))
   ipcMain.handle('leads:search', wrapHandler((query: unknown) => {

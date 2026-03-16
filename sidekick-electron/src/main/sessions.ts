@@ -294,6 +294,23 @@ export async function focusSession(tty: string): Promise<{ success: boolean; err
   }
 }
 
+export async function broadcastToSessions(message: string): Promise<{ sent: number; failed: number }> {
+  const sessions = await getClaudeSessions()
+  let sent = 0
+  let failed = 0
+
+  for (const session of sessions) {
+    if (!session.tty) { failed++; continue }
+    const result = await sendToSession(session.tty, message)
+    if (result.success) sent++
+    else failed++
+    // Small delay between sends to avoid overwhelming iTerm2
+    await new Promise(r => setTimeout(r, 200))
+  }
+
+  return { sent, failed }
+}
+
 export async function createNewSession(cwd: string): Promise<{ success: boolean; error?: string }> {
   // Validate the directory exists
   if (!fs.existsSync(cwd)) {

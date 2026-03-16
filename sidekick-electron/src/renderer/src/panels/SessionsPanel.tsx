@@ -294,6 +294,68 @@ function SessionCard({
 
 // ── Sessions Panel ──────────────────────────────────────────────────────────
 
+function BroadcastBar() {
+  const [message, setMessage] = useState('')
+  const [broadcasting, setBroadcasting] = useState(false)
+  const [result, setResult] = useState<string | null>(null)
+
+  const presets = [
+    { label: 'Commit', msg: '/commit' },
+    { label: 'Status', msg: 'what are you working on right now? give me a one-line summary' },
+    { label: 'Pause', msg: 'pause what you are doing and wait for further instructions' },
+  ]
+
+  const handleBroadcast = async (msg: string) => {
+    if (!msg.trim() || broadcasting) return
+    setBroadcasting(true)
+    setResult(null)
+    try {
+      const res = await window.api.broadcastToSessions(msg.trim())
+      setResult(`Sent to ${res.sent} sessions${res.failed > 0 ? `, ${res.failed} failed` : ''}`)
+      setMessage('')
+    } finally {
+      setBroadcasting(false)
+      setTimeout(() => setResult(null), 3000)
+    }
+  }
+
+  return (
+    <div className="bg-slate-900/50 border border-slate-800 rounded-lg p-3 mb-4">
+      <div className="flex items-center gap-2 mb-2">
+        <span className="text-[10px] text-slate-500 uppercase font-medium">Broadcast</span>
+        {presets.map(p => (
+          <button
+            key={p.label}
+            onClick={() => handleBroadcast(p.msg)}
+            disabled={broadcasting}
+            className="px-2 py-0.5 text-[10px] bg-slate-800 hover:bg-slate-700 rounded border border-slate-700 text-slate-400 transition-colors disabled:opacity-40"
+          >
+            {p.label}
+          </button>
+        ))}
+        {result && <span className="text-[10px] text-emerald-400 ml-auto">{result}</span>}
+      </div>
+      <div className="flex gap-2">
+        <input
+          type="text"
+          placeholder="Send a message to all sessions..."
+          value={message}
+          onChange={e => setMessage(e.target.value)}
+          onKeyDown={e => e.key === 'Enter' && handleBroadcast(message)}
+          className="flex-1 bg-slate-950 border border-slate-800 rounded-md px-2.5 py-1.5 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:border-slate-600"
+        />
+        <button
+          onClick={() => handleBroadcast(message)}
+          disabled={broadcasting || !message.trim()}
+          className="px-3 py-1.5 text-[10px] bg-amber-600 hover:bg-amber-500 rounded-md text-white transition-colors disabled:opacity-40"
+        >
+          {broadcasting ? 'Sending...' : 'Send All'}
+        </button>
+      </div>
+    </div>
+  )
+}
+
 export function SessionsPanel() {
   const { data: sessions, loading, refresh } = usePolling<ClaudeSession[]>(
     () => window.api.getClaudeSessions(),
@@ -350,6 +412,9 @@ export function SessionsPanel() {
       </div>
 
       {showNewSession && <NewSessionDialog onClose={() => setShowNewSession(false)} />}
+
+      {/* Broadcast bar */}
+      {sessions && sessions.length > 1 && <BroadcastBar />}
 
       {/* Cards grid */}
       {!sessions || sessions.length === 0 ? (
