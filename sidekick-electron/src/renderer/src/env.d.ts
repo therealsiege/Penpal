@@ -9,6 +9,8 @@ import type {
   TerritoryData,
   NewLead,
   ClaudeSession,
+  ConversationMessage,
+  SessionActionResult,
   GraphStats,
   LeadSearchResult,
 } from './types'
@@ -25,6 +27,10 @@ declare global {
       getTerritories: () => Promise<TerritoryData[]>
       getNewLeads: () => Promise<NewLead[]>
       getClaudeSessions: () => Promise<ClaudeSession[]>
+      getSessionConversation: (sessionId: string) => Promise<ConversationMessage[]>
+      sendToSession: (tty: string, message: string) => Promise<SessionActionResult>
+      focusSession: (tty: string) => Promise<SessionActionResult>
+      createNewSession: (cwd: string) => Promise<SessionActionResult>
       getGraphStats: () => Promise<GraphStats>
       searchLeads: (query: string) => Promise<LeadSearchResult[]>
     }
