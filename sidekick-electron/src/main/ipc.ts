@@ -1,4 +1,6 @@
 import { ipcMain } from 'electron'
+import fs from 'fs'
+import path from 'path'
 import { checkHealth } from './health'
 import { getJobStatuses, getJobHistory, forceRunJob } from './scheduler-bridge'
 import { getPipelineSummary, getHotLeads, getTerritories, getNewLeads, getGraphStats, searchLeads, getLeadDetail } from './graph'
@@ -10,6 +12,48 @@ import {
   createNewSession,
   broadcastToSessions,
 } from './sessions'
+
+const VAULT_ROOT = path.resolve(__dirname, '..', '..')
+const BRIEFINGS_DIR = path.join(VAULT_ROOT, 'Ventures', '1Putt', 'Daily Briefings')
+
+function getLatestBriefing(): { date: string; content: string } | null {
+  try {
+    if (!fs.existsSync(BRIEFINGS_DIR)) return null
+    const files = fs.readdirSync(BRIEFINGS_DIR)
+      .filter(f => f.endsWith('.md'))
+      .sort()
+      .reverse()
+    if (files.length === 0) return null
+    const latest = files[0]
+    const content = fs.readFileSync(path.join(BRIEFINGS_DIR, latest), 'utf-8')
+    return { date: latest.replace('.md', ''), content }
+  } catch {
+    return null
+  }
+}
+
+function listBriefings(): string[] {
+  try {
+    if (!fs.existsSync(BRIEFINGS_DIR)) return []
+    return fs.readdirSync(BRIEFINGS_DIR)
+      .filter(f => f.endsWith('.md'))
+      .sort()
+      .reverse()
+      .map(f => f.replace('.md', ''))
+  } catch {
+    return []
+  }
+}
+
+function getBriefing(date: string): string | null {
+  try {
+    const filePath = path.join(BRIEFINGS_DIR, `${date}.md`)
+    if (!fs.existsSync(filePath)) return null
+    return fs.readFileSync(filePath, 'utf-8')
+  } catch {
+    return null
+  }
+}
 
 function wrapHandler<T>(fn: (...args: unknown[]) => Promise<T> | T) {
   return async (_event: Electron.IpcMainInvokeEvent, ...args: unknown[]) => {
@@ -64,5 +108,11 @@ export function registerIpcHandlers() {
   ipcMain.handle('leads:detail', wrapHandler((name: unknown) => {
     if (typeof name !== 'string') throw new Error('name must be a string')
     return getLeadDetail(name)
+  }))
+  ipcMain.handle('briefing:latest', wrapHandler(() => getLatestBriefing()))
+  ipcMain.handle('briefing:list', wrapHandler(() => listBriefings()))
+  ipcMain.handle('briefing:get', wrapHandler((date: unknown) => {
+    if (typeof date !== 'string') throw new Error('date must be a string')
+    return getBriefing(date)
   }))
 }
