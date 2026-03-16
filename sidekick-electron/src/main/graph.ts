@@ -275,6 +275,99 @@ export async function searchLeads(query: string): Promise<LeadSearchResult[]> {
   }
 }
 
+// ── Lead Detail ────────────────────────────────────────────────────────────
+
+export interface LeadDetail {
+  name: string
+  company: string
+  score: number
+  businessArm: string
+  stage: string
+  ehr: string
+  location: string
+  nextAction: string
+  source: string
+  npi: string
+  phone: string
+  specialty: string
+  website: string
+  events: { type: string; date: string; detail: string }[]
+  documents: { title: string; path: string }[]
+  stageHistory: { stage: string; enteredAt: string }[]
+}
+
+export async function getLeadDetail(name: string): Promise<LeadDetail | null> {
+  const session = getDriver().session()
+  try {
+    const result = await session.run(
+      `MATCH (l:Lead)
+       WHERE l.name = $name
+       OPTIONAL MATCH (l)-[:CURRENT_STAGE]->(s:SalesStage)
+       OPTIONAL MATCH (l)-[:USES_EHR]->(e:EHRSystem)
+       RETURN l, s.name AS stage, e.name AS ehr`,
+      { name },
+    )
+
+    if (result.records.length === 0) return null
+
+    const r = result.records[0]
+    const l = r.get('l').properties
+
+    // Fetch related data in parallel
+    const [eventsResult, docsResult, historyResult] = await Promise.all([
+      session.run(
+        `MATCH (l:Lead {name: $name})-[:HAD_EVENT]->(ev:Event)
+         RETURN ev.type AS type, ev.date AS date, ev.detail AS detail
+         ORDER BY ev.date DESC LIMIT 20`,
+        { name },
+      ),
+      session.run(
+        `MATCH (l:Lead {name: $name})<-[:ABOUT_LEAD]-(d:Document)
+         RETURN d.title AS title, d.path AS path
+         ORDER BY d.title LIMIT 20`,
+        { name },
+      ),
+      session.run(
+        `MATCH (l:Lead {name: $name})-[:ENTERED_STAGE]->(s:SalesStage)
+         RETURN s.name AS stage, s.enteredAt AS enteredAt
+         ORDER BY s.enteredAt DESC`,
+        { name },
+      ),
+    ])
+
+    return {
+      name: toStr(l.name),
+      company: toStr(l.company),
+      score: toNum(l.leadScore),
+      businessArm: toStr(l.businessArm),
+      stage: toStr(r.get('stage')),
+      ehr: toStr(r.get('ehr')),
+      location: toStr(l.location),
+      nextAction: toStr(l.nextAction),
+      source: toStr(l.leadSource),
+      npi: toStr(l.npi),
+      phone: toStr(l.phone),
+      specialty: toStr(l.specialty),
+      website: toStr(l.website),
+      events: eventsResult.records.map(e => ({
+        type: toStr(e.get('type')),
+        date: toStr(e.get('date')),
+        detail: toStr(e.get('detail')),
+      })),
+      documents: docsResult.records.map(d => ({
+        title: toStr(d.get('title')),
+        path: toStr(d.get('path')),
+      })),
+      stageHistory: historyResult.records.map(h => ({
+        stage: toStr(h.get('stage')),
+        enteredAt: toStr(h.get('enteredAt')),
+      })),
+    }
+  } finally {
+    await session.close()
+  }
+}
+
 // ── Cleanup ─────────────────────────────────────────────────────────────────
 
 export async function closeGraph() {

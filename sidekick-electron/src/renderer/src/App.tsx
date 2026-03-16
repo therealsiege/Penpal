@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Layout } from './components/Layout'
+import { ToastProvider } from './components/Toast'
 import { HealthPanel } from './panels/HealthPanel'
 import { SchedulerPanel } from './panels/SchedulerPanel'
 import { PipelinePanel } from './panels/PipelinePanel'
@@ -34,8 +35,10 @@ export default function App() {
   }, [])
 
   return (
-    <Layout activePanel={activePanel} onNavigate={setActivePanel}>
-      <Panel />
-    </Layout>
+    <ToastProvider>
+      <Layout activePanel={activePanel} onNavigate={setActivePanel}>
+        <Panel />
+      </Layout>
+    </ToastProvider>
   )
 }

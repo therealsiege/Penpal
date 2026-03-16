@@ -14,6 +14,7 @@ import type {
   BroadcastResult,
   GraphStats,
   LeadSearchResult,
+  LeadDetail,
 } from './types'
 
 declare global {
@@ -35,6 +36,7 @@ declare global {
       broadcastToSessions: (message: string) => Promise<BroadcastResult>
       getGraphStats: () => Promise<GraphStats>
       searchLeads: (query: string) => Promise<LeadSearchResult[]>
+      getLeadDetail: (name: string) => Promise<LeadDetail | null>
     }
   }
 }

@@ -17,4 +17,5 @@ contextBridge.exposeInMainWorld('api', {
   broadcastToSessions: (message: string) => ipcRenderer.invoke('sessions:broadcast', message),
   getGraphStats: () => ipcRenderer.invoke('graph:stats'),
   searchLeads: (query: string) => ipcRenderer.invoke('leads:search', query),
+  getLeadDetail: (name: string) => ipcRenderer.invoke('leads:detail', name),
 })
