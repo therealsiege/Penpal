@@ -14,6 +14,7 @@ contextBridge.exposeInMainWorld('api', {
   sendToSession: (tty: string, message: string) => ipcRenderer.invoke('sessions:send', tty, message),
   focusSession: (tty: string) => ipcRenderer.invoke('sessions:focus', tty),
   createNewSession: (cwd: string) => ipcRenderer.invoke('sessions:create', cwd),
+  broadcastToSessions: (message: string) => ipcRenderer.invoke('sessions:broadcast', message),
   getGraphStats: () => ipcRenderer.invoke('graph:stats'),
   searchLeads: (query: string) => ipcRenderer.invoke('leads:search', query),
 })

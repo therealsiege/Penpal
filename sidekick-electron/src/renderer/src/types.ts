@@ -107,3 +107,8 @@ export interface SessionActionResult {
   success: boolean
   error?: string
 }
+
+export interface BroadcastResult {
+  sent: number
+  failed: number
+}

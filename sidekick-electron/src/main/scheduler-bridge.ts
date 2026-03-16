@@ -2,11 +2,10 @@ import fs from 'fs'
 import path from 'path'
 import { exec } from 'child_process'
 import { promisify } from 'util'
-import { app } from 'electron'
 
 const execAsync = promisify(exec)
 
-const SIDEKICK_GRAPH = path.resolve(app.getAppPath(), '..', 'sidekick-graph')
+const SIDEKICK_GRAPH = path.resolve(__dirname, '..', '..', 'sidekick-graph')
 const SCHEDULE_PATH = path.join(SIDEKICK_GRAPH, 'schedule.yaml')
 const STATE_PATH = path.join(SIDEKICK_GRAPH, 'data', 'scheduler-state.json')
 
