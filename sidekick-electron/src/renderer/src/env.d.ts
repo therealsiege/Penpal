@@ -64,13 +64,6 @@ declare global {
       getAgentStatuses: () => Promise<AgentState[]>
       launchAgent: (agentId: string, cwd: string) => Promise<SessionActionResult>
       focusAgent: (agentId: string) => Promise<SessionActionResult>
-      // Stats / Gamification
-      getAgentAllStats: () => Promise<Record<string, import('./types').AgentStats>>
-      getLeaderboard: () => Promise<import('./types').LeaderboardEntry[]>
-      getAchievements: () => Promise<import('./types').AchievementDef[]>
-      recordTask: (agentId: string) => Promise<string[]>
-      recordMessage: (agentId: string) => Promise<{ success: boolean }>
-      recordApproval: (agentId: string) => Promise<{ success: boolean }>
       // Triplet Workflows
       createTriplet: (task: string, opts?: Record<string, unknown>) => Promise<import('./types').TripletWorkflow>
       listTriplets: () => Promise<import('./types').TripletWorkflow[]>

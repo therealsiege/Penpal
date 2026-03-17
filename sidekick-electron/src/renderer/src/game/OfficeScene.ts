@@ -516,8 +516,15 @@ export class OfficeScene extends Phaser.Scene {
       deskBody, deskTop, monitorSprite, chairSprite, state: agent,
     }
 
+    let lastClickTime = 0
     hitArea.on('pointerdown', () => {
-      EventBus.emit(EVENTS.AGENT_CLICKED, agent.config.id, ws.state)
+      const now = Date.now()
+      if (now - lastClickTime < 350) {
+        EventBus.emit(EVENTS.AGENT_DOUBLE_CLICKED, agent.config.id, ws.state)
+      } else {
+        EventBus.emit(EVENTS.AGENT_CLICKED, agent.config.id, ws.state)
+      }
+      lastClickTime = now
     })
 
     hitArea.on('pointerover', () => {
