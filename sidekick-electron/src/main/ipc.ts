@@ -3,6 +3,7 @@ import fs from 'fs'
 import path from 'path'
 import os from 'os'
 import { checkHealth } from './health'
+import { startSlackBridge, stopSlackBridge, isSlackBridgeRunning } from './slack-bridge'
 import { getJobStatuses, getJobHistory, forceRunJob } from './scheduler-bridge'
 import { getPipelineSummary, getHotLeads, getTerritories, getNewLeads, getGraphStats, searchLeads, getLeadDetail } from './graph'
 import {
@@ -488,4 +489,12 @@ export function registerIpcHandlers() {
     if (typeof relativePath !== 'string') throw new Error('relativePath must be a string')
     return getBacklinks(relativePath)
   }))
+
+  // ── Slack Bridge ──────────────────────────────────────────────────────
+  ipcMain.handle('slack:status', wrapHandler(() => ({
+    running: isSlackBridgeRunning(),
+    configured: !!(process.env.SLACK_BOT_TOKEN && process.env.SLACK_APP_TOKEN),
+  })))
+  ipcMain.handle('slack:start', wrapHandler(() => startSlackBridge()))
+  ipcMain.handle('slack:stop', wrapHandler(() => stopSlackBridge()))
 }

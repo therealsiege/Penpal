@@ -1,16 +1,23 @@
 import { app, BrowserWindow, nativeImage, shell } from 'electron'
+import fs from 'fs'
 import path from 'path'
 import dotenv from 'dotenv'
 import { registerIpcHandlers } from './ipc'
 import { closeGraph } from './graph'
 import { loadAgentConfigs } from './agents'
 import { registerPtyHandlers, destroyAllPtys } from './pty'
+import { startSlackBridge, stopSlackBridge } from './slack-bridge'
 
 // Load sidekick-graph's .env for Memgraph/Qdrant connection strings
-// In dev: __dirname is src/main, in prod build: __dirname is out/main
-// Either way, go up to sidekick-electron/ then sibling sidekick-graph/
-const SIDEKICK_GRAPH = path.resolve(__dirname, '..', '..', 'sidekick-graph')
-dotenv.config({ path: path.join(SIDEKICK_GRAPH, '.env') })
+// __dirname is out/main (or src/main in dev) — go up to sidekick-electron/
+// then up one more to sidekick/, then into sidekick-graph/
+const ELECTRON_ROOT = path.resolve(__dirname, '..', '..')
+const SIDEKICK_GRAPH = path.join(ELECTRON_ROOT, '..', 'sidekick-graph')
+// Fallback: if we're already at the vault root (sidekick/), check sibling
+const envPath = fs.existsSync(path.join(SIDEKICK_GRAPH, '.env'))
+  ? path.join(SIDEKICK_GRAPH, '.env')
+  : path.join(ELECTRON_ROOT, 'sidekick-graph', '.env')
+dotenv.config({ path: envPath })
 
 let mainWindow: BrowserWindow | null = null
 
@@ -63,6 +70,7 @@ app.whenReady().then(() => {
   registerIpcHandlers()
   registerPtyHandlers()
   createWindow()
+  startSlackBridge()
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
@@ -75,5 +83,6 @@ app.on('window-all-closed', () => {
 
 app.on('before-quit', async () => {
   destroyAllPtys()
+  await stopSlackBridge()
   await closeGraph()
 })

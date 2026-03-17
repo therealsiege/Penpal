@@ -79,6 +79,10 @@ declare global {
       vaultTags: () => Promise<import('./types').VaultTag[]>
       vaultFilesByTag: (tag: string) => Promise<string[]>
       vaultBacklinks: (relativePath: string) => Promise<import('./types').VaultBacklink[]>
+      // Slack Bridge
+      slackStatus: () => Promise<{ running: boolean; configured: boolean }>
+      slackStart: () => Promise<boolean>
+      slackStop: () => Promise<void>
     }
   }
 }
