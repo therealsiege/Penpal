@@ -1,8 +1,10 @@
-import { app, BrowserWindow, shell } from 'electron'
+import { app, BrowserWindow, nativeImage, shell } from 'electron'
 import path from 'path'
 import dotenv from 'dotenv'
 import { registerIpcHandlers } from './ipc'
 import { closeGraph } from './graph'
+import { loadAgentConfigs } from './agents'
+import { registerPtyHandlers, destroyAllPtys } from './pty'
 
 // Load sidekick-graph's .env for Memgraph/Qdrant connection strings
 // In dev: __dirname is src/main, in prod build: __dirname is out/main
@@ -19,6 +21,7 @@ function createWindow() {
     minWidth: 900,
     minHeight: 600,
     backgroundColor: '#020617',
+    icon: path.join(__dirname, '../../resources/icon.png'),
     titleBarStyle: 'hiddenInset',
     trafficLightPosition: { x: 16, y: 16 },
     webPreferences: {
@@ -41,10 +44,24 @@ function createWindow() {
     shell.openExternal(url)
     return { action: 'deny' }
   })
+
+  mainWindow.webContents.on('render-process-gone', (_e, details) => {
+    console.error('[renderer crashed]', details)
+  })
 }
 
 app.whenReady().then(() => {
+  // Set dock icon (macOS) — ensures custom icon in dev mode
+  if (process.platform === 'darwin') {
+    const dockIcon = nativeImage.createFromPath(
+      path.join(__dirname, '../../resources/icon.png')
+    )
+    if (!dockIcon.isEmpty()) app.dock.setIcon(dockIcon)
+  }
+
+  loadAgentConfigs()
   registerIpcHandlers()
+  registerPtyHandlers()
   createWindow()
 
   app.on('activate', () => {
@@ -57,5 +74,6 @@ app.on('window-all-closed', () => {
 })
 
 app.on('before-quit', async () => {
+  destroyAllPtys()
   await closeGraph()
 })

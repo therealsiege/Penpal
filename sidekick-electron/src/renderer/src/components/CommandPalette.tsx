@@ -87,10 +87,10 @@ export function CommandPalette({ actions }: Props) {
   return (
     <>
       <div className="fixed inset-0 bg-black/50 z-[200]" onClick={() => setOpen(false)} />
-      <div className="fixed top-[15%] left-1/2 -translate-x-1/2 w-[520px] bg-slate-900 border border-slate-700 rounded-xl shadow-2xl z-[201] overflow-hidden">
+      <div className="fixed top-[15%] left-1/2 -translate-x-1/2 w-[520px] bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl shadow-2xl z-[201] overflow-hidden">
         {/* Input */}
-        <div className="border-b border-slate-800 px-4 py-3 flex items-center gap-3">
-          <span className="text-slate-500 text-sm">&#8984;</span>
+        <div className="border-b border-slate-200 dark:border-slate-800 px-4 py-3 flex items-center gap-3">
+          <span className="text-slate-400 dark:text-slate-500 text-sm">&#8984;</span>
           <input
             ref={inputRef}
             type="text"
@@ -98,9 +98,9 @@ export function CommandPalette({ actions }: Props) {
             value={query}
             onChange={e => setQuery(e.target.value)}
             onKeyDown={handleKeyDown}
-            className="flex-1 bg-transparent text-sm text-slate-200 placeholder-slate-600 focus:outline-none"
+            className="flex-1 bg-transparent text-sm text-slate-800 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-600 focus:outline-none"
           />
-          <kbd className="text-[10px] text-slate-600 bg-slate-800 px-1.5 py-0.5 rounded border border-slate-700">ESC</kbd>
+          <kbd className="text-xs text-slate-400 dark:text-slate-600 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-700">ESC</kbd>
         </div>
 
         {/* Results */}
@@ -110,7 +110,7 @@ export function CommandPalette({ actions }: Props) {
           ) : (
             Array.from(groups.entries()).map(([category, items]) => (
               <div key={category}>
-                <p className="text-[10px] text-slate-600 uppercase tracking-wider px-4 py-1.5">{category}</p>
+                <p className="text-xs text-slate-400 dark:text-slate-600 uppercase tracking-wider px-4 py-1.5">{category}</p>
                 {items.map(item => {
                   const idx = globalIndex++
                   return (
@@ -118,7 +118,7 @@ export function CommandPalette({ actions }: Props) {
                       key={item.id}
                       onClick={() => execute(item)}
                       className={`flex items-center justify-between px-4 py-2 cursor-pointer transition-colors ${
-                        idx === selected ? 'bg-blue-600/20 text-blue-100' : 'text-slate-300 hover:bg-slate-800'
+                        idx === selected ? 'bg-blue-600/15 dark:bg-blue-600/20 text-blue-700 dark:text-blue-100' : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
                       }`}
                     >
                       <div>
@@ -128,7 +128,7 @@ export function CommandPalette({ actions }: Props) {
                         )}
                       </div>
                       {item.shortcut && (
-                        <kbd className="text-[10px] text-slate-500 bg-slate-800 px-1.5 py-0.5 rounded border border-slate-700">
+                        <kbd className="text-xs text-slate-500 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-700">
                           {item.shortcut}
                         </kbd>
                       )}

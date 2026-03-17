@@ -1,0 +1,17 @@
+{
+  "last_run": {
+    "health-check": "2026-03-15T18:55:21.887Z"
+  },
+  "history": [
+    {
+      "job": "health-check",
+      "started_at": "2026-03-15T18:55:21.887Z",
+      "finished_at": "2026-03-15T18:55:22.194Z",
+      "duration_ms": 306,
+      "exit_code": 0,
+      "success": true,
+      "stdout_tail": "> sidekick-graph@1.0.0 health\n> tsx src/scheduler/health.ts\n\n[dotenv@17.3.1] injecting env (3) from .env -- tip: 🔐 prevent building .env in docker: https://dotenvx.com/prebuild\n\nSidekick Health: OK (healthy)\n──────────────────────────────────────────────────\n  [+] memgraph (134ms) — 71638 nodes\n  [+] qdrant (138ms) — 2 collections\n  [+] docker (112ms) — 3/3 running\n  [+] openai_key — ...t90A\n  [+] anthropic_key — ...VwAA\n  [+] firecrawl_key — ...66ed",
+      "stderr_tail": ""
+    }
+  ]
+}

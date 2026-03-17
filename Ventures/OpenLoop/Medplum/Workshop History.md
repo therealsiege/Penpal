@@ -146,11 +146,190 @@ Selected as the pilot migration vertical because:
 
 ---
 
+## March 2026 Workshop: Clinical MVP Sprint
+
+**Source:** `Product/March 2026 Workshop Sessions/Enterprise Workshop Scoping 2`
+
+### Objective
+
+Achieve **proof of value** by delivering a business-ready MVP within 1 week. 5 daily sessions with pair programming, each building toward production.
+
+### Clinical MVP Definition
+
+**An OpenLoop client can:**
+- Access the Main MWL Intake Questionnaire (all info needed to see a patient)
+- Configure client-specific MWL intake Questionnaires
+- View their patients' Questionnaires and QuestionnaireResponses (multi-tenant isolation)
+- Be alerted when OpenLoop changes the Main MWL Intake Questionnaire
+
+**An OpenLoop developer/admin can:**
+- Write a Bot to convert client-specific QR → Main MWL QR
+- Write a Bot to convert Main MWL QR → clinical FHIR resources
+- Provision new tenants for new clients
+
+### Session Plan
+
+| Day | Topic | Deliverable |
+|-----|-------|-------------|
+| 1: Capturing Intake | Questionnaires, Terminology Services | Create Main MWL Questionnaire + client-specific Questionnaires |
+| 2: Parsing Intake | Bots, Charting | Bots: client QR → Main QR → FHIR resources |
+| 3: Representing Tenants | MSO, Multi-Tenancy | Tenanting resources, role definitions |
+| 4: Enrolling Clients | Patient Compartment, Access Policies | Example patients, AccessPolicies for Practitioners and Clients |
+| 5: Pre-filling Intake | QuestionnaireResponse pre-fill, real-time validation | Pre-fill for existing patients in new verticals |
+
+**Prerequisites per session:**
+- Day 1: Read FHIR Basics, Search, Questionnaires, Terminology Services
+- Day 2: Read Bots, Charting Basics
+- Day 3: Read Multitenant Access Control, MSO Example App Video
+- Day 4: Read Assigning Data to Tenants, Access Policies with Tenant Parameterization
+
+**Open questions from scoping:**
+- Disqualification validation: server-side or application-side?
+- What powers the Intake UI currently? Server-side, app-side, or other framework?
+- What patient data should clients have access to? All PII, no PHI? Some PHI?
+- For practitioners, which patients? Only their assigned, or all for assigned clients?
+
+---
+
+## Session Details (Jul-Aug 2025)
+
+### Session 1: Templating & Tenancy (Jul 31)
+
+**Key outcomes:**
+- Defined 4-level hierarchy: All OpenLoop → Across Vertical → Across Client Type → Per Client
+- Intake forms standard at base data level per vertical, with "keys" per vertical for clinical protocol
+- Clients wanting full control maintain own intake + mapping to Main Questionnaire
+- Current system stores intake responses as text blobs — not scalable
+- Charting needs modularization: standardize UI, allow client-specific medication lists
+- Moving from code-driven to data-driven configuration
+
+**Client deep dive (MWL vertical):**
+- **G-Plans:** Legacy custom intake, Smart intake fields mapped directly, full MWL med list, Metformin via manual Quest ticket (should be Junction)
+- **Fridays:** No Junction lab ordering, previously 12-week ordering cycles
+- **TrimRx:** Standard medication ordering
+
+**Auth decisions:**
+- Providers: per-client access within their vertical
+- Clients: read/write to QuestionnaireResponses, read-only to Patient data, no access to other info
+- Patients: auth exists but not actively used; clients have patient portals
+- Clinical ops: small centralized team, specialized by function (scheduling team manages across all customers)
+
+### Session 2: Instantiating Templates (Aug 1)
+
+**Key outcomes:**
+- Demoed Medplum provider app showing PlanDefinition$apply with Questionnaires, ServiceRequests, Tasks
+- Mapped CarePlan templates to tenancy hierarchy
+- Verticals represented by HealthcareService (GLP-1s, TRT, etc.)
+- Each client has its own Organization
+
+**Child CarePlan detail (from session notes):**
+
+| CarePlan | Activities | Trigger |
+|----------|-----------|---------|
+| **Intake & Payment** | Patient intake Task→Questionnaire, Consent, Rx selection Task→Questionnaire, Payment webhook→Stripe subscription, Parse QR→FHIR | Patient referral |
+| **Initial Visit (Sync)** | Encounter note Task→Charting Questionnaire (with pre-fill), Scheduling Task→Appointment, Provider edits/signs QR | Intake complete |
+| **Labs** | Patient Task (go get labs), ServiceRequest to Junction | Charting QR has labs selected |
+| **Rx** | MedicationRequest to DoseSpot/Photon, MedicationDispense (tracking), Follow-up Task for clinical ops | Charting QR responses |
+
+**Payment failure path:** PlanDefinition$apply creates Task for billing team + Communication resource. Does NOT apply next CarePlan.
+
+**Refill architecture:** Discussed but details in separate document.
+
+### Session 3: Using Tenancy Model (Aug 5)
+
+**Key outcomes — the complete access control pattern:**
+
+1. **Organization = client**, HealthcareService = vertical
+2. Resources tagged with `meta.compartment` referencing both Organization AND HealthcareService
+3. AccessPolicy uses `_compartment=%customer_organization` criteria
+4. ProjectMembership passes `customer_organization` and `vertical_healthcare_service` as parameters
+5. Only admin Users can set `meta.compartment` (enforced by Medplum)
+6. Child resources (Observations linked to Patient) auto-inherit compartment references
+
+**Resource bucket model:**
+- **Tenant-level:** Patient, Observation, PlanDefinition (criteria: `_compartment=%customer_organization`)
+- **Vertical-level:** Practitioner (criteria: `_compartment=%vertical_healthcare_service`, read-only)
+- **Global:** Organization (read/search only, no criteria)
+
+**Multi-tenant provider access — decided on hybrid approach:**
+- Single ProjectMembership with access to all assigned tenants
+- Client-side `_compartment` filtering for UI scoping (tenant switcher in UI, not in auth)
+- Pros: simple management, single auth context
+- Cons: API returns resources from multiple tenants (mitigated by client-side filtering)
+
+**Admin super users:** Simple AccessPolicy with no criteria — unrestricted access across all customers.
+
+### Session 4: Questionnaires (Aug 12)
+
+**Key outcomes:**
+- Reviewed parent/child CarePlan Miro
+- Scoped CarePlans to All OpenLoop / Across Vertical / Specific Client levels
+- Performed UX review of clinician workflow
+
+**Questionnaire customization — two options formalized:**
+1. Allow customization of question **wording** only (same `code`, different `text`)
+2. Allow full customization with a **translation layer** between client Questionnaire and Main Questionnaire
+
+---
+
+## FHIR Questions Potpourri (Sep 4, 2025)
+
+**Source:** `Product/Notes - FHIR Questions Potpourri`
+
+Key technical answers from Medplum:
+
+| Question | Answer |
+|----------|--------|
+| Custom FHIR profiles | Create your own: `docs/fhir-datastore/profiles` |
+| US Core enforcement | Loaded into every project. Enforce per-resource via `defaultProfile` project setting |
+| FHIR versioning | All resources versioned by default. Backward-compatible — spec-aligned |
+| SOAP → FHIR | S: Observation, O: DiagnosticReport+Observation, A: Condition, P: MedicationRequest+ServiceRequest+CommunicationRequest |
+| Bundle vs Transaction | Transactions = all-or-nothing (slower, referential integrity). Batches = sequential, independent |
+| Large imports | 100+ resources/transaction causes DB errors. Medplum bumped retry limits, implementing async batches |
+| Rate limits | Being negotiated specifically for OpenLoop in contract |
+| Referential integrity | `checkReferencesOnWrite` project setting validates references on create/update |
+| QR → FHIR extraction | Save as QuestionnaireResponse, parse via Bots — or use `$extract` (SDC, in progress at time of session, now available) |
+| Conformance tools | Not needed — Medplum validates on submission |
+
+---
+
+## Office Hours: Medications, Scheduling, Billing (Sep 12, 2025)
+
+**Source:** `Product/Notes - Medplum Office Hours`
+
+Key technical guidance from Medplum (with international implementation experience at 10M+ patient scale):
+
+**Medications:**
+- `MedicationKnowledge` = drug catalog (compartment-tagged per client)
+- `MedicationRequest` = prescription order (RxNorm codes)
+- `MedicationDispense` = fulfillment tracking:
+  - `whenPrepared` = ship date
+  - `whenHandedOver` = delivery date
+  - `status`: preparation → in-progress → completed (preparing → in transit → delivered)
+  - Extension for shipping/tracking number
+- Experience integrating with Pharmacy Information Systems
+
+**Scheduling:**
+- Medplum is system of record for Appointments/Practitioners/Patients
+- Many customers use outside vendors for scheduling UI/middleware
+- All tools are composable — anything clickable can be automated via code
+
+**Billing:**
+- `Claim` = billable event
+- `ClaimResponse.payment` = payment record
+- Actively implementing Stedi and Candid integrations
+
+**International considerations (food for thought):**
+- Country-specific FHIR implementation guides (EU has GDPR + country-specific)
+- Each country has own integration partners (labs, Rx, data exchange)
+- Data sovereignty requirements
+
+---
+
 ## Future Topics (Not Yet Covered)
 
 - Provider credentialing and state licensing
 - KPIs: turnaround time, time to first response, communication routing
-- Data migration (bulk ETL from Healthie)
-- Integrations: Labs (Junction), eRx (DoseSpot/Photon), RCM (Candid/Stedi)
-- Automation: notifications, reminders
+- Pharmacy access: OL-owned and partner pharmacies need identity verification for controlled substances
 - Micro-frontend breakup of Clinic App
+- International expansion considerations (EU GDPR, country-specific FHIR IGs)

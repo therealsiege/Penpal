@@ -31,14 +31,14 @@ async function main() {
   console.log("Node counts:");
   await assert("6 domains", "MATCH (n:Domain) RETURN count(n) AS c", r => r[0].get("c").toNumber() === 6);
   await assert("42 people", "MATCH (n:Person) RETURN count(n) AS c", r => r[0].get("c").toNumber() === 42);
-  await assert("27 organizations", "MATCH (n:Organization) RETURN count(n) AS c", r => r[0].get("c").toNumber() === 27);
-  await assert("49 technologies", "MATCH (n:Technology) RETURN count(n) AS c", r => r[0].get("c").toNumber() === 49);
-  await assert("22 integrations", "MATCH (n:Integration) RETURN count(n) AS c", r => r[0].get("c").toNumber() === 22);
-  await assert("47 FHIR resources", "MATCH (n:FhirResource) RETURN count(n) AS c", r => r[0].get("c").toNumber() === 47);
+  await assert("28 organizations", "MATCH (n:Organization) RETURN count(n) AS c", r => r[0].get("c").toNumber() === 28);
+  await assert("61 technologies", "MATCH (n:Technology) RETURN count(n) AS c", r => r[0].get("c").toNumber() === 61);
+  await assert("26 integrations", "MATCH (n:Integration) RETURN count(n) AS c", r => r[0].get("c").toNumber() === 26);
+  await assert("66 FHIR resources", "MATCH (n:FhirResource) RETURN count(n) AS c", r => r[0].get("c").toNumber() === 66);
   await assert("4 phases", "MATCH (n:Phase) RETURN count(n) AS c", r => r[0].get("c").toNumber() === 4);
   await assert("13 risks", "MATCH (n:Risk) RETURN count(n) AS c", r => r[0].get("c").toNumber() === 13);
-  await assert("16 decisions", "MATCH (n:Decision) RETURN count(n) AS c", r => r[0].get("c").toNumber() === 16);
-  await assert("28 documents", "MATCH (n:Document) RETURN count(n) AS c", r => r[0].get("c").toNumber() === 28);
+  await assert("21 decisions", "MATCH (n:Decision) RETURN count(n) AS c", r => r[0].get("c").toNumber() === 21);
+  await assert("66 documents", "MATCH (n:Document) RETURN count(n) AS c", r => r[0].get("c").toNumber() === 66);
   await assert("6 meeting notes", "MATCH (n:MeetingNote) RETURN count(n) AS c", r => r[0].get("c").toNumber() === 6);
   await assert("88 action items", "MATCH (n:ActionItem) RETURN count(n) AS c", r => r[0].get("c").toNumber() === 88);
 
@@ -56,8 +56,8 @@ async function main() {
   await assert("42 people employed", "MATCH ()-[r:EMPLOYS]->() RETURN count(r) AS c", r => r[0].get("c").toNumber() === 42);
   await assert("Phase chain (3 depends_on)", "MATCH (p:Phase)-[:DEPENDS_ON]->() RETURN count(p) AS c", r => r[0].get("c").toNumber() === 3);
   await assert("OpenLoop migrating from Healthie", "MATCH (o:Organization {name:'OpenLoop'})-[:MIGRATING_FROM]->(h:Organization {name:'Healthie'}) RETURN count(*) AS c", r => r[0].get("c").toNumber() === 1);
-  await assert("Tech mappings >= 5", "MATCH ()-[r:MAPS_TO]->() RETURN count(r) AS c", r => r[0].get("c").toNumber() >= 5);
-  await assert("16 decisions linked to doc", "MATCH (d:Decision)-[:DECIDED_IN]->(doc:Document) RETURN count(d) AS c", r => r[0].get("c").toNumber() === 16);
+  await assert("Tech mappings >= 8", "MATCH ()-[r:MAPS_TO]->() RETURN count(r) AS c", r => r[0].get("c").toNumber() >= 8);
+  await assert("21 decisions linked to doc", "MATCH (d:Decision)-[:DECIDED_IN]->(doc:Document) RETURN count(d) AS c", r => r[0].get("c").toNumber() === 21);
   await assert("MENTIONS > 50", "MATCH ()-[r:MENTIONS]->() RETURN count(r) AS c", r => r[0].get("c").toNumber() > 50);
   await assert("Action items produced", "MATCH (m:MeetingNote)-[:PRODUCED]->(a:ActionItem) RETURN count(a) AS c", r => r[0].get("c").toNumber() > 0);
 
@@ -67,7 +67,7 @@ async function main() {
   await assert("3 REPORTS_TO", "MATCH ()-[r:REPORTS_TO]->() RETURN count(r) AS c", r => r[0].get("c").toNumber() === 3);
   await assert("6 team PART_OF", "MATCH ()-[r:PART_OF]->() RETURN count(r) AS c", r => r[0].get("c").toNumber() === 6);
   await assert("8 LEADS", "MATCH ()-[r:LEADS]->() RETURN count(r) AS c", r => r[0].get("c").toNumber() === 8);
-  await assert("16 DECIDED_FOR project", "MATCH ()-[r:DECIDED_FOR]->() RETURN count(r) AS c", r => r[0].get("c").toNumber() === 16);
+  await assert("21 DECIDED_FOR project", "MATCH ()-[r:DECIDED_FOR]->() RETURN count(r) AS c", r => r[0].get("c").toNumber() === 21);
   await assert("13 THREATENS project", "MATCH ()-[r:THREATENS]->() RETURN count(r) AS c", r => r[0].get("c").toNumber() === 13);
   await assert("Incident CAUSED_BY DynamoDB", "MATCH (i:Incident)-[:CAUSED_BY]->(t:Technology {name:'DynamoDB'}) RETURN count(*) AS c", r => r[0].get("c").toNumber() === 1);
   await assert("Incident AFFECTED 3 orgs", "MATCH (i:Incident)-[:AFFECTED]->(o:Organization) RETURN count(o) AS c", r => r[0].get("c").toNumber() === 3);
@@ -78,7 +78,7 @@ async function main() {
 
   // ── Semantic checks ────────────────────────────────────────────────────────
   console.log("\nSemantic checks:");
-  await assert("EventBridge in Tech Stack", "MATCH (d:Document)-[:MENTIONS]->(t:Technology {name:'EventBridge'}) WHERE d.filePath ENDS WITH 'Tech Stack.md' RETURN count(*) AS c", r => r[0].get("c").toNumber() === 1);
+  await assert("EventBridge in Tech Stack", "MATCH (d:Document)-[:MENTIONS]->(t:Technology {name:'EventBridge'}) WHERE d.filePath ENDS WITH 'Tech Stack.md' RETURN count(*) AS c", r => r[0].get("c").toNumber() >= 1);
   await assert("Stripe provides Stripe Payments", "MATCH (o:Organization {name:'Stripe'})-[:PROVIDES]->(i:Integration {name:'Stripe Payments'}) RETURN count(*) AS c", r => r[0].get("c").toNumber() === 1);
   await assert("Clint owns Migration", "MATCH (p:Person {name:'Clint Johnson'})-[:OWNS]->(d:Domain {name:'Migration'}) RETURN count(*) AS c", r => r[0].get("c").toNumber() === 1);
   await assert("Clint MEMBER_OF Payments & Revenue", "MATCH (p:Person {name:'Clint Johnson'})-[:MEMBER_OF]->(t:Team {name:'Payments & Revenue'}) RETURN count(*) AS c", r => r[0].get("c").toNumber() === 1);

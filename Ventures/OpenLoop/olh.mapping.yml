@@ -1,0 +1,7 @@
+CONSUMER_API_VPC_ENDPOINT={{PlatformStack Output: PlatformStack.ApiVpcEndpointId}}
+CONSUMER_EVENT_BUS_ARN={{PlatformStack Output: PlatformStack.EventBusArn}}
+CONSUMER_EVENT_BUS_INTEGRATION_ROLE_ARN={{PlatformStack Output: PlatformStack.EventBusIntegrationRoleArn}}
+CONSUMER_API_ID={{PlatformStack Output: PlatformStack.InternalApiId}}
+CONSUMER_API_ROLE={{PlatformStack Output: PlatformStack.InternalApiIntegrationRoleArn}}
+CONSUMER_API_VPC_LINK={{PlatformStack Output: PlatformStack.PartnerApiVpcLinkId}}
+KMS_ENCRYPTION_KEY_ARN={{PlatformStack Output: PlatformStack.StripeEslKeyArn}}

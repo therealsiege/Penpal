@@ -96,6 +96,7 @@ export interface ClaudeSession {
   lastUserMessage: string
   tty: string
   terminalName: string
+  waitingForInput: boolean
 }
 
 export interface ConversationMessage {
@@ -111,6 +112,69 @@ export interface SessionActionResult {
 export interface BroadcastResult {
   sent: number
   failed: number
+}
+
+export interface AgentPersona {
+  backstory: string
+  style: string
+  catchphrase: string
+}
+
+export interface AgentConfig {
+  id: string
+  name: string
+  title: string
+  tripletRole: 'solver' | 'reviewer' | 'executor'
+  persona?: AgentPersona
+  systemPrompt: string
+  model: string
+  mcpProfile: string
+  skills: string[]
+  allowedTools: string[]
+  subAgents: Record<string, { description: string; prompt: string }>
+  defaultRepos: string[]
+  avatar: string
+  desk: { row: number; col: number }
+  autonomy: string
+}
+
+export type AgentStatus = 'sleeping' | 'idle' | 'active'
+
+export type SessionMode = 'working' | 'plan' | 'accept-edits' | 'waiting' | 'idle' | 'compressing'
+
+// Finer-grained classification of WHY the session needs interaction (or doesn't)
+export type InteractionType =
+  | 'tool-approval'  // Tool use pending approval (bash, read, etc.)
+  | 'question'       // AskUserQuestion tool used — agent asked user something
+  | 'accept-edits'   // File edits pending accept/reject
+  | 'idle-prompt'    // Task finished (end_turn), sitting at idle prompt
+  | 'none'           // Working or no interaction pending
+
+export interface SubAgentInvocation {
+  description: string
+  timestamp: number
+  status: 'active' | 'completed'
+}
+
+export interface AgentState {
+  config: AgentConfig
+  status: AgentStatus
+  needsInteraction?: boolean
+  sessionMode?: SessionMode
+  interactionType?: InteractionType
+  sessionId?: string
+  pid?: number
+  tty?: string
+  cpu?: string
+  memoryMB?: number
+  uptime?: string
+  lastUserMessage?: string
+  lastAssistantBlurb?: string
+  cwd?: string
+  parentAgentId?: string
+  isSubAgent?: boolean
+  subAgents?: AgentState[]
+  subAgentInvocations?: SubAgentInvocation[]
 }
 
 export interface LeadDetail {
@@ -130,4 +194,113 @@ export interface LeadDetail {
   events: { type: string; date: string; detail: string }[]
   documents: { title: string; path: string }[]
   stageHistory: { stage: string; enteredAt: string }[]
+}
+
+export interface AgentStats {
+  agentId: string
+  tasksCompleted: number
+  totalUptime: number
+  messagesReceived: number
+  approvalsGranted: number
+  streak: number
+  bestStreak: number
+  xp: number
+  level: number
+  lastActive: number
+  achievements: string[]
+}
+
+export interface LeaderboardEntry {
+  agentId: string
+  agentName: string
+  xp: number
+  level: number
+  tasksCompleted: number
+  streak: number
+  achievements: string[]
+}
+
+export interface AchievementDef {
+  id: string
+  name: string
+  description: string
+  icon: string
+}
+
+// ── Triplet Workflow Types ──────────────────────────────────────────────────
+
+export type TripletStatus =
+  | 'pending'
+  | 'solving'
+  | 'reviewing'
+  | 'executing'
+  | 'feedback'
+  | 'complete'
+  | 'failed'
+  | 'paused'
+
+export interface TripletRole {
+  agentId: string
+  tty?: string
+  sessionId?: string
+  status: 'waiting' | 'active' | 'complete' | 'failed'
+  output?: string
+}
+
+export interface TripletWorkflow {
+  id: string
+  name: string
+  status: TripletStatus
+  task: string
+  cwd: string
+  solver: TripletRole
+  reviewer: TripletRole
+  executor: TripletRole
+  iteration: number
+  maxIterations: number
+  artifacts: { stage: string; path: string; iteration: number; timestamp: number }[]
+  createdAt: number
+  updatedAt: number
+  error?: string
+  stageHistory: { stage: TripletStatus; enteredAt: number }[]
+}
+
+export interface TripletPreset {
+  id: string
+  solver: string
+  reviewer: string
+  executor: string
+  description: string
+}
+
+// ── Vault Types ──────────────────────────────────────────────────────────────
+
+export interface VaultEntry {
+  name: string
+  isDirectory: boolean
+  path: string
+  size?: number
+  mtime?: number
+}
+
+export interface VaultFileContent {
+  content: string
+  mtime: number
+}
+
+export interface VaultSearchResult {
+  path: string
+  line: number
+  text: string
+}
+
+export interface VaultTag {
+  name: string
+  count: number
+}
+
+export interface VaultBacklink {
+  title: string
+  path: string
+  snippet: string
 }

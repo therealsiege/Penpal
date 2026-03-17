@@ -68,6 +68,13 @@
         "serena", "start-mcp-server",
         "--context", "claude-code"
       ]
+    },
+    "phaser-editor": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@phaserjs/editor-mcp-server"
+      ]
     }
   }
 }

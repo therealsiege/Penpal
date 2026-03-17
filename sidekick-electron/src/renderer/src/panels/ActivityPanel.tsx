@@ -53,7 +53,7 @@ function BriefingViewer() {
 
   if (dates.length === 0) {
     return (
-      <div className="bg-slate-900 border border-slate-800 rounded-lg p-4">
+      <div className="bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg p-4">
         <p className="text-xs text-slate-500">No daily briefings yet. Run the daily-briefing job to generate one.</p>
       </div>
     )
@@ -69,8 +69,8 @@ function BriefingViewer() {
             onClick={() => setSelectedDate(date)}
             className={`px-2.5 py-1 text-xs rounded-md border whitespace-nowrap transition-colors ${
               selectedDate === date
-                ? 'bg-blue-600/20 border-blue-500/30 text-blue-400'
-                : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-slate-200'
+                ? 'bg-blue-600/20 border-blue-500/30 text-blue-500 dark:text-blue-400'
+                : 'bg-slate-200 dark:bg-slate-800 border-slate-300 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
             }`}
           >
             {date}
@@ -79,12 +79,12 @@ function BriefingViewer() {
       </div>
 
       {/* Content */}
-      <div className="bg-slate-900 border border-slate-800 rounded-lg overflow-hidden">
+      <div className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg overflow-hidden">
         {content === null ? (
           <p className="text-xs text-slate-500 p-4">Loading...</p>
         ) : (
           <div className="p-4 max-h-[60vh] overflow-y-auto">
-            <pre className="text-xs text-slate-300 whitespace-pre-wrap font-mono leading-relaxed">
+            <pre className="text-xs text-slate-700 dark:text-slate-300 whitespace-pre-wrap font-mono leading-relaxed">
               {content}
             </pre>
           </div>
@@ -119,15 +119,15 @@ export function ActivityPanel() {
           <h2 className="text-lg font-semibold">Activity</h2>
           <p className="text-xs text-slate-500 mt-0.5">Recent system activity, leads, and daily briefings</p>
         </div>
-        <div className="flex bg-slate-900 border border-slate-800 rounded-lg overflow-hidden">
+        <div className="flex bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg overflow-hidden">
           {(['feed', 'briefing'] as const).map(t => (
             <button
               key={t}
               onClick={() => setTab(t)}
               className={`px-3 py-1.5 text-xs transition-colors ${
                 tab === t
-                  ? 'bg-slate-700 text-white'
-                  : 'text-slate-400 hover:text-slate-200'
+                  ? 'bg-slate-300 dark:bg-slate-700 text-slate-900 dark:text-white'
+                  : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
               }`}
             >
               {t === 'feed' ? 'Activity Feed' : 'Daily Briefing'}
@@ -147,28 +147,28 @@ export function ActivityPanel() {
             </h3>
             <div className="space-y-2">
               {!history || history.length === 0 ? (
-                <p className="text-xs text-slate-500 bg-slate-900 border border-slate-800 rounded-lg p-4">
+                <p className="text-xs text-slate-500 bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg p-4">
                   No runs recorded yet.
                 </p>
               ) : (
                 history.slice(-15).reverse().map((run, i) => (
                   <div
                     key={i}
-                    className="bg-slate-900 border border-slate-800 rounded-lg p-3"
+                    className="bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg p-3"
                   >
                     <div className="flex items-center justify-between mb-1">
                       <div className="flex items-center gap-2">
                         <StatusBadge status={run.success ? 'ok' : 'fail'} />
-                        <span className="text-sm font-medium text-slate-200">{run.job}</span>
+                        <span className="text-sm font-medium text-slate-800 dark:text-slate-200">{run.job}</span>
                       </div>
-                      <span className="text-[11px] text-slate-600">{timeAgo(run.started_at)}</span>
+                      <span className="text-[11px] text-slate-400 dark:text-slate-600">{timeAgo(run.started_at)}</span>
                     </div>
                     <div className="flex items-center gap-3 text-[11px] text-slate-500">
                       <span>{formatDuration(run.duration_ms)}</span>
                       <span>exit {run.exit_code}</span>
                     </div>
                     {!run.success && run.stderr_tail && (
-                      <p className="text-[11px] text-red-400/80 mt-1.5 truncate">
+                      <p className="text-[11px] text-red-500 dark:text-red-400/80 mt-1.5 truncate">
                         {run.stderr_tail.split('\n')[0]}
                       </p>
                     )}
@@ -185,21 +185,21 @@ export function ActivityPanel() {
             </h3>
             <div className="space-y-2">
               {!newLeads || newLeads.length === 0 ? (
-                <p className="text-xs text-slate-500 bg-slate-900 border border-slate-800 rounded-lg p-4">
+                <p className="text-xs text-slate-500 bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg p-4">
                   No new leads in the last 24 hours.
                 </p>
               ) : (
                 newLeads.map((lead, i) => (
                   <div
                     key={i}
-                    className="bg-slate-900 border border-slate-800 rounded-lg p-3"
+                    className="bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg p-3"
                   >
                     <div className="flex items-center justify-between mb-1">
-                      <span className="text-sm font-medium text-slate-200">{lead.name}</span>
+                      <span className="text-sm font-medium text-slate-800 dark:text-slate-200">{lead.name}</span>
                       <span className={`text-xs font-mono ${
-                        lead.score >= 50 ? 'text-emerald-400'
-                          : lead.score >= 30 ? 'text-amber-400'
-                          : 'text-slate-400'
+                        lead.score >= 50 ? 'text-emerald-500 dark:text-emerald-400'
+                          : lead.score >= 30 ? 'text-amber-500 dark:text-amber-400'
+                          : 'text-slate-500 dark:text-slate-400'
                       }`}>
                         {lead.score}
                       </span>

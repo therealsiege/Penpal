@@ -204,6 +204,6 @@ graph TD
 
 ## The Knowledge System
 
-A **232-node, 950-relationship knowledge graph** in Memgraph, backed by a 26+ document Obsidian vault, with semantic code intelligence on the Medplum repo via Serena. This gives the ability to trace from a product decision all the way down to the TypeScript implementation.
+A **492-node, 2,060-relationship knowledge graph** in Memgraph (16 node labels, 25 relationship types), backed by a 72-document Obsidian vault, with semantic code intelligence on the Medplum repo via Serena. This gives the ability to trace from a product decision all the way down to the TypeScript implementation.
 
 See [System Guide](System%20Guide.md) for how to interact with it.
