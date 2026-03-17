@@ -1,0 +1,207 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# ── dispatch: Two-phase Claude Code launcher ─────────────────────────────────
+# Phase 1: Plan mode — discuss the work, ask clarifying questions
+# Phase 2: Execute — autonomous execution, no permission prompts
+#
+# Usage:
+#   dispatch [options] [task description]
+#   dispatch "Add pagination to the leads table"
+#   dispatch --agent fullstack-dev "Refactor the ETL pipeline"
+#   dispatch --dir /path/to/project "Fix the build"
+#   dispatch --plan-only "What would it take to add auth?"
+#
+# Setup (first time):
+#   claude setup-token
+#   dispatch --setup
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SIDEKICK_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+AGENTS_YAML="$SIDEKICK_ROOT/sidekick-electron/agents/agent-types.yaml"
+
+# ── Defaults ─────────────────────────────────────────────────────────────────
+
+WORK_DIR="${DISPATCH_DIR:-$(pwd)}"
+AGENT=""
+PLAN_ONLY=false
+MODEL="opus"
+MCP_CONFIG=""
+TASK=""
+
+# ── Colors ───────────────────────────────────────────────────────────────────
+
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+CYAN='\033[0;36m'
+BOLD='\033[1m'
+DIM='\033[2m'
+RESET='\033[0m'
+
+# ── Helpers ──────────────────────────────────────────────────────────────────
+
+die()  { echo -e "${RED}error:${RESET} $*" >&2; exit 1; }
+info() { echo -e "${BLUE}>>>${RESET} $*"; }
+warn() { echo -e "${YELLOW}warn:${RESET} $*"; }
+
+usage() {
+  cat <<'EOF'
+dispatch — Two-phase Claude Code launcher
+
+USAGE
+  dispatch [options] [task description]
+
+OPTIONS
+  --agent, -a <id>     Use agent profile from agent-types.yaml
+  --dir, -d <path>     Working directory (default: cwd)
+  --model, -m <model>  Model override (default: opus)
+  --plan-only          Only run the planning phase, don't execute
+  --mcp <path>         Additional MCP config file
+  --setup              Run first-time auth setup
+  -h, --help           Show this help
+
+EXAMPLES
+  dispatch "Add pagination to the leads table"
+  dispatch -a fullstack-dev "Refactor the ETL pipeline"
+  dispatch -d ~/projects/app "Fix the login bug"
+  dispatch --plan-only "What would it take to add auth?"
+
+WORKFLOW
+  1. Plan  — Claude discusses the work and asks clarifying questions
+  2. Approve — You review and approve the plan (or refine it)
+  3. Execute — Claude runs autonomously, no permission prompts
+  4. Report — Claude summarizes what was done
+EOF
+  exit 0
+}
+
+# ── Parse Args ───────────────────────────────────────────────────────────────
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --agent|-a)   AGENT="$2"; shift 2 ;;
+    --dir|-d)     WORK_DIR="$2"; shift 2 ;;
+    --model|-m)   MODEL="$2"; shift 2 ;;
+    --plan-only)  PLAN_ONLY=true; shift ;;
+    --mcp)        MCP_CONFIG="$2"; shift 2 ;;
+    --setup)
+      info "Running Claude Code auth setup..."
+      claude setup-token
+      exit $?
+      ;;
+    -h|--help)    usage ;;
+    --)           shift; TASK="$*"; break ;;
+    -*)           die "Unknown option: $1" ;;
+    *)            TASK="$*"; break ;;
+  esac
+done
+
+[[ -z "$TASK" ]] && die "No task provided. Usage: dispatch [options] <task>"
+[[ -d "$WORK_DIR" ]] || die "Directory not found: $WORK_DIR"
+
+# ── Resolve Agent Config ─────────────────────────────────────────────────────
+
+SYSTEM_PROMPT=""
+AGENT_LABEL=""
+
+if [[ -n "$AGENT" ]]; then
+  if ! command -v yq &>/dev/null; then
+    warn "yq not installed, skipping agent profile resolution"
+  elif [[ -f "$AGENTS_YAML" ]]; then
+    AGENT_PROMPT=$(yq -r ".agents.\"$AGENT\".systemPrompt // empty" "$AGENTS_YAML" 2>/dev/null)
+    AGENT_MODEL=$(yq -r ".agents.\"$AGENT\".model // empty" "$AGENTS_YAML" 2>/dev/null)
+    AGENT_MCP=$(yq -r ".agents.\"$AGENT\".mcpProfile // empty" "$AGENTS_YAML" 2>/dev/null)
+    AGENT_NAME=$(yq -r ".agents.\"$AGENT\".name // empty" "$AGENTS_YAML" 2>/dev/null)
+
+    [[ -n "$AGENT_PROMPT" ]] && SYSTEM_PROMPT="$AGENT_PROMPT"
+    [[ -n "$AGENT_MODEL" ]] && MODEL="$AGENT_MODEL"
+    [[ -z "$MCP_CONFIG" && -n "$AGENT_MCP" ]] && {
+      PROFILE_PATH="$SIDEKICK_ROOT/sidekick-electron/agents/mcp-profiles/${AGENT_MCP}.json"
+      [[ -f "$PROFILE_PATH" ]] && MCP_CONFIG="$PROFILE_PATH"
+    }
+    AGENT_LABEL="${AGENT_NAME:-$AGENT}"
+  fi
+fi
+
+# ── Build System Prompt ──────────────────────────────────────────────────────
+
+DISPATCH_PROMPT="You are operating in DISPATCH mode — a two-phase autonomous workflow.
+
+== PHASE 1: PLAN ==
+You are currently in the PLANNING phase.
+- Analyze the task thoroughly before proposing any changes
+- Read relevant code and understand the codebase context
+- Ask clarifying questions if anything is ambiguous — this is the ONLY time to ask
+- Present a clear, numbered plan of what you will do
+- Wait for the user to approve the plan before proceeding
+- If the user says 'go', 'approved', 'execute', 'do it', 'lgtm', or similar — move to Phase 2
+
+== PHASE 2: EXECUTE ==
+Once the plan is approved:
+- Execute the entire plan without stopping for permission
+- You may ask clarifying questions if you hit genuine ambiguity, but NEVER ask for permission to proceed
+- Make all file edits, run all commands, install dependencies — whatever the plan requires
+- If something fails, debug and fix it yourself
+- When finished, provide a complete summary of everything you did
+
+== RULES ==
+- NEVER ask 'shall I proceed?' or 'would you like me to continue?' — just do it
+- NEVER ask permission to read, edit, create, or delete files — just do it
+- NEVER ask permission to run commands — just do it
+- You MAY ask questions when you genuinely need information you cannot determine yourself
+- After execution, report: what changed, what was created, what was tested
+- If you encounter an error, fix it. If you can't fix it, explain why and what you tried."
+
+if [[ -n "$SYSTEM_PROMPT" ]]; then
+  DISPATCH_PROMPT="$SYSTEM_PROMPT
+
+$DISPATCH_PROMPT"
+fi
+
+# ── Display ──────────────────────────────────────────────────────────────────
+
+echo ""
+echo -e "${BOLD}${CYAN}╔══════════════════════════════════════════╗${RESET}"
+echo -e "${BOLD}${CYAN}║          DISPATCH MODE                   ║${RESET}"
+echo -e "${BOLD}${CYAN}╚══════════════════════════════════════════╝${RESET}"
+echo ""
+if [[ -n "$AGENT_LABEL" ]]; then
+  echo -e "  ${DIM}Agent:${RESET}  ${GREEN}$AGENT_LABEL${RESET}"
+fi
+echo -e "  ${DIM}Model:${RESET}  $MODEL"
+echo -e "  ${DIM}Dir:${RESET}    $WORK_DIR"
+echo -e "  ${DIM}Task:${RESET}   $TASK"
+echo ""
+
+# ── Phase 1: Plan ────────────────────────────────────────────────────────────
+
+if [[ "$PLAN_ONLY" == true ]]; then
+  info "Plan-only mode — no execution phase"
+  echo ""
+
+  exec claude \
+    --model "$MODEL" \
+    --permission-mode plan \
+    --system-prompt "$DISPATCH_PROMPT" \
+    --name "dispatch:plan" \
+    ${MCP_CONFIG:+--mcp-config "$MCP_CONFIG"} \
+    "$TASK"
+fi
+
+# ── Full Dispatch: Plan + Execute ────────────────────────────────────────────
+
+info "Starting dispatch — plan first, then execute autonomously"
+echo -e "  ${DIM}Permissions will be bypassed during execution.${RESET}"
+echo ""
+
+cd "$WORK_DIR"
+
+exec claude \
+  --model "$MODEL" \
+  --dangerously-skip-permissions \
+  --system-prompt "$DISPATCH_PROMPT" \
+  --name "dispatch:${AGENT:-auto}" \
+  ${MCP_CONFIG:+--mcp-config "$MCP_CONFIG"} \
+  "$TASK"

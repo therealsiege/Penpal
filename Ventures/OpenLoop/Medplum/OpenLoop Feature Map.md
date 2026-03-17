@@ -249,3 +249,34 @@ This is a bot-based tool for migrating data FROM Healthie into Medplum via SFTP.
 | Fax integration | **EXISTS** (demo app) | Adapt `medplum-efax-demo` |
 
 **Bottom line:** 17 of 21 identified needs have existing code to start from. Only 4 require greenfield development — and those are the OpenLoop-specific business logic (abstraction layer, EventBridge bridge, provider network, client onboarding).
+
+---
+
+## Additional Example Apps (Not Yet Mapped to OpenLoop Needs)
+
+These examples exist in the repo but weren't covered above. Several are highly relevant.
+
+### High Relevance
+
+| Example | Path | What It Does | OpenLoop Use |
+|---------|------|-------------|-------------|
+| **foomedical** | `examples/foomedical/` | Production-ready medical practice sample app — patient registration, scheduling, clinical documentation, charting | Reference architecture for the provider app |
+| **task-demo** | `examples/medplum-task-demo/` | Full Task lifecycle — create, assign, complete, delete, view queues | Task management UI patterns for CarePlan workflow |
+| **smart-on-fhir-demo** | `examples/medplum-smart-on-fhir-demo/` | EHR launch + standalone launch + SMART Health IT sandbox | Phase 3 health system integration |
+| **websocket-subscriptions-demo** | `examples/medplum-websocket-subscriptions-demo/` | Real-time notifications via WebSocket Subscriptions + `$get-ws-binding-token` | Live UI updates for provider dashboard |
+| **fhircast-demo** | `examples/medplum-fhircast-demo/` | Publisher/Subscriber pattern for synchronized clinical workflows | Context sync across telehealth modules |
+
+### Useful Reference
+
+| Example | Path | What It Does | OpenLoop Use |
+|---------|------|-------------|-------------|
+| **hello-world** | `examples/medplum-hello-world/` | Starter app — FHIR search, GraphQL queries, React component basics | Onboarding template for new OpenLoop engineers |
+| **valueset-selector** | `examples/medplum-valueset-selector/` | Search existing ValueSets and create custom ones | Build OpenLoop-specific terminology |
+| **fsh-profiles** | `examples/medplum-fsh-profiles/` | FHIR Shorthand profile definitions | Define OpenLoop-specific FHIR profiles |
+| **postman-examples** | `examples/medplum-postman-examples/` | Postman collection for API testing | QA and manual testing |
+| **local-k8s** | `examples/medplum-local-k8s/` | Kubernetes deployment with Fission, PostgreSQL, Redis | Alternative deployment if K8s is ever considered |
+
+### Updated Build vs. Reuse Count
+
+**Existing examples in repo:** 23 (was 17 mapped, now all 23 cataloged)
+**Greenfield build:** 4 (unchanged — abstraction layer, EventBridge bridge, provider network, client onboarding)

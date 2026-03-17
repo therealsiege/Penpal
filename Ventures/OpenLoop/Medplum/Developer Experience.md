@@ -1,6 +1,6 @@
 > SDK, npm packages, CLI, React components, MCP server, and TypeScript-first development. Everything OpenLoop engineers need to build on Medplum.
 
-**See also:** [Platform Overview](Platform%20Overview.md) | [FHIR Glossary](FHIR%20R4%20Glossary.md)
+**See also:** [Platform Overview](Platform%20Overview.md) | [FHIR Glossary](FHIR%20R4%20Glossary.md) | [Server Operations](Server%20Operations.md) | [Bots & Subscriptions](Bots%20&%20Subscriptions.md) | [React Components](React%20Components.md) | [AI & LLM Integration](AI%20&%20LLM%20Integration.md)
 
 ---
 
@@ -242,3 +242,31 @@ medplum bot deploy my-bot
 | Unit tests (bot logic) | `@medplum/mock` — MockClient simulates server |
 | Integration tests | Local Docker Compose Medplum instance |
 | E2E tests | Staging Medplum Project (isolated from production) |
+
+---
+
+## Migration Guides (From the Repo)
+
+Medplum includes dedicated migration documentation at `packages/docs/docs/migration/`:
+
+| Guide | What It Covers |
+|-------|---------------|
+| **Migration Planning** | Timeline, stakeholder identification, data requirements, downtime tolerance, adoption strategy (phased vs big bang) |
+| **Migration Sequencing** | Recommended data loading order: Practitioner/PractitionerRole → Organization → Patient → Conditions/Medications → Encounters/Observations. Follows FHIR dependency graph. |
+| **Convert to FHIR** | Reshaping source data to FHIR, using identifiers to track source system origins, handling CodeableConcepts, enriching with standard codes (ICD-10, SNOMED, LOINC) |
+| **Migration Pipelines** | Building ETL infrastructure — batch vs streaming, error handling, idempotency |
+| **Adoption Strategy** | Parallel adoption, active-active synchronization, cutover planning |
+
+**OpenLoop relevance:** The sequencing guide is directly applicable — follow the dependency order when migrating from Healthie. The "Convert to FHIR" guide addresses the GraphQL → FHIR paradigm shift head-on.
+
+---
+
+## Deeper References
+
+For more detail on specific subsystems, see:
+
+- **[Server Operations](Server%20Operations.md)** — All 56 custom FHIR operations with descriptions
+- **[Bots & Subscriptions](Bots%20&%20Subscriptions.md)** — Execution internals, Lambda deployment, secrets cascade, retry logic
+- **[Care Plans & Tasks](Care%20Plans%20&%20Tasks.md)** — PlanDefinition $apply, Task lifecycle, $extract, workflow automation
+- **[React Components](React%20Components.md)** — Full catalog of 123+ clinical UI components
+- **[AI & LLM Integration](AI%20&%20LLM%20Integration.md)** — $ai operation, MCP server, Textract, Comprehend Medical

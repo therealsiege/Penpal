@@ -352,6 +352,8 @@ async function loadUsesRelationships(session: Session): Promise<void> {
   const medplumTech = [
     "TypeScript", "PostgreSQL", "AWS CDK", "ECS Fargate",
     "Medplum Bots", "FHIR Subscriptions", "Medplum SDK", "FHIR R4",
+    "BullMQ", "FHIRcast", "MCP", "Medplum React", "Medplum CLI",
+    "pdfmake", "ElastiCache Redis", "Docker",
   ];
   for (const tech of medplumTech) {
     await run(
@@ -387,6 +389,8 @@ async function loadProvidesRelationships(session: Session): Promise<void> {
     "Doxy.me": "Doxy.me",
     AWS: "AWS",
     Datadog: "Datadog",
+    OpenAI: "OpenAI",
+    Medplum: "Medplum",
   };
 
   let count = 0;

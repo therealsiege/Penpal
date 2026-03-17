@@ -42,16 +42,16 @@ function LeadDrawer({ name, onClose }: { name: string; onClose: () => void }) {
       <div className="fixed inset-0 bg-black/40 z-40" onClick={onClose} />
 
       {/* Drawer */}
-      <div className="fixed right-0 top-0 bottom-0 w-[480px] bg-slate-950 border-l border-slate-800 z-50 overflow-y-auto shadow-2xl">
+      <div className="fixed right-0 top-0 bottom-0 w-[480px] bg-white dark:bg-slate-950 border-l border-slate-200 dark:border-slate-800 z-50 overflow-y-auto shadow-2xl">
         {/* Header */}
-        <div className="sticky top-0 bg-slate-950/95 backdrop-blur border-b border-slate-800 px-6 py-4 flex items-start justify-between">
+        <div className="sticky top-0 bg-white/95 dark:bg-slate-950/95 backdrop-blur border-b border-slate-200 dark:border-slate-800 px-6 py-4 flex items-start justify-between">
           <div className="min-w-0">
-            <h2 className="text-lg font-semibold text-slate-100 truncate">{name}</h2>
-            {lead && <p className="text-sm text-slate-400">{lead.company}</p>}
+            <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100 truncate">{name}</h2>
+            {lead && <p className="text-sm text-slate-500 dark:text-slate-400">{lead.company}</p>}
           </div>
           <button
             onClick={onClose}
-            className="ml-4 text-slate-500 hover:text-slate-300 text-lg leading-none"
+            className="ml-4 text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 text-lg leading-none"
           >
             &times;
           </button>
@@ -69,12 +69,12 @@ function LeadDrawer({ name, onClose }: { name: string; onClose: () => void }) {
                 {lead.score}
               </span>
               {lead.stage && (
-                <span className="px-2.5 py-1 rounded-full bg-blue-500/15 text-blue-400 border border-blue-500/30 text-xs">
+                <span className="px-2.5 py-1 rounded-full bg-blue-500/15 text-blue-500 dark:text-blue-400 border border-blue-500/30 text-xs">
                   {lead.stage}
                 </span>
               )}
               {lead.businessArm && (
-                <span className="px-2.5 py-1 rounded-full bg-purple-500/15 text-purple-400 border border-purple-500/30 text-xs">
+                <span className="px-2.5 py-1 rounded-full bg-purple-500/15 text-purple-600 dark:text-purple-400 border border-purple-500/30 text-xs">
                   {lead.businessArm}
                 </span>
               )}
@@ -90,25 +90,25 @@ function LeadDrawer({ name, onClose }: { name: string; onClose: () => void }) {
                 ['Specialty', lead.specialty],
                 ['Source', lead.source],
               ].filter(([, v]) => v).map(([label, value]) => (
-                <div key={label} className="bg-slate-900 border border-slate-800 rounded-lg px-3 py-2">
+                <div key={label} className="bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg px-3 py-2">
                   <div className="text-[10px] text-slate-500 uppercase tracking-wider">{label}</div>
-                  <div className="text-sm text-slate-200 mt-0.5 truncate">{value}</div>
+                  <div className="text-sm text-slate-800 dark:text-slate-200 mt-0.5 truncate">{value}</div>
                 </div>
               ))}
             </div>
 
             {lead.website && (
-              <div className="bg-slate-900 border border-slate-800 rounded-lg px-3 py-2">
+              <div className="bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg px-3 py-2">
                 <div className="text-[10px] text-slate-500 uppercase tracking-wider">Website</div>
-                <div className="text-sm text-blue-400 mt-0.5 truncate">{lead.website}</div>
+                <div className="text-sm text-blue-500 dark:text-blue-400 mt-0.5 truncate">{lead.website}</div>
               </div>
             )}
 
             {/* Next Action */}
             {lead.nextAction && (
               <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg px-4 py-3">
-                <div className="text-[10px] text-blue-400 uppercase tracking-wider mb-1">Next Action</div>
-                <div className="text-sm text-slate-200">{lead.nextAction}</div>
+                <div className="text-[10px] text-blue-500 dark:text-blue-400 uppercase tracking-wider mb-1">Next Action</div>
+                <div className="text-sm text-slate-800 dark:text-slate-200">{lead.nextAction}</div>
               </div>
             )}
 
@@ -118,8 +118,8 @@ function LeadDrawer({ name, onClose }: { name: string; onClose: () => void }) {
                 <h3 className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-2">Stage History</h3>
                 <div className="space-y-1">
                   {lead.stageHistory.map((sh, i) => (
-                    <div key={i} className="flex items-center justify-between bg-slate-900 border border-slate-800 rounded px-3 py-1.5 text-xs">
-                      <span className="text-slate-300">{sh.stage}</span>
+                    <div key={i} className="flex items-center justify-between bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded px-3 py-1.5 text-xs">
+                      <span className="text-slate-700 dark:text-slate-300">{sh.stage}</span>
                       <span className="text-slate-500">{sh.enteredAt ? new Date(sh.enteredAt).toLocaleDateString() : '-'}</span>
                     </div>
                   ))}
@@ -133,12 +133,12 @@ function LeadDrawer({ name, onClose }: { name: string; onClose: () => void }) {
                 <h3 className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-2">Events</h3>
                 <div className="space-y-1.5">
                   {lead.events.map((ev, i) => (
-                    <div key={i} className="bg-slate-900 border border-slate-800 rounded px-3 py-2">
+                    <div key={i} className="bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded px-3 py-2">
                       <div className="flex items-center justify-between">
-                        <span className="text-xs font-medium text-slate-300">{ev.type}</span>
+                        <span className="text-xs font-medium text-slate-700 dark:text-slate-300">{ev.type}</span>
                         <span className="text-[10px] text-slate-500">{ev.date ? new Date(ev.date).toLocaleDateString() : ''}</span>
                       </div>
-                      {ev.detail && <p className="text-xs text-slate-400 mt-1">{ev.detail}</p>}
+                      {ev.detail && <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{ev.detail}</p>}
                     </div>
                   ))}
                 </div>
@@ -151,7 +151,7 @@ function LeadDrawer({ name, onClose }: { name: string; onClose: () => void }) {
                 <h3 className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-2">Related Documents</h3>
                 <div className="space-y-1">
                   {lead.documents.map((doc, i) => (
-                    <div key={i} className="bg-slate-900 border border-slate-800 rounded px-3 py-2 text-xs text-slate-300">
+                    <div key={i} className="bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded px-3 py-2 text-xs text-slate-700 dark:text-slate-300">
                       {doc.title}
                     </div>
                   ))}
@@ -201,7 +201,7 @@ export function PipelinePanel() {
   )
 
   if (loadingStages || loadingHot) {
-    return <div className="text-slate-500 text-sm">Loading pipeline data...</div>
+    return <div className="text-slate-500 dark:text-slate-500 text-sm">Loading pipeline data...</div>
   }
 
   const totalLeads = stages?.reduce((sum, s) => sum + s.total, 0) || 0
@@ -228,7 +228,7 @@ export function PipelinePanel() {
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && handleSearch()}
-            className="flex-1 bg-slate-900 border border-slate-800 rounded-md px-3 py-2 text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:border-slate-600"
+            className="flex-1 bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md px-3 py-2 text-sm text-slate-800 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-600 focus:outline-none focus:border-slate-400 dark:focus:border-slate-600"
           />
           <button
             onClick={handleSearch}
@@ -240,7 +240,7 @@ export function PipelinePanel() {
           {searchResults !== null && (
             <button
               onClick={() => { setSearchResults(null); setSearchQuery('') }}
-              className="px-3 py-2 text-xs bg-slate-800 hover:bg-slate-700 rounded-md border border-slate-700 text-slate-300 transition-colors"
+              className="px-3 py-2 text-xs bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 rounded-md border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 transition-colors"
             >
               Clear
             </button>
@@ -248,8 +248,8 @@ export function PipelinePanel() {
         </div>
 
         {searchResults !== null && (
-          <div className="mt-3 bg-slate-900 border border-slate-800 rounded-lg overflow-hidden">
-            <div className="px-4 py-2 border-b border-slate-800">
+          <div className="mt-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg overflow-hidden">
+            <div className="px-4 py-2 border-b border-slate-200 dark:border-slate-800">
               <span className="text-xs text-slate-500">
                 {searchResults.length} results for "{searchQuery}"
               </span>
@@ -259,7 +259,7 @@ export function PipelinePanel() {
             ) : (
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-slate-800 text-slate-500 text-xs">
+                  <tr className="border-b border-slate-200 dark:border-slate-800 text-slate-500 text-xs">
                     <th className="text-left px-4 py-2 font-medium">Name</th>
                     <th className="text-left px-4 py-2 font-medium">Arm</th>
                     <th className="text-right px-4 py-2 font-medium">Score</th>
@@ -273,16 +273,16 @@ export function PipelinePanel() {
                   {searchResults.map((lead, i) => (
                     <tr
                       key={i}
-                      className="border-b border-slate-800/50 hover:bg-slate-800/30 cursor-pointer"
+                      className="border-b border-slate-200/70 dark:border-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-800/30 cursor-pointer"
                       onClick={() => setSelectedLead(lead.name)}
                     >
-                      <td className="px-4 py-2.5 text-slate-200 font-medium">{lead.name}</td>
-                      <td className="px-4 py-2.5 text-xs text-slate-400">{lead.businessArm}</td>
+                      <td className="px-4 py-2.5 text-slate-800 dark:text-slate-200 font-medium">{lead.name}</td>
+                      <td className="px-4 py-2.5 text-xs text-slate-500 dark:text-slate-400">{lead.businessArm}</td>
                       <td className={`px-4 py-2.5 text-right font-mono ${scoreColor(lead.score)}`}>{lead.score}</td>
-                      <td className="px-4 py-2.5 text-xs text-slate-400">{lead.stage || '-'}</td>
-                      <td className="px-4 py-2.5 text-xs text-slate-400">{lead.location || '-'}</td>
-                      <td className="px-4 py-2.5 text-xs text-slate-400">{lead.ehr || '-'}</td>
-                      <td className="px-4 py-2.5 text-xs text-slate-500 max-w-40 truncate">{lead.nextAction || '-'}</td>
+                      <td className="px-4 py-2.5 text-xs text-slate-500 dark:text-slate-400">{lead.stage || '-'}</td>
+                      <td className="px-4 py-2.5 text-xs text-slate-500 dark:text-slate-400">{lead.location || '-'}</td>
+                      <td className="px-4 py-2.5 text-xs text-slate-500 dark:text-slate-400">{lead.ehr || '-'}</td>
+                      <td className="px-4 py-2.5 text-xs text-slate-400 dark:text-slate-500 max-w-40 truncate">{lead.nextAction || '-'}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -296,10 +296,10 @@ export function PipelinePanel() {
       <div className="grid grid-cols-2 gap-6 mb-6">
         <div>
           <h3 className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-3">By Stage</h3>
-          <div className="bg-slate-900 border border-slate-800 rounded-lg overflow-hidden">
+          <div className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg overflow-hidden">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-slate-800 text-slate-500 text-xs">
+                <tr className="border-b border-slate-200 dark:border-slate-800 text-slate-500 text-xs">
                   <th className="text-left px-4 py-2 font-medium">Stage</th>
                   <th className="text-right px-4 py-2 font-medium">Count</th>
                   <th className="text-right px-4 py-2 font-medium">Avg Score</th>
@@ -308,8 +308,8 @@ export function PipelinePanel() {
               </thead>
               <tbody>
                 {stages?.map(s => (
-                  <tr key={s.stage} className="border-b border-slate-800/50">
-                    <td className="px-4 py-2.5 text-slate-200">{s.stage}</td>
+                  <tr key={s.stage} className="border-b border-slate-200/70 dark:border-slate-800/50">
+                    <td className="px-4 py-2.5 text-slate-800 dark:text-slate-200">{s.stage}</td>
                     <td className="px-4 py-2.5 text-right font-mono">{s.total}</td>
                     <td className={`px-4 py-2.5 text-right font-mono ${scoreColor(s.avgScore)}`}>
                       {s.avgScore}
@@ -326,13 +326,13 @@ export function PipelinePanel() {
 
         <div>
           <h3 className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-3">By Territory</h3>
-          <div className="bg-slate-900 border border-slate-800 rounded-lg overflow-hidden">
+          <div className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg overflow-hidden">
             {!territories || territories.length === 0 ? (
               <p className="text-xs text-slate-500 p-4">No territory data.</p>
             ) : (
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-slate-800 text-slate-500 text-xs">
+                  <tr className="border-b border-slate-200 dark:border-slate-800 text-slate-500 text-xs">
                     <th className="text-left px-4 py-2 font-medium">Territory</th>
                     <th className="text-right px-4 py-2 font-medium">Leads</th>
                     <th className="text-right px-4 py-2 font-medium">Avg Score</th>
@@ -340,8 +340,8 @@ export function PipelinePanel() {
                 </thead>
                 <tbody>
                   {territories.map(t => (
-                    <tr key={t.territory} className="border-b border-slate-800/50">
-                      <td className="px-4 py-2.5 text-slate-200">{t.territory}</td>
+                    <tr key={t.territory} className="border-b border-slate-200/70 dark:border-slate-800/50">
+                      <td className="px-4 py-2.5 text-slate-800 dark:text-slate-200">{t.territory}</td>
                       <td className="px-4 py-2.5 text-right font-mono">{t.leads}</td>
                       <td className={`px-4 py-2.5 text-right font-mono ${scoreColor(t.avgScore)}`}>
                         {t.avgScore}
@@ -359,13 +359,13 @@ export function PipelinePanel() {
       <h3 className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-3">
         Hot Leads (score &gt;= 45)
       </h3>
-      <div className="bg-slate-900 border border-slate-800 rounded-lg overflow-hidden">
+      <div className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg overflow-hidden">
         {!hotLeads || hotLeads.length === 0 ? (
           <p className="text-xs text-slate-500 p-4">No hot leads.</p>
         ) : (
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-slate-800 text-slate-500 text-xs">
+              <tr className="border-b border-slate-200 dark:border-slate-800 text-slate-500 text-xs">
                 <th className="text-left px-4 py-2 font-medium">Name</th>
                 <th className="text-left px-4 py-2 font-medium">Arm</th>
                 <th className="text-right px-4 py-2 font-medium">Score</th>
@@ -378,17 +378,17 @@ export function PipelinePanel() {
               {hotLeads.map((lead, i) => (
                 <tr
                   key={i}
-                  className="border-b border-slate-800/50 hover:bg-slate-800/30 cursor-pointer"
+                  className="border-b border-slate-200/70 dark:border-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-800/30 cursor-pointer"
                   onClick={() => setSelectedLead(lead.name)}
                 >
-                  <td className="px-4 py-2.5 text-slate-200 font-medium">{lead.name}</td>
-                  <td className="px-4 py-2.5 text-xs text-slate-400">{lead.businessArm}</td>
+                  <td className="px-4 py-2.5 text-slate-800 dark:text-slate-200 font-medium">{lead.name}</td>
+                  <td className="px-4 py-2.5 text-xs text-slate-500 dark:text-slate-400">{lead.businessArm}</td>
                   <td className={`px-4 py-2.5 text-right font-mono ${scoreColor(lead.score)}`}>
                     {lead.score}
                   </td>
-                  <td className="px-4 py-2.5 text-xs text-slate-400">{lead.stage || '-'}</td>
-                  <td className="px-4 py-2.5 text-xs text-slate-400">{lead.ehr || '-'}</td>
-                  <td className="px-4 py-2.5 text-xs text-slate-500 max-w-48 truncate">
+                  <td className="px-4 py-2.5 text-xs text-slate-500 dark:text-slate-400">{lead.stage || '-'}</td>
+                  <td className="px-4 py-2.5 text-xs text-slate-500 dark:text-slate-400">{lead.ehr || '-'}</td>
+                  <td className="px-4 py-2.5 text-xs text-slate-400 dark:text-slate-500 max-w-48 truncate">
                     {lead.nextAction || '-'}
                   </td>
                 </tr>

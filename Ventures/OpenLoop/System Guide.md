@@ -12,7 +12,7 @@ Three systems work together to give you deep, persistent context across conversa
 |--------|-------------|----------------|
 | **Claude Code** | AI pair programmer with file access, shell, and web tools | CLI / desktop — runs in your terminal |
 | **Serena** | Semantic code intelligence — navigates symbols, types, references across codebases | MCP server — activated per-project |
-| **Memgraph** | Knowledge graph of the KB — people, domains, decisions, risks, FHIR mappings, meetings | Local Docker — `bolt://localhost:7687`, Lab at `http://localhost:3000` |
+| **Memgraph** | Knowledge graph of the KB — people, domains, decisions, risks, FHIR mappings, meetings | Local Docker — `bolt://localhost:7687`, Lab at `http://localhost:3003` |
 
 ### Persistent Memory
 
@@ -38,7 +38,7 @@ Claude will activate it in Serena, giving access to symbol navigation, reference
 
 ### 2. Query the Knowledge Graph (Memgraph)
 
-The KB graph contains 184+ nodes and 829+ relationships extracted from this Obsidian vault. Ask questions like:
+The KB graph contains 492 nodes and 2,060 relationships extracted from this Obsidian vault. Ask questions like:
 
 - "What risks are associated with the Payments domain?"
 - "Which FHIR resources map to Healthie concepts?"
@@ -112,15 +112,25 @@ Changes are precise — Serena replaces specific symbol bodies rather than rewri
 ### Graph Structure
 
 ```
-Node Labels (12):
-  Domain, Document, MeetingNote, Person, Organization,
-  Technology, Integration, FhirResource, Phase, Risk,
-  Decision, ActionItem
+Node Labels (16):
+  Domain (6), Document (66), MeetingNote (6), Person (42),
+  Organization (28), Technology (61), Integration (26),
+  FhirResource (66), Phase (4), Risk (13), Decision (21),
+  ActionItem (88), Project (9), Team (8), Topic (47),
+  Incident (1)
 
-Key Relationships:
-  CONTAINS, REFERENCES, MENTIONS, EMPLOYS, OWNS, USES,
-  PROVIDES, MAPS_TO, MIGRATING_FROM/TO, DEPENDS_ON,
-  DECIDED_IN, PRODUCED, ATTENDED_BY, ASSIGNED_TO
+  Total: 492 nodes
+
+Key Relationships (25 types, 2,060 total):
+  MENTIONS (1,379), REFERENCES (153), PRODUCED (88),
+  USES (78), CONTAINS (51), ATTENDED_BY (50),
+  DISCUSSES (49), EMPLOYS (42), ASSIGNED_TO (42),
+  DECIDED_FOR (21), DECIDED_IN (21), MEMBER_OF (18),
+  PROVIDES (15), THREATENS (13), MAPS_TO (9),
+  LEADS (8), PART_OF (6), DEPENDS_ON (3),
+  REPORTS_TO (3), AFFECTED (3), NEXT (2), OWNS (2),
+  MIGRATING_FROM (1), MIGRATING_TO (1), CAUSED_BY (1),
+  DISCUSSED_IN (1)
 ```
 
 ### Example Queries You Can Ask
@@ -138,9 +148,10 @@ Key Relationships:
 
 When new KB files are added or existing ones change:
 
-1. Update `~/Workspace/KB/scripts/catalog.ts` if there are new entities
-2. Run `npm run reload` from `~/Workspace/KB/scripts/` to rebuild the graph
-3. Run `npm run validate` to verify (24 assertions)
+1. Update `scripts/catalog.ts` if there are new entities (FHIR resources, technologies, decisions, etc.)
+2. Run `npx tsx load-graph.ts --clear` from `scripts/` to rebuild the graph
+3. Run `npx tsx validate-graph.ts` to verify (43 assertions)
+4. Update assertion counts in `validate-graph.ts` if entity counts changed
 
 ---
 
@@ -162,9 +173,9 @@ When new KB files are added or existing ones change:
 | Serena not responding | Check that the MCP server is running; restart Claude Code if needed |
 | Memgraph queries fail | Verify Docker is running: `docker ps` should show memgraph |
 | "Project not activated" | Say the project name (e.g., "medplum") to activate it |
-| Graph data seems stale | Run `npm run reload` from `~/Workspace/KB/scripts/` |
+| Graph data seems stale | Run `npx tsx load-graph.ts --clear` from `scripts/` |
 | Claude doesn't remember something | Check `~/.claude/projects/` memory files; add important facts there |
-| Node/npm not found in scripts | Ensure nvm is loaded: `source ~/.nvm/nvm.sh && nvm use 24` |
+| Node/npm not found in scripts | Ensure nvm is loaded: `source ~/.nvm/nvm.sh && nvm use 24`; run `npm install` in `scripts/` first |
 
 ---
 
@@ -176,7 +187,7 @@ graph TB
 
     subgraph Tools
         Serena["Serena<br/><i>MCP Server</i><br/>Symbols · References · Editing"]
-        Memgraph["Memgraph<br/><i>Docker</i><br/>184 nodes · 829 rels · Cypher"]
+        Memgraph["Memgraph<br/><i>Docker</i><br/>492 nodes · 2,060 rels · Cypher"]
         Memory["Claude Memory<br/><i>~/.claude/</i><br/>User context · Project state"]
     end
 

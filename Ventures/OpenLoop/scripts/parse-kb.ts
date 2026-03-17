@@ -2,7 +2,7 @@
 import { readFileSync, readdirSync } from "fs";
 import { join, basename, dirname } from "path";
 
-const KB_ROOT = join(process.env.HOME!, "Workspace", "KB");
+const KB_ROOT = join(process.env.HOME!, "sidekick", "Ventures", "OpenLoop");
 
 export interface ParsedDocument {
   type: "Document" | "MeetingNote";
