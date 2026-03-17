@@ -31,7 +31,7 @@ const WORKSTATION_W   = 88
 const WORKSTATION_H   = 96
 const ROOM_PADDING    = 19
 const ROOM_HEADER_H   = 22
-const ROOM_GAP        = 26
+const ROOM_GAP        = 6
 const MAX_AGENTS_PER_ROW = 4
 
 const WS_CHAIR_Y    = 6
@@ -638,30 +638,29 @@ export class OfficeScene extends Phaser.Scene {
       return
     }
 
-    // Find the max room dimensions to create a uniform grid
-    let maxRoomW = 0, maxRoomH = 0
+    // Flow layout: pack rooms left-to-right, wrapping to next row by actual size
+    const availableW = Math.max(this.viewWidth - WORLD_MARGIN * 2, 300)
+
+    let cursorX = 0
+    let cursorY = 0
+    let rowHeight = 0
+
     for (const room of roomList) {
-      maxRoomW = Math.max(maxRoomW, room.width)
-      maxRoomH = Math.max(maxRoomH, room.height)
-    }
+      // Wrap to next row if this room doesn't fit
+      if (cursorX > 0 && cursorX + room.width > availableW) {
+        cursorX = 0
+        cursorY += rowHeight + ROOM_GAP
+        rowHeight = 0
+      }
 
-    const cellW = maxRoomW + ROOM_GAP
-    const cellH = maxRoomH + ROOM_GAP
-
-    // Calculate how many columns fit in the viewport
-    const availableW = Math.max(this.viewWidth - WORLD_MARGIN * 2, cellW)
-    const cols = Math.max(1, Math.floor(availableW / cellW))
-
-    for (let i = 0; i < roomList.length; i++) {
-      const room = roomList[i]
-      const col = i % cols
-      const row = Math.floor(i / cols)
-
-      room.x = WORLD_MARGIN + col * cellW + room.width / 2
-      room.y = WORLD_MARGIN + row * cellH + room.height / 2
+      room.x = WORLD_MARGIN + cursorX + room.width / 2
+      room.y = WORLD_MARGIN + cursorY + room.height / 2
 
       this.tweens.killTweensOf(room.container)
       this.tweens.add({ targets: room.container, x: room.x, y: room.y, duration: 320, ease: 'Power2' })
+
+      cursorX += room.width + ROOM_GAP
+      rowHeight = Math.max(rowHeight, room.height)
     }
 
     for (const room of roomList) {

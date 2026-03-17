@@ -68,4 +68,8 @@ contextBridge.exposeInMainWorld('api', {
   vaultTags: () => ipcRenderer.invoke('vault:tags'),
   vaultFilesByTag: (tag: string) => ipcRenderer.invoke('vault:files-by-tag', tag),
   vaultBacklinks: (relativePath: string) => ipcRenderer.invoke('vault:backlinks', relativePath),
+  // Slack Bridge
+  slackStatus: () => ipcRenderer.invoke('slack:status'),
+  slackStart: () => ipcRenderer.invoke('slack:start'),
+  slackStop: () => ipcRenderer.invoke('slack:stop'),
 })
