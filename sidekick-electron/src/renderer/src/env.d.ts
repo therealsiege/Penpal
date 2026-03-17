@@ -39,7 +39,7 @@ declare global {
       getTerritories: () => Promise<TerritoryData[]>
       getNewLeads: () => Promise<NewLead[]>
       getClaudeSessions: () => Promise<ClaudeSession[]>
-      getSessionConversation: (sessionId: string) => Promise<ConversationMessage[]>
+      getSessionConversation: (sessionId: string, source?: string) => Promise<ConversationMessage[]>
       sendToSession: (tty: string, message: string) => Promise<SessionActionResult>
       focusSession: (tty: string) => Promise<SessionActionResult>
       createNewSession: (cwd: string) => Promise<SessionActionResult>
@@ -75,10 +75,22 @@ declare global {
       // Vault File Manager
       vaultList: (relativePath: string) => Promise<import('./types').VaultEntry[]>
       vaultRead: (relativePath: string) => Promise<import('./types').VaultFileContent | null>
+      vaultWrite: (relativePath: string, content: string) => Promise<{ success: boolean; mtime: number; error?: string }>
       vaultSearch: (query: string, glob?: string, limit?: number) => Promise<import('./types').VaultSearchResult[]>
       vaultTags: () => Promise<import('./types').VaultTag[]>
       vaultFilesByTag: (tag: string) => Promise<string[]>
       vaultBacklinks: (relativePath: string) => Promise<import('./types').VaultBacklink[]>
+      vaultCreate: (relativePath: string, content?: string) => Promise<{ success: boolean; mtime: number }>
+      vaultCreateFolder: (relativePath: string) => Promise<{ success: boolean }>
+      vaultRename: (oldPath: string, newPath: string) => Promise<{ success: boolean; mtime?: number }>
+      vaultDelete: (relativePath: string) => Promise<{ success: boolean }>
+      vaultIndex: () => Promise<import('./types').VaultIndexEntry[]>
+      vaultSearchIndexed: (query: string, limit?: number) => Promise<{ path: string; title: string; snippet: string; score: number }[]>
+      vaultBuildSearchIndex: () => Promise<number>
+      vaultGraphData: (scope?: string, centerPath?: string) => Promise<{ nodes: { id: string; label: string; type: string; path?: string }[]; links: { source: string; target: string; type: string }[] }>
+      onVaultFileChanged: (callback: (event: { eventType: string; path: string }) => void) => () => void
+      // Cursor Agent APIs
+      focusCursorIDE: () => Promise<SessionActionResult>
       // Slack Bridge
       slackStatus: () => Promise<{ running: boolean; configured: boolean }>
       slackStart: () => Promise<boolean>

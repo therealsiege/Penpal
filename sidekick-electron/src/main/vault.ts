@@ -2,6 +2,7 @@ import fs from 'fs'
 import path from 'path'
 import { execFile } from 'child_process'
 import neo4j from 'neo4j-driver'
+import { protocol, net } from 'electron'
 
 const VAULT_ROOT = path.resolve(__dirname, '..', '..')
 const MAX_PREVIEW_BYTES = 5 * 1024 * 1024 // 5MB
@@ -111,6 +112,178 @@ export function readVaultFile(relativePath: string): VaultFileContent | null {
   return { content: fs.readFileSync(fullPath, 'utf-8'), mtime: stat.mtimeMs }
 }
 
+// ── Write file (atomic) ───────────────────────────────────────────────────
+
+export function writeVaultFile(
+  relativePath: string,
+  content: string,
+): { success: boolean; mtime: number; error?: string } {
+  if (typeof relativePath !== 'string') throw new Error('relativePath must be a string')
+  const fullPath = validatePath(relativePath)
+
+  // Check parent directory exists
+  const dir = path.dirname(fullPath)
+  if (!fs.existsSync(dir)) {
+    throw new Error('Parent directory does not exist')
+  }
+
+  // Atomic write: write to tmp, then rename
+  const tmpPath = fullPath + '.sidekick-tmp'
+  try {
+    fs.writeFileSync(tmpPath, content, 'utf-8')
+    fs.renameSync(tmpPath, fullPath)
+    const stat = fs.statSync(fullPath)
+    return { success: true, mtime: stat.mtimeMs }
+  } catch (err) {
+    // Clean up tmp file if rename failed
+    try { fs.unlinkSync(tmpPath) } catch { /* ignore */ }
+    throw err
+  }
+}
+
+// ── Create file ───────────────────────────────────────────────────────────
+
+export function createVaultFile(
+  relativePath: string,
+  content = '',
+): { success: boolean; mtime: number } {
+  if (typeof relativePath !== 'string') throw new Error('relativePath must be a string')
+  const fullPath = validatePath(relativePath)
+
+  if (fs.existsSync(fullPath)) {
+    throw new Error('File already exists')
+  }
+
+  const dir = path.dirname(fullPath)
+  fs.mkdirSync(dir, { recursive: true })
+
+  const tmpPath = fullPath + '.sidekick-tmp'
+  fs.writeFileSync(tmpPath, content, 'utf-8')
+  fs.renameSync(tmpPath, fullPath)
+  const stat = fs.statSync(fullPath)
+  return { success: true, mtime: stat.mtimeMs }
+}
+
+// ── Create folder ─────────────────────────────────────────────────────────
+
+export function createVaultFolder(relativePath: string): { success: boolean } {
+  if (typeof relativePath !== 'string') throw new Error('relativePath must be a string')
+  const fullPath = validatePath(relativePath)
+
+  if (fs.existsSync(fullPath)) {
+    throw new Error('Folder already exists')
+  }
+
+  fs.mkdirSync(fullPath, { recursive: true })
+  return { success: true }
+}
+
+// ── Rename file/folder ────────────────────────────────────────────────────
+
+export function renameVaultFile(
+  oldRelPath: string,
+  newRelPath: string,
+): { success: boolean; mtime?: number } {
+  if (typeof oldRelPath !== 'string' || typeof newRelPath !== 'string') {
+    throw new Error('paths must be strings')
+  }
+  const oldFull = validatePath(oldRelPath)
+  const newFull = validatePath(newRelPath)
+
+  if (!fs.existsSync(oldFull)) throw new Error('Source does not exist')
+  if (fs.existsSync(newFull)) throw new Error('Destination already exists')
+
+  const newDir = path.dirname(newFull)
+  fs.mkdirSync(newDir, { recursive: true })
+  fs.renameSync(oldFull, newFull)
+
+  try {
+    const stat = fs.statSync(newFull)
+    return { success: true, mtime: stat.mtimeMs }
+  } catch {
+    return { success: true }
+  }
+}
+
+// ── Delete file/folder ────────────────────────────────────────────────────
+
+export function deleteVaultFile(relativePath: string): { success: boolean } {
+  if (typeof relativePath !== 'string') throw new Error('relativePath must be a string')
+  const fullPath = validatePath(relativePath)
+
+  if (!fs.existsSync(fullPath)) throw new Error('Path does not exist')
+
+  const stat = fs.statSync(fullPath)
+  if (stat.isDirectory()) {
+    fs.rmSync(fullPath, { recursive: true })
+  } else {
+    fs.unlinkSync(fullPath)
+  }
+  return { success: true }
+}
+
+// ── Index vault (flat file list) ──────────────────────────────────────────
+
+export interface VaultIndexEntry {
+  path: string
+  name: string
+  title: string
+  mtime: number
+  size: number
+  tags: string[]
+}
+
+export function indexVault(): VaultIndexEntry[] {
+  const results: VaultIndexEntry[] = []
+
+  function walk(dir: string, relDir: string) {
+    let entries: fs.Dirent[]
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true })
+    } catch { return }
+
+    for (const entry of entries) {
+      if (entry.name.startsWith('.')) continue
+      const fullPath = path.join(dir, entry.name)
+      const relPath = relDir ? path.join(relDir, entry.name) : entry.name
+
+      if (entry.isDirectory()) {
+        if (HIDDEN_ROOT_DIRS.has(entry.name) && relDir === '') continue
+        walk(fullPath, relPath)
+      } else if (entry.name.endsWith('.md')) {
+        try {
+          const stat = fs.statSync(fullPath)
+          // Extract title from first heading or filename
+          const head = Buffer.alloc(512)
+          const fd = fs.openSync(fullPath, 'r')
+          const bytesRead = fs.readSync(fd, head, 0, 512, 0)
+          fs.closeSync(fd)
+          const snippet = head.toString('utf-8', 0, bytesRead)
+
+          let title = entry.name.replace(/\.md$/, '')
+          const headingMatch = snippet.match(/^#\s+(.+)$/m)
+          if (headingMatch) title = headingMatch[1].trim()
+
+          // Extract tags from frontmatter
+          const tags: string[] = []
+          const fmMatch = snippet.match(/^---\n([\s\S]*?)\n---/)
+          if (fmMatch) {
+            const tagLine = fmMatch[1].match(/tags:\s*\[([^\]]*)\]/)
+            if (tagLine) {
+              tags.push(...tagLine[1].split(',').map(t => t.trim().replace(/['"]/g, '')).filter(Boolean))
+            }
+          }
+
+          results.push({ path: relPath, name: entry.name, title, mtime: stat.mtimeMs, size: stat.size, tags })
+        } catch { /* skip unreadable */ }
+      }
+    }
+  }
+
+  walk(VAULT_ROOT, '')
+  return results
+}
+
 // ── Search ─────────────────────────────────────────────────────────────────
 
 export function searchVault(
@@ -197,6 +370,43 @@ export function searchVault(
         resolve(results)
       }
     })
+  })
+}
+
+// ── Resolve vault asset ───────────────────────────────────────────────────
+
+export function resolveVaultAsset(filename: string): string | null {
+  // Search for the file anywhere in the vault
+  function find(dir: string): string | null {
+    let entries: fs.Dirent[]
+    try { entries = fs.readdirSync(dir, { withFileTypes: true }) } catch { return null }
+
+    for (const entry of entries) {
+      if (entry.name.startsWith('.')) continue
+      const full = path.join(dir, entry.name)
+      if (entry.isFile() && entry.name === filename) return full
+      if (entry.isDirectory() && !HIDDEN_ROOT_DIRS.has(entry.name)) {
+        const found = find(full)
+        if (found) return found
+      }
+    }
+    return null
+  }
+
+  return find(VAULT_ROOT)
+}
+
+// ── Register vault:// protocol ────────────────────────────────────────────
+
+export function registerVaultProtocol() {
+  protocol.handle('vault', (request) => {
+    // vault://filename.png
+    const filename = decodeURIComponent(request.url.replace('vault://', ''))
+    const resolved = resolveVaultAsset(filename)
+    if (!resolved) {
+      return new Response('Not found', { status: 404 })
+    }
+    return net.fetch(`file://${resolved}`)
   })
 }
 

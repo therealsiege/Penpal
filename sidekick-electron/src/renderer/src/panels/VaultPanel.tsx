@@ -1,9 +1,15 @@
 import { useState, useEffect, useCallback } from 'react'
 import { FileTree } from '../components/vault/FileTree'
-import { FilePreview } from '../components/vault/FilePreview'
+import { EditorPane } from '../components/editor/EditorPane'
 import { VaultSearch } from '../components/vault/VaultSearch'
 import { TagFilter } from '../components/vault/TagFilter'
 import { SendToAgent } from '../components/vault/SendToAgent'
+import { QuickSwitcher } from '../components/editor/QuickSwitcher'
+import { SidePanel } from '../components/editor/SidePanel'
+import { SearchPanel } from '../components/vault/SearchPanel'
+import { DailyNote } from '../components/editor/DailyNote'
+import { useEditorStore } from '../stores/editor-store'
+import { useVaultIndex } from '../stores/vault-index'
 
 export function VaultPanel() {
   const [previewPath, setPreviewPath] = useState<string | null>(null)
@@ -12,7 +18,40 @@ export function VaultPanel() {
   const [filterPaths, setFilterPaths] = useState<Set<string> | null>(null)
   const [sidebarWidth, setSidebarWidth] = useState(260)
   const [resizing, setResizing] = useState(false)
-  const [searchActive, setSearchActive] = useState(false)
+  const [showQuickSwitcher, setShowQuickSwitcher] = useState(false)
+  const [showRightSidebar, setShowRightSidebar] = useState(false)
+  const [leftSidebarMode, setLeftSidebarMode] = useState<'tree' | 'search'>('tree')
+
+  const openFile = useEditorStore(s => s.openFile)
+  const closeTab = useEditorStore(s => s.closeTab)
+  const activeTabId = useEditorStore(s => s.activeTabId)
+  const tabs = useEditorStore(s => s.tabs)
+  const loadIndex = useVaultIndex(s => s.loadIndex)
+  const indexLoaded = useVaultIndex(s => s.loaded)
+
+  const updateTabContent = useEditorStore(s => s.updateTabContent)
+
+  // Load vault index on mount for wikilinks + autocomplete + quick switcher
+  useEffect(() => {
+    if (!indexLoaded) loadIndex()
+  }, [indexLoaded, loadIndex])
+
+  // Listen for external file changes (Obsidian Sync, other editors)
+  useEffect(() => {
+    const cleanup = window.api.onVaultFileChanged(async (event) => {
+      // Reload tab content if the changed file is open and not dirty
+      const tab = tabs.find(t => t.path === event.path)
+      if (tab && !tab.dirty && event.eventType === 'change') {
+        try {
+          const result = await window.api.vaultRead(event.path)
+          if (result?.content != null) {
+            updateTabContent(tab.id, result.content, result.mtime)
+          }
+        } catch { /* skip */ }
+      }
+    })
+    return cleanup
+  }, [tabs, updateTabContent])
 
   const handleToggleSelect = useCallback((path: string) => {
     setSelectedFiles(prev => {
@@ -29,6 +68,15 @@ export function VaultPanel() {
   const handlePreview = useCallback((path: string) => {
     setPreviewPath(path)
   }, [])
+
+  const handleOpenInEditor = useCallback(async (path: string) => {
+    try {
+      const result = await window.api.vaultRead(path)
+      if (result?.content != null) {
+        openFile(path, result.content, result.mtime)
+      }
+    } catch { /* skip */ }
+  }, [openFile])
 
   // Load files for tag filter
   useEffect(() => {
@@ -49,7 +97,7 @@ export function VaultPanel() {
   useEffect(() => {
     if (!resizing) return
     const handleMouseMove = (e: MouseEvent) => {
-      const newWidth = Math.max(180, Math.min(500, e.clientX - 140)) // 140 = sidebar nav width
+      const newWidth = Math.max(180, Math.min(500, e.clientX - 140))
       setSidebarWidth(newWidth)
     }
     const handleMouseUp = () => setResizing(false)
@@ -61,35 +109,100 @@ export function VaultPanel() {
     }
   }, [resizing])
 
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.metaKey && e.key === 'w') {
+        e.preventDefault()
+        if (activeTabId) closeTab(activeTabId)
+      }
+      if (e.metaKey && e.key === 'p') {
+        e.preventDefault()
+        setShowQuickSwitcher(true)
+      }
+      if (e.metaKey && e.key === '\\') {
+        e.preventDefault()
+        setShowRightSidebar(s => !s)
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [activeTabId, closeTab])
+
   return (
     <div className="flex flex-col h-full">
+      {/* Quick Switcher overlay */}
+      {showQuickSwitcher && (
+        <QuickSwitcher
+          onSelect={handleOpenInEditor}
+          onClose={() => setShowQuickSwitcher(false)}
+        />
+      )}
+
       {/* Top bar */}
       <div className="shrink-0 flex items-center gap-2 px-3 py-2 border-b border-slate-800/60 bg-slate-900/40">
         <div className="drag-region flex-1 h-2" />
+        <button
+          onClick={() => setShowQuickSwitcher(true)}
+          className="text-[10px] text-slate-500 hover:text-slate-300 px-2 py-0.5 rounded bg-slate-800/40 transition-colors"
+          title="Quick Open (Cmd+P)"
+        >
+          Open...
+        </button>
+        <DailyNote onOpenFile={handleOpenInEditor} />
         <VaultSearch
           onSelectResult={(path) => {
-            setPreviewPath(path)
-            setSearchActive(false)
+            handleOpenInEditor(path)
           }}
-          onSearchActive={setSearchActive}
+          onSearchActive={() => {}}
         />
         <TagFilter activeTag={activeTag} onSelectTag={setActiveTag} />
+        <button
+          onClick={() => setShowRightSidebar(s => !s)}
+          className={`text-[10px] px-2 py-0.5 rounded transition-colors ${
+            showRightSidebar ? 'bg-blue-600/30 text-blue-300' : 'text-slate-500 hover:text-slate-300 bg-slate-800/40'
+          }`}
+          title="Toggle Outline (Cmd+\\)"
+        >
+          Outline
+        </button>
       </div>
 
-      {/* Main content: tree + preview */}
+      {/* Main content: tree + editor + optional sidebar */}
       <div className="flex-1 flex overflow-hidden" style={{ cursor: resizing ? 'col-resize' : undefined }}>
-        {/* File tree sidebar */}
+        {/* Left sidebar: tree or search */}
         <div
           className="shrink-0 border-r border-slate-800/60 overflow-hidden flex flex-col bg-slate-950/50"
           style={{ width: sidebarWidth }}
         >
-          <FileTree
-            selectedFiles={selectedFiles}
-            onToggleSelect={handleToggleSelect}
-            onPreview={handlePreview}
-            previewPath={previewPath}
-            filterPaths={filterPaths}
-          />
+          {/* Sidebar mode tabs */}
+          <div className="shrink-0 flex border-b border-slate-800/60">
+            {(['tree', 'search'] as const).map(mode => (
+              <button
+                key={mode}
+                onClick={() => setLeftSidebarMode(mode)}
+                className={`flex-1 px-2 py-1 text-[10px] capitalize transition-colors ${
+                  leftSidebarMode === mode
+                    ? 'text-blue-300 bg-slate-800/40'
+                    : 'text-slate-500 hover:text-slate-300'
+                }`}
+              >
+                {mode === 'tree' ? 'Files' : 'Search'}
+              </button>
+            ))}
+          </div>
+          {leftSidebarMode === 'tree' ? (
+            <FileTree
+              selectedFiles={selectedFiles}
+              onToggleSelect={handleToggleSelect}
+              onPreview={handlePreview}
+              onOpenInEditor={handleOpenInEditor}
+              previewPath={previewPath}
+              filterPaths={filterPaths}
+            />
+          ) : (
+            <SearchPanel onSelectResult={handleOpenInEditor} />
+          )}
         </div>
 
         {/* Resize handle */}
@@ -98,10 +211,17 @@ export function VaultPanel() {
           onMouseDown={handleMouseDown}
         />
 
-        {/* Preview */}
+        {/* Editor pane */}
         <div className="flex-1 overflow-hidden">
-          <FilePreview filePath={previewPath} />
+          <EditorPane />
         </div>
+
+        {/* Right sidebar (outline/backlinks) */}
+        {showRightSidebar && (
+          <div className="shrink-0 w-[200px]">
+            <SidePanel />
+          </div>
+        )}
       </div>
 
       {/* Bottom bar */}
@@ -109,7 +229,9 @@ export function VaultPanel() {
         <div className="text-xs text-slate-500">
           {selectedFiles.size > 0
             ? `${selectedFiles.size} file${selectedFiles.size > 1 ? 's' : ''} selected`
-            : 'Check files in the tree to select them'}
+            : tabs.length > 0
+              ? `${tabs.length} tab${tabs.length > 1 ? 's' : ''} open`
+              : 'Click a file to preview, double-click to edit'}
           {selectedFiles.size > 0 && (
             <button
               onClick={() => setSelectedFiles(new Set())}

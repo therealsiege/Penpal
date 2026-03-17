@@ -452,6 +452,7 @@ export class OfficeScene extends Phaser.Scene {
       wsContainer.add(this.add.rectangle(0, WS_CHAIR_Y, 18, 13, 0x2d3748).setStrokeStyle(1, 0x4a5568, 0.6))
     }
 
+    const isCursor = this.isCursorAgent(agent)
     const deskBody = this.add.rectangle(0, WS_DESK_Y, 64, 21, COLOR_DESK_BODY).setStrokeStyle(1, 0x64748b, 0.5)
     wsContainer.add(deskBody)
 
@@ -466,45 +467,31 @@ export class OfficeScene extends Phaser.Scene {
       wsContainer.add(this.add.rectangle(0, WS_MONITOR_Y, 16, 13, 0x1a1a2e).setStrokeStyle(1, 0x4a5568, 0.8))
     }
 
-    const charIdx = this.getCharacterIndex(agent.config.name)
+    const charIdx = isCursor ? 1 : this.getCharacterIndex(agent.config.name)
     const frame   = this.getPoseFrame(charIdx, agent)
     const sprite  = this.add.sprite(0, WS_SPRITE_Y, 'characters', frame)
     sprite.setScale(CHAR_SCALE).setOrigin(0.5, 1)
     wsContainer.add(sprite)
 
     // Show persona name (e.g. "Marcus Chen") instead of title
-    const displayName = agent.config.name || agent.config.title || agent.config.id
-    const nameText = this.add.text(0, WS_NAME_Y, this.truncName(displayName), {
+    const nameText = this.add.text(0, WS_NAME_Y, '', {
       fontSize: '11px', color: '#e2e8f0', fontFamily: 'system-ui, sans-serif',
       backgroundColor: '#0f172acc', padding: { x: 4, y: 2 }, align: 'center',
       resolution: 2,
-    }).setOrigin(0.5)
+    }).setOrigin(0.5).setVisible(false)
     wsContainer.add(nameText)
 
     const dotColor  = this.getStatusColor(agent)
-    const statusDot = this.add.circle(nameText.width / 2 + WS_DOT_GAP, WS_NAME_Y, 3.5, dotColor)
+    const statusDot = this.add.circle(nameText.width / 2 + WS_DOT_GAP, WS_NAME_Y, 3.5, dotColor).setVisible(false)
     wsContainer.add(statusDot)
 
-    // Triplet role badge (small icon below name)
-    let roleBadge: Phaser.GameObjects.Text | null = null
-    const tripletRole = (agent.config as { tripletRole?: string }).tripletRole
-    if (tripletRole) {
-      const roleChar = tripletRole === 'solver' ? 'S' : tripletRole === 'reviewer' ? 'R' : 'E'
-      const roleColor = tripletRole === 'solver' ? '#34d399' : tripletRole === 'reviewer' ? '#60a5fa' : '#fb923c'
-      roleBadge = this.add.text(-(nameText.width / 2) - WS_DOT_GAP - 4, WS_NAME_Y, roleChar, {
-        fontSize: '8px', color: roleColor,
-        fontFamily: 'system-ui, monospace', fontStyle: 'bold',
-        backgroundColor: '#0f172acc', padding: { x: 2, y: 1 },
-        resolution: 2,
-      }).setOrigin(1, 0.5)
-      wsContainer.add(roleBadge)
-    }
+    const roleBadge: Phaser.GameObjects.Text | null = null
 
     const blurbText = this.add.text(0, WS_BLURB_Y, '', {
       fontSize: '9px', color: '#94a3b8', fontFamily: 'system-ui, sans-serif',
       align: 'center', wordWrap: { width: WORKSTATION_W + 20 },
       resolution: 2,
-    }).setOrigin(0.5, 0)
+    }).setOrigin(0.5, 0).setVisible(false)
     wsContainer.add(blurbText)
 
     const hitArea = this.add.rectangle(0, 5, WORKSTATION_W - 6, WORKSTATION_H - 10, 0x000000, 0)
@@ -512,8 +499,8 @@ export class OfficeScene extends Phaser.Scene {
     wsContainer.add(hitArea)
 
     const ws: WorkstationSprite = {
-      container: wsContainer, sprite, nameText, statusDot, roleBadge, blurbText,
-      deskBody, deskTop, monitorSprite, chairSprite, state: agent,
+      container: wsContainer, sprite, nameText, statusDot, roleBadge,
+      blurbText, deskBody, deskTop, monitorSprite, chairSprite, state: agent,
     }
 
     let lastClickTime = 0
@@ -555,15 +542,15 @@ export class OfficeScene extends Phaser.Scene {
   private updateWorkstation(ws: WorkstationSprite, agent: AgentState): void {
     ws.state = agent
 
-    const charIdx = this.getCharacterIndex(agent.config.name)
+    const isCursor = this.isCursorAgent(agent)
+    const charIdx = isCursor ? 1 : this.getCharacterIndex(agent.config.name)
     ws.sprite.setFrame(this.getPoseFrame(charIdx, agent))
 
     const dotColor = this.getStatusColor(agent)
     ws.statusDot.setFillStyle(dotColor)
     ws.statusDot.setPosition(ws.nameText.width / 2 + WS_DOT_GAP, WS_NAME_Y)
 
-    const blurb = agent.lastAssistantBlurb ?? ''
-    ws.blurbText.setText(blurb.length > 48 ? blurb.slice(0, 45) + '...' : blurb)
+    ws.blurbText.setText('')
 
     const isWorking = agent.sessionMode === 'working' || agent.sessionMode === 'plan'
     const isWaiting = agent.needsInteraction
@@ -764,6 +751,10 @@ export class OfficeScene extends Phaser.Scene {
     if (agent.sessionMode === 'plan')          return 0xa78bfa
     if (agent.sessionMode === 'accept-edits')  return 0x60a5fa
     return 0x64748b
+  }
+
+  private isCursorAgent(agent: AgentState): boolean {
+    return agent.config.model === 'cursor-agent'
   }
 
   private getCharacterIndex(name: string): number {

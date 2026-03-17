@@ -17,6 +17,11 @@ import {
   broadcastToSessions,
 } from './sessions'
 import {
+  getCursorAgentSessions,
+  getCursorTranscriptConversation,
+  focusCursorIDE,
+} from './cursor-sessions'
+import {
   getAgentConfigs,
   getAgentConfig,
   loadAgentSessionMap,
@@ -36,11 +41,19 @@ import {
 import {
   listVaultDir,
   readVaultFile,
+  writeVaultFile,
+  createVaultFile,
+  createVaultFolder,
+  renameVaultFile,
+  deleteVaultFile,
+  indexVault,
   searchVault,
   getVaultTags,
   getFilesByTag,
   getBacklinks,
 } from './vault'
+import { buildSearchIndex, searchIndexed } from './search-index'
+import { getVaultGraph } from './vault-graph'
 
 const VAULT_ROOT = path.resolve(__dirname, '..', '..')
 const BRIEFINGS_DIR = path.join(VAULT_ROOT, 'Ventures', '1Putt', 'Daily Briefings')
@@ -135,9 +148,17 @@ export function registerIpcHandlers() {
   ipcMain.handle('pipeline:hot-leads', wrapHandler(() => getHotLeads()))
   ipcMain.handle('pipeline:territories', wrapHandler(() => getTerritories()))
   ipcMain.handle('pipeline:new-leads', wrapHandler(() => getNewLeads()))
-  ipcMain.handle('sessions:list', wrapHandler(() => getClaudeSessions()))
-  ipcMain.handle('sessions:conversation', wrapHandler((sessionId: unknown) => {
+  ipcMain.handle('sessions:list', wrapHandler(async () => {
+    const [claudeSessions, cursorSessions] = await Promise.all([
+      getClaudeSessions(),
+      getCursorAgentSessions().catch(() => []),
+    ])
+    const tagged = claudeSessions.map(s => ({ ...s, source: 'claude' as const }))
+    return [...tagged, ...cursorSessions]
+  }))
+  ipcMain.handle('sessions:conversation', wrapHandler((sessionId: unknown, source?: unknown) => {
     if (typeof sessionId !== 'string') throw new Error('sessionId must be a string')
+    if (source === 'cursor') return getCursorTranscriptConversation(sessionId)
     return getSessionConversation(sessionId)
   }))
   ipcMain.handle('sessions:send', wrapHandler((tty: unknown, message: unknown) => {
@@ -208,7 +229,10 @@ export function registerIpcHandlers() {
 
   ipcMain.handle('agents:statuses', wrapHandler(async (): Promise<AgentState[]> => {
     const configs = getAgentConfigs()
-    const sessions = await getClaudeSessions()
+    const [sessions, cursorSessions] = await Promise.all([
+      getClaudeSessions(),
+      getCursorAgentSessions().catch(() => []),
+    ])
     const savedMap = loadAgentSessionMap()
     const matchedPids = new Set<number>()
     const agentStates: AgentState[] = []
@@ -296,6 +320,48 @@ export function registerIpcHandlers() {
         lastAssistantBlurb: session.lastAssistantBlurb,
         cwd: session.cwd,
         subAgentInvocations: session.subAgentInvocations,
+      })
+    }
+
+    // Surface Cursor agent sessions as freelancers
+    for (const cs of cursorSessions) {
+      const projectName = cs.project || cs.cwd.split('/').pop() || 'unknown'
+      const cpuVal = parseFloat(cs.cpu || '0')
+      const iType = cs.interactionType ?? 'none'
+      const cursorConfig: AgentConfig = {
+        id: `cursor-${cs.pid}`,
+        name: `Cursor: ${projectName}`,
+        title: `Cursor Agent`,
+        tripletRole: 'solver',
+        systemPrompt: '',
+        model: 'cursor-agent',
+        mcpProfile: '',
+        skills: [],
+        allowedTools: [],
+        subAgents: {},
+        defaultRepos: [cs.cwd],
+        avatar: 'cursor',
+        desk: { row: 0, col: 0 },
+        autonomy: 'unknown',
+      }
+
+      agentStates.push({
+        config: cursorConfig,
+        status: (cpuVal >= 1 ? 'active' : 'idle') as AgentState['status'],
+        needsInteraction: cpuVal < 1 &&
+          (iType === 'tool-approval' || iType === 'question' || iType === 'accept-edits'),
+        sessionMode: cs.sessionMode,
+        interactionType: iType,
+        sessionId: cs.sessionId,
+        pid: cs.pid,
+        tty: cs.tty,
+        cpu: cs.cpu,
+        memoryMB: cs.memoryMB,
+        uptime: cs.uptime,
+        lastUserMessage: cs.lastUserMessage,
+        lastAssistantBlurb: cs.lastAssistantBlurb,
+        cwd: cs.cwd,
+        subAgentInvocations: [],
       })
     }
 
@@ -429,6 +495,9 @@ export function registerIpcHandlers() {
     return { success: false, error: 'No active session for this agent' }
   }))
 
+  // ── Cursor Agent Handlers ────────────────────────────────────────────
+  ipcMain.handle('cursor:focus', wrapHandler(() => focusCursorIDE()))
+
   // ── Triplet Workflow Handlers ──────────────────────────────────────────
   ipcMain.handle('triplet:create', wrapHandler((task: unknown, opts: unknown) => {
     if (typeof task !== 'string') throw new Error('task must be a string')
@@ -469,6 +538,12 @@ export function registerIpcHandlers() {
     return readVaultFile(relativePath)
   }))
 
+  ipcMain.handle('vault:write', wrapHandler((relativePath: unknown, content: unknown) => {
+    if (typeof relativePath !== 'string') throw new Error('relativePath must be a string')
+    if (typeof content !== 'string') throw new Error('content must be a string')
+    return writeVaultFile(relativePath, content)
+  }))
+
   ipcMain.handle('vault:search', wrapHandler((query: unknown, glob?: unknown, limit?: unknown) => {
     if (typeof query !== 'string') throw new Error('query must be a string')
     return searchVault(
@@ -488,6 +563,42 @@ export function registerIpcHandlers() {
   ipcMain.handle('vault:backlinks', wrapHandler((relativePath: unknown) => {
     if (typeof relativePath !== 'string') throw new Error('relativePath must be a string')
     return getBacklinks(relativePath)
+  }))
+
+  ipcMain.handle('vault:create', wrapHandler((relativePath: unknown, content?: unknown) => {
+    if (typeof relativePath !== 'string') throw new Error('relativePath must be a string')
+    return createVaultFile(relativePath, typeof content === 'string' ? content : '')
+  }))
+
+  ipcMain.handle('vault:create-folder', wrapHandler((relativePath: unknown) => {
+    if (typeof relativePath !== 'string') throw new Error('relativePath must be a string')
+    return createVaultFolder(relativePath)
+  }))
+
+  ipcMain.handle('vault:rename', wrapHandler((oldPath: unknown, newPath: unknown) => {
+    if (typeof oldPath !== 'string' || typeof newPath !== 'string') throw new Error('paths must be strings')
+    return renameVaultFile(oldPath, newPath)
+  }))
+
+  ipcMain.handle('vault:delete', wrapHandler((relativePath: unknown) => {
+    if (typeof relativePath !== 'string') throw new Error('relativePath must be a string')
+    return deleteVaultFile(relativePath)
+  }))
+
+  ipcMain.handle('vault:index', wrapHandler(() => indexVault()))
+
+  ipcMain.handle('vault:search-indexed', wrapHandler((query: unknown, limit?: unknown) => {
+    if (typeof query !== 'string') throw new Error('query must be a string')
+    return searchIndexed(query, typeof limit === 'number' ? limit : undefined)
+  }))
+
+  ipcMain.handle('vault:build-search-index', wrapHandler(() => buildSearchIndex()))
+
+  ipcMain.handle('vault:graph-data', wrapHandler((scope?: unknown, centerPath?: unknown) => {
+    return getVaultGraph(
+      typeof scope === 'string' ? scope as 'full' | 'local' | 'tag' : 'full',
+      typeof centerPath === 'string' ? centerPath : undefined,
+    )
   }))
 
   // ── Slack Bridge ──────────────────────────────────────────────────────

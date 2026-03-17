@@ -7,6 +7,8 @@ import { closeGraph } from './graph'
 import { loadAgentConfigs } from './agents'
 import { registerPtyHandlers, destroyAllPtys } from './pty'
 import { startSlackBridge, stopSlackBridge } from './slack-bridge'
+import { registerVaultProtocol } from './vault'
+import { startFileWatcher, stopFileWatcher } from './file-watcher'
 
 // Load sidekick-graph's .env for Memgraph/Qdrant connection strings
 // __dirname is out/main (or src/main in dev) — go up to sidekick-electron/
@@ -66,11 +68,13 @@ app.whenReady().then(() => {
     if (!dockIcon.isEmpty()) app.dock.setIcon(dockIcon)
   }
 
+  registerVaultProtocol()
   loadAgentConfigs()
   registerIpcHandlers()
   registerPtyHandlers()
   createWindow()
   startSlackBridge()
+  startFileWatcher()
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
@@ -82,6 +86,7 @@ app.on('window-all-closed', () => {
 })
 
 app.on('before-quit', async () => {
+  stopFileWatcher()
   destroyAllPtys()
   await stopSlackBridge()
   await closeGraph()
