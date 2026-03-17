@@ -53,13 +53,6 @@ contextBridge.exposeInMainWorld('api', {
   getAgentStatuses: () => ipcRenderer.invoke('agents:statuses'),
   launchAgent: (agentId: string, cwd: string) => ipcRenderer.invoke('agents:launch', agentId, cwd),
   focusAgent: (agentId: string) => ipcRenderer.invoke('agents:focus', agentId),
-  // Stats / Gamification APIs
-  getAgentAllStats: () => ipcRenderer.invoke('stats:all'),
-  getLeaderboard: () => ipcRenderer.invoke('stats:leaderboard'),
-  getAchievements: () => ipcRenderer.invoke('stats:achievements'),
-  recordTask: (agentId: string) => ipcRenderer.invoke('stats:record-task', agentId),
-  recordMessage: (agentId: string) => ipcRenderer.invoke('stats:record-message', agentId),
-  recordApproval: (agentId: string) => ipcRenderer.invoke('stats:record-approval', agentId),
   // Triplet Workflow APIs
   createTriplet: (task: string, opts?: Record<string, unknown>) => ipcRenderer.invoke('triplet:create', task, opts),
   listTriplets: () => ipcRenderer.invoke('triplet:list'),

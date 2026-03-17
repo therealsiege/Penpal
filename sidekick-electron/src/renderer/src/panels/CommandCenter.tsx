@@ -3,7 +3,7 @@ import { usePolling } from '../hooks/usePolling'
 import { AgentAvatar } from '../components/AgentAvatar'
 import { useToast } from '../components/Toast'
 import { Terminal } from '../components/Terminal'
-import type { AgentConfig, AgentState, AgentStats, HealthResult, HotLead, JobStatus, LeaderboardEntry, AchievementDef, TripletWorkflow, TripletPreset } from '../types'
+import type { AgentConfig, AgentState, HealthResult, HotLead, JobStatus, TripletWorkflow, TripletPreset, ProjectLeaderboardEntry } from '../types'
 import { TripletLauncherModal, TripletStatusModal, TripletListModal } from '../components/TripletModal'
 import { createOfficeGame } from '../game/OfficeGame'
 import { OfficeScene } from '../game/OfficeScene'
@@ -647,54 +647,113 @@ function SharePickerModal({ source, agents, onShare, onClose }: {
 }
 
 // ---------------------------------------------------------------------------
-// LeaderboardModal
+// LeaderboardModal — Resource usage grouped by project directory
 // ---------------------------------------------------------------------------
 
-function LeaderboardModal({ entries, onClose }: {
-  entries: LeaderboardEntry[]
+function buildProjectLeaderboard(agents: AgentState[]): ProjectLeaderboardEntry[] {
+  const byDir = new Map<string, ProjectLeaderboardEntry>()
+
+  for (const agent of agents) {
+    if (agent.isSubAgent) continue
+    const dir = agent.cwd || 'unknown'
+    const projectName = dir.split('/').pop() || dir
+
+    let entry = byDir.get(dir)
+    if (!entry) {
+      entry = { directory: dir, projectName, agentCount: 0, totalMemoryMB: 0, totalCpu: 0, agents: [] }
+      byDir.set(dir, entry)
+    }
+
+    const cpuVal = parseFloat(agent.cpu || '0')
+    const memVal = agent.memoryMB || 0
+    entry.agentCount += 1
+    entry.totalMemoryMB += memVal
+    entry.totalCpu += cpuVal
+    entry.agents.push({
+      name: agent.config.name,
+      status: agent.status,
+      memoryMB: memVal,
+      cpu: cpuVal,
+      uptime: agent.uptime || '0m',
+    })
+  }
+
+  return [...byDir.values()].sort((a, b) => b.totalMemoryMB - a.totalMemoryMB)
+}
+
+function LeaderboardModal({ agents, onClose }: {
+  agents: AgentState[]
   onClose: () => void
 }) {
+  const entries = buildProjectLeaderboard(agents)
+  const totalMem = entries.reduce((s, e) => s + e.totalMemoryMB, 0)
+  const totalCpu = entries.reduce((s, e) => s + e.totalCpu, 0)
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={onClose}>
-      <div className="bg-slate-900 border border-slate-700 rounded-xl p-5 w-[500px] shadow-2xl max-h-[70vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-[15px] font-bold text-white">🏆 Agent Leaderboard</h3>
+      <div className="bg-slate-900 border border-slate-700 rounded-xl p-5 w-[540px] shadow-2xl max-h-[70vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-[15px] font-bold text-white">Resource Leaderboard</h3>
           <button onClick={onClose} className="text-slate-500 hover:text-slate-300 text-lg">x</button>
         </div>
+
+        {/* Totals bar */}
+        <div className="flex items-center gap-4 mb-4 px-3 py-2 bg-slate-800/50 rounded-lg border border-slate-700/50 text-[12px] text-slate-400">
+          <span>{entries.length} project{entries.length !== 1 ? 's' : ''}</span>
+          <span>{entries.reduce((s, e) => s + e.agentCount, 0)} agent{entries.reduce((s, e) => s + e.agentCount, 0) !== 1 ? 's' : ''}</span>
+          <span>{totalMem.toLocaleString()} MB</span>
+          <span>{totalCpu.toFixed(1)}% CPU</span>
+        </div>
+
         {entries.length === 0 ? (
-          <p className="text-[13px] text-slate-500 text-center py-8">No stats yet. Agents earn XP by completing tasks.</p>
+          <p className="text-[13px] text-slate-500 text-center py-8">No active sessions.</p>
         ) : (
           <div className="flex flex-col gap-2">
-            {entries.map((entry, idx) => (
-              <div key={entry.agentId} className={`flex items-center gap-3 p-3 rounded-lg border transition-all ${
-                idx === 0 ? 'bg-amber-900/20 border-amber-700/40' :
-                idx === 1 ? 'bg-slate-800/60 border-slate-600/40' :
-                idx === 2 ? 'bg-orange-900/10 border-orange-800/30' :
-                'bg-slate-800/30 border-slate-700/30'
-              }`}>
-                <span className="text-lg w-8 text-center font-bold" style={{ fontFamily: 'Monogram, monospace' }}>
-                  {idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : `#${idx + 1}`}
-                </span>
-                <div className="flex-1 min-w-0">
-                  <p className="text-[13px] font-semibold text-slate-200 truncate">{entry.agentName || entry.agentId}</p>
-                  <div className="flex items-center gap-2 mt-0.5">
-                    <span className="text-[11px] text-emerald-400">Lv.{entry.level}</span>
-                    <span className="text-[11px] text-slate-500">{entry.tasksCompleted} tasks</span>
-                    {entry.streak > 0 && <span className="text-[11px] text-amber-400">🔥 {entry.streak}</span>}
-                  </div>
-                  {entry.achievements.length > 0 && (
-                    <div className="flex gap-1 mt-1">
-                      {entry.achievements.slice(0, 5).map(a => (
-                        <span key={a} className="text-[10px] px-1.5 py-0.5 bg-violet-900/30 border border-violet-700/30 rounded text-violet-400">{a}</span>
-                      ))}
+            {entries.map((entry, idx) => {
+              const memPct = totalMem > 0 ? (entry.totalMemoryMB / totalMem) * 100 : 0
+              return (
+                <div key={entry.directory} className={`p-3 rounded-lg border transition-all ${
+                  idx === 0 ? 'bg-amber-900/15 border-amber-700/40' :
+                  idx === 1 ? 'bg-slate-800/60 border-slate-600/40' :
+                  idx === 2 ? 'bg-orange-900/10 border-orange-800/30' :
+                  'bg-slate-800/30 border-slate-700/30'
+                }`}>
+                  <div className="flex items-center gap-3">
+                    <span className="text-lg w-8 text-center font-bold shrink-0" style={{ fontFamily: 'Monogram, monospace' }}>
+                      {idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : `#${idx + 1}`}
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[13px] font-semibold text-slate-200 truncate">{entry.projectName}</p>
+                      <p className="text-[10px] text-slate-500 truncate">{entry.directory}</p>
                     </div>
-                  )}
+                    <div className="text-right shrink-0">
+                      <p className="text-[13px] font-bold text-amber-400">{entry.totalMemoryMB.toLocaleString()} MB</p>
+                      <p className="text-[10px] text-slate-500">{entry.totalCpu.toFixed(1)}% CPU</p>
+                    </div>
+                  </div>
+
+                  {/* Memory proportion bar */}
+                  <div className="mt-2 h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                    <div
+                      className="h-full rounded-full bg-gradient-to-r from-amber-500 to-orange-500"
+                      style={{ width: `${Math.max(memPct, 2)}%` }}
+                    />
+                  </div>
+
+                  {/* Agent breakdown */}
+                  <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1">
+                    {entry.agents.map((a, i) => (
+                      <span key={i} className="text-[10px] text-slate-400 flex items-center gap-1">
+                        <span className={`w-1.5 h-1.5 rounded-full ${a.status === 'active' ? 'bg-emerald-400' : 'bg-slate-600'}`} />
+                        {a.name}
+                        <span className="text-slate-600">{a.memoryMB}MB</span>
+                        <span className="text-slate-600">{a.uptime}</span>
+                      </span>
+                    ))}
+                  </div>
                 </div>
-                <div className="text-right">
-                  <p className="text-[13px] font-bold text-amber-400">{entry.xp} XP</p>
-                </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         )}
       </div>
@@ -724,15 +783,6 @@ export function CommandCenter(props: CommandCenterProps) {
     30000,
   )
 
-  // --- Agent stats ---
-  const { data: agentStats } = usePolling<Record<string, AgentStats>>(
-    () => window.api.getAgentAllStats().catch(() => ({})),
-    10000,
-  )
-  const { data: leaderboard } = usePolling<LeaderboardEntry[]>(
-    () => window.api.getLeaderboard().catch(() => []),
-    10000,
-  )
 
   // --- Agent configs (load once) ---
   const [allConfigs, setAllConfigs] = useState<AgentConfig[]>([])
@@ -759,7 +809,6 @@ export function CommandCenter(props: CommandCenterProps) {
   const [launchConfig, setLaunchConfig] = useState<AgentConfig | null>(null)
   const [shareSource, setShareSource] = useState<AgentState | null>(null)
   const [showLeaderboard, setShowLeaderboard] = useState(false)
-  const [achievementToast, setAchievementToast] = useState<{ name: string; icon: string } | null>(null)
   const [showTripletLauncher, setShowTripletLauncher] = useState(false)
   const [showTripletList, setShowTripletList] = useState(false)
   const [viewingTriplet, setViewingTriplet] = useState<TripletWorkflow | null>(null)
@@ -825,6 +874,12 @@ export function CommandCenter(props: CommandCenterProps) {
   // --- Wire EventBus to React state ---
   useEffect(() => {
     const handleAgentClicked = (_id: unknown, state: unknown) => {
+      const agentState = state as AgentState
+      if (agentState.tty) {
+        window.api.focusSession(agentState.tty).catch(() => {})
+      }
+    }
+    const handleAgentDoubleClicked = (_id: unknown, state: unknown) => {
       setActionAgent(state as AgentState)
     }
     const handleAddWorker = () => {
@@ -832,10 +887,12 @@ export function CommandCenter(props: CommandCenterProps) {
     }
 
     EventBus.on(EVENTS.AGENT_CLICKED, handleAgentClicked)
+    EventBus.on(EVENTS.AGENT_DOUBLE_CLICKED, handleAgentDoubleClicked)
     EventBus.on(EVENTS.ADD_WORKER_CLICKED, handleAddWorker)
 
     return () => {
       EventBus.off(EVENTS.AGENT_CLICKED, handleAgentClicked)
+      EventBus.off(EVENTS.AGENT_DOUBLE_CLICKED, handleAgentDoubleClicked)
       EventBus.off(EVENTS.ADD_WORKER_CLICKED, handleAddWorker)
     }
   }, [])
@@ -843,24 +900,6 @@ export function CommandCenter(props: CommandCenterProps) {
   // --- Derived data ---
   const agents = agentStatuses ?? []
 
-  // Track working→idle transitions as task completions
-  const prevStatusRef = useRef<Record<string, string>>({})
-  useEffect(() => {
-    if (!agentStatuses) return
-    for (const agent of agentStatuses) {
-      const prev = prevStatusRef.current[agent.config.id]
-      const curr = agent.sessionMode || 'idle'
-      if (prev === 'working' && curr === 'idle') {
-        window.api.recordTask(agent.config.id).then(newAchievements => {
-          if (newAchievements && newAchievements.length > 0) {
-            setAchievementToast({ name: newAchievements[0], icon: '🏆' })
-            setTimeout(() => setAchievementToast(null), 3000)
-          }
-        }).catch(() => {})
-      }
-      prevStatusRef.current[agent.config.id] = curr
-    }
-  }, [agentStatuses])
   const activeAgentCount = agents.filter(a => a.status === 'active' || a.needsInteraction).length
 
   const enabledJobs = (schedulerJobs ?? []).filter(j => j.enabled)
@@ -883,7 +922,6 @@ export function CommandCenter(props: CommandCenterProps) {
         }
         toast(`Message sent to ${state.config.name}`, 'success')
         setActionAgent(null)
-        window.api.recordMessage(state.config.id).catch(() => {})
       } catch {
         toast('Failed to send message', 'error')
       }
@@ -905,7 +943,6 @@ export function CommandCenter(props: CommandCenterProps) {
         }
         toast(`Approved for ${state.config.name}`, 'success')
         setActionAgent(null)
-        window.api.recordApproval(state.config.id).catch(() => {})
       } catch {
         toast('Failed to approve', 'error')
       }
@@ -916,7 +953,6 @@ export function CommandCenter(props: CommandCenterProps) {
   const handleFocusiTerm = useCallback(
     async (state: AgentState) => {
       try {
-        if (state.tty) await window.api.focusSession(state.tty)
         await window.api.focusAgent(state.config.id)
         setActionAgent(null)
       } catch {
@@ -1208,7 +1244,7 @@ export function CommandCenter(props: CommandCenterProps) {
 
       {showLeaderboard && (
         <LeaderboardModal
-          entries={leaderboard ?? []}
+          agents={agentStatuses ?? []}
           onClose={() => setShowLeaderboard(false)}
         />
       )}
@@ -1260,17 +1296,6 @@ export function CommandCenter(props: CommandCenterProps) {
         />
       )}
 
-      {achievementToast && (
-        <div className="fixed top-4 right-4 z-50 animate-slide-up bg-amber-900/90 border border-amber-600/50 rounded-xl px-4 py-3 shadow-2xl backdrop-blur">
-          <div className="flex items-center gap-2">
-            <span className="text-lg">{achievementToast.icon}</span>
-            <div>
-              <p className="text-[11px] text-amber-400/70 uppercase font-medium">Achievement Unlocked</p>
-              <p className="text-[13px] text-white font-semibold">{achievementToast.name}</p>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   )
 }

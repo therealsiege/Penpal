@@ -10,6 +10,7 @@ import {
   getSessionConversation,
   sendToSession,
   focusSession,
+  focusByName,
   createNewSession,
   createAgentSession,
   broadcastToSessions,
@@ -22,7 +23,6 @@ import {
   type AgentConfig,
   type AgentState,
 } from './agents'
-import { getAllAgentStats, getLeaderboard, recordTaskComplete, recordMessage, recordApproval, ACHIEVEMENTS } from './agent-stats'
 import {
   createTriplet,
   listTriplets,
@@ -419,28 +419,13 @@ export function registerIpcHandlers() {
     })
 
     if (matched?.tty) {
-      return focusSession(matched.tty)
+      const result = await focusSession(matched.tty)
+      if (result.success) return result
+      // TTY match failed — fall back to name-based search
+      console.log(`[agents:focus] TTY focus failed for ${agentId}, trying name fallback`)
+      return focusByName(config.name, matched.cwd)
     }
     return { success: false, error: 'No active session for this agent' }
-  }))
-
-  // ── Agent Stats / Gamification ─────────────────────────────────────────
-  ipcMain.handle('stats:all', wrapHandler(() => getAllAgentStats()))
-  ipcMain.handle('stats:leaderboard', wrapHandler(() => getLeaderboard()))
-  ipcMain.handle('stats:achievements', wrapHandler(() => ACHIEVEMENTS))
-  ipcMain.handle('stats:record-task', wrapHandler((agentId: unknown) => {
-    if (typeof agentId !== 'string') throw new Error('agentId must be a string')
-    return recordTaskComplete(agentId)
-  }))
-  ipcMain.handle('stats:record-message', wrapHandler((agentId: unknown) => {
-    if (typeof agentId !== 'string') throw new Error('agentId must be a string')
-    recordMessage(agentId)
-    return { success: true }
-  }))
-  ipcMain.handle('stats:record-approval', wrapHandler((agentId: unknown) => {
-    if (typeof agentId !== 'string') throw new Error('agentId must be a string')
-    recordApproval(agentId)
-    return { success: true }
   }))
 
   // ── Triplet Workflow Handlers ──────────────────────────────────────────

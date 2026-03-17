@@ -196,36 +196,15 @@ export interface LeadDetail {
   stageHistory: { stage: string; enteredAt: string }[]
 }
 
-export interface AgentStats {
-  agentId: string
-  tasksCompleted: number
-  totalUptime: number
-  messagesReceived: number
-  approvalsGranted: number
-  streak: number
-  bestStreak: number
-  xp: number
-  level: number
-  lastActive: number
-  achievements: string[]
+export interface ProjectLeaderboardEntry {
+  directory: string
+  projectName: string
+  agentCount: number
+  totalMemoryMB: number
+  totalCpu: number
+  agents: { name: string; status: AgentStatus; memoryMB: number; cpu: number; uptime: string }[]
 }
 
-export interface LeaderboardEntry {
-  agentId: string
-  agentName: string
-  xp: number
-  level: number
-  tasksCompleted: number
-  streak: number
-  achievements: string[]
-}
-
-export interface AchievementDef {
-  id: string
-  name: string
-  description: string
-  icon: string
-}
 
 // ── Triplet Workflow Types ──────────────────────────────────────────────────
 

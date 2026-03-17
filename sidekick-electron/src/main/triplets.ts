@@ -3,7 +3,6 @@ import fs from 'fs'
 import path from 'path'
 import { analyzeSession, sendToSession, getClaudeSessions, createAgentSession, getSessionConversation } from './sessions'
 import { getAgentConfig, loadTripletPresets } from './agents'
-import { recordTaskComplete } from './agent-stats'
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
@@ -525,10 +524,6 @@ async function runWorkflow(wf: TripletWorkflow): Promise<void> {
 
       if (passed) {
         setStatus(wf, 'complete')
-        // Record task completions for gamification
-        recordTaskComplete(wf.solver.agentId)
-        recordTaskComplete(wf.reviewer.agentId)
-        recordTaskComplete(wf.executor.agentId)
         // Fix 8: Auto-update CLAUDE.md
         appendWorkflowSummary(wf)
         return

@@ -77,7 +77,7 @@ async function getProcessStats(pid: number): Promise<{ cpu: string; memoryMB: nu
         `ps -o pid=,ppid=,tty= -p ${pid} 2>/dev/null`,
       )
       let ppid = parseInt(chain.trim().split(/\s+/)[1] || '0', 10)
-      for (let depth = 0; depth < 4 && ppid > 1; depth++) {
+      for (let depth = 0; depth < 6 && ppid > 1; depth++) {
         const { stdout: parentInfo } = await execAsync(
           `ps -o ppid=,tty= -p ${ppid} 2>/dev/null`,
         )
@@ -682,6 +682,7 @@ function runAppleScriptSafe(script: string): Promise<string> {
 }
 
 export async function focusSession(tty: string): Promise<{ success: boolean; error?: string }> {
+  console.log(`[focusSession] searching for tty=/dev/${tty}`)
   try {
     const result = await runAppleScriptSafe(`
       tell application "iTerm2"
@@ -705,11 +706,80 @@ export async function focusSession(tty: string): Promise<{ success: boolean; err
         return "not_found"
       end tell
     `)
+    console.log(`[focusSession] iTerm2 result=${result}`)
     if (result === 'not_found') {
       return { success: false, error: 'Session not found in iTerm2' }
     }
+    // Best-effort AXRaise to ensure window comes to front on macOS Ventura+
+    try {
+      await runAppleScriptSafe(`
+        tell application "System Events"
+          tell process "iTerm2"
+            set frontmost to true
+            perform action "AXRaise" of window 1
+          end tell
+        end tell
+      `)
+    } catch { /* AXRaise is best-effort */ }
     return { success: true }
   } catch (err) {
+    console.error(`[focusSession] error:`, err)
+    return { success: false, error: (err as Error).message }
+  }
+}
+
+export async function focusByName(name: string, cwd?: string): Promise<{ success: boolean; error?: string }> {
+  const searchTerms = [name]
+  if (cwd) searchTerms.push(path.basename(cwd))
+  console.log(`[focusByName] searching for name containing: ${searchTerms.join(' or ')}`)
+
+  // Build AppleScript that checks session name against search terms
+  const conditions = searchTerms
+    .map(term => {
+      const escaped = term.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
+      return `sessName contains "${escaped}"`
+    })
+    .join(' or ')
+
+  try {
+    const result = await runAppleScriptSafe(`
+      tell application "iTerm2"
+        activate
+        repeat with w in windows
+          repeat with t in tabs of w
+            repeat with s in sessions of t
+              set sessName to name of s
+              if ${conditions} then
+                tell w
+                  select t
+                end tell
+                tell t
+                  select s
+                end tell
+                set index of w to 1
+                try
+                  tell application "System Events"
+                    tell process "iTerm2"
+                      set frontmost to true
+                      perform action "AXRaise" of window 1
+                    end tell
+                  end tell
+                end try
+                return "focused"
+              end if
+            end repeat
+          end repeat
+        end repeat
+        return "not_found"
+      end tell
+    `)
+    console.log(`[focusByName] result=${result}`)
+    if (result === 'not_found') {
+      return { success: false, error: `No iTerm2 session matching "${name}"` }
+    }
+    return { success: true }
+  } catch (err) {
+    console.error(`[focusByName] error:`, err)
     return { success: false, error: (err as Error).message }
   }
 }
