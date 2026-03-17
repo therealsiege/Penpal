@@ -10,6 +10,7 @@ import { PipelineModal } from './components/PipelineModal'
 import { ActivityModal } from './components/ActivityModal'
 import { CommandCenter } from './panels/CommandCenter'
 import { VaultPanel } from './panels/VaultPanel'
+import { GraphPanel } from './panels/GraphPanel'
 
 function AppContent() {
   const [activePanel, setActivePanel] = useState('office')
@@ -228,6 +229,7 @@ function AppContent() {
           />
         )}
         {activePanel === 'vault' && <VaultPanel />}
+        {activePanel === 'graph' && <GraphPanel />}
         {activePanel === 'settings' && (
           <div className="flex items-center justify-center h-full text-slate-500">
             <div className="text-center">

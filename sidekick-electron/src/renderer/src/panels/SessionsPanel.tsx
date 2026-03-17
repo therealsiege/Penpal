@@ -19,6 +19,8 @@ function cpuBadge(cpu: string): { color: string; bg: string } {
 
 // ── Chat View ───────────────────────────────────────────────────────────────
 
+const isCursorSession = (s: ClaudeSession) => s.source === 'cursor'
+
 function SessionChat({
   session,
   onBack,
@@ -31,9 +33,10 @@ function SessionChat({
   const [sending, setSending] = useState(false)
   const [loading, setLoading] = useState(true)
   const bottomRef = useRef<HTMLDivElement>(null)
+  const isCursor = isCursorSession(session)
 
   const loadConversation = async () => {
-    const msgs = await window.api.getSessionConversation(session.sessionId)
+    const msgs = await window.api.getSessionConversation(session.sessionId, session.source)
     setMessages(msgs)
     setLoading(false)
   }
@@ -81,10 +84,12 @@ function SessionChat({
           </div>
         </div>
         <button
-          onClick={() => window.api.focusSession(session.tty)}
-          className="px-3 py-1.5 text-xs bg-blue-600 hover:bg-blue-500 rounded-md text-white transition-colors"
+          onClick={() => isCursor ? window.api.focusCursorIDE() : window.api.focusSession(session.tty)}
+          className={`px-3 py-1.5 text-xs rounded-md text-white transition-colors ${
+            isCursor ? 'bg-purple-600 hover:bg-purple-500' : 'bg-blue-600 hover:bg-blue-500'
+          }`}
         >
-          Open in Terminal
+          {isCursor ? 'Open in Cursor' : 'Open in Terminal'}
         </button>
       </div>
 
@@ -123,23 +128,38 @@ function SessionChat({
       </div>
 
       {/* Input */}
-      <div className="mt-3 flex gap-2 shrink-0">
-        <input
-          type="text"
-          placeholder="Send a message to this Claude session..."
-          value={input}
-          onChange={e => setInput(e.target.value)}
-          onKeyDown={e => e.key === 'Enter' && !e.shiftKey && handleSend()}
-          className="flex-1 bg-slate-900 border border-slate-800 rounded-md px-3 py-2.5 text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:border-blue-600"
-        />
-        <button
-          onClick={handleSend}
-          disabled={sending || !input.trim()}
-          className="px-4 py-2.5 text-sm bg-blue-600 hover:bg-blue-500 rounded-md text-white transition-colors disabled:opacity-40"
-        >
-          {sending ? 'Sending...' : 'Send'}
-        </button>
-      </div>
+      {isCursor ? (
+        <div className="mt-3 shrink-0 bg-slate-900/50 border border-slate-800 rounded-md px-3 py-2.5 text-center">
+          <p className="text-xs text-slate-500">
+            Cursor agent sessions are read-only.{' '}
+            <button
+              onClick={() => window.api.focusCursorIDE()}
+              className="text-purple-400 hover:text-purple-300 underline"
+            >
+              Open Cursor
+            </button>
+            {' '}to interact.
+          </p>
+        </div>
+      ) : (
+        <div className="mt-3 flex gap-2 shrink-0">
+          <input
+            type="text"
+            placeholder="Send a message to this Claude session..."
+            value={input}
+            onChange={e => setInput(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && !e.shiftKey && handleSend()}
+            className="flex-1 bg-slate-900 border border-slate-800 rounded-md px-3 py-2.5 text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:border-blue-600"
+          />
+          <button
+            onClick={handleSend}
+            disabled={sending || !input.trim()}
+            className="px-4 py-2.5 text-sm bg-blue-600 hover:bg-blue-500 rounded-md text-white transition-colors disabled:opacity-40"
+          >
+            {sending ? 'Sending...' : 'Send'}
+          </button>
+        </div>
+      )}
     </div>
   )
 }
@@ -231,14 +251,17 @@ function SessionCard({
 }) {
   const cpu = cpuBadge(session.cpu)
   const isActive = parseFloat(session.cpu) >= 1
+  const isCursor = isCursorSession(session)
 
   return (
     <div
       onClick={onClick}
       className={`bg-slate-900 border rounded-xl p-4 cursor-pointer transition-all hover:scale-[1.01] hover:shadow-lg hover:shadow-slate-950/50 ${
-        isActive
-          ? 'border-blue-500/30 hover:border-blue-500/50'
-          : 'border-slate-800 hover:border-slate-700'
+        isCursor
+          ? 'border-purple-500/30 hover:border-purple-500/50'
+          : isActive
+            ? 'border-blue-500/30 hover:border-blue-500/50'
+            : 'border-slate-800 hover:border-slate-700'
       }`}
     >
       {/* Top: project + status */}
@@ -246,11 +269,20 @@ function SessionCard({
         <div className="flex items-center gap-2">
           <StatusBadge status={isActive ? 'ok' : 'none'} size="md" />
           <h3 className="text-sm font-bold text-white truncate">{session.project}</h3>
+          {isCursor && (
+            <span className="px-1.5 py-0.5 text-[9px] font-semibold rounded bg-purple-500/15 text-purple-400 border border-purple-500/20">
+              CURSOR
+            </span>
+          )}
         </div>
         <button
           onClick={e => {
             e.stopPropagation()
-            window.api.focusSession(session.tty)
+            if (isCursor) {
+              window.api.focusCursorIDE()
+            } else {
+              window.api.focusSession(session.tty)
+            }
           }}
           className="shrink-0 px-2 py-0.5 text-[10px] bg-slate-800 hover:bg-slate-700 rounded border border-slate-700 text-slate-400 transition-colors"
         >
@@ -258,10 +290,10 @@ function SessionCard({
         </button>
       </div>
 
-      {/* Terminal name */}
-      {session.terminalName && (
-        <p className="text-[11px] text-blue-400/60 truncate mb-2 -mt-1">
-          {session.terminalName}
+      {/* Terminal name / source label */}
+      {(session.terminalName || isCursor) && (
+        <p className={`text-[11px] truncate mb-2 -mt-1 ${isCursor ? 'text-purple-400/60' : 'text-blue-400/60'}`}>
+          {isCursor ? 'Cursor Agent' : session.terminalName}
         </p>
       )}
 
@@ -381,15 +413,22 @@ export function SessionsPanel() {
 
   const totalMem = sessions?.reduce((sum, s) => sum + s.memoryMB, 0) || 0
   const activeSessions = sessions?.filter(s => parseFloat(s.cpu) >= 1) || []
+  const cursorCount = sessions?.filter(s => s.source === 'cursor').length || 0
+  const claudeCount = (sessions?.length || 0) - cursorCount
 
   return (
     <div>
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
         <div>
-          <h2 className="text-lg font-semibold">Claude Sessions</h2>
+          <h2 className="text-lg font-semibold">AI Sessions</h2>
           <p className="text-xs text-slate-500 mt-0.5">
             {sessions?.length || 0} sessions
+            {claudeCount > 0 && cursorCount > 0 && (
+              <span className="text-slate-600 ml-1">
+                ({claudeCount} Claude, {cursorCount} Cursor)
+              </span>
+            )}
             {activeSessions.length > 0 && (
               <span className="text-emerald-400 ml-1">({activeSessions.length} active)</span>
             )}

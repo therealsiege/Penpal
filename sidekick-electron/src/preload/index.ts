@@ -28,7 +28,7 @@ contextBridge.exposeInMainWorld('api', {
   getTerritories: () => ipcRenderer.invoke('pipeline:territories'),
   getNewLeads: () => ipcRenderer.invoke('pipeline:new-leads'),
   getClaudeSessions: () => ipcRenderer.invoke('sessions:list'),
-  getSessionConversation: (sessionId: string) => ipcRenderer.invoke('sessions:conversation', sessionId),
+  getSessionConversation: (sessionId: string, source?: string) => ipcRenderer.invoke('sessions:conversation', sessionId, source),
   sendToSession: (tty: string, message: string) => ipcRenderer.invoke('sessions:send', tty, message),
   focusSession: (tty: string) => ipcRenderer.invoke('sessions:focus', tty),
   createNewSession: (cwd: string) => ipcRenderer.invoke('sessions:create', cwd),
@@ -64,10 +64,26 @@ contextBridge.exposeInMainWorld('api', {
   // Vault File Manager
   vaultList: (relativePath: string) => ipcRenderer.invoke('vault:list', relativePath),
   vaultRead: (relativePath: string) => ipcRenderer.invoke('vault:read', relativePath),
+  vaultWrite: (relativePath: string, content: string) => ipcRenderer.invoke('vault:write', relativePath, content),
   vaultSearch: (query: string, glob?: string, limit?: number) => ipcRenderer.invoke('vault:search', query, glob, limit),
   vaultTags: () => ipcRenderer.invoke('vault:tags'),
   vaultFilesByTag: (tag: string) => ipcRenderer.invoke('vault:files-by-tag', tag),
   vaultBacklinks: (relativePath: string) => ipcRenderer.invoke('vault:backlinks', relativePath),
+  vaultCreate: (relativePath: string, content?: string) => ipcRenderer.invoke('vault:create', relativePath, content),
+  vaultCreateFolder: (relativePath: string) => ipcRenderer.invoke('vault:create-folder', relativePath),
+  vaultRename: (oldPath: string, newPath: string) => ipcRenderer.invoke('vault:rename', oldPath, newPath),
+  vaultDelete: (relativePath: string) => ipcRenderer.invoke('vault:delete', relativePath),
+  vaultIndex: () => ipcRenderer.invoke('vault:index'),
+  vaultSearchIndexed: (query: string, limit?: number) => ipcRenderer.invoke('vault:search-indexed', query, limit),
+  vaultBuildSearchIndex: () => ipcRenderer.invoke('vault:build-search-index'),
+  vaultGraphData: (scope?: string, centerPath?: string) => ipcRenderer.invoke('vault:graph-data', scope, centerPath),
+  onVaultFileChanged: (callback: (event: { eventType: string; path: string }) => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, data: { eventType: string; path: string }) => callback(data)
+    ipcRenderer.on('vault:file-changed', handler)
+    return () => ipcRenderer.removeListener('vault:file-changed', handler)
+  },
+  // Cursor Agent APIs
+  focusCursorIDE: () => ipcRenderer.invoke('cursor:focus'),
   // Slack Bridge
   slackStatus: () => ipcRenderer.invoke('slack:status'),
   slackStart: () => ipcRenderer.invoke('slack:start'),

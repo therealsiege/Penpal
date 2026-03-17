@@ -97,6 +97,7 @@ export interface ClaudeSession {
   tty: string
   terminalName: string
   waitingForInput: boolean
+  source?: 'claude' | 'cursor'
 }
 
 export interface ConversationMessage {
@@ -282,4 +283,13 @@ export interface VaultBacklink {
   title: string
   path: string
   snippet: string
+}
+
+export interface VaultIndexEntry {
+  path: string
+  name: string
+  title: string
+  mtime: number
+  size: number
+  tags: string[]
 }

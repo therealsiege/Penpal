@@ -42,13 +42,14 @@ function AgentActionPopup({
   const [msg, setMsg] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
   const needsApproval = state.sessionMode === 'waiting' || state.sessionMode === 'accept-edits'
+  const isCursorAgent = state.config.model === 'cursor-agent'
 
   useEffect(() => {
-    inputRef.current?.focus()
+    if (!isCursorAgent) inputRef.current?.focus()
   }, [])
 
   useEffect(() => {
-    if (!state.tty) return
+    if (!state.tty || isCursorAgent) return
     const handler = (e: KeyboardEvent) => {
       if (document.activeElement === inputRef.current) return
       const key = e.key.toLowerCase()
@@ -66,7 +67,7 @@ function AgentActionPopup({
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
-  }, [state.tty, needsApproval, onApprove, onSendMessage])
+  }, [state.tty, needsApproval, onApprove, onSendMessage, isCursorAgent])
 
   return (
     <div
@@ -173,102 +174,122 @@ function AgentActionPopup({
           </div>
         )}
 
-        {needsApproval && state.tty && (
-          <div className="mb-3">
-            <p className="text-[13px] text-slate-500 uppercase font-medium mb-1.5">
-              {state.sessionMode === 'accept-edits' ? 'Pending Edit Approval' : 'Pending Tool Approval'}
-            </p>
+        {isCursorAgent ? (
+          <>
+            <div className="bg-purple-900/20 rounded-lg px-3 py-2 mb-3 border border-purple-700/30">
+              <p className="text-[11px] text-purple-400">
+                This is a Cursor Agent session. Interact with it directly in the Cursor IDE.
+              </p>
+            </div>
             <div className="flex gap-2">
               <button
-                onClick={() => onApprove('1')}
-                className="flex-1 px-3 py-1.5 text-[13px] bg-emerald-600 hover:bg-emerald-500 rounded-md text-white transition-colors"
+                onClick={onFocusiTerm}
+                className="flex-1 px-3 py-1.5 text-[13px] bg-purple-600 hover:bg-purple-500 rounded-md text-white transition-colors"
               >
-                Allow
-              </button>
-              <button
-                onClick={() => onApprove('2')}
-                className="flex-1 px-3 py-1.5 text-[13px] bg-blue-600 hover:bg-blue-500 rounded-md text-white transition-colors"
-              >
-                Allow Session
-              </button>
-              <button
-                onClick={() => onApprove('3')}
-                className="flex-1 px-3 py-1.5 text-[13px] bg-red-600 hover:bg-red-500 rounded-md text-white transition-colors"
-              >
-                Deny
+                Open in Cursor
               </button>
             </div>
-          </div>
-        )}
+          </>
+        ) : (
+          <>
+            {needsApproval && state.tty && (
+              <div className="mb-3">
+                <p className="text-[13px] text-slate-500 uppercase font-medium mb-1.5">
+                  {state.sessionMode === 'accept-edits' ? 'Pending Edit Approval' : 'Pending Tool Approval'}
+                </p>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => onApprove('1')}
+                    className="flex-1 px-3 py-1.5 text-[13px] bg-emerald-600 hover:bg-emerald-500 rounded-md text-white transition-colors"
+                  >
+                    Allow
+                  </button>
+                  <button
+                    onClick={() => onApprove('2')}
+                    className="flex-1 px-3 py-1.5 text-[13px] bg-blue-600 hover:bg-blue-500 rounded-md text-white transition-colors"
+                  >
+                    Allow Session
+                  </button>
+                  <button
+                    onClick={() => onApprove('3')}
+                    className="flex-1 px-3 py-1.5 text-[13px] bg-red-600 hover:bg-red-500 rounded-md text-white transition-colors"
+                  >
+                    Deny
+                  </button>
+                </div>
+              </div>
+            )}
 
-        <div className="flex gap-2 mb-3">
-          <input
-            ref={inputRef}
-            type="text"
-            placeholder="Send a message..."
-            value={msg}
-            onChange={e => setMsg(e.target.value)}
-            onKeyDown={e => {
-              if (e.key === 'Enter' && msg.trim()) {
-                onSendMessage(msg.trim())
-                setMsg('')
-              }
-            }}
-            className="flex-1 bg-slate-950 border border-slate-800 rounded-md px-3 py-2 text-[13px] text-slate-200 placeholder-slate-600 focus:outline-none focus:border-slate-600 font-mono"
-          />
-          <button
-            onClick={() => {
-              if (msg.trim()) {
-                onSendMessage(msg.trim())
-                setMsg('')
-              }
-            }}
-            disabled={!msg.trim()}
-            className="px-3 py-2 text-[13px] bg-blue-600 hover:bg-blue-500 rounded-md text-white transition-colors disabled:opacity-40"
-          >
-            Send
-          </button>
-        </div>
+            <div className="flex gap-2 mb-3">
+              <input
+                ref={inputRef}
+                type="text"
+                placeholder="Send a message..."
+                value={msg}
+                onChange={e => setMsg(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter' && msg.trim()) {
+                    onSendMessage(msg.trim())
+                    setMsg('')
+                  }
+                }}
+                className="flex-1 bg-slate-950 border border-slate-800 rounded-md px-3 py-2 text-[13px] text-slate-200 placeholder-slate-600 focus:outline-none focus:border-slate-600 font-mono"
+              />
+              <button
+                onClick={() => {
+                  if (msg.trim()) {
+                    onSendMessage(msg.trim())
+                    setMsg('')
+                  }
+                }}
+                disabled={!msg.trim()}
+                className="px-3 py-2 text-[13px] bg-blue-600 hover:bg-blue-500 rounded-md text-white transition-colors disabled:opacity-40"
+              >
+                Send
+              </button>
+            </div>
 
-        {state.tty && (
-          <div className="mb-3">
-            <p className="text-[13px] text-slate-500 uppercase font-medium mb-1.5">Quick Response</p>
-            <div className="flex gap-1.5">
-              {['1', '2', '3', '4', '5'].map(n => (
+            {state.tty && (
+              <div className="mb-3">
+                <p className="text-[13px] text-slate-500 uppercase font-medium mb-1.5">Quick Response</p>
+                <div className="flex gap-1.5">
+                  {['1', '2', '3', '4', '5'].map(n => (
+                    <button
+                      key={n}
+                      onClick={() => onSendMessage(n)}
+                      className="w-9 h-9 text-[13px] font-bold bg-slate-800 hover:bg-blue-900/40 border border-slate-700 rounded-md text-slate-300 transition-colors"
+                    >
+                      {n}
+                    </button>
+                  ))}
+                  <button
+                    onClick={() => onSendMessage('y')}
+                    className="px-3 h-9 text-[13px] font-bold bg-emerald-900/30 hover:bg-emerald-900/50 border border-emerald-700/50 rounded-md text-emerald-400 transition-colors"
+                  >
+                    Y
+                  </button>
+                  <button
+                    onClick={() => onSendMessage('n')}
+                    className="px-3 h-9 text-[13px] font-bold bg-red-900/30 hover:bg-red-900/50 border border-red-700/50 rounded-md text-red-400 transition-colors"
+                  >
+                    N
+                  </button>
+                </div>
+              </div>
+            )}
+
+            <div className="flex gap-2">
+              {state.tty && (
                 <button
-                  key={n}
-                  onClick={() => onSendMessage(n)}
-                  className="w-9 h-9 text-[13px] font-bold bg-slate-800 hover:bg-blue-900/40 border border-slate-700 rounded-md text-slate-300 transition-colors"
+                  onClick={onFocusiTerm}
+                  className="flex-1 px-3 py-1.5 text-[13px] bg-slate-800 hover:bg-slate-700 rounded-md border border-slate-700 text-slate-300 transition-colors"
                 >
-                  {n}
+                  Focus in iTerm
                 </button>
-              ))}
-              <button
-                onClick={() => onSendMessage('y')}
-                className="px-3 h-9 text-[13px] font-bold bg-emerald-900/30 hover:bg-emerald-900/50 border border-emerald-700/50 rounded-md text-emerald-400 transition-colors"
-              >
-                Y
-              </button>
-              <button
-                onClick={() => onSendMessage('n')}
-                className="px-3 h-9 text-[13px] font-bold bg-red-900/30 hover:bg-red-900/50 border border-red-700/50 rounded-md text-red-400 transition-colors"
-              >
-                N
-              </button>
+              )}
             </div>
-          </div>
+          </>
         )}
-
-        <div className="flex gap-2">
-          {state.tty && (
-            <button
-              onClick={onFocusiTerm}
-              className="flex-1 px-3 py-1.5 text-[13px] bg-slate-800 hover:bg-slate-700 rounded-md border border-slate-700 text-slate-300 transition-colors"
-            >
-              Focus in iTerm
-            </button>
-          )}
-        </div>
       </div>
     </div>
   )
@@ -875,7 +896,9 @@ export function CommandCenter(props: CommandCenterProps) {
   useEffect(() => {
     const handleAgentClicked = (_id: unknown, state: unknown) => {
       const agentState = state as AgentState
-      if (agentState.tty) {
+      if (agentState.config.model === 'cursor-agent') {
+        window.api.focusCursorIDE().catch(() => {})
+      } else if (agentState.tty) {
         window.api.focusSession(agentState.tty).catch(() => {})
       }
     }
@@ -953,7 +976,11 @@ export function CommandCenter(props: CommandCenterProps) {
   const handleFocusiTerm = useCallback(
     async (state: AgentState) => {
       try {
-        await window.api.focusAgent(state.config.id)
+        if (state.config.model === 'cursor-agent') {
+          await window.api.focusCursorIDE()
+        } else {
+          await window.api.focusAgent(state.config.id)
+        }
         setActionAgent(null)
       } catch {
         toast('Failed to focus', 'error')

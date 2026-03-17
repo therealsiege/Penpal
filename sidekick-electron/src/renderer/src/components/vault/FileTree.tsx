@@ -1,10 +1,12 @@
 import { useState, useEffect, useCallback } from 'react'
 import type { VaultEntry } from '../../types'
+import { FileContextMenu } from './FileContextMenu'
 
 interface FileTreeProps {
   selectedFiles: Set<string>
   onToggleSelect: (path: string) => void
   onPreview: (path: string) => void
+  onOpenInEditor?: (path: string) => void
   previewPath: string | null
   filterPaths?: Set<string> | null
 }
@@ -21,14 +23,19 @@ const EXT_ICONS: Record<string, string> = {
   '.html': '<>',
 }
 
-function getIcon(name: string, isDirectory: boolean): string {
-  if (isDirectory) return ''
+function getIcon(name: string): string {
   const ext = name.slice(name.lastIndexOf('.'))
   return EXT_ICONS[ext] || '  '
 }
 
-// Directories to auto-expand on first render
 const AUTO_EXPAND = new Set(['Ventures'])
+
+interface ContextMenuState {
+  x: number
+  y: number
+  path: string
+  isDirectory: boolean
+}
 
 interface TreeNodeProps {
   entry: VaultEntry
@@ -36,30 +43,32 @@ interface TreeNodeProps {
   selectedFiles: Set<string>
   onToggleSelect: (path: string) => void
   onPreview: (path: string) => void
+  onOpenInEditor?: (path: string) => void
   previewPath: string | null
   filterPaths?: Set<string> | null
+  onContextMenu: (e: React.MouseEvent, entry: VaultEntry) => void
+  refreshKey: number
 }
 
-function TreeNode({ entry, depth, selectedFiles, onToggleSelect, onPreview, previewPath, filterPaths }: TreeNodeProps) {
+function TreeNode({ entry, depth, selectedFiles, onToggleSelect, onPreview, onOpenInEditor, previewPath, filterPaths, onContextMenu, refreshKey }: TreeNodeProps) {
   const shouldAutoExpand = depth === 0 && entry.isDirectory && AUTO_EXPAND.has(entry.name)
   const [expanded, setExpanded] = useState(shouldAutoExpand)
   const [children, setChildren] = useState<VaultEntry[]>([])
   const [loaded, setLoaded] = useState(false)
 
   const loadChildren = useCallback(async () => {
-    if (loaded) return
     try {
       const entries = await window.api.vaultList(entry.path)
       setChildren(entries)
       setLoaded(true)
     } catch { /* skip */ }
-  }, [entry.path, loaded])
+  }, [entry.path])
 
   useEffect(() => {
-    if (expanded && !loaded) {
+    if (expanded) {
       loadChildren()
     }
-  }, [expanded, loaded, loadChildren])
+  }, [expanded, loadChildren, refreshKey])
 
   const handleClick = () => {
     if (entry.isDirectory) {
@@ -69,10 +78,15 @@ function TreeNode({ entry, depth, selectedFiles, onToggleSelect, onPreview, prev
     }
   }
 
+  const handleDoubleClick = () => {
+    if (!entry.isDirectory && onOpenInEditor) {
+      onOpenInEditor(entry.path)
+    }
+  }
+
   const isSelected = selectedFiles.has(entry.path)
   const isPreviewed = previewPath === entry.path
 
-  // If filtering, hide non-matching files (but show directories that might contain matches)
   if (filterPaths && !entry.isDirectory && !filterPaths.has(entry.path)) {
     return null
   }
@@ -81,7 +95,6 @@ function TreeNode({ entry, depth, selectedFiles, onToggleSelect, onPreview, prev
     ? children.filter(c => c.isDirectory || filterPaths.has(c.path))
     : children
 
-  // Hide empty directories when filtering
   if (filterPaths && entry.isDirectory && loaded && filteredChildren.length === 0) {
     return null
   }
@@ -94,8 +107,9 @@ function TreeNode({ entry, depth, selectedFiles, onToggleSelect, onPreview, prev
         }`}
         style={{ paddingLeft: `${depth * 14 + 4}px` }}
         onClick={handleClick}
+        onDoubleClick={handleDoubleClick}
+        onContextMenu={(e) => onContextMenu(e, entry)}
       >
-        {/* Checkbox */}
         {!entry.isDirectory && (
           <input
             type="checkbox"
@@ -109,24 +123,21 @@ function TreeNode({ entry, depth, selectedFiles, onToggleSelect, onPreview, prev
           />
         )}
 
-        {/* Expand arrow for dirs */}
         {entry.isDirectory ? (
           <span className="w-4 text-center text-slate-500 shrink-0 text-[10px]">
             {expanded ? '\u25BC' : '\u25B6'}
           </span>
         ) : (
           <span className="w-4 text-center text-slate-600 shrink-0 text-[9px] font-mono">
-            {getIcon(entry.name, false)}
+            {getIcon(entry.name)}
           </span>
         )}
 
-        {/* Name */}
         <span className={`truncate ${entry.isDirectory ? 'text-slate-300 font-medium' : ''}`}>
           {entry.name}
         </span>
       </div>
 
-      {/* Children */}
       {expanded && entry.isDirectory && (
         <div>
           {filteredChildren.map(child => (
@@ -137,8 +148,11 @@ function TreeNode({ entry, depth, selectedFiles, onToggleSelect, onPreview, prev
               selectedFiles={selectedFiles}
               onToggleSelect={onToggleSelect}
               onPreview={onPreview}
+              onOpenInEditor={onOpenInEditor}
               previewPath={previewPath}
               filterPaths={filterPaths}
+              onContextMenu={onContextMenu}
+              refreshKey={refreshKey}
             />
           ))}
           {!loaded && (
@@ -152,15 +166,28 @@ function TreeNode({ entry, depth, selectedFiles, onToggleSelect, onPreview, prev
   )
 }
 
-export function FileTree({ selectedFiles, onToggleSelect, onPreview, previewPath, filterPaths }: FileTreeProps) {
+export function FileTree({ selectedFiles, onToggleSelect, onPreview, onOpenInEditor, previewPath, filterPaths }: FileTreeProps) {
   const [rootEntries, setRootEntries] = useState<VaultEntry[]>([])
+  const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null)
+  const [refreshKey, setRefreshKey] = useState(0)
 
-  useEffect(() => {
+  const loadRoot = useCallback(() => {
     window.api.vaultList('').then(setRootEntries).catch(() => {})
   }, [])
 
+  useEffect(() => { loadRoot() }, [loadRoot, refreshKey])
+
+  const handleContextMenu = useCallback((e: React.MouseEvent, entry: VaultEntry) => {
+    e.preventDefault()
+    setContextMenu({ x: e.clientX, y: e.clientY, path: entry.path, isDirectory: entry.isDirectory })
+  }, [])
+
+  const handleRefresh = useCallback(() => {
+    setRefreshKey(k => k + 1)
+  }, [])
+
   return (
-    <div className="overflow-y-auto h-full py-1 text-xs">
+    <div className="overflow-y-auto h-full py-1 text-xs relative">
       {rootEntries.map(entry => (
         <TreeNode
           key={entry.path}
@@ -169,12 +196,26 @@ export function FileTree({ selectedFiles, onToggleSelect, onPreview, previewPath
           selectedFiles={selectedFiles}
           onToggleSelect={onToggleSelect}
           onPreview={onPreview}
+          onOpenInEditor={onOpenInEditor}
           previewPath={previewPath}
           filterPaths={filterPaths}
+          onContextMenu={handleContextMenu}
+          refreshKey={refreshKey}
         />
       ))}
       {rootEntries.length === 0 && (
         <div className="text-slate-600 text-xs px-3 py-4 text-center">No files found</div>
+      )}
+      {contextMenu && (
+        <FileContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          path={contextMenu.path}
+          isDirectory={contextMenu.isDirectory}
+          onClose={() => setContextMenu(null)}
+          onOpenInEditor={onOpenInEditor}
+          onRefresh={handleRefresh}
+        />
       )}
     </div>
   )
