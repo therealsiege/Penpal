@@ -1,0 +1,244 @@
+name: Founder Briefing
+
+on:
+  push:
+    branches: ['**']
+    paths-ignore:
+      - '*.md'
+      - 'docs/**'
+  workflow_dispatch: # Manual trigger
+
+jobs:
+  briefing:
+    runs-on: ubuntu-latest
+    # Skip bot commits, dependabot, and merge commits with no real changes
+    if: github.actor != 'dependabot[bot]'
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 50
+
+      - name: Collect commit info
+        id: info
+        run: |
+          BRANCH="${GITHUB_REF_NAME}"
+          AUTHOR="${{ github.event.head_commit.author.name || github.actor }}"
+          BEFORE="${{ github.event.before }}"
+          AFTER="${{ github.event.after }}"
+
+          # Determine if this is a main branch (full briefing) or feature branch (one-liner)
+          if [[ "$BRANCH" == "main" || "$BRANCH" == "dev" ]]; then
+            BRIEFING_LEVEL="full"
+          else
+            BRIEFING_LEVEL="brief"
+          fi
+
+          # Get commit messages
+          if [[ "$BEFORE" == "0000000000000000000000000000000000000000" ]]; then
+            # New branch — just show the latest commit
+            COMMITS=$(git log -1 --format="- %h %s (%an)")
+            DIFF_STAT=$(git diff --stat HEAD~1 HEAD 2>/dev/null || echo "New branch")
+            DIFF_CONTENT=""
+          else
+            COMMITS=$(git log --oneline --format="- %h %s (%an)" "${BEFORE}..${AFTER}" 2>/dev/null || git log -5 --oneline --format="- %h %s (%an)")
+            DIFF_STAT=$(git diff --stat "${BEFORE}" "${AFTER}" 2>/dev/null || echo "Unable to diff")
+            # Get actual diff for AI analysis (truncated to 8000 chars to stay within limits)
+            DIFF_CONTENT=$(git diff "${BEFORE}" "${AFTER}" 2>/dev/null | head -c 8000 || echo "")
+          fi
+
+          COMMIT_COUNT=$(echo "$COMMITS" | wc -l | tr -d ' ')
+
+          # Check for important file patterns
+          CHANGED_FILES=$(git diff --name-only "${BEFORE}" "${AFTER}" 2>/dev/null || echo "")
+          HAS_IPC=$(echo "$CHANGED_FILES" | grep -c "ipc\|preload" || true)
+          HAS_MAIN=$(echo "$CHANGED_FILES" | grep -c "src/main" || true)
+          HAS_RENDERER=$(echo "$CHANGED_FILES" | grep -c "src/renderer" || true)
+          HAS_AGENTS=$(echo "$CHANGED_FILES" | grep -c "agents\|triplet\|session" || true)
+          HAS_GAME=$(echo "$CHANGED_FILES" | grep -c "game\|phaser\|OfficeScene" || true)
+          HAS_DEPS=$(echo "$CHANGED_FILES" | grep -c "package.json" || true)
+          HAS_ETL=$(echo "$CHANGED_FILES" | grep -c "sidekick-graph\|etl\|mcp" || true)
+
+          # Write to files to avoid escaping issues
+          echo "$COMMITS" > /tmp/commits.txt
+          echo "$DIFF_STAT" > /tmp/diff_stat.txt
+          echo "$DIFF_CONTENT" > /tmp/diff_content.txt
+          echo "$CHANGED_FILES" > /tmp/changed_files.txt
+
+          # Set outputs
+          echo "branch=$BRANCH" >> $GITHUB_OUTPUT
+          echo "author=$AUTHOR" >> $GITHUB_OUTPUT
+          echo "commit_count=$COMMIT_COUNT" >> $GITHUB_OUTPUT
+          echo "briefing_level=$BRIEFING_LEVEL" >> $GITHUB_OUTPUT
+          echo "has_ipc=$HAS_IPC" >> $GITHUB_OUTPUT
+          echo "has_main=$HAS_MAIN" >> $GITHUB_OUTPUT
+          echo "has_renderer=$HAS_RENDERER" >> $GITHUB_OUTPUT
+          echo "has_agents=$HAS_AGENTS" >> $GITHUB_OUTPUT
+          echo "has_game=$HAS_GAME" >> $GITHUB_OUTPUT
+          echo "has_deps=$HAS_DEPS" >> $GITHUB_OUTPUT
+          echo "has_etl=$HAS_ETL" >> $GITHUB_OUTPUT
+          echo "compare_url=${{ github.event.compare }}" >> $GITHUB_OUTPUT
+
+      - name: Generate AI summary
+        id: summary
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          BRANCH="${{ steps.info.outputs.branch }}"
+          AUTHOR="${{ steps.info.outputs.author }}"
+          LEVEL="${{ steps.info.outputs.briefing_level }}"
+          COMMITS=$(cat /tmp/commits.txt)
+          DIFF_STAT=$(cat /tmp/diff_stat.txt)
+          DIFF_CONTENT=$(cat /tmp/diff_content.txt)
+          CHANGED_FILES=$(cat /tmp/changed_files.txt)
+
+          if [[ "$LEVEL" == "full" ]]; then
+            PROMPT="You are writing a Slack briefing for Clint, the founder of 1Putt Health. Sidekick is a developer productivity platform — an Electron dashboard that manages multiple Claude Code AI agent sessions, with a knowledge graph backend (Memgraph + Qdrant), agent team orchestration (triplet workflows), and a Phaser.js office visualization. The monorepo has two main packages: sidekick-electron (the desktop app) and sidekick-graph (ETL + MCP server). Clint is deeply technical, writes code daily, and uses Sidekick to manage his own Claude agents.
+
+          Summarize this push to the '$BRANCH' branch by $AUTHOR.
+
+          Write like a sharp cofounder reading the diff — what matters, why, and what needs attention. Be direct and opinionated. Skip anything routine unless it's all routine, then say so in one line.
+
+          Structure:
+          HEADLINE: One sentence — what shipped and why it matters
+          CHANGES: 2-4 bullets, specifics not generalities
+          SO WHAT: 1-2 sentences in plain English — why does the founder care, how does this make the product better. No tech speak. Talk about the experience, not the implementation.
+          ATTENTION: Anything to test, any risk, any new dependencies. 'None' if clean.
+
+          Keep it tight. No filler, no corporate fluff. If it's a small change, write a small summary.
+
+          Do NOT use markdown formatting, code blocks, or backticks — plain text for Slack.
+
+          Commits:
+          $COMMITS
+
+          Files changed:
+          $CHANGED_FILES
+
+          Diff stats:
+          $DIFF_STAT
+
+          Diff (truncated):
+          $DIFF_CONTENT"
+          else
+            PROMPT="Brief Slack notification for Clint, founder of 1Putt Health. One to two sentences: what $AUTHOR is working on in '$BRANCH'. Be specific, no jargon, no formatting. Flag anything notable.
+
+          Commits:
+          $COMMITS
+
+          Files changed:
+          $CHANGED_FILES
+
+          Diff stats:
+          $DIFF_STAT"
+          fi
+
+          # Call Claude API
+          RESPONSE=$(curl -s https://api.anthropic.com/v1/messages \
+            -H "x-api-key: $ANTHROPIC_API_KEY" \
+            -H "anthropic-version: 2023-06-01" \
+            -H "content-type: application/json" \
+            -d "$(jq -n \
+              --arg prompt "$PROMPT" \
+              '{
+                "model": "claude-haiku-4-5-20251001",
+                "max_tokens": 500,
+                "messages": [{"role": "user", "content": $prompt}]
+              }')")
+
+          # Extract the text content
+          SUMMARY=$(echo "$RESPONSE" | jq -r '.content[0].text // "Unable to generate summary"')
+
+          # Write summary to file
+          echo "$SUMMARY" > /tmp/summary.txt
+
+      - name: Post to Slack
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          BRANCH="${{ steps.info.outputs.branch }}"
+          AUTHOR="${{ steps.info.outputs.author }}"
+          LEVEL="${{ steps.info.outputs.briefing_level }}"
+          COMMIT_COUNT="${{ steps.info.outputs.commit_count }}"
+          COMPARE_URL="${{ steps.info.outputs.compare_url }}"
+          SUMMARY=$(cat /tmp/summary.txt)
+
+          if [[ "$LEVEL" == "full" ]]; then
+            EMOJI=":ship:"
+            HEADER="Sidekick Shipped to $BRANCH"
+            COLOR="#2ea44f"
+            if [[ "$BRANCH" == "main" ]]; then
+              EMOJI=":rocket:"
+              HEADER="Sidekick Production Deploy"
+              COLOR="#e74c3c"
+            fi
+          else
+            EMOJI=":hammer_and_wrench:"
+            HEADER="Activity on $BRANCH"
+            COLOR="#3498db"
+          fi
+
+          # Build Slack payload
+          jq -n \
+            --arg emoji "$EMOJI" \
+            --arg header "$HEADER" \
+            --arg author "$AUTHOR" \
+            --arg branch "$BRANCH" \
+            --arg count "$COMMIT_COUNT" \
+            --arg summary "$SUMMARY" \
+            --arg url "$COMPARE_URL" \
+            --arg color "$COLOR" \
+            '{
+              "username": "Sidekick Ship Log",
+              "icon_emoji": $emoji,
+              "attachments": [{
+                "color": $color,
+                "blocks": [
+                  {
+                    "type": "header",
+                    "text": {
+                      "type": "plain_text",
+                      "text": "\($emoji) \($header)",
+                      "emoji": true
+                    }
+                  },
+                  {
+                    "type": "context",
+                    "elements": [
+                      {
+                        "type": "mrkdwn",
+                        "text": "*\($author)* pushed \($count) commit(s) to `\($branch)`"
+                      }
+                    ]
+                  },
+                  {
+                    "type": "divider"
+                  },
+                  {
+                    "type": "section",
+                    "text": {
+                      "type": "mrkdwn",
+                      "text": $summary
+                    }
+                  },
+                  {
+                    "type": "actions",
+                    "elements": [
+                      {
+                        "type": "button",
+                        "text": {
+                          "type": "plain_text",
+                          "text": "View Changes",
+                          "emoji": true
+                        },
+                        "url": $url,
+                        "style": "primary"
+                      }
+                    ]
+                  }
+                ]
+              }]
+            }' | curl -s -X POST "$SLACK_WEBHOOK_URL" \
+              -H "Content-Type: application/json" \
+              -d @-
