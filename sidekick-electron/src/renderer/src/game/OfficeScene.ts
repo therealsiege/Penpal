@@ -300,6 +300,9 @@ export class OfficeScene extends Phaser.Scene {
     this.scale.on('resize', (gameSize: Phaser.Structs.Size) => {
       this.viewWidth  = gameSize.width
       this.viewHeight = gameSize.height
+      // Invalidate office bg cache so it redraws to new width
+      this.lastOfficeBgW = 0
+      this.lastOfficeBgH = 0
       if (this.rooms.size > 0) {
         this.layoutRooms()
         this.updateCameraBounds()
@@ -1145,9 +1148,10 @@ export class OfficeScene extends Phaser.Scene {
     this.worldWidth  = maxX + WORLD_MARGIN
     this.worldHeight = maxY + WORLD_MARGIN
 
-    // Draw office background behind rooms
+    // Draw office background behind rooms — clamp to viewport width
     if (this.officeGraphics) {
-      this.drawOfficeBackground(maxX + WORLD_MARGIN, maxY + WORLD_MARGIN)
+      const bgW = Math.min(maxX + WORLD_MARGIN, this.viewWidth - WORLD_MARGIN)
+      this.drawOfficeBackground(bgW, maxY + WORLD_MARGIN)
     }
 
     this.updateCameraBounds()
