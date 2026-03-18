@@ -1,6 +1,7 @@
 import Phaser from 'phaser'
 import { EventBus, EVENTS } from './events'
 import type { AgentState } from '../types'
+import { activeTheme, setActiveTheme, lerpColor, THEMES, type ThemeName } from './office-theme'
 
 // Keyboard shortcut constants
 const KB_ZOOM_STEP = 0.15
@@ -75,6 +76,19 @@ const COLOR_LED_GRAY    = 0x64748b
 
 const WORLD_MARGIN   = 60
 
+// Camera & navigation constants
+const ZOOM_MIN = 0.4
+const ZOOM_MAX = 2.0
+const ZOOM_LERP_SPEED = 0.08
+const FOLLOW_LERP_SPEED = 0.06
+const LOD_ZOOM_THRESHOLD = 0.65
+const MINIMAP_W = 160
+const MINIMAP_H = 100
+const MINIMAP_MARGIN = 12
+const MINIMAP_BG = 0x0f172a
+const MINIMAP_ROOM_COLOR = 0x334155
+const MINIMAP_VIEWPORT_COLOR = 0x3b82f6
+
 // ---------------------------------------------------------------------------
 // Interfaces
 // ---------------------------------------------------------------------------
@@ -106,6 +120,7 @@ interface WorkstationSprite {
   steamTweens?: Phaser.Tweens.Tween[]
   lastAnimMode?: 'idle' | 'working' | 'waiting'
   lastStateFingerprint?: string
+  lodDetailObjects: Phaser.GameObjects.GameObject[]
 }
 
 interface Room {
@@ -169,9 +184,15 @@ export class OfficeScene extends Phaser.Scene {
   private typingParticlePool: Phaser.GameObjects.Arc[] = []
   private typingParticleTimer: Phaser.Time.TimerEvent | null = null
 
-  // Hover tooltip
-  private tooltipText: Phaser.GameObjects.Text | null = null
-  private tooltipBg: Phaser.GameObjects.Rectangle | null = null
+  // Rich hover tooltip (screen-space, animated)
+  private tooltipContainer: Phaser.GameObjects.Container | null = null
+  private tooltipGraphics: Phaser.GameObjects.Graphics | null = null
+  private tooltipFadeTween: Phaser.Tweens.Tween | null = null
+  // World-space highlight ring around hovered desk
+  private hoverRingGraphics: Phaser.GameObjects.Graphics | null = null
+
+  // Theme transition
+  private bgTransitionTween: Phaser.Tweens.Tween | null = null
 
   // Keyboard selection state
   private selectedAgentIndex = -1
@@ -187,6 +208,15 @@ export class OfficeScene extends Phaser.Scene {
   private defaultCameraX = 0
   private defaultCameraY = 0
   private defaultCameraZoom = 1
+  private hasInitialZoomToFit = false
+
+  // Camera & navigation state
+  private targetZoom = 1
+  private followTarget: { x: number; y: number } | null = null
+  private lastLodVisible = true
+  private minimapContainer: Phaser.GameObjects.Container | null = null
+  private minimapGraphics: Phaser.GameObjects.Graphics | null = null
+  private minimapViewport: Phaser.GameObjects.Graphics | null = null
 
   constructor() {
     super({ key: 'OfficeScene' })
@@ -229,22 +259,37 @@ export class OfficeScene extends Phaser.Scene {
       delay: 200, callback: () => this.tickParticles(), loop: true,
     })
 
-    // Camera pan
+    // Camera pan -- cancel follow on manual drag
     this.input.on('pointermove', (p: Phaser.Input.Pointer) => {
       if (p.isDown && !this.isDraggingAgent) {
         cam.scrollX -= (p.x - p.prevPosition.x) / cam.zoom
         cam.scrollY -= (p.y - p.prevPosition.y) / cam.zoom
+        this.followTarget = null
       }
     })
 
-    // Zoom
+    // Smooth zoom -- sets target for lerp in update()
+    this.targetZoom = cam.zoom
     this.input.on(
       'wheel',
       (_p: Phaser.Input.Pointer, _gx: unknown, _gy: unknown, _gz: unknown, deltaY: number) => {
-        const newZoom = Phaser.Math.Clamp(cam.zoom - deltaY * 0.001, 0.4, 2.0)
-        cam.setZoom(newZoom)
+        this.targetZoom = Phaser.Math.Clamp(this.targetZoom - deltaY * 0.001, ZOOM_MIN, ZOOM_MAX)
+        this.followTarget = null
       },
     )
+
+    // Double-click on empty space resets camera (zoom-to-fit)
+    let lastSceneClickTime = 0
+    this.input.on('pointerdown', (p: Phaser.Input.Pointer) => {
+      const now = Date.now()
+      if (now - lastSceneClickTime < 350) {
+        const wp = cam.getWorldPoint(p.x, p.y)
+        if (!this.getAgentAtWorldPoint(wp.x, wp.y)) {
+          this.zoomToFit(true)
+        }
+      }
+      lastSceneClickTime = now
+    })
 
     // Resize — re-layout rooms when viewport changes
     this.scale.on('resize', (gameSize: Phaser.Structs.Size) => {
@@ -254,6 +299,7 @@ export class OfficeScene extends Phaser.Scene {
         this.layoutRooms()
         this.updateCameraBounds()
       }
+      this.repositionMinimap()
     })
 
     // Save default camera position for R reset
@@ -301,11 +347,56 @@ export class OfficeScene extends Phaser.Scene {
       }
     }
 
+    // Create minimap overlay
+    this.initMinimap()
+
     this.isReady = true
     if (this.pendingAgents) {
       this.setAgents(this.pendingAgents)
       this.pendingAgents = null
     }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Update loop (smooth zoom, follow, LOD, minimap)
+  // ---------------------------------------------------------------------------
+
+  update(_time: number, _delta: number): void {
+    const cam = this.cameras.main
+
+    // Smooth zoom lerp
+    const zoomDiff = this.targetZoom - cam.zoom
+    if (Math.abs(zoomDiff) > 0.001) {
+      cam.setZoom(Phaser.Math.Clamp(cam.zoom + zoomDiff * ZOOM_LERP_SPEED, ZOOM_MIN, ZOOM_MAX))
+    } else if (Math.abs(zoomDiff) > 0) {
+      cam.setZoom(this.targetZoom)
+    }
+
+    // Smooth camera follow
+    if (this.followTarget) {
+      const cx = cam.scrollX + cam.width / (2 * cam.zoom)
+      const cy = cam.scrollY + cam.height / (2 * cam.zoom)
+      const dx = this.followTarget.x - cx
+      const dy = this.followTarget.y - cy
+      if (Math.abs(dx) > 1 || Math.abs(dy) > 1) {
+        cam.scrollX += dx * FOLLOW_LERP_SPEED
+        cam.scrollY += dy * FOLLOW_LERP_SPEED
+      } else {
+        cam.scrollX += dx
+        cam.scrollY += dy
+        this.followTarget = null
+      }
+    }
+
+    // Zoom-dependent LOD
+    const showDetails = cam.zoom >= LOD_ZOOM_THRESHOLD
+    if (showDetails !== this.lastLodVisible) {
+      this.lastLodVisible = showDetails
+      this.applyLod(showDetails)
+    }
+
+    // Minimap refresh
+    this.drawMinimap()
   }
 
   // ---------------------------------------------------------------------------
@@ -349,6 +440,12 @@ export class OfficeScene extends Phaser.Scene {
 
     this.layoutRooms()
     this.updateCameraBounds()
+
+    // Zoom-to-fit on first data load
+    if (!this.hasInitialZoomToFit && this.rooms.size > 0) {
+      this.hasInitialZoomToFit = true
+      this.time.delayedCall(350, () => { this.zoomToFit(false) })
+    }
   }
 
   /** Called from React to check if a world point is over a workstation */
@@ -387,6 +484,63 @@ export class OfficeScene extends Phaser.Scene {
         return
       }
     }
+  }
+
+  /** Public: smooth-pan camera to center on a specific agent */
+  panToAgent(agentId: string): void {
+    const pos = this.getWorkstationWorldPos(agentId)
+    if (pos) {
+      this.followTarget = { x: pos.x, y: pos.y }
+      if (this.targetZoom < 0.8) this.targetZoom = 0.9
+    }
+  }
+
+  /** Switch theme with smooth 500ms background color transition */
+  setTheme(theme: ThemeName): void {
+    const { oldBg, newBg } = setActiveTheme(theme)
+    if (oldBg === newBg) return
+    if (this.bgTransitionTween) { this.bgTransitionTween.destroy(); this.bgTransitionTween = null }
+    const cam = this.cameras.main
+    this.bgTransitionTween = this.tweens.addCounter({
+      from: 0, to: 100, duration: 500, ease: 'Sine.easeInOut',
+      onUpdate: (tw) => { cam.setBackgroundColor(lerpColor(oldBg, newBg, tw.getValue() / 100)) },
+      onComplete: () => { cam.setBackgroundColor(newBg) },
+    })
+    this._applyThemeToAll()
+  }
+
+  /** Returns the current theme name */
+  getTheme(): ThemeName {
+    return (activeTheme === THEMES.dark ? 'dark' : activeTheme === THEMES.light ? 'light' : 'neon') as ThemeName
+  }
+
+  /** Redraw all scene elements with the current activeTheme colors */
+  private _applyThemeToAll(): void {
+    const t = activeTheme
+    for (const room of this.rooms.values()) {
+      this.drawRoomBackground(room)
+      for (const ws of room.workstations.values()) {
+        ws.deskBody.setFillStyle(t.deskBody)
+        ws.deskTop.setFillStyle(t.deskTop)
+        this.restoreDeskStroke(ws)
+        if (ws.monitorGlowOverlay) {
+          const isWorking = ws.state && (ws.state.sessionMode === 'working' || ws.state.sessionMode === 'plan') && !ws.state.needsInteraction
+          const isWaiting = ws.state?.needsInteraction
+          ws.monitorGlowOverlay.setFillStyle(isWaiting ? t.deskStrokeWaiting : isWorking ? t.monitorGlowActive : t.monitorGlowIdle)
+        }
+        ws.lastAnimMode = undefined
+        if (ws.state) this.updateWorkstation(ws, ws.state)
+      }
+    }
+    if (this.officeGraphics) {
+      let maxX = 0, maxY = 0
+      for (const room of this.rooms.values()) {
+        maxX = Math.max(maxX, room.x + room.width / 2)
+        maxY = Math.max(maxY, room.y + room.height / 2)
+      }
+      if (maxX > 0) this.drawOfficeBackground(maxX + WORLD_MARGIN, maxY + WORLD_MARGIN)
+    }
+    this.drawTripletLines()
   }
 
   // ---------------------------------------------------------------------------
@@ -657,6 +811,11 @@ export class OfficeScene extends Phaser.Scene {
     const lampLight = this.add.triangle(-24, WS_DESK_Y - 4, -10, 18, 0, 0, 10, 18, 0xfbbf24, 0.04)
     wsContainer.add(lampLight)
 
+    // Track LOD details (mug, steam, lamp -- hidden when zoomed out)
+    const lodDetailObjects: Phaser.GameObjects.GameObject[] = [
+      mugBody, mugHandle, steamContainer, lampBase, lampArm, lampShade, lampLight,
+    ]
+
     // Character shadow
     const shadow = this.add.ellipse(0, WS_SPRITE_Y + 2, 20, 6, 0x000000, 0.2)
     wsContainer.add(shadow)
@@ -699,6 +858,16 @@ export class OfficeScene extends Phaser.Scene {
       monitorGlowOverlay, screenLines, screenTween,
       thoughtBubble, thoughtBubbleText, thoughtBubbleBg, state: agent,
       steamTweens,
+      lodDetailObjects,
+    }
+
+    // Apply current LOD state to new workstation
+    if (!this.lastLodVisible) {
+      for (const obj of lodDetailObjects) {
+        if (obj && 'setVisible' in obj) {
+          (obj as Phaser.GameObjects.Components.Visible).setVisible(false)
+        }
+      }
     }
 
     let lastClickTime = 0
@@ -708,6 +877,7 @@ export class OfficeScene extends Phaser.Scene {
         EventBus.emit(EVENTS.AGENT_DOUBLE_CLICKED, agent.config.id, ws.state)
       } else {
         EventBus.emit(EVENTS.AGENT_CLICKED, agent.config.id, ws.state)
+        this.panToAgent(agent.config.id)
       }
       lastClickTime = now
     })
@@ -1345,6 +1515,95 @@ export class OfficeScene extends Phaser.Scene {
   }
 
   // ---------------------------------------------------------------------------
+  // Camera & navigation helpers
+  // ---------------------------------------------------------------------------
+
+  private zoomToFit(animated: boolean): void {
+    if (this.rooms.size === 0) return
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+    for (const room of this.rooms.values()) {
+      minX = Math.min(minX, room.x - room.width / 2)
+      minY = Math.min(minY, room.y - room.height / 2)
+      maxX = Math.max(maxX, room.x + room.width / 2)
+      maxY = Math.max(maxY, room.y + room.height / 2)
+    }
+    const padFactor = 1.15
+    const fitZoom = Phaser.Math.Clamp(
+      Math.min(this.viewWidth / ((maxX - minX) * padFactor), this.viewHeight / ((maxY - minY) * padFactor)),
+      ZOOM_MIN, ZOOM_MAX,
+    )
+    const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2
+    if (animated) {
+      this.targetZoom = fitZoom
+      this.followTarget = { x: cx, y: cy }
+    } else {
+      this.targetZoom = fitZoom
+      this.cameras.main.setZoom(fitZoom)
+      this.cameras.main.centerOn(cx, cy)
+    }
+  }
+
+  private initMinimap(): void {
+    this.minimapContainer = this.add.container(0, 0).setDepth(10010).setScrollFactor(0)
+    this.minimapGraphics = this.add.graphics().setScrollFactor(0)
+    this.minimapViewport = this.add.graphics().setScrollFactor(0)
+    this.minimapContainer.add([this.minimapGraphics, this.minimapViewport])
+    this.repositionMinimap()
+  }
+
+  private repositionMinimap(): void {
+    if (!this.minimapContainer) return
+    this.minimapContainer.setPosition(
+      this.viewWidth - MINIMAP_W - MINIMAP_MARGIN,
+      this.viewHeight - MINIMAP_H - MINIMAP_MARGIN,
+    )
+  }
+
+  private drawMinimap(): void {
+    if (!this.minimapGraphics || !this.minimapViewport || this.rooms.size === 0) return
+    const mg = this.minimapGraphics, vg = this.minimapViewport
+    mg.clear(); vg.clear()
+    mg.fillStyle(MINIMAP_BG, 0.85)
+    mg.fillRoundedRect(0, 0, MINIMAP_W, MINIMAP_H, 4)
+    mg.lineStyle(1, 0x334155, 0.8)
+    mg.strokeRoundedRect(0, 0, MINIMAP_W, MINIMAP_H, 4)
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+    for (const room of this.rooms.values()) {
+      minX = Math.min(minX, room.x - room.width / 2); minY = Math.min(minY, room.y - room.height / 2)
+      maxX = Math.max(maxX, room.x + room.width / 2); maxY = Math.max(maxY, room.y + room.height / 2)
+    }
+    const pad = 8, drawW = MINIMAP_W - pad * 2, drawH = MINIMAP_H - pad * 2
+    const s = Math.min(drawW / Math.max(maxX - minX, 1), drawH / Math.max(maxY - minY, 1))
+    for (const room of this.rooms.values()) {
+      const rx = pad + (room.x - room.width / 2 - minX) * s
+      const ry = pad + (room.y - room.height / 2 - minY) * s
+      const hasWorking = room.agents.some(a => a.sessionMode === 'working' || a.sessionMode === 'plan')
+      const hasWaiting = room.agents.some(a => a.needsInteraction)
+      mg.fillStyle(hasWaiting ? 0xfbbf24 : hasWorking ? 0x34d399 : MINIMAP_ROOM_COLOR, hasWaiting || hasWorking ? 0.6 : 0.4)
+      mg.fillRect(rx, ry, room.width * s, room.height * s)
+    }
+    const cam = this.cameras.main
+    vg.lineStyle(1.5, MINIMAP_VIEWPORT_COLOR, 0.9)
+    vg.strokeRect(
+      Phaser.Math.Clamp(pad + (cam.scrollX - minX) * s, pad, pad + drawW),
+      Phaser.Math.Clamp(pad + (cam.scrollY - minY) * s, pad, pad + drawH),
+      Math.min((cam.width / cam.zoom) * s, drawW),
+      Math.min((cam.height / cam.zoom) * s, drawH),
+    )
+  }
+
+  private applyLod(showDetails: boolean): void {
+    for (const room of this.rooms.values()) {
+      for (const ws of room.workstations.values()) {
+        if (!ws.lodDetailObjects) continue
+        for (const obj of ws.lodDetailObjects) {
+          if (obj && 'setVisible' in obj) (obj as Phaser.GameObjects.Components.Visible).setVisible(showDetails)
+        }
+      }
+    }
+  }
+
+  // ---------------------------------------------------------------------------
   // Keyboard navigation helpers
   // ---------------------------------------------------------------------------
 
@@ -1459,77 +1718,29 @@ export class OfficeScene extends Phaser.Scene {
     this.selectionRing?.setVisible(false)
   }
 
-  /** Smoothly pan the camera to center on world coords */
+  /** Smoothly pan the camera to center on world coords (uses lerp follow) */
   private kbPanCameraTo(wx: number, wy: number): void {
-    const cam = this.cameras.main
-    this.tweens.killTweensOf(cam)
-    this.tweens.add({
-      targets: cam,
-      scrollX: wx - this.viewWidth / (2 * cam.zoom),
-      scrollY: wy - this.viewHeight / (2 * cam.zoom),
-      duration: KB_PAN_DURATION,
-      ease: 'Power2',
-    })
+    this.followTarget = { x: wx, y: wy }
   }
 
-  /** Smoothly adjust zoom level */
+  /** Smoothly adjust zoom level (syncs with lerp-based targetZoom) */
   private kbSmoothZoom(delta: number): void {
-    const cam = this.cameras.main
-    const target = Phaser.Math.Clamp(cam.zoom + delta, 0.4, 2.0)
-    this.tweens.killTweensOf(cam)
-    this.tweens.add({
-      targets: cam,
-      zoom: target,
-      duration: KB_ZOOM_DURATION,
-      ease: 'Power2',
-    })
+    this.targetZoom = Phaser.Math.Clamp(this.targetZoom + delta, ZOOM_MIN, ZOOM_MAX)
+    this.followTarget = null
   }
 
-  /** Zoom camera to fit all rooms */
+  /** Zoom camera to fit all rooms (delegates to smooth zoomToFit) */
   private zoomToFitAll(): void {
-    if (this.rooms.size === 0) return
-
-    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
-    for (const room of this.rooms.values()) {
-      minX = Math.min(minX, room.x - room.width / 2)
-      minY = Math.min(minY, room.y - room.height / 2)
-      maxX = Math.max(maxX, room.x + room.width / 2)
-      maxY = Math.max(maxY, room.y + room.height / 2)
-    }
-
-    const contentW = maxX - minX + WORLD_MARGIN * 2
-    const contentH = maxY - minY + WORLD_MARGIN * 2
-    const zoomX = this.viewWidth / contentW
-    const zoomY = this.viewHeight / contentH
-    const targetZoom = Phaser.Math.Clamp(Math.min(zoomX, zoomY), 0.4, 2.0)
-
-    const centerX = (minX + maxX) / 2
-    const centerY = (minY + maxY) / 2
-
-    const cam = this.cameras.main
-    this.tweens.killTweensOf(cam)
-    this.tweens.add({
-      targets: cam,
-      zoom: targetZoom,
-      scrollX: centerX - this.viewWidth / (2 * targetZoom),
-      scrollY: centerY - this.viewHeight / (2 * targetZoom),
-      duration: KB_PAN_DURATION,
-      ease: 'Power2',
-    })
+    this.zoomToFit(true)
   }
 
-  /** Reset camera to the default position/zoom saved at create time */
+  /** Reset camera to the default position/zoom (uses lerp system) */
   private resetCamera(): void {
-    const cam = this.cameras.main
-    this.tweens.killTweensOf(cam)
-    this.tweens.add({
-      targets: cam,
-      scrollX: this.defaultCameraX,
-      scrollY: this.defaultCameraY,
-      zoom: this.defaultCameraZoom,
-      duration: KB_PAN_DURATION,
-      ease: 'Power2',
-    })
+    this.targetZoom = this.defaultCameraZoom
+    this.followTarget = {
+      x: this.defaultCameraX + this.viewWidth / (2 * this.defaultCameraZoom),
+      y: this.defaultCameraY + this.viewHeight / (2 * this.defaultCameraZoom),
+    }
     this.deselectAgent()
     this.stopAutoPan()
   }
@@ -1584,6 +1795,14 @@ export class OfficeScene extends Phaser.Scene {
     this.typingParticleTimer = null
     for (const p of this.typingParticlePool) { this.tweens.killTweensOf(p); p.destroy() }
     this.typingParticlePool = []
+
+    // Minimap cleanup
+    this.minimapGraphics?.destroy()
+    this.minimapViewport?.destroy()
+    this.minimapContainer?.destroy()
+    this.minimapGraphics = null
+    this.minimapViewport = null
+    this.minimapContainer = null
 
     // Keyboard selection cleanup
     this.stopAutoPan()
