@@ -99,6 +99,104 @@ function saveTasks(): void {
   }
 }
 
+// ── XP System ────────────────────────────────────────────────────────────────
+
+export interface AgentXP {
+  totalXP: number
+  level: number
+  rank: string
+  tasksCompleted: number
+  tasksFailed: number
+  currentStreak: number
+}
+
+const XP_PERSIST_PATH = path.join(DATA_DIR, 'agent-xp.json')
+
+const XP_RANKS = [
+  { level: 1,  title: 'Intern',        minXP: 0 },
+  { level: 2,  title: 'Junior',        minXP: 500 },
+  { level: 3,  title: 'Associate',    minXP: 1500 },
+  { level: 4,  title: 'Agent',         minXP: 3500 },
+  { level: 5,  title: 'Senior',        minXP: 7000 },
+  { level: 6,  title: 'Lead',          minXP: 12000 },
+  { level: 7,  title: 'Expert',        minXP: 20000 },
+  { level: 8,  title: 'Master',        minXP: 35000 },
+  { level: 9,  title: 'Grandmaster',    minXP: 55000 },
+  { level: 10, title: 'Legend',        minXP: 85000 },
+]
+
+const PRIORITY_XP = { critical: 300, high: 150, normal: 100, low: 50 }
+
+function loadAgentXP(): Record<string, AgentXP> {
+  try {
+    if (fs.existsSync(XP_PERSIST_PATH)) {
+      return JSON.parse(fs.readFileSync(XP_PERSIST_PATH, 'utf-8'))
+    }
+  } catch (err) {
+    console.error('[orchestrator] Failed to load XP:', err)
+  }
+  return {}
+}
+
+function saveAgentXP(xpData: Record<string, AgentXP>): void {
+  try {
+    if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true })
+    fs.writeFileSync(XP_PERSIST_PATH, JSON.stringify(xpData, null, 2))
+  } catch (err) {
+    console.error('[orchestrator] Failed to save XP:', err)
+  }
+}
+
+function getRankForXP(xp: number): { level: number; title: string } {
+  for (let i = XP_RANKS.length - 1; i >= 0; i--) {
+    if (xp >= XP_RANKS[i].minXP) {
+      return { level: XP_RANKS[i].level, title: XP_RANKS[i].title }
+    }
+  }
+  return { level: 1, title: 'Intern' }
+}
+
+function calculateTaskXP(task: Task): number {
+  const baseXP = task.status === 'completed' ? PRIORITY_XP[task.priority] : -25
+  return baseXP
+}
+
+const agentXPData = loadAgentXP()
+
+function awardXP(agentId: string, xp: number, taskStatus: 'completed' | 'failed'): AgentXP {
+  let data = agentXPData[agentId]
+  if (!data) {
+    data = { totalXP: 0, level: 1, rank: 'Intern', tasksCompleted: 0, tasksFailed: 0, currentStreak: 0 }
+  }
+
+  if (taskStatus === 'completed') {
+    data.tasksCompleted++
+    data.currentStreak++
+    data.totalXP = Math.max(0, data.totalXP + xp)
+  } else {
+    data.tasksFailed++
+    data.currentStreak = 0
+    data.totalXP = Math.max(0, data.totalXP + xp)
+  }
+
+  const rank = getRankForXP(data.totalXP)
+  data.level = rank.level
+  data.rank = rank.title
+
+  agentXPData[agentId] = data
+  saveAgentXP(agentXPData)
+
+  return data
+}
+
+export function getAgentXP(agentId: string): AgentXP | null {
+  return agentXPData[agentId] || null
+}
+
+export function getAllAgentXP(): Record<string, AgentXP> {
+  return { ...agentXPData }
+}
+
 // ── State ───────────────────────────────────────────────────────────────────
 
 const tasks: Task[] = []
@@ -400,6 +498,14 @@ async function monitorActiveTasks(): Promise<void> {
         task.status = 'completed'
         task.completedAt = Date.now()
         task.result = 'Task completed'
+        
+        // Award XP for completed task
+        if (task.assignedAgent) {
+          const xpEarned = calculateTaskXP(task)
+          const newXP = awardXP(task.assignedAgent, xpEarned, 'completed')
+          orchestratorEvents.emit('xp-awarded', { agentId: task.assignedAgent, xp: newXP })
+        }
+        
         saveTasks()
         orchestratorEvents.emit('task-updated', task)
         console.log(`[orchestrator] Task ${task.id} completed`)
@@ -427,6 +533,13 @@ async function monitorActiveTasks(): Promise<void> {
             task.status = 'failed'
             task.error = 'Agent process died and max retries exhausted'
             task.completedAt = Date.now()
+            
+            // Award XP penalty for failed task
+            if (task.assignedAgent) {
+              const newXP = awardXP(task.assignedAgent, -25, 'failed')
+              orchestratorEvents.emit('xp-awarded', { agentId: task.assignedAgent, xp: newXP })
+            }
+            
             saveTasks()
             orchestratorEvents.emit('task-updated', task)
           }

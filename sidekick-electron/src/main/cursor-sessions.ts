@@ -44,18 +44,31 @@ interface AgentProcess {
 async function findCursorAgentProcesses(): Promise<AgentProcess[]> {
   const agents: AgentProcess[] = []
   try {
-    const { stdout } = await execAsync(
-      `ps -eo pid,tty,%cpu,rss,command 2>/dev/null | grep 'cursor-agent' | grep -v grep | grep -v 'worker-server'`,
-    )
-    
-    for (const line of stdout.trim().split('\n')) {
+    // Avoid grep pipelines and force wide output so long commands are not
+    // truncated (which can hide "cursor-agent" from matching).
+    const { stdout } = await execAsync(`ps -ww -eo pid,tty,%cpu,rss,command 2>/dev/null`)
+    const lines = stdout.trim().split('\n')
+
+    // Skip header row.
+    for (const line of lines.slice(1)) {
       if (!line.trim()) continue
       const parts = line.trim().split(/\s+/)
+      if (parts.length < 5) continue
+
       const pid = parseInt(parts[0], 10)
       const tty = parts[1] || ''
       const cpu = `${parseFloat(parts[2] || '0').toFixed(1)}%`
       const memoryMB = Math.round(parseInt(parts[3] || '0', 10) / 1024)
       if (isNaN(pid) || pid <= 0) continue
+      const command = parts.slice(4).join(' ')
+
+      // Cursor agents are launched via ~/.local/bin/agent and point at the
+      // cursor-agent runtime path. Exclude worker child processes.
+      const isCursorTopLevel =
+        command.includes('/.local/bin/agent') &&
+        command.includes('cursor-agent') &&
+        !command.includes('worker-server')
+      if (!isCursorTopLevel) continue
 
       let cwd = ''
       try {

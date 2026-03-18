@@ -31,6 +31,7 @@ contextBridge.exposeInMainWorld('api', {
   getSessionConversation: (sessionId: string, source?: string) => ipcRenderer.invoke('sessions:conversation', sessionId, source),
   sendToSession: (tty: string, message: string) => ipcRenderer.invoke('sessions:send', tty, message),
   focusSession: (tty: string) => ipcRenderer.invoke('sessions:focus', tty),
+  focusSessionByName: (name: string, cwd?: string) => ipcRenderer.invoke('sessions:focus-by-name', name, cwd),
   createNewSession: (cwd: string) => ipcRenderer.invoke('sessions:create', cwd),
   broadcastToSessions: (message: string) => ipcRenderer.invoke('sessions:broadcast', message),
   getGraphStats: () => ipcRenderer.invoke('graph:stats'),
@@ -97,6 +98,7 @@ contextBridge.exposeInMainWorld('api', {
   orchestratorAgentHealth: () => ipcRenderer.invoke('orchestrator:agent-health'),
   orchestratorShutdownAgent: (agentId: string) => ipcRenderer.invoke('orchestrator:shutdown-agent', agentId),
   orchestratorStats: () => ipcRenderer.invoke('orchestrator:stats'),
+  orchestratorXP: () => ipcRenderer.invoke('orchestrator:xp'),
   // Opencode Sessions
   getOpencodeSessions: () => ipcRenderer.invoke('opencode:sessions'),
 })

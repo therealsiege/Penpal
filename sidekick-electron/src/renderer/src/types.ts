@@ -189,6 +189,42 @@ export interface AgentState {
   isSubAgent?: boolean
   subAgents?: AgentState[]
   subAgentInvocations?: SubAgentInvocation[]
+  xp?: AgentXP
+}
+
+export interface AgentXP {
+  totalXP: number
+  level: number
+  rank: string
+  tasksCompleted: number
+  tasksFailed: number
+  currentStreak: number
+}
+
+export const XP_RANKS = [
+  { level: 1,  title: 'Intern',        minXP: 0 },
+  { level: 2,  title: 'Junior',        minXP: 500 },
+  { level: 3,  title: 'Associate',     minXP: 1500 },
+  { level: 4,  title: 'Agent',        minXP: 3500 },
+  { level: 5,  title: 'Senior',       minXP: 7000 },
+  { level: 6,  title: 'Lead',          minXP: 12000 },
+  { level: 7,  title: 'Expert',        minXP: 20000 },
+  { level: 8,  title: 'Master',        minXP: 35000 },
+  { level: 9,  title: 'Grandmaster',   minXP: 55000 },
+  { level: 10, title: 'Legend',        minXP: 85000 },
+] as const
+
+export function getXPForLevel(level: number): number {
+  return XP_RANKS.find(r => r.level === level)?.minXP ?? 0
+}
+
+export function getRankForXP(xp: number): { level: number; title: string } {
+  for (let i = XP_RANKS.length - 1; i >= 0; i--) {
+    if (xp >= XP_RANKS[i].minXP) {
+      return { level: XP_RANKS[i].level, title: XP_RANKS[i].title }
+    }
+  }
+  return { level: 1, title: 'Intern' }
 }
 
 export interface LeadDetail {

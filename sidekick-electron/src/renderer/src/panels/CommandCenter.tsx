@@ -3,7 +3,7 @@ import { usePolling } from '../hooks/usePolling'
 import { AgentAvatar } from '../components/AgentAvatar'
 import { useToast } from '../components/Toast'
 import { Terminal } from '../components/Terminal'
-import type { AgentConfig, AgentState, HealthResult, HotLead, JobStatus, TripletWorkflow, TripletPreset, ProjectLeaderboardEntry, OpencodeSession } from '../types'
+import type { AgentConfig, AgentState, HealthResult, HotLead, JobStatus, TripletWorkflow, TripletPreset, ProjectLeaderboardEntry, OpencodeSession, AgentXP, getRankForXP } from '../types'
 import { TripletLauncherModal, TripletStatusModal, TripletListModal } from '../components/TripletModal'
 import { OrchestratorModal } from '../components/OrchestratorModal'
 import { createOfficeGame } from '../game/OfficeGame'
@@ -722,80 +722,209 @@ function buildProjectLeaderboard(agents: AgentState[]): ProjectLeaderboardEntry[
   return [...byDir.values()].sort((a, b) => b.totalMemoryMB - a.totalMemoryMB)
 }
 
-function LeaderboardModal({ agents, onClose }: {
+function getRankBadge(level: number): string {
+  if (level >= 9) return '👑'
+  if (level >= 7) return '⭐'
+  if (level >= 5) return '💫'
+  if (level >= 3) return '✨'
+  return '💧'
+}
+
+function getRankColor(level: number): string {
+  if (level >= 9) return 'text-amber-400'
+  if (level >= 7) return 'text-purple-400'
+  if (level >= 5) return 'text-blue-400'
+  if (level >= 3) return 'text-green-400'
+  return 'text-slate-400'
+}
+
+function LeaderboardModal({ agents, xpData, onClose }: {
   agents: AgentState[]
+  xpData: Record<string, AgentXP> | undefined
   onClose: () => void
 }) {
-  const entries = buildProjectLeaderboard(agents)
-  const totalMem = entries.reduce((s, e) => s + e.totalMemoryMB, 0)
-  const totalCpu = entries.reduce((s, e) => s + e.totalCpu, 0)
+  // Build XP-based leaderboard from agents merged with XP data
+  const xpEntries = agents
+    .filter(a => {
+      const xp = xpData?.[a.config.id]
+      return xp && xp.totalXP > 0
+    })
+    .map(a => ({
+      agentId: a.config.id,
+      name: a.config.name,
+      project: a.cwd?.split('/').pop() || 'unknown',
+      xp: xpData![a.config.id],
+    }))
+    .sort((a, b) => b.xp.totalXP - a.xp.totalXP)
+
+  const totalXP = xpEntries.reduce((s, e) => s + e.xp.totalXP, 0)
+  const totalTasks = xpEntries.reduce((s, e) => s + e.xp.tasksCompleted, 0)
+
+  // Also build resource leaderboard as fallback
+  const resourceEntries = buildProjectLeaderboard(agents)
+  const totalMem = resourceEntries.reduce((s, e) => s + e.totalMemoryMB, 0)
+
+  const [viewMode, setViewMode] = useState<'xp' | 'resources'>('xp')
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={onClose}>
-      <div className="bg-slate-900 border border-slate-700 rounded-xl p-5 w-[540px] shadow-2xl max-h-[70vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+      <div className="bg-slate-900 border border-slate-700 rounded-xl p-5 w-[560px] shadow-2xl max-h-[75vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-3">
-          <h3 className="text-[15px] font-bold text-white">Resource Leaderboard</h3>
+          <div className="flex items-center gap-3">
+            <h3 className="text-[15px] font-bold text-white">Leaderboard</h3>
+            <div className="flex rounded-lg bg-slate-800 p-0.5">
+              <button
+                onClick={() => setViewMode('xp')}
+                className={`px-2 py-0.5 text-[10px] rounded ${viewMode === 'xp' ? 'bg-slate-700 text-white' : 'text-slate-500'}`}
+              >
+                XP
+              </button>
+              <button
+                onClick={() => setViewMode('resources')}
+                className={`px-2 py-0.5 text-[10px] rounded ${viewMode === 'resources' ? 'bg-slate-700 text-white' : 'text-slate-500'}`}
+              >
+                Resources
+              </button>
+            </div>
+          </div>
           <button onClick={onClose} className="text-slate-500 hover:text-slate-300 text-lg">x</button>
         </div>
 
-        {/* Totals bar */}
+        {/* Stats bar */}
         <div className="flex items-center gap-4 mb-4 px-3 py-2 bg-slate-800/50 rounded-lg border border-slate-700/50 text-[12px] text-slate-400">
-          <span>{entries.length} project{entries.length !== 1 ? 's' : ''}</span>
-          <span>{entries.reduce((s, e) => s + e.agentCount, 0)} agent{entries.reduce((s, e) => s + e.agentCount, 0) !== 1 ? 's' : ''}</span>
-          <span>{totalMem.toLocaleString()} MB</span>
-          <span>{totalCpu.toFixed(1)}% CPU</span>
+          {viewMode === 'xp' ? (
+            <>
+              <span>{xpEntries.length} agent{xpEntries.length !== 1 ? 's' : ''}</span>
+              <span>{totalXP.toLocaleString()} Total XP</span>
+              <span>{totalTasks} Tasks</span>
+            </>
+          ) : (
+            <>
+              <span>{resourceEntries.length} project{resourceEntries.length !== 1 ? 's' : ''}</span>
+              <span>{resourceEntries.reduce((s, e) => s + e.agentCount, 0)} agents</span>
+              <span>{totalMem.toLocaleString()} MB</span>
+            </>
+          )}
         </div>
 
-        {entries.length === 0 ? (
-          <p className="text-[13px] text-slate-500 text-center py-8">No active sessions.</p>
-        ) : (
-          <div className="flex flex-col gap-2">
-            {entries.map((entry, idx) => {
-              const memPct = totalMem > 0 ? (entry.totalMemoryMB / totalMem) * 100 : 0
-              return (
-                <div key={entry.directory} className={`p-3 rounded-lg border transition-all ${
-                  idx === 0 ? 'bg-amber-900/15 border-amber-700/40' :
-                  idx === 1 ? 'bg-slate-800/60 border-slate-600/40' :
-                  idx === 2 ? 'bg-orange-900/10 border-orange-800/30' :
+        {viewMode === 'xp' ? (
+          /* XP Leaderboard */
+          xpEntries.length === 0 ? (
+            <div className="text-center py-8">
+              <p className="text-[13px] text-slate-500 mb-2">No XP data yet</p>
+              <p className="text-[11px] text-slate-600">Complete tasks to earn XP and climb the ranks</p>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-2">
+              {xpEntries.map((entry, idx) => (
+                <div key={entry.agentId} className={`p-3 rounded-lg border transition-all ${
+                  idx === 0 ? 'bg-amber-900/20 border-amber-700/50' :
+                  idx === 1 ? 'bg-slate-800/60 border-slate-600/50' :
+                  idx === 2 ? 'bg-orange-900/15 border-orange-800/40' :
                   'bg-slate-800/30 border-slate-700/30'
                 }`}>
                   <div className="flex items-center gap-3">
-                    <span className="text-lg w-8 text-center font-bold shrink-0" style={{ fontFamily: 'Monogram, monospace' }}>
+                    <span className={`text-lg w-8 text-center font-bold ${idx === 0 ? 'text-amber-400' : 'text-slate-500'}`}>
                       {idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : `#${idx + 1}`}
                     </span>
                     <div className="flex-1 min-w-0">
-                      <p className="text-[13px] font-semibold text-slate-200 truncate">{entry.projectName}</p>
-                      <p className="text-[10px] text-slate-500 truncate">{entry.directory}</p>
+                      <div className="flex items-center gap-2">
+                        <p className="text-[13px] font-semibold text-slate-200 truncate">{entry.name}</p>
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded ${getRankColor(entry.xp.level)} bg-slate-800/80`}>
+                          {getRankBadge(entry.xp.level)} Lv.{entry.xp.level} {entry.xp.rank}
+                        </span>
+                      </div>
+                      <p className="text-[10px] text-slate-500 truncate">{entry.project}</p>
                     </div>
                     <div className="text-right shrink-0">
-                      <p className="text-[13px] font-bold text-amber-400">{entry.totalMemoryMB.toLocaleString()} MB</p>
-                      <p className="text-[10px] text-slate-500">{entry.totalCpu.toFixed(1)}% CPU</p>
+                      <p className={`text-[14px] font-bold ${idx === 0 ? 'text-amber-400' : 'text-slate-300'}`}>
+                        {entry.xp.totalXP.toLocaleString()}
+                      </p>
+                      <p className="text-[10px] text-slate-500">XP</p>
                     </div>
                   </div>
 
-                  {/* Memory proportion bar */}
-                  <div className="mt-2 h-1.5 bg-slate-800 rounded-full overflow-hidden">
-                    <div
-                      className="h-full rounded-full bg-gradient-to-r from-amber-500 to-orange-500"
-                      style={{ width: `${Math.max(memPct, 2)}%` }}
-                    />
+                  {/* Progress bar to next level */}
+                  <div className="mt-2 flex items-center gap-2">
+                    <div className="flex-1 h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                      <div
+                        className={`h-full rounded-full ${
+                          entry.xp.level >= 9 ? 'bg-amber-500' :
+                          entry.xp.level >= 7 ? 'bg-purple-500' :
+                          entry.xp.level >= 5 ? 'bg-blue-500' :
+                          entry.xp.level >= 3 ? 'bg-green-500' :
+                          'bg-cyan-500'
+                        }`}
+                        style={{ width: `${Math.min(100, (entry.xp.totalXP % 1000) / 10)}%` }}
+                      />
+                    </div>
+                    <span className="text-[9px] text-slate-600 w-16 text-right">
+                      {entry.xp.tasksCompleted} tasks
+                    </span>
                   </div>
 
-                  {/* Agent breakdown */}
-                  <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1">
-                    {entry.agents.map((a, i) => (
-                      <span key={i} className="text-[10px] text-slate-400 flex items-center gap-1">
-                        <span className={`w-1.5 h-1.5 rounded-full ${a.status === 'active' ? 'bg-emerald-400' : 'bg-slate-600'}`} />
-                        {a.name}
-                        <span className="text-slate-600">{a.memoryMB}MB</span>
-                        <span className="text-slate-600">{a.uptime}</span>
-                      </span>
-                    ))}
-                  </div>
+                  {/* Streak indicator */}
+                  {entry.xp.currentStreak > 0 && (
+                    <div className="mt-1 text-[9px] text-amber-500/70">
+                      🔥 {entry.xp.currentStreak} task streak
+                    </div>
+                  )}
                 </div>
-              )
-            })}
-          </div>
+              ))}
+            </div>
+          )
+        ) : (
+          /* Resource Leaderboard (original) */
+          resourceEntries.length === 0 ? (
+            <p className="text-[13px] text-slate-500 text-center py-8">No active sessions.</p>
+          ) : (
+            <div className="flex flex-col gap-2">
+              {resourceEntries.map((entry, idx) => {
+                const memPct = totalMem > 0 ? (entry.totalMemoryMB / totalMem) * 100 : 0
+                return (
+                  <div key={entry.directory} className={`p-3 rounded-lg border transition-all ${
+                    idx === 0 ? 'bg-amber-900/15 border-amber-700/40' :
+                    idx === 1 ? 'bg-slate-800/60 border-slate-600/40' :
+                    idx === 2 ? 'bg-orange-900/10 border-orange-800/30' :
+                    'bg-slate-800/30 border-slate-700/30'
+                  }`}>
+                    <div className="flex items-center gap-3">
+                      <span className="text-lg w-8 text-center font-bold shrink-0" style={{ fontFamily: 'Monogram, monospace' }}>
+                        {idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : `#${idx + 1}`}
+                      </span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[13px] font-semibold text-slate-200 truncate">{entry.projectName}</p>
+                        <p className="text-[10px] text-slate-500 truncate">{entry.directory}</p>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <p className="text-[13px] font-bold text-amber-400">{entry.totalMemoryMB.toLocaleString()} MB</p>
+                        <p className="text-[10px] text-slate-500">{entry.totalCpu.toFixed(1)}% CPU</p>
+                      </div>
+                    </div>
+
+                    {/* Memory proportion bar */}
+                    <div className="mt-2 h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                      <div
+                        className="h-full rounded-full bg-gradient-to-r from-amber-500 to-orange-500"
+                        style={{ width: `${Math.max(memPct, 2)}%` }}
+                      />
+                    </div>
+
+                    {/* Agent breakdown */}
+                    <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1">
+                      {entry.agents.map((a, i) => (
+                        <span key={i} className="text-[10px] text-slate-400 flex items-center gap-1">
+                          <span className={`w-1.5 h-1.5 rounded-full ${a.status === 'active' ? 'bg-emerald-400' : 'bg-slate-600'}`} />
+                          {a.name}
+                          <span className="text-slate-600">{a.memoryMB}MB</span>
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )
         )}
       </div>
     </div>
@@ -826,6 +955,10 @@ export function CommandCenter(props: CommandCenterProps) {
   const { data: schedulerJobs } = usePolling<JobStatus[]>(
     () => window.api.getSchedulerStatus().catch(() => []),
     30000,
+  )
+  const { data: xpData } = usePolling<Record<string, AgentXP>>(
+    () => window.api.orchestratorXP().catch(() => ({})),
+    10000,
   )
 
 
@@ -859,6 +992,9 @@ export function CommandCenter(props: CommandCenterProps) {
   const [showTripletList, setShowTripletList] = useState(false)
   const [viewingTriplet, setViewingTriplet] = useState<TripletWorkflow | null>(null)
   const [tripletPresets, setTripletPresets] = useState<TripletPreset[]>([])
+  const [smokeCheckRunning, setSmokeCheckRunning] = useState(false)
+  const [compactLayoutEnabled, setCompactLayoutEnabled] = useState(true)
+  const [overviewZoomEnabled, setOverviewZoomEnabled] = useState(false)
 
   // Load triplet presets once
   useEffect(() => {
@@ -894,12 +1030,52 @@ export function CommandCenter(props: CommandCenterProps) {
     }
   }, [])
 
+  useEffect(() => {
+    sceneRef.current?.setCompactLayout(compactLayoutEnabled)
+  }, [compactLayoutEnabled])
+
+  useEffect(() => {
+    sceneRef.current?.setOverviewZoomEnabled(overviewZoomEnabled)
+  }, [overviewZoomEnabled])
+
   // --- Push agent data into Phaser scene ---
   useEffect(() => {
     if (sceneRef.current && agentStatuses) {
       sceneRef.current.setAgents(agentStatuses, opencodeSessions)
     }
   }, [agentStatuses, opencodeSessions])
+
+  const isCursorState = useCallback(
+    (state: AgentState) =>
+      state.config.model === 'cursor-agent' || state.config.id.startsWith('cursor-'),
+    [],
+  )
+
+  const focusAgentFromState = useCallback(
+    async (agentState: AgentState): Promise<boolean> => {
+      if (isCursorState(agentState)) {
+        const cursorResult = await window.api.focusCursorIDE().catch(() => ({ success: false }))
+        if (cursorResult?.success) return true
+      }
+
+      if (agentState.tty) {
+        const ttyResult = await window.api.focusSession(agentState.tty).catch(() => ({ success: false }))
+        if (ttyResult?.success) return true
+      }
+
+      const isConfiguredAgent = allConfigs.some(cfg => cfg.id === agentState.config.id)
+      if (isConfiguredAgent) {
+        const idResult = await window.api.focusAgent(agentState.config.id).catch(() => ({ success: false }))
+        if (idResult?.success) return true
+      }
+
+      const nameResult = await window.api
+        .focusSessionByName(agentState.config.name, agentState.cwd)
+        .catch(() => ({ success: false }))
+      return !!nameResult?.success
+    },
+    [allConfigs, isCursorState],
+  )
 
   // --- Push triplet workflow data into Phaser scene for connecting lines (Fix 11) ---
   useEffect(() => {
@@ -921,9 +1097,11 @@ export function CommandCenter(props: CommandCenterProps) {
   useEffect(() => {
     const handleAgentClicked = (_id: unknown, state: unknown) => {
       const agentState = state as AgentState
-      if (agentState.tty) {
-        window.api.focusSession(agentState.tty).catch(() => {})
-      }
+      void focusAgentFromState(agentState).then((focused) => {
+        if (!focused) {
+          toast(`Couldn't focus ${agentState.config.name}`, 'error')
+        }
+      })
     }
     const handleAgentDoubleClicked = (_id: unknown, state: unknown) => {
       setActionAgent(state as AgentState)
@@ -941,11 +1119,13 @@ export function CommandCenter(props: CommandCenterProps) {
       EventBus.off(EVENTS.AGENT_DOUBLE_CLICKED, handleAgentDoubleClicked)
       EventBus.off(EVENTS.ADD_WORKER_CLICKED, handleAddWorker)
     }
-  }, [])
+  }, [focusAgentFromState, toast])
 
   // --- Derived data ---
   const agents = agentStatuses ?? []
-
+  const cursorAgentCount = agents.filter(a => a.config.model === 'cursor-agent').length
+  const claudeAgentCount = agents.length - cursorAgentCount
+  const openCodeAgentCount = (opencodeSessions ?? []).length
   const activeAgentCount = agents.filter(a => a.status === 'active' || a.needsInteraction).length
 
   const enabledJobs = (schedulerJobs ?? []).filter(j => j.enabled)
@@ -999,17 +1179,17 @@ export function CommandCenter(props: CommandCenterProps) {
   const handleFocusiTerm = useCallback(
     async (state: AgentState) => {
       try {
-        if (state.tty) {
-          await window.api.focusSession(state.tty)
-        } else {
-          await window.api.focusAgent(state.config.id)
+        const focused = await focusAgentFromState(state)
+        if (!focused) {
+          toast(`Couldn't focus ${state.config.name}`, 'error')
+          return
         }
         setActionAgent(null)
       } catch {
         toast('Failed to focus', 'error')
       }
     },
-    [toast],
+    [focusAgentFromState, toast],
   )
 
   const handleLaunchAgent = useCallback(
@@ -1071,6 +1251,60 @@ export function CommandCenter(props: CommandCenterProps) {
     setShareSource(null)
   }, [toast])
 
+  const runOfficeSmokeCheck = useCallback(async () => {
+    if (smokeCheckRunning) return
+    setSmokeCheckRunning(true)
+    try {
+      const scene = sceneRef.current
+      if (!scene) {
+        toast('Office smoke failed: scene unavailable', 'error')
+        return
+      }
+
+      const before = scene.getDebugSnapshot()
+      const issues: string[] = []
+      const liveAgents = agentStatuses ?? []
+      const expectedDesks = liveAgents.length + (opencodeSessions?.length ?? 0)
+
+      if (!before.ready) issues.push('scene not ready')
+      if (expectedDesks > 0 && before.workstationCount === 0) issues.push('no desks rendered')
+      if (expectedDesks > 0 && before.workstationCount < expectedDesks) {
+        issues.push(`desks ${before.workstationCount}/${expectedDesks}`)
+      }
+
+      const hasFocusableAgent = liveAgents.some(a =>
+        isCursorState(a) ||
+        !!a.tty ||
+        allConfigs.some(cfg => cfg.id === a.config.id) ||
+        !!a.config.name,
+      )
+      if (liveAgents.length > 0 && !hasFocusableAgent) {
+        issues.push('no focus route candidates')
+      }
+
+      await new Promise(resolve => setTimeout(resolve, 320))
+      const after = scene.getDebugSnapshot()
+      const drift = Math.hypot(
+        after.camera.scrollX - before.camera.scrollX,
+        after.camera.scrollY - before.camera.scrollY,
+      )
+      if (drift > 2) issues.push(`camera drift ${drift.toFixed(1)}px`)
+      if (Math.abs(after.camera.zoom - before.camera.zoom) > 0.02) {
+        issues.push('camera zoom changed')
+      }
+
+      if (issues.length > 0) {
+        toast(`Office smoke failed: ${issues.join(' | ')}`, 'error')
+      } else {
+        toast(`Office smoke ok: ${before.roomCount} rooms, ${before.workstationCount} desks`, 'success')
+      }
+    } catch {
+      toast('Office smoke failed unexpectedly', 'error')
+    } finally {
+      setSmokeCheckRunning(false)
+    }
+  }, [agentStatuses, allConfigs, isCursorState, opencodeSessions, smokeCheckRunning, toast])
+
   // --- Health dot ---
   const healthColor =
     health?.overall === 'healthy'
@@ -1123,6 +1357,12 @@ export function CommandCenter(props: CommandCenterProps) {
             <span className="text-[13px] font-semibold text-slate-300">
               {activeAgentCount}/{agents.length}
             </span>
+            <span
+              className="text-[10px] text-slate-500 font-mono"
+              title={`Claude ${claudeAgentCount} | Cursor ${cursorAgentCount} | OpenCode ${openCodeAgentCount}`}
+            >
+              C{claudeAgentCount} Cu{cursorAgentCount} O{openCodeAgentCount}
+            </span>
           </div>
 
           {/* Clock */}
@@ -1164,6 +1404,38 @@ export function CommandCenter(props: CommandCenterProps) {
               )}
             </button>
           )}
+
+          <button
+            onClick={() => setCompactLayoutEnabled(v => !v)}
+            className={`flex items-center gap-1 px-2.5 py-1 border rounded-md text-[13px] transition-colors ${
+              compactLayoutEnabled
+                ? 'bg-cyan-600/20 hover:bg-cyan-600/30 border-cyan-500/30 text-cyan-300'
+                : 'bg-slate-800 hover:bg-slate-700 border-slate-700 text-slate-400'
+            }`}
+            title="Toggle compact team-area packing"
+          >
+            {compactLayoutEnabled ? 'Compact On' : 'Compact Off'}
+          </button>
+
+          <button
+            onClick={() => setOverviewZoomEnabled(v => !v)}
+            className={`flex items-center gap-1 px-2.5 py-1 border rounded-md text-[13px] transition-colors ${
+              overviewZoomEnabled
+                ? 'bg-violet-600/20 hover:bg-violet-600/30 border-violet-500/30 text-violet-300'
+                : 'bg-slate-800 hover:bg-slate-700 border-slate-700 text-slate-400'
+            }`}
+            title="Allow lower minimum zoom for overview mode"
+          >
+            {overviewZoomEnabled ? 'Overview On' : 'Overview Off'}
+          </button>
+
+          <button
+            onClick={() => { void runOfficeSmokeCheck() }}
+            disabled={smokeCheckRunning}
+            className="flex items-center gap-1 px-2.5 py-1 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-md text-slate-400 text-[13px] transition-colors disabled:opacity-50 disabled:cursor-default"
+          >
+            {smokeCheckRunning ? 'Checking...' : 'Smoke'}
+          </button>
 
           {/* Leaderboard button */}
           <button
@@ -1296,6 +1568,7 @@ export function CommandCenter(props: CommandCenterProps) {
       {showLeaderboard && (
         <LeaderboardModal
           agents={agentStatuses ?? []}
+          xpData={xpData}
           onClose={() => setShowLeaderboard(false)}
         />
       )}
