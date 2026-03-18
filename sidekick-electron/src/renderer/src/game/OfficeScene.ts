@@ -2,6 +2,12 @@ import Phaser from 'phaser'
 import { EventBus, EVENTS } from './events'
 import type { AgentState } from '../types'
 
+// Keyboard shortcut constants
+const KB_ZOOM_STEP = 0.15
+const KB_ZOOM_DURATION = 200
+const KB_PAN_DURATION = 400
+const KB_AUTO_PAN_INTERVAL = 3000
+
 // ---------------------------------------------------------------------------
 // Spritesheet constants
 // ---------------------------------------------------------------------------
@@ -50,14 +56,22 @@ const WS_DOT_GAP    = 4
 
 // Colors
 const COLOR_BG          = 0x111827
-const COLOR_ROOM_FLOOR  = 0x94a3b8
-const COLOR_ROOM_FLOOR2 = 0x8b97a8
-const COLOR_WALL        = 0xcbd5e1
-const COLOR_WALL_INNER  = 0xe2e8f0
+const COLOR_ROOM_FLOOR  = 0x1e293b
+const COLOR_ROOM_FLOOR2 = 0x334155
+const COLOR_WALL        = 0x334155
+const COLOR_WALL_INNER  = 0x475569
 const COLOR_DESK_BODY   = 0x475569
 const COLOR_DESK_TOP    = 0x64748b
-const COLOR_HEADER_BG   = 0x1e293b
+const COLOR_HEADER_BG   = 0x0f172a
 const COLOR_DOOR_FRAME  = 0x3b82f6
+const COLOR_POD_EDGE    = 0x64748b
+const COLOR_POD_GROOVE  = 0x0f172a
+const COLOR_VIGNETTE    = 0x000000
+const COLOR_DOOR_FILL   = 0x0f172a
+const COLOR_DOOR_ACCENT = 0x3b82f6
+const COLOR_LED_GREEN   = 0x34d399
+const COLOR_LED_AMBER   = 0xfbbf24
+const COLOR_LED_GRAY    = 0x64748b
 
 const WORLD_MARGIN   = 60
 
@@ -89,7 +103,9 @@ interface WorkstationSprite {
   typingTween?: Phaser.Tweens.Tween
   headTiltTween?: Phaser.Tweens.Tween
   pulseTween?: Phaser.Tweens.Tween
+  steamTweens?: Phaser.Tweens.Tween[]
   lastAnimMode?: 'idle' | 'working' | 'waiting'
+  lastStateFingerprint?: string
 }
 
 interface Room {
@@ -105,6 +121,9 @@ interface Room {
   floorGraphics: Phaser.GameObjects.Graphics
   activityBar: Phaser.GameObjects.Rectangle
   activityBarTween: Phaser.Tweens.Tween | null
+  statusLed: Phaser.GameObjects.Arc
+  statusLedGlow: Phaser.GameObjects.Arc
+  statusLedTween: Phaser.Tweens.Tween | null
 }
 
 // ---------------------------------------------------------------------------
@@ -143,6 +162,8 @@ export class OfficeScene extends Phaser.Scene {
   // Office background (standalone, not a container)
   private officeGraphics: Phaser.GameObjects.Graphics | null = null
   private officeDecoSprites: Phaser.GameObjects.Sprite[] = []
+  private lastOfficeBgW = 0
+  private lastOfficeBgH = 0
 
   // Typing spark particles
   private typingParticlePool: Phaser.GameObjects.Arc[] = []
@@ -151,6 +172,21 @@ export class OfficeScene extends Phaser.Scene {
   // Hover tooltip
   private tooltipText: Phaser.GameObjects.Text | null = null
   private tooltipBg: Phaser.GameObjects.Rectangle | null = null
+
+  // Keyboard selection state
+  private selectedAgentIndex = -1
+  private selectionRing: Phaser.GameObjects.Graphics | null = null
+  private selectionRingTween: Phaser.Tweens.Tween | null = null
+
+  // Auto-pan (Space to cycle camera across agents)
+  private autoPanEnabled = false
+  private autoPanTimer: Phaser.Time.TimerEvent | null = null
+  private autoPanIndex = 0
+
+  // Default camera snapshot (for R reset)
+  private defaultCameraX = 0
+  private defaultCameraY = 0
+  private defaultCameraZoom = 1
 
   constructor() {
     super({ key: 'OfficeScene' })
@@ -219,6 +255,51 @@ export class OfficeScene extends Phaser.Scene {
         this.updateCameraBounds()
       }
     })
+
+    // Save default camera position for R reset
+    this.defaultCameraX = cam.scrollX
+    this.defaultCameraY = cam.scrollY
+    this.defaultCameraZoom = cam.zoom
+
+    // Selection ring graphic (drawn in world space, repositioned on select)
+    this.selectionRing = this.add.graphics().setDepth(9999)
+
+    // -----------------------------------------------------------------------
+    // Keyboard shortcuts -- use Phaser keyboard events so they don't leak to React
+    // -----------------------------------------------------------------------
+    if (this.input.keyboard) {
+      this.input.keyboard.on('keydown-TAB', (e: KeyboardEvent) => {
+        e.preventDefault()
+        this.cycleSelectedAgent(e.shiftKey ? -1 : 1)
+      })
+
+      this.input.keyboard.on('keydown-ENTER', (e: KeyboardEvent) => {
+        e.preventDefault()
+        this.confirmSelectedAgent()
+      })
+
+      this.input.keyboard.on('keydown-ESC', (e: KeyboardEvent) => {
+        e.preventDefault()
+        this.deselectAgent()
+        this.stopAutoPan()
+      })
+
+      this.input.keyboard.on('keydown-F', () => { this.zoomToFitAll() })
+      this.input.keyboard.on('keydown-R', () => { this.resetCamera() })
+      this.input.keyboard.on('keydown-SPACE', (e: KeyboardEvent) => {
+        e.preventDefault()
+        this.toggleAutoPan()
+      })
+
+      // +/= and - for zoom
+      this.input.keyboard.on('keydown-PLUS', () => { this.kbSmoothZoom(KB_ZOOM_STEP) })
+      this.input.keyboard.on('keydown-MINUS', () => { this.kbSmoothZoom(-KB_ZOOM_STEP) })
+
+      // Number keys 1-9: jump to agent by index
+      for (let n = 1; n <= 9; n++) {
+        this.input.keyboard.on(`keydown-${n}`, () => { this.selectAgentByIndex(n - 1) })
+      }
+    }
 
     this.isReady = true
     if (this.pendingAgents) {
@@ -321,6 +402,16 @@ export class OfficeScene extends Phaser.Scene {
     const activityBar = this.add.rectangle(-width / 2, height / 2 + 2, 0, 2, 0x34d399, 1).setOrigin(0, 0)
     container.add(activityBar)
 
+    // Status LED indicator (top-left of header, next to room name)
+    const ledWallT = 6
+    const ledWallI = 2
+    const ledX = -width / 2 + ledWallT + ledWallI + 10
+    const ledY = -height / 2 + ledWallT + ledWallI + ROOM_HEADER_H / 2
+    const statusLedGlow = this.add.circle(ledX, ledY, 6, COLOR_LED_GRAY, 0.15)
+    container.add(statusLedGlow)
+    const statusLed = this.add.circle(ledX, ledY, 3, COLOR_LED_GRAY, 1)
+    container.add(statusLed)
+
     const room: Room = {
       cwd, label, agents,
       x: 0, y: 0, width, height,
@@ -328,6 +419,7 @@ export class OfficeScene extends Phaser.Scene {
       workstations: new Map(),
       floorGraphics,
       activityBar, activityBarTween: null,
+      statusLed, statusLedGlow, statusLedTween: null,
     }
 
     this.drawRoomBackground(room)
@@ -349,6 +441,7 @@ export class OfficeScene extends Phaser.Scene {
 
   private destroyRoom(room: Room): void {
     if (room.activityBarTween) room.activityBarTween.destroy()
+    if (room.statusLedTween) room.statusLedTween.destroy()
     for (const ws of room.workstations.values()) {
       this.destroyWorkstation(ws)
     }
@@ -539,18 +632,19 @@ export class OfficeScene extends Phaser.Scene {
     const mugHandle = this.add.arc(25, WS_DESK_Y - 3, 2.5, 0, 180, false, 0x000000, 0).setStrokeStyle(1, 0x8b5cf6, 0.8)
     wsContainer.add(mugHandle)
 
-    // Coffee steam
+    // Coffee steam — store tweens so destroyWorkstation can clean them up
     const steamContainer = this.add.container(22, WS_DESK_Y - 7)
     wsContainer.add(steamContainer)
+    const steamTweens: Phaser.Tweens.Tween[] = []
     for (let i = 0; i < 3; i++) {
       const steam = this.add.circle((i - 1) * 2, 0, 1, 0xffffff, 0.15)
       steamContainer.add(steam)
-      this.tweens.add({
+      steamTweens.push(this.tweens.add({
         targets: steam, y: -8 - Math.random() * 4, alpha: 0,
         duration: 1500 + Math.random() * 800,
         delay: i * 500, yoyo: false, repeat: -1, ease: 'Sine.easeOut',
         onRepeat: () => { steam.y = 0; steam.setAlpha(0.15) },
-      })
+      }))
     }
 
     // Desk lamp
@@ -604,6 +698,7 @@ export class OfficeScene extends Phaser.Scene {
       deskBody, deskTop, monitorSprite, chairSprite,
       monitorGlowOverlay, screenLines, screenTween,
       thoughtBubble, thoughtBubbleText, thoughtBubbleBg, state: agent,
+      steamTweens,
     }
 
     let lastClickTime = 0
@@ -621,19 +716,20 @@ export class OfficeScene extends Phaser.Scene {
       this.tweens.killTweensOf(wsContainer)
       this.tweens.add({ targets: wsContainer, scaleX: 1.07, scaleY: 1.07, duration: 140, ease: 'Back.easeOut' })
       ws.deskBody.setStrokeStyle(2, 0x3b82f6, 0.9)
-      // Fix 11: Show backstory tooltip on hover
-      const backstory = (agent.config as { persona?: { backstory?: string } }).persona?.backstory
-      if (backstory) {
-        const worldX = room.container.x + wsContainer.x
-        const worldY = room.container.y + wsContainer.y - WORKSTATION_H / 2
-        this.showTooltip(worldX, worldY, backstory.slice(0, 150))
-      }
+      // Highlight ring around desk in world-space
+      const rWx = room.container.x + wsContainer.x
+      const rWy = room.container.y + wsContainer.y
+      this.drawHoverRing(rWx, rWy)
+      // Rich tooltip near pointer in screen-space
+      const ptr = this.input.activePointer
+      this.showRichTooltip(ws.state ?? agent, ptr.x, ptr.y)
     })
 
     hitArea.on('pointerout', () => {
       this.tweens.killTweensOf(wsContainer)
       this.tweens.add({ targets: wsContainer, scaleX: 1, scaleY: 1, duration: 140, ease: 'Power2' })
       this.restoreDeskStroke(ws)
+      this.clearHoverRing()
       this.hideTooltip()
     })
 
@@ -642,6 +738,13 @@ export class OfficeScene extends Phaser.Scene {
   }
 
   private updateWorkstation(ws: WorkstationSprite, agent: AgentState): void {
+    // Skip redundant updates — fingerprint the fields that affect visuals
+    const fp = `${agent.sessionMode}|${agent.needsInteraction}|${agent.interactionType}|${agent.config.name}`
+    if (ws.lastStateFingerprint === fp) {
+      ws.state = agent
+      return
+    }
+    ws.lastStateFingerprint = fp
     ws.state = agent
 
     const isCursor = this.isCursorAgent(agent)
@@ -744,6 +847,7 @@ export class OfficeScene extends Phaser.Scene {
     if (ws.monitorGlowTween) ws.monitorGlowTween.destroy()
     if (ws.screenTween)      ws.screenTween.destroy()
     if (ws.pulseTween)       ws.pulseTween.destroy()
+    if (ws.steamTweens) { for (const t of ws.steamTweens) t.destroy() }
     this.tweens.killTweensOf(ws.thoughtBubble)
     ws.container.destroy()
   }
@@ -823,6 +927,10 @@ export class OfficeScene extends Phaser.Scene {
   // ---------------------------------------------------------------------------
 
   private drawOfficeBackground(contentW: number, contentH: number): void {
+    if (contentW === this.lastOfficeBgW && contentH === this.lastOfficeBgH) return
+    this.lastOfficeBgW = contentW
+    this.lastOfficeBgH = contentH
+
     const g = this.officeGraphics
     if (!g) return
     g.clear()
@@ -920,7 +1028,7 @@ export class OfficeScene extends Phaser.Scene {
   // ---------------------------------------------------------------------------
 
   private initParticlePool(): void {
-    for (let i = 0; i < 40; i++) {
+    for (let i = 0; i < 80; i++) {
       const p = this.add.circle(0, 0, 2, 0xffffff, 0).setDepth(9998).setVisible(false)
       p.setData('busy', false)
       this.typingParticlePool.push(p)
@@ -954,7 +1062,7 @@ export class OfficeScene extends Phaser.Scene {
         if (ws.state.needsInteraction) continue
         const wx = room.x + ws.container.x
         const wy = room.y + ws.container.y + WS_DESK_Y
-        if (Math.random() < 0.5) this.spawnTypingParticle(wx, wy)
+        if (Math.random() < 0.3) this.spawnTypingParticle(wx, wy)
       }
     }
   }
@@ -1237,6 +1345,237 @@ export class OfficeScene extends Phaser.Scene {
   }
 
   // ---------------------------------------------------------------------------
+  // Keyboard navigation helpers
+  // ---------------------------------------------------------------------------
+
+  /** Get a flat, deterministic list of all agent IDs in room->workstation order */
+  private getFlatAgentIds(): string[] {
+    const ids: string[] = []
+    for (const room of this.rooms.values()) {
+      for (const id of room.workstations.keys()) {
+        ids.push(id)
+      }
+    }
+    return ids
+  }
+
+  /** Cycle selection forward (+1) or backward (-1) through agents */
+  private cycleSelectedAgent(dir: 1 | -1): void {
+    const ids = this.getFlatAgentIds()
+    if (ids.length === 0) return
+    if (this.selectedAgentIndex < 0 || this.selectedAgentIndex >= ids.length) {
+      this.selectedAgentIndex = dir === 1 ? 0 : ids.length - 1
+    } else {
+      this.selectedAgentIndex = (this.selectedAgentIndex + dir + ids.length) % ids.length
+    }
+    this.applySelection(ids)
+  }
+
+  /** Jump directly to agent at index (0-based) */
+  private selectAgentByIndex(index: number): void {
+    const ids = this.getFlatAgentIds()
+    if (index < 0 || index >= ids.length) return
+    this.selectedAgentIndex = index
+    this.applySelection(ids)
+  }
+
+  /** Apply the current selectedAgentIndex: draw ring + pan camera */
+  private applySelection(ids?: string[]): void {
+    const agentIds = ids ?? this.getFlatAgentIds()
+    if (this.selectedAgentIndex < 0 || this.selectedAgentIndex >= agentIds.length) {
+      this.clearSelectionRing()
+      return
+    }
+
+    const agentId = agentIds[this.selectedAgentIndex]
+    const pos = this.getWorkstationWorldPos(agentId)
+    if (!pos) { this.clearSelectionRing(); return }
+
+    this.drawSelectionRing(pos.x, pos.y)
+    this.kbPanCameraTo(pos.x, pos.y)
+  }
+
+  /** Emit AGENT_CLICKED for the currently selected agent */
+  private confirmSelectedAgent(): void {
+    const ids = this.getFlatAgentIds()
+    if (this.selectedAgentIndex < 0 || this.selectedAgentIndex >= ids.length) return
+    const agentId = ids[this.selectedAgentIndex]
+
+    // Find the agent state
+    for (const room of this.rooms.values()) {
+      const ws = room.workstations.get(agentId)
+      if (ws?.state) {
+        EventBus.emit(EVENTS.AGENT_CLICKED, agentId, ws.state)
+        return
+      }
+    }
+  }
+
+  /** Clear selection state */
+  private deselectAgent(): void {
+    this.selectedAgentIndex = -1
+    this.clearSelectionRing()
+    EventBus.emit(EVENTS.AGENT_DESELECTED)
+  }
+
+  /** Draw a pulsing blue ring at world coordinates */
+  private drawSelectionRing(wx: number, wy: number): void {
+    if (!this.selectionRing) return
+
+    // Kill existing ring tween
+    if (this.selectionRingTween) {
+      this.selectionRingTween.destroy()
+      this.selectionRingTween = null
+    }
+
+    const g = this.selectionRing
+    g.clear()
+    g.lineStyle(2.5, 0x3b82f6, 0.9)
+    g.strokeCircle(0, 0, 38)
+    g.lineStyle(1, 0x60a5fa, 0.4)
+    g.strokeCircle(0, 0, 42)
+    g.setPosition(wx, wy)
+    g.setVisible(true)
+    g.setAlpha(1)
+
+    // Pulse animation
+    this.selectionRingTween = this.tweens.add({
+      targets: g,
+      alpha: 0.45,
+      duration: 700,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
+    })
+  }
+
+  /** Remove the selection ring */
+  private clearSelectionRing(): void {
+    if (this.selectionRingTween) {
+      this.selectionRingTween.destroy()
+      this.selectionRingTween = null
+    }
+    this.selectionRing?.clear()
+    this.selectionRing?.setVisible(false)
+  }
+
+  /** Smoothly pan the camera to center on world coords */
+  private kbPanCameraTo(wx: number, wy: number): void {
+    const cam = this.cameras.main
+    this.tweens.killTweensOf(cam)
+    this.tweens.add({
+      targets: cam,
+      scrollX: wx - this.viewWidth / (2 * cam.zoom),
+      scrollY: wy - this.viewHeight / (2 * cam.zoom),
+      duration: KB_PAN_DURATION,
+      ease: 'Power2',
+    })
+  }
+
+  /** Smoothly adjust zoom level */
+  private kbSmoothZoom(delta: number): void {
+    const cam = this.cameras.main
+    const target = Phaser.Math.Clamp(cam.zoom + delta, 0.4, 2.0)
+    this.tweens.killTweensOf(cam)
+    this.tweens.add({
+      targets: cam,
+      zoom: target,
+      duration: KB_ZOOM_DURATION,
+      ease: 'Power2',
+    })
+  }
+
+  /** Zoom camera to fit all rooms */
+  private zoomToFitAll(): void {
+    if (this.rooms.size === 0) return
+
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+    for (const room of this.rooms.values()) {
+      minX = Math.min(minX, room.x - room.width / 2)
+      minY = Math.min(minY, room.y - room.height / 2)
+      maxX = Math.max(maxX, room.x + room.width / 2)
+      maxY = Math.max(maxY, room.y + room.height / 2)
+    }
+
+    const contentW = maxX - minX + WORLD_MARGIN * 2
+    const contentH = maxY - minY + WORLD_MARGIN * 2
+    const zoomX = this.viewWidth / contentW
+    const zoomY = this.viewHeight / contentH
+    const targetZoom = Phaser.Math.Clamp(Math.min(zoomX, zoomY), 0.4, 2.0)
+
+    const centerX = (minX + maxX) / 2
+    const centerY = (minY + maxY) / 2
+
+    const cam = this.cameras.main
+    this.tweens.killTweensOf(cam)
+    this.tweens.add({
+      targets: cam,
+      zoom: targetZoom,
+      scrollX: centerX - this.viewWidth / (2 * targetZoom),
+      scrollY: centerY - this.viewHeight / (2 * targetZoom),
+      duration: KB_PAN_DURATION,
+      ease: 'Power2',
+    })
+  }
+
+  /** Reset camera to the default position/zoom saved at create time */
+  private resetCamera(): void {
+    const cam = this.cameras.main
+    this.tweens.killTweensOf(cam)
+    this.tweens.add({
+      targets: cam,
+      scrollX: this.defaultCameraX,
+      scrollY: this.defaultCameraY,
+      zoom: this.defaultCameraZoom,
+      duration: KB_PAN_DURATION,
+      ease: 'Power2',
+    })
+    this.deselectAgent()
+    this.stopAutoPan()
+  }
+
+  /** Toggle slow auto-pan that cycles the camera across all agents */
+  private toggleAutoPan(): void {
+    if (this.autoPanEnabled) {
+      this.stopAutoPan()
+    } else {
+      this.startAutoPan()
+    }
+  }
+
+  private startAutoPan(): void {
+    const ids = this.getFlatAgentIds()
+    if (ids.length === 0) return
+
+    this.autoPanEnabled = true
+    this.autoPanIndex = this.selectedAgentIndex >= 0 ? this.selectedAgentIndex : 0
+
+    // Immediately show first agent
+    this.selectedAgentIndex = this.autoPanIndex
+    this.applySelection(ids)
+
+    this.autoPanTimer = this.time.addEvent({
+      delay: KB_AUTO_PAN_INTERVAL,
+      loop: true,
+      callback: () => {
+        const currentIds = this.getFlatAgentIds()
+        if (currentIds.length === 0) { this.stopAutoPan(); return }
+        this.autoPanIndex = (this.autoPanIndex + 1) % currentIds.length
+        this.selectedAgentIndex = this.autoPanIndex
+        this.applySelection(currentIds)
+      },
+    })
+  }
+
+  private stopAutoPan(): void {
+    this.autoPanEnabled = false
+    if (this.autoPanTimer) {
+      this.autoPanTimer.destroy()
+      this.autoPanTimer = null
+    }
+  }
+
+  // ---------------------------------------------------------------------------
   // Cleanup
   // ---------------------------------------------------------------------------
 
@@ -1245,6 +1584,12 @@ export class OfficeScene extends Phaser.Scene {
     this.typingParticleTimer = null
     for (const p of this.typingParticlePool) { this.tweens.killTweensOf(p); p.destroy() }
     this.typingParticlePool = []
+
+    // Keyboard selection cleanup
+    this.stopAutoPan()
+    if (this.selectionRingTween) { this.selectionRingTween.destroy(); this.selectionRingTween = null }
+    this.selectionRing?.destroy()
+    this.selectionRing = null
 
     for (const s of this.officeDecoSprites) s.destroy()
     this.officeDecoSprites = []

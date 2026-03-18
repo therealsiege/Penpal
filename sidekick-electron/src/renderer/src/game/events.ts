@@ -28,6 +28,9 @@ export const EventBus = new GameEventBus()
 export const EVENTS = {
   AGENT_CLICKED: 'agent:clicked',
   AGENT_DOUBLE_CLICKED: 'agent:doubleClicked',
+  AGENT_RIGHT_CLICKED: 'agent:rightClicked',
+  AGENT_DESELECTED: 'agent:deselected',
+  AGENT_DRAGGED_TO_ROOM: 'agent:draggedToRoom',
   ADD_WORKER_CLICKED: 'addWorker:clicked',
   DESK_CLICKED: 'desk:clicked',
 } as const
