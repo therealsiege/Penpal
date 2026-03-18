@@ -218,6 +218,10 @@ export class OfficeScene extends Phaser.Scene {
   private defaultCameraZoom = 1
   private hasInitialZoomToFit = false
 
+  // Notification toasts (screen-space)
+  private toastContainer: Phaser.GameObjects.Container | null = null
+  private activeToasts: { container: Phaser.GameObjects.Container; createdAt: number }[] = []
+
   // Camera & navigation state
   private targetZoom = 1
   private followTarget: { x: number; y: number } | null = null
@@ -373,6 +377,9 @@ export class OfficeScene extends Phaser.Scene {
       callback: () => this.applyDayNightCycle(true),
       loop: true,
     })
+
+    // Notification toast container (screen-space, top-right)
+    this.toastContainer = this.add.container(0, 0).setDepth(9998).setScrollFactor(0)
 
     this.isReady = true
     if (this.pendingAgents) {
@@ -981,8 +988,29 @@ export class OfficeScene extends Phaser.Scene {
       ws.state = agent
       return
     }
+    // Fire toasts on meaningful state transitions
+    const prevState = ws.state
     ws.lastStateFingerprint = fp
     ws.state = agent
+
+    if (prevState) {
+      const name = agent.config.name.split(' ')[0]
+      const wasWorking = (prevState.sessionMode === 'working' || prevState.sessionMode === 'plan') && !prevState.needsInteraction
+      const isWorking = (agent.sessionMode === 'working' || agent.sessionMode === 'plan') && !agent.needsInteraction
+      if (agent.needsInteraction && !prevState.needsInteraction) {
+        if (agent.interactionType === 'accept-edits') {
+          this.showToast(`${name} has edits to review`, 0x3b82f6)
+        } else if (agent.interactionType === 'question') {
+          this.showToast(`${name} asked a question`, 0xf59e0b)
+        } else if (agent.interactionType === 'tool-approval') {
+          this.showToast(`${name} needs approval`, 0xf59e0b)
+        }
+      } else if (wasWorking && !isWorking && !agent.needsInteraction) {
+        this.showToast(`${name} finished task`, 0x059669)
+      } else if (!wasWorking && isWorking) {
+        this.showToast(`${name} started working`, 0x334155)
+      }
+    }
 
     const isCursor = this.isCursorAgent(agent)
     const charIdx = isCursor ? 1 : this.getCharacterIndex(agent.config.name)
@@ -1472,6 +1500,74 @@ export class OfficeScene extends Phaser.Scene {
     } else {
       ws.deskBody.setStrokeStyle(1, 0x64748b, 0.5)
     }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Notification toasts
+  // ---------------------------------------------------------------------------
+
+  private showToast(text: string, color: number = 0x334155): void {
+    if (!this.toastContainer) return
+
+    const TOAST_W = 220
+    const TOAST_H = 28
+    const TOAST_MARGIN = 8
+    const MAX_TOASTS = 4
+
+    // Remove oldest if at capacity
+    while (this.activeToasts.length >= MAX_TOASTS) {
+      const old = this.activeToasts.shift()
+      old?.container.destroy()
+    }
+
+    const yOffset = this.activeToasts.length * (TOAST_H + TOAST_MARGIN)
+    const startX = this.viewWidth - TOAST_W - 16
+    const startY = 16 + yOffset
+
+    const bg = this.add.graphics()
+    bg.fillStyle(color, 0.92)
+    bg.fillRoundedRect(0, 0, TOAST_W, TOAST_H, 6)
+
+    const label = this.add.text(10, 6, text, {
+      fontSize: '11px', fontFamily: 'monospace', color: '#e2e8f0',
+      wordWrap: { width: TOAST_W - 20 },
+    })
+
+    const toast = this.add.container(startX + 30, startY, [bg, label])
+    toast.setAlpha(0).setScrollFactor(0).setDepth(9998)
+    this.toastContainer.add(toast)
+
+    const entry = { container: toast, createdAt: Date.now() }
+    this.activeToasts.push(entry)
+
+    // Slide in + fade in, then auto-dismiss after 3s
+    this.tweens.add({
+      targets: toast, x: startX, alpha: 1,
+      duration: 250, ease: 'Power2',
+    })
+    this.time.delayedCall(3000, () => {
+      this.tweens.add({
+        targets: toast, alpha: 0, x: startX + 30,
+        duration: 200, ease: 'Power2',
+        onComplete: () => {
+          const idx = this.activeToasts.indexOf(entry)
+          if (idx >= 0) this.activeToasts.splice(idx, 1)
+          toast.destroy()
+          this.reflowToasts()
+        },
+      })
+    })
+  }
+
+  private reflowToasts(): void {
+    const TOAST_H = 28
+    const TOAST_MARGIN = 8
+    this.activeToasts.forEach((t, i) => {
+      this.tweens.add({
+        targets: t.container, y: 16 + i * (TOAST_H + TOAST_MARGIN),
+        duration: 150, ease: 'Power2',
+      })
+    })
   }
 
   // ---------------------------------------------------------------------------
