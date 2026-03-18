@@ -43,6 +43,7 @@ declare global {
       getSessionConversation: (sessionId: string, source?: string) => Promise<ConversationMessage[]>
       sendToSession: (tty: string, message: string) => Promise<SessionActionResult>
       focusSession: (tty: string) => Promise<SessionActionResult>
+      focusSessionByName: (name: string, cwd?: string) => Promise<SessionActionResult>
       createNewSession: (cwd: string) => Promise<SessionActionResult>
       broadcastToSessions: (message: string) => Promise<BroadcastResult>
       getGraphStats: () => Promise<GraphStats>

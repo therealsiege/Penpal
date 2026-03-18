@@ -63,6 +63,8 @@ import {
   getAgentHealthStatuses,
   shutdownAgent,
   getOrchestratorStats,
+  getAllAgentXP,
+  type AgentXP,
 } from './orchestrator'
 
 const HOME = process.env.HOME || '/Users/fuzeelogik'
@@ -185,6 +187,10 @@ export function registerIpcHandlers() {
   ipcMain.handle('sessions:focus', wrapHandler((tty: unknown) => {
     if (typeof tty !== 'string') throw new Error('tty must be a string')
     return focusSession(tty)
+  }))
+  ipcMain.handle('sessions:focus-by-name', wrapHandler((name: unknown, cwd?: unknown) => {
+    if (typeof name !== 'string') throw new Error('name must be a string')
+    return focusByName(name, typeof cwd === 'string' ? cwd : undefined)
   }))
   ipcMain.handle('sessions:create', wrapHandler((cwd: unknown) => {
     if (typeof cwd !== 'string') throw new Error('cwd must be a string')
@@ -656,4 +662,5 @@ export function registerIpcHandlers() {
     return shutdownAgent(agentId)
   }))
   ipcMain.handle('orchestrator:stats', wrapHandler(() => getOrchestratorStats()))
+  ipcMain.handle('orchestrator:xp', wrapHandler(() => getAllAgentXP()))
 }
