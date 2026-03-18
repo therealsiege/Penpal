@@ -16,12 +16,14 @@ const KB_AUTO_PAN_INTERVAL = 3000
 const CHAR_FRAME_W = 256
 const CHAR_FRAME_H = 512
 const CHAR_COLS    = 6
-const NUM_CHARS    = 2
+const NUM_CHARS    = 3  // Character 1, Character 2, Character 1 tinted
 
 const POSE_IDLE     = 0
 const POSE_INTERACT = 1
 const POSE_SIT      = 2
 const POSE_SURPRISE = 3
+const POSE_HURT     = 4
+const POSE_WALK     = 5
 
 const OFFICE_TILE_SIZE = 48
 const FRAME_CHAIR_DARK   = 112
@@ -46,7 +48,7 @@ const WORKSTATION_H   = 96
 const ROOM_PADDING    = 12
 const ROOM_TOP_EXTRA  = 30   // extra top padding so thought bubbles clear room headers
 const ROOM_HEADER_H   = 20
-const ROOM_GAP        = 4
+const ROOM_GAP        = 10
 const MAX_AGENTS_PER_ROW = 4
 
 const WS_CHAIR_Y    = 6
@@ -434,16 +436,50 @@ export class OfficeScene extends Phaser.Scene {
   // Public API
   // ---------------------------------------------------------------------------
 
-  setAgents(agents: AgentState[]): void {
+  setAgents(agents: AgentState[], opencodeSessions?: { pid: number; cwd: string; project: string; uptime: string; cpu: string; memoryMB: number; alive: boolean }[]): void {
     if (!this.isReady) {
       this.pendingAgents = agents
       return
     }
 
-    this.agents = agents
+    const allAgents = [...agents]
+    
+    // Convert opencode sessions to agent states and merge
+    if (opencodeSessions && opencodeSessions.length > 0) {
+      for (const session of opencodeSessions) {
+        allAgents.push({
+          config: {
+            id: `opencode-${session.pid}`,
+            name: 'opencode',
+            title: 'OpenCode',
+            tripletRole: 'solver',
+            systemPrompt: '',
+            model: 'opencode',
+            mcpProfile: '',
+            skills: [],
+            allowedTools: [],
+            subAgents: {},
+            defaultRepos: [session.cwd],
+            avatar: 'opencode',
+            desk: { row: 0, col: 0 },
+            autonomy: 'default',
+          },
+          status: 'active',
+          cwd: session.cwd,
+          pid: session.pid,
+          cpu: session.cpu,
+          memoryMB: session.memoryMB,
+          uptime: session.uptime,
+          sessionMode: 'working' as const,
+          needsInteraction: false,
+        })
+      }
+    }
+
+    this.agents = allAgents
 
     const grouped = new Map<string, AgentState[]>()
-    for (const agent of agents) {
+    for (const agent of allAgents) {
       const key = agent.cwd ?? '__unassigned__'
       if (!grouped.has(key)) grouped.set(key, [])
       grouped.get(key)!.push(agent)
@@ -644,20 +680,20 @@ export class OfficeScene extends Phaser.Scene {
 
     const w = room.width
     const h = room.height
-    const WALL_T = 6
-    const WALL_I = 2
+    const WALL_T = 3          // thinner than outer building walls (5)
+    const WALL_I = 1
 
-    // Drop shadow
-    g.fillStyle(0x000000, 0.3)
-    g.fillRoundedRect(-w / 2 + 4, -h / 2 + 4, w, h, 8)
+    // Subtle drop shadow
+    g.fillStyle(0x000000, 0.15)
+    g.fillRoundedRect(-w / 2 + 3, -h / 2 + 3, w, h, 6)
 
-    // Outer wall
-    g.fillStyle(COLOR_WALL)
-    g.fillRoundedRect(-w / 2, -h / 2, w, h, 6)
+    // Outer wall — lighter than building walls
+    g.fillStyle(0x475569)
+    g.fillRoundedRect(-w / 2, -h / 2, w, h, 5)
 
-    // Inner wall highlight
-    g.fillStyle(COLOR_WALL_INNER)
-    g.fillRoundedRect(-w / 2 + WALL_T, -h / 2 + WALL_T, w - WALL_T * 2, h - WALL_T * 2, 4)
+    // Inner wall highlight — even lighter
+    g.fillStyle(0x64748b)
+    g.fillRoundedRect(-w / 2 + WALL_T, -h / 2 + WALL_T, w - WALL_T * 2, h - WALL_T * 2, 3)
 
     // Floor
     const floorX = -w / 2 + WALL_T + WALL_I
@@ -894,7 +930,7 @@ export class OfficeScene extends Phaser.Scene {
     const shadow = this.add.ellipse(0, WS_SPRITE_Y + 2, 20, 6, 0x000000, 0.2)
     wsContainer.add(shadow)
 
-    const charIdx = isCursor ? 1 : this.getCharacterIndex(agent.config.name)
+    const charIdx = this.getAgentCharacterIndex(agent)
     const frame   = this.getPoseFrame(charIdx, agent)
     const sprite  = this.add.sprite(0, WS_SPRITE_Y, 'characters', frame)
     sprite.setScale(CHAR_SCALE).setOrigin(0.5, 1)
@@ -1012,8 +1048,7 @@ export class OfficeScene extends Phaser.Scene {
       }
     }
 
-    const isCursor = this.isCursorAgent(agent)
-    const charIdx = isCursor ? 1 : this.getCharacterIndex(agent.config.name)
+    const charIdx = this.getAgentCharacterIndex(agent)
     ws.sprite.setFrame(this.getPoseFrame(charIdx, agent))
 
     const dotColor = this.getStatusColor(agent)
@@ -1043,11 +1078,24 @@ export class OfficeScene extends Phaser.Scene {
     // Thought bubble
     let icon: string | null = null
     let bgColor = 0x475569
-    if (isAcceptEdits)      { icon = '~';  bgColor = 0x3b82f6 }
-    else if (isPlan)        { icon = '?';  bgColor = 0x8b5cf6 }
-    else if (isWorking)     { icon = '*';  bgColor = 0x059669 }
-    else if (!isWaiting)    { icon = '\u2615'; bgColor = 0x475569 }
-    // isWaiting with no special state: no bubble (duplicate indicator exists)
+    
+    if (isAcceptEdits) {
+      icon = '~'; bgColor = 0x60a5fa  // Blue for pending edits
+    } else if (agent.sessionMode === 'compressing') {
+      icon = '!'; bgColor = 0xf87171  // Red for compression
+    } else if (isPlan) {
+      icon = '?'; bgColor = 0xa78bfa  // Purple for planning
+    } else if (isWorking) {
+      icon = '*'; bgColor = 0x059669  // Green for working
+    } else if (agent.needsInteraction) {
+      icon = '!'; bgColor = 0xfbbf24  // Yellow for needs attention
+    } else if (agent.sessionMode === 'waiting') {
+      icon = '...'; bgColor = 0xfbbf24  // Yellow for waiting
+    } else if (!agent.sessionMode) {
+      icon = '*'; bgColor = 0x059669  // Default to working (for opencode agents)
+    } else {
+      icon = '\u2615'; bgColor = 0x475569  // Coffee for idle
+    }
 
     this.tweens.killTweensOf(ws.thoughtBubble)
     ws.thoughtBubbleBg.clear()
@@ -1137,6 +1185,7 @@ export class OfficeScene extends Phaser.Scene {
 
   private layoutRooms(): void {
     const roomList = Array.from(this.rooms.values())
+
     if (roomList.length === 0) {
       this.worldWidth  = 800
       this.worldHeight = 600
@@ -1175,11 +1224,13 @@ export class OfficeScene extends Phaser.Scene {
     }
 
     for (const room of roomList) {
-      this.refreshRoomHeaderText(room)
+      if (!room.cwd.startsWith('__')) {
+        this.refreshRoomHeaderText(room)
+      }
     }
 
     let maxX = 0, maxY = 0
-    for (const room of this.rooms.values()) {
+    for (const room of roomList) {
       maxX = Math.max(maxX, room.x + room.width  / 2)
       maxY = Math.max(maxY, room.y + room.height / 2)
     }
@@ -1389,8 +1440,7 @@ export class OfficeScene extends Phaser.Scene {
 
     this.updateMonitorGlow(ws, isWorking, isWaiting)
 
-    const isCursor = this.isCursorAgent(agent)
-    const charIdx = isCursor ? 1 : this.getCharacterIndex(agent.config.name)
+    const charIdx = this.getAgentCharacterIndex(agent)
     const base = charIdx * CHAR_COLS
 
     if (isWaiting) {
@@ -1576,22 +1626,66 @@ export class OfficeScene extends Phaser.Scene {
 
   private getPoseFrame(charIdx: number, agent: AgentState): number {
     const base = charIdx * CHAR_COLS
-    if (agent.needsInteraction)                                           return base + POSE_SURPRISE
-    if (agent.sessionMode === 'working' || agent.sessionMode === 'plan') return base + POSE_INTERACT
-    if (agent.sessionMode === 'idle' || !agent.sessionMode)              return base + POSE_SIT
+    
+    // Priority: interaction needs > error/compress > working > idle/default
+    if (agent.needsInteraction) {
+      // Surprise for questions or edits pending
+      if (agent.interactionType === 'question' || agent.interactionType === 'accept-edits') {
+        return base + POSE_SURPRISE
+      }
+      // Hurt/panic animation for tool approvals that need attention
+      if (agent.interactionType === 'tool-approval') {
+        return base + POSE_HURT
+      }
+      // Default wait state
+      return base + POSE_WALK
+    }
+    
+    // Working states
+    if (agent.sessionMode === 'working' || agent.sessionMode === 'plan') {
+      return base + POSE_INTERACT
+    }
+    
+    // Special states
+    if (agent.sessionMode === 'compressing') {
+      return base + POSE_HURT  // Struggle animation for compression
+    }
+    
+    if (agent.sessionMode === 'accept-edits') {
+      return base + POSE_SURPRISE  // Alert about pending edits
+    }
+    
+    if (agent.sessionMode === 'waiting') {
+      return base + POSE_WALK  // Waiting/moving animation
+    }
+    
+    // Idle or default
+    if (agent.sessionMode === 'idle' || !agent.sessionMode) {
+      return base + POSE_SIT
+    }
+    
     return base + POSE_IDLE
   }
 
   private getStatusColor(agent: AgentState): number {
-    if (agent.needsInteraction)                return 0xfbbf24
-    if (agent.sessionMode === 'working')       return 0x34d399
-    if (agent.sessionMode === 'plan')          return 0xa78bfa
-    if (agent.sessionMode === 'accept-edits')  return 0x60a5fa
-    return 0x64748b
+    if (agent.needsInteraction) {
+      if (agent.interactionType === 'tool-approval') return 0xf87171  // Red for approval needed
+      return 0xfbbf24  // Yellow for other interactions
+    }
+    if (agent.sessionMode === 'working')       return 0x34d399  // Green for working
+    if (agent.sessionMode === 'plan')          return 0xa78bfa  // Purple for planning
+    if (agent.sessionMode === 'accept-edits')  return 0x60a5fa  // Blue for pending edits
+    if (agent.sessionMode === 'compressing')    return 0xf87171  // Red for compressing
+    if (agent.sessionMode === 'waiting')        return 0xfbbf24  // Yellow for waiting
+    return 0x64748b  // Gray for idle
   }
 
   private isCursorAgent(agent: AgentState): boolean {
     return agent.config.model === 'cursor-agent'
+  }
+
+  private isOpencodeAgent(agent: AgentState): boolean {
+    return agent.config.model === 'opencode' || agent.config.id.startsWith('opencode-')
   }
 
   private getCharacterIndex(name: string): number {
@@ -1601,6 +1695,12 @@ export class OfficeScene extends Phaser.Scene {
       hash |= 0
     }
     return Math.abs(hash) % NUM_CHARS
+  }
+
+  private getAgentCharacterIndex(agent: AgentState): number {
+    if (this.isCursorAgent(agent)) return 1
+    if (this.isOpencodeAgent(agent)) return 2  // Tinted character sprite
+    return this.getCharacterIndex(agent.config.name)
   }
 
   private cwdToLabel(cwd: string): string {

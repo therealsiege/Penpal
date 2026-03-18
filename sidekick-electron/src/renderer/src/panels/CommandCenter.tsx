@@ -3,7 +3,7 @@ import { usePolling } from '../hooks/usePolling'
 import { AgentAvatar } from '../components/AgentAvatar'
 import { useToast } from '../components/Toast'
 import { Terminal } from '../components/Terminal'
-import type { AgentConfig, AgentState, HealthResult, HotLead, JobStatus, TripletWorkflow, TripletPreset, ProjectLeaderboardEntry } from '../types'
+import type { AgentConfig, AgentState, HealthResult, HotLead, JobStatus, TripletWorkflow, TripletPreset, ProjectLeaderboardEntry, OpencodeSession } from '../types'
 import { TripletLauncherModal, TripletStatusModal, TripletListModal } from '../components/TripletModal'
 import { OrchestratorModal } from '../components/OrchestratorModal'
 import { createOfficeGame } from '../game/OfficeGame'
@@ -814,6 +814,10 @@ export function CommandCenter(props: CommandCenterProps) {
     () => window.api.getAgentStatuses(),
     5000,
   )
+  const { data: opencodeSessions } = usePolling<OpencodeSession[]>(
+    () => window.api.getOpencodeSessions().catch(() => []),
+    5000,
+  )
   const { data: health } = usePolling<HealthResult>(() => window.api.getHealth(), 15000)
   const { data: hotLeads } = usePolling<HotLead[]>(
     () => window.api.getHotLeads().catch(() => []),
@@ -893,9 +897,9 @@ export function CommandCenter(props: CommandCenterProps) {
   // --- Push agent data into Phaser scene ---
   useEffect(() => {
     if (sceneRef.current && agentStatuses) {
-      sceneRef.current.setAgents(agentStatuses)
+      sceneRef.current.setAgents(agentStatuses, opencodeSessions)
     }
-  }, [agentStatuses])
+  }, [agentStatuses, opencodeSessions])
 
   // --- Push triplet workflow data into Phaser scene for connecting lines (Fix 11) ---
   useEffect(() => {

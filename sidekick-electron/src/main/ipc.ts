@@ -21,6 +21,7 @@ import {
   getCursorTranscriptConversation,
   focusCursorIDE,
 } from './cursor-sessions'
+import { getOpencodeSessions, type OpencodeSession } from './opencode-sessions'
 import {
   getAgentConfigs,
   getAgentConfig,
@@ -622,7 +623,10 @@ export function registerIpcHandlers() {
   ipcMain.handle('slack:start', wrapHandler(() => startSlackBridge()))
   ipcMain.handle('slack:stop', wrapHandler(() => stopSlackBridge()))
 
-  // ── Orchestrator ──────────────────────────────────────────────────────
+  // ── Opencode Sessions ──────────────────────────────────────────────────────
+  ipcMain.handle('opencode:sessions', wrapHandler(async () => {
+    return getOpencodeSessions()
+  }))
   ipcMain.handle('orchestrator:queue', wrapHandler(() => getTaskQueue()))
   ipcMain.handle('orchestrator:enqueue', wrapHandler((
     title: unknown, description: unknown, project: unknown, priority: unknown,
