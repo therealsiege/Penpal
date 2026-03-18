@@ -194,6 +194,11 @@ export class OfficeScene extends Phaser.Scene {
   // Theme transition
   private bgTransitionTween: Phaser.Tweens.Tween | null = null
 
+  // Day/night cycle
+  private dayNightOverlay: Phaser.GameObjects.Rectangle | null = null
+  private dayNightTimer: Phaser.Time.TimerEvent | null = null
+  private currentTimePhase: 'morning' | 'day' | 'evening' | 'night' = 'day'
+
   // Keyboard selection state
   private selectedAgentIndex = -1
   private selectionRing: Phaser.GameObjects.Graphics | null = null
@@ -349,6 +354,19 @@ export class OfficeScene extends Phaser.Scene {
 
     // Create minimap overlay
     this.initMinimap()
+
+    // Day/night cycle overlay (doesn't block input)
+    this.dayNightOverlay = this.add
+      .rectangle(0, 0, 8000, 8000, 0x000000, 0)
+      .setOrigin(0, 0)
+      .setDepth(9997)
+      .setScrollFactor(0)
+    this.applyDayNightCycle(false)
+    this.dayNightTimer = this.time.addEvent({
+      delay: 60_000,
+      callback: () => this.applyDayNightCycle(true),
+      loop: true,
+    })
 
     this.isReady = true
     if (this.pendingAgents) {
@@ -811,9 +829,52 @@ export class OfficeScene extends Phaser.Scene {
     const lampLight = this.add.triangle(-24, WS_DESK_Y - 4, -10, 18, 0, 0, 10, 18, 0xfbbf24, 0.04)
     wsContainer.add(lampLight)
 
-    // Track LOD details (mug, steam, lamp -- hidden when zoomed out)
+    // Desk accessories (deterministic per agent name)
+    let nameHash = 0
+    for (let i = 0; i < agent.config.name.length; i++) {
+      nameHash = ((nameHash << 5) - nameHash) + agent.config.name.charCodeAt(i); nameHash |= 0
+    }
+    nameHash = Math.abs(nameHash)
+
+    // Keyboard
+    const keyboard = this.add.rectangle(0, WS_DESK_Y + 2, 18, 5, 0x1e293b).setAlpha(0.8)
+    wsContainer.add(keyboard)
+    const kbLines = this.add.graphics()
+    kbLines.lineStyle(0.5, 0x334155, 0.6)
+    for (let r = 0; r < 3; r++) kbLines.lineBetween(-7, WS_DESK_Y + r * 1.5, 7, WS_DESK_Y + r * 1.5)
+    wsContainer.add(kbLines)
+
+    // Sticky note (color varies)
+    const stickyColors = [0x38bdf8, 0x818cf8, 0x34d399, 0xfbbf24, 0xf472b6]
+    const stickyX = nameHash % 2 === 0 ? 14 : -14
+    const sticky = this.add.rectangle(stickyX, WS_DESK_Y - 6, 7, 6, stickyColors[nameHash % 5], 0.7)
+    wsContainer.add(sticky)
+
+    // Pencil holder (~60% of desks)
+    const extraDecos: Phaser.GameObjects.GameObject[] = []
+    if (nameHash % 5 >= 2) {
+      const phX = nameHash % 2 === 0 ? -14 : 14
+      const cup = this.add.rectangle(phX, WS_DESK_Y - 5, 5, 7, 0x475569, 0.7)
+      wsContainer.add(cup); extraDecos.push(cup)
+      const p1 = this.add.rectangle(phX - 1, WS_DESK_Y - 10, 1, 6, 0xfbbf24, 0.6).setAngle(-5)
+      wsContainer.add(p1); extraDecos.push(p1)
+      const p2 = this.add.rectangle(phX + 1, WS_DESK_Y - 10, 1, 6, 0xef4444, 0.5).setAngle(7)
+      wsContainer.add(p2); extraDecos.push(p2)
+    }
+
+    // Desk plant (~40% of desks)
+    if (nameHash % 5 < 2) {
+      const plX = nameHash % 2 === 0 ? -16 : 16
+      const pot = this.add.rectangle(plX, WS_DESK_Y - 2, 5, 4, 0x475569, 0.7)
+      wsContainer.add(pot); extraDecos.push(pot)
+      const leaf = this.add.circle(plX, WS_DESK_Y - 6, 3, 0x34d399, 0.6)
+      wsContainer.add(leaf); extraDecos.push(leaf)
+    }
+
+    // Track LOD details (mug, steam, lamp, accessories -- hidden when zoomed out)
     const lodDetailObjects: Phaser.GameObjects.GameObject[] = [
       mugBody, mugHandle, steamContainer, lampBase, lampArm, lampShade, lampLight,
+      keyboard, kbLines, sticky, ...extraDecos,
     ]
 
     // Character shadow
@@ -1826,10 +1887,67 @@ export class OfficeScene extends Phaser.Scene {
   }
 
   // ---------------------------------------------------------------------------
+  // Day/night cycle
+  // ---------------------------------------------------------------------------
+
+  private getTimePhase(): {
+    phase: 'morning' | 'day' | 'evening' | 'night'
+    color: number
+    alpha: number
+    bgColor: number
+    glowMultiplier: number
+  } {
+    const hour = new Date().getHours()
+    if (hour >= 6 && hour < 10) {
+      return { phase: 'morning', color: 0xffa500, alpha: 0.06, bgColor: 0x151a24, glowMultiplier: 1.0 }
+    } else if (hour >= 10 && hour < 17) {
+      return { phase: 'day', color: 0x000000, alpha: 0.0, bgColor: 0x111827, glowMultiplier: 1.0 }
+    } else if (hour >= 17 && hour < 20) {
+      return { phase: 'evening', color: 0xff6a00, alpha: 0.08, bgColor: 0x14161f, glowMultiplier: 1.2 }
+    } else {
+      return { phase: 'night', color: 0x1a3a6a, alpha: 0.14, bgColor: 0x0a0e18, glowMultiplier: 1.6 }
+    }
+  }
+
+  private applyDayNightCycle(animate: boolean): void {
+    const { phase, color, alpha, bgColor, glowMultiplier } = this.getTimePhase()
+    if (phase === this.currentTimePhase && animate) return
+    this.currentTimePhase = phase
+
+    const overlay = this.dayNightOverlay
+    if (!overlay) return
+
+    this.cameras.main.setBackgroundColor(bgColor)
+
+    if (animate) {
+      this.tweens.killTweensOf(overlay)
+      overlay.setFillStyle(color)
+      this.tweens.add({ targets: overlay, alpha, duration: 3000, ease: 'Sine.easeInOut' })
+    } else {
+      overlay.setFillStyle(color)
+      overlay.setAlpha(alpha)
+    }
+
+    // Adjust monitor glow and lamp brightness
+    for (const room of this.rooms.values()) {
+      for (const ws of room.workstations.values()) {
+        if (ws.monitorGlowOverlay) {
+          ws.monitorGlowOverlay.setScale(0.8 + (glowMultiplier - 1.0) * 0.5)
+        }
+      }
+    }
+  }
+
+  // ---------------------------------------------------------------------------
   // Cleanup
   // ---------------------------------------------------------------------------
 
   destroy(): void {
+    this.dayNightTimer?.destroy()
+    this.dayNightTimer = null
+    this.dayNightOverlay?.destroy()
+    this.dayNightOverlay = null
+
     this.typingParticleTimer?.destroy()
     this.typingParticleTimer = null
     for (const p of this.typingParticlePool) { this.tweens.killTweensOf(p); p.destroy() }
