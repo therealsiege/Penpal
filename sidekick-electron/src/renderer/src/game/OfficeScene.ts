@@ -43,9 +43,9 @@ const OFFICE_FRAME_BOOKSHELF = 96
 const CHAR_SCALE      = 0.134
 const WORKSTATION_W   = 88
 const WORKSTATION_H   = 96
-const ROOM_PADDING    = 19
-const ROOM_HEADER_H   = 22
-const ROOM_GAP        = 6
+const ROOM_PADDING    = 12
+const ROOM_HEADER_H   = 20
+const ROOM_GAP        = 4
 const MAX_AGENTS_PER_ROW = 4
 
 const WS_CHAIR_Y    = 6
@@ -74,7 +74,7 @@ const COLOR_LED_GREEN   = 0x34d399
 const COLOR_LED_AMBER   = 0xfbbf24
 const COLOR_LED_GRAY    = 0x64748b
 
-const WORLD_MARGIN   = 60
+const WORLD_MARGIN   = 30
 
 // Camera & navigation constants
 const ZOOM_MIN = 0.4
@@ -465,7 +465,7 @@ export class OfficeScene extends Phaser.Scene {
     // Zoom-to-fit on first data load
     if (!this.hasInitialZoomToFit && this.rooms.size > 0) {
       this.hasInitialZoomToFit = true
-      this.time.delayedCall(350, () => { this.zoomToFit(false) })
+      this.zoomToFit(false)
     }
   }
 
@@ -1130,7 +1130,12 @@ export class OfficeScene extends Phaser.Scene {
       room.y = WORLD_MARGIN + cursorY + room.height / 2
 
       this.tweens.killTweensOf(room.container)
-      this.tweens.add({ targets: room.container, x: room.x, y: room.y, duration: 320, ease: 'Power2' })
+      if (!this.hasInitialZoomToFit) {
+        // First layout: place instantly to avoid flash
+        room.container.setPosition(room.x, room.y)
+      } else {
+        this.tweens.add({ targets: room.container, x: room.x, y: room.y, duration: 320, ease: 'Power2' })
+      }
 
       cursorX += room.width + ROOM_GAP
       rowHeight = Math.max(rowHeight, room.height)
