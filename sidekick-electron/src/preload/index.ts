@@ -97,4 +97,6 @@ contextBridge.exposeInMainWorld('api', {
   orchestratorAgentHealth: () => ipcRenderer.invoke('orchestrator:agent-health'),
   orchestratorShutdownAgent: (agentId: string) => ipcRenderer.invoke('orchestrator:shutdown-agent', agentId),
   orchestratorStats: () => ipcRenderer.invoke('orchestrator:stats'),
+  // Opencode Sessions
+  getOpencodeSessions: () => ipcRenderer.invoke('opencode:sessions'),
 })

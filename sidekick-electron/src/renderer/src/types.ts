@@ -139,6 +139,19 @@ export interface AgentConfig {
   autonomy: string
 }
 
+export interface OpencodeSession {
+  pid: number
+  cwd: string
+  project: string
+  uptime: string
+  cpu: string
+  memoryMB: number
+  alive: boolean
+  startedAt: number
+}
+
+// ── Agent State ──────────────────────────────────────────────────────────────
+
 export type AgentStatus = 'sleeping' | 'idle' | 'active'
 
 export type SessionMode = 'working' | 'plan' | 'accept-edits' | 'waiting' | 'idle' | 'compressing'

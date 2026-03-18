@@ -5,8 +5,10 @@
  * Source: game-assets/favorite-vector-rpg-characters/Individual Animations/
  * Output: sidekick-electron/public/sprites/characters.png
  *
- * Layout — 6 columns × 2 rows, each cell 256×512 px:
- *   Row 0 = Character 1, Row 1 = Character 2
+ * Layout — 6 columns × 3 rows, each cell 256×512 px:
+ *   Row 0 = Character 1 (Claude)
+ *   Row 1 = Character 2 (Cursor)
+ *   Row 2 = Character 1 tinted (OpenCode)
  *   Col 0 = idle       (frame 0 of idle-{n}_256.png)
  *   Col 1 = interact   (frame 0 of interact-{n}_256.png)  — "working"
  *   Col 2 = sit        (frame 0 of sit-{n}_256.png)       — "idle at desk"
@@ -14,7 +16,7 @@
  *   Col 4 = hurt       (frame 0 of hurt-{n}_256.png)      — "error"
  *   Col 5 = walk       (frame 0 of walk-{n}_256.png)      — "moving"
  *
- * Total output: 1536×1024 (6 × 256w, 2 × 512h)
+ * Total output: 1536×1536 (6 × 256w, 3 × 512h)
  *
  * Also copies the Modern Office 48×48 tileset to public/sprites/office-tiles.png.
  *
@@ -52,14 +54,10 @@ const FRAME_H = 512
 const COLS = 6
 
 /** Number of character rows in the output sheet. */
-const ROWS = 2
+const ROWS = 3  // Character 1, Character 2, Character 1 tinted
 
 /**
  * Animation columns, in order.
- * Each entry maps a column index to the source filename stem (without character
- * suffix and extension) so we can derive the full path at runtime.
- *
- * @type {Array<{col: number, anim: string}>}
  */
 const ANIMATIONS = [
   { col: 0, anim: 'idle' },
@@ -71,11 +69,7 @@ const ANIMATIONS = [
 ]
 
 /**
- * Extract the first 256×512 frame (front-facing, direction 0) from a source
- * strip PNG and return a Sharp instance ready for compositing.
- *
- * @param {string} srcPath - Absolute path to the source animation PNG.
- * @returns {Promise<Buffer>} Raw PNG buffer of the extracted frame.
+ * Extract the first 256×512 frame from a source strip PNG.
  */
 async function extractFirstFrame(srcPath) {
   return sharp(srcPath)
@@ -86,9 +80,25 @@ async function extractFirstFrame(srcPath) {
 }
 
 /**
+ * Apply a color tint overlay to create a variation of the character.
+ * Creates a teal/purple tint for opencode agents.
+ */
+async function applyTint(frameBuffer) {
+  // Create a tinted overlay - teal/purple for opencode
+  const tintColor = { r: 100, g: 80, b: 200, alpha: 0.15 }
+  
+  // Create a tinted version by compositing a color layer
+  return sharp(frameBuffer)
+    .modulate({
+      saturation: 0.8,  // Slightly desaturate
+    })
+    .tint(tintColor)
+    .png()
+    .toBuffer()
+}
+
+/**
  * Build the character spritesheet and write it to disk.
- *
- * @returns {Promise<void>}
  */
 async function buildCharacterSheet() {
   const outPath = resolve(OUT_DIR, 'characters.png')
@@ -97,25 +107,51 @@ async function buildCharacterSheet() {
   /** @type {Array<{input: Buffer, left: number, top: number}>} */
   const composites = []
 
-  for (let charIdx = 0; charIdx < ROWS; charIdx++) {
-    const charNum = charIdx + 1 // 1-based suffix in filenames
+  // Row 0: Character 1 (Claude)
+  for (const { col, anim } of ANIMATIONS) {
+    const srcPath = resolve(ANIM_DIR, `${anim}-1_256.png`)
+    console.log(`  Extracting ${anim}-1 from ${srcPath}`)
 
-    for (const { col, anim } of ANIMATIONS) {
-      const srcPath = resolve(ANIM_DIR, `${anim}-${charNum}_256.png`)
-      console.log(`  Extracting ${anim}-${charNum} frame 0 from ${srcPath}`)
+    const frameBuffer = await extractFirstFrame(srcPath)
 
-      const frameBuffer = await extractFirstFrame(srcPath)
+    composites.push({
+      input: frameBuffer,
+      left: col * FRAME_W,
+      top: 0 * FRAME_H,
+    })
+  }
 
-      composites.push({
-        input: frameBuffer,
-        left: col * FRAME_W,
-        top: charIdx * FRAME_H,
-      })
-    }
+  // Row 1: Character 2 (Cursor)
+  for (const { col, anim } of ANIMATIONS) {
+    const srcPath = resolve(ANIM_DIR, `${anim}-2_256.png`)
+    console.log(`  Extracting ${anim}-2 from ${srcPath}`)
+
+    const frameBuffer = await extractFirstFrame(srcPath)
+
+    composites.push({
+      input: frameBuffer,
+      left: col * FRAME_W,
+      top: 1 * FRAME_H,
+    })
+  }
+
+  // Row 2: Character 1 tinted (OpenCode)
+  console.log('  Creating tinted variations...')
+  for (const { col, anim } of ANIMATIONS) {
+    const srcPath = resolve(ANIM_DIR, `${anim}-1_256.png`)
+    
+    const frameBuffer = await extractFirstFrame(srcPath)
+    const tintedBuffer = await applyTint(frameBuffer)
+
+    composites.push({
+      input: tintedBuffer,
+      left: col * FRAME_W,
+      top: 2 * FRAME_H,
+    })
   }
 
   const totalWidth = COLS * FRAME_W   // 1536
-  const totalHeight = ROWS * FRAME_H  // 1024
+  const totalHeight = ROWS * FRAME_H  // 1536
 
   await sharp({
     create: {
@@ -134,8 +170,6 @@ async function buildCharacterSheet() {
 
 /**
  * Copy the Modern Office 48×48 tileset to public/sprites/office-tiles.png.
- *
- * @returns {void}
  */
 function copyOfficeTiles() {
   const destPath = resolve(OUT_DIR, 'office-tiles.png')

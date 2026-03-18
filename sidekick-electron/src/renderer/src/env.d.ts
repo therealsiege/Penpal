@@ -17,6 +17,7 @@ import type {
   LeadDetail,
   AgentConfig,
   AgentState,
+  OpencodeSession,
 } from './types'
 
 declare global {
@@ -103,6 +104,8 @@ declare global {
       orchestratorAgentHealth: () => Promise<import('./types').AgentHealthStatus[]>
       orchestratorShutdownAgent: (agentId: string) => Promise<{ success: boolean; error?: string }>
       orchestratorStats: () => Promise<import('./types').OrchestratorStats>
+      // Opencode Sessions
+      getOpencodeSessions: () => Promise<OpencodeSession[]>
     }
   }
 }
