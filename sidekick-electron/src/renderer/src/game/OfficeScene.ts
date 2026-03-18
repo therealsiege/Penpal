@@ -44,6 +44,7 @@ const CHAR_SCALE      = 0.134
 const WORKSTATION_W   = 88
 const WORKSTATION_H   = 96
 const ROOM_PADDING    = 12
+const ROOM_TOP_EXTRA  = 30   // extra top padding so thought bubbles clear room headers
 const ROOM_HEADER_H   = 20
 const ROOM_GAP        = 4
 const MAX_AGENTS_PER_ROW = 4
@@ -1052,10 +1053,10 @@ export class OfficeScene extends Phaser.Scene {
     const WALL_T = 8
     const WALL_I = 4
     const floorStartX = -room.width  / 2 + WALL_T + WALL_I + ROOM_PADDING
-    const floorStartY = -room.height / 2 + WALL_T + WALL_I + ROOM_HEADER_H + ROOM_PADDING
+    const floorStartY = -room.height / 2 + WALL_T + WALL_I + ROOM_HEADER_H + ROOM_PADDING + ROOM_TOP_EXTRA
 
     const usableW = room.width  - (WALL_T + WALL_I + ROOM_PADDING) * 2
-    const usableH = room.height - (WALL_T + WALL_I) * 2 - ROOM_HEADER_H - ROOM_PADDING * 2
+    const usableH = room.height - (WALL_T + WALL_I) * 2 - ROOM_HEADER_H - ROOM_PADDING * 2 - ROOM_TOP_EXTRA
 
     const cellW = usableW / cols
     const cellH = usableH / rows
@@ -1098,7 +1099,7 @@ export class OfficeScene extends Phaser.Scene {
     const WALL_I = 4
     return {
       width:  (WALL_T + WALL_I + ROOM_PADDING) * 2 + cols * WORKSTATION_W,
-      height: (WALL_T + WALL_I) * 2 + ROOM_HEADER_H + ROOM_PADDING * 2 + rows * WORKSTATION_H,
+      height: (WALL_T + WALL_I) * 2 + ROOM_HEADER_H + ROOM_PADDING * 2 + ROOM_TOP_EXTRA + rows * WORKSTATION_H,
     }
   }
 
