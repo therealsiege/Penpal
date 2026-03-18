@@ -40,20 +40,20 @@ const OFFICE_FRAME_BOOKSHELF = 96
 // Layout constants
 // ---------------------------------------------------------------------------
 
-const CHAR_SCALE      = 0.134
-const WORKSTATION_W   = 88
-const WORKSTATION_H   = 96
-const ROOM_PADDING    = 12
-const ROOM_HEADER_H   = 20
+const CHAR_SCALE      = 0.107
+const WORKSTATION_W   = 70
+const WORKSTATION_H   = 77
+const ROOM_PADDING    = 10
+const ROOM_HEADER_H   = 16
 const ROOM_GAP        = 4
 const MAX_AGENTS_PER_ROW = 4
 
-const WS_CHAIR_Y    = 6
-const WS_SPRITE_Y   = -5
-const WS_DESK_Y     = 18
-const WS_MONITOR_Y  = 5
-const WS_NAME_Y     = 40
-const WS_DOT_GAP    = 4
+const WS_CHAIR_Y    = 5
+const WS_SPRITE_Y   = -4
+const WS_DESK_Y     = 14
+const WS_MONITOR_Y  = 4
+const WS_NAME_Y     = 32
+const WS_DOT_GAP    = 3
 
 // Colors
 const COLOR_BG          = 0x111827
