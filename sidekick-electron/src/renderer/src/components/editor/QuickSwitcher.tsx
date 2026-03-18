@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
 import MiniSearch from 'minisearch'
 import { useVaultIndex } from '../../stores/vault-index'
+import { useEditorStore } from '../../stores/editor-store'
 import type { VaultIndexEntry } from '../../types'
 
 interface QuickSwitcherProps {
@@ -13,6 +14,7 @@ export function QuickSwitcher({ onSelect, onClose }: QuickSwitcherProps) {
   const [selectedIdx, setSelectedIdx] = useState(0)
   const inputRef = useRef<HTMLInputElement>(null)
   const entries = useVaultIndex(s => s.entries)
+  const recentFiles = useEditorStore(s => s.recentFiles)
 
   const miniSearch = useMemo(() => {
     const ms = new MiniSearch<VaultIndexEntry>({
@@ -31,12 +33,14 @@ export function QuickSwitcher({ onSelect, onClose }: QuickSwitcherProps) {
 
   const results = useMemo(() => {
     if (!query.trim()) {
-      // Show recent / alphabetical when empty
-      return entries.slice(0, 20)
+      const recentEntries = recentFiles
+        .map(p => entries.find(e => e.path === p))
+        .filter(Boolean) as VaultIndexEntry[]
+      return recentEntries.length > 0 ? recentEntries : entries.slice(0, 20)
     }
     const hits = miniSearch.search(query)
     return hits.slice(0, 20).map(h => entries.find(e => e.path === h.id)!).filter(Boolean)
-  }, [query, miniSearch, entries])
+  }, [query, miniSearch, entries, recentFiles])
 
   useEffect(() => {
     inputRef.current?.focus()

@@ -8,13 +8,13 @@ export function FrontmatterEditor() {
   const setDirty = useEditorStore(s => s.setDirty)
   const activeTab = tabs.find(t => t.id === activeTabId) ?? null
 
-  const { data, content: bodyContent, orig } = useMemo(() => {
-    if (!activeTab?.content) return { data: {} as Record<string, unknown>, content: '', orig: '' }
+  const { data, content: bodyContent } = useMemo(() => {
+    if (!activeTab?.content) return { data: {} as Record<string, unknown>, content: '' }
     try {
       const parsed = matter(activeTab.content)
-      return { data: parsed.data as Record<string, unknown>, content: parsed.content, orig: activeTab.content }
+      return { data: parsed.data as Record<string, unknown>, content: parsed.content }
     } catch {
-      return { data: {} as Record<string, unknown>, content: activeTab.content, orig: activeTab.content }
+      return { data: {} as Record<string, unknown>, content: activeTab.content }
     }
   }, [activeTab?.content])
 

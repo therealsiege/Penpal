@@ -22,7 +22,7 @@ export function EditorTabs() {
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
-            className={`group flex items-center gap-1.5 px-3 py-1.5 text-xs border-r border-slate-800/40 shrink-0 transition-colors ${
+            className={`group flex items-center gap-1.5 px-3 py-1.5 text-sm border-r border-slate-800/40 shrink-0 transition-colors ${
               isActive
                 ? 'bg-slate-800/50 text-slate-200'
                 : 'text-slate-500 hover:text-slate-300 hover:bg-slate-800/30'

@@ -47,8 +47,7 @@ function buildDecorations(view: EditorView): DecorationSet {
 
     obsidianEmbedRegex.lastIndex = 0
     while ((match = obsidianEmbedRegex.exec(line.text)) !== null) {
-      const from = line.from + match.index
-      const to = from + match[0].length
+      const to = line.from + match.index + match[0].length
       const filename = match[1]
       const width = match[3] ? parseInt(match[3], 10) : undefined
 
@@ -60,8 +59,7 @@ function buildDecorations(view: EditorView): DecorationSet {
 
     mdImageRegex.lastIndex = 0
     while ((match = mdImageRegex.exec(line.text)) !== null) {
-      const from = line.from + match.index
-      const to = from + match[0].length
+      const to = line.from + match.index + match[0].length
       const alt = match[1]
       const src = match[2]
 

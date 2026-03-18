@@ -5,6 +5,7 @@ import { useToast } from '../components/Toast'
 import { Terminal } from '../components/Terminal'
 import type { AgentConfig, AgentState, HealthResult, HotLead, JobStatus, TripletWorkflow, TripletPreset, ProjectLeaderboardEntry } from '../types'
 import { TripletLauncherModal, TripletStatusModal, TripletListModal } from '../components/TripletModal'
+import { OrchestratorModal } from '../components/OrchestratorModal'
 import { createOfficeGame } from '../game/OfficeGame'
 import { OfficeScene } from '../game/OfficeScene'
 import { EventBus, EVENTS } from '../game/events'
@@ -580,6 +581,25 @@ function IconActivity() {
   )
 }
 
+function IconQueue() {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="w-4 h-4"
+    >
+      <rect x="3" y="3" width="18" height="4" rx="1" />
+      <rect x="3" y="10" width="18" height="4" rx="1" />
+      <rect x="3" y="17" width="18" height="4" rx="1" />
+    </svg>
+  )
+}
+
 function IconPlus() {
   return (
     <svg
@@ -831,6 +851,7 @@ export function CommandCenter(props: CommandCenterProps) {
   const [shareSource, setShareSource] = useState<AgentState | null>(null)
   const [showLeaderboard, setShowLeaderboard] = useState(false)
   const [showTripletLauncher, setShowTripletLauncher] = useState(false)
+  const [showOrchestrator, setShowOrchestrator] = useState(false)
   const [showTripletList, setShowTripletList] = useState(false)
   const [viewingTriplet, setViewingTriplet] = useState<TripletWorkflow | null>(null)
   const [tripletPresets, setTripletPresets] = useState<TripletPreset[]>([])
@@ -896,9 +917,7 @@ export function CommandCenter(props: CommandCenterProps) {
   useEffect(() => {
     const handleAgentClicked = (_id: unknown, state: unknown) => {
       const agentState = state as AgentState
-      if (agentState.config.model === 'cursor-agent') {
-        window.api.focusCursorIDE().catch(() => {})
-      } else if (agentState.tty) {
+      if (agentState.tty) {
         window.api.focusSession(agentState.tty).catch(() => {})
       }
     }
@@ -976,8 +995,8 @@ export function CommandCenter(props: CommandCenterProps) {
   const handleFocusiTerm = useCallback(
     async (state: AgentState) => {
       try {
-        if (state.config.model === 'cursor-agent') {
-          await window.api.focusCursorIDE()
+        if (state.tty) {
+          await window.api.focusSession(state.tty)
         } else {
           await window.api.focusAgent(state.config.id)
         }
@@ -1224,6 +1243,7 @@ export function CommandCenter(props: CommandCenterProps) {
           <QuickActionButton icon={<IconNewspaper />} label="Briefing" onClick={props.onOpenBriefing} />
           <QuickActionButton icon={<IconFunnel />} label="Pipeline" onClick={props.onOpenPipeline} />
           <QuickActionButton icon={<IconActivity />} label="Activity" onClick={props.onOpenActivity} />
+          <QuickActionButton icon={<IconQueue />} label="Tasks" onClick={() => setShowOrchestrator(true)} />
         </div>
       </div>
 
@@ -1302,6 +1322,10 @@ export function CommandCenter(props: CommandCenterProps) {
           }}
           onClose={() => setShowTripletList(false)}
         />
+      )}
+
+      {showOrchestrator && (
+        <OrchestratorModal onClose={() => setShowOrchestrator(false)} />
       )}
 
       {viewingTriplet && (

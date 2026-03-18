@@ -293,3 +293,53 @@ export interface VaultIndexEntry {
   size: number
   tags: string[]
 }
+
+// ── Orchestrator Types ──────────────────────────────────────────────────────
+
+export type TaskPriority = 'critical' | 'high' | 'normal' | 'low'
+export type TaskStatusType = 'queued' | 'assigned' | 'active' | 'completed' | 'failed' | 'cancelled'
+export type TaskSource = 'slack' | 'dashboard' | 'api'
+
+export interface Task {
+  id: string
+  title: string
+  description: string
+  project: string
+  priority: TaskPriority
+  status: TaskStatusType
+  requiredSkills: string[]
+  preferredAgent?: string
+  assignedAgent?: string
+  assignedSessionId?: string
+  source: TaskSource
+  slackChannelId?: string
+  slackThreadTs?: string
+  createdAt: number
+  assignedAt?: number
+  completedAt?: number
+  result?: string
+  error?: string
+  retryCount: number
+  maxRetries: number
+}
+
+export interface AgentHealthStatus {
+  agentId: string
+  name: string
+  alive: boolean
+  pid?: number
+  memoryMB?: number
+  cpu?: string
+  uptime?: string
+  activeTasks: number
+  status: 'healthy' | 'warning' | 'dead'
+  warnings: string[]
+}
+
+export interface OrchestratorStats {
+  queueDepth: number
+  activeTasks: number
+  completedToday: number
+  failedToday: number
+  totalProcessed: number
+}

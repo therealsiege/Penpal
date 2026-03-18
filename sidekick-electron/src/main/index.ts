@@ -9,6 +9,7 @@ import { registerPtyHandlers, destroyAllPtys } from './pty'
 import { startSlackBridge, stopSlackBridge } from './slack-bridge'
 import { registerVaultProtocol } from './vault'
 import { startFileWatcher, stopFileWatcher } from './file-watcher'
+import { startOrchestrator, stopOrchestrator } from './orchestrator'
 
 // Load sidekick-graph's .env for Memgraph/Qdrant connection strings
 // __dirname is out/main (or src/main in dev) — go up to sidekick-electron/
@@ -20,6 +21,12 @@ const envPath = fs.existsSync(path.join(SIDEKICK_GRAPH, '.env'))
   ? path.join(SIDEKICK_GRAPH, '.env')
   : path.join(ELECTRON_ROOT, 'sidekick-graph', '.env')
 dotenv.config({ path: envPath })
+
+// Prevent EPIPE from Slack bridge logger crashing the app
+process.on('uncaughtException', (err) => {
+  if (err.message?.includes('EPIPE')) return
+  console.error('[uncaughtException]', err)
+})
 
 let mainWindow: BrowserWindow | null = null
 
@@ -75,6 +82,7 @@ app.whenReady().then(() => {
   createWindow()
   startSlackBridge()
   startFileWatcher()
+  startOrchestrator()
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
@@ -87,6 +95,7 @@ app.on('window-all-closed', () => {
 
 app.on('before-quit', async () => {
   stopFileWatcher()
+  stopOrchestrator()
   destroyAllPtys()
   await stopSlackBridge()
   await closeGraph()

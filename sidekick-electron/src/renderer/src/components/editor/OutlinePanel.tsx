@@ -56,9 +56,12 @@ export function OutlinePanel() {
       {headings.map((h, i) => (
         <div
           key={i}
-          className="px-3 py-1 text-xs text-slate-400 hover:text-slate-200 hover:bg-slate-800/40 cursor-pointer transition-colors truncate"
+          className="px-3 py-1 text-sm text-slate-400 hover:text-slate-200 hover:bg-slate-800/40 cursor-pointer transition-colors truncate"
           style={{ paddingLeft: `${(h.level - 1) * 12 + 12}px` }}
           title={h.text}
+          onClick={() => {
+            document.dispatchEvent(new CustomEvent('outline-scroll', { detail: { line: h.line } }))
+          }}
         >
           <span className={h.level === 1 ? 'font-semibold text-slate-300' : ''}>
             {h.text}

@@ -226,9 +226,8 @@ function getLatestTranscript(projectDir: string): TranscriptData | null {
           if (Array.isArray(blocks)) {
             const toolUses = blocks.filter((b: { type?: string }) => b.type === 'tool_use')
             if (toolUses.length > 0) {
-              waitingForInput = true
-              sessionMode = 'waiting'
-              interactionType = 'tool-approval'
+              sessionMode = 'working'
+              interactionType = 'none'
             } else {
               waitingForInput = true
               sessionMode = 'waiting'

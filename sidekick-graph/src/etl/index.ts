@@ -1,7 +1,7 @@
 import fs from "fs";
 import path from "path";
 import { glob } from "glob";
-import { config, resolveVaultPath } from "../shared/config.js";
+import { config, resolveVaultPath, getActiveVentures, getActiveDirectories } from "../shared/config.js";
 import { verifyConnection, closeConnections } from "../shared/connections.js";
 import { createSchema, dropAll } from "./db/schema.js";
 import { GraphImporter } from "./graph/importer.js";
@@ -87,10 +87,26 @@ const skipLLM = process.argv.includes("--skip-llm");
 const skipAnalytics = process.argv.includes("--skip-analytics");
 const skipNPI = process.argv.includes("--skip-npi");
 
+// Parse --venture flags: e.g. --venture openloop --venture 1putt
+const ventureFilter: string[] = [];
+for (let i = 0; i < process.argv.length; i++) {
+  if (process.argv[i] === "--venture" && process.argv[i + 1]) {
+    ventureFilter.push(process.argv[i + 1]);
+    i++;
+  }
+}
+
 async function main() {
+  const activeVentures = getActiveVentures(ventureFilter.length > 0 ? ventureFilter : undefined);
+  const activeDirs = getActiveDirectories(ventureFilter.length > 0 ? ventureFilter : undefined);
   console.log("Sidekick Knowledge Base → Memgraph + Qdrant Import");
   console.log(`Vault: ${config.vaultPath}`);
   console.log(`Mode: ${isClean ? "CLEAN (drop + reimport)" : "UPSERT (merge)"}`);
+  console.log(`\nActive ventures (${activeVentures.length}):`);
+  for (const v of activeVentures) {
+    console.log(`  ${v.name}: ${v.directories.length} directories`);
+    for (const d of v.directories) console.log(`    - ${d}`);
+  }
   if (skipEmbeddings) console.log("  Skipping embeddings (--skip-embeddings)");
   if (skipLLM) console.log("  Skipping LLM extraction (--skip-llm)");
   if (skipAnalytics) console.log("  Skipping MAGE analytics (--skip-analytics)");
@@ -165,10 +181,17 @@ async function main() {
   console.log("\n--- Walking vault directories ---");
   const allDirs = new Set<string>();
 
-  const mdFiles = await glob("**/*.md", {
-    cwd: config.vaultPath,
-    ignore: config.skipDirs.map((d) => `${d}/**`),
-  });
+  // Glob per active venture directory for precise control
+  let mdFiles: string[] = [];
+  for (const dir of activeDirs) {
+    const matches = await glob("**/*.md", {
+      cwd: path.join(config.vaultPath, dir),
+      ignore: config.skipDirs.map((d) => `${d}/**`),
+    });
+    mdFiles.push(...matches.map((f) => path.join(dir, f)));
+  }
+  // Deduplicate in case of overlapping directories
+  mdFiles = [...new Set(mdFiles)];
 
   // Collect all directories
   for (const file of mdFiles) {
@@ -356,12 +379,14 @@ async function main() {
     }
   }
 
-  // 9. Parse CRM CSV
-  console.log("\n--- Parsing CRM CSV ---");
-  const crmPath = resolveVaultPath(config.crmCsvPath);
+  // 9. Parse CRM CSVs per venture
+  console.log("\n--- Parsing CRM CSVs ---");
+  const allCrmPaths = activeVentures.filter((v) => v.crmCsvPath).map((v) => v.crmCsvPath!);
+  for (const csvRelPath of allCrmPaths) {
+  const crmPath = resolveVaultPath(csvRelPath);
   if (fs.existsSync(crmPath)) {
     const crmRecords = parseCRMCsv(crmPath);
-    console.log(`  Found ${crmRecords.length} CRM records`);
+    console.log(`  [${csvRelPath}] Found ${crmRecords.length} CRM records`);
 
     for (const crm of crmRecords) {
       importer.addNode(buildLeadNodeFromCRM(crm));
@@ -435,8 +460,9 @@ async function main() {
       }
     }
   } else {
-    console.log("  CRM CSV not found, skipping");
+    console.log(`  [${csvRelPath}] CRM CSV not found, skipping`);
   }
+  } // end CRM per-venture loop
 
   // 10. Update lead scores as node properties
   console.log("\n--- Updating lead scores ---");

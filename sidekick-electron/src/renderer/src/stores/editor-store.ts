@@ -15,6 +15,7 @@ interface EditorState {
   tabs: EditorTab[]
   activeTabId: string | null
   viewMode: ViewMode
+  recentFiles: string[]
 
   openFile: (path: string, content: string, mtime: number) => void
   closeTab: (id: string) => void
@@ -24,6 +25,7 @@ interface EditorState {
   setViewMode: (mode: ViewMode) => void
   updateTabContent: (id: string, content: string, mtime: number) => void
   getActiveTab: () => EditorTab | null
+  cycleTab: (direction: 1 | -1) => void
 }
 
 function tabId(path: string): string {
@@ -33,18 +35,25 @@ function tabId(path: string): string {
 export const useEditorStore = create<EditorState>((set, get) => ({
   tabs: [],
   activeTabId: null,
-  viewMode: 'source',
+  viewMode: 'preview',
+  recentFiles: [],
 
   openFile: (path, content, mtime) => {
     const id = tabId(path)
     const existing = get().tabs.find(t => t.id === id)
     if (existing) {
-      set({ activeTabId: id })
+      set(state => ({
+        activeTabId: id,
+        viewMode: 'preview',
+        recentFiles: [path, ...state.recentFiles.filter(p => p !== path)].slice(0, 20),
+      }))
       return
     }
     set(state => ({
       tabs: [...state.tabs, { id, path, dirty: false, scrollPos: 0, content, mtime }],
       activeTabId: id,
+      viewMode: 'preview',
+      recentFiles: [path, ...state.recentFiles.filter(p => p !== path)].slice(0, 20),
     }))
   },
 
@@ -93,5 +102,13 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   getActiveTab: () => {
     const { tabs, activeTabId } = get()
     return tabs.find(t => t.id === activeTabId) ?? null
+  },
+
+  cycleTab: (direction) => {
+    const { tabs, activeTabId } = get()
+    if (tabs.length <= 1) return
+    const idx = tabs.findIndex(t => t.id === activeTabId)
+    const next = (idx + direction + tabs.length) % tabs.length
+    set({ activeTabId: tabs[next].id })
   },
 }))

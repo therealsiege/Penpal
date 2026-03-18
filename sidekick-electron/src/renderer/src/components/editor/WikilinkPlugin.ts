@@ -1,6 +1,5 @@
 import { ViewPlugin, Decoration, type DecorationSet, type EditorView, WidgetType } from '@codemirror/view'
 import { RangeSetBuilder } from '@codemirror/state'
-import { syntaxTree } from '@codemirror/language'
 
 class WikilinkWidget extends WidgetType {
   constructor(readonly display: string, readonly target: string) { super() }
