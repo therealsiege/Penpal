@@ -122,6 +122,8 @@ interface WorkstationSprite {
   lastAnimMode?: 'idle' | 'working' | 'waiting'
   lastStateFingerprint?: string
   lodDetailObjects: Phaser.GameObjects.GameObject[]
+  lookAroundTimer?: Phaser.Time.TimerEvent
+  stretchTimer?: Phaser.Time.TimerEvent
 }
 
 interface Room {
@@ -1082,6 +1084,8 @@ export class OfficeScene extends Phaser.Scene {
     if (ws.monitorGlowTween) ws.monitorGlowTween.destroy()
     if (ws.screenTween)      ws.screenTween.destroy()
     if (ws.pulseTween)       ws.pulseTween.destroy()
+    if (ws.lookAroundTimer)  ws.lookAroundTimer.destroy()
+    if (ws.stretchTimer)     ws.stretchTimer.destroy()
     if (ws.steamTweens) { for (const t of ws.steamTweens) t.destroy() }
     this.tweens.killTweensOf(ws.thoughtBubble)
     ws.container.destroy()
@@ -1337,6 +1341,8 @@ export class OfficeScene extends Phaser.Scene {
     if (ws.lastAnimMode === mode) return
     ws.lastAnimMode = mode
 
+    const prevMode = ws.lastAnimMode
+
     // Tear down all animation state
     if (ws.bounceTween)      { ws.bounceTween.destroy();      ws.bounceTween      = undefined }
     if (ws.dotPulseTween)    { ws.dotPulseTween.destroy();    ws.dotPulseTween    = undefined; ws.statusDot.setAlpha(1) }
@@ -1345,6 +1351,8 @@ export class OfficeScene extends Phaser.Scene {
     if (ws.breathTween)      { ws.breathTween.destroy();      ws.breathTween      = undefined }
     if (ws.headTiltTween)    { ws.headTiltTween.destroy();    ws.headTiltTween    = undefined }
     if (ws.pulseTween)       { ws.pulseTween.destroy();       ws.pulseTween       = undefined }
+    if (ws.lookAroundTimer)  { ws.lookAroundTimer.destroy();  ws.lookAroundTimer  = undefined }
+    if (ws.stretchTimer)     { ws.stretchTimer.destroy();     ws.stretchTimer     = undefined }
 
     ws.sprite.y = WS_SPRITE_Y
     ws.sprite.x = 0
@@ -1394,6 +1402,48 @@ export class OfficeScene extends Phaser.Scene {
         duration: 2800, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
       })
       this.restoreDeskStroke(ws)
+
+      // "Just finished" bounce when transitioning from working→idle
+      if (prevMode === 'working') {
+        this.tweens.add({
+          targets: ws.sprite, y: WS_SPRITE_Y - 6,
+          duration: 200, yoyo: true, ease: 'Back.easeOut',
+          onComplete: () => { ws.sprite.y = WS_SPRITE_Y },
+        })
+      }
+
+      // Periodic look-around: random head tilt every 4-8s
+      ws.lookAroundTimer = this.time.addEvent({
+        delay: 4000 + Math.random() * 4000,
+        loop: true,
+        callback: () => {
+          if (ws.headTiltTween) ws.headTiltTween.destroy()
+          const angle = (Math.random() - 0.5) * 6
+          ws.headTiltTween = this.tweens.add({
+            targets: ws.sprite, angle,
+            duration: 600, yoyo: true, hold: 800, ease: 'Sine.easeInOut',
+            onComplete: () => { ws.sprite.setAngle(0) },
+          })
+        },
+      })
+
+      // Occasional stretch: subtle scale-up every 10-18s
+      ws.stretchTimer = this.time.addEvent({
+        delay: 10000 + Math.random() * 8000,
+        loop: true,
+        callback: () => {
+          this.tweens.add({
+            targets: ws.sprite,
+            scaleX: CHAR_SCALE * 1.08, scaleY: CHAR_SCALE * 1.05,
+            y: WS_SPRITE_Y - 3,
+            duration: 500, yoyo: true, hold: 300, ease: 'Sine.easeInOut',
+            onComplete: () => {
+              ws.sprite.setScale(CHAR_SCALE)
+              ws.sprite.y = WS_SPRITE_Y
+            },
+          })
+        },
+      })
     }
   }
 
