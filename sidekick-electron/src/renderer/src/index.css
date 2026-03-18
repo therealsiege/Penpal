@@ -12,12 +12,20 @@
 
 /* ── Base ──────────────────────────────────────────────────────────────────── */
 
+:root {
+  --ui-font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
+  --ui-font-size: 15px;
+  --editor-font-family: ui-monospace, 'SF Mono', 'Cascadia Code', 'Fira Code', Menlo, monospace;
+  --editor-font-size: 15px;
+  --editor-line-height: 1.6;
+}
+
 html, body {
   margin: 0;
   background: #020617;
   color: #e2e8f0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
-  font-size: 14px;
+  font-family: var(--ui-font-family);
+  font-size: var(--ui-font-size);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -333,3 +341,27 @@ body::before {
   margin-right: 0.3em;
   accent-color: #3b82f6;
 }
+
+/* ── Light theme overrides ────────────────────────────────────────────────── */
+
+.light-theme,
+.light-theme body {
+  background: #f8fafc;
+  color: #1e293b;
+}
+
+.light-theme ::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+
+.light-theme ::-webkit-scrollbar-thumb {
+  background: #94a3b8;
+}
+
+.light-theme .vault-markdown h1 { color: #1e293b; }
+.light-theme .vault-markdown h2 { color: #334155; }
+.light-theme .vault-markdown h3 { color: #475569; }
+.light-theme .vault-markdown code { background: rgba(226, 232, 240, 0.6); color: #1e40af; }
+.light-theme .vault-markdown pre { background: #f1f5f9; border-color: #e2e8f0; }
+.light-theme .vault-markdown pre code { color: #334155; }
+.light-theme .vault-markdown blockquote { border-left-color: #cbd5e1; color: #475569; }

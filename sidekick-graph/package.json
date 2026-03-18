@@ -6,6 +6,8 @@
   "scripts": {
     "etl": "tsx src/etl/index.ts",
     "etl:clean": "tsx src/etl/index.ts --clean",
+    "etl:openloop": "tsx src/etl/index.ts --venture openloop",
+    "etl:1putt": "tsx src/etl/index.ts --venture 1putt",
     "mcp:dev": "tsx src/mcp/index.ts",
     "mcp:build": "tsc",
     "mcp:start": "node dist/mcp/index.js",

@@ -11,6 +11,7 @@ import { darkThemeExtensions } from './cm-theme'
 import { wikilinkPlugin } from './WikilinkPlugin'
 import { wikilinkCompletionSource } from './WikilinkAutocomplete'
 import { imagePlugin } from './ImageWidget'
+import { pdfPlugin } from './PdfWidget'
 import { tagCompletionSource } from './TagAutocomplete'
 
 interface MarkdownEditorProps {
@@ -67,6 +68,7 @@ export function MarkdownEditor({ content, onChange, onSave, onNavigate }: Markdo
         autocompletion({ override: [wikilinkCompletionSource, tagCompletionSource] }),
         wikilinkPlugin,
         imagePlugin,
+        pdfPlugin,
         keymap.of([
           ...defaultKeymap,
           ...historyKeymap,
@@ -98,8 +100,19 @@ export function MarkdownEditor({ content, onChange, onSave, onNavigate }: Markdo
     }
     container?.addEventListener('wikilink-navigate', handler)
 
+    const scrollHandler = (e: Event) => {
+      const view = viewRef.current
+      if (!view) return
+      const lineNum = (e as CustomEvent).detail?.line
+      if (typeof lineNum !== 'number') return
+      const line = view.state.doc.line(Math.min(lineNum + 1, view.state.doc.lines))
+      view.dispatch({ effects: EditorView.scrollIntoView(line.from, { y: 'start' }) })
+    }
+    document.addEventListener('outline-scroll', scrollHandler)
+
     return () => {
       container?.removeEventListener('wikilink-navigate', handler)
+      document.removeEventListener('outline-scroll', scrollHandler)
       viewRef.current?.destroy()
       viewRef.current = null
     }

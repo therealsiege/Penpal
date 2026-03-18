@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { FileTree } from '../components/vault/FileTree'
 import { EditorPane } from '../components/editor/EditorPane'
 import { VaultSearch } from '../components/vault/VaultSearch'
@@ -6,10 +6,12 @@ import { TagFilter } from '../components/vault/TagFilter'
 import { SendToAgent } from '../components/vault/SendToAgent'
 import { QuickSwitcher } from '../components/editor/QuickSwitcher'
 import { SidePanel } from '../components/editor/SidePanel'
+import { SplitContainer } from '../components/editor/SplitContainer'
 import { SearchPanel } from '../components/vault/SearchPanel'
 import { DailyNote } from '../components/editor/DailyNote'
 import { useEditorStore } from '../stores/editor-store'
 import { useVaultIndex } from '../stores/vault-index'
+import { useAppearanceStore } from '../stores/appearance-store'
 
 export function VaultPanel() {
   const [previewPath, setPreviewPath] = useState<string | null>(null)
@@ -21,6 +23,7 @@ export function VaultPanel() {
   const [showQuickSwitcher, setShowQuickSwitcher] = useState(false)
   const [showRightSidebar, setShowRightSidebar] = useState(false)
   const [leftSidebarMode, setLeftSidebarMode] = useState<'tree' | 'search'>('tree')
+  const [splitMode, setSplitMode] = useState<'none' | 'horizontal'>('none')
 
   const openFile = useEditorStore(s => s.openFile)
   const closeTab = useEditorStore(s => s.closeTab)
@@ -30,6 +33,7 @@ export function VaultPanel() {
   const indexLoaded = useVaultIndex(s => s.loaded)
 
   const updateTabContent = useEditorStore(s => s.updateTabContent)
+  const cycleTab = useEditorStore(s => s.cycleTab)
 
   // Load vault index on mount for wikilinks + autocomplete + quick switcher
   useEffect(() => {
@@ -37,10 +41,13 @@ export function VaultPanel() {
   }, [indexLoaded, loadIndex])
 
   // Listen for external file changes (Obsidian Sync, other editors)
+  const tabsRef = useRef(tabs)
+  useEffect(() => { tabsRef.current = tabs }, [tabs])
+
   useEffect(() => {
     const cleanup = window.api.onVaultFileChanged(async (event) => {
       // Reload tab content if the changed file is open and not dirty
-      const tab = tabs.find(t => t.path === event.path)
+      const tab = tabsRef.current.find(t => t.path === event.path)
       if (tab && !tab.dirty && event.eventType === 'change') {
         try {
           const result = await window.api.vaultRead(event.path)
@@ -51,7 +58,7 @@ export function VaultPanel() {
       }
     })
     return cleanup
-  }, [tabs, updateTabContent])
+  }, [updateTabContent])
 
   const handleToggleSelect = useCallback((path: string) => {
     setSelectedFiles(prev => {
@@ -65,11 +72,11 @@ export function VaultPanel() {
     })
   }, [])
 
-  const handlePreview = useCallback((path: string) => {
-    setPreviewPath(path)
-  }, [])
+  const setViewMode = useEditorStore(s => s.setViewMode)
 
-  const handleOpenInEditor = useCallback(async (path: string) => {
+  // Single click: open file in preview mode
+  const handlePreview = useCallback(async (path: string) => {
+    setPreviewPath(path)
     try {
       const result = await window.api.vaultRead(path)
       if (result?.content != null) {
@@ -77,6 +84,17 @@ export function VaultPanel() {
       }
     } catch { /* skip */ }
   }, [openFile])
+
+  // Double click: switch to edit mode
+  const handleOpenInEditor = useCallback(async (path: string) => {
+    try {
+      const result = await window.api.vaultRead(path)
+      if (result?.content != null) {
+        openFile(path, result.content, result.mtime)
+        setViewMode('source')
+      }
+    } catch { /* skip */ }
+  }, [openFile, setViewMode])
 
   // Load files for tag filter
   useEffect(() => {
@@ -109,6 +127,8 @@ export function VaultPanel() {
     }
   }, [resizing])
 
+  const { zoom, zoomIn, zoomOut, zoomReset } = useAppearanceStore()
+
   // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -120,17 +140,37 @@ export function VaultPanel() {
         e.preventDefault()
         setShowQuickSwitcher(true)
       }
-      if (e.metaKey && e.key === '\\') {
+      if (e.metaKey && e.shiftKey && e.key === '\\') {
         e.preventDefault()
         setShowRightSidebar(s => !s)
+      } else if (e.metaKey && e.key === '\\') {
+        e.preventDefault()
+        setSplitMode(s => s === 'none' ? 'horizontal' : 'none')
+      }
+      if (e.metaKey && e.key === 'Tab') {
+        e.preventDefault()
+        cycleTab(e.shiftKey ? -1 : 1)
+      }
+      // Zoom: Cmd+= / Cmd+- / Cmd+0
+      if (e.metaKey && (e.key === '=' || e.key === '+')) {
+        e.preventDefault()
+        zoomIn()
+      }
+      if (e.metaKey && e.key === '-') {
+        e.preventDefault()
+        zoomOut()
+      }
+      if (e.metaKey && e.key === '0') {
+        e.preventDefault()
+        zoomReset()
       }
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [activeTabId, closeTab])
+  }, [activeTabId, closeTab, cycleTab, zoomIn, zoomOut, zoomReset])
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full vault-zoom" style={{ zoom }}>
       {/* Quick Switcher overlay */}
       {showQuickSwitcher && (
         <QuickSwitcher
@@ -144,7 +184,7 @@ export function VaultPanel() {
         <div className="drag-region flex-1 h-2" />
         <button
           onClick={() => setShowQuickSwitcher(true)}
-          className="text-[10px] text-slate-500 hover:text-slate-300 px-2 py-0.5 rounded bg-slate-800/40 transition-colors"
+          className="text-xs text-slate-500 hover:text-slate-300 px-2 py-1 rounded bg-slate-800/40 transition-colors"
           title="Quick Open (Cmd+P)"
         >
           Open...
@@ -159,7 +199,7 @@ export function VaultPanel() {
         <TagFilter activeTag={activeTag} onSelectTag={setActiveTag} />
         <button
           onClick={() => setShowRightSidebar(s => !s)}
-          className={`text-[10px] px-2 py-0.5 rounded transition-colors ${
+          className={`text-xs px-2 py-1 rounded transition-colors ${
             showRightSidebar ? 'bg-blue-600/30 text-blue-300' : 'text-slate-500 hover:text-slate-300 bg-slate-800/40'
           }`}
           title="Toggle Outline (Cmd+\\)"
@@ -181,7 +221,7 @@ export function VaultPanel() {
               <button
                 key={mode}
                 onClick={() => setLeftSidebarMode(mode)}
-                className={`flex-1 px-2 py-1 text-[10px] capitalize transition-colors ${
+                className={`flex-1 px-2 py-1.5 text-xs capitalize transition-colors ${
                   leftSidebarMode === mode
                     ? 'text-blue-300 bg-slate-800/40'
                     : 'text-slate-500 hover:text-slate-300'
@@ -213,7 +253,11 @@ export function VaultPanel() {
 
         {/* Editor pane */}
         <div className="flex-1 overflow-hidden">
-          <EditorPane />
+          {splitMode === 'none' ? (
+            <EditorPane />
+          ) : (
+            <SplitContainer direction="horizontal" left={<EditorPane />} right={<EditorPane />} />
+          )}
         </div>
 
         {/* Right sidebar (outline/backlinks) */}
@@ -241,7 +285,13 @@ export function VaultPanel() {
             </button>
           )}
         </div>
-        <SendToAgent selectedFiles={selectedFiles} />
+        <div className="flex items-center gap-1">
+          <SendToAgent selectedFiles={selectedFiles} />
+          <span className="mx-2 w-px h-4 bg-slate-800/60" />
+          <button onClick={zoomOut} className="w-6 h-6 rounded text-slate-500 hover:text-slate-300 hover:bg-slate-800/60 flex items-center justify-center text-xs transition-colors" title="Zoom Out (Cmd+-)">-</button>
+          <button onClick={zoomReset} className="px-1 h-6 rounded text-slate-500 hover:text-slate-300 hover:bg-slate-800/60 text-[10px] tabular-nums transition-colors" title="Reset Zoom (Cmd+0)">{Math.round(zoom * 100)}%</button>
+          <button onClick={zoomIn} className="w-6 h-6 rounded text-slate-500 hover:text-slate-300 hover:bg-slate-800/60 flex items-center justify-center text-xs transition-colors" title="Zoom In (Cmd+=)">+</button>
+        </div>
       </div>
     </div>
   )

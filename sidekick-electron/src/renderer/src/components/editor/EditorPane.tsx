@@ -9,6 +9,7 @@ import remarkGfm from 'remark-gfm'
 import rehypeHighlight from 'rehype-highlight'
 import matter from 'gray-matter'
 import { FrontmatterEditor } from './FrontmatterEditor'
+import { TemplateInserter } from './TemplateInserter'
 
 export function EditorPane() {
   const tabs = useEditorStore(s => s.tabs)
@@ -80,8 +81,8 @@ export function EditorPane() {
     return (
       <div className="flex items-center justify-center h-full text-slate-600">
         <div className="text-center">
-          <div className="text-2xl mb-2">Select a file to edit</div>
-          <div className="text-xs text-slate-700">Click any file in the tree, or double-click to open in a tab</div>
+          <div className="text-2xl mb-2">Select a file</div>
+          <div className="text-sm text-slate-700">Click to preview, double-click to edit</div>
         </div>
       </div>
     )
@@ -95,13 +96,15 @@ export function EditorPane() {
 
       {activeTab && (
         <div className="shrink-0 flex items-center justify-between px-3 py-1.5 border-b border-slate-800/60 bg-slate-900/40">
-          <div className="text-xs text-slate-500 truncate mr-4">{activeTab.path}</div>
-          <div className="flex items-center gap-1 shrink-0">
+          <div className="text-sm text-slate-500 truncate mr-4">{activeTab.path}</div>
+          <div className="flex items-center gap-2 shrink-0">
+            <TemplateInserter onInsert={(content) => { if (activeTabId && activeTab?.content != null) setDirty(activeTabId, true, activeTab.content + '\n' + content) }} />
+            <div className="flex items-center gap-1">
             {(['source', 'preview'] as const).map(mode => (
               <button
                 key={mode}
                 onClick={() => setViewMode(mode)}
-                className={`px-2 py-0.5 text-[10px] rounded transition-colors ${
+                className={`px-2 py-0.5 text-xs rounded transition-colors ${
                   viewMode === mode
                     ? 'bg-blue-600/30 text-blue-300'
                     : 'text-slate-500 hover:text-slate-300'
@@ -110,6 +113,7 @@ export function EditorPane() {
                 {mode === 'source' ? 'Edit' : 'Preview'}
               </button>
             ))}
+            </div>
           </div>
         </div>
       )}

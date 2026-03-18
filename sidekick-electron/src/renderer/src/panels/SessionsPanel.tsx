@@ -84,12 +84,12 @@ function SessionChat({
           </div>
         </div>
         <button
-          onClick={() => isCursor ? window.api.focusCursorIDE() : window.api.focusSession(session.tty)}
+          onClick={() => window.api.focusSession(session.tty)}
           className={`px-3 py-1.5 text-xs rounded-md text-white transition-colors ${
             isCursor ? 'bg-purple-600 hover:bg-purple-500' : 'bg-blue-600 hover:bg-blue-500'
           }`}
         >
-          {isCursor ? 'Open in Cursor' : 'Open in Terminal'}
+          Focus Terminal
         </button>
       </div>
 
@@ -133,10 +133,10 @@ function SessionChat({
           <p className="text-xs text-slate-500">
             Cursor agent sessions are read-only.{' '}
             <button
-              onClick={() => window.api.focusCursorIDE()}
+              onClick={() => window.api.focusSession(session.tty)}
               className="text-purple-400 hover:text-purple-300 underline"
             >
-              Open Cursor
+              Focus Terminal
             </button>
             {' '}to interact.
           </p>
@@ -278,11 +278,7 @@ function SessionCard({
         <button
           onClick={e => {
             e.stopPropagation()
-            if (isCursor) {
-              window.api.focusCursorIDE()
-            } else {
-              window.api.focusSession(session.tty)
-            }
+            window.api.focusSession(session.tty)
           }}
           className="shrink-0 px-2 py-0.5 text-[10px] bg-slate-800 hover:bg-slate-700 rounded border border-slate-700 text-slate-400 transition-colors"
         >

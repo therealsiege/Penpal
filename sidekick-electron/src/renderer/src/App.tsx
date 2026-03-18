@@ -11,6 +11,7 @@ import { ActivityModal } from './components/ActivityModal'
 import { CommandCenter } from './panels/CommandCenter'
 import { VaultPanel } from './panels/VaultPanel'
 import { GraphPanel } from './panels/GraphPanel'
+import { SettingsPanel } from './panels/SettingsPanel'
 
 function AppContent() {
   const [activePanel, setActivePanel] = useState('office')
@@ -206,6 +207,20 @@ function AppContent() {
         toast(`Pause sent to ${r.sent} agents`, 'success')
       },
     },
+    {
+      id: 'vault-open',
+      label: 'Open Vault',
+      description: 'Browse and edit vault files',
+      category: 'Vault',
+      action: () => setActivePanel('vault'),
+    },
+    {
+      id: 'vault-graph',
+      label: 'Open Graph View',
+      description: 'Visual knowledge graph',
+      category: 'Vault',
+      action: () => setActivePanel('graph'),
+    },
   ], [toast])
 
   return (
@@ -230,14 +245,7 @@ function AppContent() {
         )}
         {activePanel === 'vault' && <VaultPanel />}
         {activePanel === 'graph' && <GraphPanel />}
-        {activePanel === 'settings' && (
-          <div className="flex items-center justify-center h-full text-slate-500">
-            <div className="text-center">
-              <p className="text-lg font-semibold text-slate-300" style={{ fontFamily: 'Monogram, monospace' }}>Settings</p>
-              <p className="text-xs mt-2">Coming soon</p>
-            </div>
-          </div>
-        )}
+        {activePanel === 'settings' && <SettingsPanel />}
       </Layout>
     </>
   )

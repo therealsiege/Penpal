@@ -22,6 +22,13 @@ const FRAME_MONITOR      = 122
 
 const ROOM_TILE_SIZE = 48
 
+const OFFICE_FRAME_PLANT     = 68
+const OFFICE_FRAME_PLANT_SM  = 53
+const OFFICE_FRAME_PICTURE   = 64
+const OFFICE_FRAME_PICTURE2  = 65
+const OFFICE_FRAME_PICTURE3  = 66
+const OFFICE_FRAME_BOOKSHELF = 96
+
 // ---------------------------------------------------------------------------
 // Layout constants
 // ---------------------------------------------------------------------------
@@ -39,7 +46,6 @@ const WS_SPRITE_Y   = -5
 const WS_DESK_Y     = 18
 const WS_MONITOR_Y  = 5
 const WS_NAME_Y     = 40
-const WS_BLURB_Y    = 50
 const WS_DOT_GAP    = 4
 
 // Colors
@@ -65,15 +71,24 @@ interface WorkstationSprite {
   nameText: Phaser.GameObjects.Text
   statusDot: Phaser.GameObjects.Arc
   roleBadge: Phaser.GameObjects.Text | null
-  blurbText: Phaser.GameObjects.Text
   deskBody: Phaser.GameObjects.Rectangle
   deskTop: Phaser.GameObjects.Rectangle
   monitorSprite: Phaser.GameObjects.Sprite | null
   chairSprite: Phaser.GameObjects.Sprite | null
+  monitorGlowOverlay?: Phaser.GameObjects.Arc
+  screenLines?: Phaser.GameObjects.Graphics
+  thoughtBubble: Phaser.GameObjects.Container
+  thoughtBubbleText: Phaser.GameObjects.Text
+  thoughtBubbleBg: Phaser.GameObjects.Graphics
   state: AgentState | null
   breathTween?: Phaser.Tweens.Tween
   bounceTween?: Phaser.Tweens.Tween
   dotPulseTween?: Phaser.Tweens.Tween
+  monitorGlowTween?: Phaser.Tweens.Tween
+  screenTween?: Phaser.Tweens.Tween
+  typingTween?: Phaser.Tweens.Tween
+  headTiltTween?: Phaser.Tweens.Tween
+  pulseTween?: Phaser.Tweens.Tween
   lastAnimMode?: 'idle' | 'working' | 'waiting'
 }
 
@@ -88,6 +103,8 @@ interface Room {
   container: Phaser.GameObjects.Container
   workstations: Map<string, WorkstationSprite>
   floorGraphics: Phaser.GameObjects.Graphics
+  activityBar: Phaser.GameObjects.Rectangle
+  activityBarTween: Phaser.Tweens.Tween | null
 }
 
 // ---------------------------------------------------------------------------
@@ -123,7 +140,15 @@ export class OfficeScene extends Phaser.Scene {
   private tripletLines: TripletLineInfo[] = []
   private tripletGraphics: Phaser.GameObjects.Graphics | null = null
 
-  // Fix 11: Hover tooltip
+  // Office background (standalone, not a container)
+  private officeGraphics: Phaser.GameObjects.Graphics | null = null
+  private officeDecoSprites: Phaser.GameObjects.Sprite[] = []
+
+  // Typing spark particles
+  private typingParticlePool: Phaser.GameObjects.Arc[] = []
+  private typingParticleTimer: Phaser.Time.TimerEvent | null = null
+
+  // Hover tooltip
   private tooltipText: Phaser.GameObjects.Text | null = null
   private tooltipBg: Phaser.GameObjects.Rectangle | null = null
 
@@ -158,6 +183,15 @@ export class OfficeScene extends Phaser.Scene {
 
     this.viewWidth  = this.scale.width
     this.viewHeight = this.scale.height
+
+    // Office background (drawn behind rooms, updated in layoutRooms)
+    this.officeGraphics = this.add.graphics()
+
+    // Typing spark particle pool
+    this.initParticlePool()
+    this.typingParticleTimer = this.time.addEvent({
+      delay: 200, callback: () => this.tickParticles(), loop: true,
+    })
 
     // Camera pan
     this.input.on('pointermove', (p: Phaser.Input.Pointer) => {
@@ -284,16 +318,21 @@ export class OfficeScene extends Phaser.Scene {
     const floorGraphics = this.add.graphics()
     container.add(floorGraphics)
 
+    const activityBar = this.add.rectangle(-width / 2, height / 2 + 2, 0, 2, 0x34d399, 1).setOrigin(0, 0)
+    container.add(activityBar)
+
     const room: Room = {
       cwd, label, agents,
       x: 0, y: 0, width, height,
       container,
       workstations: new Map(),
       floorGraphics,
+      activityBar, activityBarTween: null,
     }
 
     this.drawRoomBackground(room)
     this.syncWorkstations(room, agents)
+    this.updateRoomActivity(room)
     return room
   }
 
@@ -305,9 +344,11 @@ export class OfficeScene extends Phaser.Scene {
     room.height = height
     if (sizeChanged) this.drawRoomBackground(room)
     this.syncWorkstations(room, agents)
+    this.updateRoomActivity(room)
   }
 
   private destroyRoom(room: Room): void {
+    if (room.activityBarTween) room.activityBarTween.destroy()
     for (const ws of room.workstations.values()) {
       this.destroyWorkstation(ws)
     }
@@ -460,18 +501,85 @@ export class OfficeScene extends Phaser.Scene {
     wsContainer.add(deskTop)
 
     let monitorSprite: Phaser.GameObjects.Sprite | null = null
+    let monitorGlowOverlay: Phaser.GameObjects.Arc | undefined
+    let screenLines: Phaser.GameObjects.Graphics | undefined
+    let screenTween: Phaser.Tweens.Tween | undefined
     if (this.officeTilesLoaded) {
+      monitorGlowOverlay = this.add.circle(0, WS_MONITOR_Y, 14, 0x0ea5e9, 0.15).setVisible(false)
+      wsContainer.add(monitorGlowOverlay)
       monitorSprite = this.add.sprite(0, WS_MONITOR_Y, 'office', FRAME_MONITOR).setScale(0.42)
       wsContainer.add(monitorSprite)
+      // Scrolling screen content lines
+      screenLines = this.add.graphics().setVisible(false)
+      wsContainer.add(screenLines)
+      const LINE_COLORS = [0x0ea5e9, 0x34d399]
+      const lineWidths = Array.from({ length: 4 }, () => 6 + Math.random() * 6)
+      const lineColors = lineWidths.map(() => LINE_COLORS[Math.floor(Math.random() * LINE_COLORS.length)])
+      screenTween = this.tweens.addCounter({
+        from: 0, to: 1, duration: 1200 + Math.random() * 600, repeat: -1, ease: 'Linear',
+        onUpdate: (tw) => {
+          if (!screenLines?.active) return
+          screenLines.clear()
+          const v = tw.getValue()
+          for (let i = 0; i < 4; i++) {
+            const y = WS_MONITOR_Y + ((v * 13 + i * 3.25) % 13) - 6.5
+            screenLines.fillStyle(lineColors[i], 0.5)
+            screenLines.fillRect(-lineWidths[i] / 2, y, lineWidths[i], 1)
+          }
+        },
+      })
+      screenTween.pause()
     } else {
       wsContainer.add(this.add.rectangle(0, WS_MONITOR_Y, 16, 13, 0x1a1a2e).setStrokeStyle(1, 0x4a5568, 0.8))
     }
+
+    // Coffee mug
+    const mugBody = this.add.rectangle(22, WS_DESK_Y - 3, 5, 6, 0x8b5cf6).setStrokeStyle(0.5, 0x6d28d9, 0.8)
+    wsContainer.add(mugBody)
+    const mugHandle = this.add.arc(25, WS_DESK_Y - 3, 2.5, 0, 180, false, 0x000000, 0).setStrokeStyle(1, 0x8b5cf6, 0.8)
+    wsContainer.add(mugHandle)
+
+    // Coffee steam
+    const steamContainer = this.add.container(22, WS_DESK_Y - 7)
+    wsContainer.add(steamContainer)
+    for (let i = 0; i < 3; i++) {
+      const steam = this.add.circle((i - 1) * 2, 0, 1, 0xffffff, 0.15)
+      steamContainer.add(steam)
+      this.tweens.add({
+        targets: steam, y: -8 - Math.random() * 4, alpha: 0,
+        duration: 1500 + Math.random() * 800,
+        delay: i * 500, yoyo: false, repeat: -1, ease: 'Sine.easeOut',
+        onRepeat: () => { steam.y = 0; steam.setAlpha(0.15) },
+      })
+    }
+
+    // Desk lamp
+    const lampBase = this.add.rectangle(-24, WS_DESK_Y - 2, 6, 3, 0x94a3b8)
+    wsContainer.add(lampBase)
+    const lampArm = this.add.rectangle(-24, WS_DESK_Y - 8, 1.5, 10, 0x94a3b8)
+    wsContainer.add(lampArm)
+    const lampShade = this.add.triangle(-24, WS_DESK_Y - 14, -5, 6, 0, -2, 5, 6, 0xfbbf24, 0.8)
+    wsContainer.add(lampShade)
+    const lampLight = this.add.triangle(-24, WS_DESK_Y - 4, -10, 18, 0, 0, 10, 18, 0xfbbf24, 0.04)
+    wsContainer.add(lampLight)
+
+    // Character shadow
+    const shadow = this.add.ellipse(0, WS_SPRITE_Y + 2, 20, 6, 0x000000, 0.2)
+    wsContainer.add(shadow)
 
     const charIdx = isCursor ? 1 : this.getCharacterIndex(agent.config.name)
     const frame   = this.getPoseFrame(charIdx, agent)
     const sprite  = this.add.sprite(0, WS_SPRITE_Y, 'characters', frame)
     sprite.setScale(CHAR_SCALE).setOrigin(0.5, 1)
     wsContainer.add(sprite)
+
+    // Thought bubble
+    const thoughtBubbleBg = this.add.graphics()
+    const thoughtBubbleText = this.add.text(0, -1, '', {
+      fontSize: '13px', color: '#ffffff', fontFamily: 'system-ui, sans-serif', fontStyle: 'bold', resolution: 2,
+    }).setOrigin(0.5)
+    const thoughtBubble = this.add.container(4, WS_SPRITE_Y - 58, [thoughtBubbleBg, thoughtBubbleText]).setVisible(false)
+    wsContainer.add(thoughtBubble)
 
     // Show persona name (e.g. "Marcus Chen") instead of title
     const nameText = this.add.text(0, WS_NAME_Y, '', {
@@ -487,20 +595,15 @@ export class OfficeScene extends Phaser.Scene {
 
     const roleBadge: Phaser.GameObjects.Text | null = null
 
-    const blurbText = this.add.text(0, WS_BLURB_Y, '', {
-      fontSize: '9px', color: '#94a3b8', fontFamily: 'system-ui, sans-serif',
-      align: 'center', wordWrap: { width: WORKSTATION_W + 20 },
-      resolution: 2,
-    }).setOrigin(0.5, 0).setVisible(false)
-    wsContainer.add(blurbText)
-
     const hitArea = this.add.rectangle(0, 5, WORKSTATION_W - 6, WORKSTATION_H - 10, 0x000000, 0)
       .setInteractive({ useHandCursor: true })
     wsContainer.add(hitArea)
 
     const ws: WorkstationSprite = {
       container: wsContainer, sprite, nameText, statusDot, roleBadge,
-      blurbText, deskBody, deskTop, monitorSprite, chairSprite, state: agent,
+      deskBody, deskTop, monitorSprite, chairSprite,
+      monitorGlowOverlay, screenLines, screenTween,
+      thoughtBubble, thoughtBubbleText, thoughtBubbleBg, state: agent,
     }
 
     let lastClickTime = 0
@@ -534,7 +637,6 @@ export class OfficeScene extends Phaser.Scene {
       this.hideTooltip()
     })
 
-    this.startBreathing(ws)
     this.updateWorkstation(ws, agent)
     return ws
   }
@@ -550,13 +652,53 @@ export class OfficeScene extends Phaser.Scene {
     ws.statusDot.setFillStyle(dotColor)
     ws.statusDot.setPosition(ws.nameText.width / 2 + WS_DOT_GAP, WS_NAME_Y)
 
-    ws.blurbText.setText('')
+    ws.nameText.setVisible(false)
+    ws.statusDot.setVisible(false)
 
-    const isWorking = agent.sessionMode === 'working' || agent.sessionMode === 'plan'
     const isWaiting = agent.needsInteraction
+    const isPlan = agent.sessionMode === 'plan'
+    const isAcceptEdits = agent.interactionType === 'accept-edits' && isWaiting
+    const isWorking = (agent.sessionMode === 'working' || isPlan) && !isWaiting
+
+    // Screen content
+    if (isWorking && ws.screenLines && ws.screenTween) {
+      ws.screenLines.setVisible(true); ws.screenTween.resume()
+    } else if (ws.screenLines) {
+      ws.screenLines.setVisible(false); ws.screenTween?.pause()
+    }
+
     if (ws.monitorSprite) {
       ws.monitorSprite.setTint(isWorking ? 0x0ea5e9 : isWaiting ? 0xf59e0b : 0xffffff)
       ws.monitorSprite.setAlpha(isWorking ? 0.95 : isWaiting ? 0.9 : 0.7)
+    }
+
+    // Thought bubble
+    let icon: string | null = null
+    let bgColor = 0x475569
+    if (isAcceptEdits)      { icon = '~';  bgColor = 0x3b82f6 }
+    else if (isPlan)        { icon = '?';  bgColor = 0x8b5cf6 }
+    else if (isWorking)     { icon = '*';  bgColor = 0x059669 }
+    else if (!isWaiting)    { icon = '\u2615'; bgColor = 0x475569 }
+    // isWaiting with no special state: no bubble (duplicate indicator exists)
+
+    this.tweens.killTweensOf(ws.thoughtBubble)
+    ws.thoughtBubbleBg.clear()
+    if (icon) {
+      ws.thoughtBubbleText.setText(icon)
+      ws.thoughtBubbleBg.fillStyle(bgColor, 0.9)
+      ws.thoughtBubbleBg.fillRoundedRect(-11, -12, 22, 24, 7)
+      ws.thoughtBubbleBg.fillTriangle(-3, 12, 3, 12, -4, 17)
+      ws.thoughtBubble.setVisible(true)
+
+      const baseY = WS_SPRITE_Y - 58
+      ws.thoughtBubble.y = baseY
+      this.tweens.add({
+        targets: ws.thoughtBubble, y: baseY - 3,
+        duration: isWorking ? 1200 : 2000,
+        yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
+      })
+    } else {
+      ws.thoughtBubble.setVisible(false)
     }
 
     this.updateAnimation(ws, agent)
@@ -594,9 +736,15 @@ export class OfficeScene extends Phaser.Scene {
   }
 
   private destroyWorkstation(ws: WorkstationSprite): void {
-    if (ws.breathTween)   ws.breathTween.destroy()
-    if (ws.bounceTween)   ws.bounceTween.destroy()
-    if (ws.dotPulseTween) ws.dotPulseTween.destroy()
+    if (ws.breathTween)      ws.breathTween.destroy()
+    if (ws.bounceTween)      ws.bounceTween.destroy()
+    if (ws.dotPulseTween)    ws.dotPulseTween.destroy()
+    if (ws.typingTween)      ws.typingTween.destroy()
+    if (ws.headTiltTween)    ws.headTiltTween.destroy()
+    if (ws.monitorGlowTween) ws.monitorGlowTween.destroy()
+    if (ws.screenTween)      ws.screenTween.destroy()
+    if (ws.pulseTween)       ws.pulseTween.destroy()
+    this.tweens.killTweensOf(ws.thoughtBubble)
     ws.container.destroy()
   }
 
@@ -662,7 +810,97 @@ export class OfficeScene extends Phaser.Scene {
     this.worldWidth  = maxX + WORLD_MARGIN
     this.worldHeight = maxY + WORLD_MARGIN
 
+    // Draw office background behind rooms
+    if (this.officeGraphics) {
+      this.drawOfficeBackground(maxX + WORLD_MARGIN, maxY + WORLD_MARGIN)
+    }
+
     this.updateCameraBounds()
+  }
+
+  // ---------------------------------------------------------------------------
+  // Office background (standalone graphics, NOT a container)
+  // ---------------------------------------------------------------------------
+
+  private drawOfficeBackground(contentW: number, contentH: number): void {
+    const g = this.officeGraphics
+    if (!g) return
+    g.clear()
+
+    for (const s of this.officeDecoSprites) s.destroy()
+    this.officeDecoSprites = []
+
+    const WALL_T = 5
+    const WALL_I = 2
+    const PAD = 30
+
+    const x0 = WORLD_MARGIN - PAD
+    const y0 = WORLD_MARGIN - PAD
+    const w = contentW - WORLD_MARGIN + PAD * 2
+    const h = contentH - WORLD_MARGIN + PAD * 2
+
+    // Drop shadow
+    g.fillStyle(0x000000, 0.25)
+    g.fillRoundedRect(x0 - WALL_T + 4, y0 - WALL_T + 4, w + WALL_T * 2, h + WALL_T * 2, 8)
+
+    // Outer wall
+    g.fillStyle(COLOR_WALL)
+    g.fillRoundedRect(x0 - WALL_T, y0 - WALL_T, w + WALL_T * 2, h + WALL_T * 2, 6)
+
+    // Inner wall
+    g.fillStyle(COLOR_WALL_INNER)
+    g.fillRoundedRect(x0 - WALL_I, y0 - WALL_I, w + WALL_I * 2, h + WALL_I * 2, 4)
+
+    // Floor
+    g.fillStyle(0x0f172a)
+    g.fillRoundedRect(x0, y0, w, h, 2)
+
+    // Subtle grid lines on floor
+    g.lineStyle(1, 0x1e293b, 0.3)
+    const PLANK_H = 24
+    for (let py = y0; py < y0 + h; py += PLANK_H) g.lineBetween(x0, py, x0 + w, py)
+    g.lineStyle(1, 0x1e293b, 0.15)
+    const PLANK_W = 48
+    for (let py = y0; py < y0 + h; py += PLANK_H) {
+      const off = ((py - y0) / PLANK_H) % 2 === 0 ? 0 : PLANK_W / 2
+      for (let px = x0 + off; px < x0 + w; px += PLANK_W) g.lineBetween(px, py, px, py + PLANK_H)
+    }
+
+    // Carpet/rug in the center
+    const rugMargin = 20
+    const mainRugW = Math.max(w - rugMargin * 2, 100)
+    const mainRugH = Math.max(h - rugMargin * 2, 60)
+    g.fillStyle(0x1e3a5f, 0.15)
+    g.fillRoundedRect(x0 + rugMargin, y0 + rugMargin, mainRugW, mainRugH, 6)
+    g.lineStyle(1, 0x2563eb, 0.08)
+    g.strokeRoundedRect(x0 + rugMargin + 6, y0 + rugMargin + 6, mainRugW - 12, mainRugH - 12, 4)
+
+    // Decorations
+    if (this.officeTilesLoaded) {
+      const DECO_SCALE = 0.38
+      const decos: Phaser.GameObjects.Sprite[] = []
+
+      // Plants in corners
+      decos.push(this.add.sprite(x0 + 14, y0 + h - 14, 'office', OFFICE_FRAME_PLANT).setScale(DECO_SCALE).setAlpha(0.7).setDepth(-1))
+      decos.push(this.add.sprite(x0 + w - 14, y0 + h - 14, 'office', OFFICE_FRAME_PLANT_SM).setScale(DECO_SCALE).setAlpha(0.7).setDepth(-1))
+      decos.push(this.add.sprite(x0 + w - 14, y0 + 14, 'office', OFFICE_FRAME_PLANT_SM).setScale(DECO_SCALE * 0.8).setAlpha(0.5).setDepth(-1))
+
+      // Picture frames along top wall
+      const picFrames = [OFFICE_FRAME_PICTURE, OFFICE_FRAME_PICTURE2, OFFICE_FRAME_PICTURE3]
+      const picCount = Math.min(5, Math.floor(w / 90))
+      const picSpacing = w / (picCount + 1)
+      for (let i = 0; i < picCount; i++) {
+        decos.push(this.add.sprite(x0 + picSpacing * (i + 1), y0 + 8, 'office', picFrames[i % picFrames.length])
+          .setScale(DECO_SCALE * 0.85).setAlpha(0.45).setDepth(-1))
+      }
+
+      // Bookshelf on left
+      if (h > 140) {
+        decos.push(this.add.sprite(x0 + 14, y0 + 50, 'office', OFFICE_FRAME_BOOKSHELF).setScale(DECO_SCALE).setAlpha(0.45).setDepth(-1))
+      }
+
+      this.officeDecoSprites = decos
+    }
   }
 
   private updateCameraBounds(): void {
@@ -678,48 +916,152 @@ export class OfficeScene extends Phaser.Scene {
   }
 
   // ---------------------------------------------------------------------------
-  // Animations
+  // Typing spark particles
   // ---------------------------------------------------------------------------
 
-  private startBreathing(ws: WorkstationSprite): void {
-    if (ws.breathTween) ws.breathTween.destroy()
-    ws.breathTween = this.tweens.add({
-      targets: ws.sprite, scaleY: CHAR_SCALE * 0.96,
-      duration: 2600, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
+  private initParticlePool(): void {
+    for (let i = 0; i < 40; i++) {
+      const p = this.add.circle(0, 0, 2, 0xffffff, 0).setDepth(9998).setVisible(false)
+      p.setData('busy', false)
+      this.typingParticlePool.push(p)
+    }
+  }
+
+  private spawnTypingParticle(worldX: number, worldY: number): void {
+    const p = this.typingParticlePool.find(c => !c.getData('busy'))
+    if (!p) return
+    const colors = [0x0ea5e9, 0x34d399, 0xffffff]
+    p.setPosition(worldX + (Math.random() - 0.5) * 20, worldY)
+    p.setFillStyle(colors[Math.floor(Math.random() * colors.length)])
+    p.setAlpha(1).setVisible(true).setData('busy', true)
+    this.tweens.add({
+      targets: p,
+      y: worldY - 20 - Math.random() * 20,
+      x: p.x + (Math.random() - 0.5) * 16,
+      alpha: 0,
+      duration: 800 + Math.random() * 400,
+      ease: 'Quad.easeOut',
+      onComplete: () => { p.setVisible(false).setData('busy', false) },
     })
   }
 
+  private tickParticles(): void {
+    for (const room of this.rooms.values()) {
+      for (const ws of room.workstations.values()) {
+        if (!ws.state) continue
+        const m = ws.state.sessionMode
+        if (m !== 'working' && m !== 'plan') continue
+        if (ws.state.needsInteraction) continue
+        const wx = room.x + ws.container.x
+        const wy = room.y + ws.container.y + WS_DESK_Y
+        if (Math.random() < 0.5) this.spawnTypingParticle(wx, wy)
+      }
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Room activity bar
+  // ---------------------------------------------------------------------------
+
+  private updateRoomActivity(room: Room): void {
+    const agents = room.agents
+    if (agents.length === 0) return
+    const hasWaiting = agents.some(a => a.needsInteraction)
+    const activeCount = agents.filter(a => a.needsInteraction || a.sessionMode === 'working' || a.sessionMode === 'plan').length
+
+    const targetW = (activeCount / agents.length) * room.width
+    room.activityBar.setFillStyle(hasWaiting ? 0xfbbf24 : 0x34d399)
+    room.activityBar.setPosition(-room.width / 2, room.height / 2 + 1)
+    if (room.activityBarTween) room.activityBarTween.destroy()
+    room.activityBarTween = this.tweens.add({ targets: room.activityBar, width: targetW, duration: 280, ease: 'Power2' })
+  }
+
+  // ---------------------------------------------------------------------------
+  // Animations
+  // ---------------------------------------------------------------------------
+
   private updateAnimation(ws: WorkstationSprite, agent: AgentState): void {
-    const isWorking = agent.sessionMode === 'working' || agent.sessionMode === 'plan'
     const isWaiting = agent.needsInteraction
+    const isWorking = (agent.sessionMode === 'working' || agent.sessionMode === 'plan') && !isWaiting
 
     const mode: 'idle' | 'working' | 'waiting' = isWaiting ? 'waiting' : isWorking ? 'working' : 'idle'
     if (ws.lastAnimMode === mode) return
     ws.lastAnimMode = mode
 
-    if (ws.bounceTween)   { ws.bounceTween.destroy();   ws.bounceTween   = undefined }
-    if (ws.dotPulseTween) { ws.dotPulseTween.destroy(); ws.dotPulseTween = undefined; ws.statusDot.setAlpha(1) }
+    // Tear down all animation state
+    if (ws.bounceTween)      { ws.bounceTween.destroy();      ws.bounceTween      = undefined }
+    if (ws.dotPulseTween)    { ws.dotPulseTween.destroy();    ws.dotPulseTween    = undefined; ws.statusDot.setAlpha(1) }
+    if (ws.typingTween)      { ws.typingTween.destroy();      ws.typingTween      = undefined; ws.sprite.x = 0 }
+    if (ws.monitorGlowTween) { ws.monitorGlowTween.destroy(); ws.monitorGlowTween = undefined }
+    if (ws.breathTween)      { ws.breathTween.destroy();      ws.breathTween      = undefined }
+    if (ws.headTiltTween)    { ws.headTiltTween.destroy();    ws.headTiltTween    = undefined }
+    if (ws.pulseTween)       { ws.pulseTween.destroy();       ws.pulseTween       = undefined }
+
+    ws.sprite.y = WS_SPRITE_Y
+    ws.sprite.x = 0
+    ws.sprite.setScale(CHAR_SCALE)
+    ws.sprite.setAngle(0)
+
+    this.updateMonitorGlow(ws, isWorking, isWaiting)
+
+    const isCursor = this.isCursorAgent(agent)
+    const charIdx = isCursor ? 1 : this.getCharacterIndex(agent.config.name)
+    const base = charIdx * CHAR_COLS
 
     if (isWaiting) {
-      ws.bounceTween = this.tweens.add({
-        targets: ws.sprite, y: WS_SPRITE_Y - 4,
-        duration: 460, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
+      ws.sprite.setFrame(base + POSE_IDLE)
+      ws.pulseTween = this.tweens.add({
+        targets: ws.sprite, scaleX: CHAR_SCALE * 1.06, scaleY: CHAR_SCALE * 1.06,
+        duration: 900, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
       })
-      ws.deskBody.setStrokeStyle(2, 0xfbbf24, 0.8)
+      ws.typingTween = this.tweens.add({
+        targets: ws.sprite, x: 1.2,
+        duration: 600, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
+      })
       ws.dotPulseTween = this.tweens.add({
-        targets: ws.statusDot, alpha: 0.2,
-        duration: 620, yoyo: true, repeat: -1,
+        targets: ws.statusDot, alpha: 0.3,
+        duration: 600, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
       })
+      this.restoreDeskStroke(ws)
     } else if (isWorking) {
+      ws.sprite.setFrame(base + POSE_INTERACT)
+      ws.typingTween = this.tweens.add({
+        targets: ws.sprite, x: 0.8,
+        duration: 400, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
+      })
       ws.bounceTween = this.tweens.add({
         targets: ws.sprite, y: WS_SPRITE_Y - 2,
-        duration: 820, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
+        duration: 800, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
+      })
+      ws.headTiltTween = this.tweens.add({
+        targets: ws.sprite, angle: 1.5,
+        duration: 1600, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
       })
       ws.deskBody.setStrokeStyle(1, 0x34d399, 0.55)
     } else {
-      ws.sprite.y = WS_SPRITE_Y
+      ws.sprite.setFrame(base + POSE_SIT)
+      ws.breathTween = this.tweens.add({
+        targets: ws.sprite, scaleY: CHAR_SCALE * 0.97,
+        duration: 2800, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
+      })
       this.restoreDeskStroke(ws)
     }
+  }
+
+  private updateMonitorGlow(ws: WorkstationSprite, isWorking: boolean, isWaiting: boolean): void {
+    if (!ws.monitorGlowOverlay) return
+    ws.monitorGlowOverlay.setVisible(true)
+    const isActive = isWorking || isWaiting
+    const baseColor = isWaiting ? 0xfbbf24 : isWorking ? 0x0ea5e9 : 0x94a3b8
+    const baseAlpha = isActive ? 0.35 : 0.12
+    const peakAlpha = isActive ? 0.6 : 0.25
+    const duration  = isActive ? 800 : 2400
+    ws.monitorGlowOverlay.setFillStyle(baseColor)
+    ws.monitorGlowOverlay.setAlpha(baseAlpha)
+    ws.monitorGlowTween = this.tweens.add({
+      targets: ws.monitorGlowOverlay, alpha: peakAlpha,
+      duration, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
+    })
   }
 
   private restoreDeskStroke(ws: WorkstationSprite): void {
@@ -773,7 +1115,7 @@ export class OfficeScene extends Phaser.Scene {
   }
 
   private formatLabel(label: string): string {
-    return `[ ${label.toUpperCase()} ]`
+    return label
   }
 
   private truncName(name: string): string {
@@ -899,6 +1241,16 @@ export class OfficeScene extends Phaser.Scene {
   // ---------------------------------------------------------------------------
 
   destroy(): void {
+    this.typingParticleTimer?.destroy()
+    this.typingParticleTimer = null
+    for (const p of this.typingParticlePool) { this.tweens.killTweensOf(p); p.destroy() }
+    this.typingParticlePool = []
+
+    for (const s of this.officeDecoSprites) s.destroy()
+    this.officeDecoSprites = []
+    this.officeGraphics?.destroy()
+    this.officeGraphics = null
+
     for (const room of this.rooms.values()) {
       this.destroyRoom(room)
     }

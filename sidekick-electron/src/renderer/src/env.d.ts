@@ -95,6 +95,14 @@ declare global {
       slackStatus: () => Promise<{ running: boolean; configured: boolean }>
       slackStart: () => Promise<boolean>
       slackStop: () => Promise<void>
+      // Orchestrator
+      orchestratorQueue: () => Promise<import('./types').Task[]>
+      orchestratorEnqueue: (title: string, description: string, project: string, priority: string) => Promise<import('./types').Task>
+      orchestratorCancelTask: (taskId: string) => Promise<boolean>
+      orchestratorRetryTask: (taskId: string) => Promise<boolean>
+      orchestratorAgentHealth: () => Promise<import('./types').AgentHealthStatus[]>
+      orchestratorShutdownAgent: (agentId: string) => Promise<{ success: boolean; error?: string }>
+      orchestratorStats: () => Promise<import('./types').OrchestratorStats>
     }
   }
 }

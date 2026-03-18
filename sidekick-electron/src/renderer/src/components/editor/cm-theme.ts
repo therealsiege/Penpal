@@ -6,13 +6,13 @@ export const sidebarDarkTheme = EditorView.theme({
   '&': {
     backgroundColor: '#0f172a',
     color: '#e2e8f0',
-    fontSize: '13px',
+    fontSize: 'var(--editor-font-size, 15px)',
     height: '100%',
   },
   '.cm-content': {
     caretColor: '#60a5fa',
-    fontFamily: 'ui-monospace, "SF Mono", "Cascadia Code", "Fira Code", Menlo, monospace',
-    lineHeight: '1.6',
+    fontFamily: 'var(--editor-font-family, ui-monospace, monospace)',
+    lineHeight: 'var(--editor-line-height, 1.6)',
     padding: '8px 0',
   },
   '.cm-cursor, .cm-dropCursor': {

@@ -1,27 +1,23 @@
 import path from 'path'
 import { BrowserWindow } from 'electron'
-import chokidar from 'chokidar'
 import { reindexFile } from './search-index'
 
-const VAULT_ROOT = path.resolve(__dirname, '..', '..')
+const HOME = process.env.HOME || '/Users/fuzeelogik'
+const VAULT_ROOT = path.join(HOME, 'sidekick', 'Ventures')
 const IGNORE_PATTERNS = [
   '**/.obsidian/**',
   '**/.git/**',
   '**/node_modules/**',
-  '**/sidekick-electron/**',
-  '**/sidekick-graph/**',
-  '**/game-assets/**',
-  '**/out/**',
-  '**/build/**',
-  '**/dist/**',
+  '**/.trash/**',
   '**/.sidekick-tmp',
 ]
 
-let watcher: chokidar.FSWatcher | null = null
+let watcher: { close(): Promise<void> } | null = null
 
-export function startFileWatcher() {
+export async function startFileWatcher() {
   if (watcher) return
 
+  const chokidar = await import('chokidar')
   watcher = chokidar.watch(VAULT_ROOT, {
     ignored: IGNORE_PATTERNS,
     persistent: true,
@@ -34,11 +30,9 @@ export function startFileWatcher() {
 
   const notify = (eventType: string, filePath: string) => {
     const relativePath = path.relative(VAULT_ROOT, filePath)
-    // Re-index changed file
     if (relativePath.endsWith('.md')) {
       reindexFile(relativePath)
     }
-    // Notify renderer
     const windows = BrowserWindow.getAllWindows()
     for (const win of windows) {
       win.webContents.send('vault:file-changed', { eventType, path: relativePath })
@@ -46,9 +40,9 @@ export function startFileWatcher() {
   }
 
   watcher
-    .on('change', (p) => notify('change', p))
-    .on('add', (p) => notify('add', p))
-    .on('unlink', (p) => notify('unlink', p))
+    .on('change', (p: string) => notify('change', p))
+    .on('add', (p: string) => notify('add', p))
+    .on('unlink', (p: string) => notify('unlink', p))
 }
 
 export function stopFileWatcher() {

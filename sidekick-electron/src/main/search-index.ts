@@ -2,10 +2,10 @@ import fs from 'fs'
 import path from 'path'
 import MiniSearch from 'minisearch'
 
-const VAULT_ROOT = path.resolve(__dirname, '..', '..')
+const HOME = process.env.HOME || '/Users/fuzeelogik'
+const VAULT_ROOT = path.join(HOME, 'sidekick', 'Ventures')
 const HIDDEN_ROOT_DIRS = new Set([
-  'sidekick-electron', 'sidekick-graph', 'game-assets', 'tools',
-  'node_modules', 'out', 'build', 'dist', '.obsidian',
+  'node_modules', '.obsidian', '.git', '.trash',
 ])
 
 interface IndexDoc {
@@ -106,13 +106,39 @@ export function searchIndexed(query: string, limit = 30): SearchResult[] {
   if (!miniSearch || !query.trim()) return []
 
   const results = miniSearch.search(query, { limit })
+  const queryTerms = query.toLowerCase().split(/\s+/).filter(Boolean)
+
   return results.map(r => {
     const doc = r as unknown as { path: string; title: string; score: number }
-    // Build snippet from match terms
+
     let snippet = ''
-    if (r.terms && r.terms.length > 0) {
-      snippet = r.terms.join(', ')
+    try {
+      const fullPath = path.join(VAULT_ROOT, doc.path)
+      const content = fs.readFileSync(fullPath, 'utf-8').slice(0, 2000)
+      const contentLower = content.toLowerCase()
+
+      let bestIdx = -1
+      for (const term of queryTerms) {
+        const idx = contentLower.indexOf(term)
+        if (idx !== -1) {
+          bestIdx = idx
+          break
+        }
+      }
+
+      if (bestIdx !== -1) {
+        const start = Math.max(0, bestIdx - 40)
+        const end = Math.min(content.length, bestIdx + 80)
+        snippet = (start > 0 ? '...' : '') + content.slice(start, end).replace(/\n/g, ' ').trim() + (end < content.length ? '...' : '')
+      } else {
+        snippet = content.slice(0, 120).replace(/\n/g, ' ').trim() + (content.length > 120 ? '...' : '')
+      }
+    } catch {
+      if (r.terms && r.terms.length > 0) {
+        snippet = r.terms.join(', ')
+      }
     }
+
     return {
       path: doc.path,
       title: doc.title,

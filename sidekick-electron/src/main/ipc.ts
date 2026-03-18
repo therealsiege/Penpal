@@ -54,10 +54,20 @@ import {
 } from './vault'
 import { buildSearchIndex, searchIndexed } from './search-index'
 import { getVaultGraph } from './vault-graph'
+import {
+  enqueueTask,
+  getTaskQueue,
+  cancelTask,
+  retryTask,
+  getAgentHealthStatuses,
+  shutdownAgent,
+  getOrchestratorStats,
+} from './orchestrator'
 
-const VAULT_ROOT = path.resolve(__dirname, '..', '..')
-const BRIEFINGS_DIR = path.join(VAULT_ROOT, 'Ventures', '1Putt', 'Daily Briefings')
-const DATA_DIR = path.join(VAULT_ROOT, 'sidekick-electron', 'data')
+const HOME = process.env.HOME || '/Users/fuzeelogik'
+const VAULT_ROOT = path.join(HOME, 'sidekick', 'Ventures')
+const BRIEFINGS_DIR = path.join(VAULT_ROOT, '1Putt', 'Daily Briefings')
+const DATA_DIR = path.resolve(__dirname, '..', '..', 'data')
 
 interface VaultFolder {
   name: string
@@ -67,7 +77,13 @@ interface VaultFolder {
 
 function scanVaultFolders(): VaultFolder[] {
   const folders: VaultFolder[] = []
-  const topDirs = ['Ventures', 'Product', 'Sales', 'sidekick-graph', 'sidekick-electron']
+  // Dynamically discover top-level folders in the vault
+  let topDirs: string[] = []
+  try {
+    topDirs = fs.readdirSync(VAULT_ROOT, { withFileTypes: true })
+      .filter(e => e.isDirectory() && !e.name.startsWith('.'))
+      .map(e => e.name)
+  } catch { /* vault root not found */ }
 
   for (const dir of topDirs) {
     const fullPath = path.join(VAULT_ROOT, dir)
@@ -198,8 +214,8 @@ export function registerIpcHandlers() {
   // ── Ventures File Browser ────────────────────────────────────────────
   ipcMain.handle('ventures:list', wrapHandler((relativePath: unknown) => {
     const rel = typeof relativePath === 'string' ? relativePath : ''
-    const fullPath = path.resolve(path.join(VAULT_ROOT, 'Ventures', rel))
-    if (!fullPath.startsWith(path.join(VAULT_ROOT, 'Ventures'))) throw new Error('Path traversal denied')
+    const fullPath = path.resolve(path.join(VAULT_ROOT, rel))
+    if (!fullPath.startsWith(VAULT_ROOT)) throw new Error('Path traversal denied')
     if (!fs.existsSync(fullPath)) return []
     const entries = fs.readdirSync(fullPath, { withFileTypes: true })
     return entries
@@ -217,8 +233,8 @@ export function registerIpcHandlers() {
 
   ipcMain.handle('ventures:read', wrapHandler((relativePath: unknown) => {
     if (typeof relativePath !== 'string') throw new Error('relativePath must be a string')
-    const fullPath = path.resolve(path.join(VAULT_ROOT, 'Ventures', relativePath))
-    if (!fullPath.startsWith(path.join(VAULT_ROOT, 'Ventures'))) throw new Error('Path traversal denied')
+    const fullPath = path.resolve(path.join(VAULT_ROOT, relativePath))
+    if (!fullPath.startsWith(VAULT_ROOT)) throw new Error('Path traversal denied')
     if (!fs.existsSync(fullPath)) return null
     return fs.readFileSync(fullPath, 'utf-8')
   }))
@@ -256,9 +272,6 @@ export function registerIpcHandlers() {
         matchedPids.add(matched.pid)
         const cpuVal = parseFloat(matched.cpu || '0')
         const iType = matched.interactionType ?? 'none'
-        // needsInteraction is true only when the agent is actively waiting for a
-        // human response (tool approval, question, or file edit accept/reject).
-        // idle-prompt means the task finished — no urgent interaction needed.
         const needsInteraction = cpuVal < 1 &&
           (iType === 'tool-approval' || iType === 'question' || iType === 'accept-edits')
         agentStates.push({
@@ -608,4 +621,35 @@ export function registerIpcHandlers() {
   })))
   ipcMain.handle('slack:start', wrapHandler(() => startSlackBridge()))
   ipcMain.handle('slack:stop', wrapHandler(() => stopSlackBridge()))
+
+  // ── Orchestrator ──────────────────────────────────────────────────────
+  ipcMain.handle('orchestrator:queue', wrapHandler(() => getTaskQueue()))
+  ipcMain.handle('orchestrator:enqueue', wrapHandler((
+    title: unknown, description: unknown, project: unknown, priority: unknown,
+  ) => {
+    if (typeof title !== 'string') throw new Error('title must be a string')
+    if (typeof description !== 'string') throw new Error('description must be a string')
+    if (typeof project !== 'string') throw new Error('project must be a string')
+    return enqueueTask({
+      title,
+      description,
+      project,
+      priority: (typeof priority === 'string' ? priority : 'normal') as 'critical' | 'high' | 'normal' | 'low',
+      source: 'dashboard',
+    })
+  }))
+  ipcMain.handle('orchestrator:cancel-task', wrapHandler((taskId: unknown) => {
+    if (typeof taskId !== 'string') throw new Error('taskId must be a string')
+    return cancelTask(taskId)
+  }))
+  ipcMain.handle('orchestrator:retry-task', wrapHandler((taskId: unknown) => {
+    if (typeof taskId !== 'string') throw new Error('taskId must be a string')
+    return retryTask(taskId)
+  }))
+  ipcMain.handle('orchestrator:agent-health', wrapHandler(() => getAgentHealthStatuses()))
+  ipcMain.handle('orchestrator:shutdown-agent', wrapHandler((agentId: unknown) => {
+    if (typeof agentId !== 'string') throw new Error('agentId must be a string')
+    return shutdownAgent(agentId)
+  }))
+  ipcMain.handle('orchestrator:stats', wrapHandler(() => getOrchestratorStats()))
 }

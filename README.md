@@ -25,8 +25,12 @@ npm run infra:up   # start Memgraph + Qdrant via Docker
 
 | Script | Description |
 |--------|-------------|
-| `npm run etl` | Run the ETL pipeline (upsert mode) |
+| `npm run etl` | Run the ETL pipeline for all enabled ventures |
 | `npm run etl:clean` | Drop all data and reimport from scratch |
+| `npm run etl:openloop` | Run ETL for the OpenLoop venture only |
+| `npm run etl:1putt` | Run ETL for the 1Putt venture only |
+| `npm run etl:elion` | Run ETL for the Elion Health venture only |
+| `npm run etl:research` | Run ETL for the Research venture only |
 | `npm run mcp:dev` | Start the MCP server (dev, via tsx) |
 | `npm run mcp:build` | Compile TypeScript to `dist/` |
 | `npm run mcp:start` | Start the compiled MCP server |
@@ -43,7 +47,19 @@ Walks the Obsidian vault and builds a knowledge graph with:
 - **Vector Embeddings** (OpenAI `text-embedding-3-small`) stored in Qdrant for semantic search
 - **Graph Analytics** via Memgraph MAGE (PageRank, community detection, betweenness centrality)
 
-CLI flags: `--clean`, `--skip-embeddings`, `--skip-llm`, `--skip-analytics`
+CLI flags: `--clean`, `--skip-embeddings`, `--skip-llm`, `--skip-analytics`, `--venture <name>`
+
+### Venture-Based Processing
+
+The ETL pipeline processes directories on a per-venture basis. Ventures are configured in `src/shared/config.ts` with:
+
+- **name** -- display name
+- **enabled** -- whether the venture is included in a default `npm run etl`
+- **directories** -- list of vault subdirectories that belong to the venture (processed into both Qdrant and Memgraph)
+- **crmCsvPath** -- optional path to a CRM CSV for lead ingestion
+- **referencesCsvPaths** -- optional CSV files for reference data
+
+Configured ventures: `openloop`, `1putt`, `giving-prints`, `elion`, `research`. Enable/disable them in `config.ts` or run a single venture with `--venture openloop`.
 
 ## MCP Tools
 

@@ -88,4 +88,13 @@ contextBridge.exposeInMainWorld('api', {
   slackStatus: () => ipcRenderer.invoke('slack:status'),
   slackStart: () => ipcRenderer.invoke('slack:start'),
   slackStop: () => ipcRenderer.invoke('slack:stop'),
+  // Orchestrator
+  orchestratorQueue: () => ipcRenderer.invoke('orchestrator:queue'),
+  orchestratorEnqueue: (title: string, description: string, project: string, priority: string) =>
+    ipcRenderer.invoke('orchestrator:enqueue', title, description, project, priority),
+  orchestratorCancelTask: (taskId: string) => ipcRenderer.invoke('orchestrator:cancel-task', taskId),
+  orchestratorRetryTask: (taskId: string) => ipcRenderer.invoke('orchestrator:retry-task', taskId),
+  orchestratorAgentHealth: () => ipcRenderer.invoke('orchestrator:agent-health'),
+  orchestratorShutdownAgent: (agentId: string) => ipcRenderer.invoke('orchestrator:shutdown-agent', agentId),
+  orchestratorStats: () => ipcRenderer.invoke('orchestrator:stats'),
 })

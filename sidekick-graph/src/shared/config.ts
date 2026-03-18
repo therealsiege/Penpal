@@ -9,23 +9,79 @@ dotenv.config({ path: path.resolve(__dirname, "..", "..", ".env") });
 // config.ts lives at sidekick-graph/src/shared/ — vault root is 3 levels up
 const defaultVaultPath = path.resolve(__dirname, "..", "..", "..");
 
+export interface VentureConfig {
+  name: string;
+  enabled: boolean;
+  directories: string[];
+  crmCsvPath?: string;
+  referencesCsvPaths?: string[];
+}
+
+export const ventures: Record<string, VentureConfig> = {
+  "1putt": {
+    name: "1Putt Health",
+    enabled: true,
+    directories: [
+      "Ventures/1Putt/MedScrub KB",
+      "Ventures/1Putt/MedHook KB",
+      "Ventures/1Putt/Sales",
+      "Ventures/1Putt/Business",
+      "Ventures/1Putt/Engineering",
+    ],
+    crmCsvPath: "Ventures/1Putt/MedScrub KB/Sales/Leads/1PuttHealth CRM.csv",
+  },
+  openloop: {
+    name: "OpenLoop",
+    enabled: true,
+    directories: [
+      "Ventures/OpenLoop/Campfire",
+      "Ventures/OpenLoop/Medplum",
+      "Ventures/OpenLoop/Fhir",
+      "Ventures/OpenLoop/Migration",
+      "Ventures/OpenLoop/OpenLoop",
+      "Ventures/OpenLoop/Healthie",
+      "Ventures/OpenLoop/docs",
+    ],
+    referencesCsvPaths: [
+      "Ventures/OpenLoop/References.csv",
+      "Ventures/OpenLoop/References2.csv",
+    ],
+  },
+  "giving-prints": {
+    name: "Giving Prints",
+    enabled: false,
+    directories: [
+      "Ventures/Giving Prints/Meetings",
+      "Ventures/Giving Prints/Tasks",
+    ],
+  },
+  elion: {
+    name: "Elion Health Research",
+    enabled: false,
+    directories: [
+      "Research/Elion Health/Categories",
+      "Research/Elion Health/Products",
+      "Research/Elion Health/Research",
+      "Research/Elion Health/Reviews",
+    ],
+  },
+  research: {
+    name: "Research",
+    enabled: false,
+    directories: [
+      "Research",
+    ],
+  },
+};
+
 export const config = {
   vaultPath: process.env.VAULT_PATH || defaultVaultPath,
   memgraphUri: process.env.MEMGRAPH_URI || "bolt://localhost:7687",
   memgraphUser: process.env.MEMGRAPH_USER || "",
   memgraphPassword: process.env.MEMGRAPH_PASSWORD || "",
   batchSize: 100,
-  skipDirs: [".obsidian", ".trash", "node_modules", "sidekick-graph"],
-  ventures: {
-    medscrub: "Ventures/1Putt/MedScrub KB",
-    openloop: "Ventures/OpenLoop",
-    medhook: "Ventures/1Putt/MedHook KB",
-  },
-  crmCsvPath: "Ventures/1Putt/MedScrub KB/Sales/Leads/1PuttHealth CRM.csv",
-  referencesCsvPaths: [
-    "Ventures/OpenLoop/References.csv",
-    "Ventures/OpenLoop/References2.csv",
-  ],
+  skipDirs: [".obsidian", ".trash", "node_modules", "sidekick-graph", "sidekick-electron", "game-assets"],
+  ventures,
 
   // Qdrant
   qdrantUrl: process.env.QDRANT_URL || "http://localhost:6333",
@@ -84,4 +140,26 @@ export const config = {
 
 export function resolveVaultPath(relativePath: string): string {
   return path.join(config.vaultPath, relativePath);
+}
+
+/** Get enabled ventures, optionally filtered by CLI --venture flag */
+export function getActiveVentures(filterKeys?: string[]): VentureConfig[] {
+  const all = Object.entries(ventures);
+  if (filterKeys && filterKeys.length > 0) {
+    return all
+      .filter(([key]) => filterKeys.includes(key))
+      .map(([, v]) => v);
+  }
+  return all.filter(([, v]) => v.enabled).map(([, v]) => v);
+}
+
+/** Get the flat list of all included directories across active ventures */
+export function getActiveDirectories(filterKeys?: string[]): string[] {
+  return getActiveVentures(filterKeys).flatMap((v) => v.directories);
+}
+
+/** Check if a file path belongs to any active venture directory */
+export function isInActiveVenture(relPath: string, filterKeys?: string[]): boolean {
+  const dirs = getActiveDirectories(filterKeys);
+  return dirs.some((d) => relPath.startsWith(d));
 }

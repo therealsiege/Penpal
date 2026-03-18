@@ -14,6 +14,7 @@
 import { App, LogLevel } from '@slack/bolt'
 import { getClaudeSessions, sendToSession, getSessionConversation, type ClaudeSession } from './sessions'
 import { getAgentConfigs, loadAgentSessionMap, type AgentConfig } from './agents'
+import { enqueueTask, orchestratorEvents, type Task } from './orchestrator'
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
@@ -328,6 +329,67 @@ async function pollAndSync(): Promise<void> {
   }
 }
 
+// ── Task Command Parser ─────────────────────────────────────────────────────
+
+function parseTaskCommand(text: string): {
+  description: string
+  priority: 'critical' | 'high' | 'normal' | 'low'
+  agent?: string
+} {
+  let priority: 'critical' | 'high' | 'normal' | 'low' = 'normal'
+  let agent: string | undefined
+  let description = text
+
+  // Extract priority:X
+  const priorityMatch = description.match(/\bpriority:(\w+)\b/i)
+  if (priorityMatch) {
+    const p = priorityMatch[1].toLowerCase()
+    if (['critical', 'high', 'normal', 'low'].includes(p)) {
+      priority = p as typeof priority
+    }
+    description = description.replace(priorityMatch[0], '').trim()
+  }
+
+  // Extract agent:X
+  const agentMatch = description.match(/\bagent:(\w[\w-]*)\b/i)
+  if (agentMatch) {
+    agent = agentMatch[1]
+    description = description.replace(agentMatch[0], '').trim()
+  }
+
+  return { description, priority, agent }
+}
+
+// ── Slack Task Status Updates ───────────────────────────────────────────────
+
+function setupTaskStatusPosting(): void {
+  orchestratorEvents.on('task-updated', async (task: Task) => {
+    if (!slackApp || !task.slackChannelId) return
+
+    const statusMessages: Record<string, string> = {
+      assigned: `:robot_face: Assigned to ${task.assignedAgent || 'an agent'}`,
+      completed: `:white_check_mark: Done! ${(task.result || '').slice(0, 200)}`,
+      failed: `:x: Failed: ${(task.error || 'Unknown error').slice(0, 200)}`,
+      cancelled: `:no_entry_sign: Task cancelled`,
+    }
+
+    const msg = statusMessages[task.status]
+    if (!msg) return
+
+    try {
+      await slackApp.client.chat.postMessage({
+        channel: task.slackChannelId,
+        text: msg,
+        thread_ts: task.slackThreadTs,
+        username: 'Sidekick',
+        icon_emoji: ':clipboard:',
+      })
+    } catch (err) {
+      console.error(`[slack-bridge] Failed to post task status:`, err)
+    }
+  })
+}
+
 // ── Init / Shutdown ─────────────────────────────────────────────────────────
 
 export async function startSlackBridge(): Promise<boolean> {
@@ -355,6 +417,36 @@ export async function startSlackBridge(): Promise<boolean> {
       const channelId = (message as { channel: string }).channel
       console.log(`[slack-bridge] Received message in ${channelId}: "${text.slice(0, 80)}"`)
 
+      // ── !task prefix — enqueue to orchestrator ──
+      if (text.startsWith('!task ')) {
+        const taskText = text.slice(6).trim()
+        const parsed = parseTaskCommand(taskText)
+
+        // Resolve project from channel
+        let taskProject = ''
+        for (const [cwd, ch] of channelMap) {
+          if (ch.channelId === channelId) { taskProject = cwd; break }
+        }
+        if (!taskProject) taskProject = process.env.HOME || '/tmp'
+
+        const task = enqueueTask({
+          title: parsed.description.slice(0, 80),
+          description: parsed.description,
+          project: taskProject,
+          priority: parsed.priority,
+          preferredAgent: parsed.agent,
+          source: 'slack',
+          slackChannelId: channelId,
+          slackThreadTs: (message as { ts?: string }).ts,
+        })
+
+        await say({
+          text: `:clipboard: Task #${task.id.split('-').pop()} queued (${task.priority} priority)`,
+          username: 'Sidekick',
+          icon_emoji: ':clipboard:',
+        })
+        return
+      }
 
       // Find which project this channel maps to
       let targetCwd: string | null = null
@@ -407,6 +499,9 @@ export async function startSlackBridge(): Promise<boolean> {
 
     await slackApp.start()
     console.log('[slack-bridge] Connected to Slack (Socket Mode)')
+
+    // Wire up orchestrator task status updates to Slack
+    setupTaskStatusPosting()
 
     // Start polling for agent output
     pollTimer = setInterval(pollAndSync, POLL_INTERVAL)

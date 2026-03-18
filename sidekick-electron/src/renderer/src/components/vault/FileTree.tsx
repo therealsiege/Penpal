@@ -102,7 +102,7 @@ function TreeNode({ entry, depth, selectedFiles, onToggleSelect, onPreview, onOp
   return (
     <div>
       <div
-        className={`flex items-center gap-1 py-0.5 px-1 cursor-pointer rounded text-xs group transition-colors ${
+        className={`flex items-center gap-1 py-0.5 px-1 cursor-pointer rounded text-sm group transition-colors ${
           isPreviewed ? 'bg-blue-600/20 text-blue-300' : 'hover:bg-slate-800/60 text-slate-400'
         }`}
         style={{ paddingLeft: `${depth * 14 + 4}px` }}
@@ -124,7 +124,7 @@ function TreeNode({ entry, depth, selectedFiles, onToggleSelect, onPreview, onOp
         )}
 
         {entry.isDirectory ? (
-          <span className="w-4 text-center text-slate-500 shrink-0 text-[10px]">
+          <span className="w-4 text-center text-slate-500 shrink-0 text-xs">
             {expanded ? '\u25BC' : '\u25B6'}
           </span>
         ) : (

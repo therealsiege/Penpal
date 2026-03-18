@@ -1,10 +1,10 @@
 import fs from 'fs'
 import path from 'path'
 import { execFile } from 'child_process'
-import neo4j from 'neo4j-driver'
 import { protocol, net } from 'electron'
 
-const VAULT_ROOT = path.resolve(__dirname, '..', '..')
+const HOME = process.env.HOME || '/Users/fuzeelogik'
+const VAULT_ROOT = path.join(HOME, 'sidekick', 'Ventures')
 const MAX_PREVIEW_BYTES = 5 * 1024 * 1024 // 5MB
 
 export interface VaultEntry {
@@ -37,10 +37,9 @@ export interface VaultBacklink {
   snippet: string
 }
 
-// Directories to hide from the root listing (code/build noise)
+// Directories to hide from listings
 const HIDDEN_ROOT_DIRS = new Set([
-  'sidekick-electron', 'sidekick-graph', 'game-assets', 'tools',
-  'node_modules', 'out', 'build', 'dist', '.obsidian',
+  'node_modules', '.obsidian', '.git', '.trash',
 ])
 
 function validatePath(relativePath: string): string {
@@ -49,15 +48,6 @@ function validatePath(relativePath: string): string {
     throw new Error('Path traversal denied')
   }
   return resolved
-}
-
-function getDriver() {
-  const uri = process.env.MEMGRAPH_URI || 'bolt://localhost:7687'
-  const user = process.env.MEMGRAPH_USER || ''
-  const password = process.env.MEMGRAPH_PASSWORD || ''
-  return user
-    ? neo4j.driver(uri, neo4j.auth.basic(user, password))
-    : neo4j.driver(uri)
 }
 
 // ── List directory ─────────────────────────────────────────────────────────
@@ -150,16 +140,18 @@ export function createVaultFile(
   if (typeof relativePath !== 'string') throw new Error('relativePath must be a string')
   const fullPath = validatePath(relativePath)
 
-  if (fs.existsSync(fullPath)) {
-    throw new Error('File already exists')
-  }
-
   const dir = path.dirname(fullPath)
   fs.mkdirSync(dir, { recursive: true })
 
-  const tmpPath = fullPath + '.sidekick-tmp'
-  fs.writeFileSync(tmpPath, content, 'utf-8')
-  fs.renameSync(tmpPath, fullPath)
+  // Use 'wx' flag for atomic create — fails with EEXIST if file already exists (no TOCTOU race)
+  try {
+    fs.writeFileSync(fullPath, content, { encoding: 'utf-8', flag: 'wx' })
+  } catch (e: unknown) {
+    if (e instanceof Error && 'code' in e && (e as NodeJS.ErrnoException).code === 'EEXIST') {
+      throw new Error('File already exists')
+    }
+    throw e
+  }
   const stat = fs.statSync(fullPath)
   return { success: true, mtime: stat.mtimeMs }
 }
@@ -170,11 +162,15 @@ export function createVaultFolder(relativePath: string): { success: boolean } {
   if (typeof relativePath !== 'string') throw new Error('relativePath must be a string')
   const fullPath = validatePath(relativePath)
 
-  if (fs.existsSync(fullPath)) {
-    throw new Error('Folder already exists')
+  // Use mkdirSync without recursive to fail atomically if folder exists (no TOCTOU race)
+  try {
+    fs.mkdirSync(fullPath)
+  } catch (e: unknown) {
+    if (e instanceof Error && 'code' in e && (e as NodeJS.ErrnoException).code === 'EEXIST') {
+      throw new Error('Folder already exists')
+    }
+    throw e
   }
-
-  fs.mkdirSync(fullPath, { recursive: true })
   return { success: true }
 }
 
@@ -306,7 +302,7 @@ export function searchVault(
 
     // Try rg first, fall back to grep
     const args = ['-rn', '--max-count', '3', '-i', '-l']
-    if (globPattern) {
+    if (globPattern && /^\*\.[a-zA-Z0-9]+$/.test(globPattern)) {
       args.push('--include', globPattern)
     }
     // Exclude hidden dirs and node_modules
@@ -400,8 +396,12 @@ export function resolveVaultAsset(filename: string): string | null {
 
 export function registerVaultProtocol() {
   protocol.handle('vault', (request) => {
-    // vault://filename.png
-    const filename = decodeURIComponent(request.url.replace('vault://', ''))
+    // vault://filename.png — extract just the basename, reject path traversal
+    const raw = decodeURIComponent(new URL(request.url).pathname.slice(1))
+    const filename = path.basename(raw)
+    if (!filename || filename.includes('..') || filename.startsWith('.')) {
+      return new Response('Forbidden', { status: 403 })
+    }
     const resolved = resolveVaultAsset(filename)
     if (!resolved) {
       return new Response('Not found', { status: 404 })
@@ -410,76 +410,125 @@ export function registerVaultProtocol() {
   })
 }
 
-// ── Tags from Memgraph ─────────────────────────────────────────────────────
+// ── Tags from filesystem (frontmatter + inline #tags) ─────────────────────
+
+let tagCache: VaultTag[] | null = null
 
 export async function getVaultTags(): Promise<VaultTag[]> {
-  const driver = getDriver()
-  const session = driver.session()
-  try {
-    const result = await session.run(`
-      MATCH (d:Document)-[:TAGGED_WITH]->(t:Tag)
-      RETURN t.name AS name, count(d) AS cnt
-      ORDER BY cnt DESC
-      LIMIT 100
-    `)
-    return result.records.map(r => ({
-      name: String(r.get('name') || ''),
-      count: typeof r.get('cnt') === 'object' && 'toNumber' in (r.get('cnt') as object)
-        ? (r.get('cnt') as { toNumber(): number }).toNumber()
-        : Number(r.get('cnt')),
-    }))
-  } catch {
-    return []
-  } finally {
-    await session.close()
-    await driver.close()
+  if (tagCache) return tagCache
+  const counts = new Map<string, number>()
+
+  function walk(dir: string) {
+    let entries: fs.Dirent[]
+    try { entries = fs.readdirSync(dir, { withFileTypes: true }) } catch { return }
+    for (const entry of entries) {
+      if (entry.name.startsWith('.')) continue
+      if (HIDDEN_ROOT_DIRS.has(entry.name)) continue
+      const full = path.join(dir, entry.name)
+      if (entry.isDirectory()) { walk(full); continue }
+      if (!entry.name.endsWith('.md')) continue
+      try {
+        const content = fs.readFileSync(full, 'utf-8').slice(0, 3000)
+        // Frontmatter tags
+        const fmMatch = content.match(/^---\n([\s\S]*?)\n---\n?/)
+        if (fmMatch) {
+          const tagLine = fmMatch[1].match(/tags:\s*\[([^\]]*)\]/)
+          if (tagLine) {
+            tagLine[1].split(',').map(t => t.replace(/['"]/g, '').trim()).filter(Boolean)
+              .forEach(t => counts.set(t, (counts.get(t) || 0) + 1))
+          }
+        }
+        // Inline #tags
+        const inlineTags = content.match(/(?:^|\s)#([a-zA-Z][\w/-]*)/g)
+        if (inlineTags) {
+          inlineTags.map(t => t.trim().slice(1)).filter(t => !t.startsWith('#'))
+            .forEach(t => counts.set(t, (counts.get(t) || 0) + 1))
+        }
+      } catch { /* skip */ }
+    }
   }
+
+  walk(VAULT_ROOT)
+  tagCache = Array.from(counts.entries())
+    .map(([name, count]) => ({ name, count }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 100)
+  // Invalidate cache after 60s
+  setTimeout(() => { tagCache = null }, 60_000)
+  return tagCache
 }
 
 // ── Files by tag ───────────────────────────────────────────────────────────
 
 export async function getFilesByTag(tag: string): Promise<string[]> {
-  const driver = getDriver()
-  const session = driver.session()
-  try {
-    const result = await session.run(
-      `MATCH (d:Document)-[:TAGGED_WITH]->(t:Tag {name: $tag})
-       RETURN d.path AS path
-       ORDER BY d.path`,
-      { tag },
-    )
-    return result.records.map(r => String(r.get('path') || ''))
-  } catch {
-    return []
-  } finally {
-    await session.close()
-    await driver.close()
+  const results: string[] = []
+
+  function walk(dir: string, relDir: string) {
+    let entries: fs.Dirent[]
+    try { entries = fs.readdirSync(dir, { withFileTypes: true }) } catch { return }
+    for (const entry of entries) {
+      if (entry.name.startsWith('.')) continue
+      if (HIDDEN_ROOT_DIRS.has(entry.name)) continue
+      const full = path.join(dir, entry.name)
+      const rel = relDir ? path.join(relDir, entry.name) : entry.name
+      if (entry.isDirectory()) { walk(full, rel); continue }
+      if (!entry.name.endsWith('.md')) continue
+      try {
+        const content = fs.readFileSync(full, 'utf-8').slice(0, 3000)
+        const lower = tag.toLowerCase()
+        // Check frontmatter tags
+        const fmMatch = content.match(/^---\n([\s\S]*?)\n---\n?/)
+        if (fmMatch) {
+          const tagLine = fmMatch[1].match(/tags:\s*\[([^\]]*)\]/)
+          if (tagLine) {
+            const tags = tagLine[1].split(',').map(t => t.replace(/['"]/g, '').trim().toLowerCase())
+            if (tags.includes(lower)) { results.push(rel); continue }
+          }
+        }
+        // Check inline #tags
+        if (content.toLowerCase().includes(`#${lower}`)) {
+          results.push(rel)
+        }
+      } catch { /* skip */ }
+    }
   }
+
+  walk(VAULT_ROOT, '')
+  return results.sort()
 }
 
-// ── Backlinks ──────────────────────────────────────────────────────────────
+// ── Backlinks (filesystem wikilink scan) ──────────────────────────────────
 
 export async function getBacklinks(relativePath: string): Promise<VaultBacklink[]> {
-  const driver = getDriver()
-  const session = driver.session()
-  try {
-    const result = await session.run(
-      `MATCH (source:Document)-[:LINKS_TO]->(target:Document)
-       WHERE target.path ENDS WITH $path
-       RETURN source.title AS title, source.path AS path
-       ORDER BY source.title
-       LIMIT 30`,
-      { path: relativePath },
-    )
-    return result.records.map(r => ({
-      title: String(r.get('title') || ''),
-      path: String(r.get('path') || ''),
-      snippet: '',
-    }))
-  } catch {
-    return []
-  } finally {
-    await session.close()
-    await driver.close()
+  const targetName = path.basename(relativePath, '.md')
+  const results: VaultBacklink[] = []
+
+  function walk(dir: string, relDir: string) {
+    let entries: fs.Dirent[]
+    try { entries = fs.readdirSync(dir, { withFileTypes: true }) } catch { return }
+    for (const entry of entries) {
+      if (entry.name.startsWith('.')) continue
+      if (HIDDEN_ROOT_DIRS.has(entry.name)) continue
+      const full = path.join(dir, entry.name)
+      const rel = relDir ? path.join(relDir, entry.name) : entry.name
+      if (entry.isDirectory()) { walk(full, rel); continue }
+      if (!entry.name.endsWith('.md') || rel === relativePath) continue
+      try {
+        const content = fs.readFileSync(full, 'utf-8').slice(0, 5000)
+        // Look for [[targetName]] or [[targetName|alias]]
+        const regex = new RegExp(`\\[\\[${targetName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(\\|[^\\]]*)?\\]\\]`, 'i')
+        const match = content.match(regex)
+        if (match) {
+          const lineIdx = content.slice(0, match.index).split('\n').length - 1
+          const lines = content.split('\n')
+          const snippet = lines[lineIdx]?.trim().slice(0, 120) || ''
+          const title = entry.name.replace(/\.md$/, '')
+          results.push({ title, path: rel, snippet })
+        }
+      } catch { /* skip */ }
+    }
   }
+
+  walk(VAULT_ROOT, '')
+  return results.sort((a, b) => a.title.localeCompare(b.title)).slice(0, 30)
 }
