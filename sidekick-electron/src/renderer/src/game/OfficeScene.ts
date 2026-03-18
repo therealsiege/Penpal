@@ -1155,7 +1155,7 @@ export class OfficeScene extends Phaser.Scene {
 
     // Draw office background behind rooms — clamp to viewport width
     if (this.officeGraphics) {
-      const bgW = Math.min(maxX + WORLD_MARGIN, this.viewWidth - WORLD_MARGIN * 2)
+      const bgW = Math.min(maxX + WORLD_MARGIN, this.viewWidth - 60)
       this.drawOfficeBackground(bgW, maxY + WORLD_MARGIN)
     }
 
