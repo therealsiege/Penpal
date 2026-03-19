@@ -1,0 +1,57 @@
+# Penny Scheduler
+# Defines recurring jobs executed by src/scheduler/runner.ts
+# Cron expressions: min hour day month weekday
+# All times are local (system timezone)
+
+jobs:
+  health-check:
+    description: Verify Memgraph, Qdrant, and API keys are available
+    command: npm run health
+    cron: "*/30 * * * *"
+    timeout: 30
+    enabled: true
+
+  rss-ingest:
+    description: Ingest RSS feeds + Google Alerts for all ventures
+    command: npm run ingest:all
+    cron: "0 6,14 * * *"
+    timeout: 300
+    enabled: true
+
+  daily-briefing:
+    description: Generate daily intelligence briefing
+    command: npm run briefing
+    cron: "30 6 * * 1-5"
+    timeout: 120
+    enabled: true
+    depends_on:
+      - rss-ingest
+
+  npi-enrich:
+    description: Enrich unenriched NPI leads via Firecrawl
+    command: npm run npi:enrich -- --limit 25
+    cron: "0 3 * * 6"
+    timeout: 600
+    enabled: true
+
+  etl-full:
+    description: Full ETL pipeline rebuild (vault parse + graph + embeddings)
+    command: npm run etl
+    cron: "0 2 * * 0"
+    timeout: 900
+    enabled: true
+
+  # --- Future agent tasks (Phase B+) ---
+  # stale-leads:
+  #   description: Flag leads with no activity in 14+ days
+  #   command: npm run agent:stale-leads
+  #   cron: "0 7 * * 1"
+  #   timeout: 120
+  #   enabled: false
+
+  # weekly-digest:
+  #   description: AI-synthesized weekly rollup
+  #   command: npm run agent:weekly-digest
+  #   cron: "0 8 * * 1"
+  #   timeout: 180
+  #   enabled: false

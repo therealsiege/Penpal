@@ -58,7 +58,7 @@ jobs:
           HAS_AGENTS=$(echo "$CHANGED_FILES" | grep -c "agents\|triplet\|session" || true)
           HAS_GAME=$(echo "$CHANGED_FILES" | grep -c "game\|phaser\|OfficeScene" || true)
           HAS_DEPS=$(echo "$CHANGED_FILES" | grep -c "package.json" || true)
-          HAS_ETL=$(echo "$CHANGED_FILES" | grep -c "sidekick-graph\|etl\|mcp" || true)
+          HAS_ETL=$(echo "$CHANGED_FILES" | grep -c "analytics\|etl\|mcp" || true)
 
           # Write to files to avoid escaping issues
           echo "$COMMITS" > /tmp/commits.txt
@@ -94,7 +94,7 @@ jobs:
           CHANGED_FILES=$(cat /tmp/changed_files.txt)
 
           if [[ "$LEVEL" == "full" ]]; then
-            PROMPT="You are writing a Slack briefing for Clint, the founder of 1Putt Health. Sidekick is a developer productivity platform — an Electron dashboard that manages multiple Claude Code AI agent sessions, with a knowledge graph backend (Memgraph + Qdrant), agent team orchestration (triplet workflows), and a Phaser.js office visualization. The monorepo has two main packages: sidekick-electron (the desktop app) and sidekick-graph (ETL + MCP server). Clint is deeply technical, writes code daily, and uses Sidekick to manage his own Claude agents.
+            PROMPT="You are writing a Slack briefing for Clint, the founder of 1Putt Health. Penny is a developer productivity platform — an Electron dashboard that manages multiple Claude Code AI agent sessions, with a knowledge graph backend (Memgraph + Qdrant), agent team orchestration (triplet workflows), and a Phaser.js office visualization. The monorepo has two main packages: Penny (the desktop app) and analytics (ETL + MCP server). Clint is deeply technical, writes code daily, and uses Penny to manage his own Claude agents.
 
           Summarize this push to the '$BRANCH' branch by $AUTHOR.
 
@@ -166,11 +166,11 @@ jobs:
 
           if [[ "$LEVEL" == "full" ]]; then
             EMOJI=":ship:"
-            HEADER="Sidekick Shipped to $BRANCH"
+            HEADER="Penny Shipped to $BRANCH"
             COLOR="#2ea44f"
             if [[ "$BRANCH" == "main" ]]; then
               EMOJI=":rocket:"
-              HEADER="Sidekick Production Deploy"
+              HEADER="Penny Production Deploy"
               COLOR="#e74c3c"
             fi
           else
@@ -190,7 +190,7 @@ jobs:
             --arg url "$COMPARE_URL" \
             --arg color "$COLOR" \
             '{
-              "username": "Sidekick Ship Log",
+              "username": "Penny Ship Log",
               "icon_emoji": $emoji,
               "attachments": [{
                 "color": $color,

@@ -1,11 +1,11 @@
-# SideKick
+# Penny
 
 AI-powered knowledge graph and MCP server for an Obsidian vault. Parses markdown notes, builds a graph in Memgraph, generates vector embeddings in Qdrant, and exposes it all via a Model Context Protocol server.
 
 ## Structure
 
 ```
-sidekick-graph/
+analytics/
   src/
     shared/          # Shared connections, config, and utilities
     etl/             # Vault parser → Memgraph + Qdrant ingestion pipeline
@@ -16,7 +16,7 @@ sidekick-graph/
 ## Setup
 
 ```bash
-cd sidekick-graph
+cd analytics
 npm install
 npm run infra:up   # start Memgraph + Qdrant via Docker
 ```

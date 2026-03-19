@@ -1,0 +1,44 @@
+name: penny-control-plane
+
+services:
+  veritas-kanban:
+    image: ${PENNY_VERITAS_IMAGE:-veritas-kanban:local}
+    build:
+      context: ${PENNY_VERITAS_SOURCE_DIR:-../../veritas-kanban}
+      dockerfile: Dockerfile
+    ports:
+      - "${PENNY_VERITAS_BIND_HOST:-127.0.0.1}:${PENNY_VERITAS_PORT:-47832}:3001"
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+      DATA_DIR: /app/data
+      VERITAS_AUTH_ENABLED: ${PENNY_VERITAS_AUTH_ENABLED:-true}
+      VERITAS_AUTH_LOCALHOST_BYPASS: ${PENNY_VERITAS_LOCALHOST_BYPASS:-true}
+      VERITAS_AUTH_LOCALHOST_ROLE: ${PENNY_VERITAS_LOCALHOST_ROLE:-agent}
+      VERITAS_ADMIN_KEY: ${PENNY_VERITAS_ADMIN_KEY:-change-me}
+      VERITAS_API_KEYS: ${PENNY_VERITAS_API_KEYS:-}
+      VERITAS_JWT_SECRET: ${PENNY_VERITAS_JWT_SECRET:-}
+      CORS_ORIGINS: ${PENNY_VERITAS_CORS_ORIGINS:-http://localhost:3000,http://localhost:5173}
+      TRUST_PROXY: ${PENNY_VERITAS_TRUST_PROXY:-}
+    volumes:
+      - penny_veritas_data:/app/data
+      - penny_veritas_runtime:/app/.veritas-kanban
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:3001/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    restart: unless-stopped
+    networks:
+      - penny_control
+
+networks:
+  penny_control:
+    name: ${PENNY_CONTROL_NETWORK:-penny_control}
+
+volumes:
+  penny_veritas_data:
+    name: ${PENNY_VERITAS_DATA_VOLUME:-penny_veritas_data}
+  penny_veritas_runtime:
+    name: ${PENNY_VERITAS_RUNTIME_VOLUME:-penny_veritas_runtime}
