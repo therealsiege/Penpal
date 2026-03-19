@@ -1,0 +1,24 @@
+﻿Name,Assigned To,Due,Estimates,GitHub Pull Requests,ID,Priority,Release,Status,Tags
+Product Release Marketing,Matt Wimberley,"January 1, 2024 → February 6, 2024",,,GDE-10,Medium,,Done,"marketing, marketplace, website"
+Product Hunt Launch,Clint Johnson,"February 15, 2024 → March 1, 2024",,,GDE-11,Low,,Done,"marketing, marketplace"
+IG Integration,Clint Johnson,"May 25, 2024 → August 15, 2024",L,,GDE-13,High,,Done,integration
+Epic Marketplace Listing,Clint Johnson,"December 2, 2023 → March 20, 2024",L,,GDE-14,High,,Done,"marketing, marketplace"
+Updated Marketing Copy,Clint Johnson,"November 1, 2024 → November 30, 2024",L,,GDE-16,High,Nov-24,Done,"marketplace, website"
+Update Icons,Clint Johnson,"November 15, 2024 → December 11, 2024",XL,,GDE-18,High,,Done,"UX, icons"
+Phase 2 - Smart on FHIR,Clint Johnson,"November 4, 2023 → November 17, 2023",,,GDE-20,,,Done,"FHIR Updates, UX"
+Image Upload Admin Blocked,Clint Johnson,"December 11, 2024 → December 12, 2024",S,,GDE-21,Low,,Done,"UX, image upload"
+Scrollbar Updates,Clint Johnson,"August 1, 2024",M,,GDE-22,Medium,,Done,UX
+Hide All Icons Button,Clint Johnson,"August 1, 2024",,,GDE-24,Medium,,Done,"UX, icons"
+Problem List ASC Sorting,Clint Johnson,"August 1, 2024",S,,GDE-25,Medium,,Done,"Conditions, UX"
+Dynamic Multi Tenants,Clint Johnson,"October 1, 2024 → November 30, 2024",M,,GDE-31,Low,Nov-24,In progress,FHIR Updates
+Show Hide ICD10 Code,Clint Johnson,"September 14, 2024 → October 3, 2024",S,,GDE-42,Medium,,Done,"UX, metadata, point"
+Chart Failed Loads,Clint Johnson,"November 1, 2024 → November 30, 2024",M,,GDE-34,High,Nov-24,Done,"Conditions, UX, integration, persistance"
+Image Upload V2,Clint Johnson,"November 15, 2024 → December 1, 2024",S,,GDE-35,High,Nov-24,Done,"UX, image upload"
+Epic Vendor Services Demo Environment,Clint Johnson,"November 12, 2024 → November 15, 2024",S,,GDE-36,High,Nov-24,Done,"marketing, sales"
+Primary Complaint in UX,Clint Johnson,"November 16, 2024 → December 1, 2024",S,,GDE-37,Medium,Nov-24,Done,"FHIR Updates, UX"
+Vanta Implementation,"Clint Johnson, Matt Wimberley","November 15, 2024 → December 20, 2024",XL,,GDE-38,High,Dec-24,Done,"compliance, devops"
+Practice Advisory Cards (Curated PLs),Clint Johnson,"March 1, 2025 → March 31, 2025",,,GDE-41,,,Done,
+"Icon collision (show hidden icons, icon fan out)",Clint Johnson,"March 1, 2025 → April 1, 2025",,,GDE-43,,,Done,
+Clock Face Helpers,Clint Johnson,"December 2, 2024 → December 31, 2024",S,,GDE-40,Medium,Dec-24,Done,
+AMIA FHIR App Competition,Clint Johnson,"November 15, 2025 → November 19, 2025",,,GDE-45,,,Done,
+AMIA FHIR Competition Application,Clint Johnson,"September 9, 2025",S,,GDE-46,High,,Done,marketing

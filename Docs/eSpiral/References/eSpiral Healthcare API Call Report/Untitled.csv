@@ -1,0 +1,9 @@
+﻿Resource,Action,File/Function,Why We Call It,Notes
+metadata,GET,services/fhir/r4.ts:getConformanceStatement,Discover OAuth endpoints and server capabilities,Critical for dynamic endpoint discovery; called during authentication flow
+Practitioner,GET,services/fhir/r4.ts:getPractitioner,Retrieve practitioner details for session and display,Used to identify the logged-in provider and personalize the interface
+PractitionerRole,GET,services/fhir/r4.ts:getPractitionerRole,Get practitioner’s role and organization affiliation,Helps determine user permissions and context within the healthcare organization
+Patient,GET,services/fhir/r4.ts:getPatient,Fetch patient demographics and identifiers,Core data for patient identification and header display in charts
+Condition,GET,services/fhir/r4.ts:getProblemList,Retrieve patient’s problem list/active conditions,Primary source for populating the spiral chart with ICD-10 coded conditions
+Observation,GET,services/fhir/r4.ts:getChiefComplaint,Search for chief complaint (LOINC 8661-1),Attempts to find the patient’s presenting complaint for context
+Encounter,GET,services/fhir/r4.ts:getChiefComplaint,Find recent encounters with reason codes,Secondary source for chief complaint from encounter reason codes
+ServiceRequest,GET,services/fhir/r4.ts:getChiefComplaint,Check service requests for reason codes,Tertiary source for identifying chief complaint
