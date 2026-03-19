@@ -18,7 +18,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SIDEKICK_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-AGENTS_YAML="$SIDEKICK_ROOT/sidekick-electron/agents/agent-types.yaml"
+AGENTS_YAML="$SIDEKICK_ROOT/Penny/agents/agent-types.yaml"
 
 # ── Defaults ─────────────────────────────────────────────────────────────────
 
@@ -118,7 +118,7 @@ if [[ -n "$AGENT" ]]; then
     [[ -n "$AGENT_PROMPT" ]] && SYSTEM_PROMPT="$AGENT_PROMPT"
     [[ -n "$AGENT_MODEL" ]] && MODEL="$AGENT_MODEL"
     [[ -z "$MCP_CONFIG" && -n "$AGENT_MCP" ]] && {
-      PROFILE_PATH="$SIDEKICK_ROOT/sidekick-electron/agents/mcp-profiles/${AGENT_MCP}.json"
+      PROFILE_PATH="$SIDEKICK_ROOT/Penny/agents/mcp-profiles/${AGENT_MCP}.json"
       [[ -f "$PROFILE_PATH" ]] && MCP_CONFIG="$PROFILE_PATH"
     }
     AGENT_LABEL="${AGENT_NAME:-$AGENT}"
