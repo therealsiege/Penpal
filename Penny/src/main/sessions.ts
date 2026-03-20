@@ -3,7 +3,7 @@ import path from 'path'
 import { exec, spawn } from 'child_process'
 import { promisify } from 'util'
 import os from 'os'
-import { buildAgentCliArgs, saveAgentSession } from './agents'
+import { buildAgentCliArgs, saveAgentSession, type BuildCliOpts } from './agents'
 
 const execAsync = promisify(exec)
 
@@ -852,7 +852,7 @@ export async function createAgentSession(
 
   let cliArgs: string[]
   try {
-    cliArgs = buildAgentCliArgs(agentId, resolvedCwd, dispatch)
+    cliArgs = buildAgentCliArgs(agentId, resolvedCwd, { dispatch })
   } catch (err) {
     return { success: false, error: (err as Error).message }
   }
@@ -883,4 +883,86 @@ export async function createAgentSession(
   } catch (err) {
     return { success: false, error: (err as Error).message }
   }
+}
+
+// ── Headless agent execution ─────────────────────────────────────────────────
+
+export interface HeadlessResult {
+  success: boolean
+  output: string
+  error?: string
+  durationMs: number
+}
+
+export async function runAgentHeadless(
+  agentId: string,
+  cwd: string,
+  prompt: string,
+  opts: { permissionMode?: string; timeoutMs?: number } = {},
+): Promise<HeadlessResult> {
+  const resolvedCwd = resolveUserPath(cwd)
+  const timeoutMs = opts.timeoutMs ?? 600_000
+
+  let cliArgs: string[]
+  try {
+    cliArgs = buildAgentCliArgs(agentId, resolvedCwd, {
+      headless: true,
+      permissionMode: opts.permissionMode,
+    })
+  } catch (err) {
+    return { success: false, output: '', error: (err as Error).message, durationMs: 0 }
+  }
+
+  // The prompt is the positional argument after all flags
+  cliArgs.push(prompt)
+
+  const start = Date.now()
+
+  return new Promise<HeadlessResult>((resolve) => {
+    const child = spawn('claude', cliArgs, {
+      cwd: resolvedCwd,
+      stdio: ['ignore', 'pipe', 'pipe'],
+      env: { ...process.env },
+    })
+
+    let stdout = ''
+    let stderr = ''
+    let settled = false
+
+    const settle = (result: HeadlessResult) => {
+      if (settled) return
+      settled = true
+      resolve(result)
+    }
+
+    child.stdout.on('data', (chunk: Buffer) => { stdout += chunk.toString() })
+    child.stderr.on('data', (chunk: Buffer) => { stderr += chunk.toString() })
+
+    child.on('close', (code) => {
+      const durationMs = Date.now() - start
+      if (code === 0) {
+        settle({ success: true, output: stdout.trim(), durationMs })
+      } else {
+        settle({ success: false, output: stdout.trim(), error: stderr || `Exit code ${code}`, durationMs })
+      }
+    })
+
+    child.on('error', (err) => {
+      settle({ success: false, output: '', error: err.message, durationMs: Date.now() - start })
+    })
+
+    // Kill if exceeds timeout
+    const timer = setTimeout(() => {
+      child.kill('SIGTERM')
+      setTimeout(() => { if (!settled) child.kill('SIGKILL') }, 5000)
+      settle({
+        success: false,
+        output: stdout.trim(),
+        error: `Timed out after ${Math.round(timeoutMs / 1000)}s`,
+        durationMs: timeoutMs,
+      })
+    }, timeoutMs)
+
+    child.on('close', () => clearTimeout(timer))
+  })
 }

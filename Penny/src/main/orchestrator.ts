@@ -12,7 +12,7 @@ import path from 'path'
 import {
   getClaudeSessions,
   sendToSession,
-  createAgentSession,
+  runAgentHeadless,
   analyzeSession,
   type ClaudeSession,
 } from './sessions'
@@ -387,8 +387,9 @@ async function selectAgent(task: Task): Promise<ScoredAgent | null> {
 
 // ── Dispatch Loop ───────────────────────────────────────────────────────────
 
+const activeDispatches = new Set<string>()
+
 async function dispatchLoop(): Promise<void> {
-  // Get queued tasks sorted by priority then createdAt
   const queued = tasks
     .filter(t => t.status === 'queued')
     .sort((a, b) => {
@@ -398,18 +399,21 @@ async function dispatchLoop(): Promise<void> {
     })
 
   for (const task of queued) {
+    if (activeDispatches.has(task.id)) continue
+
     try {
       const agent = await selectAgent(task)
       if (!agent) continue
 
-      await dispatchTask(task, agent)
+      // Fire and forget — headless agent runs in background
+      activeDispatches.add(task.id)
+      dispatchTask(task, agent)
+        .catch(err => console.error(`[orchestrator] Dispatch error for task ${task.id}:`, err))
+        .finally(() => activeDispatches.delete(task.id))
     } catch (err) {
       console.error(`[orchestrator] Dispatch error for task ${task.id}:`, err)
     }
   }
-
-  // Monitor active tasks
-  await monitorActiveTasks()
 }
 
 async function dispatchTask(task: Task, agent: ScoredAgent): Promise<void> {
@@ -418,68 +422,51 @@ async function dispatchTask(task: Task, agent: ScoredAgent): Promise<void> {
   task.assignedAt = Date.now()
   saveTasks()
   orchestratorEvents.emit('task-updated', task)
-  console.log(`[orchestrator] Assigned task ${task.id} to ${agent.config.name}`)
+  console.log(`[orchestrator] Dispatching task ${task.id} to ${agent.config.name} (headless)`)
 
-  let tty: string | undefined
-  let sessionId: string | undefined
-
-  if (agent.session && agent.session.tty) {
-    // Reuse existing idle session
-    tty = agent.session.tty
-    sessionId = agent.session.sessionId
-  } else {
-    // Launch new agent session
-    const result = await createAgentSession(agent.config.id, task.project, true)
-    if (!result.success) {
-      task.status = 'failed'
-      task.error = `Failed to launch agent: ${result.error}`
-      task.completedAt = Date.now()
-      saveTasks()
-      orchestratorEvents.emit('task-updated', task)
-      return
-    }
-
-    // Wait for session to appear (poll for up to 60s)
-    for (let attempt = 0; attempt < 20; attempt++) {
-      await new Promise(r => setTimeout(r, 3000))
-      const sessions = await getClaudeSessions()
-      const savedMap = loadAgentSessionMap()
-      const saved = savedMap[agent.config.id]
-      const found = sessions.find(s => {
-        if (saved && saved.pid > 0) return s.pid === saved.pid
-        return agent.config.defaultRepos.some(repo => s.cwd === repo)
-      })
-      if (found?.tty) {
-        tty = found.tty
-        sessionId = found.sessionId
-        break
-      }
-    }
-
-    if (!tty) {
-      task.status = 'failed'
-      task.error = 'Agent launched but session not found after 60s'
-      task.completedAt = Date.now()
-      saveTasks()
-      orchestratorEvents.emit('task-updated', task)
-      return
-    }
-  }
-
-  task.assignedSessionId = sessionId
   task.status = 'active'
   saveTasks()
   orchestratorEvents.emit('task-updated', task)
 
-  // Send the task description to the agent
-  const sendResult = await sendToSession(tty, task.description)
-  if (!sendResult.success) {
-    task.status = 'failed'
-    task.error = `Failed to send to agent: ${sendResult.error}`
+  // Run headless — spawns claude -p in background, returns when done
+  const result = await runAgentHeadless(agent.config.id, task.project, task.description, {
+    timeoutMs: 1_800_000,
+  })
+
+  if (result.success) {
+    task.status = 'completed'
     task.completedAt = Date.now()
-    saveTasks()
-    orchestratorEvents.emit('task-updated', task)
+    task.result = result.output.slice(0, 2000)
+    console.log(`[orchestrator] Task ${task.id} completed (${Math.round(result.durationMs / 1000)}s)`)
+
+    if (task.assignedAgent) {
+      const xpEarned = calculateTaskXP(task)
+      const newXP = awardXP(task.assignedAgent, xpEarned, 'completed')
+      orchestratorEvents.emit('xp-awarded', { agentId: task.assignedAgent, xp: newXP })
+    }
+  } else {
+    if (task.retryCount < task.maxRetries) {
+      task.status = 'queued'
+      task.assignedAgent = undefined
+      task.assignedAt = undefined
+      task.retryCount += 1
+      task.error = `Agent failed: ${result.error} — re-queuing`
+      console.log(`[orchestrator] Task ${task.id} failed, re-queuing (attempt ${task.retryCount})`)
+    } else {
+      task.status = 'failed'
+      task.error = result.error || 'Agent failed'
+      task.completedAt = Date.now()
+      console.log(`[orchestrator] Task ${task.id} failed permanently: ${task.error}`)
+
+      if (task.assignedAgent) {
+        const newXP = awardXP(task.assignedAgent, -25, 'failed')
+        orchestratorEvents.emit('xp-awarded', { agentId: task.assignedAgent, xp: newXP })
+      }
+    }
   }
+
+  saveTasks()
+  orchestratorEvents.emit('task-updated', task)
 }
 
 async function monitorActiveTasks(): Promise<void> {
