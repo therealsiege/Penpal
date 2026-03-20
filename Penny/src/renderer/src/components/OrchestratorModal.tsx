@@ -8,6 +8,9 @@ import type {
   VeritasTaskStatus,
   VeritasTaskPriority,
   VeritasServiceStatus,
+  ModelProvider,
+  StageResult,
+  TaskStage,
 } from '../types'
 
 // ── OrchestratorModal ───────────────────────────────────────────────────────
@@ -25,12 +28,33 @@ export function OrchestratorModal({ onClose }: { onClose: () => void }) {
   const [tab, setTab] = useState<'queue' | 'health' | 'veritas'>('queue')
   const [showEnqueue, setShowEnqueue] = useState(false)
   const [showVeritasCreate, setShowVeritasCreate] = useState(false)
+  const [provider, setProvider] = useState<ModelProvider>('claude')
+  const [ollamaAvailable, setOllamaAvailable] = useState(false)
 
   useEffect(() => {
     void loadData()
+    void loadProvider()
     const interval = setInterval(() => { void loadData() }, 7000)
     return () => clearInterval(interval)
   }, [])
+
+  async function loadProvider() {
+    try {
+      const result = await window.api.orchestratorGetProvider()
+      if (result && typeof result.provider === 'string') {
+        setProvider(result.provider as ModelProvider)
+        setOllamaAvailable(!!result.ollamaAvailable)
+      }
+    } catch { /* keep defaults */ }
+  }
+
+  async function toggleProvider() {
+    const next: ModelProvider = provider === 'claude' ? 'ollama' : 'claude'
+    try {
+      await window.api.orchestratorSetProvider(next)
+      setProvider(next)
+    } catch { /* ignore */ }
+  }
 
   async function loadOrchestratorData() {
     try {
@@ -115,10 +139,10 @@ export function OrchestratorModal({ onClose }: { onClose: () => void }) {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-backdrop-fade-in"
       data-disable-office-hotkeys="true"
     >
-      <div className="bg-slate-900 border border-slate-700 rounded-xl w-[900px] max-h-[84vh] flex flex-col shadow-2xl">
+      <div className="bg-slate-900 border border-slate-700 rounded-xl w-[900px] max-h-[84vh] flex flex-col shadow-2xl animate-modal-scale-in">
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-800">
           <div className="flex items-center gap-3">
@@ -142,12 +166,28 @@ export function OrchestratorModal({ onClose }: { onClose: () => void }) {
               </div>
             )}
           </div>
-          <button
-            onClick={onClose}
-            className="text-slate-500 hover:text-slate-300 text-xl leading-none"
-          >
-            x
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={toggleProvider}
+              className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition-all duration-200 ${
+                provider === 'claude'
+                  ? 'bg-blue-600/20 text-blue-400 border border-blue-500/30 hover:bg-blue-600/30'
+                  : 'bg-purple-600/20 text-purple-400 border border-purple-500/30 hover:bg-purple-600/30'
+              }`}
+              title={`Current provider: ${provider}. Click to toggle.`}
+            >
+              {provider === 'claude' ? 'Claude' : 'Ollama'}
+              {provider === 'ollama' && !ollamaAvailable && (
+                <span className="ml-1 text-red-400">(offline)</span>
+              )}
+            </button>
+            <button
+              onClick={onClose}
+              className="text-slate-500 hover:text-slate-300 text-xl leading-none"
+            >
+              x
+            </button>
+          </div>
         </div>
 
         {/* Tabs */}
@@ -231,8 +271,13 @@ export function OrchestratorModal({ onClose }: { onClose: () => void }) {
 function TaskQueueView({ tasks, onRefresh }: { tasks: Task[]; onRefresh: () => void }) {
   if (tasks.length === 0) {
     return (
-      <div className="text-center text-slate-500 py-12">
-        No tasks in queue. Create one with the + button or use <code>!task</code> in Slack.
+      <div className="space-y-2">
+        {[1, 2, 3].map(n => (
+          <div key={n} className="animate-shimmer h-14 rounded-lg bg-slate-800/50 border border-slate-700/50" />
+        ))}
+        <div className="text-center text-slate-500 py-4 text-xs">
+          No tasks in queue. Create one with the + button or use <code>!task</code> in Slack.
+        </div>
       </div>
     )
   }
@@ -240,13 +285,17 @@ function TaskQueueView({ tasks, onRefresh }: { tasks: Task[]; onRefresh: () => v
   return (
     <div className="space-y-2">
       {tasks.map(task => (
-        <TaskRow key={task.id} task={task} onRefresh={onRefresh} />
+        <div key={task.id} className="stagger-item">
+          <TaskRow task={task} onRefresh={onRefresh} />
+        </div>
       ))}
     </div>
   )
 }
 
 function TaskRow({ task, onRefresh }: { task: Task; onRefresh: () => void }) {
+  const [expanded, setExpanded] = useState(false)
+
   const statusColors: Record<string, string> = {
     queued: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30',
     assigned: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
@@ -264,44 +313,148 @@ function TaskRow({ task, onRefresh }: { task: Task; onRefresh: () => void }) {
   }
 
   const age = formatAge(task.createdAt)
+  const isActive = task.status === 'active' || task.status === 'assigned'
+  const hasStages = task.stageResults && task.stageResults.length > 0
 
   return (
-    <div className="flex items-center gap-3 p-3 bg-slate-800/50 border border-slate-700/50 rounded-lg">
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2">
-          <span className={`text-[11px] font-medium ${priorityColors[task.priority]}`}>
-            {task.priority.toUpperCase()}
-          </span>
-          <span className="text-sm text-slate-200 truncate">{task.title}</span>
+    <div className="bg-slate-800/50 border border-slate-700/50 rounded-lg">
+      <div className="flex items-center gap-3 p-3">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <span className={`text-[11px] font-medium ${priorityColors[task.priority]}`}>
+              {task.priority.toUpperCase()}
+            </span>
+            <span className="text-sm text-slate-200 truncate">{task.title}</span>
+            {task.provider === 'ollama' && (
+              <span className="text-[9px] px-1.5 py-0.5 rounded bg-purple-600/20 text-purple-400 border border-purple-500/30">
+                ollama
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-2 mt-1 text-xs text-slate-500">
+            <span>{age}</span>
+            <span>via {task.source}</span>
+            {task.assignedAgent && <span>{'-> '}{task.assignedAgent}</span>}
+            {task.error && <span className="text-red-400 truncate">{task.error}</span>}
+          </div>
         </div>
-        <div className="flex items-center gap-2 mt-1 text-xs text-slate-500">
-          <span>{age}</span>
-          <span>via {task.source}</span>
-          {task.assignedAgent && <span>{'-> '}{task.assignedAgent}</span>}
-          {task.error && <span className="text-red-400 truncate">{task.error}</span>}
+
+        {/* Stage progress dots for active tasks */}
+        {(isActive || hasStages) && task.currentStage && (
+          <StageDots currentStage={task.currentStage} stageResults={task.stageResults} />
+        )}
+
+        <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium border ${statusColors[task.status]}`}>
+          {task.status}
+        </span>
+        <div className="flex items-center gap-1">
+          {hasStages && (
+            <button
+              onClick={() => setExpanded(!expanded)}
+              className="px-2 py-1 text-[10px] bg-slate-700/50 text-slate-400 hover:bg-slate-700 rounded"
+            >
+              {expanded ? 'Hide' : 'Detail'}
+            </button>
+          )}
+          {task.status === 'failed' && (
+            <button
+              onClick={async () => { await window.api.orchestratorRetryTask(task.id); onRefresh() }}
+              className="px-2 py-1 text-[10px] bg-blue-600/20 text-blue-400 hover:bg-blue-600/40 rounded"
+            >
+              Retry
+            </button>
+          )}
+          {(task.status === 'queued' || task.status === 'assigned' || task.status === 'active') && (
+            <button
+              onClick={async () => { await window.api.orchestratorCancelTask(task.id); onRefresh() }}
+              className="px-2 py-1 text-[10px] bg-red-600/20 text-red-400 hover:bg-red-600/40 rounded"
+            >
+              Cancel
+            </button>
+          )}
         </div>
       </div>
-      <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium border ${statusColors[task.status]}`}>
-        {task.status}
-      </span>
-      <div className="flex items-center gap-1">
-        {task.status === 'failed' && (
-          <button
-            onClick={async () => { await window.api.orchestratorRetryTask(task.id); onRefresh() }}
-            className="px-2 py-1 text-[10px] bg-blue-600/20 text-blue-400 hover:bg-blue-600/40 rounded"
-          >
-            Retry
-          </button>
-        )}
-        {(task.status === 'queued' || task.status === 'assigned' || task.status === 'active') && (
-          <button
-            onClick={async () => { await window.api.orchestratorCancelTask(task.id); onRefresh() }}
-            className="px-2 py-1 text-[10px] bg-red-600/20 text-red-400 hover:bg-red-600/40 rounded"
-          >
-            Cancel
-          </button>
-        )}
+
+      {/* Expanded stage detail */}
+      {expanded && hasStages && (
+        <div className="px-3 pb-3 space-y-2 border-t border-slate-700/30 pt-2 animate-fade-slide-down">
+          {task.stageResults!.map((sr, i) => (
+            <StageResultRow key={i} result={sr} />
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Stage Progress Dots ─────────────────────────────────────────────────────
+
+const STAGE_ORDER: TaskStage[] = ['planning', 'executing', 'validating']
+const STAGE_LABELS: Record<string, string> = { planning: 'Plan', executing: 'Exec', validating: 'Val' }
+
+function StageDots({
+  currentStage,
+  stageResults,
+}: {
+  currentStage: TaskStage
+  stageResults?: StageResult[]
+}) {
+  const resultMap = new Map<string, StageResult>()
+  stageResults?.forEach(sr => resultMap.set(sr.stage, sr))
+
+  return (
+    <div className="flex items-center gap-0.5">
+      {STAGE_ORDER.map((stage, idx) => {
+        const result = resultMap.get(stage)
+        const isActive = stage === currentStage
+        const isDone = result?.success === true
+        const isFailed = result?.success === false
+        const isOllama = result?.provider === 'ollama'
+
+        let dotClass = 'bg-slate-600 text-slate-500'
+        if (isDone) dotClass = 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40'
+        else if (isFailed) dotClass = 'bg-red-500/20 text-red-400 border-red-500/40'
+        else if (isActive) dotClass = 'bg-blue-500/20 text-blue-400 border-blue-500/40 animate-breathe-glow'
+
+        return (
+          <div key={stage} className="flex items-center">
+            {idx > 0 && <div className="w-2 h-px bg-slate-600 mx-0.5" />}
+            <span
+              className={`px-1.5 py-0.5 rounded text-[9px] font-medium border ${dotClass}`}
+              title={result ? `${stage}: ${result.success ? 'PASS' : 'FAIL'} (${Math.round(result.durationMs / 1000)}s, ${result.provider})` : stage}
+            >
+              {STAGE_LABELS[stage]}
+              {isOllama && <span className="ml-0.5 opacity-60">(o)</span>}
+            </span>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+function StageResultRow({ result }: { result: StageResult }) {
+  return (
+    <div className="text-xs">
+      <div className="flex items-center gap-2 mb-1">
+        <span className={`font-medium ${result.success ? 'text-emerald-400' : 'text-red-400'}`}>
+          {STAGE_LABELS[result.stage] || result.stage}
+        </span>
+        <span className="text-slate-500">{Math.round(result.durationMs / 1000)}s</span>
+        <span className={`px-1 rounded text-[9px] ${
+          result.provider === 'ollama'
+            ? 'bg-purple-600/20 text-purple-400'
+            : 'bg-blue-600/20 text-blue-400'
+        }`}>
+          {result.provider}
+        </span>
+        <span className={result.success ? 'text-emerald-400' : 'text-red-400'}>
+          {result.success ? 'PASS' : 'FAIL'}
+        </span>
       </div>
+      <pre className="text-slate-400 whitespace-pre-wrap text-[10px] max-h-24 overflow-y-auto bg-slate-900/50 rounded px-2 py-1">
+        {result.output.slice(0, 500) || '(no output)'}
+      </pre>
     </div>
   )
 }
@@ -316,7 +469,9 @@ function AgentHealthView({ health, onRefresh }: { health: AgentHealthStatus[]; o
   return (
     <div className="space-y-2">
       {health.map(agent => (
-        <AgentHealthRow key={agent.agentId} agent={agent} onRefresh={onRefresh} />
+        <div key={agent.agentId} className="stagger-item">
+          <AgentHealthRow agent={agent} onRefresh={onRefresh} />
+        </div>
       ))}
     </div>
   )
@@ -435,12 +590,13 @@ function VeritasBoardView({
       ) : (
         <div className="space-y-2">
           {tasks.map(task => (
-            <VeritasTaskRow
-              key={task.id}
-              task={task}
-              updating={updatingTaskId === task.id}
-              onUpdateStatus={onUpdateStatus}
-            />
+            <div key={task.id} className="stagger-item">
+              <VeritasTaskRow
+                task={task}
+                updating={updatingTaskId === task.id}
+                onUpdateStatus={onUpdateStatus}
+              />
+            </div>
           ))}
         </div>
       )}
@@ -671,7 +827,7 @@ function TabButton({ active, onClick, children }: { active: boolean; onClick: ()
   return (
     <button
       onClick={onClick}
-      className={`px-3 py-1.5 text-xs rounded-md transition-colors ${
+      className={`px-3 py-1.5 text-xs rounded-md transition-all duration-150 ${
         active
           ? 'bg-slate-700 text-slate-100'
           : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'

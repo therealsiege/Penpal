@@ -221,6 +221,7 @@ Optional Penny infra vars can be set in `Penny/docker/.env.control-plane`:
 | `PENNY_VERITAS_WEB_URL` | No | Browser URL opened from Settings (default `http://127.0.0.1:47832`) |
 | `PENNY_VERITAS_ADMIN_KEY` | Yes for authenticated usage | Veritas admin key for the service |
 | `PENNY_VERITAS_AGENT_KEY` | Recommended | Non-admin key used by MCP agents (`VK_API_KEY`) |
+| `PENNY_SFX_DIR` | No | Absolute or relative folder for Soundboard mp3 discovery (default auto-detect, fallback `Penny/sound-effects`) |
 
 ## IPC API Reference
 

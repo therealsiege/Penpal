@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 
-export type ThemeName = 'dark' | 'light'
+export type ThemeName = 'dark' | 'light' | 'neon'
 
 export interface AppearanceState {
   theme: ThemeName
@@ -51,6 +51,7 @@ function persist(state: AppearanceState) {
 function applyToDOM(state: AppearanceState) {
   const root = document.documentElement
   root.classList.toggle('light-theme', state.theme === 'light')
+  root.classList.toggle('neon-theme', state.theme === 'neon')
   root.style.setProperty('--ui-font-family', state.uiFontFamily)
   root.style.setProperty('--ui-font-size', `${state.uiFontSize}px`)
   root.style.setProperty('--editor-font-family', state.editorFontFamily)
@@ -62,7 +63,7 @@ function applyToDOM(state: AppearanceState) {
 const saved = loadPersisted()
 
 const defaults = {
-  theme: (saved.theme as ThemeName) || 'dark',
+  theme: (['dark', 'light', 'neon'].includes(saved.theme as string) ? saved.theme as ThemeName : 'dark'),
   uiFontFamily: saved.uiFontFamily || "-apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif",
   uiFontSize: saved.uiFontSize || 15,
   editorFontFamily: saved.editorFontFamily || "ui-monospace, 'SF Mono', 'Cascadia Code', 'Fira Code', Menlo, monospace",

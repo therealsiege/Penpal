@@ -13,6 +13,7 @@ import { CommandCenter } from './panels/CommandCenter'
 import { VaultPanel } from './panels/VaultPanel'
 import { GraphPanel } from './panels/GraphPanel'
 import { SettingsPanel } from './panels/SettingsPanel'
+import { SoundboardPanel } from './panels/SoundboardPanel'
 import type { SystemPaths } from './types'
 import { getPathPresets } from './utils/path-presets'
 
@@ -108,6 +109,13 @@ function AppContent() {
       description: 'Browse vault files and send to agents',
       category: 'Navigation',
       action: () => setActivePanel('vault'),
+    },
+    {
+      id: 'open-soundboard',
+      label: 'Open Soundboard',
+      description: 'Play any mp3 from Penny sound effects folder',
+      category: 'Navigation',
+      action: () => setActivePanel('soundboard'),
     },
     {
       id: 'open-tasks',
@@ -325,6 +333,7 @@ function AppContent() {
         )}
         {activePanel === 'vault' && <VaultPanel />}
         {activePanel === 'graph' && <GraphPanel />}
+        {activePanel === 'soundboard' && <SoundboardPanel />}
         {activePanel === 'settings' && <SettingsPanel />}
       </Layout>
     </>

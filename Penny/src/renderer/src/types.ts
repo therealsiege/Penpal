@@ -121,6 +121,20 @@ export interface SystemPaths {
   docsRoot: string
 }
 
+export interface SoundboardClip {
+  id: string
+  name: string
+  relativePath: string
+  absolutePath: string
+  url: string
+}
+
+export interface SoundboardListing {
+  directory: string
+  clips: SoundboardClip[]
+  source: 'configured' | 'candidate' | 'fallback-scan' | 'default'
+}
+
 export interface AgentPersona {
   backstory: string
   style: string
@@ -356,6 +370,18 @@ export interface VaultIndexEntry {
 export type TaskPriority = 'critical' | 'high' | 'normal' | 'low'
 export type TaskStatusType = 'queued' | 'assigned' | 'active' | 'completed' | 'failed' | 'cancelled'
 export type TaskSource = 'slack' | 'dashboard' | 'api'
+export type TaskStage = 'queued' | 'planning' | 'executing' | 'validating' | 'done'
+export type ModelProvider = 'claude' | 'ollama'
+
+export interface StageResult {
+  stage: TaskStage
+  success: boolean
+  output: string
+  durationMs: number
+  provider: ModelProvider
+  startedAt: number
+  completedAt: number
+}
 
 export interface Task {
   id: string
@@ -378,6 +404,11 @@ export interface Task {
   error?: string
   retryCount: number
   maxRetries: number
+  currentStage?: TaskStage
+  stageResults?: StageResult[]
+  planOutput?: string
+  validateOutput?: string
+  provider?: ModelProvider
 }
 
 export interface AgentHealthStatus {

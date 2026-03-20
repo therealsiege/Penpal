@@ -19,7 +19,7 @@ function statusColor(status: TripletStatus): string {
 
 function roleStatusDot(status: string): string {
   switch (status) {
-    case 'active': return 'bg-emerald-400 animate-pulse'
+    case 'active': return 'bg-emerald-400 animate-breathe-glow'
     case 'complete': return 'bg-emerald-400'
     case 'failed': return 'bg-red-400'
     default: return 'bg-slate-500'
@@ -89,8 +89,8 @@ export function TripletLauncherModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={onClose}>
-      <div className="bg-slate-900 border border-slate-700 rounded-xl p-5 w-[560px] shadow-2xl max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 animate-backdrop-fade-in" onClick={onClose}>
+      <div className="bg-slate-900 border border-slate-700 rounded-xl p-5 w-[560px] shadow-2xl max-h-[85vh] overflow-y-auto animate-modal-scale-in" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-4">
           <div>
             <h3 className="text-[15px] font-bold text-white">Launch Triplet Workflow</h3>
@@ -107,7 +107,7 @@ export function TripletLauncherModal({
               <button
                 key={p.id}
                 onClick={() => setSelectedPreset(p.id)}
-                className={`px-3 py-1.5 text-[12px] rounded-md border transition-colors ${
+                className={`stagger-item px-3 py-1.5 text-[12px] rounded-md border transition-colors ${
                   selectedPreset === p.id
                     ? 'bg-blue-600/20 border-blue-500/40 text-blue-400'
                     : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-slate-200'
@@ -289,8 +289,8 @@ export function TripletStatusModal({
   const isActive = !['complete', 'failed'].includes(wf.status)
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={onClose}>
-      <div className="bg-slate-900 border border-slate-700 rounded-xl p-5 w-[680px] shadow-2xl max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 animate-backdrop-fade-in" onClick={onClose}>
+      <div className="bg-slate-900 border border-slate-700 rounded-xl p-5 w-[680px] shadow-2xl max-h-[85vh] overflow-y-auto animate-modal-scale-in" onClick={e => e.stopPropagation()}>
         {/* Header */}
         <div className="flex items-center justify-between mb-4">
           <div>
@@ -299,7 +299,7 @@ export function TripletStatusModal({
               <span className={`text-[11px] px-2 py-0.5 rounded border font-medium ${statusColor(wf.status)}`}>
                 {wf.status}
               </span>
-              <span className="text-[11px] text-slate-500">
+              <span className={`text-[11px] text-slate-500${isActive ? ' animate-breathe-glow' : ''}`}>
                 Iteration {wf.iteration}/{wf.maxIterations}
               </span>
             </div>
@@ -350,7 +350,7 @@ export function TripletStatusModal({
           <p className="text-[10px] text-slate-500 uppercase tracking-wider mb-2">Timeline</p>
           <div className="flex flex-col gap-1">
             {wf.stageHistory.map((entry, i) => (
-              <div key={i} className="flex items-center gap-2">
+              <div key={i} className="stagger-item flex items-center gap-2">
                 <span className="text-[10px] text-slate-600 font-mono w-16">{formatTime(entry.enteredAt)}</span>
                 <span className={`text-[11px] px-1.5 py-0.5 rounded border ${statusColor(entry.stage)}`}>
                   {entry.stage}
@@ -482,8 +482,8 @@ export function TripletListModal({
   const list = workflows ?? []
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={onClose}>
-      <div className="bg-slate-900 border border-slate-700 rounded-xl p-5 w-[520px] shadow-2xl max-h-[70vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 animate-backdrop-fade-in" onClick={onClose}>
+      <div className="bg-slate-900 border border-slate-700 rounded-xl p-5 w-[520px] shadow-2xl max-h-[70vh] overflow-y-auto animate-modal-scale-in" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-[15px] font-bold text-white">Triplet Workflows</h3>
           <button onClick={onClose} className="text-slate-500 hover:text-slate-300 text-lg">x</button>
@@ -497,7 +497,7 @@ export function TripletListModal({
               <button
                 key={wf.id}
                 onClick={() => onSelect(wf)}
-                className="text-left p-3 bg-slate-800/40 hover:bg-slate-800 border border-slate-700/40 hover:border-slate-600 rounded-lg transition-colors"
+                className="stagger-item text-left p-3 bg-slate-800/40 hover:bg-slate-800 border border-slate-700/40 hover:border-slate-600 rounded-lg transition-colors"
               >
                 <div className="flex items-center gap-2">
                   <span className={`text-[11px] px-1.5 py-0.5 rounded border font-medium ${statusColor(wf.status)}`}>

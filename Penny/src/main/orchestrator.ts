@@ -23,12 +23,25 @@ import {
   removeAgentSession,
   type AgentConfig,
 } from './agents'
+import { checkOllamaAvailable, runOllama } from './ollama-client'
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
 export type TaskPriority = 'critical' | 'high' | 'normal' | 'low'
 export type TaskStatus = 'queued' | 'assigned' | 'active' | 'completed' | 'failed' | 'cancelled'
 export type TaskSource = 'slack' | 'dashboard' | 'api'
+export type TaskStage = 'queued' | 'planning' | 'executing' | 'validating' | 'done'
+export type ModelProvider = 'claude' | 'ollama'
+
+export interface StageResult {
+  stage: TaskStage
+  success: boolean
+  output: string
+  durationMs: number
+  provider: ModelProvider
+  startedAt: number
+  completedAt: number
+}
 
 export interface Task {
   id: string
@@ -51,6 +64,12 @@ export interface Task {
   error?: string
   retryCount: number
   maxRetries: number
+  // 3-stage pipeline fields (optional for backward compat)
+  currentStage?: TaskStage
+  stageResults?: StageResult[]
+  planOutput?: string
+  validateOutput?: string
+  provider?: ModelProvider
 }
 
 export interface AgentHealthStatus {
@@ -217,6 +236,95 @@ const PRIORITY_ORDER: Record<TaskPriority, number> = {
   low: 3,
 }
 
+// ── Model Provider ──────────────────────────────────────────────────────────
+
+let currentProvider: ModelProvider = 'claude'
+
+export function setModelProvider(p: ModelProvider): void {
+  currentProvider = p
+  console.log(`[orchestrator] Model provider set to: ${p}`)
+}
+
+export function getModelProvider(): ModelProvider {
+  return currentProvider
+}
+
+// ── Stage Prompt Builders ───────────────────────────────────────────────────
+
+function buildPlanPrompt(task: Task): string {
+  return [
+    'You are a planning agent. Your job is to produce a detailed, numbered plan for the following task.',
+    'Do NOT implement anything. Do NOT write code. Only output the plan.',
+    '',
+    `Task: ${task.title}`,
+    `Description: ${task.description}`,
+    `Project: ${task.project}`,
+    `Priority: ${task.priority}`,
+    '',
+    'Output a numbered step-by-step plan. Be specific about which files to touch and what changes to make.',
+  ].join('\n')
+}
+
+function buildExecutePrompt(task: Task, plan: string): string {
+  return [
+    'You are an execution agent. Implement the following plan exactly. Do not deviate.',
+    '',
+    `Task: ${task.title}`,
+    `Description: ${task.description}`,
+    `Project: ${task.project}`,
+    '',
+    '--- PLAN ---',
+    plan,
+    '--- END PLAN ---',
+    '',
+    'Implement each step. When done, summarize what you changed.',
+  ].join('\n')
+}
+
+function buildValidatePrompt(task: Task, plan: string, execOutput: string): string {
+  return [
+    'You are a validation agent. Review whether the execution output satisfies the original task and plan.',
+    'Do NOT make any changes. This is a read-only review.',
+    '',
+    `Task: ${task.title}`,
+    `Description: ${task.description}`,
+    '',
+    '--- PLAN ---',
+    plan,
+    '--- END PLAN ---',
+    '',
+    '--- EXECUTION OUTPUT ---',
+    execOutput.slice(0, 4000),
+    '--- END EXECUTION OUTPUT ---',
+    '',
+    'Evaluate completeness and correctness. End your response with exactly PASS or FAIL on its own line.',
+  ].join('\n')
+}
+
+// ── Stage Runner ────────────────────────────────────────────────────────────
+
+async function runStage(
+  task: Task,
+  agentId: string,
+  stage: TaskStage,
+  prompt: string,
+): Promise<{ success: boolean; output: string; durationMs: number; provider: ModelProvider }> {
+  const provider = task.provider ?? currentProvider
+
+  // Ollama handles plan & validate only; execute always uses Claude
+  if (provider === 'ollama' && (stage === 'planning' || stage === 'validating')) {
+    const result = await runOllama(prompt, { timeoutMs: 300_000 })
+    return { success: result.success, output: result.output, durationMs: result.durationMs, provider: 'ollama' }
+  }
+
+  // Claude (or execute stage always)
+  const result = await runAgentHeadless(agentId, task.project, prompt, {
+    permissionMode: stage === 'validating' ? 'plan' : undefined,
+    timeoutMs: 1_800_000,
+  })
+  return { success: result.success, output: result.output, durationMs: result.durationMs, provider: 'claude' }
+}
+
 // ── Init ────────────────────────────────────────────────────────────────────
 
 function init(): void {
@@ -243,6 +351,7 @@ export function enqueueTask(opts: {
   slackChannelId?: string
   slackThreadTs?: string
   maxRetries?: number
+  provider?: ModelProvider
 }): Task {
   taskCounter += 1
   const task: Task = {
@@ -260,6 +369,9 @@ export function enqueueTask(opts: {
     createdAt: Date.now(),
     retryCount: 0,
     maxRetries: opts.maxRetries ?? 1,
+    currentStage: 'queued',
+    stageResults: [],
+    provider: opts.provider ?? currentProvider,
   }
 
   tasks.push(task)
@@ -416,28 +528,138 @@ async function dispatchLoop(): Promise<void> {
   }
 }
 
+function handleStageFailure(task: Task, stage: TaskStage, error: string): void {
+  if (task.retryCount < task.maxRetries) {
+    task.status = 'queued'
+    task.currentStage = 'queued'
+    task.assignedAgent = undefined
+    task.assignedAt = undefined
+    task.retryCount += 1
+    task.error = `${stage} failed: ${error} — re-queuing`
+    console.log(`[orchestrator] Task ${task.id} failed at ${stage}, re-queuing (attempt ${task.retryCount})`)
+  } else {
+    task.status = 'failed'
+    task.error = `${stage} failed: ${error}`
+    task.completedAt = Date.now()
+    console.log(`[orchestrator] Task ${task.id} failed permanently at ${stage}: ${task.error}`)
+
+    if (task.assignedAgent) {
+      const newXP = awardXP(task.assignedAgent, -25, 'failed')
+      orchestratorEvents.emit('xp-awarded', { agentId: task.assignedAgent, xp: newXP })
+    }
+  }
+}
+
 async function dispatchTask(task: Task, agent: ScoredAgent): Promise<void> {
   task.status = 'assigned'
   task.assignedAgent = agent.config.id
   task.assignedAt = Date.now()
+  task.stageResults = task.stageResults ?? []
   saveTasks()
   orchestratorEvents.emit('task-updated', task)
-  console.log(`[orchestrator] Dispatching task ${task.id} to ${agent.config.name} (headless)`)
+  console.log(`[orchestrator] Dispatching task ${task.id} to ${agent.config.name} (3-stage pipeline)`)
 
   task.status = 'active'
   saveTasks()
   orchestratorEvents.emit('task-updated', task)
 
-  // Run headless — spawns claude -p in background, returns when done
-  const result = await runAgentHeadless(agent.config.id, task.project, task.description, {
-    timeoutMs: 1_800_000,
+  // ── Stage 1: Planning ──
+  task.currentStage = 'planning'
+  saveTasks()
+  orchestratorEvents.emit('task-updated', task)
+  console.log(`[orchestrator] Task ${task.id} — stage: planning`)
+
+  const planStart = Date.now()
+  const planResult = await runStage(task, agent.config.id, 'planning', buildPlanPrompt(task))
+  task.stageResults!.push({
+    stage: 'planning',
+    success: planResult.success,
+    output: planResult.output.slice(0, 4000),
+    durationMs: planResult.durationMs,
+    provider: planResult.provider,
+    startedAt: planStart,
+    completedAt: Date.now(),
   })
 
-  if (result.success) {
+  if (!planResult.success) {
+    handleStageFailure(task, 'planning', planResult.output || 'Plan generation failed')
+    saveTasks()
+    orchestratorEvents.emit('task-updated', task)
+    return
+  }
+
+  task.planOutput = planResult.output
+  saveTasks()
+  orchestratorEvents.emit('task-updated', task)
+
+  // Check for cancellation between stages
+  if (task.status === 'cancelled') return
+
+  // ── Stage 2: Executing (always Claude) ──
+  task.currentStage = 'executing'
+  saveTasks()
+  orchestratorEvents.emit('task-updated', task)
+  console.log(`[orchestrator] Task ${task.id} — stage: executing`)
+
+  const execStart = Date.now()
+  const execResult = await runStage(task, agent.config.id, 'executing', buildExecutePrompt(task, task.planOutput!))
+  task.stageResults!.push({
+    stage: 'executing',
+    success: execResult.success,
+    output: execResult.output.slice(0, 4000),
+    durationMs: execResult.durationMs,
+    provider: execResult.provider,
+    startedAt: execStart,
+    completedAt: Date.now(),
+  })
+
+  if (!execResult.success) {
+    handleStageFailure(task, 'executing', execResult.output || 'Execution failed')
+    saveTasks()
+    orchestratorEvents.emit('task-updated', task)
+    return
+  }
+
+  saveTasks()
+  orchestratorEvents.emit('task-updated', task)
+
+  if (task.status === 'cancelled') return
+
+  // ── Stage 3: Validating ──
+  task.currentStage = 'validating'
+  saveTasks()
+  orchestratorEvents.emit('task-updated', task)
+  console.log(`[orchestrator] Task ${task.id} — stage: validating`)
+
+  const valStart = Date.now()
+  const valResult = await runStage(
+    task,
+    agent.config.id,
+    'validating',
+    buildValidatePrompt(task, task.planOutput!, execResult.output),
+  )
+  task.stageResults!.push({
+    stage: 'validating',
+    success: valResult.success,
+    output: valResult.output.slice(0, 4000),
+    durationMs: valResult.durationMs,
+    provider: valResult.provider,
+    startedAt: valStart,
+    completedAt: Date.now(),
+  })
+
+  task.validateOutput = valResult.output
+
+  // Check for PASS/FAIL in validation output
+  const passed = valResult.success && /\bPASS\b/i.test(valResult.output)
+
+  if (passed) {
     task.status = 'completed'
+    task.currentStage = 'done'
     task.completedAt = Date.now()
-    task.result = result.output.slice(0, 2000)
-    console.log(`[orchestrator] Task ${task.id} completed (${Math.round(result.durationMs / 1000)}s)`)
+    task.result = execResult.output.slice(0, 2000)
+    const totalDuration = task.stageResults!.reduce((sum, s) => sum + s.durationMs, 0)
+    console.log(`[orchestrator] Task ${task.id} completed (${Math.round(totalDuration / 1000)}s total)`)
 
     if (task.assignedAgent) {
       const xpEarned = calculateTaskXP(task)
@@ -445,24 +667,7 @@ async function dispatchTask(task: Task, agent: ScoredAgent): Promise<void> {
       orchestratorEvents.emit('xp-awarded', { agentId: task.assignedAgent, xp: newXP })
     }
   } else {
-    if (task.retryCount < task.maxRetries) {
-      task.status = 'queued'
-      task.assignedAgent = undefined
-      task.assignedAt = undefined
-      task.retryCount += 1
-      task.error = `Agent failed: ${result.error} — re-queuing`
-      console.log(`[orchestrator] Task ${task.id} failed, re-queuing (attempt ${task.retryCount})`)
-    } else {
-      task.status = 'failed'
-      task.error = result.error || 'Agent failed'
-      task.completedAt = Date.now()
-      console.log(`[orchestrator] Task ${task.id} failed permanently: ${task.error}`)
-
-      if (task.assignedAgent) {
-        const newXP = awardXP(task.assignedAgent, -25, 'failed')
-        orchestratorEvents.emit('xp-awarded', { agentId: task.assignedAgent, xp: newXP })
-      }
-    }
+    handleStageFailure(task, 'validating', valResult.output ? 'Validation returned FAIL' : 'Validation failed')
   }
 
   saveTasks()

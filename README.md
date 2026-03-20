@@ -1,69 +1,87 @@
-# Penny
+# Sidekick
 
-AI-powered knowledge graph and MCP server for an Obsidian vault. Parses markdown notes, builds a graph in Memgraph, generates vector embeddings in Qdrant, and exposes it all via a Model Context Protocol server.
+AI-powered venture intelligence platform built on an Obsidian vault. Parses markdown notes into a knowledge graph (Memgraph + Qdrant), orchestrates teams of Claude Code agents, and surfaces everything through an Electron dashboard and MCP server.
 
-## Structure
+## Repository Structure
 
 ```
-analytics/
-  src/
-    shared/          # Shared connections, config, and utilities
-    etl/             # Vault parser → Memgraph + Qdrant ingestion pipeline
-    mcp/             # MCP server exposing 8 tools for graph + vector queries
-  docker-compose.yml # Memgraph, Memgraph Lab, Qdrant
+sidekick/
+  analytics/        # Graph ETL pipeline, MCP server, scheduler
+  Penny/            # Electron dashboard (React + Tailwind + Phaser)
+  Docs/             # Per-venture documentation and knowledge bases
+  Resources/        # Reference materials
+  tools/            # Utility scripts (dispatch, etc.)
+  agents/           # Agent personas, shared memory, MCP profiles
 ```
 
-## Setup
+## What We Built
 
-```bash
-cd analytics
-npm install
-npm run infra:up   # start Memgraph + Qdrant via Docker
-```
+### Phase 1 -- Vault Parsing & Embeddings
+- Obsidian vault walker that parses markdown, frontmatter, wikilinks, and tags
+- Memgraph ingestion: Documents, Folders, Tags with full relationship graph
+- Qdrant vector store with OpenAI `text-embedding-3-small` embeddings
+- Chunking strategy for long documents with overlap
 
-## Scripts
+### Phase 2 -- LLM Entity Extraction
+- Claude Haiku extraction of People, Companies, Technologies, EHR Systems, Regulations, and Skills from document text
+- Curated dictionaries for entity normalization and fuzzy matching
+- Graph analytics via Memgraph MAGE: PageRank, community detection, betweenness centrality
 
-| Script | Description |
-|--------|-------------|
-| `npm run etl` | Run the ETL pipeline for all enabled ventures |
-| `npm run etl:clean` | Drop all data and reimport from scratch |
-| `npm run etl:openloop` | Run ETL for the OpenLoop venture only |
-| `npm run etl:1putt` | Run ETL for the 1Putt venture only |
-| `npm run etl:elion` | Run ETL for the Elion Health venture only |
-| `npm run etl:research` | Run ETL for the Research venture only |
-| `npm run mcp:dev` | Start the MCP server (dev, via tsx) |
-| `npm run mcp:build` | Compile TypeScript to `dist/` |
-| `npm run mcp:start` | Start the compiled MCP server |
-| `npm run infra:up` | Start Memgraph + Qdrant containers |
-| `npm run infra:down` | Stop containers |
+### Phase 3 -- Sales Pipeline & Territories
+- Lead ingestion from markdown files and CRM CSV
+- Sales stage tracking (prospect -> qualified -> demo -> pilot -> closed)
+- Territory mapping by state/region
+- Lead scoring engine with weighted signals
 
-## ETL Pipeline
+### Phase 4 -- Revenue Intelligence
+- CMS billing code mapping (MIPS quality measures, CPT codes)
+- Program eligibility tracking (CCM, RPM, TCM)
+- Specialty and practice association graphs
 
-Walks the Obsidian vault and builds a knowledge graph with:
+### Phase 5 -- External Intelligence
+- NPI Registry integration: streaming 11GB NPPES CSV + real-time NPI API queries
+- Web intelligence parser for structured competitor data
+- Competitor product graph nodes and COMPETES_WITH relationships
+- Output docs: Competitive Intelligence Matrix, Design Partner Shortlist, Messaging Playbook
 
-- **Documents, Folders, Tags** from markdown files
-- **People, Companies, Technologies, EHR Systems, Regulations, Skills** from curated dictionaries + LLM extraction (Claude Haiku)
-- **Leads and Sales Pipeline** from markdown lead files and CRM CSV
-- **Vector Embeddings** (OpenAI `text-embedding-3-small`) stored in Qdrant for semantic search
-- **Graph Analytics** via Memgraph MAGE (PageRank, community detection, betweenness centrality)
+### Phase 6 -- Multi-Venture Ingestion
+- Venture-based ETL: each venture (MedScrub, MedHook, 1Putt Health) gets its own config, directories, and scoring profile
+- Shared enrichment pipeline: extract -> enrich -> score -> write -> graph push
+- RSS ingestion from healthcare feeds (HIStalk, Becker's, Fierce, ONC, CMS)
+- Google Alerts ingestion with venture-aware routing
+- Per-venture lead scoring profiles (clinical, integration, consulting)
 
-CLI flags: `--clean`, `--skip-embeddings`, `--skip-llm`, `--skip-analytics`, `--venture <name>`
+### Phase 7 -- Scheduler
+- Cron-like job runner with YAML config (`schedule.yaml`)
+- Jobs: health checks, RSS ingest, daily briefing, NPI enrichment, full ETL
+- Persistent state tracking with run history
+- Daily briefing generator that writes markdown summaries to the vault
+- NPI enricher with Firecrawl-powered practice website scraping and EHR detection
+- System crontab integration (runs every minute)
 
-### Venture-Based Processing
+### Phase 8 -- Electron Dashboard (Penny)
+- Full desktop app: Electron + React 18 + Tailwind 3 + Phaser 3
+- **Command Center**: Live pixel-art office scene with agent sprites, animated status bubbles, desk assignments, room decorations
+- **Vault Editor**: CodeMirror 6 with wikilinks, frontmatter editor, multi-tab, templates, full-text search, tag browser, knowledge graph visualization
+- **Pipeline Panel**: Sales stages, lead cards, territory breakdown
+- **Health/Scheduler Panels**: Service status, job history, manual triggers
+- **Sessions Panel**: Raw Claude Code + Cursor IDE session browser with JSONL transcript viewer
+- **Graph Panel**: Interactive force-directed knowledge graph (react-force-graph-2d)
+- **Settings Panel**: Appearance/theme controls, Veritas service management
+- Embedded terminal (node-pty + xterm.js), command palette (Cmd+K), toast notifications
 
-The ETL pipeline processes directories on a per-venture basis. Ventures are configured in `src/shared/config.ts` with:
+### Phase 9 -- Agent Teams & Orchestration
+- **Agent personas**: 11 named agents with specialties, backstories, and desk positions (CrewAI-inspired)
+- **Triplet workflows**: Solver/Reviewer/Executor pattern (AgentCoder-inspired) with independent review and max 3 feedback iterations
+- **Task orchestrator**: Priority queue with skill-based agent scoring, automatic dispatch (10s loop), health monitoring (30s), graceful shutdown
+- **Slack bridge**: Per-project channels via Socket Mode, bidirectional message routing, `!task` command for creating orchestrator tasks
+- **Session discovery**: Both Claude Code (`~/.claude/sessions/`) and Cursor IDE agent transcripts
+- **Headless execution**: Agents run via `claude -p` for background task processing
+- Shared team memory (`agents/CLAUDE.md`) injected into all agent prompts
 
-- **name** -- display name
-- **enabled** -- whether the venture is included in a default `npm run etl`
-- **directories** -- list of vault subdirectories that belong to the venture (processed into both Qdrant and Memgraph)
-- **crmCsvPath** -- optional path to a CRM CSV for lead ingestion
-- **referencesCsvPaths** -- optional CSV files for reference data
+## MCP Server
 
-Configured ventures: `openloop`, `1putt`, `giving-prints`, `elion`, `research`. Enable/disable them in `config.ts` or run a single venture with `--venture openloop`.
-
-## MCP Tools
-
-The MCP server exposes 8 tools:
+The MCP server exposes 8 tools for graph + vector queries:
 
 | Tool | Description |
 |------|-------------|
@@ -76,9 +94,51 @@ The MCP server exposes 8 tools:
 | `discover_connections` | Find paths between two entities in the graph |
 | `list_communities` | Show entity clusters from community detection |
 
+## Quick Start
+
+```bash
+# Infrastructure
+cd analytics
+npm install
+npm run infra:up          # Start Memgraph + Qdrant via Docker
+
+# ETL
+npm run etl               # Run full pipeline for all enabled ventures
+npm run etl -- --venture 1putt   # Single venture
+npm run etl:clean         # Drop all data and reimport
+
+# MCP Server
+npm run mcp:dev           # Start MCP server (dev mode)
+
+# Scheduler
+npm run scheduler         # Start cron runner
+npm run scheduler:status  # Check job statuses
+
+# Sales Intelligence
+npm run ingest:all        # Run all ingestion sources
+npm run rss:ingest        # RSS feeds only
+npm run alerts:ingest     # Google Alerts only
+
+# Dashboard
+cd Penny
+npm install
+npm run dev               # Electron dev with hot reload
+npm run build             # Production build
+```
+
 ## Requirements
 
 - Node.js 18+
-- Docker (for Memgraph + Qdrant)
-- `OPENAI_API_KEY` env var (embeddings)
-- `ANTHROPIC_API_KEY` env var (LLM extraction + RAG)
+- Docker (Memgraph + Qdrant)
+- macOS (iTerm2 for agent terminal interaction)
+- `OPENAI_API_KEY` -- embeddings
+- `ANTHROPIC_API_KEY` -- LLM extraction, RAG, and agent execution
+- Optional: `SLACK_BOT_TOKEN` + `SLACK_APP_TOKEN` for Slack bridge
+
+## Ventures
+
+| Venture | Focus | Scoring Profile |
+|---------|-------|-----------------|
+| MedScrub | Clinical screening compliance (starting with CRC/MIPS #113) | Clinical |
+| MedHook | EHR integration platform | Integration |
+| 1Putt Health | Healthcare IT consulting | Consulting |
