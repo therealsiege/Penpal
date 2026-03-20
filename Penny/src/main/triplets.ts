@@ -1,7 +1,7 @@
 import { EventEmitter } from 'events'
 import fs from 'fs'
 import path from 'path'
-import { analyzeSession, sendToSession, getClaudeSessions, createAgentSession, getSessionConversation } from './sessions'
+import { runAgentHeadless } from './sessions'
 import { getAgentConfig, loadTripletPresets } from './agents'
 
 // ── Types ───────────────────────────────────────────────────────────────────
@@ -161,128 +161,10 @@ function setStatus(wf: TripletWorkflow, status: TripletStatus): void {
   saveTriplets() // Persist after every state transition (Fix 4)
 }
 
-// ── Output capture (Fix 1) ──────────────────────────────────────────────────
+// ── Headless execution helpers ──────────────────────────────────────────────
 
-function getLastAssistantOutput(sessionId: string): string | undefined {
-  const messages = getSessionConversation(sessionId, 10)
-  // Walk backwards to find the last assistant message
-  for (let i = messages.length - 1; i >= 0; i--) {
-    if (messages[i].role === 'assistant' && messages[i].text.trim().length > 1) {
-      return messages[i].text
-    }
-  }
-  return undefined
-}
-
-// ── Finding an agent's TTY ──────────────────────────────────────────────────
-
-async function findAgentTty(agentId: string, targetCwd?: string): Promise<{ tty: string; sessionId: string } | null> {
-  const sessions = await getClaudeSessions()
-  const cfg = getAgentConfig(agentId)
-  if (!cfg) return null
-
-  // Match by agent name pattern or default repos
-  for (const s of sessions) {
-    if (!s.tty) continue
-    // Match by name
-    if (s.terminalName?.includes(`agent:${agentId}`) || s.terminalName?.includes(`dispatch:${agentId}`)) {
-      return { tty: s.tty, sessionId: s.sessionId }
-    }
-    // Match by target cwd if specified
-    if (targetCwd && s.cwd === targetCwd) {
-      return { tty: s.tty, sessionId: s.sessionId }
-    }
-    // Match by default repos
-    if (cfg.defaultRepos.some(repo => s.cwd === repo)) {
-      return { tty: s.tty, sessionId: s.sessionId }
-    }
-  }
-  return null
-}
-
-// ── Auto-launch agent if not running ────────────────────────────────────────
-
-async function ensureAgentRunning(agentId: string, cwd: string): Promise<{ tty: string; sessionId: string } | null> {
-  // First check if already running
-  let info = await findAgentTty(agentId, cwd)
-  if (info) return info
-
-  // Launch it
-  console.log(`[triplets] Auto-launching agent ${agentId} in ${cwd}`)
-  const result = await createAgentSession(agentId, cwd)
-  if (!result.success) {
-    console.error(`[triplets] Failed to launch ${agentId}: ${result.error}`)
-    return null
-  }
-
-  // Wait for the session to appear (agent takes a moment to start)
-  for (let attempt = 0; attempt < 20; attempt++) {
-    await new Promise(r => setTimeout(r, 3000))
-    info = await findAgentTty(agentId, cwd)
-    if (info) return info
-  }
-
-  console.error(`[triplets] Agent ${agentId} launched but session not found after 60s`)
-  return null
-}
-
-// ── Stage detection ─────────────────────────────────────────────────────────
-
-async function waitForAgentIdle(
-  agentId: string,
-  role: TripletRole,
-  timeoutMs = 300000,
-): Promise<{ idle: boolean; output?: string }> {
-  let elapsed = 0
-
-  return new Promise((resolve) => {
-    const check = async () => {
-      if (elapsed > timeoutMs) {
-        resolve({ idle: false })
-        return
-      }
-
-      const info = await findAgentTty(agentId)
-      if (!info) {
-        // Agent not found yet, keep waiting
-        elapsed += 3000
-        setTimeout(check, 3000)
-        return
-      }
-
-      role.tty = info.tty
-      role.sessionId = info.sessionId
-
-      const analysis = analyzeSession(info.sessionId)
-
-      // Fix 5: Don't count time spent waiting for tool approval against the timeout
-      const isApprovalWait = analysis.interactionType === 'tool-approval' ||
-        analysis.interactionType === 'accept-edits'
-
-      // Agent is idle (end_turn) — task is done
-      if (analysis.mode === 'idle' || analysis.interactionType === 'idle-prompt') {
-        // Fix 1: Read the actual output from the JSONL transcript
-        const output = getLastAssistantOutput(info.sessionId)
-        resolve({ idle: true, output })
-        return
-      }
-
-      // Agent needs approval — surface to dashboard but keep polling
-      if (analysis.waitingForInput) {
-        tripletEvents.emit('needs-interaction', { agentId, analysis })
-      }
-
-      // Fix 5: Only increment elapsed time if not waiting for approval
-      if (!isApprovalWait) {
-        elapsed += 3000
-      }
-
-      setTimeout(check, 3000)
-    }
-
-    check()
-  })
-}
+const PLAN_TIMEOUT_MS = 600_000   // 10 min for planning
+const EXECUTE_TIMEOUT_MS = 1_800_000  // 30 min for execution
 
 // ── Message formatting ──────────────────────────────────────────────────────
 
@@ -363,7 +245,7 @@ function formatExecutorMessage(wf: TripletWorkflow, solverOutput?: string, revie
   ].join('\n')
 }
 
-// ── Core workflow loop ──────────────────────────────────────────────────────
+// ── Core workflow loop (headless) ────────────────────────────────────────────
 
 async function runSolveStage(wf: TripletWorkflow, feedback?: string): Promise<boolean> {
   setStatus(wf, 'solving')
@@ -371,33 +253,21 @@ async function runSolveStage(wf: TripletWorkflow, feedback?: string): Promise<bo
   wf.reviewer.status = 'waiting'
   wf.executor.status = 'waiting'
 
-  const msg = formatSolverMessage(wf, feedback)
-  const info = await ensureAgentRunning(wf.solver.agentId, wf.cwd)
-  if (!info) {
-    wf.error = `Solver agent ${wf.solver.agentId} could not be found or launched in ${wf.cwd}`
-    setStatus(wf, 'failed')
-    return false
-  }
+  const prompt = formatSolverMessage(wf, feedback)
+  console.log(`[triplets] Running solver ${wf.solver.agentId} headless in ${wf.cwd}`)
+  const result = await runAgentHeadless(wf.solver.agentId, wf.cwd, prompt, {
+    timeoutMs: EXECUTE_TIMEOUT_MS,
+  })
 
-  wf.solver.tty = info.tty
-  wf.solver.sessionId = info.sessionId
-
-  const sendResult = await sendToSession(info.tty, msg)
-  if (!sendResult.success) {
-    wf.error = `Failed to send to solver: ${sendResult.error}`
-    setStatus(wf, 'failed')
-    return false
-  }
-
-  const result = await waitForAgentIdle(wf.solver.agentId, wf.solver)
-  if (!result.idle) {
-    wf.error = 'Solver timed out'
+  if (!result.success) {
+    wf.error = `Solver failed: ${result.error}`
     setStatus(wf, 'failed')
     return false
   }
 
   wf.solver.status = 'complete'
   wf.solver.output = result.output
+  console.log(`[triplets] Solver done (${Math.round(result.durationMs / 1000)}s)`)
   return true
 }
 
@@ -405,33 +275,22 @@ async function runReviewStage(wf: TripletWorkflow): Promise<boolean> {
   setStatus(wf, 'reviewing')
   wf.reviewer.status = 'active'
 
-  const msg = formatReviewerMessage(wf)
-  const info = await ensureAgentRunning(wf.reviewer.agentId, wf.cwd)
-  if (!info) {
-    wf.error = `Reviewer agent ${wf.reviewer.agentId} could not be found or launched in ${wf.cwd}`
-    setStatus(wf, 'failed')
-    return false
-  }
+  const prompt = formatReviewerMessage(wf)
+  console.log(`[triplets] Running reviewer ${wf.reviewer.agentId} headless (plan mode) in ${wf.cwd}`)
+  const result = await runAgentHeadless(wf.reviewer.agentId, wf.cwd, prompt, {
+    permissionMode: 'plan',
+    timeoutMs: PLAN_TIMEOUT_MS,
+  })
 
-  wf.reviewer.tty = info.tty
-  wf.reviewer.sessionId = info.sessionId
-
-  const sendResult = await sendToSession(info.tty, msg)
-  if (!sendResult.success) {
-    wf.error = `Failed to send to reviewer: ${sendResult.error}`
-    setStatus(wf, 'failed')
-    return false
-  }
-
-  const result = await waitForAgentIdle(wf.reviewer.agentId, wf.reviewer)
-  if (!result.idle) {
-    wf.error = 'Reviewer timed out'
+  if (!result.success) {
+    wf.error = `Reviewer failed: ${result.error}`
     setStatus(wf, 'failed')
     return false
   }
 
   wf.reviewer.status = 'complete'
   wf.reviewer.output = result.output
+  console.log(`[triplets] Reviewer done (${Math.round(result.durationMs / 1000)}s)`)
   return true
 }
 
@@ -439,35 +298,22 @@ async function runExecuteStage(wf: TripletWorkflow): Promise<{ passed: boolean }
   setStatus(wf, 'executing')
   wf.executor.status = 'active'
 
-  const msg = formatExecutorMessage(wf, wf.solver.output, wf.reviewer.output)
-  const info = await ensureAgentRunning(wf.executor.agentId, wf.cwd)
-  if (!info) {
-    wf.error = `Executor agent ${wf.executor.agentId} could not be found or launched in ${wf.cwd}`
-    setStatus(wf, 'failed')
-    return { passed: false }
-  }
+  const prompt = formatExecutorMessage(wf, wf.solver.output, wf.reviewer.output)
+  console.log(`[triplets] Running executor ${wf.executor.agentId} headless in ${wf.cwd}`)
+  const result = await runAgentHeadless(wf.executor.agentId, wf.cwd, prompt, {
+    timeoutMs: EXECUTE_TIMEOUT_MS,
+  })
 
-  wf.executor.tty = info.tty
-  wf.executor.sessionId = info.sessionId
-
-  const sendResult = await sendToSession(info.tty, msg)
-  if (!sendResult.success) {
-    wf.error = `Failed to send to executor: ${sendResult.error}`
-    setStatus(wf, 'failed')
-    return { passed: false }
-  }
-
-  const result = await waitForAgentIdle(wf.executor.agentId, wf.executor)
-  if (!result.idle) {
-    wf.error = 'Executor timed out'
+  if (!result.success) {
+    wf.error = `Executor failed: ${result.error}`
     setStatus(wf, 'failed')
     return { passed: false }
   }
 
   wf.executor.status = 'complete'
   wf.executor.output = result.output
+  console.log(`[triplets] Executor done (${Math.round(result.durationMs / 1000)}s)`)
 
-  // Check if executor reported PASS or FAIL
   const output = (wf.executor.output || '').toUpperCase()
   const passed = output.includes('RESULT: PASS') || (output.includes('PASS') && !output.includes('FAIL'))
   return { passed }

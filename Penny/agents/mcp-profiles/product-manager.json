@@ -1,7 +1,8 @@
 {
   "mcpServers": {
     "veritas-kanban": {
-      "command": "vk-mcp",
+      "command": "node",
+      "args": ["/Users/cj/SideKick/veritas-kanban/mcp/dist/index.js"],
       "env": {
         "VK_API_URL": "${PENNY_VERITAS_API_URL}",
         "VK_API_KEY": "${PENNY_VERITAS_AGENT_KEY}",

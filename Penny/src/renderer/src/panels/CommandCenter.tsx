@@ -1203,7 +1203,6 @@ export function CommandCenter(props: CommandCenterProps) {
       try {
         const cfg = allConfigs.find(c => c.id === agentId)
         const ptyId = await window.pty.create(cwd, 'claude', [
-          '--name', `agent:${agentId}`,
           '--model', cfg?.model || 'opus',
           '--permission-mode', cfg?.autonomy || 'default',
         ])

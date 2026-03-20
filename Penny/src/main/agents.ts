@@ -180,14 +180,19 @@ Once the plan is approved:
 - After execution, report: what changed, what was created, what was tested
 - If you encounter an error, fix it. If you can't fix it, explain why and what you tried.`
 
-export function buildAgentCliArgs(agentId: string, cwd: string, dispatch = false): string[] {
+export interface BuildCliOpts {
+  dispatch?: boolean
+  headless?: boolean
+  permissionMode?: string
+}
+
+export function buildAgentCliArgs(agentId: string, cwd: string, opts: BuildCliOpts = {}): string[] {
   const agent = getAgentConfig(agentId)
   if (!agent) throw new Error(`Unknown agent: ${agentId}`)
 
   const mcpPath = getMcpProfilePath(agent.mcpProfile)
-  const isDispatch = dispatch || agent.autonomy === 'dispatch'
+  const isDispatch = opts.dispatch || agent.autonomy === 'dispatch'
 
-  // Fix 7: Read and inline shared team memory content instead of just referencing the path
   const sharedMemoryPath = path.join(AGENTS_DIR, 'CLAUDE.md')
   let sharedMemoryNote = ''
   if (fs.existsSync(sharedMemoryPath)) {
@@ -199,22 +204,31 @@ export function buildAgentCliArgs(agentId: string, cwd: string, dispatch = false
     }
   }
 
-  // Inject persona context
   const personaContext = agent.persona
     ? `\n\nYour name is ${agent.name}. ${agent.persona.backstory} Your working style: ${agent.persona.style}.`
     : ''
 
-  const systemPrompt = isDispatch
+  // Headless mode skips the interactive DISPATCH prompt — task instructions come via the prompt arg
+  const systemPrompt = (!opts.headless && isDispatch)
     ? `${agent.systemPrompt}${personaContext}${sharedMemoryNote}\n\n${DISPATCH_SYSTEM_PROMPT}`
     : `${agent.systemPrompt}${personaContext}${sharedMemoryNote}`
 
-  const args: string[] = [
-    '--name', isDispatch ? `dispatch:${agentId}` : `agent:${agentId}`,
-    '--append-system-prompt', systemPrompt,
-    '--model', agent.model,
-  ]
+  const agentTag = isDispatch ? `dispatch:${agentId}` : `agent:${agentId}`
+  const taggedPrompt = `[AGENT_ID:${agentTag}]\n\n${systemPrompt}`
 
-  if (isDispatch) {
+  const args: string[] = []
+
+  if (opts.headless) {
+    args.push('-p')
+  }
+
+  args.push('--append-system-prompt', taggedPrompt)
+  args.push('--model', agent.model)
+
+  // Permission handling: explicit override > headless default > dispatch > agent config
+  if (opts.permissionMode) {
+    args.push('--permission-mode', opts.permissionMode)
+  } else if (opts.headless || isDispatch) {
     args.push('--dangerously-skip-permissions')
   } else {
     args.push('--permission-mode', agent.autonomy)
@@ -224,17 +238,14 @@ export function buildAgentCliArgs(agentId: string, cwd: string, dispatch = false
     args.push('--mcp-config', mcpPath)
   }
 
-  // Allowed tools — restrict what this agent can access
   if (agent.allowedTools.length > 0) {
     args.push('--allowedTools', ...agent.allowedTools)
   }
 
-  // Sub-agents — give the agent specialized helpers
   if (Object.keys(agent.subAgents).length > 0) {
     args.push('--agents', JSON.stringify(agent.subAgents))
   }
 
-  // Additional directory access for the working directory
   if (cwd) {
     args.push('--add-dir', cwd)
   }
@@ -253,10 +264,21 @@ interface SessionInfo {
 }
 
 export function matchSessionToAgent(session: SessionInfo): string | null {
-  // Check for agent:<id> name pattern in session metadata
+  // Check for agent:<id> name pattern in iTerm session name
   if (session.name && session.name.startsWith('agent:')) {
     const agentId = session.name.slice(6)
     if (getAgentConfig(agentId)) return agentId
+  }
+
+  // Check persisted session map by PID
+  const map = loadAgentSessionMap()
+  for (const [agentId, saved] of Object.entries(map)) {
+    if (saved.pid === session.pid && getAgentConfig(agentId)) return agentId
+  }
+
+  // Match by CWD against agent default repos
+  for (const cfg of getAgentConfigs()) {
+    if (cfg.defaultRepos.some(repo => session.cwd === repo)) return cfg.id
   }
 
   return null
