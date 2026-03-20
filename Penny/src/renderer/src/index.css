@@ -257,6 +257,148 @@ body::before {
   animation: status-pulse 1.5s ease-in-out infinite;
 }
 
+/* ── Polished UI Animations ─────────────────────────────────────────────── */
+
+@keyframes backdrop-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+.animate-backdrop-fade-in {
+  animation: backdrop-fade-in 200ms ease-out both;
+}
+
+@keyframes modal-scale-in {
+  from {
+    transform: scale(0.95) translateY(8px);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1) translateY(0);
+    opacity: 1;
+  }
+}
+.animate-modal-scale-in {
+  animation: modal-scale-in 250ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+@keyframes shimmer {
+  from { background-position: -200% 0; }
+  to   { background-position:  200% 0; }
+}
+.animate-shimmer {
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.04), transparent);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s linear infinite;
+}
+
+@keyframes breathe-glow {
+  0%, 100% { box-shadow: 0 0 4px 0   rgba(52,211,153,0.3); }
+  50%       { box-shadow: 0 0 12px 4px rgba(52,211,153,0.5); }
+}
+.animate-breathe-glow {
+  animation: breathe-glow 2s ease-in-out infinite;
+}
+
+@keyframes bell-shake {
+  0%, 100% { transform: rotate(0deg);   }
+  15%       { transform: rotate(-12deg); }
+  30%       { transform: rotate(12deg);  }
+  45%       { transform: rotate(-8deg);  }
+  60%       { transform: rotate(8deg);   }
+  75%       { transform: rotate(-4deg);  }
+  90%       { transform: rotate(4deg);   }
+}
+.animate-bell-shake {
+  animation: bell-shake 0.5s ease-in-out both;
+}
+
+@keyframes fade-slide-down {
+  from {
+    transform: translateY(-4px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+.animate-fade-slide-down {
+  animation: fade-slide-down 150ms ease-out both;
+}
+
+@keyframes spin-smooth {
+  from { transform: rotate(0deg);   }
+  to   { transform: rotate(360deg); }
+}
+.animate-spin-smooth {
+  animation: spin-smooth 0.8s linear infinite;
+}
+
+.stagger-item {
+  opacity: 0;
+  animation: card-enter 0.3s ease-out forwards;
+}
+.stagger-item:nth-child(1) { animation-delay: 0.03s; }
+.stagger-item:nth-child(2) { animation-delay: 0.06s; }
+.stagger-item:nth-child(3) { animation-delay: 0.09s; }
+.stagger-item:nth-child(4) { animation-delay: 0.12s; }
+.stagger-item:nth-child(5) { animation-delay: 0.15s; }
+.stagger-item:nth-child(6) { animation-delay: 0.18s; }
+.stagger-item:nth-child(7) { animation-delay: 0.21s; }
+.stagger-item:nth-child(8) { animation-delay: 0.24s; }
+
+/* ── Command Palette animations ───────────────────────────────────────────── */
+
+@keyframes cp-backdrop-out {
+  from { opacity: 1; }
+  to   { opacity: 0; }
+}
+
+@keyframes cp-modal-out {
+  from {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.96) translateY(-8px);
+  }
+}
+
+@keyframes cp-item-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes cp-border-pulse {
+  0%, 100% { border-left-color: #3b82f6; }
+  50%       { border-left-color: #93c5fd; }
+}
+
+.cp-backdrop-exit {
+  animation: cp-backdrop-out 150ms ease forwards;
+}
+
+.cp-modal-exit {
+  animation: cp-modal-out 150ms ease forwards;
+}
+
+.cp-item-enter {
+  opacity: 0;
+  animation: cp-item-in 180ms ease forwards;
+}
+
+.cp-border-pulse {
+  border-left: 2px solid #3b82f6;
+  animation: cp-border-pulse 1.4s ease-in-out infinite;
+}
+
 /* ── Vault Markdown Preview ─────────────────────────────────────────────── */
 
 .vault-markdown h1 { font-size: 1.4em; font-weight: 700; margin: 1em 0 0.5em; color: #e2e8f0; }
@@ -365,3 +507,23 @@ body::before {
 .light-theme .vault-markdown pre { background: #f1f5f9; border-color: #e2e8f0; }
 .light-theme .vault-markdown pre code { color: #334155; }
 .light-theme .vault-markdown blockquote { border-left-color: #cbd5e1; color: #475569; }
+
+/* ── Neon theme ────────────────────────────────────────────────────────────── */
+
+.neon-theme,
+.neon-theme body {
+  background: #03001a;
+  color: #e0faff;
+}
+
+.neon-theme ::-webkit-scrollbar-track {
+  background: #03001a;
+}
+
+.neon-theme ::-webkit-scrollbar-thumb {
+  background: #0ff;
+}
+
+.neon-theme ::-webkit-scrollbar-thumb:hover {
+  background: #7f00ff;
+}

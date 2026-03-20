@@ -60,6 +60,7 @@ declare global {
       openDownloads: () => Promise<{ success: boolean }>
       pickDirectory: () => Promise<string | null>
       getSystemPaths: () => Promise<SystemPaths>
+      soundboardList: () => Promise<import('./types').SoundboardListing>
       // Approval APIs
       approveSession: (tty: string, choice: string) => Promise<SessionActionResult>
       approveAllSessions: (choice: string) => Promise<BroadcastResult>
@@ -126,6 +127,9 @@ declare global {
       orchestratorAgentHealth: () => Promise<import('./types').AgentHealthStatus[]>
       orchestratorShutdownAgent: (agentId: string) => Promise<{ success: boolean; error?: string }>
       orchestratorStats: () => Promise<import('./types').OrchestratorStats>
+      orchestratorXP: () => Promise<Record<string, import('./types').AgentXP>>
+      orchestratorSetProvider: (provider: string) => Promise<{ provider: string }>
+      orchestratorGetProvider: () => Promise<{ provider: import('./types').ModelProvider; ollamaAvailable: boolean }>
       // Opencode Sessions
       getOpencodeSessions: () => Promise<OpencodeSession[]>
     }

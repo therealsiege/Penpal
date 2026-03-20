@@ -1,8 +1,7 @@
-import { useEffect } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { usePolling } from '../hooks/usePolling'
 import { StatusBadge } from './StatusBadge'
 import type { HealthResult, GraphStats, SystemPaths } from '../types'
-import { useState } from 'react'
 import { getPathPresets } from '../utils/path-presets'
 
 const INFRA_NAMES: Record<string, string> = {
@@ -18,6 +17,34 @@ const OVERALL_STYLES = {
   healthy: { color: 'text-emerald-400', bg: 'bg-emerald-500/10 border-emerald-500/20', dot: 'bg-emerald-400' },
   degraded: { color: 'text-amber-400', bg: 'bg-amber-500/10 border-amber-500/20', dot: 'bg-amber-400' },
   down: { color: 'text-red-400', bg: 'bg-red-500/10 border-red-500/20', dot: 'bg-red-400' },
+}
+
+// Counts from 0 to `target` over `duration` ms using requestAnimationFrame.
+function AnimatedNumber({ target, duration = 800 }: { target: number; duration?: number }) {
+  const [display, setDisplay] = useState(0)
+  const rafRef = useRef<number | null>(null)
+  const startRef = useRef<number | null>(null)
+
+  useEffect(() => {
+    startRef.current = null
+    const step = (timestamp: number) => {
+      if (startRef.current === null) startRef.current = timestamp
+      const elapsed = timestamp - startRef.current
+      const progress = Math.min(elapsed / duration, 1)
+      // ease-out quad
+      const eased = 1 - (1 - progress) * (1 - progress)
+      setDisplay(Math.round(eased * target))
+      if (progress < 1) {
+        rafRef.current = requestAnimationFrame(step)
+      }
+    }
+    rafRef.current = requestAnimationFrame(step)
+    return () => {
+      if (rafRef.current !== null) cancelAnimationFrame(rafRef.current)
+    }
+  }, [target, duration])
+
+  return <>{display.toLocaleString()}</>
 }
 
 interface HealthModalProps {
@@ -60,16 +87,18 @@ export function HealthModal({ onClose }: HealthModalProps) {
   const style = data ? OVERALL_STYLES[data.overall] : null
   const paths = getPathPresets(systemPaths)
 
+  const dotAnimClass = data?.overall === 'healthy' ? 'animate-breathe-glow' : 'animate-pulse'
+
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-backdrop-fade-in"
       onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
     >
-      <div className="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl shadow-2xl w-[520px] max-h-[80vh] overflow-hidden flex flex-col">
+      <div className="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl shadow-2xl w-[520px] max-h-[80vh] overflow-hidden flex flex-col animate-modal-scale-in">
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200 dark:border-slate-800">
           <div className="flex items-center gap-3">
-            <div className={`w-2.5 h-2.5 rounded-full ${style?.dot || 'bg-slate-400 dark:bg-slate-600'} ${data?.overall === 'healthy' ? 'animate-pulse' : ''}`} />
+            <div className={`w-2.5 h-2.5 rounded-full ${style?.dot || 'bg-slate-400 dark:bg-slate-600'} ${data ? dotAnimClass : ''}`} />
             <h2 className="text-base font-semibold text-slate-900 dark:text-white">System Status</h2>
             {data && (
               <span className={`text-xs font-medium px-2 py-0.5 rounded-full border ${style?.bg} ${style?.color}`}>
@@ -96,8 +125,12 @@ export function HealthModal({ onClose }: HealthModalProps) {
               <div>
                 <h3 className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-2">Services</h3>
                 <div className="space-y-1.5">
-                  {infraChecks.map(check => (
-                    <div key={check.name} className="flex items-center justify-between bg-slate-100 dark:bg-slate-800/50 rounded-lg px-3 py-2">
+                  {infraChecks.map((check, index) => (
+                    <div
+                      key={check.name}
+                      className="flex items-center justify-between bg-slate-100 dark:bg-slate-800/50 rounded-lg px-3 py-2 animate-card-enter"
+                      style={{ animationDelay: `${index * 50}ms` }}
+                    >
                       <div className="flex items-center gap-2">
                         <StatusBadge status={check.status} size="md" />
                         <span className="text-xs font-medium text-slate-700 dark:text-slate-200">{INFRA_NAMES[check.name] || check.name}</span>
@@ -117,8 +150,12 @@ export function HealthModal({ onClose }: HealthModalProps) {
               <div>
                 <h3 className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-2">API Keys</h3>
                 <div className="space-y-1.5">
-                  {keyChecks.map(check => (
-                    <div key={check.name} className="flex items-center justify-between bg-slate-100 dark:bg-slate-800/50 rounded-lg px-3 py-2">
+                  {keyChecks.map((check, index) => (
+                    <div
+                      key={check.name}
+                      className="flex items-center justify-between bg-slate-100 dark:bg-slate-800/50 rounded-lg px-3 py-2 animate-card-enter"
+                      style={{ animationDelay: `${(infraChecks.length + index) * 50}ms` }}
+                    >
                       <div className="flex items-center gap-2">
                         <StatusBadge status={check.status} size="md" />
                         <span className="text-xs font-medium text-slate-700 dark:text-slate-200">{INFRA_NAMES[check.name] || check.name}</span>
@@ -136,11 +173,15 @@ export function HealthModal({ onClose }: HealthModalProps) {
                   <div className="grid grid-cols-2 gap-3">
                     <div className="bg-slate-100 dark:bg-slate-800/50 rounded-lg px-3 py-2">
                       <p className="text-xs text-slate-500">Nodes</p>
-                      <p className="text-sm font-bold text-slate-900 dark:text-white">{graphStats.totalNodes.toLocaleString()}</p>
+                      <p className="text-sm font-bold text-slate-900 dark:text-white">
+                        <AnimatedNumber target={graphStats.totalNodes} />
+                      </p>
                     </div>
                     <div className="bg-slate-100 dark:bg-slate-800/50 rounded-lg px-3 py-2">
                       <p className="text-xs text-slate-500">Relationships</p>
-                      <p className="text-sm font-bold text-slate-900 dark:text-white">{graphStats.totalRelationships.toLocaleString()}</p>
+                      <p className="text-sm font-bold text-slate-900 dark:text-white">
+                        <AnimatedNumber target={graphStats.totalRelationships} />
+                      </p>
                     </div>
                   </div>
                 </div>
@@ -175,8 +216,20 @@ export function HealthModal({ onClose }: HealthModalProps) {
           </p>
           <button
             onClick={refresh}
-            className="px-3 py-1 text-xs bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 rounded border border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-300 transition-colors"
+            className="flex items-center gap-1.5 px-3 py-1 text-xs bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 rounded border border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-300 transition-colors"
           >
+            <svg
+              viewBox="0 0 16 16"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className={`w-3 h-3 ${loading ? 'animate-spin-smooth' : ''}`}
+            >
+              <path d="M13.5 8A5.5 5.5 0 1 1 10 3.07" />
+              <polyline points="10 1 10 4 13 4" />
+            </svg>
             Refresh
           </button>
         </div>

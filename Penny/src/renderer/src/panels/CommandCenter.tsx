@@ -310,8 +310,8 @@ function TypePickerModal({
   onClose: () => void
 }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
-      <div className="bg-slate-900 border border-slate-700 rounded-xl p-5 w-[520px] shadow-2xl max-h-[80vh] overflow-y-auto">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 animate-backdrop-fade-in">
+      <div className="bg-slate-900 border border-slate-700 rounded-xl p-5 w-[520px] shadow-2xl max-h-[80vh] overflow-y-auto animate-modal-scale-in">
         <div className="flex items-center justify-between mb-4">
           <div>
             <h3 className="text-[13px] font-bold text-white">Hire Worker</h3>
@@ -326,7 +326,7 @@ function TypePickerModal({
             <button
               key={c.id}
               onClick={() => onSelect(c)}
-              className="text-left p-3 bg-slate-800/50 hover:bg-slate-800 border border-slate-700/50 hover:border-slate-600 rounded-lg transition-colors group"
+              className="stagger-item text-left p-3 bg-slate-800/50 hover:bg-slate-800 border border-slate-700/50 hover:border-slate-600 rounded-lg transition-all duration-150 hover:scale-[1.02] active:scale-[0.98] group"
             >
               <p className="text-[13px] font-semibold text-slate-200 group-hover:text-white">{c.name}</p>
               <p className="text-[13px] text-slate-500 mt-0.5">
@@ -370,8 +370,8 @@ function LaunchModal({
   const repos = config.defaultRepos
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
-      <div className="bg-slate-900 border border-slate-700 rounded-xl p-5 w-[420px] shadow-2xl">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 animate-backdrop-fade-in">
+      <div className="bg-slate-900 border border-slate-700 rounded-xl p-5 w-[420px] shadow-2xl animate-modal-scale-in">
         <div className="flex items-center justify-between mb-4">
           <div>
             <h3 className="text-[13px] font-bold text-white">{config.name}</h3>
@@ -393,7 +393,7 @@ function LaunchModal({
                   setCwd(r)
                   setCustom('')
                 }}
-                className={`px-2.5 py-1 text-[13px] rounded-md border transition-colors ${
+                className={`stagger-item px-2.5 py-1 text-[13px] rounded-md border transition-all duration-150 hover:scale-[1.02] active:scale-[0.98] ${
                   cwd === r && !custom
                     ? 'bg-blue-600/20 border-blue-500/30 text-blue-400'
                     : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-slate-200'
@@ -649,8 +649,8 @@ function SharePickerModal({ source, agents, onShare, onClose }: {
 }) {
   const targets = agents.filter(a => a.config.id !== source.config.id && a.tty)
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={onClose}>
-      <div className="bg-slate-900 border border-slate-700 rounded-xl p-5 w-[400px] shadow-2xl" onClick={e => e.stopPropagation()}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 animate-backdrop-fade-in" onClick={onClose}>
+      <div className="bg-slate-900 border border-slate-700 rounded-xl p-5 w-[400px] shadow-2xl animate-modal-scale-in" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-4">
           <div>
             <h3 className="text-[13px] font-bold text-white">Share from {source.config.name}</h3>
@@ -672,7 +672,7 @@ function SharePickerModal({ source, agents, onShare, onClose }: {
               <div className="flex flex-col gap-2">
                 {targets.map(t => (
                   <button key={t.config.id} onClick={() => onShare(t)}
-                    className="flex items-center gap-2 p-2 bg-slate-800/50 hover:bg-slate-800 border border-slate-700/50 hover:border-slate-600 rounded-lg transition-colors text-left">
+                    className="stagger-item flex items-center gap-2 p-2 bg-slate-800/50 hover:bg-slate-800 border border-slate-700/50 hover:border-slate-600 rounded-lg transition-all duration-150 hover:scale-[1.01] active:scale-[0.99] text-left">
                     <span className={`w-2 h-2 rounded-full ${getStatusDot(t).color}`} />
                     <span className="text-[13px] text-slate-200">{t.config.name}</span>
                     {t.cwd && <span className="text-[13px] text-slate-500 ml-auto">{t.cwd.split('/').pop()}</span>}
@@ -767,8 +767,8 @@ function LeaderboardModal({ agents, xpData, onClose }: {
   const [viewMode, setViewMode] = useState<'xp' | 'resources'>('xp')
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={onClose}>
-      <div className="bg-slate-900 border border-slate-700 rounded-xl p-5 w-[560px] shadow-2xl max-h-[75vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 animate-backdrop-fade-in" onClick={onClose}>
+      <div className="bg-slate-900 border border-slate-700 rounded-xl p-5 w-[560px] shadow-2xl max-h-[75vh] overflow-y-auto animate-modal-scale-in" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-3">
             <h3 className="text-[15px] font-bold text-white">Leaderboard</h3>
@@ -817,7 +817,7 @@ function LeaderboardModal({ agents, xpData, onClose }: {
           ) : (
             <div className="flex flex-col gap-2">
               {xpEntries.map((entry, idx) => (
-                <div key={entry.agentId} className={`p-3 rounded-lg border transition-all ${
+                <div key={entry.agentId} className={`stagger-item p-3 rounded-lg border transition-all ${
                   idx === 0 ? 'bg-amber-900/20 border-amber-700/50' :
                   idx === 1 ? 'bg-slate-800/60 border-slate-600/50' :
                   idx === 2 ? 'bg-orange-900/15 border-orange-800/40' :
@@ -882,7 +882,7 @@ function LeaderboardModal({ agents, xpData, onClose }: {
               {resourceEntries.map((entry, idx) => {
                 const memPct = totalMem > 0 ? (entry.totalMemoryMB / totalMem) * 100 : 0
                 return (
-                  <div key={entry.directory} className={`p-3 rounded-lg border transition-all ${
+                  <div key={entry.directory} className={`stagger-item p-3 rounded-lg border transition-all ${
                     idx === 0 ? 'bg-amber-900/15 border-amber-700/40' :
                     idx === 1 ? 'bg-slate-800/60 border-slate-600/40' :
                     idx === 2 ? 'bg-orange-900/10 border-orange-800/30' :
@@ -1612,7 +1612,7 @@ function QuickActionButton({
   return (
     <button
       onClick={onClick}
-      className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-900/60 hover:bg-slate-800 border border-slate-800 hover:border-slate-700 rounded-lg text-slate-400 hover:text-slate-200 text-[13px] transition-all duration-200"
+      className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-900/60 hover:bg-slate-800 border border-slate-800 hover:border-slate-700 rounded-lg text-slate-400 hover:text-slate-200 text-[13px] transition-all duration-150 hover:scale-[1.02] hover:-translate-y-0.5 active:scale-[0.98] active:translate-y-0"
     >
       {icon}
       <span>{label}</span>

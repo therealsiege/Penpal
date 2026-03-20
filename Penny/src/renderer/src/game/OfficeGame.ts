@@ -9,10 +9,9 @@ export function createOfficeGame(container: HTMLDivElement): {
 
   const scene = new OfficeScene()
 
-  // Keep high-DPI rendering sharp and visual sizing consistent across displays.
   // NO_CENTER avoids the flex-layout drift/jump we saw with CENTER_BOTH.
-  const dpr = Math.min(window.devicePixelRatio || 1, 2)
-
+  // No DPR zoom/resolution overrides — RESIZE mode reports CSS pixels directly,
+  // which is what all layout math expects.  Text objects set resolution: 2 individually.
   const game = new Phaser.Game({
     type: Phaser.AUTO,
     parent: container,
@@ -25,14 +24,12 @@ export function createOfficeGame(container: HTMLDivElement): {
     scale: {
       mode: Phaser.Scale.RESIZE,
       autoCenter: Phaser.Scale.NO_CENTER,
-      zoom: 1 / dpr,
     },
     render: {
       antialias: true,
       pixelArt: false,
       roundPixels: false,
     },
-    resolution: dpr,
     input: {
       mouse: { preventDefaultWheel: true },
     },

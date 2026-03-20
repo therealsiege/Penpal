@@ -50,6 +50,7 @@ contextBridge.exposeInMainWorld('api', {
   openDownloads: () => ipcRenderer.invoke('shell:open-downloads'),
   pickDirectory: () => ipcRenderer.invoke('dialog:open-directory') as Promise<string | null>,
   getSystemPaths: () => ipcRenderer.invoke('system:paths'),
+  soundboardList: () => ipcRenderer.invoke('soundboard:list'),
   // Agent APIs
   getAgents: () => ipcRenderer.invoke('agents:list'),
   getAgentStatuses: () => ipcRenderer.invoke('agents:statuses'),
@@ -113,6 +114,8 @@ contextBridge.exposeInMainWorld('api', {
   orchestratorShutdownAgent: (agentId: string) => ipcRenderer.invoke('orchestrator:shutdown-agent', agentId),
   orchestratorStats: () => ipcRenderer.invoke('orchestrator:stats'),
   orchestratorXP: () => ipcRenderer.invoke('orchestrator:xp'),
+  orchestratorSetProvider: (provider: string) => ipcRenderer.invoke('orchestrator:set-provider', provider),
+  orchestratorGetProvider: () => ipcRenderer.invoke('orchestrator:get-provider'),
   // Opencode Sessions
   getOpencodeSessions: () => ipcRenderer.invoke('opencode:sessions'),
 })

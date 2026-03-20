@@ -913,8 +913,9 @@ export async function runAgentHeadless(
     return { success: false, output: '', error: (err as Error).message, durationMs: 0 }
   }
 
-  // The prompt is the positional argument after all flags
-  cliArgs.push(prompt)
+  // `--add-dir`/other variadic options can consume trailing tokens.
+  // Use `--` to terminate option parsing so the prompt is always positional.
+  cliArgs.push('--', prompt)
 
   const start = Date.now()
 

@@ -64,8 +64,12 @@ import {
   shutdownAgent,
   getOrchestratorStats,
   getAllAgentXP,
+  setModelProvider,
+  getModelProvider,
   type AgentXP,
+  type ModelProvider,
 } from './orchestrator'
+import { checkOllamaAvailable } from './ollama-client'
 import {
   getVeritasStatus,
   startVeritasService,
@@ -73,6 +77,7 @@ import {
   restartVeritasService,
   getVeritasLogs,
 } from './veritas-service'
+import { listSoundboardClips } from './soundboard'
 import {
   listVeritasTasks,
   getVeritasTaskCounts,
@@ -502,6 +507,7 @@ export function registerIpcHandlers() {
     return result.filePaths[0]
   }))
   ipcMain.handle('system:paths', wrapHandler(() => getSystemPaths()))
+  ipcMain.handle('soundboard:list', wrapHandler(() => listSoundboardClips()))
 
   ipcMain.handle('agents:focus', wrapHandler(async (agentId: unknown) => {
     if (typeof agentId !== 'string') throw new Error('agentId must be a string')
@@ -719,7 +725,7 @@ export function registerIpcHandlers() {
   }))
   ipcMain.handle('orchestrator:queue', wrapHandler(() => getTaskQueue()))
   ipcMain.handle('orchestrator:enqueue', wrapHandler((
-    title: unknown, description: unknown, project: unknown, priority: unknown,
+    title: unknown, description: unknown, project: unknown, priority: unknown, provider?: unknown,
   ) => {
     if (typeof title !== 'string') throw new Error('title must be a string')
     if (typeof description !== 'string') throw new Error('description must be a string')
@@ -730,6 +736,7 @@ export function registerIpcHandlers() {
       project,
       priority: (typeof priority === 'string' ? priority : 'normal') as 'critical' | 'high' | 'normal' | 'low',
       source: 'dashboard',
+      provider: (provider === 'claude' || provider === 'ollama') ? provider as ModelProvider : undefined,
     })
   }))
   ipcMain.handle('orchestrator:cancel-task', wrapHandler((taskId: unknown) => {
@@ -747,4 +754,12 @@ export function registerIpcHandlers() {
   }))
   ipcMain.handle('orchestrator:stats', wrapHandler(() => getOrchestratorStats()))
   ipcMain.handle('orchestrator:xp', wrapHandler(() => getAllAgentXP()))
+  ipcMain.handle('orchestrator:set-provider', wrapHandler((provider: unknown) => {
+    if (provider !== 'claude' && provider !== 'ollama') throw new Error('provider must be "claude" or "ollama"')
+    setModelProvider(provider as ModelProvider)
+    return { provider: getModelProvider() }
+  }))
+  ipcMain.handle('orchestrator:get-provider', wrapHandler(async () => {
+    return { provider: getModelProvider(), ollamaAvailable: await checkOllamaAvailable() }
+  }))
 }
