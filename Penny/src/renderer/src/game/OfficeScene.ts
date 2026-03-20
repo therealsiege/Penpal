@@ -3149,12 +3149,17 @@ export class OfficeScene extends Phaser.Scene {
         if (!ws.state) continue
         const m = ws.state.sessionMode
         const isWorking = m === 'working' || m === 'plan'
+        const isCompressing = m === 'compressing'
         const isWaiting = ws.state.needsInteraction
-        if (!isWorking && !isWaiting) continue
+        if (!isWorking && !isWaiting && !isCompressing) continue
         const wx = room.x + ws.container.x
-        const wy = room.y + ws.container.y + WS_DESK_Y
-        // Reduced spawn rate for subtlety
-        if (Math.random() < 0.12) this.spawnTypingParticle(wx, wy, isWaiting)
+        const wy = room.y + ws.container.y + WS_DESK_Y + 2
+        // Intensity scaling by mode
+        const spawnCount = isCompressing ? 3 : m === 'plan' ? 2 : 1
+        const spawnChance = isCompressing ? 0.25 : m === 'plan' ? 0.18 : 0.12
+        for (let s = 0; s < spawnCount; s++) {
+          if (Math.random() < spawnChance) this.spawnTypingParticle(wx, wy, isWaiting, isCompressing)
+        }
       }
     }
   }
