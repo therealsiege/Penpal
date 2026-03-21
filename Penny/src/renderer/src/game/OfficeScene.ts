@@ -208,6 +208,7 @@ interface WorkstationSprite {
   taskCountBg?: Phaser.GameObjects.Graphics
   taskCountFlashTween?: Phaser.Tweens.Tween
   localTaskCount: number
+  onCoffeeRun?: boolean
 }
 
 interface Room {
@@ -346,12 +347,16 @@ export class OfficeScene extends Phaser.Scene {
   private cafeBaristas: Phaser.GameObjects.Container[] = []
   private cafeVisitorTimer: Phaser.Time.TimerEvent | null = null
   private cafeSteamTimer: Phaser.Time.TimerEvent | null = null
+  private coffeeRunTimer: Phaser.Time.TimerEvent | null = null
+  private coffeeRunners: Set<string> = new Set()  // agent IDs currently on coffee run
+  private cafeWorldX = 0
+  private cafeWorldY = 0
   private decoTweens: Phaser.Tweens.Tween[] = []
   private waterCoolerBubbleTimer: Phaser.Time.TimerEvent | null = null
   private whiteboardContainer: Phaser.GameObjects.Container | null = null
   private whiteboardTexts: Phaser.GameObjects.Text[] = []
   private lastWhiteboardUpdateAt = 0
-  private teamAreaLabels: Phaser.GameObjects.Text[] = []
+  private teamAreaLabels: (Phaser.GameObjects.Text | Phaser.GameObjects.Graphics)[] = []
   private corridorSegments: Array<{ x1: number; y1: number; x2: number; y2: number; color: number }> = []
   private corridorSignTexts: Phaser.GameObjects.Text[] = []
   private lastOfficeBgW = 0
@@ -828,6 +833,7 @@ export class OfficeScene extends Phaser.Scene {
     this.scheduleNextAmbientActivity()
 
     this.isReady = true
+    this.startCoffeeRunTimer()
     if (this.pendingAgents) {
       this.setAgents(this.pendingAgents)
       this.pendingAgents = null
@@ -2216,6 +2222,14 @@ export class OfficeScene extends Phaser.Scene {
 
   private updateWorkstation(ws: WorkstationSprite, agent: AgentState): void {
     // Safety: ensure container is always visible for existing workstations
+    // If agent was on coffee run but is now working, cancel the visual dim
+    if (this.coffeeRunners.has(agent.config.id)) {
+      const m = agent.sessionMode
+      if (m === 'working' || m === 'plan' || agent.needsInteraction) {
+        this.coffeeRunners.delete(agent.config.id)
+        ws.sprite.setAlpha(1)
+      }
+    }
     if (ws.container.alpha < 0.9) ws.container.setAlpha(1)
     if (ws.container.scaleX < 0.9) ws.container.setScale(1)
 
@@ -4484,6 +4498,8 @@ export class OfficeScene extends Phaser.Scene {
     const cy = floorBottom - CAFE_H - 10
 
     const container = this.add.container(cx, cy).setDepth(2)
+    this.cafeWorldX = cx + CAFE_W / 2
+    this.cafeWorldY = cy + COUNTER_H + 20  // target: the stools area
     this.cafeContainer = container
     const g = this.add.graphics()
     container.add(g)
@@ -4725,7 +4741,182 @@ export class OfficeScene extends Phaser.Scene {
     })
   }
 
-  private updateCameraBounds(): void {
+  // ---------------------------------------------------------------------------
+  // Coffee Runs — idle agents walk to the café and back
+  // ---------------------------------------------------------------------------
+
+  private startCoffeeRunTimer(): void {
+    if (this.coffeeRunTimer) this.coffeeRunTimer.destroy()
+    this.coffeeRunTimer = this.time.addEvent({
+      delay: 15000 + Math.random() * 10000,
+      loop: true,
+      callback: () => this.tryStartCoffeeRun(),
+    })
+  }
+
+  private tryStartCoffeeRun(): void {
+    if (!this.cafeContainer || this.rooms.size === 0) return
+    if (this.coffeeRunners.size >= 2) return
+
+    const candidates: { ws: WorkstationSprite; room: Room }[] = []
+    for (const room of this.rooms.values()) {
+      for (const ws of room.workstations.values()) {
+        if (!ws.state) continue
+        if (ws.walkBreakTween) continue
+        if (this.coffeeRunners.has(ws.state.config.id)) continue
+        const m = ws.state.sessionMode
+        const status = ws.state.status
+        // Only truly idle agents — not working, planning, waiting, or active in any way
+        const isIdle = status === 'idle' || status === 'sleeping'
+        const isBusy = ws.state.needsInteraction || m === 'working' || m === 'plan' || m === 'compressing' || m === 'waiting' || m === 'accept-edits'
+        if (isIdle && !isBusy) candidates.push({ ws, room })
+      }
+    }
+    if (candidates.length === 0) return
+
+    const pick = candidates[Math.floor(Math.random() * candidates.length)]
+    this.sendAgentForCoffee(pick.ws, pick.room)
+  }
+
+  private sendAgentForCoffee(ws: WorkstationSprite, room: Room): void {
+    if (!ws.state || !this.cafeContainer) return
+    const agentId = ws.state.config.id
+    this.coffeeRunners.add(agentId)
+
+    const charIdx = this.getAgentCharacterIndex(ws.state)
+    const base = charIdx * CHAR_COLS
+
+    // World positions
+    const startX = room.x + ws.container.x
+    const startY = room.y + ws.container.y + WS_SPRITE_Y
+    const doorX = room.x
+    const doorY = room.y + room.height / 2 + 4
+    const stoolIdx = Math.floor(Math.random() * 5)
+    const cafeX = this.cafeWorldX - 50 + stoolIdx * 28
+    const cafeY = this.cafeWorldY
+
+    // Walking speed: ~55px per second (brisk but not rushed)
+    const WALK_SPEED = 55
+    const distToDoor = Math.hypot(doorX - startX, doorY - startY)
+    const distToFCafe = Math.hypot(cafeX - doorX, cafeY - doorY)
+
+    // Create world-space walking sprite
+    const walker = this.add.sprite(startX, startY, 'characters', base + POSE_WALK)
+      .setScale(CHAR_SCALE).setOrigin(0.5, 1).setDepth(9000)
+
+    // Shadow beneath walker — rendered just below the sprite depth
+    const walkShadow = this.add.ellipse(startX, startY + 2, 16, 5, 0x000000, 0.15).setDepth(8999)
+    const shadowSync = this.time.addEvent({
+      delay: 16, loop: true,
+      callback: () => { if (walker.active) walkShadow.setPosition(walker.x, walker.y + 2) },
+    })
+
+    this.spawnEmojiReaction(startX, startY - 25, '☕')
+    ws.sprite.setAlpha(0.15)
+
+    const flipForDir = (fromX: number, toX: number) => { walker.setFlipX(toX < fromX) }
+
+    // Waddle animation — bounce + tilt while walking, like a little penguin
+    const walkBob = this.tweens.add({
+      targets: walker, y: '-=3',
+      duration: 160, yoyo: true, repeat: -1, ease: 'Quad.easeOut',
+    })
+    const walkWaddle = this.tweens.add({
+      targets: walker, angle: { from: -4, to: 4 },
+      duration: 320, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
+    })
+    // Slight scale squish on each step
+    const walkSquish = this.tweens.add({
+      targets: walker,
+      scaleX: CHAR_SCALE * 1.06, scaleY: CHAR_SCALE * 0.94,
+      duration: 160, yoyo: true, repeat: -1, ease: 'Quad.easeOut',
+    })
+
+    // Helper: tween walk segment at consistent speed
+    const walkTo = (tx: number, ty: number, thenFn: () => void) => {
+      const dist = Math.hypot(tx - walker.x, ty - walker.y)
+      const dur = Math.max(400, (dist / WALK_SPEED) * 1000)
+      flipForDir(walker.x, tx)
+      walker.setFrame(base + POSE_WALK)
+      this.tweens.add({
+        targets: walker, x: tx, y: ty,
+        duration: dur, ease: 'Linear',
+        onComplete: thenFn,
+      })
+    }
+
+    // Phase 1: Walk to room door
+    walkTo(doorX, doorY, () => {
+      // Phase 2: Walk from door to café
+      walkTo(cafeX, cafeY, () => {
+        // Phase 3: Sit on stool at café
+        walkBob.destroy()
+        walkWaddle.destroy()
+        walkSquish.destroy()
+        walker.setAngle(0).setScale(CHAR_SCALE)
+        walker.setFrame(base + POSE_SIT)
+        walker.setFlipX(false)
+        walker.y = cafeY // reset any bob offset
+
+        // Sit and enjoy coffee for 5-8 seconds
+        this.time.delayedCall(5000 + Math.random() * 3000, () => {
+          // Phase 4: Stand up, walk back with coffee
+          walker.setFrame(base + POSE_WALK)
+          const cup = this.add.circle(0, 0, 2.5, 0x8b5cf6, 0.75).setDepth(9001)
+          // Restart walking waddle for return trip
+          const returnBob = this.tweens.add({
+            targets: walker, y: '-=3',
+            duration: 160, yoyo: true, repeat: -1, ease: 'Quad.easeOut',
+          })
+          const returnWaddle = this.tweens.add({
+            targets: walker, angle: { from: -4, to: 4 },
+            duration: 320, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
+          })
+          const returnSquish = this.tweens.add({
+            targets: walker,
+            scaleX: CHAR_SCALE * 1.06, scaleY: CHAR_SCALE * 0.94,
+            duration: 160, yoyo: true, repeat: -1, ease: 'Quad.easeOut',
+          })
+
+          const walkBackTo = (tx: number, ty: number, thenFn: () => void) => {
+            const dist = Math.hypot(tx - walker.x, ty - walker.y)
+            const dur = Math.max(400, (dist / WALK_SPEED) * 1000)
+            flipForDir(walker.x, tx)
+            walker.setFrame(base + POSE_WALK)
+            this.tweens.add({
+              targets: walker, x: tx, y: ty,
+              duration: dur, ease: 'Linear',
+              onUpdate: () => { cup.setPosition(walker.x + 5, walker.y - 18) },
+              onComplete: thenFn,
+            })
+          }
+
+          // Walk café → door → desk
+          walkBackTo(doorX, doorY, () => {
+            walkBackTo(startX, startY, () => {
+              // Arrived back
+              returnBob.destroy()
+              returnWaddle.destroy()
+              returnSquish.destroy()
+              shadowSync.destroy()
+              walkShadow.destroy()
+              walker.destroy()
+              ws.sprite.setAlpha(1)
+              this.coffeeRunners.delete(agentId)
+              this.tweens.add({
+                targets: cup, alpha: 0, y: cup.y - 10,
+                duration: 800, delay: 600, ease: 'Sine.easeOut',
+                onComplete: () => cup.destroy(),
+              })
+              this.spawnEmojiReaction(startX, startY - 25, '😊')
+            })
+          })
+        })
+      })
+    })
+  }
+
+    private updateCameraBounds(): void {
     const cam = this.cameras.main
     let maxX = 0
     let maxY = 0
@@ -8182,8 +8373,10 @@ export class OfficeScene extends Phaser.Scene {
     this.mouseTrailPool = []
 
     // Café cleanup
+    if (this.coffeeRunTimer) { this.coffeeRunTimer.destroy(); this.coffeeRunTimer = null }
     if (this.cafeVisitorTimer) { this.cafeVisitorTimer.destroy(); this.cafeVisitorTimer = null }
     if (this.cafeSteamTimer) { this.cafeSteamTimer.destroy(); this.cafeSteamTimer = null }
+    this.coffeeRunners.clear()
     if (this.cafeContainer) { this.cafeContainer.destroy(true); this.cafeContainer = null }
     this.cafeBaristas = []
 
