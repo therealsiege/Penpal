@@ -355,6 +355,7 @@ export class OfficeScene extends Phaser.Scene {
   private waterCoolerBubbleTimer: Phaser.Time.TimerEvent | null = null
   private whiteboardContainer: Phaser.GameObjects.Container | null = null
   private whiteboardTexts: Phaser.GameObjects.Text[] = []
+  private flagContainer: Phaser.GameObjects.Container | null = null
   private lastWhiteboardUpdateAt = 0
   private teamAreaLabels: (Phaser.GameObjects.Text | Phaser.GameObjects.Graphics)[] = []
   private corridorSegments: Array<{ x1: number; y1: number; x2: number; y2: number; color: number }> = []
@@ -523,6 +524,15 @@ export class OfficeScene extends Phaser.Scene {
 
   // Ambient office-life activity timer (paper airplanes, coffee refills, phone rings, etc.)
   private ambientActivityTimer: Phaser.Time.TimerEvent | null = null
+
+  // PA system broadcast banner (screen-space, below status bar)
+  private broadcastBannerContainer: Phaser.GameObjects.Container | null = null
+  private broadcastBannerBg: Phaser.GameObjects.Rectangle | null = null
+  private broadcastBannerText: Phaser.GameObjects.Text | null = null
+  private broadcastScrollTween: Phaser.Tweens.Tween | null = null
+  private broadcastFadeTimer: Phaser.Time.TimerEvent | null = null
+  private broadcastLedTimer: Phaser.Time.TimerEvent | null = null
+  private broadcastHandler: ((msg: unknown) => void) | null = null
 
   constructor() {
     super({ key: 'OfficeScene' })
@@ -831,6 +841,10 @@ export class OfficeScene extends Phaser.Scene {
 
     // Ambient office-life activity — fires every 8-15 seconds with a random incidental event
     this.scheduleNextAmbientActivity()
+
+    // PA system broadcast — listen for cross-component broadcast events
+    this.broadcastHandler = (msg: unknown) => this.showBroadcastEffect(String(msg))
+    EventBus.on(EVENTS.BROADCAST, this.broadcastHandler)
 
     this.isReady = true
     this.startCoffeeRunTimer()
@@ -1597,6 +1611,44 @@ export class OfficeScene extends Phaser.Scene {
       const winY = floorY + 8
       g.fillStyle(this.windowTintColor, this.windowTintAlpha * 1.5)
       g.fillRect(winX, winY, winW, winH)
+
+      // ── Tiny scenic view through the window ──────────────────────────────
+      // Layers drawn bottom-to-top inside the window bounds so they composite
+      // naturally before the frame, mullions, and curtains are painted over.
+      if (this.currentTimePhase === 'day' || this.currentTimePhase === 'morning') {
+        // Pale blue sky wash across the full pane
+        g.fillStyle(0x7dd3fc, 0.06)
+        g.fillRect(winX, winY, winW, winH)
+        // Green hill — squat ellipse sitting just below the sill
+        g.fillStyle(0x166534, 0.08)
+        g.fillEllipse(winX + winW / 2, winY + winH + 1, winW * 0.9, 6)
+        // Tiny sun dot in the upper-right quadrant
+        g.fillStyle(0xfde68a, 0.10)
+        g.fillCircle(winX + winW - 3, winY + 2, 1)
+      } else if (this.currentTimePhase === 'night') {
+        // Dark sky wash
+        g.fillStyle(0x0f172a, 0.08)
+        g.fillRect(winX, winY, winW, winH)
+        // Three scattered star dots
+        g.fillStyle(0xffffff, 0.08)
+        g.fillCircle(winX + 4, winY + 2, 0.5)
+        g.fillCircle(winX + 11, winY + 1, 0.5)
+        g.fillCircle(winX + 16, winY + 3, 0.5)
+        // Tiny crescent moon — bright circle with a dark bite taken out
+        g.fillStyle(0xfef3c7, 0.08)
+        g.fillCircle(winX + 15, winY + 2, 1.5)
+        g.fillStyle(0x0f172a, 0.08)
+        g.fillCircle(winX + 16, winY + 2, 1.2)
+      } else {
+        // Evening — warm orange sky tint
+        g.fillStyle(0xf97316, 0.05)
+        g.fillRect(winX, winY, winW, winH)
+        // Dark silhouette hill at the base
+        g.fillStyle(0x1e293b, 0.06)
+        g.fillEllipse(winX + winW / 2, winY + winH + 1, winW * 0.9, 6)
+      }
+      // ─────────────────────────────────────────────────────────────────────
+
       g.lineStyle(1, 0x475569, 0.8)
       g.strokeRect(winX, winY, winW, winH)
       g.lineStyle(1, 0x475569, 0.5)
@@ -3088,6 +3140,34 @@ export class OfficeScene extends Phaser.Scene {
       labelText.setDepth(-1)
       this.teamAreaLabels.push(labelText)
 
+      // --- 6b. Animated underline beneath the team label ---
+      // Starts at scaleX=0, sweeps right over 500ms, then alpha-pulses indefinitely.
+      const underlineGfx = this.add.graphics()
+      const ulY = y + BANNER_H - 3
+      const ulX = x + width / 2 + 4 - labelText.width / 2
+      underlineGfx.lineStyle(2, color, 0.5)
+      underlineGfx.lineBetween(0, 0, labelText.width, 0)
+      underlineGfx.setPosition(ulX, ulY)
+      underlineGfx.setDepth(-1)
+      underlineGfx.setScale(0, 1)
+      this.tweens.add({
+        targets: underlineGfx,
+        scaleX: 1,
+        duration: 500,
+        ease: 'Cubic.easeOut',
+        onComplete: () => {
+          this.tweens.add({
+            targets: underlineGfx,
+            alpha: { from: 0.45, to: 0.85 },
+            duration: 2000,
+            ease: 'Sine.easeInOut',
+            yoyo: true,
+            repeat: -1,
+          })
+        },
+      })
+      this.teamAreaLabels.push(underlineGfx)
+
       // --- 7. Agent count badge (top-right of banner) ---
       const badgeLabel = `${area.agentCount} agent${area.agentCount !== 1 ? 's' : ''}`
       const badgePadX = 5
@@ -3687,6 +3767,58 @@ export class OfficeScene extends Phaser.Scene {
       // Tiny door handle
       g.fillStyle(0x64748b, 0.6)
       g.fillRect(doorX + 7, doorY + 6, 2, 2)
+    }
+
+    // 1c. FLAG POLE + ANIMATED FLAG — left side of roof
+    {
+      // Destroy any previously created flag container so redraws don't stack
+      if (this.flagContainer) {
+        this.tweens.killTweensOf(this.flagContainer)
+        this.flagContainer.destroy(true)
+        this.flagContainer = null
+      }
+
+      if (bw > 200) {
+        // Pole: thin vertical line drawn on g (static, part of background)
+        const poleX = bx + 20
+        const poleBaseY = by - 4   // sits on the roof cap
+        const poleH = 30
+        g.fillStyle(0x94a3b8, 1)
+        g.fillRect(poleX, poleBaseY - poleH, 1, poleH)
+
+        // Animated flag: live Container so Phaser tweens can run on it
+        const flagTopY = poleBaseY - poleH
+        this.flagContainer = this.add.container(poleX + 1, flagTopY)
+        this.flagContainer.setDepth(-0.3)
+
+        // Flag body — simple filled rect with a shading strip
+        const flagGfx = this.add.graphics()
+        flagGfx.fillStyle(0x3b82f6, 1)
+        flagGfx.fillRect(0, 0, 12, 8)
+        // Subtle shading strip along bottom edge
+        flagGfx.fillStyle(0x1d4ed8, 0.4)
+        flagGfx.fillRect(0, 6, 12, 2)
+
+        // "P" label centred on the flag
+        const flagLabel = this.add.text(6, 4, 'P', {
+          fontSize: '4px',
+          color: '#ffffff',
+          fontFamily: 'monospace',
+        }).setOrigin(0.5, 0.5)
+
+        this.flagContainer.add([flagGfx, flagLabel])
+
+        // Waving animation: oscillate scaleX (wind flutter) + slight angle tilt
+        this.tweens.add({
+          targets: this.flagContainer,
+          scaleX: { from: 1.0, to: 0.85 },
+          angle: { from: -3, to: 3 },
+          duration: 1500,
+          ease: 'Sine.easeInOut',
+          yoyo: true,
+          repeat: -1,
+        })
+      }
     }
 
     // 2. SIDE WINDOWS — left and right walls, 3-4 windows each
@@ -4832,6 +4964,26 @@ export class OfficeScene extends Phaser.Scene {
       duration: 160, yoyo: true, repeat: -1, ease: 'Quad.easeOut',
     })
 
+    // Footstep dust puffs behind the walker
+    const footstepTimer = this.time.addEvent({
+      delay: 280, loop: true,
+      callback: () => {
+        if (!walker.active) return
+        const puff = this.add.circle(
+          walker.x + (Math.random() - 0.5) * 4,
+          walker.y + 1,
+          1.2 + Math.random(), 0x94a3b8, 0.2
+        ).setDepth(8998)
+        this.tweens.add({
+          targets: puff,
+          alpha: 0, scaleX: 2, scaleY: 2,
+          y: puff.y - 3,
+          duration: 400, ease: 'Sine.easeOut',
+          onComplete: () => puff.destroy(),
+        })
+      },
+    })
+
     // Helper: tween walk segment at consistent speed
     const walkTo = (tx: number, ty: number, thenFn: () => void) => {
       const dist = Math.hypot(tx - walker.x, ty - walker.y)
@@ -4893,6 +5045,7 @@ export class OfficeScene extends Phaser.Scene {
 
           // Walk café → door → desk
           walkBackTo(doorX, doorY, () => {
+            footstepTimer.destroy()
             walkBackTo(startX, startY, () => {
               // Arrived back
               returnBob.destroy()
@@ -4900,6 +5053,7 @@ export class OfficeScene extends Phaser.Scene {
               returnSquish.destroy()
               shadowSync.destroy()
               walkShadow.destroy()
+              footstepTimer.destroy()
               walker.destroy()
               ws.sprite.setAlpha(1)
               this.coffeeRunners.delete(agentId)
@@ -8456,6 +8610,11 @@ export class OfficeScene extends Phaser.Scene {
     this.officeGraphics = null
     this.tripletGraphics?.destroy()
     this.tripletGraphics = null
+    if (this.flagContainer) {
+      this.tweens.killTweensOf(this.flagContainer)
+      this.flagContainer.destroy(true)
+      this.flagContainer = null
+    }
 
     // Chat animation cleanup
     for (const anim of this.chatAnimations) {
