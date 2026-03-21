@@ -33,4 +33,5 @@ export const EVENTS = {
   AGENT_DRAGGED_TO_ROOM: 'agent:draggedToRoom',
   ADD_WORKER_CLICKED: 'addWorker:clicked',
   DESK_CLICKED: 'desk:clicked',
+  BROADCAST: 'broadcast',
 } as const
