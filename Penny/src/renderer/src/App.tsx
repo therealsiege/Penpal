@@ -16,6 +16,7 @@ import { SettingsPanel } from './panels/SettingsPanel'
 import { SoundboardPanel } from './panels/SoundboardPanel'
 import type { SystemPaths } from './types'
 import { getPathPresets } from './utils/path-presets'
+import { EventBus, EVENTS } from './game/events'
 
 let veritasStartupCheckDone = false
 
@@ -265,8 +266,10 @@ function AppContent() {
       description: 'Ask all agents what they\'re working on',
       category: 'Agents',
       action: async () => {
-        const r = await window.api.broadcastToSessions('what are you working on right now? give me a one-line summary')
+        const msg = 'what are you working on right now? give me a one-line summary'
+        const r = await window.api.broadcastToSessions(msg)
         toast(`Status check sent to ${r.sent} agents`, 'success')
+        if (r.sent > 0) EventBus.emit(EVENTS.BROADCAST, msg)
       },
     },
     {
@@ -275,8 +278,10 @@ function AppContent() {
       description: 'Tell all agents to commit',
       category: 'Agents',
       action: async () => {
-        const r = await window.api.broadcastToSessions('/commit')
+        const msg = '/commit'
+        const r = await window.api.broadcastToSessions(msg)
         toast(`Commit sent to ${r.sent} agents`, 'success')
+        if (r.sent > 0) EventBus.emit(EVENTS.BROADCAST, msg)
       },
     },
     {
@@ -285,8 +290,10 @@ function AppContent() {
       description: 'Pause all agents',
       category: 'Agents',
       action: async () => {
-        const r = await window.api.broadcastToSessions('pause what you are doing and wait for further instructions')
+        const msg = 'pause what you are doing and wait for further instructions'
+        const r = await window.api.broadcastToSessions(msg)
         toast(`Pause sent to ${r.sent} agents`, 'success')
+        if (r.sent > 0) EventBus.emit(EVENTS.BROADCAST, msg)
       },
     },
     {

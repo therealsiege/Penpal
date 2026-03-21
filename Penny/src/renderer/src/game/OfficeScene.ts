@@ -1125,6 +1125,109 @@ export class OfficeScene extends Phaser.Scene {
     }
   }
 
+  // ---------------------------------------------------------------------------
+  // PA system broadcast effect
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Displays a marquee banner below the status bar and pulses all room LEDs
+   * amber — triggered whenever the user broadcasts a message to all agents.
+   */
+  public showBroadcastEffect(message: string): void {
+    const viewW = this.scale.width
+    const BANNER_Y = 28
+    const BANNER_H = 30
+    const BANNER_COLOR = 0x0f172a
+    const BANNER_ALPHA = 0.9
+    const TEXT_COLOR = '#fbbf24'
+    const DURATION_MS = 5000
+    const FADE_MS = 400
+
+    // Tear down any existing broadcast banner before creating a new one
+    this._destroyBroadcastBanner()
+
+    // Container pinned to screen space (ignores camera scroll)
+    this.broadcastBannerContainer = this.add.container(0, BANNER_Y)
+      .setDepth(9999)
+      .setScrollFactor(0)
+
+    // Dark background strip
+    this.broadcastBannerBg = this.add.rectangle(0, 0, viewW, BANNER_H, BANNER_COLOR, BANNER_ALPHA)
+      .setOrigin(0, 0)
+    this.broadcastBannerContainer.add(this.broadcastBannerBg)
+
+    // Amber accent line at the top edge of the banner
+    const accentLine = this.add.rectangle(0, 0, viewW, 2, 0xfbbf24, 0.7).setOrigin(0, 0)
+    this.broadcastBannerContainer.add(accentLine)
+
+    // Scrolling text — starts just off the right edge, scrolls to past the left edge
+    const label = '\u{1F4E2}  BROADCAST:  ' + message
+    this.broadcastBannerText = this.add.text(viewW + 10, BANNER_H / 2, label, {
+      fontSize: '10px',
+      fontFamily: 'ui-monospace, monospace',
+      color: TEXT_COLOR,
+      resolution: 2,
+    }).setOrigin(0, 0.5)
+    this.broadcastBannerContainer.add(this.broadcastBannerText)
+
+    // Marquee: scroll the text from right to left over the active duration
+    const textW = this.broadcastBannerText.width
+    this.broadcastScrollTween = this.tweens.add({
+      targets: this.broadcastBannerText,
+      x: -(textW + 10),
+      duration: DURATION_MS - FADE_MS,
+      ease: 'Linear',
+    })
+
+    // Pulse all room status LEDs amber 3 times (6 timer ticks: on/off x3)
+    let pulseCount = 0
+    this.broadcastLedTimer = this.time.addEvent({
+      delay: 500,
+      repeat: 5,
+      callback: () => {
+        pulseCount++
+        const isOn = pulseCount % 2 === 1
+        for (const room of this.rooms.values()) {
+          if (isOn) {
+            room.statusLed.setFillStyle(COLOR_LED_AMBER, 1)
+            room.statusLedGlow?.setFillStyle(COLOR_LED_AMBER, 0.4)
+          } else {
+            const restoreColor =
+              room.ledMode === 'active'  ? COLOR_LED_GREEN :
+              room.ledMode === 'waiting' ? COLOR_LED_AMBER : COLOR_LED_GRAY
+            room.statusLed.setFillStyle(restoreColor, 1)
+            room.statusLedGlow?.setFillStyle(restoreColor, 0.25)
+          }
+        }
+      },
+    })
+
+    // After the scroll completes, fade the banner out then destroy it
+    this.broadcastFadeTimer = this.time.delayedCall(DURATION_MS - FADE_MS, () => {
+      if (!this.broadcastBannerContainer) return
+      this.tweens.add({
+        targets: this.broadcastBannerContainer,
+        alpha: 0,
+        duration: FADE_MS,
+        ease: 'Sine.easeIn',
+        onComplete: () => this._destroyBroadcastBanner(),
+      })
+    })
+  }
+
+  private _destroyBroadcastBanner(): void {
+    if (this.broadcastScrollTween) { this.broadcastScrollTween.destroy(); this.broadcastScrollTween = null }
+    if (this.broadcastFadeTimer)   { this.broadcastFadeTimer.destroy();   this.broadcastFadeTimer   = null }
+    if (this.broadcastLedTimer)    { this.broadcastLedTimer.destroy();    this.broadcastLedTimer    = null }
+    if (this.broadcastBannerContainer) {
+      this.tweens.killTweensOf(this.broadcastBannerContainer)
+      this.broadcastBannerContainer.destroy(true)
+      this.broadcastBannerContainer = null
+    }
+    this.broadcastBannerBg   = null
+    this.broadcastBannerText = null
+  }
+
   /** Switch theme with smooth 500ms background color transition */
   setTheme(theme: ThemeName): void {
     const { oldBg, newBg } = setActiveTheme(theme)
@@ -8475,6 +8578,13 @@ export class OfficeScene extends Phaser.Scene {
 
   destroy(): void {
     if (this.resizeTimer) { clearTimeout(this.resizeTimer); this.resizeTimer = null }
+
+    // PA system broadcast banner cleanup
+    this._destroyBroadcastBanner()
+    if (this.broadcastHandler) {
+      EventBus.off(EVENTS.BROADCAST, this.broadcastHandler)
+      this.broadcastHandler = null
+    }
 
     // Focus mode cleanup
     if (this.focusDimTween) { this.focusDimTween.destroy(); this.focusDimTween = null }
