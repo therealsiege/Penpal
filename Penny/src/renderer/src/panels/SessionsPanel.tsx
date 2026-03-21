@@ -4,6 +4,7 @@ import { StatusBadge } from '../components/StatusBadge'
 import { useToast } from '../components/Toast'
 import type { ClaudeSession, ConversationMessage, SystemPaths } from '../types'
 import { getPathPresets } from '../utils/path-presets'
+import { EventBus, EVENTS } from '../game/events'
 
 function memColor(mb: number): string {
   if (mb >= 900) return 'text-amber-400'
@@ -358,6 +359,7 @@ function BroadcastBar() {
         `Sent to ${res.sent} session${res.sent !== 1 ? 's' : ''}${res.failed > 0 ? `, ${res.failed} failed` : ''}`,
         res.failed > 0 ? 'error' : 'success',
       )
+      if (res.sent > 0) EventBus.emit(EVENTS.BROADCAST, msg.trim())
       setMessage('')
     } finally {
       setBroadcasting(false)
