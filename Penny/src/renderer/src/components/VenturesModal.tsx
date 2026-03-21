@@ -105,13 +105,19 @@ export function VenturesModal({ onClose }: VenturesModalProps) {
   const [fileContent, setFileContent] = useState<string | null>(null)
   const [selectedFile, setSelectedFile] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+  // Bump this key whenever the directory changes so stagger items re-animate
+  const [listKey, setListKey] = useState(0)
+  // Bump on each file selection so the preview pane re-animates
+  const [previewKey, setPreviewKey] = useState(0)
 
   const loadDir = useCallback(async (relativePath: string) => {
     setLoading(true)
+    setEntries([]) // clear list so stagger re-fires on new entries
     try {
       const items = await window.api.listVentures(relativePath)
       setEntries(items)
       setCurrentPath(relativePath)
+      setListKey(k => k + 1)
     } catch {
       setEntries([])
     }
@@ -140,10 +146,12 @@ export function VenturesModal({ onClose }: VenturesModalProps) {
       return
     }
     setSelectedFile(entry.path)
+    setFileContent(null) // clear so preview re-animates
     setLoading(true)
     try {
       const content = await window.api.readVentureFile(entry.path)
       setFileContent(content)
+      setPreviewKey(k => k + 1)
     } catch {
       setFileContent(null)
     }
@@ -169,10 +177,10 @@ export function VenturesModal({ onClose }: VenturesModalProps) {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-backdrop-fade-in"
       onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
     >
-      <div className="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl shadow-2xl w-[780px] max-h-[80vh] overflow-hidden flex flex-col">
+      <div className="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl shadow-2xl w-[780px] max-h-[80vh] overflow-hidden flex flex-col animate-modal-scale-in">
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200 dark:border-slate-800">
           <div className="flex items-center gap-3">
@@ -193,12 +201,17 @@ export function VenturesModal({ onClose }: VenturesModalProps) {
         {/* Breadcrumbs */}
         <div className="px-5 py-2 border-b border-slate-200 dark:border-slate-800 flex items-center gap-1 text-[11px] overflow-x-auto">
           {breadcrumbs.map((crumb, i) => (
-            <span key={crumb.path} className="flex items-center gap-1 shrink-0">
+            <span
+              key={crumb.path}
+              className="flex items-center gap-1 shrink-0 transition-all duration-150"
+            >
               {i > 0 && <span className="text-slate-400 dark:text-slate-600">/</span>}
               <button
                 onClick={() => navigateTo(crumb.path)}
-                className={`hover:text-slate-900 dark:hover:text-white transition-colors ${
-                  i === breadcrumbs.length - 1 ? 'text-slate-700 dark:text-slate-200 font-medium' : 'text-slate-500'
+                className={`transition-all duration-150 hover:text-slate-900 dark:hover:text-white ${
+                  i === breadcrumbs.length - 1
+                    ? 'text-slate-700 dark:text-slate-200 font-medium'
+                    : 'text-slate-500'
                 }`}
               >
                 {crumb.label}
@@ -211,41 +224,79 @@ export function VenturesModal({ onClose }: VenturesModalProps) {
         <div className="flex-1 overflow-hidden flex min-h-0">
           {/* Left: file list */}
           <div className="w-[280px] border-r border-slate-200 dark:border-slate-800 overflow-auto">
-            {loading && !fileContent && (
-              <p className="text-slate-500 text-xs px-4 py-3">Loading...</p>
+            {/* Loading skeleton */}
+            {loading && entries.length === 0 && (
+              <div className="px-4 py-3 space-y-2.5">
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <div key={i} className="flex items-center gap-2.5">
+                    <div className="w-4 h-4 rounded animate-shimmer bg-slate-700/40 shrink-0" />
+                    <div
+                      className="h-2.5 rounded animate-shimmer bg-slate-700/40"
+                      style={{ width: `${55 + (i % 3) * 15}%` }}
+                    />
+                  </div>
+                ))}
+              </div>
             )}
+
+            {/* Empty state */}
             {!loading && entries.length === 0 && (
-              <p className="text-slate-500 text-xs px-4 py-3">Empty directory</p>
+              <div className="flex flex-col items-center justify-center gap-2 py-10 animate-card-enter">
+                <span className="text-2xl opacity-30">📂</span>
+                <p className="text-slate-500 dark:text-slate-600 text-xs">Empty directory</p>
+              </div>
             )}
-            {entries.map(entry => (
-              <button
-                key={entry.path}
-                onClick={() => openFile(entry)}
-                className={`w-full text-left px-4 py-2 flex items-center gap-2.5 hover:bg-slate-100 dark:hover:bg-slate-800/60 transition-colors border-b border-slate-200/70 dark:border-slate-800/50 ${
-                  selectedFile === entry.path ? 'bg-slate-200/80 dark:bg-slate-800/80' : ''
-                }`}
-              >
-                <span className="text-sm shrink-0">{fileIcon(entry)}</span>
-                <span className="text-xs text-slate-700 dark:text-slate-300 truncate">{entry.name}</span>
-                {entry.isDirectory && (
-                  <span className="text-xs text-slate-400 dark:text-slate-600 ml-auto shrink-0">&rsaquo;</span>
-                )}
-              </button>
-            ))}
+
+            {/* File / folder rows */}
+            <div key={listKey}>
+              {entries.map((entry, idx) => (
+                <button
+                  key={entry.path}
+                  onClick={() => openFile(entry)}
+                  style={{ animationDelay: `${Math.min(idx, 19) * 0.03}s` }}
+                  className={`stagger-item w-full text-left px-4 py-2 flex items-center gap-2.5 hover:bg-slate-100 dark:hover:bg-slate-800/60 transition-colors border-b border-slate-200/70 dark:border-slate-800/50 ${
+                    selectedFile === entry.path ? 'bg-slate-200/80 dark:bg-slate-800/80' : ''
+                  }`}
+                >
+                  <span className="text-sm shrink-0 hover:scale-110 transition-transform duration-100 inline-block">
+                    {fileIcon(entry)}
+                  </span>
+                  <span className="text-xs text-slate-700 dark:text-slate-300 truncate">{entry.name}</span>
+                  {entry.isDirectory && (
+                    <span className="text-xs text-slate-400 dark:text-slate-600 ml-auto shrink-0">&rsaquo;</span>
+                  )}
+                </button>
+              ))}
+            </div>
           </div>
 
           {/* Right: file content */}
           <div className="flex-1 overflow-auto px-5 py-4">
+            {/* File loading skeleton */}
             {loading && selectedFile && (
-              <p className="text-slate-500 text-xs">Loading file...</p>
+              <div className="space-y-3 pt-1">
+                <div className="h-3 w-1/2 rounded animate-shimmer bg-slate-700/40" />
+                <div className="h-px w-full bg-slate-800/60" />
+                {Array.from({ length: 8 }).map((_, i) => (
+                  <div
+                    key={i}
+                    className="h-2 rounded animate-shimmer bg-slate-700/30"
+                    style={{ width: `${40 + (i % 5) * 12}%` }}
+                  />
+                ))}
+              </div>
             )}
-            {!selectedFile && !fileContent && (
+
+            {/* Empty prompt */}
+            {!selectedFile && !fileContent && !loading && (
               <div className="flex items-center justify-center h-full">
                 <p className="text-slate-400 dark:text-slate-600 text-xs">Select a file to preview</p>
               </div>
             )}
-            {fileContent !== null && selectedFile && (
-              <div className="ventures-md">
+
+            {/* File preview */}
+            {fileContent !== null && selectedFile && !loading && (
+              <div key={previewKey} className="ventures-md animate-card-enter">
                 <div className="mb-3 pb-2 border-b border-slate-200 dark:border-slate-800">
                   <p className="text-xs text-slate-500 font-mono truncate">{selectedFile}</p>
                 </div>

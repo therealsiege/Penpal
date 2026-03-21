@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { usePolling } from '../hooks/usePolling'
 import { StatusBadge } from '../components/StatusBadge'
 import type { JobRun, NewLead } from '../types'
@@ -18,6 +18,158 @@ function formatDuration(ms: number): string {
   if (ms < 1000) return `${ms}ms`
   if (ms < 60000) return `${(ms / 1000).toFixed(1)}s`
   return `${(ms / 60000).toFixed(1)}m`
+}
+
+// ── Loading skeleton ─────────────────────────────────────────────────────────
+
+function ShimmerRow() {
+  return (
+    <div className="rounded-lg p-3 border border-slate-800 overflow-hidden relative">
+      <div
+        className="absolute inset-0 animate-shimmer"
+        style={{
+          background:
+            'linear-gradient(90deg, transparent 0%, rgba(148,163,184,0.06) 50%, transparent 100%)',
+          backgroundSize: '800px 100%',
+        }}
+      />
+      <div className="h-3.5 w-32 bg-slate-800 rounded mb-2" />
+      <div className="h-2.5 w-20 bg-slate-800/60 rounded" />
+    </div>
+  )
+}
+
+function LoadingSkeleton({ rows = 4 }: { rows?: number }) {
+  return (
+    <div className="space-y-2">
+      {Array.from({ length: rows }).map((_, i) => (
+        <ShimmerRow key={i} />
+      ))}
+    </div>
+  )
+}
+
+// ── Empty state ──────────────────────────────────────────────────────────────
+
+function EmptyState({ message }: { message: string }) {
+  return (
+    <div className="animate-card-enter flex flex-col items-center justify-center gap-2 rounded-lg border border-slate-800 bg-slate-900/50 p-8 text-center">
+      {/* inbox icon */}
+      <svg
+        className="w-8 h-8 text-slate-600"
+        fill="none"
+        viewBox="0 0 24 24"
+        stroke="currentColor"
+        strokeWidth={1.5}
+        aria-hidden="true"
+      >
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          d="M9 3H5a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2V9m-9-6l6 6m-6-6v6h6"
+        />
+      </svg>
+      <p className="text-xs text-slate-500">{message}</p>
+    </div>
+  )
+}
+
+// ── Section header ───────────────────────────────────────────────────────────
+
+function SectionHeader({ children }: { children: React.ReactNode }) {
+  return (
+    <h3 className="animate-fade-slide-down text-xs font-medium text-slate-500 uppercase tracking-wider mb-3">
+      {children}
+    </h3>
+  )
+}
+
+// ── Job run row ──────────────────────────────────────────────────────────────
+
+interface JobRunRowProps {
+  run: JobRun
+  index: number
+  isNew: boolean
+}
+
+function JobRunRow({ run, index, isNew }: JobRunRowProps) {
+  return (
+    <div
+      className={[
+        'rounded-lg p-3 border transition-all duration-100',
+        'bg-slate-900 border-slate-800',
+        'hover:bg-slate-800/50',
+        isNew ? 'animate-new-item-flash border-l-2' : '',
+      ].join(' ')}
+      style={{
+        animationDelay: `${index * 40}ms`,
+        animationFillMode: 'both',
+        animation: `fade-slide-up 240ms ease-out ${index * 40}ms both${isNew ? ', new-item-flash 1400ms ease-out forwards' : ''}`,
+      }}
+    >
+      <div className="flex items-center justify-between mb-1">
+        <div className="flex items-center gap-2">
+          <StatusBadge status={run.success ? 'ok' : 'fail'} />
+          <span className="text-sm font-medium text-slate-200">{run.job}</span>
+        </div>
+        <span className="text-[11px] text-slate-600 transition-all duration-200">
+          {timeAgo(run.started_at)}
+        </span>
+      </div>
+      <div className="flex items-center gap-3 text-[11px] text-slate-500">
+        <span>{formatDuration(run.duration_ms)}</span>
+        <span>exit {run.exit_code}</span>
+      </div>
+      {!run.success && run.stderr_tail && (
+        <p className="text-[11px] text-red-400/80 mt-1.5 truncate">
+          {run.stderr_tail.split('\n')[0]}
+        </p>
+      )}
+    </div>
+  )
+}
+
+// ── Lead row ─────────────────────────────────────────────────────────────────
+
+interface LeadRowProps {
+  lead: NewLead
+  index: number
+  isNew: boolean
+}
+
+function LeadRow({ lead, index, isNew }: LeadRowProps) {
+  return (
+    <div
+      className={[
+        'rounded-lg p-3 border transition-all duration-100',
+        'bg-slate-900 border-slate-800',
+        'hover:bg-slate-800/50',
+        isNew ? 'border-l-2' : '',
+      ].join(' ')}
+      style={{
+        animation: `fade-slide-up 240ms ease-out ${index * 40}ms both${isNew ? ', new-item-flash 1400ms ease-out forwards' : ''}`,
+      }}
+    >
+      <div className="flex items-center justify-between mb-1">
+        <span className="text-sm font-medium text-slate-200">{lead.name}</span>
+        <span
+          className={`text-xs font-mono transition-all duration-200 ${
+            lead.score >= 50
+              ? 'text-emerald-400'
+              : lead.score >= 30
+              ? 'text-amber-400'
+              : 'text-slate-500'
+          }`}
+        >
+          {lead.score}
+        </span>
+      </div>
+      <div className="flex items-center gap-3 text-[11px] text-slate-500">
+        <span>{lead.businessArm}</span>
+        {lead.source && <span>via {lead.source}</span>}
+      </div>
+    </div>
+  )
 }
 
 // ── Briefing Viewer ─────────────────────────────────────────────────────────
@@ -48,29 +200,27 @@ function BriefingViewer() {
   }, [selectedDate])
 
   if (loading) {
-    return <p className="text-xs text-slate-500">Loading briefings...</p>
+    return <LoadingSkeleton rows={3} />
   }
 
   if (dates.length === 0) {
     return (
-      <div className="bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg p-4">
-        <p className="text-xs text-slate-500">No daily briefings yet. Run the daily-briefing job to generate one.</p>
-      </div>
+      <EmptyState message="No daily briefings yet. Run the daily-briefing job to generate one." />
     )
   }
 
   return (
     <div>
       {/* Date selector */}
-      <div className="flex items-center gap-2 mb-3 overflow-x-auto">
+      <div className="flex items-center gap-2 mb-3 overflow-x-auto animate-fade-slide-down">
         {dates.slice(0, 10).map(date => (
           <button
             key={date}
             onClick={() => setSelectedDate(date)}
             className={`px-2.5 py-1 text-xs rounded-md border whitespace-nowrap transition-colors ${
               selectedDate === date
-                ? 'bg-blue-600/20 border-blue-500/30 text-blue-500 dark:text-blue-400'
-                : 'bg-slate-200 dark:bg-slate-800 border-slate-300 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
+                ? 'bg-blue-600/20 border-blue-500/30 text-blue-400'
+                : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-slate-200'
             }`}
           >
             {date}
@@ -79,12 +229,14 @@ function BriefingViewer() {
       </div>
 
       {/* Content */}
-      <div className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg overflow-hidden">
+      <div className="bg-slate-900 border border-slate-800 rounded-lg overflow-hidden">
         {content === null ? (
-          <p className="text-xs text-slate-500 p-4">Loading...</p>
+          <div className="p-4">
+            <LoadingSkeleton rows={5} />
+          </div>
         ) : (
-          <div className="p-4 max-h-[60vh] overflow-y-auto">
-            <pre className="text-xs text-slate-700 dark:text-slate-300 whitespace-pre-wrap font-mono leading-relaxed">
+          <div className="p-4 max-h-[60vh] overflow-y-auto animate-fade-slide-up">
+            <pre className="text-xs text-slate-300 whitespace-pre-wrap font-mono leading-relaxed">
               {content}
             </pre>
           </div>
@@ -99,6 +251,12 @@ function BriefingViewer() {
 export function ActivityPanel() {
   const [tab, setTab] = useState<'feed' | 'briefing'>('feed')
 
+  // Track which item keys were present on the previous render so we can flag truly new ones
+  const prevRunKeysRef = useRef<Set<string>>(new Set())
+  const prevLeadKeysRef = useRef<Set<string>>(new Set())
+  const [newRunKeys, setNewRunKeys] = useState<Set<string>>(new Set())
+  const [newLeadKeys, setNewLeadKeys] = useState<Set<string>>(new Set())
+
   const { data: history, loading: loadingHistory } = usePolling<JobRun[]>(
     () => window.api.getSchedulerHistory(),
     15000,
@@ -108,26 +266,50 @@ export function ActivityPanel() {
     30000,
   )
 
-  if (loadingHistory && loadingLeads) {
-    return <div className="text-slate-500 text-sm">Loading activity...</div>
-  }
+  // Detect genuinely new run items across polls
+  useEffect(() => {
+    if (!history) return
+    const incoming = new Set(history.map(r => `${r.job}-${r.started_at}`))
+    const fresh = new Set([...incoming].filter(k => !prevRunKeysRef.current.has(k)))
+    if (prevRunKeysRef.current.size > 0 && fresh.size > 0) {
+      setNewRunKeys(fresh)
+      const t = setTimeout(() => setNewRunKeys(new Set()), 2000)
+      return () => clearTimeout(t)
+    }
+    prevRunKeysRef.current = incoming
+  }, [history])
+
+  // Detect genuinely new lead items across polls
+  useEffect(() => {
+    if (!newLeads) return
+    const incoming = new Set(newLeads.map(l => l.name))
+    const fresh = new Set([...incoming].filter(k => !prevLeadKeysRef.current.has(k)))
+    if (prevLeadKeysRef.current.size > 0 && fresh.size > 0) {
+      setNewLeadKeys(fresh)
+      const t = setTimeout(() => setNewLeadKeys(new Set()), 2000)
+      return () => clearTimeout(t)
+    }
+    prevLeadKeysRef.current = incoming
+  }, [newLeads])
 
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
         <div>
           <h2 className="text-lg font-semibold">Activity</h2>
-          <p className="text-xs text-slate-500 mt-0.5">Recent system activity, leads, and daily briefings</p>
+          <p className="text-xs text-slate-500 mt-0.5">
+            Recent system activity, leads, and daily briefings
+          </p>
         </div>
-        <div className="flex bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg overflow-hidden">
+        <div className="flex bg-slate-900 border border-slate-800 rounded-lg overflow-hidden">
           {(['feed', 'briefing'] as const).map(t => (
             <button
               key={t}
               onClick={() => setTab(t)}
               className={`px-3 py-1.5 text-xs transition-colors ${
                 tab === t
-                  ? 'bg-slate-300 dark:bg-slate-700 text-slate-900 dark:text-white'
-                  : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
+                  ? 'bg-slate-700 text-white'
+                  : 'text-slate-400 hover:text-slate-200'
               }`}
             >
               {t === 'feed' ? 'Activity Feed' : 'Daily Briefing'}
@@ -142,73 +324,47 @@ export function ActivityPanel() {
         <div className="grid grid-cols-2 gap-6">
           {/* Job runs */}
           <div>
-            <h3 className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-3">
-              Job Runs
-            </h3>
+            <SectionHeader>Job Runs</SectionHeader>
             <div className="space-y-2">
-              {!history || history.length === 0 ? (
-                <p className="text-xs text-slate-500 bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg p-4">
-                  No runs recorded yet.
-                </p>
+              {loadingHistory ? (
+                <LoadingSkeleton rows={4} />
+              ) : !history || history.length === 0 ? (
+                <EmptyState message="No runs recorded yet." />
               ) : (
-                history.slice(-15).reverse().map((run, i) => (
-                  <div
-                    key={i}
-                    className="bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg p-3"
-                  >
-                    <div className="flex items-center justify-between mb-1">
-                      <div className="flex items-center gap-2">
-                        <StatusBadge status={run.success ? 'ok' : 'fail'} />
-                        <span className="text-sm font-medium text-slate-800 dark:text-slate-200">{run.job}</span>
-                      </div>
-                      <span className="text-[11px] text-slate-400 dark:text-slate-600">{timeAgo(run.started_at)}</span>
-                    </div>
-                    <div className="flex items-center gap-3 text-[11px] text-slate-500">
-                      <span>{formatDuration(run.duration_ms)}</span>
-                      <span>exit {run.exit_code}</span>
-                    </div>
-                    {!run.success && run.stderr_tail && (
-                      <p className="text-[11px] text-red-500 dark:text-red-400/80 mt-1.5 truncate">
-                        {run.stderr_tail.split('\n')[0]}
-                      </p>
-                    )}
-                  </div>
-                ))
+                history
+                  .slice(-15)
+                  .reverse()
+                  .map((run, i) => {
+                    const key = `${run.job}-${run.started_at}`
+                    return (
+                      <JobRunRow
+                        key={key}
+                        run={run}
+                        index={i}
+                        isNew={newRunKeys.has(key)}
+                      />
+                    )
+                  })
               )}
             </div>
           </div>
 
           {/* New leads */}
           <div>
-            <h3 className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-3">
-              New Leads (24h)
-            </h3>
+            <SectionHeader>New Leads (24h)</SectionHeader>
             <div className="space-y-2">
-              {!newLeads || newLeads.length === 0 ? (
-                <p className="text-xs text-slate-500 bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg p-4">
-                  No new leads in the last 24 hours.
-                </p>
+              {loadingLeads ? (
+                <LoadingSkeleton rows={4} />
+              ) : !newLeads || newLeads.length === 0 ? (
+                <EmptyState message="No new leads in the last 24 hours." />
               ) : (
                 newLeads.map((lead, i) => (
-                  <div
-                    key={i}
-                    className="bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg p-3"
-                  >
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-sm font-medium text-slate-800 dark:text-slate-200">{lead.name}</span>
-                      <span className={`text-xs font-mono ${
-                        lead.score >= 50 ? 'text-emerald-500 dark:text-emerald-400'
-                          : lead.score >= 30 ? 'text-amber-500 dark:text-amber-400'
-                          : 'text-slate-500 dark:text-slate-400'
-                      }`}>
-                        {lead.score}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-3 text-[11px] text-slate-500">
-                      <span>{lead.businessArm}</span>
-                      {lead.source && <span>via {lead.source}</span>}
-                    </div>
-                  </div>
+                  <LeadRow
+                    key={lead.name}
+                    lead={lead}
+                    index={i}
+                    isNew={newLeadKeys.has(lead.name)}
+                  />
                 ))
               )}
             </div>

@@ -58,7 +58,16 @@ function LeadDrawer({ name, onClose }: { name: string; onClose: () => void }) {
         </div>
 
         {loading ? (
-          <div className="p-6 text-sm text-slate-500">Loading lead details...</div>
+          <div className="p-6 space-y-3">
+            <div className="h-6 w-2/3 rounded-md bg-slate-200 dark:bg-slate-800 animate-shimmer" />
+            <div className="h-4 w-1/3 rounded-md bg-slate-200 dark:bg-slate-800 animate-shimmer" style={{ animationDelay: '0.1s' }} />
+            <div className="grid grid-cols-2 gap-3 mt-4">
+              {[...Array(4)].map((_, i) => (
+                <div key={i} className="h-12 rounded-lg bg-slate-200 dark:bg-slate-800 animate-shimmer" style={{ animationDelay: `${0.05 * i}s` }} />
+              ))}
+            </div>
+            <div className="h-16 rounded-lg bg-slate-200 dark:bg-slate-800 animate-shimmer" style={{ animationDelay: '0.25s' }} />
+          </div>
         ) : !lead ? (
           <div className="p-6 text-sm text-slate-500">Lead not found in graph.</div>
         ) : (
@@ -201,7 +210,17 @@ export function PipelinePanel() {
   )
 
   if (loadingStages || loadingHot) {
-    return <div className="text-slate-500 dark:text-slate-500 text-sm">Loading pipeline data...</div>
+    return (
+      <div className="space-y-3 py-2">
+        {[...Array(6)].map((_, i) => (
+          <div
+            key={i}
+            className="h-8 rounded-md bg-slate-800 animate-shimmer"
+            style={{ animationDelay: `${i * 0.08}s` }}
+          />
+        ))}
+      </div>
+    )
   }
 
   const totalLeads = stages?.reduce((sum, s) => sum + s.total, 0) || 0
@@ -255,7 +274,12 @@ export function PipelinePanel() {
               </span>
             </div>
             {searchResults.length === 0 ? (
-              <p className="text-xs text-slate-500 p-4">No leads found.</p>
+              <div className="flex flex-col items-center gap-2 py-6 px-4 animate-card-enter">
+                <svg className="w-6 h-6 text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" />
+                </svg>
+                <p className="text-xs text-slate-500">No leads found.</p>
+              </div>
             ) : (
               <table className="w-full text-sm">
                 <thead>
@@ -273,12 +297,16 @@ export function PipelinePanel() {
                   {searchResults.map((lead, i) => (
                     <tr
                       key={i}
-                      className="border-b border-slate-200/70 dark:border-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-800/30 cursor-pointer"
+                      className="stagger-item border-b border-slate-200/70 dark:border-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-800/50 transition-all duration-100 cursor-pointer"
                       onClick={() => setSelectedLead(lead.name)}
                     >
                       <td className="px-4 py-2.5 text-slate-800 dark:text-slate-200 font-medium">{lead.name}</td>
                       <td className="px-4 py-2.5 text-xs text-slate-500 dark:text-slate-400">{lead.businessArm}</td>
-                      <td className={`px-4 py-2.5 text-right font-mono ${scoreColor(lead.score)}`}>{lead.score}</td>
+                      <td className="px-4 py-2.5 text-right">
+                        <span className={`inline-block px-2 py-0.5 rounded border text-xs font-mono font-semibold animate-card-enter ${scoreBadge(lead.score)}`}>
+                          {lead.score}
+                        </span>
+                      </td>
                       <td className="px-4 py-2.5 text-xs text-slate-500 dark:text-slate-400">{lead.stage || '-'}</td>
                       <td className="px-4 py-2.5 text-xs text-slate-500 dark:text-slate-400">{lead.location || '-'}</td>
                       <td className="px-4 py-2.5 text-xs text-slate-500 dark:text-slate-400">{lead.ehr || '-'}</td>
@@ -308,11 +336,13 @@ export function PipelinePanel() {
               </thead>
               <tbody>
                 {stages?.map(s => (
-                  <tr key={s.stage} className="border-b border-slate-200/70 dark:border-slate-800/50">
+                  <tr key={s.stage} className="stagger-item border-b border-slate-200/70 dark:border-slate-800/50">
                     <td className="px-4 py-2.5 text-slate-800 dark:text-slate-200">{s.stage}</td>
                     <td className="px-4 py-2.5 text-right font-mono">{s.total}</td>
-                    <td className={`px-4 py-2.5 text-right font-mono ${scoreColor(s.avgScore)}`}>
-                      {s.avgScore}
+                    <td className="px-4 py-2.5 text-right font-mono">
+                      <span className={`inline-block px-2 py-0.5 rounded border text-xs font-mono font-semibold animate-card-enter ${scoreBadge(s.avgScore)}`}>
+                        {s.avgScore}
+                      </span>
                     </td>
                     <td className="px-4 py-2.5 text-xs text-slate-500">
                       {Object.entries(s.byArm).map(([arm, cnt]) => `${arm}: ${cnt}`).join(', ')}
@@ -328,7 +358,12 @@ export function PipelinePanel() {
           <h3 className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-3">By Territory</h3>
           <div className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg overflow-hidden">
             {!territories || territories.length === 0 ? (
-              <p className="text-xs text-slate-500 p-4">No territory data.</p>
+              <div className="flex flex-col items-center gap-2 py-6 px-4 animate-card-enter">
+                <svg className="w-6 h-6 text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 6.75V15m6-6v8.25m.503 3.498 4.875-2.437c.381-.19.622-.58.622-1.006V4.82c0-.836-.88-1.38-1.628-1.006l-3.869 1.934c-.317.159-.69.159-1.006 0L9.503 3.252a1.125 1.125 0 0 0-1.006 0L3.622 5.689C3.24 5.88 3 6.27 3 6.695V19.18c0 .836.88 1.38 1.628 1.006l3.869-1.934c.317-.159.69-.159 1.006 0l4.994 2.497c.317.158.69.158 1.006 0Z" />
+                </svg>
+                <p className="text-xs text-slate-500">No territory data.</p>
+              </div>
             ) : (
               <table className="w-full text-sm">
                 <thead>
@@ -340,11 +375,13 @@ export function PipelinePanel() {
                 </thead>
                 <tbody>
                   {territories.map(t => (
-                    <tr key={t.territory} className="border-b border-slate-200/70 dark:border-slate-800/50">
+                    <tr key={t.territory} className="stagger-item border-b border-slate-200/70 dark:border-slate-800/50 hover:scale-[1.01] transition-all duration-150">
                       <td className="px-4 py-2.5 text-slate-800 dark:text-slate-200">{t.territory}</td>
                       <td className="px-4 py-2.5 text-right font-mono">{t.leads}</td>
-                      <td className={`px-4 py-2.5 text-right font-mono ${scoreColor(t.avgScore)}`}>
-                        {t.avgScore}
+                      <td className="px-4 py-2.5 text-right font-mono">
+                        <span className={`inline-block px-2 py-0.5 rounded border text-xs font-mono font-semibold animate-card-enter ${scoreBadge(t.avgScore)}`}>
+                          {t.avgScore}
+                        </span>
                       </td>
                     </tr>
                   ))}
@@ -361,7 +398,13 @@ export function PipelinePanel() {
       </h3>
       <div className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg overflow-hidden">
         {!hotLeads || hotLeads.length === 0 ? (
-          <p className="text-xs text-slate-500 p-4">No hot leads.</p>
+          <div className="flex flex-col items-center gap-2 py-6 px-4 animate-card-enter">
+            <svg className="w-6 h-6 text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15.362 5.214A8.252 8.252 0 0 1 12 21 8.25 8.25 0 0 1 6.038 7.047 8.287 8.287 0 0 0 9 9.601a8.983 8.983 0 0 1 3.361-6.867 8.21 8.21 0 0 0 3 2.48Z" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 18a3.75 3.75 0 0 0 .495-7.468 5.99 5.99 0 0 0-1.925 3.547 5.975 5.975 0 0 1-2.133-1.001A3.75 3.75 0 0 0 12 18Z" />
+            </svg>
+            <p className="text-xs text-slate-500">No hot leads.</p>
+          </div>
         ) : (
           <table className="w-full text-sm">
             <thead>
@@ -378,13 +421,15 @@ export function PipelinePanel() {
               {hotLeads.map((lead, i) => (
                 <tr
                   key={i}
-                  className="border-b border-slate-200/70 dark:border-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-800/30 cursor-pointer"
+                  className="stagger-item border-b border-slate-200/70 dark:border-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-800/50 transition-all duration-100 cursor-pointer"
                   onClick={() => setSelectedLead(lead.name)}
                 >
                   <td className="px-4 py-2.5 text-slate-800 dark:text-slate-200 font-medium">{lead.name}</td>
                   <td className="px-4 py-2.5 text-xs text-slate-500 dark:text-slate-400">{lead.businessArm}</td>
-                  <td className={`px-4 py-2.5 text-right font-mono ${scoreColor(lead.score)}`}>
-                    {lead.score}
+                  <td className="px-4 py-2.5 text-right">
+                    <span className={`inline-block px-2 py-0.5 rounded border text-xs font-mono font-semibold animate-card-enter ${scoreBadge(lead.score)}`}>
+                      {lead.score}
+                    </span>
                   </td>
                   <td className="px-4 py-2.5 text-xs text-slate-500 dark:text-slate-400">{lead.stage || '-'}</td>
                   <td className="px-4 py-2.5 text-xs text-slate-500 dark:text-slate-400">{lead.ehr || '-'}</td>

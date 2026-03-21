@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import type { VaultEntry } from '../../types'
 import { FileContextMenu } from './FileContextMenu'
 
@@ -50,15 +50,49 @@ interface TreeNodeProps {
   refreshKey: number
 }
 
-function TreeNode({ entry, depth, selectedFiles, onToggleSelect, onPreview, onOpenInEditor, previewPath, filterPaths, onContextMenu, refreshKey }: TreeNodeProps) {
+function TreeNode({
+  entry,
+  depth,
+  selectedFiles,
+  onToggleSelect,
+  onPreview,
+  onOpenInEditor,
+  previewPath,
+  filterPaths,
+  onContextMenu,
+  refreshKey,
+}: TreeNodeProps) {
   const shouldAutoExpand = depth === 0 && entry.isDirectory && AUTO_EXPAND.has(entry.name)
   const [expanded, setExpanded] = useState(shouldAutoExpand)
   const [children, setChildren] = useState<VaultEntry[]>([])
   const [loaded, setLoaded] = useState(false)
 
+  // --- Animation: new-file flash ---
+  // Track the previous child count to detect newly added files.
+  const prevChildCountRef = useRef<number | null>(null)
+  const [flashingPaths, setFlashingPaths] = useState<Set<string>>(new Set())
+
+  // --- Animation: active-file highlight ---
+  // Re-trigger card-enter animation when this file becomes the previewed one.
+  const [cardEnterKey, setCardEnterKey] = useState(0)
+  const prevPreviewedRef = useRef(false)
+
   const loadChildren = useCallback(async () => {
     try {
       const entries = await window.api.vaultList(entry.path)
+
+      // Detect newly added files (after initial load)
+      if (prevChildCountRef.current !== null && entries.length > prevChildCountRef.current) {
+        const incoming = entries.slice(prevChildCountRef.current)
+        const newPaths = new Set(incoming.map((e) => e.path))
+        setFlashingPaths(newPaths)
+        // Remove flash classes after animation completes (1 s + small buffer)
+        setTimeout(() => {
+          setFlashingPaths(new Set())
+        }, 1200)
+      }
+      prevChildCountRef.current = entries.length
+
       setChildren(entries)
       setLoaded(true)
     } catch { /* skip */ }
@@ -69,6 +103,15 @@ function TreeNode({ entry, depth, selectedFiles, onToggleSelect, onPreview, onOp
       loadChildren()
     }
   }, [expanded, loadChildren, refreshKey])
+
+  // Trigger card-enter animation each time this node transitions into previewed state
+  const isPreviewed = previewPath === entry.path
+  useEffect(() => {
+    if (isPreviewed && !prevPreviewedRef.current) {
+      setCardEnterKey((k) => k + 1)
+    }
+    prevPreviewedRef.current = isPreviewed
+  }, [isPreviewed])
 
   const handleClick = () => {
     if (entry.isDirectory) {
@@ -85,14 +128,13 @@ function TreeNode({ entry, depth, selectedFiles, onToggleSelect, onPreview, onOp
   }
 
   const isSelected = selectedFiles.has(entry.path)
-  const isPreviewed = previewPath === entry.path
 
   if (filterPaths && !entry.isDirectory && !filterPaths.has(entry.path)) {
     return null
   }
 
   const filteredChildren = filterPaths
-    ? children.filter(c => c.isDirectory || filterPaths.has(c.path))
+    ? children.filter((c) => c.isDirectory || filterPaths.has(c.path))
     : children
 
   if (filterPaths && entry.isDirectory && loaded && filteredChildren.length === 0) {
@@ -101,15 +143,44 @@ function TreeNode({ entry, depth, selectedFiles, onToggleSelect, onPreview, onOp
 
   return (
     <div>
+      {/*
+        Row element.
+
+        Animations applied here:
+        - Feature 2: hover translate + bg (transition-all duration-100 hover:bg-slate-800/50 hover:translate-x-0.5)
+        - Feature 3: active file highlight — border-l-2 border-blue-500 + animate-card-enter
+                     The `key` on the wrapping span forces React to remount the element,
+                     restarting the CSS animation on each selection change.
+        - Feature 4: new-file flash — animate-new-file-flash inset box-shadow
+      */}
       <div
-        className={`flex items-center gap-1 py-0.5 px-1 cursor-pointer rounded text-sm group transition-colors ${
-          isPreviewed ? 'bg-blue-600/20 text-blue-300' : 'hover:bg-slate-800/60 text-slate-400'
-        }`}
+        className={[
+          'flex items-center gap-1 py-0.5 px-1 cursor-pointer rounded text-sm group',
+          // Feature 2: hover translate + bg
+          'transition-all duration-100 hover:bg-slate-800/50 hover:translate-x-0.5',
+          // Feature 3: previewed state base colors (animation handles the flash on entry)
+          isPreviewed
+            ? 'bg-blue-600/20 text-blue-300 border-l-2 border-blue-500'
+            : 'text-slate-400 border-l-2 border-transparent',
+          // Feature 4: new-file flash
+          !entry.isDirectory && flashingPaths.has(entry.path) ? 'animate-new-file-flash' : '',
+        ]
+          .filter(Boolean)
+          .join(' ')}
         style={{ paddingLeft: `${depth * 14 + 4}px` }}
         onClick={handleClick}
         onDoubleClick={handleDoubleClick}
         onContextMenu={(e) => onContextMenu(e, entry)}
       >
+        {/* Feature 3: remount span to restart card-enter animation on each selection */}
+        {isPreviewed && (
+          <span
+            key={cardEnterKey}
+            className="animate-card-enter absolute inset-0 rounded pointer-events-none"
+            aria-hidden="true"
+          />
+        )}
+
         {!entry.isDirectory && (
           <input
             type="checkbox"
@@ -124,8 +195,19 @@ function TreeNode({ entry, depth, selectedFiles, onToggleSelect, onPreview, onOp
         )}
 
         {entry.isDirectory ? (
-          <span className="w-4 text-center text-slate-500 shrink-0 text-xs">
-            {expanded ? '\u25BC' : '\u25B6'}
+          /*
+            Feature 5: chevron rotation.
+            ▶ (▶ U+25B6) is the collapsed state; we rotate it 90° when expanded.
+            transition-transform duration-200 handles the smooth rotation.
+          */
+          <span
+            className={[
+              'w-4 text-center text-slate-500 shrink-0 text-xs inline-block',
+              'transition-transform duration-200',
+              expanded ? 'rotate-90' : 'rotate-0',
+            ].join(' ')}
+          >
+            {'\u25B6'}
           </span>
         ) : (
           <span className="w-4 text-center text-slate-600 shrink-0 text-[9px] font-mono">
@@ -138,9 +220,27 @@ function TreeNode({ entry, depth, selectedFiles, onToggleSelect, onPreview, onOp
         </span>
       </div>
 
-      {expanded && entry.isDirectory && (
-        <div>
-          {filteredChildren.map(child => (
+      {/*
+        Feature 1: folder expand/collapse animation.
+        We always render the children wrapper div so the CSS transition has
+        something to animate between. Visibility is controlled via max-height
+        and opacity rather than conditional rendering.
+
+        max-height is set high enough (2000px) to accommodate deep subtrees.
+        The ease-out timing ensures snappy open and gentle close.
+      */}
+      {entry.isDirectory && (
+        <div
+          style={{
+            overflow: 'hidden',
+            maxHeight: expanded ? '2000px' : '0px',
+            opacity: expanded ? 1 : 0,
+            transition: expanded
+              ? 'max-height 200ms ease-out, opacity 150ms ease-out'
+              : 'max-height 180ms ease-in, opacity 120ms ease-in',
+          }}
+        >
+          {filteredChildren.map((child) => (
             <TreeNode
               key={child.path}
               entry={child}
@@ -156,7 +256,10 @@ function TreeNode({ entry, depth, selectedFiles, onToggleSelect, onPreview, onOp
             />
           ))}
           {!loaded && (
-            <div className="text-slate-600 text-xs pl-6" style={{ paddingLeft: `${(depth + 1) * 14 + 4}px` }}>
+            <div
+              className="text-slate-600 text-xs"
+              style={{ paddingLeft: `${(depth + 1) * 14 + 4}px` }}
+            >
               Loading...
             </div>
           )}
@@ -166,7 +269,14 @@ function TreeNode({ entry, depth, selectedFiles, onToggleSelect, onPreview, onOp
   )
 }
 
-export function FileTree({ selectedFiles, onToggleSelect, onPreview, onOpenInEditor, previewPath, filterPaths }: FileTreeProps) {
+export function FileTree({
+  selectedFiles,
+  onToggleSelect,
+  onPreview,
+  onOpenInEditor,
+  previewPath,
+  filterPaths,
+}: FileTreeProps) {
   const [rootEntries, setRootEntries] = useState<VaultEntry[]>([])
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null)
   const [refreshKey, setRefreshKey] = useState(0)
@@ -175,7 +285,9 @@ export function FileTree({ selectedFiles, onToggleSelect, onPreview, onOpenInEdi
     window.api.vaultList('').then(setRootEntries).catch(() => {})
   }, [])
 
-  useEffect(() => { loadRoot() }, [loadRoot, refreshKey])
+  useEffect(() => {
+    loadRoot()
+  }, [loadRoot, refreshKey])
 
   const handleContextMenu = useCallback((e: React.MouseEvent, entry: VaultEntry) => {
     e.preventDefault()
@@ -183,12 +295,12 @@ export function FileTree({ selectedFiles, onToggleSelect, onPreview, onOpenInEdi
   }, [])
 
   const handleRefresh = useCallback(() => {
-    setRefreshKey(k => k + 1)
+    setRefreshKey((k) => k + 1)
   }, [])
 
   return (
     <div className="overflow-y-auto h-full py-1 text-xs relative">
-      {rootEntries.map(entry => (
+      {rootEntries.map((entry) => (
         <TreeNode
           key={entry.path}
           entry={entry}
