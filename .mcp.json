@@ -17,7 +17,18 @@
     },
     "memory": {
       "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-memory"]
+      "args": ["-y", "@modelcontextprotocol/server-memory"],
+      "env": {
+        "MEMORY_FILE_PATH": "/Users/fuzeelogik/sidekick/analytics/data/memory-graph.json"
+      }
+    },
+    "browserbase": {
+      "command": "npx",
+      "args": ["-y", "@anthropic-ai/mcp-server-browserbase@latest"],
+      "env": {
+        "BROWSERBASE_API_KEY": "bb_live_Lx-Uh-p9yrX8GcNZ76hj6wQlias",
+        "BROWSERBASE_PROJECT_ID": "9695e93a-91ab-4fcc-9a21-f96de490fecd"
+      }
     },
     "ddg-search": {
       "command": "uvx",

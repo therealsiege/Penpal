@@ -17,6 +17,7 @@
     "npi:activate": "tsx src/etl/sales/npi-activator.ts",
     "npi:enrich": "tsx src/etl/sales/npi-enricher.ts",
     "briefing": "tsx src/etl/sales/daily-briefing.ts",
+    "memory:sync": "tsx src/etl/memory-sync.ts",
     "health": "tsx src/scheduler/health.ts",
     "scheduler": "tsx src/scheduler/runner.ts",
     "scheduler:status": "tsx src/scheduler/runner.ts --status",
