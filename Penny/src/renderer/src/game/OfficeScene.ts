@@ -90,12 +90,12 @@ const WORKSTATION_H   = 77 // ~20% tighter office footprint
 const ROOM_PADDING    = 12
 const ROOM_TOP_EXTRA  = 30   // extra top padding so thought bubbles clear room headers
 const ROOM_HEADER_H   = 20
-const ROOM_GAP        = 10
+const ROOM_GAP        = 18
 const MAX_AGENTS_PER_ROW = 4
 const TEAM_AREA_PAD_X = 18
 const TEAM_AREA_PAD_Y = 18
-const TEAM_AREA_GAP_X = 18
-const TEAM_AREA_GAP_Y = 16
+const TEAM_AREA_GAP_X = 28
+const TEAM_AREA_GAP_Y = 40
 const TEAM_LABEL_H = 16
 
 const WS_CHAIR_Y    = 6
@@ -273,6 +273,7 @@ interface Room {
   floorTileSprites?: Phaser.GameObjects.Sprite[]
   miniWhiteboard?: Phaser.GameObjects.Container
   miniWhiteboardTexts?: Phaser.GameObjects.Text[]
+  doorSide: 'top' | 'bottom'
 }
 
 // ---------------------------------------------------------------------------
@@ -374,6 +375,7 @@ export class OfficeScene extends Phaser.Scene {
   private coffeeRunTimer: Phaser.Time.TimerEvent | null = null
   private navMesh = new NavMesh()
   private coffeeRunners: Set<string> = new Set()  // agent IDs currently on coffee run
+  private coffeeRunnerRooms: Set<string> = new Set()  // room CWDs with active coffee runners
   private cafeWorldX = 0
   private cafeWorldY = 0
   private decoTweens: Phaser.Tweens.Tween[] = []
@@ -588,6 +590,17 @@ export class OfficeScene extends Phaser.Scene {
       frameWidth: CHAR_FRAME_W,
       frameHeight: CHAR_FRAME_H,
     })
+    // Individual animation strips (_256 PNGs, 256×512 per frame — same as main spritesheet)
+    // Walk: 3072×512 = 12 frames (step-A: 8 rotations + step-B: 4 rotations)
+    // Idle: 1024×512 = 4 frames (4 rotations)
+    // Sit:  1024×512 = 4 frames (4 rotations)
+    const ANIM_FW = 256, ANIM_FH = 512
+    this.load.spritesheet('anim-walk-1', '/sprites/walk-1.png', { frameWidth: ANIM_FW, frameHeight: ANIM_FH })
+    this.load.spritesheet('anim-walk-2', '/sprites/walk-2.png', { frameWidth: ANIM_FW, frameHeight: ANIM_FH })
+    this.load.spritesheet('anim-idle-1', '/sprites/idle-1.png', { frameWidth: ANIM_FW, frameHeight: ANIM_FH })
+    this.load.spritesheet('anim-idle-2', '/sprites/idle-2.png', { frameWidth: ANIM_FW, frameHeight: ANIM_FH })
+    this.load.spritesheet('anim-sit-1',  '/sprites/sit-1.png',  { frameWidth: ANIM_FW, frameHeight: ANIM_FH })
+    this.load.spritesheet('anim-sit-2',  '/sprites/sit-2.png',  { frameWidth: ANIM_FW, frameHeight: ANIM_FH })
     this.load.on('filecomplete-spritesheet-office', () => { this.officeTilesLoaded = true })
     this.load.on('filecomplete-spritesheet-rooms',  () => { this.roomTilesLoaded   = true })
   }
@@ -1394,6 +1407,7 @@ export class OfficeScene extends Phaser.Scene {
       badgeDotTween: null,
       heatOverlay,
       heatTween: undefined,
+      doorSide: 'bottom',
     }
 
     this.drawRoomBackground(room)
@@ -1523,40 +1537,7 @@ export class OfficeScene extends Phaser.Scene {
     // Tiled floor texture sprites — subtly layered over the flat floor fill.
     // Each style picks a different region of the room-tiles spritesheet (48x48 frames).
     // Alpha is kept very low (0.08–0.12) so the texture reads as grain, not replacement art.
-    if (this.roomTilesLoaded) {
-      // Frame selection per style:
-      //   Style 0 (blue)   → wood plank area  — rows 4–5, frames 24–29
-      //   Style 1 (teal)   → lighter tile area — rows 2–3, frames 12–17
-      //   Style 2 (purple) → stone/carpet area — rightmost column, frames 30–35
-      const frameRanges: [number, number][] = [
-        [24, 29],
-        [12, 17],
-        [30, 35],
-      ]
-      const [frameStart, frameEnd] = frameRanges[styleIdx]
-      const frameCount = frameEnd - frameStart + 1
-
-      const tileCols = Math.ceil(floorW / ROOM_TILE_SIZE)
-      const tileRows = Math.ceil(floorH / ROOM_TILE_SIZE)
-      const tileAlpha = styleIdx === 2 ? 0.1 : 0.08
-
-      room.floorTileSprites = []
-      for (let tRow = 0; tRow < tileRows; tRow++) {
-        for (let tCol = 0; tCol < tileCols; tCol++) {
-          // Alternate frames across the grid for a varied texture impression
-          const frame = frameStart + ((tRow * tileCols + tCol) % frameCount)
-          const sx = floorX + tCol * ROOM_TILE_SIZE + ROOM_TILE_SIZE / 2
-          const sy = floorY + tRow * ROOM_TILE_SIZE + ROOM_TILE_SIZE / 2
-          const spr = this.add.sprite(sx, sy, 'rooms', frame)
-          spr.setScale(1)
-          spr.setAlpha(tileAlpha)
-          room.container.add(spr)
-          // Move behind future Graphics draws (floorGraphics sits at index 0 of the container)
-          room.container.moveDown(spr)
-          room.floorTileSprites.push(spr)
-        }
-      }
-    }
+    // Floor tile sprites removed — they created a muddy gray overlay at low alpha
 
     // Slight room rug variation to avoid identical project spaces.
     const rugInsetX = 8
@@ -1832,7 +1813,10 @@ export class OfficeScene extends Phaser.Scene {
     const doorW = Math.max(20, Math.min(34, floorW * 0.22))
     const doorH = 12
     const doorLeftX = -doorW / 2
-    const doorY = h / 2 - WALL_T - WALL_I - doorH
+    // Bottom door: near bottom wall. Top door: near top wall (below header).
+    const doorY = room.doorSide === 'top'
+      ? -h / 2 + WALL_T + WALL_I + 16  // below header area
+      : h / 2 - WALL_T - WALL_I - doorH
 
     // Frame drawn in container space — static, does not scale with swing.
     const fg = room.doorFrameGraphics
@@ -2409,13 +2393,18 @@ export class OfficeScene extends Phaser.Scene {
   }
 
   private updateWorkstation(ws: WorkstationSprite, agent: AgentState): void {
-    // Safety: ensure container is always visible for existing workstations
-    // If agent was on coffee run but is now working, cancel the visual dim
+    // If agent is on a coffee run, keep desk sprite hidden and skip all visual updates
     if (this.coffeeRunners.has(agent.config.id)) {
       const m = agent.sessionMode
       if (m === 'working' || m === 'plan' || agent.needsInteraction) {
+        // Agent started working — cancel the coffee run visual
         this.coffeeRunners.delete(agent.config.id)
-        ws.sprite.setAlpha(1)
+        ws.sprite.setVisible(true)
+      } else {
+        // Still on coffee run — hide sprite and skip the rest
+        ws.sprite.setVisible(false)
+        ws.state = agent
+        return
       }
     }
     if (ws.container.alpha < 0.9) ws.container.setAlpha(1)
@@ -3101,7 +3090,11 @@ export class OfficeScene extends Phaser.Scene {
     // Anchor layout from the top-left corner.
     let areaCursorY = 0
 
-    for (const row of rows) {
+    for (let rowIdx = 0; rowIdx < rows.length; rowIdx++) {
+      const row = rows[rowIdx]
+      // Even rows (0, 2, 4…) have doors on bottom, odd rows (1, 3, 5…) on top
+      // This way pairs of rows share a hallway between them
+      const doorSide: 'top' | 'bottom' = rowIdx % 2 === 0 ? 'bottom' : 'top'
       let areaCursorX = 0
       for (const draft of row.drafts) {
         const areaX = WORLD_MARGIN + areaCursorX
@@ -3112,6 +3105,7 @@ export class OfficeScene extends Phaser.Scene {
           if (!local) continue
           room.x = areaX + local.x
           room.y = areaY + local.y
+          room.doorSide = doorSide
           this.tweens.killTweensOf(room.container)
           room.container.setPosition(room.x, room.y)
         }
@@ -3134,6 +3128,10 @@ export class OfficeScene extends Phaser.Scene {
       if (!room.cwd.startsWith('__')) {
         this.refreshRoomHeaderText(room)
       }
+      // Redraw door panel to match assigned doorSide
+      const accentColor = this.getTeamColor(room.teamKey)
+      const floorW = room.width - 12
+      this.drawDoorPanel(room, floorW, accentColor)
     }
 
     let maxX = 0, maxY = 0
@@ -3145,25 +3143,30 @@ export class OfficeScene extends Phaser.Scene {
       maxX = Math.max(maxX, area.x + area.width)
       maxY = Math.max(maxY, area.y + area.height)
     }
-    this.worldWidth  = maxX + WORLD_MARGIN
-    this.worldHeight = maxY + WORLD_MARGIN + 400  // extra for café below
+    // Position café inline — to the right of rooms, aligned with top row
+    const CAFE_LAYOUT_W = 420
+    const CAFE_LAYOUT_H = 180
+    const cafeX = maxX + CAFE_LAYOUT_W / 2 + 40
+    const cafeTopY = WORLD_MARGIN + 20  // align with top of rooms
+    const cafeBottomY = cafeTopY + CAFE_LAYOUT_H
+
+    // World bounds include both rooms and café
+    const totalMaxX = cafeX + CAFE_LAYOUT_W / 2
+    const totalMaxY = Math.max(maxY, cafeBottomY)
+    this.worldWidth  = totalMaxX + WORLD_MARGIN
+    this.worldHeight = totalMaxY + WORLD_MARGIN
     this.tripletDirty = true
 
-    // Draw office background behind rooms — clamp to viewport width
+    // Draw office background — includes both rooms and café
     if (this.officeGraphics) {
-      // The building shell adds PAD(30)+WALL_T(5)+shadow(4)=39px below bgH,
-      // so subtract that from viewport size to keep the wall visible at zoom 1.
-      const bgW = maxX + WORLD_MARGIN * 2
-      const bgH = maxY + WORLD_MARGIN * 2
+      const bgW = totalMaxX + WORLD_MARGIN
+      const bgH = Math.max(maxY, cafeBottomY) + WORLD_MARGIN
       this.drawOfficeBackground(bgW, bgH)
     }
 
-    // Build Penny Café — positioned to the bottom-right, outside the main office rooms
-    // but inside the building background area
+    // Build Penny Café
     if (this.rooms.size > 0) {
-      // Horizontal café centered below the building
-      const cafeCenterX = (WORLD_MARGIN + maxX) / 2 + 100
-      this.buildCafeZone(cafeCenterX, maxY + 30)
+      this.buildCafeZone(cafeX, cafeTopY)
     }
 
     this.rebuildNavMesh()
@@ -3371,9 +3374,13 @@ export class OfficeScene extends Phaser.Scene {
       if (rowRooms.length < 2) continue
       rowRooms.sort((a, b) => a.x - b.x)
 
+      // Place hallway near the doors — use the first room's door side to decide
+      const doorSide = rowRooms[0].doorSide
       const maxBottom = Math.max(...rowRooms.map(r => r.y + r.height / 2))
-      let hallY = maxBottom + ROOM_GAP * 0.45
-      hallY = Math.max(hallY, maxBottom + 2)
+      const minTop = Math.min(...rowRooms.map(r => r.y - r.height / 2))
+      let hallY = doorSide === 'top'
+        ? minTop - ROOM_GAP * 0.45
+        : maxBottom + ROOM_GAP * 0.45
 
       const minX = rowRooms[0].x
       const maxX = rowRooms[rowRooms.length - 1].x
@@ -3431,9 +3438,9 @@ export class OfficeScene extends Phaser.Scene {
 
       // Room connection legs + T-junctions + name plates
       for (const room of rowRooms) {
-        const doorY = room.y + room.height / 2 - 8
-        const legTop = doorY
-        const legBot = hallY - HALL_H / 2
+        const doorY = this.getRoomDoorY(room) - 4
+        const legTop = Math.min(doorY, hallY - HALL_H / 2)
+        const legBot = Math.max(doorY, hallY + HALL_H / 2)
 
         // Vertical leg: filled rect (LEG_W wide)
         if (legBot > legTop) {
@@ -3546,7 +3553,7 @@ export class OfficeScene extends Phaser.Scene {
 
     for (const room of activeRooms) {
       const doorX = room.x
-      const doorY = room.y + room.height / 2
+      const doorY = this.getRoomDoorY(room)
       const ddx = doorX - entranceX
       const ddy = doorY - entranceY
       const totalDist = Math.hypot(ddx, ddy)
@@ -3633,114 +3640,6 @@ export class OfficeScene extends Phaser.Scene {
     const fw = bw - WALL_T * 2
     const fh = bh - WALL_T * 2
 
-    // -------------------------------------------------------------------------
-    // OUTDOOR AREA — drawn BEFORE the building so it sits behind/below it
-    // -------------------------------------------------------------------------
-
-    // --- Sidewalk strip around the building perimeter (subtle lighter border) ---
-    g.fillStyle(0x334155, 0.15)
-    g.fillRect(bx - 8, by - 8, bw + 16, bh + 16)
-    // Crack lines along sidewalk edges
-    g.lineStyle(1, 0x1e293b, 0.1)
-    for (let cx = bx - 8; cx < bx + bw + 8; cx += 40) {
-      g.lineBetween(cx, by - 8, cx, by)
-      g.lineBetween(cx, by + bh, cx, by + bh + 8)
-    }
-    for (let cy = by - 8; cy < by + bh + 8; cy += 40) {
-      g.lineBetween(bx - 8, cy, bx, cy)
-      g.lineBetween(bx + bw, cy, bx + bw + 8, cy)
-    }
-
-    // --- Parking lot (below the building) ---
-    const lotY = by + bh + 8
-    const lotH = 60
-    g.fillStyle(0x1a1a2e, 0.4)
-    g.fillRect(bx, lotY, bw, lotH)
-
-    // Parking space divider lines (vertical dashes every 30px)
-    g.lineStyle(2, 0xffffff, 0.08)
-    for (let lx = bx + 30; lx < bx + bw; lx += 30) {
-      g.lineBetween(lx, lotY + 20, lx, lotY + 40)
-    }
-
-    // Tiny parked cars — 12x6 px rectangles in fixed bays
-    const carBays = [
-      { slot: 2, color: 0x334155 },
-      { slot: 5, color: 0x1e3a5f },
-      { slot: 8, color: 0x3f1f1f },
-    ]
-    for (const car of carBays) {
-      const carX = bx + car.slot * 30 + 4
-      const carY = lotY + 27
-      if (carX + 12 < bx + bw) {
-        g.fillStyle(car.color, 0.25)
-        g.fillRect(carX, carY, 12, 6)
-        // windshield glint
-        g.fillStyle(0x7dd3fc, 0.06)
-        g.fillRect(carX + 2, carY + 1, 4, 2)
-      }
-    }
-
-    // --- Trees / landscaping — left and right of building ---
-    const treePositions = [
-      // Left side
-      { x: bx - 28, y: by + Math.floor(bh * 0.25) },
-      { x: bx - 22, y: by + Math.floor(bh * 0.55) },
-      { x: bx - 30, y: by + Math.floor(bh * 0.75) },
-      // Right side
-      { x: bx + bw + 28, y: by + Math.floor(bh * 0.2) },
-      { x: bx + bw + 22, y: by + Math.floor(bh * 0.5) },
-      { x: bx + bw + 30, y: by + Math.floor(bh * 0.72) },
-    ]
-    for (const tp of treePositions) {
-      // Trunk
-      g.fillStyle(0x78350f, 0.5)
-      g.fillRect(tp.x - 1, tp.y, 2, 6)
-      // Canopy outer
-      g.fillStyle(0x166534, 0.25)
-      g.fillCircle(tp.x, tp.y - 2, 7)
-      // Canopy inner highlight
-      g.fillStyle(0x15803d, 0.1)
-      g.fillCircle(tp.x, tp.y - 4, 4)
-    }
-
-    // --- Street lamps along the parking lot edge ---
-    const lampPositions = [
-      bx + Math.floor(bw * 0.25),
-      bx + Math.floor(bw * 0.72),
-    ]
-    for (const lampX of lampPositions) {
-      // Pole
-      g.fillStyle(0x475569, 0.6)
-      g.fillRect(lampX, lotY - 16, 1, 16)
-      // Lamp head
-      g.fillStyle(0xfbbf24, 0.08)
-      g.fillCircle(lampX, lotY - 17, 3)
-      // Tiny glow halo
-      g.fillStyle(0xfbbf24, 0.03)
-      g.fillCircle(lampX, lotY - 17, 6)
-    }
-
-    // --- Company sign near the parking lot entrance ---
-    const signX = bx + Math.floor(bw * 0.5) - 8
-    const signY = lotY + 6
-    // Sign post
-    g.fillStyle(0x475569, 0.5)
-    g.fillRect(signX + 7, signY, 1, 8)
-    // Sign plate
-    g.fillStyle(0x1e293b, 0.7)
-    g.fillRect(signX, signY, 16, 8)
-    // Sign plate border highlight
-    g.lineStyle(1, 0x334155, 0.4)
-    g.strokeRect(signX, signY, 16, 8)
-    // Penny logo dot — amber accent
-    g.fillStyle(0xf59e0b, 0.35)
-    g.fillCircle(signX + 4, signY + 4, 2)
-
-    // -------------------------------------------------------------------------
-    // END OUTDOOR AREA
-    // -------------------------------------------------------------------------
-
     // Drop shadow (offset behind building)
     g.fillStyle(0x000000, 0.25)
     g.fillRoundedRect(bx + 4, by + 4, bw, bh, 8)
@@ -3802,26 +3701,7 @@ export class OfficeScene extends Phaser.Scene {
       this.ceilingLights.push(lightContainer)
     }
 
-    // Subtle grid lines on floor
-    g.lineStyle(1, 0x1e293b, 0.3)
-    const PLANK_H = 24
-    for (let py = fy; py < fy + fh; py += PLANK_H) g.lineBetween(fx, py, fx + fw, py)
-    g.lineStyle(1, 0x1e293b, 0.15)
-    const PLANK_W = 48
-    for (let py = fy; py < fy + fh; py += PLANK_H) {
-      const off = ((py - fy) / PLANK_H) % 2 === 0 ? 0 : PLANK_W / 2
-      const plankBottom = Math.min(py + PLANK_H, fy + fh)
-      for (let px = fx + off; px < fx + fw; px += PLANK_W) g.lineBetween(px, py, px, plankBottom)
-    }
-
-    // Carpet/rug in the center
-    const rugMargin = 20
-    const mainRugW = Math.max(fw - rugMargin * 2, 100)
-    const mainRugH = Math.max(fh - rugMargin * 2, 60)
-    g.fillStyle(0x1e3a5f, 0.15)
-    g.fillRoundedRect(fx + rugMargin, fy + rugMargin, mainRugW, mainRugH, 6)
-    g.lineStyle(1, 0x2563eb, 0.08)
-    g.strokeRoundedRect(fx + rugMargin + 6, fy + rugMargin + 6, mainRugW - 12, mainRugH - 12, 4)
+    // Floor kept clean — no planks or rug overlay
 
     // -------------------------------------------------------------------------
     // BUILDING FACADE UPGRADES
@@ -4007,271 +3887,7 @@ export class OfficeScene extends Phaser.Scene {
       g.fillRect(pillarX + 3, fy, 1, fh)
     }
 
-    // 4. LOBBY FLOOR ZONE — darker strip near the bottom entrance
-    {
-      const lobbyZoneH = 30
-      const lobbyZoneY = fy + fh - lobbyZoneH
-      g.fillStyle(0x1a2332, 0.85)
-      g.fillRect(fx, lobbyZoneY, fw, lobbyZoneH)
-      g.lineStyle(1, 0x1e293b, 0.2)
-      g.lineBetween(fx, lobbyZoneY, fx + fw, lobbyZoneY)
-      // Dashed zone dividers across the main floor
-      const zoneCount = 2
-      const zoneStepH = (fh - lobbyZoneH) / (zoneCount + 1)
-      for (let z = 1; z <= zoneCount; z++) {
-        const zy = fy + zoneStepH * z
-        const dashLen = 8
-        const gapLen = 6
-        for (let dx = fx; dx < fx + fw; dx += dashLen + gapLen) {
-          g.lineStyle(1, 0x1e293b, 0.2)
-          g.lineBetween(dx, zy, Math.min(dx + dashLen, fx + fw), zy)
-        }
-      }
-    }
-
-    // 5. GLASS ENTRANCE — wide glass double-door at bottom-center
-    {
-      const entranceW = 60
-      const entranceH = 20
-      const entranceX = bx + bw / 2 - entranceW / 2
-      const entranceY = by + bh - entranceH
-      // Outer frame
-      g.fillStyle(0x1e293b, 1)
-      g.fillRect(entranceX - 2, entranceY - 2, entranceW + 4, entranceH + 4)
-      // Left glass panel
-      g.fillStyle(0x7dd3fc, 0.12)
-      g.fillRect(entranceX, entranceY, entranceW / 2 - 1, entranceH)
-      // Right glass panel
-      g.fillStyle(0x7dd3fc, 0.12)
-      g.fillRect(entranceX + entranceW / 2 + 1, entranceY, entranceW / 2 - 1, entranceH)
-      // Center mullion
-      g.lineStyle(1, 0x7dd3fc, 0.25)
-      g.lineBetween(entranceX + entranceW / 2, entranceY, entranceX + entranceW / 2, entranceY + entranceH)
-      // Door handles
-      g.fillStyle(0x7dd3fc, 0.35)
-      g.fillRect(entranceX + entranceW / 2 - 5, entranceY + entranceH / 2 - 1, 4, 2)
-      g.fillRect(entranceX + entranceW / 2 + 1, entranceY + entranceH / 2 - 1, 4, 2)
-      // Welcome mat
-      g.fillStyle(0x475569, 0.3)
-      g.fillRoundedRect(entranceX + 4, entranceY + entranceH, entranceW - 8, 5, 1)
-      // "PENNY HQ" sign above entrance
-      const hqSign = this.add.text(
-        bx + bw / 2,
-        entranceY - 10,
-        'PENNY HQ',
-        { fontSize: '7px', fontFamily: 'monospace', color: '#cbd5e1', fontStyle: 'bold', resolution: 2 },
-      ).setOrigin(0.5, 0.5).setDepth(-0.5).setAlpha(0.85)
-      this.officeDecoSprites.push(hqSign as unknown as Phaser.GameObjects.Sprite)
-    }
-
-    // 5b. LOBBY FURNITURE
-    {
-      const lobbyH = 30, lobbyY = fy + fh - lobbyH, cx = bx + bw / 2
-      const rdX = cx - 80, rdY = lobbyY + 6
-      g.fillStyle(0x475569, 1); g.fillRoundedRect(rdX, rdY, 40, 12, 3)
-      g.fillStyle(0x1e293b, 1); g.fillRect(rdX + 16, rdY + 2, 8, 4)
-      g.fillStyle(0x0ea5e9, 0.15); g.fillRect(rdX + 30, rdY - 5, 6, 5)
-      const wX = cx + 50, wY = lobbyY + 4
-      g.fillStyle(0x334155, 1); g.fillRoundedRect(wX, wY + 4, 16, 8, 2)
-      g.fillStyle(0x1e293b, 1); g.fillRoundedRect(wX, wY, 16, 3, 1)
-      g.fillStyle(0x334155, 1); g.fillRoundedRect(wX + 20, wY + 4, 16, 8, 2)
-      g.fillStyle(0x1e293b, 1); g.fillRoundedRect(wX + 20, wY, 16, 3, 1)
-      g.fillStyle(0x1e293b, 1); g.fillRect(wX + 8, wY + 6, 8, 8)
-      g.fillStyle(0x3b82f6, 0.3); g.fillRect(wX + 9, wY + 7, 4, 3)
-      const eW = 60, eX = cx - eW / 2, pY = lobbyY + 18
-      g.fillStyle(0x78350f, 1); g.fillRect(eX - 16, pY, 6, 4)
-      g.fillStyle(0x22c55e, 0.5); g.fillCircle(eX - 13, pY - 3, 5)
-      g.fillStyle(0x78350f, 1); g.fillRect(eX + eW + 10, pY, 6, 4)
-      g.fillStyle(0x22c55e, 0.5); g.fillCircle(eX + eW + 13, pY - 3, 5)
-      g.fillStyle(0xf8fafc, 0.06); g.fillRect(rdX - 28, lobbyY + 3, 20, 14)
-      g.fillStyle(0x3b82f6, 0.55); g.fillRect(rdX - 26, lobbyY + 5, 3, 2)
-      g.fillStyle(0xf59e0b, 0.55); g.fillRect(rdX - 20, lobbyY + 5, 3, 2)
-      g.fillStyle(0x22c55e, 0.55); g.fillRect(rdX - 14, lobbyY + 5, 3, 2)
-    }
-
-    // 5c. COMMON AREAS — break room, conference table, printer, fire ext, elevator
-    {
-      const cx = bx + bw / 2
-      // Break room (top-right corner)
-      if (fw > 300) {
-        const brX = fx + fw - 50, brY = fy + 20
-        g.fillStyle(0x1a2535, 0.12); g.fillRoundedRect(brX, brY, 40, 30, 3)
-        g.fillStyle(0x334155, 1); g.fillRect(brX + 4, brY + 4, 6, 8)
-        g.fillStyle(0xef4444, 0.3); g.fillCircle(brX + 7, brY + 5, 1)
-        g.fillStyle(0x475569, 1); g.fillRect(brX + 14, brY + 6, 8, 5)
-        g.fillStyle(0x334155, 1); g.fillRect(brX + 4, brY + 16, 20, 3)
-      }
-      // Meeting table (center-left)
-      if (fw > 350 && fh > 200) {
-        const mtX = fx + 50, mtY = fy + fh / 2 - 20
-        g.fillStyle(0x475569, 0.3); g.fillRoundedRect(mtX, mtY, 30, 14, 5)
-        g.fillStyle(0x334155, 0.2)
-        for (let ci = 0; ci < 3; ci++) { g.fillCircle(mtX + 5 + ci * 10, mtY - 3, 2); g.fillCircle(mtX + 5 + ci * 10, mtY + 17, 2) }
-      }
-      // Printer station (right wall)
-      if (fw > 250) {
-        const prX = fx + fw - 16, prY = fy + fh / 2
-        g.fillStyle(0x475569, 1); g.fillRect(prX, prY, 10, 8)
-        g.fillStyle(0xf8fafc, 0.08); g.fillRect(prX + 1, prY - 2, 8, 2)
-        g.fillStyle(0x34d399, 0.3); g.fillCircle(prX + 8, prY + 2, 1)
-      }
-      // Fire extinguisher (left wall)
-      if (fh > 120) {
-        g.fillStyle(0xef4444, 0.25); g.fillRect(fx + 2, fy + fh / 2, 3, 6)
-      }
-      // Elevator doors (right wall, tall buildings only)
-      if (fh > 250) {
-        const elX = fx + fw - 20, elY = fy + 40
-        g.fillStyle(0x334155, 0.3); g.fillRect(elX, elY, 8, 16); g.fillRect(elX + 9, elY, 8, 16)
-        g.lineStyle(1, 0x1e293b, 0.4); g.lineBetween(elX + 8, elY, elX + 8, elY + 16)
-      }
-    }
-
-    // 6. EXIT SIGNS — at lobby zone boundary corners and top interior corners
-    {
-      const exitSignW = 12
-      const exitSignH = 6
-      const lobbyBoundaryY = fy + fh - 30 - exitSignH - 2
-      const exitPositions = [
-        { x: fx + 6,                  y: lobbyBoundaryY },
-        { x: fx + fw - exitSignW - 6, y: lobbyBoundaryY },
-        { x: fx + 6,                  y: fy + 6 },
-        { x: fx + fw - exitSignW - 6, y: fy + 6 },
-      ]
-      for (const ep of exitPositions) {
-        g.fillStyle(0x059669, 0.4)
-        g.fillRoundedRect(ep.x, ep.y, exitSignW, exitSignH, 1)
-        g.lineStyle(1, 0x34d399, 0.25)
-        g.strokeRoundedRect(ep.x, ep.y, exitSignW, exitSignH, 1)
-        const exitLabel = this.add.text(
-          ep.x + exitSignW / 2,
-          ep.y + exitSignH / 2,
-          'EXIT',
-          { fontSize: '4px', fontFamily: 'monospace', color: '#6ee7b7', fontStyle: 'bold', resolution: 2 },
-        ).setOrigin(0.5, 0.5).setDepth(-0.5).setAlpha(0.7)
-        this.officeDecoSprites.push(exitLabel as unknown as Phaser.GameObjects.Sprite)
-      }
-    }
-
-    // 7. BUILDING ADDRESS NUMBER — bottom-left of facade exterior
-    {
-      const addrText = this.add.text(
-        bx + 20,
-        by + bh - 20,
-        '1337',
-        { fontSize: '14px', fontFamily: 'monospace', fontStyle: 'bold', color: '#475569', resolution: 2 },
-      ).setOrigin(0, 1).setDepth(-0.5).setAlpha(0.25)
-      this.officeDecoSprites.push(addrText as unknown as Phaser.GameObjects.Sprite)
-    }
-
-    // 8. DEPARTMENT DIRECTORY — small panel near entrance listing team labels
-    {
-      const dirEntranceW = 60
-      const dirW = 30
-      const dirH = 40
-      const dirX = bx + bw / 2 - dirEntranceW / 2 - dirW - 6
-      const dirY = by + bh - dirH - 2
-      g.fillStyle(0x0f172a, 0.5)
-      g.fillRoundedRect(dirX, dirY, dirW, dirH, 1)
-      g.lineStyle(1, 0x334155, 0.4)
-      g.strokeRoundedRect(dirX, dirY, dirW, dirH, 1)
-      // Header bar
-      g.fillStyle(0x1e3a5f, 0.6)
-      g.fillRoundedRect(dirX, dirY, dirW, 5, 1)
-      const dirHeaderLabel = this.add.text(
-        dirX + dirW / 2,
-        dirY + 2,
-        'DIRECTORY',
-        { fontSize: '3px', fontFamily: 'monospace', fontStyle: 'bold', color: '#93c5fd', resolution: 2 },
-      ).setOrigin(0.5, 0.5).setDepth(-0.5).setAlpha(0.75)
-      this.officeDecoSprites.push(dirHeaderLabel as unknown as Phaser.GameObjects.Sprite)
-      // Team entries — up to 5
-      const roomEntries = Array.from(this.rooms.values())
-        .filter(r => !r.cwd.startsWith('__'))
-        .slice(0, 5)
-      roomEntries.forEach((room, idx) => {
-        const entryLabel = room.teamLabel || room.label || room.cwd.split('/').pop() || '?'
-        const truncated = entryLabel.length > 9 ? entryLabel.slice(0, 8) + '\u2026' : entryLabel
-        const lineY = dirY + 8 + idx * 6
-        g.fillStyle(0x3b82f6, 0.5)
-        g.fillCircle(dirX + 4, lineY + 1.5, 1)
-        const entryText = this.add.text(
-          dirX + 8,
-          lineY,
-          truncated,
-          { fontSize: '4px', fontFamily: 'monospace', color: '#94a3b8', resolution: 2 },
-        ).setOrigin(0, 0).setDepth(-0.5).setAlpha(0.7)
-        this.officeDecoSprites.push(entryText as unknown as Phaser.GameObjects.Sprite)
-      })
-    }
-
-    // 9. BUILDING NAME PLAQUE — metallic nameplate above glass entrance doors
-    {
-      const plaqueW = 50
-      const plaqueH = 12
-      const plaqueX = bx + bw / 2 - plaqueW / 2
-      const plaqueY = by + bh - 20 - plaqueH - 4
-      // Metallic base layer (dark)
-      g.fillStyle(0x1e293b, 0.9)
-      g.fillRoundedRect(plaqueX, plaqueY, plaqueW, plaqueH, 2)
-      // Metallic sheen — lighter strip across top quarter
-      g.fillStyle(0x94a3b8, 0.18)
-      g.fillRoundedRect(plaqueX, plaqueY, plaqueW, plaqueH * 0.35, 2)
-      // Subtle gold border
-      g.lineStyle(1, 0x7c6f3e, 0.45)
-      g.strokeRoundedRect(plaqueX, plaqueY, plaqueW, plaqueH, 2)
-      const plaqueText = this.add.text(
-        bx + bw / 2,
-        plaqueY + plaqueH / 2,
-        'PENNY',
-        { fontSize: '8px', fontFamily: 'monospace', fontStyle: 'bold', color: '#e2e8f0', resolution: 2 },
-      ).setOrigin(0.5, 0.5).setDepth(-0.5).setAlpha(0.92)
-      this.officeDecoSprites.push(plaqueText as unknown as Phaser.GameObjects.Sprite)
-    }
-
-    // 10. SECURITY CAMERA — top-right exterior corner, FOV cone toward entrance
-    {
-      const camX = bx + bw - 30
-      const camY = by + bh - 8
-      // Camera body
-      g.fillStyle(0x334155, 0.8)
-      g.fillCircle(camX, camY, 2)
-      g.lineStyle(1, 0x475569, 0.5)
-      g.strokeCircle(camX, camY, 2)
-      // Lens highlight
-      g.fillStyle(0x7dd3fc, 0.3)
-      g.fillCircle(camX, camY, 0.8)
-      // FOV cone pointing down-left toward entrance
-      g.fillStyle(0x334155, 0.25)
-      g.beginPath()
-      g.moveTo(camX, camY + 2)
-      g.lineTo(camX - 8, camY + 10)
-      g.lineTo(camX + 2, camY + 10)
-      g.closePath()
-      g.fillPath()
-      // Red recording LED
-      g.fillStyle(0xef4444, 0.55)
-      g.fillCircle(camX + 2, camY - 1, 0.7)
-    }
-
-    // 11. DOORBELL / INTERCOM — tiny panel beside left edge of entrance door
-    {
-      const ibX = bx + bw / 2 - 30 - 7
-      const ibY = by + bh - 20 + 4
-      // Panel body
-      g.fillStyle(0x475569, 0.7)
-      g.fillRoundedRect(ibX, ibY, 3, 4, 0.5)
-      g.lineStyle(1, 0x64748b, 0.4)
-      g.strokeRoundedRect(ibX, ibY, 3, 4, 0.5)
-      // Green status light
-      g.fillStyle(0x34d399, 0.85)
-      g.fillCircle(ibX + 1.5, ibY + 1.5, 0.5)
-      // Speaker grille dots
-      g.fillStyle(0x94a3b8, 0.4)
-      g.fillCircle(ibX + 0.8, ibY + 3, 0.4)
-      g.fillCircle(ibX + 1.5, ibY + 3, 0.4)
-      g.fillCircle(ibX + 2.2, ibY + 3, 0.4)
-    }
+    // Lobby, entrance, and exterior details removed — keeping the building clean
 
     // Decorations
     if (this.officeTilesLoaded) {
@@ -4758,162 +4374,123 @@ export class OfficeScene extends Phaser.Scene {
       this.cafeContainer = null
     }
     this.cafeBaristas = []
+    this.coffeeRunners.clear()  // clear stale runners that reference old container
+    this.coffeeRunnerRooms.clear()
     if (this.cafeVisitorTimer) { this.cafeVisitorTimer.destroy(); this.cafeVisitorTimer = null }
     if (this.cafeSteamTimer) { this.cafeSteamTimer.destroy(); this.cafeSteamTimer = null }
 
-    // ── HORIZONTAL layout — wide coffee bar spanning across the bottom ──
-    const CAFE_W = 400   // wide, spans most of the building width
-    const CAFE_H = 160   // short, like a ground-floor bar
-    const COUNTER_W = 14 // counter thickness (vertical bar behind which baristas work)
-    const BEHIND_W = 60  // depth of the barista workspace behind the counter
+    // ── HORIZONTAL layout — coffee bar in the corner ──
+    const CAFE_W = 420   // wide coffee bar
+    const CAFE_H = 180   // comfortable height
+    const COUNTER_W = 16 // counter thickness
+    const BEHIND_W = 68  // depth of barista workspace
 
-    const cx = floorRight - CAFE_W / 2  // center it
+    const cx = floorRight - CAFE_W / 2  // right-aligned
     const cy = floorBottom
 
     const container = this.add.container(cx, cy).setDepth(2)
     this.cafeWorldX = cx + CAFE_W / 2
-    this.cafeWorldY = cy + CAFE_H - BEHIND_W - 26  // stools are above the counter
+    // Align duder walk target with stool Y position
+    // counterY = (CAFE_H - BEHIND_W - 20) - 2, stoolY = counterY - 14
+    const stoolWorldY = (CAFE_H - BEHIND_W - 20) - 2 - 14
+    this.cafeWorldY = cy + stoolWorldY
     this.cafeContainer = container
     const g = this.add.graphics()
     container.add(g)
 
-    // ── Building structure (flipped: customers on top, baristas on bottom) ──
-    const CUSTOMER_H = CAFE_H - BEHIND_W - 16
-    g.fillStyle(0x000000, 0.18); g.fillRoundedRect(4, 4, CAFE_W, CAFE_H, 6)
-    // Customer area (top — agents enter from above)
-    g.fillStyle(0x334155, 0.2); g.fillRoundedRect(0, 0, CAFE_W, CUSTOMER_H, { tl: 5, tr: 5, bl: 0, br: 0 })
-    g.fillStyle(0x1e293b, 0.25); g.fillRect(4, 4, CAFE_W - 8, CUSTOMER_H - 4)
-    // Floor tile pattern in customer area
-    g.lineStyle(0.5, 0x475569, 0.1)
-    for (let px = 10; px < CAFE_W - 10; px += 20) {
-      g.lineBetween(px, 4, px, CUSTOMER_H)
-    }
-    // Barista workspace (bottom — back of house)
-    g.fillStyle(0x4a3728, 0.7); g.fillRoundedRect(0, CUSTOMER_H, CAFE_W, BEHIND_W + 16, { tl: 0, tr: 0, bl: 5, br: 5 })
-    g.fillStyle(0x3d2b1f, 0.6); g.fillRoundedRect(3, CUSTOMER_H + 3, CAFE_W - 6, BEHIND_W + 10, { tl: 0, tr: 0, bl: 3, br: 3 })
-    g.fillStyle(0x1a1208, 0.75); g.fillRect(5, CUSTOMER_H + 6, CAFE_W - 10, BEHIND_W - 4)
+    // ── Building structure ──
+    const CUSTOMER_H = CAFE_H - BEHIND_W - 20
 
-    // ── Header sign (top of customer area) ──
-    g.fillStyle(0x1a0f06, 0.85); g.fillRoundedRect(5, 3, CAFE_W - 10, 20, { tl: 3, tr: 3, bl: 0, br: 0 })
-    g.lineStyle(2, 0xd97706, 0.6); g.lineBetween(5, 23, CAFE_W - 5, 23)
-    const signText = this.add.text(CAFE_W / 2, 13, '☕  PENNY CAFÉ', {
-      fontSize: '12px', fontFamily: 'system-ui, sans-serif', fontStyle: 'bold',
+    // Drop shadow
+    g.fillStyle(0x000000, 0.15); g.fillRoundedRect(4, 4, CAFE_W, CAFE_H, 6)
+
+    // Customer area (top) — clean, minimal
+    g.fillStyle(0x1e293b, 0.35); g.fillRoundedRect(0, 0, CAFE_W, CUSTOMER_H, { tl: 6, tr: 6, bl: 0, br: 0 })
+
+    // Barista workspace (bottom) — warm brown
+    g.fillStyle(0x3d2b1f, 0.7); g.fillRoundedRect(0, CUSTOMER_H, CAFE_W, BEHIND_W + 20, { tl: 0, tr: 0, bl: 6, br: 6 })
+    g.fillStyle(0x1a1208, 0.5); g.fillRect(6, CUSTOMER_H + 6, CAFE_W - 12, BEHIND_W + 6)
+
+    // ── Header sign ──
+    g.fillStyle(0x1a0f06, 0.85); g.fillRoundedRect(6, 2, CAFE_W - 12, 26, { tl: 4, tr: 4, bl: 0, br: 0 })
+    g.lineStyle(2, 0xd97706, 0.5); g.lineBetween(6, 28, CAFE_W - 6, 28)
+    const signText = this.add.text(CAFE_W / 2, 15, '☕  PENNY CAFÉ', {
+      fontSize: '14px', fontFamily: 'system-ui, sans-serif', fontStyle: 'bold',
       color: '#fbbf24', resolution: 2,
     }).setOrigin(0.5)
     container.add(signText)
 
-    // ── Horizontal counter bar (between customer seating and barista workspace) ──
+    // ── Counter bar ──
     const counterY = CUSTOMER_H - 2
-    g.fillStyle(0x78350f, 0.8); g.fillRoundedRect(8, counterY, CAFE_W - 16, COUNTER_W, 3)
-    g.fillStyle(0xb45309, 0.3); g.fillRect(9, counterY + 1, CAFE_W - 18, 4)
+    g.fillStyle(0x78350f, 0.75); g.fillRoundedRect(8, counterY, CAFE_W - 16, COUNTER_W, 3)
+    g.fillStyle(0xb45309, 0.25); g.fillRect(10, counterY + 2, CAFE_W - 20, 4)
 
-    // ── Equipment along the back wall (below counter, barista side) ──
-    const eqY = counterY + COUNTER_W + 6
-    // Espresso machines (3 of them, spread out)
-    const machinePositions = [20, 80, 140]
+    // ── Equipment (small, behind counter) ──
+    const eqY = counterY + COUNTER_W + 8
+    const machinePositions = [30, 110]
     for (const mx of machinePositions) {
-      g.fillStyle(0x334155, 0.85); g.fillRoundedRect(mx, eqY, 18, 20, 3)
-      g.fillStyle(0xef4444, 0.5); g.fillCircle(mx + 9, eqY + 4, 1.5)
-      g.fillStyle(0x94a3b8, 0.4); g.fillRect(mx + 2, eqY + 14, 14, 3)
+      g.fillStyle(0x334155, 0.7); g.fillRoundedRect(mx, eqY, 20, 22, 3)
+      g.fillStyle(0xef4444, 0.4); g.fillCircle(mx + 10, eqY + 5, 2)
     }
-    // Grinder
-    g.fillStyle(0x475569, 0.7); g.fillRoundedRect(180, eqY + 2, 14, 16, 2)
-    g.fillStyle(0x1e293b, 0.6); g.fillCircle(187, eqY + 6, 3)
-
-    // Menu board (large, centered)
-    g.fillStyle(0x1e293b, 0.8); g.fillRoundedRect(210, eqY - 2, 70, 26, 2)
-    g.lineStyle(1, 0x78350f, 0.5); g.strokeRoundedRect(210, eqY - 2, 70, 26, 2)
-    for (let ml = 0; ml < 4; ml++) {
-      g.fillStyle(0xf8fafc, 0.08 + (3 - ml) * 0.02); g.fillRect(214, eqY + 2 + ml * 5, 24, 2)
-      g.fillStyle(0xfbbf24, 0.12); g.fillRect(260, eqY + 2 + ml * 5, 12, 2)
+    // Menu board (small)
+    g.fillStyle(0x1e293b, 0.7); g.fillRoundedRect(200, eqY, 60, 28, 2)
+    g.lineStyle(1, 0x78350f, 0.4); g.strokeRoundedRect(200, eqY, 60, 28, 2)
+    for (let ml = 0; ml < 3; ml++) {
+      g.fillStyle(0xf8fafc, 0.06); g.fillRect(204, eqY + 4 + ml * 8, 28, 2)
+      g.fillStyle(0xfbbf24, 0.1); g.fillRect(240, eqY + 4 + ml * 8, 14, 2)
     }
 
-    // Pastry display case
-    g.fillStyle(0x475569, 0.5); g.fillRoundedRect(300, eqY + 2, 36, 16, 2)
-    g.fillStyle(0x7dd3fc, 0.1); g.fillRect(301, eqY + 3, 34, 14)
-    g.fillStyle(0xfbbf24, 0.35); g.fillCircle(310, eqY + 10, 3)
-    g.fillStyle(0xf97316, 0.3); g.fillCircle(320, eqY + 10, 3)
-    g.fillStyle(0xfde68a, 0.25); g.fillCircle(330, eqY + 10, 2.5)
-
-    // Tip jar
-    g.fillStyle(0x475569, 0.5); g.fillRect(350, eqY + 4, 6, 8)
-    g.fillStyle(0x34d399, 0.2); g.fillRect(351, eqY + 5, 4, 6)
-
-    // ── BARISTAS — spread along behind the counter ──
-    const baristaSlots = [
-      { x: 50, y: counterY + COUNTER_W + 40, charIdx: 1 },
-      { x: 120, y: counterY + COUNTER_W + 38, charIdx: 0 },
-      { x: 200, y: counterY + COUNTER_W + 40, charIdx: 1 },
+    // ── BARISTAS — walk between machines, counter, make & serve drinks ──
+    const baristaWorkY = counterY + COUNTER_W + 40  // Y where baristas stand/walk
+    const counterServeY = counterY + 4               // Y where drinks are placed on counter
+    const baristaConfigs = [
+      { homeX: 60,  charIdx: 1, name: 'Latte Larry',   machineX: 30 },
+      { homeX: 200, charIdx: 0, name: 'Mocha Maya',    machineX: 110 },
+      { homeX: 350, charIdx: 1, name: 'Espresso Ed',   machineX: 200 },
     ]
-    for (const slot of baristaSlots) {
-      const bc = this.add.container(slot.x, slot.y)
+
+    for (const cfg of baristaConfigs) {
+      const walkKey = cfg.charIdx === 1 ? 'anim-walk-2' : 'anim-walk-1'
+      const idleKey = cfg.charIdx === 1 ? 'anim-idle-2' : 'anim-idle-1'
+
+      // Put everything in a container so walking moves it all together
+      const bc = this.add.container(cfg.homeX, baristaWorkY)
       container.add(bc)
-      const charBase = slot.charIdx * CHAR_COLS
-      const sprite = this.add.sprite(0, 0, 'characters', charBase + POSE_INTERACT)
-      sprite.setScale(CHAR_SCALE).setOrigin(0.5, 1)
-      bc.add(sprite)
-      const apron = this.add.rectangle(0, -8, 12, 10, 0x059669, 0.4)
+
+      const bSprite = this.add.sprite(0, 0, idleKey, 3)  // face counter (back view)
+        .setScale(CHAR_SCALE).setOrigin(0.5, 1)
+      bc.add(bSprite)
+
+      const apron = this.add.rectangle(0, -8, 14, 12, 0x059669, 0.35)
       bc.add(apron)
-      this.tweens.add({ targets: sprite, scaleY: CHAR_SCALE * 1.015, duration: 1800 + Math.random() * 600, yoyo: true, repeat: -1, ease: 'Sine.easeInOut', delay: Math.random() * 800 })
-      this.tweens.add({ targets: bc, angle: { from: -1.5, to: 1.5 }, duration: 2500 + Math.random() * 1000, yoyo: true, repeat: -1, ease: 'Sine.easeInOut', delay: Math.random() * 1200 })
-      this.cafeBaristas.push(bc)
-    }
-    const baristaNames = ['Latte Larry', 'Mocha Maya', 'Espresso Ed']
-    baristaSlots.forEach((slot, i) => {
-      const tag = this.add.text(slot.x, slot.y + 6, baristaNames[i], {
-        fontSize: '7px', fontFamily: 'system-ui, sans-serif', color: '#fbbf24',
+
+      const tag = this.add.text(0, 6, cfg.name, {
+        fontSize: '8px', fontFamily: 'system-ui, sans-serif', color: '#fbbf24',
         backgroundColor: '#1a0f06cc', padding: { x: 3, y: 1 }, resolution: 2,
       }).setOrigin(0.5, 0)
-      container.add(tag)
-    })
+      bc.add(tag)
 
-    // ── STOOLS along the counter (customer side — above the counter) ──
-    const stoolY = counterY - 12
-    const stoolCount = Math.floor((CAFE_W - 40) / 32)
+      this.cafeBaristas.push(bc)
+
+      // Face up toward customers (walk-up stand frame = frame 6)
+      bSprite.setTexture(walkKey, 6)
+      // Busy working — sway, bob, shuffle
+      this.tweens.add({ targets: bc, angle: { from: -3, to: 3 }, duration: 700 + Math.random() * 300, yoyo: true, repeat: -1, ease: 'Sine.easeInOut', delay: Math.random() * 500 })
+      this.tweens.add({ targets: bSprite, y: -2, scaleY: CHAR_SCALE * 0.97, duration: 450 + Math.random() * 200, yoyo: true, repeat: -1, ease: 'Sine.easeInOut', delay: Math.random() * 400 })
+      this.tweens.add({ targets: bc, x: cfg.homeX + 10, duration: 1600 + Math.random() * 600, yoyo: true, repeat: -1, ease: 'Sine.easeInOut', delay: Math.random() * 800 })
+    }
+
+    // ── Small stools along counter (customer side) — aligned with duder sit positions ──
+    const stoolY = counterY - 14
+    const STOOL_START = 42
+    const STOOL_GAP = 48
+    const stoolCount = Math.min(7, Math.floor((CAFE_W - STOOL_START - 20) / STOOL_GAP))
     for (let si = 0; si < stoolCount; si++) {
-      const sx = 28 + si * 32
-      g.fillStyle(0x475569, 0.45); g.fillCircle(sx, stoolY, 5)
-      g.fillStyle(0x334155, 0.35); g.fillRect(sx - 1, stoolY + 5, 2, 5)
-      g.fillStyle(0x334155, 0.25); g.fillRect(sx - 3, stoolY + 9, 6, 2)
+      const sx = STOOL_START + si * STOOL_GAP
+      g.fillStyle(0x475569, 0.4); g.fillCircle(sx, stoolY, 8)
+      g.fillStyle(0x334155, 0.25); g.fillRect(sx - 2, stoolY + 8, 4, 6)
+      g.fillStyle(0x334155, 0.2); g.fillRect(sx - 4, stoolY + 13, 8, 2)
     }
-
-    // ── Tables in the customer area ──
-    const tableY1 = stoolY - 35
-    const tableY2 = stoolY - 65
-    const tablePositions = [
-      { x: 40, y: tableY1 }, { x: 110, y: tableY1 }, { x: 180, y: tableY1 },
-      { x: 250, y: tableY1 }, { x: 320, y: tableY1 },
-      { x: 75, y: tableY2 }, { x: 180, y: tableY2 }, { x: 285, y: tableY2 },
-    ]
-    for (const t of tablePositions) {
-      g.fillStyle(0x78350f, 0.4); g.fillCircle(t.x, t.y, 10)
-      g.fillStyle(0xb45309, 0.15); g.fillCircle(t.x, t.y, 7)
-      g.fillStyle(0x475569, 0.3); g.fillCircle(t.x - 14, t.y, 4)
-      g.fillStyle(0x475569, 0.3); g.fillCircle(t.x + 14, t.y, 4)
-      if (Math.random() > 0.5) {
-        g.fillStyle(0x8b5cf6, 0.35); g.fillCircle(t.x + 3, t.y - 2, 2.5)
-      }
-    }
-
-    // ── String lights across the customer area ──
-    g.lineStyle(0.5, 0x475569, 0.3); g.lineBetween(6, 26, CAFE_W - 6, 26)
-    for (let bl = 0; bl < 14; bl++) {
-      g.fillStyle(0xfbbf24, 0.12); g.fillCircle(20 + bl * ((CAFE_W - 40) / 13), 27, 2)
-    }
-
-    // ── Plants at corners ──
-    g.fillStyle(0x78350f, 0.5); g.fillRect(8, CAFE_H - 12, 8, 6)
-    g.fillStyle(0x166534, 0.4); g.fillCircle(12, CAFE_H - 14, 7)
-    g.fillStyle(0x78350f, 0.5); g.fillRect(CAFE_W - 16, CAFE_H - 12, 8, 6)
-    g.fillStyle(0x166534, 0.4); g.fillCircle(CAFE_W - 12, CAFE_H - 14, 7)
-
-    // ── OPEN sign ──
-    g.fillStyle(0xd97706, 0.5); g.fillRoundedRect(CAFE_W / 2 - 16, CAFE_H - 6, 32, 6, 2)
-    const openSign = this.add.text(CAFE_W / 2, CAFE_H - 3, 'OPEN', {
-      fontSize: '6px', fontFamily: 'monospace', fontStyle: 'bold', color: '#34d399', resolution: 2,
-    }).setOrigin(0.5).setAlpha(0.7)
-    container.add(openSign)
-    this.tweens.add({ targets: openSign, alpha: { from: 0.4, to: 0.8 }, duration: 1200, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' })
 
     // ── Animated steam ──
     this.cafeSteamTimer = this.time.addEvent({
@@ -4921,12 +4498,12 @@ export class OfficeScene extends Phaser.Scene {
       callback: () => {
         if (!this.cafeContainer?.active) return
         const mx = machinePositions[Math.floor(Math.random() * machinePositions.length)]
-        for (let si = 0; si < 3; si++) {
-          const p = this.add.circle(mx + 9 + (si - 1) * 3, eqY - 2, 1.8, 0xffffff, 0.3)
+        for (let si = 0; si < 2; si++) {
+          const p = this.add.circle(mx + 10 + (si - 0.5) * 4, eqY - 2, 2, 0xffffff, 0.25)
           container.add(p)
           this.tweens.add({
-            targets: p, y: eqY - 14 - Math.random() * 8, x: mx + 9 + (si - 1) * 3 + (Math.random() - 0.5) * 6,
-            alpha: 0, duration: 1000 + Math.random() * 500, delay: si * 150, ease: 'Sine.easeOut',
+            targets: p, y: eqY - 16 - Math.random() * 8, x: mx + 10 + (si - 0.5) * 4 + (Math.random() - 0.5) * 6,
+            alpha: 0, duration: 900 + Math.random() * 400, delay: si * 120, ease: 'Sine.easeOut',
             onComplete: () => { p.destroy() },
           })
         }
@@ -4937,7 +4514,7 @@ export class OfficeScene extends Phaser.Scene {
     private startCoffeeRunTimer(): void {
     if (this.coffeeRunTimer) this.coffeeRunTimer.destroy()
     this.coffeeRunTimer = this.time.addEvent({
-      delay: 15000 + Math.random() * 10000,
+      delay: 10000 + Math.random() * 8000,
       loop: true,
       callback: () => this.tryStartCoffeeRun(),
     })
@@ -4949,6 +4526,9 @@ export class OfficeScene extends Phaser.Scene {
 
     const candidates: { ws: WorkstationSprite; room: Room }[] = []
     for (const room of this.rooms.values()) {
+      // Only one coffee runner per room at a time
+      if (this.coffeeRunnerRooms.has(room.cwd)) continue
+
       for (const ws of room.workstations.values()) {
         if (!ws.state) continue
         if (ws.walkBreakTween) continue
@@ -4971,242 +4551,177 @@ export class OfficeScene extends Phaser.Scene {
     if (!ws.state || !this.cafeContainer) return
     const agentId = ws.state.config.id
     this.coffeeRunners.add(agentId)
+    this.coffeeRunnerRooms.add(room.cwd)
 
-    const charIdx = this.getAgentCharacterIndex(ws.state)
-    const base = charIdx * CHAR_COLS
     const WALK_SPEED = 55
-
-    // ── Build waypoints: desk → door → hallway → café door → stool ──
     const startX = room.x + ws.container.x
     const startY = room.y + ws.container.y + WS_SPRITE_Y
-
-    // Room door (used as fallback if navmesh has no path)
     const doorX = room.x
-    const doorY = room.y + room.height / 2 + 4
-
-    // Café stool target
-    const stoolIdx = Math.floor(Math.random() * 5)
-    const cafeX = this.cafeWorldX - 50 + stoolIdx * 28
+    const doorY = this.getRoomDoorY(room) + (room.doorSide === 'top' ? -4 : 4)
+    const numStools = Math.min(7, Math.floor((420 - 42 - 20) / 48))
+    const stoolIdx = Math.floor(Math.random() * numStools)
+    const cafeX = (this.cafeWorldX - 210) + 42 + stoolIdx * 48
     const cafeY = this.cafeWorldY
+    const midY = room.doorSide === 'top' ? doorY - 30 : doorY + 30
 
-    // Hybrid pathfinding:
-    // Phase A: Manual waypoints INSIDE the room (desk → room aisle → door)
-    //   Agent walks to the center aisle of their room first, then down to the door.
-    //   This avoids cutting through other agents' desks.
-    // Phase B: A* pathfinding OUTSIDE the room (door → corridors → café)
-
-    // Room navigation: stand up → step behind chair → walk to aisle → go to door
-    // The desk is at ws.container position. The chair is behind the desk (higher Y).
-    // Step DOWN (away from desk) first, then walk to the center aisle, then to the door.
-    const behindDeskX = room.x + ws.container.x  // same X as desk
-    const behindDeskY = room.y + ws.container.y + WS_DESK_Y + 20 // below the desk/chair
-    const aisleX = room.x  // center of room
-    const aisleY = behindDeskY  // same Y as behind-desk position
-
-    // In-room waypoints: desk → behind chair → center aisle → door
-    const roomExitPath: NavPoint[] = [
-      { x: behindDeskX, y: behindDeskY },  // Step back from desk (stand up)
-      { x: aisleX, y: aisleY },             // Walk sideways to center aisle
-      { x: doorX, y: doorY },               // Walk down aisle to door
-    ]
-
-    // A* for building navigation: door → café
-    const buildingPath = this.navMesh.findPath({ x: doorX, y: doorY }, { x: cafeX, y: cafeY })
-    const waypoints: NavPoint[] = [
-      ...roomExitPath,
-      ...(buildingPath ?? [{ x: cafeX, y: cafeY }]),
-    ]
-
-    // Return: café → door (A*), then door → aisle → desk (manual)
-    const buildingReturnPath = this.navMesh.findPath({ x: cafeX, y: cafeY }, { x: doorX, y: doorY })
-    const roomEnterPath: NavPoint[] = [
-      { x: aisleX, y: aisleY },            // Walk up aisle to agent's row
-      { x: behindDeskX, y: behindDeskY },   // Walk to behind desk
-      { x: startX, y: startY },             // Sit back down at desk
-    ]
-    const returnWaypoints: NavPoint[] = [
-      ...(buildingReturnPath ?? [{ x: doorX, y: doorY }]),
-      ...roomEnterPath,
-    ]
-
-    // Create world-space walking sprite using the compact spritesheet
-    // charIdx 0 = duder1, charIdx 1 = duder2, charIdx 2 = duder1 tinted
-    const walkSheet = charIdx === 1 ? 'duder2' : 'duder1'
-    const walker = this.add.sprite(startX, startY, walkSheet, COMPACT_WALK_START + WALK_FRONT)
-      .setScale(CHAR_SCALE).setOrigin(0.5, 1).setDepth(9000)
-    const walkShadow = this.add.ellipse(startX, startY + 2, 16, 5, 0x000000, 0.15).setDepth(8999)
-    const shadowSync = this.time.addEvent({
-      delay: 16, loop: true,
-      callback: () => { if (walker.active) walkShadow.setPosition(walker.x, walker.y + 2) },
-    })
-
+    // Hide desk sprite while on coffee run — desk stays clickable
+    ws.sprite.setVisible(false)
     this.spawnEmojiReaction(startX, startY - 25, '☕')
-    ws.sprite.setAlpha(0.15)
 
-    // Brief "stand up" animation — use compact idle front frame first
-    walker.setFrame(COMPACT_IDLE_START)
-    walker.setScale(CHAR_SCALE * 0.9)
-    this.tweens.add({
-      targets: walker, scaleX: CHAR_SCALE, scaleY: CHAR_SCALE,
-      duration: 200, ease: 'Back.easeOut',
-    })
+    const charIdx = this.getAgentCharacterIndex(ws.state)
+    // Use individual walk animation strips (_256 PNGs: 6 frames at 512×512)
+    // Frames: 0=front-stepA, 1=front-stepB, 2=¾-stepA, 3=¾-stepB, 4=side-stepA, 5=side-stepB
+    const walkSuffix = charIdx === 1 ? '2' : '1'
+    const walkSheetKey = `anim-walk-${walkSuffix}`
+    const sitSheetKey = `anim-sit-${walkSuffix}`
+    const WALK_SCALE = CHAR_SCALE  // frames are 256×512, same as main spritesheet
+    const walker = this.add.sprite(startX, startY, walkSheetKey, 0)
+      .setScale(WALK_SCALE).setOrigin(0.5, 1).setDepth(9000)
 
-    // Waddle animations — exaggerated for character
-    const walkBob = this.tweens.add({ targets: walker, y: '-=4', duration: 140, yoyo: true, repeat: -1, ease: 'Quad.easeOut' })
-    const walkWaddle = this.tweens.add({ targets: walker, angle: { from: -6, to: 6 }, duration: 280, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' })
-    const walkSquish = this.tweens.add({ targets: walker, scaleX: CHAR_SCALE * 1.08, scaleY: CHAR_SCALE * 0.92, duration: 140, yoyo: true, repeat: -1, ease: 'Quad.easeOut' })
+    // Shadow
+    const shadow = this.add.ellipse(startX, startY + 2, 16, 5, 0x000000, 0.15).setDepth(8999)
 
-    // Footstep particles
-    const footstepTimer = this.time.addEvent({
-      delay: 280, loop: true,
-      callback: () => {
-        if (!walker.active) return
-        const puff = this.add.circle(walker.x + (Math.random() - 0.5) * 4, walker.y + 1, 1.2 + Math.random(), 0x94a3b8, 0.2).setDepth(8998)
-        this.tweens.add({ targets: puff, alpha: 0, scaleX: 2, scaleY: 2, y: puff.y - 3, duration: 400, ease: 'Sine.easeOut', onComplete: () => puff.destroy() })
-      },
-    })
+    // No waddle — the walk sprite frames handle the animation
 
-    const stopWalkAnims = () => {
-      walkBob.destroy(); walkWaddle.destroy(); walkSquish.destroy()
-      walker.setAngle(0).setScale(CHAR_SCALE)
+    // Cleanup helper
+    let cleaned = false
+    const cleanup = () => {
+      if (cleaned) return
+      cleaned = true
+      shadow.destroy()
+      walker.destroy()
+      ws.sprite.setVisible(true)
+      this.coffeeRunners.delete(agentId)
+      this.coffeeRunnerRooms.delete(room.cwd)
     }
 
-    const destroyAll = () => {
-      if ((walker as any)._walkCycleTimer) (walker as any)._walkCycleTimer.destroy()
-      footstepTimer.destroy(); shadowSync.destroy(); walkShadow.destroy(); walker.destroy()
-    }
+    // Walk through a list of waypoints sequentially
+    const goPoints = [
+      { x: doorX, y: doorY },
+      { x: doorX, y: midY },
+      { x: cafeX, y: midY },
+      { x: cafeX, y: cafeY },
+    ]
+    const backPoints = [
+      { x: cafeX, y: midY },
+      { x: doorX, y: midY },
+      { x: doorX, y: doorY },
+      { x: startX, y: startY },
+    ]
 
-    // ── Walk along waypoints sequentially ──
-    // Choose sprite pose based on movement direction:
-    //   Mostly horizontal → POSE_WALK (side profile) + flipX for direction
-    //   Mostly vertical   → POSE_IDLE (front-facing, walking toward/away from camera)
-    const walkPath = (points: { x: number; y: number }[], onDone: () => void) => {
-      let idx = 0
-      const next = () => {
-        if (idx >= points.length) { onDone(); return }
-        const target = points[idx++]
-        const dx = Math.abs(target.x - walker.x)
-        const dy = Math.abs(target.y - walker.y)
-        const dist = Math.hypot(dx, dy)
-        const dur = Math.max(200, (dist / WALK_SPEED) * 1000)
+    let pointIdx = 0
+    let currentPoints = goPoints
+    let phase: 'going' | 'sitting' | 'returning' = 'going'
 
-        // Determine walk direction and pick the right rotation frame
-        const goingRight = target.x > walker.x
-        const goingDown = target.y > walker.y
-        walker.setFlipX(false)
+    const stepNext = () => {
+      if (!walker.active) { cleanup(); return }
+      if (pointIdx >= currentPoints.length) {
+        if (phase === 'going') {
+          // Arrived at café — sit
+          phase = 'sitting'
+          walker.setAngle(0)
+          walker.setTexture(sitSheetKey, 0)  // front-facing sit
+          walker.setFlipX(false)
+          walker.setScale(WALK_SCALE)
+          walker.setDepth(9000)
 
-        // Pick step A frame based on direction (8 directions)
-        let walkFrameA: number
-        let walkFrameB: number  // alternate step (only 4 directions, use closest)
-
-        if (dx > dy * 2) {
-          // Mostly horizontal — side view
-          walkFrameA = goingRight ? WALK_A_SIDE_R : WALK_A_SIDE_L
-          walkFrameB = goingRight ? WALK_B_SIDE_R : WALK_B_SIDE_R  // flip for left
-        } else if (dy > dx * 2) {
-          // Mostly vertical
-          walkFrameA = goingDown ? WALK_A_FRONT : WALK_A_BACK
-          walkFrameB = goingDown ? WALK_B_FRONT : WALK_B_BACK_R  // use back-right as fallback for back
-        } else {
-          // Diagonal
-          if (goingDown && goingRight) {
-            walkFrameA = WALK_A_FRONT_R; walkFrameB = WALK_B_FRONT_R
-          } else if (goingDown && !goingRight) {
-            walkFrameA = WALK_A_FRONT_L; walkFrameB = WALK_B_FRONT  // closest B frame
-          } else if (!goingDown && goingRight) {
-            walkFrameA = WALK_A_BACK_R; walkFrameB = WALK_B_BACK_R
-          } else {
-            walkFrameA = WALK_A_BACK_L; walkFrameB = WALK_B_BACK_R  // closest B frame
+          // ── Barista serves a drink ──
+          if (this.cafeContainer?.active && this.cafeBaristas.length > 0) {
+            const barista = this.cafeBaristas[Math.floor(Math.random() * this.cafeBaristas.length)]
+            if (barista?.active) {
+              // Barista reaches forward (toward counter)
+              this.time.delayedCall(600, () => {
+                if (!barista.active || !this.cafeContainer?.active) return
+                // Slide a cup from behind the counter to in front of the walker
+                const cupStartX = this.cafeContainer.x + barista.x
+                const cupStartY = this.cafeContainer.y + barista.y - 20
+                const cupEndX = walker.x
+                const cupEndY = walker.y - 10
+                const cup = this.add.circle(cupStartX, cupStartY, 3, 0x8b5cf6, 0.8).setDepth(9002)
+                // Steam wisp on the cup
+                const steam = this.add.circle(cupStartX, cupStartY - 6, 2, 0xffffff, 0.3).setDepth(9002)
+                this.tweens.add({
+                  targets: [cup, steam], x: cupEndX, y: { value: cupEndY, ease: 'Quad.easeOut' },
+                  duration: 600, ease: 'Sine.easeOut',
+                  onComplete: () => {
+                    steam.destroy()
+                    // Cup stays by the walker, then fades when they leave
+                    this.time.delayedCall(2500, () => {
+                      if (cup.active) this.tweens.add({ targets: cup, alpha: 0, duration: 400, onComplete: () => cup.destroy() })
+                    })
+                  },
+                })
+              })
+            }
           }
+
+          this.time.delayedCall(120000, () => {  // 2 minutes coffee break
+            if (!walker.active) { cleanup(); return }
+            phase = 'returning'
+            currentPoints = backPoints
+            pointIdx = 0
+            stepNext()
+          })
+        } else {
+          // Arrived back at desk
+          cleanup()
+          this.spawnEmojiReaction(startX, startY - 25, '😊')
         }
-
-        // For left-side B frames (which don't exist), use flipX on the right-side B frame
-        if (!goingRight && dx > dy * 2) {
-          walkFrameB = WALK_B_SIDE_R
-          walker.setFlipX(true)
-        }
-
-        // Set initial frame
-        walker.setFrame(COMPACT_WALK_START + walkFrameA)
-
-        // Create a walk cycle timer that alternates between step A and B
-        // Clear any previous walk cycle timer
-        if ((walker as any)._walkCycleTimer) { (walker as any)._walkCycleTimer.destroy() }
-        let stepA = true
-        const cycleTimer = this.time.addEvent({
-          delay: 200, loop: true,
-          callback: () => {
-            if (!walker.active) return
-            stepA = !stepA
-            const frame = stepA ? walkFrameA : walkFrameB
-            walker.setFrame(COMPACT_WALK_START + frame)
-            if (!goingRight && dx > dy * 2) walker.setFlipX(true)
-            else walker.setFlipX(false)
-          },
-        })
-        ;(walker as any)._walkCycleTimer = cycleTimer
-
-        this.tweens.add({ targets: walker, x: target.x, y: target.y, duration: dur, ease: 'Linear', onComplete: next })
+        return
       }
-      next()
+
+      const target = currentPoints[pointIdx++]
+      const dx = target.x - walker.x
+      const dy = target.y - walker.y
+      const dist = Math.hypot(dx, dy)
+      if (dist < 2) { stepNext(); return }
+
+      // Pick walk frames based on direction (A = step 1, B = step 2)
+      const adx = Math.abs(dx), ady = Math.abs(dy)
+      // Walk strip: 12 frames (256×512) — 4 directions × 3 frames each
+      //   0-2:  walking DOWN  (stand, left-forward, right-forward)
+      //   3-5:  walking RIGHT (stand, left-forward, right-forward)
+      //   6-8:  walking UP    (stand, left-forward, right-forward)
+      //   9-11: walking LEFT  (stand, left-forward, right-forward)
+
+      let startFrame: number
+      if (adx > ady * 1.5) {
+        startFrame = dx > 0 ? 3 : 9
+      } else if (ady > adx * 1.5) {
+        startFrame = dy > 0 ? 0 : 6
+      } else {
+        // Diagonal — pick the dominant axis
+        if (adx > ady) { startFrame = dx > 0 ? 3 : 9 }
+        else { startFrame = dy > 0 ? 0 : 6 }
+      }
+
+      walker.setTexture(walkSheetKey, startFrame)
+      walker.setFlipX(false)
+      walker.setScale(WALK_SCALE)
+
+      const dur = Math.max(200, (dist / WALK_SPEED) * 1000)
+      let cycleIdx = 0
+      // Cycle between left-foot(1) and right-foot(2), skip stand(0) to avoid vertical bounce
+      // Add very subtle angle sway (±2°) for natural movement feel
+      const walkCycleTimer = this.time.addEvent({
+        delay: 200, loop: true,
+        callback: () => {
+          if (!walker.active) { walkCycleTimer.destroy(); return }
+          cycleIdx = cycleIdx === 0 ? 1 : 0
+          walker.setFrame(startFrame + 1 + cycleIdx)
+          walker.setAngle(cycleIdx === 0 ? -3 : 3)
+        },
+      })
+      this.tweens.add({
+        targets: walker,
+        x: target.x, y: target.y,
+        duration: dur, ease: 'Linear',
+        onComplete: () => { walkCycleTimer.destroy(); stepNext() },
+      })
+      this.tweens.add({ targets: shadow, x: target.x, y: target.y + 2, duration: dur, ease: 'Linear' })
     }
 
-    // Phase 1: Walk to café via waypoints
-    walkPath(waypoints, () => {
-      // Phase 2: Sit on stool
-      stopWalkAnims()
-      walker.setFrame(COMPACT_SIT_START)
-      walker.setFlipX(false)
-      walker.y = cafeY
-
-      // Order thought bubble
-      const drinks = ['Latte', 'Espresso', 'Mocha', 'Cappuccino', 'Flat White', 'Cold Brew']
-      const orderBubble = this.add.text(walker.x, walker.y - 32, drinks[Math.floor(Math.random() * drinks.length)], {
-        fontSize: '6px', color: '#fbbf24', fontFamily: 'monospace',
-        backgroundColor: '#1e1b2eee', padding: { x: 4, y: 2 }, resolution: 2,
-      }).setOrigin(0.5).setDepth(9003).setAlpha(0)
-      this.tweens.add({
-        targets: orderBubble, alpha: 1, duration: 300,
-        onComplete: () => { this.time.delayedCall(2000, () => { this.tweens.add({ targets: orderBubble, alpha: 0, duration: 400, onComplete: () => orderBubble.destroy() }) }) },
-      })
-      // Barista responds
-      this.time.delayedCall(1500, () => {
-        if (!this.cafeContainer?.active) return
-        const bc = this.cafeBaristas[0]
-        if (bc) {
-          const dots = this.add.text(this.cafeContainer!.x + bc.x, this.cafeContainer!.y + bc.y - 24, '...', {
-            fontSize: '7px', color: '#ffffff', fontFamily: 'monospace', resolution: 2,
-          }).setOrigin(0.5).setDepth(9003).setAlpha(0)
-          this.tweens.add({ targets: dots, alpha: 1, duration: 200, yoyo: true, repeat: 2, onComplete: () => dots.destroy() })
-        }
-      })
-
-      // Phase 3: Sit for 5-8s, then walk back
-      this.time.delayedCall(5000 + Math.random() * 3000, () => {
-        // Restart waddle for return
-        const retBob = this.tweens.add({ targets: walker, y: '-=3', duration: 160, yoyo: true, repeat: -1, ease: 'Quad.easeOut' })
-        const retWaddle = this.tweens.add({ targets: walker, angle: { from: -4, to: 4 }, duration: 320, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' })
-        const retSquish = this.tweens.add({ targets: walker, scaleX: CHAR_SCALE * 1.06, scaleY: CHAR_SCALE * 0.94, duration: 160, yoyo: true, repeat: -1, ease: 'Quad.easeOut' })
-
-        // Coffee cup carried back
-        const cup = this.add.circle(0, 0, 2.5, 0x8b5cf6, 0.75).setDepth(9001)
-        const cupSync = this.time.addEvent({
-          delay: 16, loop: true,
-          callback: () => { if (walker.active) cup.setPosition(walker.x + 5, walker.y - 18) },
-        })
-
-        walkPath(returnWaypoints, () => {
-          // Arrived back at desk
-          retBob.destroy(); retWaddle.destroy(); retSquish.destroy()
-          cupSync.destroy()
-          destroyAll()
-          ws.sprite.setAlpha(1)
-          this.coffeeRunners.delete(agentId)
-          this.tweens.add({ targets: cup, alpha: 0, y: cup.y - 10, duration: 800, delay: 600, ease: 'Sine.easeOut', onComplete: () => cup.destroy() })
-          this.spawnEmojiReaction(startX, startY - 25, '😊')
-        })
-      })
-    })
+    stepNext()
   }
 
     private rebuildNavMesh(): void {
@@ -5216,7 +4731,7 @@ export class OfficeScene extends Phaser.Scene {
         x: room.x, y: room.y,
         width: room.width, height: room.height,
         doorX: room.x,
-        doorY: room.y + room.height / 2,
+        doorY: this.getRoomDoorY(room),
       })
     }
 
@@ -5230,7 +4745,7 @@ export class OfficeScene extends Phaser.Scene {
 
     let cafeBounds: { x: number; y: number; w: number; h: number } | null = null
     if (this.cafeContainer) {
-      cafeBounds = { x: this.cafeContainer.x, y: this.cafeContainer.y, w: 118, h: 350 }
+      cafeBounds = { x: this.cafeContainer.x, y: this.cafeContainer.y, w: 420, h: 180 }
     }
 
     this.navMesh.rebuild({
@@ -6864,6 +6379,13 @@ export class OfficeScene extends Phaser.Scene {
     return base + POSE_IDLE
   }
 
+  /** World-space Y of the room's door opening. */
+  private getRoomDoorY(room: Room): number {
+    return room.doorSide === 'top'
+      ? room.y - room.height / 2 + 20
+      : room.y + room.height / 2
+  }
+
   private getStatusColor(agent: AgentState): number {
     if (agent.needsInteraction) {
       if (agent.interactionType === 'tool-approval') return 0xf87171  // Red for approval needed
@@ -7492,7 +7014,8 @@ export class OfficeScene extends Phaser.Scene {
   private buildStatusBar(): void {
     const BAR_H = 24;
     const vw = this.viewWidth;
-    this.statusBarContainer = this.add.container(0, 0).setDepth(9995).setScrollFactor(0);
+    const vh = this.viewHeight;
+    this.statusBarContainer = this.add.container(0, vh - BAR_H).setDepth(9995).setScrollFactor(0);
     this.statusBarBg = this.add.rectangle(0, 0, vw, BAR_H, 0x0f172a, 0.85).setOrigin(0, 0);
     this.statusBarContainer.add(this.statusBarBg);
     const ts = { fontFamily: 'monospace', fontSize: '9px', fontStyle: 'bold', color: '#94a3b8' };
@@ -7500,9 +7023,9 @@ export class OfficeScene extends Phaser.Scene {
     const brandText = this.add.text(10, midY, 'PENNY OFFICE', ts).setOrigin(0, 0.5);
     this.statusBarContainer.add(brandText);
     const cx = vw / 2;
-    this.statusBarAgentText = this.add.text(cx - 120, midY, 'AGENTS 0', ts).setOrigin(0, 0.5);
+    this.statusBarAgentText = this.add.text(cx - 80, midY, 'AGENTS 0', ts).setOrigin(0.5, 0.5);
     this.statusBarActiveText = this.add.text(cx, midY, 'ACTIVE 0', ts).setOrigin(0.5, 0.5);
-    this.statusBarRoomText = this.add.text(cx + 60, midY, 'ROOMS 0', ts).setOrigin(0, 0.5);
+    this.statusBarRoomText = this.add.text(cx + 80, midY, 'ROOMS 0', ts).setOrigin(0.5, 0.5);
     this.statusBarContainer.add([this.statusBarAgentText, this.statusBarActiveText, this.statusBarRoomText]);
     this.statusBarTimeText = this.add.text(vw - 10, midY, this.getStatusBarTime(), ts).setOrigin(1, 0.5);
     this.statusBarContainer.add(this.statusBarTimeText);
@@ -7513,10 +7036,12 @@ export class OfficeScene extends Phaser.Scene {
   private repositionStatusBar(): void {
     if (!this.statusBarContainer) return;
     const vw = this.viewWidth;
+    const vh = this.viewHeight;
+    this.statusBarContainer.setY(vh - 24);
     if (this.statusBarBg) this.statusBarBg.setSize(vw, 24);
-    if (this.statusBarAgentText) this.statusBarAgentText.setX(vw / 2 - 120);
+    if (this.statusBarAgentText) this.statusBarAgentText.setX(vw / 2 - 80);
     if (this.statusBarActiveText) this.statusBarActiveText.setX(vw / 2);
-    if (this.statusBarRoomText) this.statusBarRoomText.setX(vw / 2 + 60);
+    if (this.statusBarRoomText) this.statusBarRoomText.setX(vw / 2 + 80);
     if (this.statusBarTimeText) this.statusBarTimeText.setX(vw - 10);
   }
 
@@ -8709,6 +8234,7 @@ export class OfficeScene extends Phaser.Scene {
     if (this.cafeVisitorTimer) { this.cafeVisitorTimer.destroy(); this.cafeVisitorTimer = null }
     if (this.cafeSteamTimer) { this.cafeSteamTimer.destroy(); this.cafeSteamTimer = null }
     this.coffeeRunners.clear()
+    this.coffeeRunnerRooms.clear()
     if (this.cafeContainer) { this.cafeContainer.destroy(true); this.cafeContainer = null }
     this.cafeBaristas = []
 
