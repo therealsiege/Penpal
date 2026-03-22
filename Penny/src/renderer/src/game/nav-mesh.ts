@@ -77,7 +77,7 @@ export class NavMesh {
 
     // 2. Door openings — narrow passage through the wall
     for (const room of config.rooms) {
-      this.markRect(room.doorX - 10, room.y + room.height / 2 - 16, 20, 32)
+      this.markRect(room.doorX - 10, room.doorY - 16, 20, 32)
     }
 
     // 3. Corridors — ONLY the actual drawn hallway segments
