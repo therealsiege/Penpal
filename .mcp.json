@@ -17,7 +17,18 @@
     },
     "memory": {
       "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-memory"]
+      "args": ["-y", "@modelcontextprotocol/server-memory"],
+      "env": {
+        "MEMORY_FILE_PATH": "/Users/fuzeelogik/sidekick/analytics/data/memory-graph.json"
+      }
+    },
+    "browserbase": {
+      "command": "npx",
+      "args": ["-y", "@anthropic-ai/mcp-server-browserbase@latest"],
+      "env": {
+        "BROWSERBASE_API_KEY": "***REMOVED***",
+        "BROWSERBASE_PROJECT_ID": "***REMOVED***"
+      }
     },
     "ddg-search": {
       "command": "uvx",

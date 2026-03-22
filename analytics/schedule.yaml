@@ -41,6 +41,13 @@ jobs:
     timeout: 900
     enabled: true
 
+  memory-sync:
+    description: Sync MCP Knowledge Graph Memory into Memgraph
+    command: npm run memory:sync
+    cron: "*/15 * * * *"
+    timeout: 60
+    enabled: true
+
   # --- Future agent tasks (Phase B+) ---
   # stale-leads:
   #   description: Flag leads with no activity in 14+ days
