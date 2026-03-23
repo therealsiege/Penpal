@@ -19,7 +19,7 @@ export function createOfficeGame(container: HTMLDivElement): {
     // immediately grow to the real size on the first layout tick.
     width: Math.max(1, Math.floor(rect.width)),
     height: Math.max(1, Math.floor(rect.height)),
-    backgroundColor: '#0f172a',
+    transparent: true,
     scene: [scene],
     scale: {
       mode: Phaser.Scale.RESIZE,

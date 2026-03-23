@@ -4,324 +4,65 @@ import type { AgentState, OpencodeSession } from '../types'
 import { XP_RANKS, getXPForLevel } from '../types'
 import { activeTheme, setActiveTheme, lerpColor, THEMES, type ThemeName } from './office-theme'
 import { NavMesh, type NavPoint } from './nav-mesh'
+import { getRoomType, getTemplate } from './room-renderer'
+import { PennyCafe, type CafeHostScene } from './penny-cafe'
+import { OfficeParticles } from './office-particles'
+import { OfficeAtmosphere } from './office-atmosphere'
+import type { WorkstationSprite, Room, TeamAreaLayout, MinimapProjection, TripletLineInfo, OfficeDebugSnapshot } from './office-types'
 
-// Keyboard shortcut constants
-const KB_ZOOM_STEP = 0.15
-const KB_ZOOM_DURATION = 200
-const KB_PAN_DURATION = 400
-const KB_AUTO_PAN_INTERVAL = 3000
+import {
+  KB_ZOOM_STEP, KB_ZOOM_DURATION, KB_PAN_DURATION, KB_AUTO_PAN_INTERVAL,
+  CHAR_FRAME_W, CHAR_FRAME_H, CHAR_COLS, NUM_CHARS,
+  POSE_IDLE, POSE_INTERACT, POSE_SIT, POSE_SURPRISE, POSE_HURT, POSE_WALK,
+  COMPACT_COLS, COMPACT_IDLE_START, COMPACT_WALK_START, COMPACT_SIT_START,
+  WALK_A_FRONT, WALK_A_FRONT_R, WALK_A_SIDE_R, WALK_A_BACK_R,
+  WALK_A_BACK, WALK_A_BACK_L, WALK_A_SIDE_L, WALK_A_FRONT_L,
+  WALK_B_FRONT, WALK_B_FRONT_R, WALK_B_SIDE_R, WALK_B_BACK_R,
+  OFFICE_TILE_SIZE, FRAME_CHAIR_DARK, FRAME_MONITOR, ROOM_TILE_SIZE,
+  OFFICE_FRAME_PLANT, OFFICE_FRAME_PLANT_SM, OFFICE_FRAME_PICTURE,
+  OFFICE_FRAME_PICTURE2, OFFICE_FRAME_PICTURE3, OFFICE_FRAME_BOOKSHELF,
+  OFFICE_FRAME_PLANT_TALL, OFFICE_FRAME_CACTUS, OFFICE_FRAME_HANGING_PLANT,
+  OFFICE_FRAME_FERN, OFFICE_FRAME_MONSTERA, OFFICE_FRAME_CLOCK,
+  OFFICE_FRAME_LAMP, OFFICE_FRAME_TRASH, OFFICE_FRAME_STORAGE,
+  OFFICE_FRAME_FILE_CABINET, OFFICE_FRAME_WATER_COOLER, OFFICE_FRAME_WHITEBOARD,
+  OFFICE_FRAME_MONITOR, OFFICE_FRAME_SOFA, OFFICE_FRAME_PRINTER,
+  CHAR_SCALE, WORKSTATION_W, WORKSTATION_H, ROOM_PADDING, ROOM_TOP_EXTRA,
+  ROOM_HEADER_H, ROOM_GAP, MAX_AGENTS_PER_ROW,
+  TEAM_AREA_PAD_X, TEAM_AREA_PAD_Y, TEAM_AREA_GAP_X, TEAM_AREA_GAP_Y, TEAM_LABEL_H,
+  WS_CHAIR_Y, WS_SPRITE_Y, WS_DESK_Y, WS_MONITOR_Y, WS_NAME_Y, WS_DOT_GAP,
+  IDLE_WALK_BREAK_MIN_MS, IDLE_WALK_BREAK_VAR_MS, IDLE_WALK_RANGE_X,
+  COLOR_BG, COLOR_ROOM_FLOOR, COLOR_ROOM_FLOOR2, COLOR_WALL, COLOR_WALL_INNER,
+  COLOR_DESK_BODY, COLOR_DESK_TOP, COLOR_HEADER_BG, COLOR_DOOR_FRAME,
+  COLOR_POD_EDGE, COLOR_POD_GROOVE, COLOR_DOOR_FILL, COLOR_DOOR_ACCENT,
+  COLOR_LED_GREEN, COLOR_LED_AMBER, COLOR_LED_GRAY,
+  WORLD_MARGIN, ZOOM_MIN, ZOOM_MAX, ZOOM_FIT_MAX, ZOOM_LERP_SPEED, FOLLOW_LERP_SPEED,
+  LOD_L1_MAX, LOD_L2_MAX,
+  MINIMAP_W, MINIMAP_H, MINIMAP_MARGIN, MINIMAP_BG, MINIMAP_ROOM_COLOR,
+  MINIMAP_VIEWPORT_COLOR, MINIMAP_REFRESH_MS,
+  TRIPLET_REFRESH_MS, AMBIENT_MOTE_POOL_SIZE,
+} from './office-constants'
 
-// ---------------------------------------------------------------------------
-// Spritesheet constants
-// ---------------------------------------------------------------------------
-
-const CHAR_FRAME_W = 256
-const CHAR_FRAME_H = 512
-const CHAR_COLS    = 6
-const NUM_CHARS    = 3  // Character 1, Character 2, Character 1 tinted
-
-const POSE_IDLE     = 0
-const POSE_INTERACT = 1
-const POSE_SIT      = 2
-const POSE_SURPRISE = 3
-const POSE_HURT     = 4
-const POSE_WALK     = 5
-
-// Compact spritesheet frame map (duder-compact / duder-compact-2)
-// Row 1: idle(4 rotations) + walk(12 rotations) + sit(1) = 17 frames
-// Rotation order: front, 3/4-right, side-right, back-right, back, back-left, side-left, 3/4-left, ...
-const COMPACT_COLS = 17
-const COMPACT_IDLE_START    = 0   // 4 frames: front, 3/4, side, back
-const COMPACT_WALK_START    = 4   // 12 frames: full rotation walk cycle
-const COMPACT_SIT_START     = 16  // 1 frame
-// Walk rotation indices (offset from COMPACT_WALK_START)
-// Step A (first walk pose): 8 directions
-const WALK_A_FRONT     = 0
-const WALK_A_FRONT_R   = 1
-const WALK_A_SIDE_R    = 2
-const WALK_A_BACK_R    = 3
-const WALK_A_BACK      = 4
-const WALK_A_BACK_L    = 5
-const WALK_A_SIDE_L    = 6
-const WALK_A_FRONT_L   = 7
-// Step B (alternate walk pose): 4 key directions
-const WALK_B_FRONT     = 8
-const WALK_B_FRONT_R   = 9
-const WALK_B_SIDE_R    = 10
-const WALK_B_BACK_R    = 11
-
-const OFFICE_TILE_SIZE = 48
-const FRAME_CHAIR_DARK   = 112
-const FRAME_MONITOR      = 122
-
-const ROOM_TILE_SIZE = 48
-
-// Office decoration frame indices
-const OFFICE_FRAME_PLANT      = 68
-const OFFICE_FRAME_PLANT_SM  = 53
-const OFFICE_FRAME_PICTURE    = 64
-const OFFICE_FRAME_PICTURE2   = 65
-const OFFICE_FRAME_PICTURE3   = 66
-const OFFICE_FRAME_BOOKSHELF  = 96
-// Additional decorations
-const OFFICE_FRAME_PLANT_TALL    = 54
-const OFFICE_FRAME_CACTUS       = 55
-const OFFICE_FRAME_HANGING_PLANT = 67
-const OFFICE_FRAME_FERN         = 69
-const OFFICE_FRAME_MONSTERA     = 70
-const OFFICE_FRAME_CLOCK        = 63
-const OFFICE_FRAME_LAMP         = 115
-const OFFICE_FRAME_TRASH        = 119
-const OFFICE_FRAME_STORAGE      = 97
-const OFFICE_FRAME_FILE_CABINET = 98
-const OFFICE_FRAME_WATER_COOLER = 120
-const OFFICE_FRAME_WHITEBOARD   = 94
-const OFFICE_FRAME_MONITOR      = 122
-const OFFICE_FRAME_SOFA         = 102
-const OFFICE_FRAME_PRINTER      = 126
 
 // ---------------------------------------------------------------------------
-// Layout constants
+// OfficeScene — Interfaces extracted to office-types.ts
 // ---------------------------------------------------------------------------
 
-const CHAR_SCALE      = 0.134
-const WORKSTATION_W   = 70 // ~20% tighter office footprint
-const WORKSTATION_H   = 77 // ~20% tighter office footprint
-const ROOM_PADDING    = 12
-const ROOM_TOP_EXTRA  = 30   // extra top padding so thought bubbles clear room headers
-const ROOM_HEADER_H   = 20
-const ROOM_GAP        = 18
-const MAX_AGENTS_PER_ROW = 4
-const TEAM_AREA_PAD_X = 18
-const TEAM_AREA_PAD_Y = 18
-const TEAM_AREA_GAP_X = 28
-const TEAM_AREA_GAP_Y = 40
-const TEAM_LABEL_H = 16
+// (WorkstationSprite, Room, TeamAreaLayout, MinimapProjection, TripletLineInfo,
+//  OfficeDebugSnapshot are imported from ./office-types)
 
-const WS_CHAIR_Y    = 6
-const WS_SPRITE_Y   = -5
-const WS_DESK_Y     = 18
-const WS_MONITOR_Y  = 5
-const WS_NAME_Y     = 40
-const WS_DOT_GAP    = 4
-const IDLE_WALK_BREAK_MIN_MS = 9000
-const IDLE_WALK_BREAK_VAR_MS = 7000
-const IDLE_WALK_RANGE_X = 20
+// WorkstationSprite — moved to ./office-types
+// (WorkstationSprite body deleted — see office-types.ts)
+// (WorkstationSprite moved to office-types.ts)
 
-// Colors
-const COLOR_BG          = 0x111827
-const COLOR_ROOM_FLOOR  = 0x1e293b
-const COLOR_ROOM_FLOOR2 = 0x334155
-const COLOR_WALL        = 0x334155
-const COLOR_WALL_INNER  = 0x475569
-const COLOR_DESK_BODY   = 0x475569
-const COLOR_DESK_TOP    = 0x64748b
-const COLOR_HEADER_BG   = 0x0f172a
-const COLOR_DOOR_FRAME  = 0x3b82f6
-const COLOR_POD_EDGE    = 0x64748b
-const COLOR_POD_GROOVE  = 0x0f172a
-const COLOR_VIGNETTE    = 0x000000
-const COLOR_DOOR_FILL   = 0x0f172a
-const COLOR_DOOR_ACCENT = 0x3b82f6
-const COLOR_LED_GREEN   = 0x34d399
-const COLOR_LED_AMBER   = 0xfbbf24
-const COLOR_LED_GRAY    = 0x64748b
-
-const WORLD_MARGIN   = 30
-
-// Camera & navigation constants
-const ZOOM_MIN = 0.4
-const ZOOM_MAX = 2.0
-const ZOOM_FIT_MAX = 1.14
-const ZOOM_LERP_SPEED = 0.08
-const FOLLOW_LERP_SPEED = 0.06
-// LOD thresholds — zoom boundaries between 3 detail levels
-// Level 1 (zoom < LOD_L1_MAX): building overview — rooms as colored rects only
-// Level 2 (LOD_L1_MAX..LOD_L2_MAX): room view — agents + desks, no micro-accessories
-// Level 3 (zoom > LOD_L2_MAX): full detail — all accessories, particles, monitor content
-const LOD_L1_MAX = 0.5
-const LOD_L2_MAX = 0.85
-const MINIMAP_W = 160
-const MINIMAP_H = 100
-const MINIMAP_MARGIN = 12
-const MINIMAP_BG = 0x0f172a
-const MINIMAP_ROOM_COLOR = 0x334155
-const MINIMAP_VIEWPORT_COLOR = 0x3b82f6
-const MINIMAP_REFRESH_MS = 120
-const TRIPLET_REFRESH_MS = 90
-const AMBIENT_MOTE_POOL_SIZE = 26
-
-// ---------------------------------------------------------------------------
-// Interfaces
-// ---------------------------------------------------------------------------
-
-interface WorkstationSprite {
-  container: Phaser.GameObjects.Container
-  sprite: Phaser.GameObjects.Sprite
-  nameText: Phaser.GameObjects.Text
-  statusDot: Phaser.GameObjects.Arc
-  roleBadge: Phaser.GameObjects.Text | null
-  deskBody: Phaser.GameObjects.Rectangle
-  deskTop: Phaser.GameObjects.Rectangle
-  monitorSprite: Phaser.GameObjects.Sprite | null
-  chairSprite: Phaser.GameObjects.Sprite | null
-  monitorGlowOverlay?: Phaser.GameObjects.Arc
-  screenLines?: Phaser.GameObjects.Graphics
-  monitorText?: Phaser.GameObjects.Text
-  monitorTextTween?: Phaser.Tweens.Tween
-  thoughtBubble: Phaser.GameObjects.Container
-  thoughtBubbleText: Phaser.GameObjects.Text
-  thoughtBubbleBg: Phaser.GameObjects.Graphics
-  blockedIndicator: Phaser.GameObjects.Container
-  blockedIndicatorPulse: Phaser.GameObjects.Arc
-  blockedIndicatorBadge: Phaser.GameObjects.Arc
-  blockedIndicatorStem: Phaser.GameObjects.Rectangle
-  blockedIndicatorText: Phaser.GameObjects.Text
-  state: AgentState | null
-  breathTween?: Phaser.Tweens.Tween
-  bounceTween?: Phaser.Tweens.Tween
-  dotPulseTween?: Phaser.Tweens.Tween
-  monitorGlowTween?: Phaser.Tweens.Tween
-  screenTween?: Phaser.Tweens.Tween
-  typingTween?: Phaser.Tweens.Tween
-  headTiltTween?: Phaser.Tweens.Tween
-  pulseTween?: Phaser.Tweens.Tween
-  steamTweens?: Phaser.Tweens.Tween[]
-  steamContainer?: Phaser.GameObjects.Container
-  lastAnimMode?: 'idle' | 'working' | 'waiting'
-  lastStateFingerprint?: string
-  /** Level 2+: shown at room-level zoom (agents, desks, status dots, name tags) */
-  lodLevel2Objects: Phaser.GameObjects.GameObject[]
-  /** Level 3 only: shown at full-detail zoom (accessories, lamps, mugs, ledGlow, monitorText, moodEmoji) */
-  lodLevel3Objects: Phaser.GameObjects.GameObject[]
-  lookAroundTimer?: Phaser.Time.TimerEvent
-  stretchTimer?: Phaser.Time.TimerEvent
-  walkBreakTimer?: Phaser.Time.TimerEvent
-  walkBreakTween?: Phaser.Tweens.Tween
-  lookAtNeighborTimer?: Phaser.Time.TimerEvent
-  yawnTimer?: Phaser.Time.TimerEvent
-  blockedIndicatorTween?: Phaser.Tweens.Tween
-  ledGlow?: Phaser.GameObjects.Graphics
-  ledPulseTween?: Phaser.Tweens.Tween
-  lastShownBlurb?: string
-  blurbFadeTimer?: Phaser.Time.TimerEvent
-  thoughtBubbleFloatTween?: Phaser.Tweens.Tween
-  blurbTypingTween?: Phaser.Tweens.Tween
-  moodEmoji?: Phaser.GameObjects.Text
-  moodTween?: Phaser.Tweens.Tween
-  deskPlantTween?: Phaser.Tweens.Tween
-  xpBarBg?: Phaser.GameObjects.Rectangle
-  xpBarFill?: Phaser.GameObjects.Rectangle
-  xpBarText?: Phaser.GameObjects.Text
-  xpBarTween?: Phaser.Tweens.Tween
-  rippleFired?: boolean
-  soundWaveGfx?: Phaser.GameObjects.Graphics
-  soundWaveTween?: Phaser.Tweens.Tween
-  sparklineGfx?: Phaser.GameObjects.Graphics
-  activityHistory?: number[]
-  phoneLight?: Phaser.GameObjects.Arc
-  phoneLightTween?: Phaser.Tweens.Tween
-  progressRing?: Phaser.GameObjects.Graphics
-  progressRingTween?: Phaser.Tweens.Tween
-  workStartTime?: number
-  shadow?: Phaser.GameObjects.Ellipse
-  uptimeText?: Phaser.GameObjects.Text
-  roleBadgePulseTween?: Phaser.Tweens.Tween
-  // Task completion tally — increments each time an agent transitions working→idle
-  taskCountText?: Phaser.GameObjects.Text
-  taskCountBg?: Phaser.GameObjects.Graphics
-  taskCountFlashTween?: Phaser.Tweens.Tween
-  localTaskCount: number
-  onCoffeeRun?: boolean
-}
-
-interface Room {
-  cwd: string
-  label: string
-  teamKey: string
-  teamLabel: string
-  agents: AgentState[]
-  x: number
-  y: number
-  width: number
-  height: number
-  container: Phaser.GameObjects.Container
-  workstations: Map<string, WorkstationSprite>
-  floorGraphics: Phaser.GameObjects.Graphics
-  activityBar: Phaser.GameObjects.Rectangle
-  activityBarTween: Phaser.Tweens.Tween | null
-  waitingBar: Phaser.GameObjects.Rectangle
-  waitingBarTween: Phaser.Tweens.Tween | null
-  statusLed: Phaser.GameObjects.Arc
-  statusLedGlow: Phaser.GameObjects.Arc
-  statusLedTween: Phaser.Tweens.Tween | null
-  ledMode: 'idle' | 'active' | 'waiting'
-  // Animated door
-  doorGraphics: Phaser.GameObjects.Graphics
-  doorFrameGraphics: Phaser.GameObjects.Graphics
-  doorPulseTween: Phaser.Tweens.Tween | null
-  prevAgentCount: number
-  // Thermal heat overlay — glows warmer as agent activity increases
-  heatOverlay?: Phaser.GameObjects.Rectangle
-  heatTween?: Phaser.Tweens.Tween
-  // Header status strip — 2px bar below accent line, width proportional to active agents
-  statusStrip: Phaser.GameObjects.Graphics | null
-  statusStripTween: Phaser.Tweens.Tween | null
-  // Badge dot pulse tween
-  badgeDotTween: Phaser.Tweens.Tween | null
-  // Tiled floor texture sprites (very-low-alpha overlays from room-tiles spritesheet)
-  floorTileSprites?: Phaser.GameObjects.Sprite[]
-  miniWhiteboard?: Phaser.GameObjects.Container
-  miniWhiteboardTexts?: Phaser.GameObjects.Text[]
-  doorSide: 'top' | 'bottom'
-}
+// Room — moved to ./office-types
 
 // ---------------------------------------------------------------------------
 // OfficeScene
 // ---------------------------------------------------------------------------
 
-// Triplet workflow info for connecting lines
-interface TripletLineInfo {
-  workflowId: string
-  solverAgentId: string
-  reviewerAgentId: string
-  executorAgentId: string
-  status: string
-}
+// TripletLineInfo, TeamAreaLayout, MinimapProjection — moved to ./office-types
 
-interface TeamAreaLayout {
-  teamKey: string
-  teamLabel: string
-  x: number
-  y: number
-  width: number
-  height: number
-  agentCount: number
-}
-
-interface MinimapProjection {
-  minX: number
-  minY: number
-  drawW: number
-  drawH: number
-  scale: number
-  pad: number
-}
-
-export interface OfficeDebugSnapshot {
-  ready: boolean
-  roomCount: number
-  workstationCount: number
-  camera: {
-    scrollX: number
-    scrollY: number
-    zoom: number
-  }
-  world: {
-    width: number
-    height: number
-  }
-}
+// OfficeDebugSnapshot — moved to ./office-types
 
 export class OfficeScene extends Phaser.Scene {
   private pendingAgents: AgentState[] | null = null
@@ -368,16 +109,9 @@ export class OfficeScene extends Phaser.Scene {
   private lastFloorArrowAt = 0
   private officeDecoSprites: Phaser.GameObjects.Sprite[] = []
   private seasonalDecos: Phaser.GameObjects.GameObject[] = []
-  private cafeContainer: Phaser.GameObjects.Container | null = null
-  private cafeBaristas: Phaser.GameObjects.Container[] = []
-  private cafeVisitorTimer: Phaser.Time.TimerEvent | null = null
-  private cafeSteamTimer: Phaser.Time.TimerEvent | null = null
-  private coffeeRunTimer: Phaser.Time.TimerEvent | null = null
+  private cafe!: PennyCafe
+  private cafeFloorMask: Phaser.GameObjects.Graphics | null = null
   private navMesh = new NavMesh()
-  private coffeeRunners: Set<string> = new Set()  // agent IDs currently on coffee run
-  private coffeeRunnerRooms: Set<string> = new Set()  // room CWDs with active coffee runners
-  private cafeWorldX = 0
-  private cafeWorldY = 0
   private decoTweens: Phaser.Tweens.Tween[] = []
   private waterCoolerBubbleTimer: Phaser.Time.TimerEvent | null = null
   private whiteboardContainer: Phaser.GameObjects.Container | null = null
@@ -400,30 +134,11 @@ export class OfficeScene extends Phaser.Scene {
   private readonly GLINT_INTERVAL = 3000
   private readonly GLINT_DURATION = 600
 
-  // Typing spark particles
-  private typingParticlePool: Phaser.GameObjects.Arc[] = []
-  private typingParticleTimer: Phaser.Time.TimerEvent | null = null
-  private ambientMotePool: (Phaser.GameObjects.Arc | Phaser.GameObjects.Graphics)[] = []
-  private ambientMoteTimer: Phaser.Time.TimerEvent | null = null
-  private constellationGfx: Phaser.GameObjects.Graphics | null = null
-  // Corridor data-flow particle trail
-  private corridorParticlePool: Phaser.GameObjects.Arc[] = []
-  private corridorParticleTimer: Phaser.Time.TimerEvent | null = null
-  // Window rain effect (night phase only, screen-space)
-  private rainDropPool: Phaser.GameObjects.Line[] = []
-  private rainActive = false
-  // Window snow effect (morning phase only, screen-space)
-  private snowPool: Phaser.GameObjects.Arc[] = []
-  private snowActive = false
-  // Alert ripple pool — sound-wave rings spawned when agents need interaction
-  private alertRipplePool: Phaser.GameObjects.Arc[] = []
+  // Particle / effect pool systems — managed by OfficeParticles
+  private particles!: OfficeParticles
 
-  // Mouse cursor sparkle trail — subtle fairy-dust effect following pointer movement
-  private mouseTrailPool: Phaser.GameObjects.Arc[] = []
-  private lastTrailSpawnAt = 0
-
-  // Emoji reaction bubble pool — floating emoji pop-ups on agent state changes
-  private emojiReactionPool: Phaser.GameObjects.Text[] = []
+  // Atmosphere — day/night, sky, clouds, stars, clock, ceiling lights
+  private atmosphere!: OfficeAtmosphere
 
   // Starfield — subtle background stars behind the building
   private starPool: Phaser.GameObjects.Arc[] = []
@@ -451,7 +166,7 @@ export class OfficeScene extends Phaser.Scene {
   private shadowAngle = 0
   private lastShadowUpdateAt = 0
   // Subtle screen-space edge shading to frame the office.
-  private vignetteOverlay: Phaser.GameObjects.Graphics | null = null
+  private vignetteFx: Phaser.FX.Vignette | null = null
 
   // Keyboard selection state
   private selectedAgentIndex = -1
@@ -522,11 +237,19 @@ export class OfficeScene extends Phaser.Scene {
   private clockSecondHand: Phaser.GameObjects.Graphics | null = null
   private lastClockTick = 0
   private lastChimeHour = -1
-  private chimeRipplePool: Phaser.GameObjects.Arc[] = []
 
   // Keyboard shortcut help overlay
   private helpOverlay: Phaser.GameObjects.Container | null = null
   private helpVisible = false
+
+  // Debug overlay (backtick toggle)
+  private debugOverlayVisible = false
+  private debugOverlayContainer: Phaser.GameObjects.Container | null = null
+  private debugFpsText: Phaser.GameObjects.Text | null = null
+  private debugObjectCountText: Phaser.GameObjects.Text | null = null
+  private debugNavMeshGfx: Phaser.GameObjects.Graphics | null = null
+  private debugPathGfx: Phaser.GameObjects.Graphics | null = null
+  private lastDebugRefreshAt = 0
 
   // Focus mode — cinematic deep-zoom on a single agent's workstation
   private focusedAgentId: string | null = null
@@ -606,6 +329,8 @@ export class OfficeScene extends Phaser.Scene {
   }
 
   create(): void {
+    this.cafe = new PennyCafe(this as unknown as CafeHostScene)
+
     const cam = this.cameras.main
     cam.setBackgroundColor(COLOR_BG)
     this.lastCamScrollX = cam.scrollX
@@ -622,7 +347,6 @@ export class OfficeScene extends Phaser.Scene {
     this.corridorGraphics = this.add.graphics()
     this.hallwayIndicatorGraphics = this.add.graphics()
     this.officeGraphics.setDepth(-4)
-    this.windowGlintGfx = this.add.graphics().setDepth(-3.5)
     this.teamAreaGraphics.setDepth(-3)
     this.corridorGraphics.setDepth(-2)
     // Floor arrows: depth -1.5 — between corridors (-2) and hallway indicators (-1)
@@ -631,37 +355,43 @@ export class OfficeScene extends Phaser.Scene {
     this.hallwayIndicatorGraphics.setDepth(-1)
 
     // Sky gradient — deepest background layer, behind stars and clouds
-    this.skyGradient = this.add.graphics().setDepth(-11)
+    const skyGradient = this.add.graphics().setDepth(-11)
+    this.skyGradient = skyGradient
 
-    // Starfield background — created before all other world objects
-    this.initStarfield()
+    // Day/night cycle overlay (must be created before atmosphere.init)
+    this.dayNightOverlay = this.add
+      .rectangle(0, 0, 8000, 8000, 0x000000, 0)
+      .setOrigin(0, 0)
+      .setDepth(9997)
+      .setScrollFactor(0)
 
-    // Cloud layer — slow atmospheric drift above/around the building
-    this.initCloudLayer()
+    // Window glint graphics created here so atmosphere can own it
+    this.windowGlintGfx = this.add.graphics().setDepth(-3.5)
 
-    // Typing spark particle pool
-    this.initParticlePool()
-    this.typingParticleTimer = this.time.addEvent({
-      delay: 200, callback: () => this.tickParticles(), loop: true,
+    // Atmosphere: day/night, sky gradient, stars, clouds, clock, ceiling lights
+    this.atmosphere = new OfficeAtmosphere(this, {
+      onPhaseChange: (phase, _animate, _rainDropPool, _snowPool, _vw, _vh) => {
+        // Guard: particles may not yet be initialized during create() (called from atmosphere.init)
+        if (this.particles) this.particles.setWeather(phase, this.viewWidth, this.viewHeight)
+      },
+      invalidateOfficeBgCache: () => { this.lastOfficeBgW = 0 },
+      showToast: (msg, type) => this.showToast(msg, type),
+      getCamera: () => this.cameras.main,
     })
-    this.initAmbientMotePool()
-    this.initRainPool()
-    this.initSnowPool()
-    this.ambientMoteTimer = this.time.addEvent({
-      delay: 420,
-      callback: () => this.tickAmbientMotes(),
-      loop: true,
-    })
-    this.initCorridorParticlePool()
-    this.corridorParticleTimer = this.time.addEvent({
-      delay: 300,
-      callback: () => this.tickCorridorParticles(),
-      loop: true,
-    })
-    this.initAlertRipplePool()
-    this.initChimeRipplePool()
-    this.initEmojiReactionPool()
-    this.initMouseTrailPool()
+    this.atmosphere.init(
+      this.dayNightOverlay,
+      skyGradient,
+      this.windowGlintGfx,
+      this.worldWidth,
+      this.worldHeight,
+      null,
+    )
+
+    // Particle / effect pool systems
+    this.particles = new OfficeParticles(this)
+    this.particles.init(this.viewWidth, this.viewHeight)
+    this.particles.setRooms(this.rooms)
+    this.particles.setCorridorData(this.corridorSegments, false)
 
     // Camera pan -- cancel follow on manual drag
     this.input.on('pointermove', (p: Phaser.Input.Pointer) => {
@@ -674,10 +404,11 @@ export class OfficeScene extends Phaser.Scene {
       // Sparkle trail — only when not panning, throttled to 25/sec max
       if (!p.isDown) {
         const time = this.time.now
-        if (time - this.lastTrailSpawnAt > 40) {
-          this.lastTrailSpawnAt = time
+        if (time - this.particles.lastTrailSpawnAt > 40) {
+          this.particles.lastTrailSpawnAt = time
           const wp = cam.getWorldPoint(p.x, p.y)
-          const particle = this.mouseTrailPool.find(c => !c.getData('busy'))
+          const pool = this.particles.getMouseTrailPool()
+          const particle = pool.find(c => !c.getData('busy'))
           if (particle) {
             const palette = activeTheme.particleColors
             const color = palette[Math.floor(Math.random() * palette.length)]
@@ -746,7 +477,6 @@ export class OfficeScene extends Phaser.Scene {
       // Cheap UI repositioning — do immediately
       this.repositionMinimap()
       this.repositionStatusBar()
-      this.drawVignetteOverlay()
       this.minimapDirty = true
 
       // Expensive layout recomputation — debounce 100ms
@@ -856,26 +586,21 @@ export class OfficeScene extends Phaser.Scene {
       }
       this.input.keyboard.on('keydown-H', toggleHelp)
       this.input.keyboard.on('keydown-QUESTION_MARK', toggleHelp)
+
+      // Backtick — toggle debug overlay (dev only)
+      this.input.keyboard.on('keydown-BACKTICK', (e: KeyboardEvent) => {
+        if (shouldIgnoreKeyboardShortcuts(e)) return
+        e.preventDefault()
+        this.toggleDebugOverlay()
+      })
     }
 
     // Create minimap overlay
     this.initMinimap()
     this.minimapDirty = true
 
-    // Day/night cycle overlay (doesn't block input)
-    this.dayNightOverlay = this.add
-      .rectangle(0, 0, 8000, 8000, 0x000000, 0)
-      .setOrigin(0, 0)
-      .setDepth(9997)
-      .setScrollFactor(0)
-    this.applyDayNightCycle(false)
-    this.vignetteOverlay = this.add.graphics().setDepth(9996).setScrollFactor(0)
-    this.drawVignetteOverlay()
-    this.dayNightTimer = this.time.addEvent({
-      delay: 60_000,
-      callback: () => this.applyDayNightCycle(true),
-      loop: true,
-    })
+    // Vignette: subtle screen-space edge shading
+    this.vignetteFx = this.cameras.main.postFX.addVignette(0.5, 0.5, 0.85, 0.35)
 
     // Notification toast container (screen-space, top-right)
     this.toastContainer = this.add.container(0, 0).setDepth(9998).setScrollFactor(0)
@@ -893,7 +618,7 @@ export class OfficeScene extends Phaser.Scene {
     EventBus.on(EVENTS.BROADCAST, this.broadcastHandler)
 
     this.isReady = true
-    this.startCoffeeRunTimer()
+    this.cafe.startCoffeeRunTimer()
     if (this.pendingAgents) {
       this.setAgents(this.pendingAgents)
       this.pendingAgents = null
@@ -961,6 +686,13 @@ export class OfficeScene extends Phaser.Scene {
       this.drawHallwayIndicators(time)
       this.lastHallwayPulseAt = time
     }
+    // Keep particle system informed about active agent state for corridor particles
+    if (this.particles) {
+      const hasActiveAgent = this.agents.some(
+        a => (a.sessionMode === 'working' || a.sessionMode === 'plan') && !a.needsInteraction,
+      )
+      this.particles.setCorridorData(this.corridorSegments, hasActiveAgent)
+    }
     // Floor arrows — only at room/full-detail zoom, throttled to 200ms
     if (cam.zoom > LOD_L1_MAX && this.rooms.size > 0 && time - this.lastFloorArrowAt >= 200) {
       this.drawFloorArrows(time)
@@ -987,18 +719,20 @@ export class OfficeScene extends Phaser.Scene {
       this.minimapDirty = false
     }
 
-    if (this.rainActive) this.tickRain()
-    if (this.snowActive) this.tickSnow(time)
-    this.tickWindowGlint(time)
-    if (this.starPool.length > 0 && time - this.lastTwinkleAt >= 500) {
-      this.lastTwinkleAt = time
-      this.tickStarfieldTwinkle()
+    // Debug overlay refresh (throttled to 250ms)
+    if (this.debugOverlayVisible && time - this.lastDebugRefreshAt >= 250) {
+      this.refreshDebugOverlay(time, _delta)
+      this.lastDebugRefreshAt = time
     }
-    this.tickClouds()
-    this.tickCeilingLightActivity(time)
-    if (this.wallClockContainer && time - this.lastClockTick >= 1000) {
+
+    if (this.particles.isRainActive()) this.particles.tickRain(this.viewWidth, this.viewHeight)
+    if (this.particles.isSnowActive()) this.particles.tickSnow(time, this.viewWidth, this.viewHeight)
+    this.atmosphere.tickWindowGlint(time)
+    this.atmosphere.tick(time, this.particles.isRainActive(), this.particles.isSnowActive())
+    this.atmosphere.tickCeilingLightActivity(time, this.rooms)
+    if (this.atmosphere.wallClockContainer && time - this.lastClockTick >= 1000) {
       this.lastClockTick = time
-      this.tickWallClock()
+      this.atmosphere.tickWallClock()
     }
     if (this.whiteboardContainer && time - this.lastWhiteboardUpdateAt >= 5000) {
       this.lastWhiteboardUpdateAt = time
@@ -1006,7 +740,7 @@ export class OfficeScene extends Phaser.Scene {
     }
     if (time - this.lastShadowUpdateAt >= 5000) {
       this.lastShadowUpdateAt = time
-      this.updateShadows()
+      this.atmosphere.updateShadows(this.rooms)
     }
 
     // Status bar: agent stats every 3s, clock label every 60s
@@ -1325,10 +1059,10 @@ export class OfficeScene extends Phaser.Scene {
         ws.deskBody.setFillStyle(t.deskBody)
         ws.deskTop.setFillStyle(t.deskTop)
         this.restoreDeskStroke(ws)
-        if (ws.monitorGlowOverlay) {
+        if (ws.monitorGlowFx) {
           const isWorking = ws.state && (ws.state.sessionMode === 'working' || ws.state.sessionMode === 'plan') && !ws.state.needsInteraction
           const isWaiting = ws.state?.needsInteraction
-          ws.monitorGlowOverlay.setFillStyle(isWaiting ? t.deskStrokeWaiting : isWorking ? t.monitorGlowActive : t.monitorGlowIdle)
+          ws.monitorGlowFx.color = isWaiting ? t.deskStrokeWaiting : isWorking ? t.monitorGlowActive : t.monitorGlowIdle
         }
         ws.lastAnimMode = undefined
         if (ws.state) this.updateWorkstation(ws, ws.state)
@@ -1340,11 +1074,7 @@ export class OfficeScene extends Phaser.Scene {
         maxX = Math.max(maxX, room.x + room.width / 2)
         maxY = Math.max(maxY, room.y + room.height / 2)
       }
-      if (maxX > 0) {
-        const bgW = maxX + WORLD_MARGIN * 2
-        const bgH = maxY + WORLD_MARGIN * 2
-        this.drawOfficeBackground(bgW, bgH)
-      }
+      // Background is drawn by layoutRooms which has café bounds for L-shape
     }
     this.tripletDirty = true
     this.drawTripletLines(this.time.now)
@@ -1465,13 +1195,6 @@ export class OfficeScene extends Phaser.Scene {
     const g = room.floorGraphics
     g.clear()
 
-    // Destroy any previously created floor tile sprites so they don't accumulate
-    // across redraws (resize, theme change, etc.)
-    if (room.floorTileSprites && room.floorTileSprites.length > 0) {
-      for (const s of room.floorTileSprites) s.destroy()
-      room.floorTileSprites = []
-    }
-
     const w = room.width
     const h = room.height
 
@@ -1482,36 +1205,17 @@ export class OfficeScene extends Phaser.Scene {
 
     const WALL_T = 3          // thinner than outer building walls (5)
     const WALL_I = 1
-    const styleIdx = this.hashToken(room.teamKey || room.cwd || room.label) % 3
-    const roomStyle = [
-      {
-        wallOuter: 0x475569,
-        wallInner: 0x64748b,
-        floor: COLOR_ROOM_FLOOR,
-        floorGrid: COLOR_ROOM_FLOOR2,
-        header: COLOR_HEADER_BG,
-        accent: COLOR_DOOR_FRAME,
-        rug: 0x1d4ed8,
-      },
-      {
-        wallOuter: 0x495b6f,
-        wallInner: 0x6b7f94,
-        floor: 0x1b2b36,
-        floorGrid: 0x355164,
-        header: 0x0f1724,
-        accent: 0x14b8a6,
-        rug: 0x0f766e,
-      },
-      {
-        wallOuter: 0x524c68,
-        wallInner: 0x746d94,
-        floor: 0x24203b,
-        floorGrid: 0x433f63,
-        header: 0x17122c,
-        accent: 0x8b5cf6,
-        rug: 0x6d28d9,
-      },
-    ][styleIdx]
+    // Directory-based theming — deterministic colors per room type
+    const template = getTemplate(getRoomType(room.cwd))
+    const roomStyle = {
+      wallOuter: 0x475569,
+      wallInner: 0x64748b,
+      floor: template.floorColor,
+      floorGrid: template.rugColor,
+      header: COLOR_HEADER_BG,
+      accent: template.accentColor,
+      rug: template.rugColor,
+    }
 
     // Subtle drop shadow
     g.fillStyle(0x000000, 0.15)
@@ -1534,64 +1238,7 @@ export class OfficeScene extends Phaser.Scene {
     g.fillStyle(roomStyle.floor)
     g.fillRect(floorX, floorY, floorW, floorH)
 
-    // Tiled floor texture sprites — subtly layered over the flat floor fill.
-    // Each style picks a different region of the room-tiles spritesheet (48x48 frames).
-    // Alpha is kept very low (0.08–0.12) so the texture reads as grain, not replacement art.
-    // Floor tile sprites removed — they created a muddy gray overlay at low alpha
-
-    // Slight room rug variation to avoid identical project spaces.
-    const rugInsetX = 8
-    const rugInsetY = 10
-    g.fillStyle(roomStyle.rug, 0.12)
-    g.fillRoundedRect(
-      floorX + rugInsetX,
-      floorY + rugInsetY,
-      Math.max(floorW - rugInsetX * 2, 12),
-      Math.max(floorH - rugInsetY * 2, 12),
-      6,
-    )
-
-    // Distinctive rug patterns per room style
-    const rugX = floorX + rugInsetX
-    const rugY = floorY + rugInsetY
-    const rugW = Math.max(floorW - rugInsetX * 2, 12)
-    const rugH = Math.max(floorH - rugInsetY * 2, 12)
-    if (styleIdx === 0) {
-      g.lineStyle(1, roomStyle.rug, 0.15)
-      g.strokeRect(rugX + 2, rugY + 2, rugW - 4, rugH - 4)
-      for (let dr = 0; dr < Math.ceil(rugH / 6); dr++) {
-        for (let dc = 0; dc < Math.ceil(rugW / 6); dc++) {
-          const a = (dr + dc) % 2 === 0 ? 0.08 : 0.12
-          g.fillStyle(roomStyle.rug, a)
-          const dx = rugX + dc * 6, dy = rugY + dr * 6
-          g.fillPoints([{x:dx,y:dy-3},{x:dx+3,y:dy},{x:dx,y:dy+3},{x:dx-3,y:dy}], true)
-        }
-      }
-    } else if (styleIdx === 1) {
-      for (let s = 0; s < Math.ceil(rugH / 4); s++) {
-        g.fillStyle(roomStyle.rug, s % 2 === 0 ? 0.08 : 0.14)
-        g.fillRect(rugX, rugY + s * 4, rugW, Math.min(4, rugH - s * 4))
-      }
-      g.lineStyle(1, roomStyle.rug, 0.1)
-      for (let fx = 0; fx < Math.floor(rugW / 4); fx++) {
-        const lx = rugX + fx * 4
-        g.lineBetween(lx, rugY, lx, rugY + 3)
-        g.lineBetween(lx, rugY + rugH - 3, lx, rugY + rugH)
-      }
-    } else {
-      const mcx = rugX + rugW / 2, mcy = rugY + rugH / 2
-      const or2 = Math.min(rugW, rugH) * 0.3
-      g.fillStyle(roomStyle.rug, 0.1); g.fillCircle(mcx, mcy, or2)
-      g.fillStyle(roomStyle.rug, 0.06); g.fillCircle(mcx, mcy, or2 * 0.6)
-      g.lineStyle(1, roomStyle.rug, 0.2)
-      g.lineBetween(rugX+2,rugY+7,rugX+2,rugY+2); g.lineBetween(rugX+2,rugY+2,rugX+7,rugY+2)
-      g.lineBetween(rugX+rugW-7,rugY+2,rugX+rugW-2,rugY+2); g.lineBetween(rugX+rugW-2,rugY+2,rugX+rugW-2,rugY+7)
-      g.lineBetween(rugX+2,rugY+rugH-7,rugX+2,rugY+rugH-2); g.lineBetween(rugX+2,rugY+rugH-2,rugX+7,rugY+rugH-2)
-      g.lineBetween(rugX+rugW-7,rugY+rugH-2,rugX+rugW-2,rugY+rugH-2); g.lineBetween(rugX+rugW-2,rugY+rugH-2,rugX+rugW-2,rugY+rugH-7)
-    }
-
-    // Herringbone / parquet floor pattern (replaces basic carpet grid)
-    // Alternating rows of 8x3px parallelogram planks at opposing skews, alpha 0.15.
+    // Herringbone / parquet floor pattern — alternating rows of parallelogram planks
     const PLANK_W = 8
     const PLANK_H = 3
     const PLANK_SKEW = 3
@@ -1615,6 +1262,61 @@ export class OfficeScene extends Phaser.Scene {
           true,
         )
       }
+    }
+
+    // Rug — themed by directory type
+    const rugInsetX = 8
+    const rugInsetY = 10
+    g.fillStyle(roomStyle.rug, 0.12)
+    g.fillRoundedRect(
+      floorX + rugInsetX,
+      floorY + rugInsetY,
+      Math.max(floorW - rugInsetX * 2, 12),
+      Math.max(floorH - rugInsetY * 2, 12),
+      6,
+    )
+
+    // Rug interior pattern — varies by template type for visual variety
+    const rugX = floorX + rugInsetX
+    const rugY = floorY + rugInsetY
+    const rugW = Math.max(floorW - rugInsetX * 2, 12)
+    const rugH = Math.max(floorH - rugInsetY * 2, 12)
+    const rugStyle = this.hashToken(template.type) % 3
+    if (rugStyle === 0) {
+      // Diamond lattice
+      g.lineStyle(1, roomStyle.rug, 0.15)
+      g.strokeRect(rugX + 2, rugY + 2, rugW - 4, rugH - 4)
+      for (let dr = 0; dr < Math.ceil(rugH / 6); dr++) {
+        for (let dc = 0; dc < Math.ceil(rugW / 6); dc++) {
+          const a = (dr + dc) % 2 === 0 ? 0.08 : 0.12
+          g.fillStyle(roomStyle.rug, a)
+          const dx = rugX + dc * 6, dy = rugY + dr * 6
+          g.fillPoints([{x:dx,y:dy-3},{x:dx+3,y:dy},{x:dx,y:dy+3},{x:dx-3,y:dy}], true)
+        }
+      }
+    } else if (rugStyle === 1) {
+      // Horizontal stripe
+      for (let s = 0; s < Math.ceil(rugH / 4); s++) {
+        g.fillStyle(roomStyle.rug, s % 2 === 0 ? 0.08 : 0.14)
+        g.fillRect(rugX, rugY + s * 4, rugW, Math.min(4, rugH - s * 4))
+      }
+      g.lineStyle(1, roomStyle.rug, 0.1)
+      for (let fx = 0; fx < Math.floor(rugW / 4); fx++) {
+        const lx = rugX + fx * 4
+        g.lineBetween(lx, rugY, lx, rugY + 3)
+        g.lineBetween(lx, rugY + rugH - 3, lx, rugY + rugH)
+      }
+    } else {
+      // Concentric medallion with corner brackets
+      const mcx = rugX + rugW / 2, mcy = rugY + rugH / 2
+      const or2 = Math.min(rugW, rugH) * 0.3
+      g.fillStyle(roomStyle.rug, 0.1); g.fillCircle(mcx, mcy, or2)
+      g.fillStyle(roomStyle.rug, 0.06); g.fillCircle(mcx, mcy, or2 * 0.6)
+      g.lineStyle(1, roomStyle.rug, 0.2)
+      g.lineBetween(rugX+2,rugY+7,rugX+2,rugY+2); g.lineBetween(rugX+2,rugY+2,rugX+7,rugY+2)
+      g.lineBetween(rugX+rugW-7,rugY+2,rugX+rugW-2,rugY+2); g.lineBetween(rugX+rugW-2,rugY+2,rugX+rugW-2,rugY+7)
+      g.lineBetween(rugX+2,rugY+rugH-7,rugX+2,rugY+rugH-2); g.lineBetween(rugX+2,rugY+rugH-2,rugX+7,rugY+rugH-2)
+      g.lineBetween(rugX+rugW-7,rugY+rugH-2,rugX+rugW-2,rugY+rugH-2); g.lineBetween(rugX+rugW-2,rugY+rugH-2,rugX+rugW-2,rugY+rugH-7)
     }
 
     // Drop-ceiling grid in the header zone (subtle lines before the solid header paints over)
@@ -1726,13 +1428,13 @@ export class OfficeScene extends Phaser.Scene {
       const winH = 8
       const winX = floorX + (floorW - winW) / 2
       const winY = floorY + 8
-      g.fillStyle(this.windowTintColor, this.windowTintAlpha * 1.5)
+      g.fillStyle(this.atmosphere.windowTintColor, this.atmosphere.windowTintAlpha * 1.5)
       g.fillRect(winX, winY, winW, winH)
 
       // ── Tiny scenic view through the window ──────────────────────────────
       // Layers drawn bottom-to-top inside the window bounds so they composite
       // naturally before the frame, mullions, and curtains are painted over.
-      if (this.currentTimePhase === 'day' || this.currentTimePhase === 'morning') {
+      if (this.atmosphere.currentTimePhase === 'day' || this.atmosphere.currentTimePhase === 'morning') {
         // Pale blue sky wash across the full pane
         g.fillStyle(0x7dd3fc, 0.06)
         g.fillRect(winX, winY, winW, winH)
@@ -1742,7 +1444,7 @@ export class OfficeScene extends Phaser.Scene {
         // Tiny sun dot in the upper-right quadrant
         g.fillStyle(0xfde68a, 0.10)
         g.fillCircle(winX + winW - 3, winY + 2, 1)
-      } else if (this.currentTimePhase === 'night') {
+      } else if (this.atmosphere.currentTimePhase === 'night') {
         // Dark sky wash
         g.fillStyle(0x0f172a, 0.08)
         g.fillRect(winX, winY, winW, winH)
@@ -1771,7 +1473,7 @@ export class OfficeScene extends Phaser.Scene {
       g.lineStyle(1, 0x475569, 0.5)
       g.lineBetween(winX + winW / 2, winY, winX + winW / 2, winY + winH)
       g.lineBetween(winX, winY + winH / 2, winX + winW, winY + winH / 2)
-      g.fillStyle(this.windowTintColor, 0.04)
+      g.fillStyle(this.atmosphere.windowTintColor, 0.04)
       g.fillRect(winX - 4, winY + winH, winW + 8, 10)
 
       // Curtain rod above window
@@ -2013,14 +1715,13 @@ export class OfficeScene extends Phaser.Scene {
     wsContainer.add(deskTop)
 
     let monitorSprite: Phaser.GameObjects.Sprite | null = null
-    let monitorGlowOverlay: Phaser.GameObjects.Arc | undefined
+    let monitorGlowFx: Phaser.FX.Glow | undefined
     let screenLines: Phaser.GameObjects.Graphics | undefined
     let screenTween: Phaser.Tweens.Tween | undefined
     if (this.officeTilesLoaded) {
-      monitorGlowOverlay = this.add.circle(0, WS_MONITOR_Y, 14, 0x0ea5e9, 0.15).setVisible(false)
-      wsContainer.add(monitorGlowOverlay)
       monitorSprite = this.add.sprite(0, WS_MONITOR_Y, 'office', FRAME_MONITOR).setScale(0.42)
       wsContainer.add(monitorSprite)
+      monitorGlowFx = monitorSprite.postFX.addGlow(0x0ea5e9, 0, 0, false, 0.1, 16)
       // Scrolling screen content lines
       screenLines = this.add.graphics().setVisible(false)
       wsContainer.add(screenLines)
@@ -2297,7 +1998,7 @@ export class OfficeScene extends Phaser.Scene {
     const ws: WorkstationSprite = {
       container: wsContainer, sprite, nameText, statusDot, roleBadge,
       deskBody, deskTop, monitorSprite, chairSprite,
-      monitorGlowOverlay, screenLines, screenTween,
+      monitorGlowFx, screenLines, screenTween,
       monitorText,
       blockedIndicator, blockedIndicatorPulse, blockedIndicatorBadge, blockedIndicatorStem, blockedIndicatorText,
       thoughtBubble, thoughtBubbleText, thoughtBubbleBg, state: agent,
@@ -2394,14 +2095,12 @@ export class OfficeScene extends Phaser.Scene {
 
   private updateWorkstation(ws: WorkstationSprite, agent: AgentState): void {
     // If agent is on a coffee run, keep desk sprite hidden and skip all visual updates
-    if (this.coffeeRunners.has(agent.config.id)) {
+    if (this.cafe.isOnCoffeeRun(agent.config.id)) {
       const m = agent.sessionMode
       if (m === 'working' || m === 'plan' || agent.needsInteraction) {
-        // Agent started working — cancel the coffee run visual
-        this.coffeeRunners.delete(agent.config.id)
+        this.cafe.cancelCoffeeRun(agent.config.id)
         ws.sprite.setVisible(true)
       } else {
-        // Still on coffee run — hide sprite and skip the rest
         ws.sprite.setVisible(false)
         ws.state = agent
         return
@@ -2447,39 +2146,39 @@ export class OfficeScene extends Phaser.Scene {
             if (agent.interactionType === 'tool-approval') rippleColor = 0xf97316
             else if (agent.interactionType === 'question') rippleColor = 0x60a5fa
             else if (agent.interactionType === 'accept-edits') rippleColor = 0x3b82f6
-            this.spawnAlertRipple(wx, wy, rippleColor)
-            this.spawnEmojiReaction(wx, wy, '\uD83D\uDD14') // blocked: 🔔
+            this.particles.spawnAlertRipple(wx, wy, rippleColor)
+            this.particles.spawnEmojiReaction(wx, wy, '\uD83D\uDD14') // blocked: 🔔
           }
         }
       } else if (!agent.needsInteraction && prevState.needsInteraction) {
         // Reset ripple guard so the next blocked event fires a fresh ripple
         ws.rippleFired = false
         const roomU = this.rooms.get(roomKey)
-        if (roomU) this.spawnEmojiReaction(roomU.x + ws.container.x, roomU.y + ws.container.y, '\uD83D\uDC4D') // unblocked: 👍
+        if (roomU) this.particles.spawnEmojiReaction(roomU.x + ws.container.x, roomU.y + ws.container.y, '\uD83D\uDC4D') // unblocked: 👍
       }
 
       if (wasWorking && !isWorking && !agent.needsInteraction) {
         this.queueMinimapRoomFlash(roomKey, COLOR_LED_GREEN, 1200)
         this.showToast(`${name} finished task`, 'success')
         const roomC = this.rooms.get(roomKey)
-        if (roomC) this.spawnEmojiReaction(roomC.x + ws.container.x, roomC.y + ws.container.y, '\u2705') // completed: ✅
+        if (roomC) this.particles.spawnEmojiReaction(roomC.x + ws.container.x, roomC.y + ws.container.y, '\u2705') // completed: ✅
       } else if (!wasWorking && isWorking) {
         this.queueMinimapRoomFlash(roomKey, COLOR_DOOR_FRAME, 900)
         this.showToast(`${name} started working`, 'info')
         const roomS = this.rooms.get(roomKey)
-        if (roomS) this.spawnEmojiReaction(roomS.x + ws.container.x, roomS.y + ws.container.y, '\u26A1') // started: ⚡
+        if (roomS) this.particles.spawnEmojiReaction(roomS.x + ws.container.x, roomS.y + ws.container.y, '\u26A1') // started: ⚡
       }
 
       // Plan mode entry
       if (agent.sessionMode === 'plan' && prevState.sessionMode !== 'plan') {
         const roomP = this.rooms.get(roomKey)
-        if (roomP) this.spawnEmojiReaction(roomP.x + ws.container.x, roomP.y + ws.container.y, '\uD83D\uDCCB') // plan: 📋
+        if (roomP) this.particles.spawnEmojiReaction(roomP.x + ws.container.x, roomP.y + ws.container.y, '\uD83D\uDCCB') // plan: 📋
       }
 
       // Compressing entry
       if (agent.sessionMode === 'compressing' && prevState.sessionMode !== 'compressing') {
         const roomZ = this.rooms.get(roomKey)
-        if (roomZ) this.spawnEmojiReaction(roomZ.x + ws.container.x, roomZ.y + ws.container.y, '\uD83D\uDCA8') // compressing: 💨
+        if (roomZ) this.particles.spawnEmojiReaction(roomZ.x + ws.container.x, roomZ.y + ws.container.y, '\uD83D\uDCA8') // compressing: 💨
       }
     }
 
@@ -2642,7 +2341,9 @@ export class OfficeScene extends Phaser.Scene {
       accentColor = 0x475569; shouldShow = true
     }
 
-    this.updateThoughtBubble(ws, agent, shouldShow, accentColor, isWorking)
+    // Thought bubbles disabled — too small to read at game scale, adds visual noise
+    // this.updateThoughtBubble(ws, agent, shouldShow, accentColor, isWorking)
+    if (ws.thoughtBubble) ws.thoughtBubble.setVisible(false)
 
     this.updateAnimation(ws, agent)
     this.updateMood(ws, agent)
@@ -2770,39 +2471,7 @@ export class OfficeScene extends Phaser.Scene {
   }
 
   private destroyCeilingLights(): void {
-    for (const c of this.ceilingLights) {
-      for (const child of c.getAll()) {
-        this.tweens.killTweensOf(child)
-      }
-      c.destroy(true)
-    }
-    this.ceilingLights = []
-  }
-
-  private tickCeilingLightActivity(time: number): void {
-    if (this.ceilingLights.length === 0 || time - this.lastLightCheckAt < 5000) return
-    this.lastLightCheckAt = time
-    let activeCount = 0
-    for (const room of this.rooms.values()) {
-      for (const ws of room.workstations.values()) {
-        if (ws.state && (ws.state.sessionMode === 'working' || ws.state.sessionMode === 'plan') && !ws.state.needsInteraction) {
-          activeCount++
-        }
-      }
-    }
-    const nextMode: 'active' | 'idle' = activeCount > 0 ? 'active' : 'idle'
-    if (nextMode === this.lightActivityMode) return
-    this.lightActivityMode = nextMode
-    const lo = nextMode === 'active' ? 0.2 : 0.1
-    const hi = nextMode === 'active' ? 0.35 : 0.2
-    for (const lightContainer of this.ceilingLights) {
-      const children = lightContainer.getAll()
-      const innerCore = children[2] as Phaser.GameObjects.Arc | undefined
-      if (innerCore) {
-        this.tweens.killTweensOf(innerCore)
-        this.tweens.add({ targets: innerCore, alpha: { from: lo, to: hi }, duration: 2000 + Math.random() * 2000, yoyo: true, repeat: -1, ease: 'Sine.easeInOut', delay: Math.random() * 800 })
-      }
-    }
+    this.atmosphere.destroyCeilingLights()
   }
 
   private destroyWorkstation(ws: WorkstationSprite): void {
@@ -2823,7 +2492,7 @@ export class OfficeScene extends Phaser.Scene {
     if (ws.walkBreakTimer)      ws.walkBreakTimer.destroy()
     if (ws.lookAtNeighborTimer) ws.lookAtNeighborTimer.destroy()
     if (ws.yawnTimer)           ws.yawnTimer.destroy()
-    this.clearSteamParticles(ws)
+    this.particles.clearSteamParticles(ws)
     this.tweens.killTweensOf(ws.thoughtBubble)
     if (ws.blurbFadeTimer)          ws.blurbFadeTimer.destroy()
     if (ws.blurbTypingTween)        ws.blurbTypingTween.destroy()
@@ -3143,21 +2812,23 @@ export class OfficeScene extends Phaser.Scene {
       maxX = Math.max(maxX, area.x + area.width)
       maxY = Math.max(maxY, area.y + area.height)
     }
-    // Position café inline — to the right of rooms, aligned with top row
-    const CAFE_LAYOUT_W = 420
-    const CAFE_LAYOUT_H = 180
-    const cafeX = maxX + CAFE_LAYOUT_W / 2 + 40
-    const cafeTopY = WORLD_MARGIN + 20  // align with top of rooms
-    const cafeBottomY = cafeTopY + CAFE_LAYOUT_H
+    // Position café inline — to the right of rooms, top-aligned with first row
+    const cafeX = maxX + this.cafe.width / 2 + 40
+    let minAreaTopY = Infinity
+    for (const area of teamLayouts) {
+      minAreaTopY = Math.min(minAreaTopY, area.y)
+    }
+    const cafeTopY = minAreaTopY === Infinity ? WORLD_MARGIN : minAreaTopY
+    const cafeBottomY = cafeTopY + this.cafe.height
 
     // World bounds include both rooms and café
-    const totalMaxX = cafeX + CAFE_LAYOUT_W / 2
+    const totalMaxX = cafeX + this.cafe.width / 2
     const totalMaxY = Math.max(maxY, cafeBottomY)
     this.worldWidth  = totalMaxX + WORLD_MARGIN
     this.worldHeight = totalMaxY + WORLD_MARGIN
     this.tripletDirty = true
 
-    // Draw office background — includes both rooms and café
+    // Draw office background — includes café
     if (this.officeGraphics) {
       const bgW = totalMaxX + WORLD_MARGIN
       const bgH = Math.max(maxY, cafeBottomY) + WORLD_MARGIN
@@ -3166,7 +2837,32 @@ export class OfficeScene extends Phaser.Scene {
 
     // Build Penny Café
     if (this.rooms.size > 0) {
-      this.buildCafeZone(cafeX, cafeTopY)
+      this.cafe.build(cafeX, cafeTopY)
+    }
+
+    // Erase building floor below the café so no dark rectangle shows.
+    // Must match drawOfficeBackground's building rect exactly.
+    if (this.cafeFloorMask) { this.cafeFloorMask.destroy(); this.cafeFloorMask = null }
+    if (this.rooms.size > 0) {
+      const BG_PAD = 30
+      const BG_WALL = 5
+      const bgContentW = totalMaxX + WORLD_MARGIN
+      const bgContentH = Math.max(maxY, cafeBottomY) + WORLD_MARGIN
+      const bx = WORLD_MARGIN - BG_PAD
+      const by = WORLD_MARGIN - BG_PAD
+      const bw = bgContentW - WORLD_MARGIN + BG_PAD * 2
+      const bh = bgContentH - WORLD_MARGIN + BG_PAD * 2
+      const floorRight = bx + bw - BG_WALL
+      const floorBottom = by + bh - BG_WALL
+
+      const maskX = cafeX - this.cafe.width / 2
+      const maskY = cafeBottomY
+      if (floorRight > maskX && floorBottom > maskY) {
+        const mask = this.add.graphics().setDepth(-3)
+        mask.fillStyle(COLOR_BG)
+        mask.fillRect(maskX, maskY, floorRight - maskX, floorBottom - maskY)
+        this.cafeFloorMask = mask
+      }
     }
 
     this.rebuildNavMesh()
@@ -3494,6 +3190,10 @@ export class OfficeScene extends Phaser.Scene {
         this.corridorSignTexts.push(signText)
       }
     }
+    // Sync updated corridor segments to the particle system
+    if (this.particles) {
+      this.particles.setCorridorData(this.corridorSegments, false)
+    }
   }
 
   private drawHallwayIndicators(timeMs: number): void {
@@ -3628,7 +3328,6 @@ export class OfficeScene extends Phaser.Scene {
     const WALL_I = 2
     const PAD = 30
 
-    // Building outer rect — everything is drawn INSIDE this so there is zero overshoot.
     const bx = WORLD_MARGIN - PAD
     const by = WORLD_MARGIN - PAD
     const bw = contentW - WORLD_MARGIN + PAD * 2
@@ -3640,279 +3339,36 @@ export class OfficeScene extends Phaser.Scene {
     const fw = bw - WALL_T * 2
     const fh = bh - WALL_T * 2
 
-    // Drop shadow (offset behind building)
-    g.fillStyle(0x000000, 0.25)
-    g.fillRoundedRect(bx + 4, by + 4, bw, bh, 8)
-
-    // Outer wall — fills the full building rect
+    // Outer wall
     g.fillStyle(COLOR_WALL)
-    g.fillRoundedRect(bx, by, bw, bh, 6)
-
-    // Inner wall accent
-    g.fillStyle(COLOR_WALL_INNER)
-    g.fillRoundedRect(bx + WALL_T - WALL_I, by + WALL_T - WALL_I, bw - (WALL_T - WALL_I) * 2, bh - (WALL_T - WALL_I) * 2, 4)
-
-    // Top-wall windows
-    const windowBandY = by + 8
-    const windowBandH = 10
-    const windowCount = Math.max(2, Math.floor(fw / 120))
-    const windowGap = fw / (windowCount + 1)
-    this.windowPositions = []
-    for (let i = 0; i < windowCount; i++) {
-      const wx = fx + windowGap * (i + 1) - 24
-      g.fillStyle(0x0b1f36, 0.62)
-      g.fillRoundedRect(wx, windowBandY, 48, windowBandH, 3)
-      g.fillStyle(this.windowTintColor, this.windowTintAlpha)
-      g.fillRoundedRect(wx + 3, windowBandY + 2, 42, windowBandH - 4, 2)
-      this.windowPositions.push({ x: wx + 3, y: windowBandY + 2, w: 42, h: windowBandH - 4 })
-
-      // Venetian blind lines on top-band windows (2 faint horizontal lines)
-      g.lineStyle(1, 0x475569, 0.08)
-      g.lineBetween(wx + 3, windowBandY + 3, wx + 45, windowBandY + 3)
-      g.lineBetween(wx + 3, windowBandY + 5, wx + 45, windowBandY + 5)
-    }
+    g.fillRoundedRect(bx, by, bw, bh, 5)
 
     // Floor (inset from wall)
     g.fillStyle(0x0f172a)
     g.fillRoundedRect(fx, fy, fw, fh, 2)
 
-    // Animated ceiling fixtures
+    this.atmosphere.windowPositions = []
     this.destroyCeilingLights()
-    const lightCount = Math.max(2, Math.floor(fw / 180))
-    const lightGap = fw / (lightCount + 1)
-    for (let i = 0; i < lightCount; i++) {
-      const lx = fx + lightGap * (i + 1)
-      const ly = fy + 16
-      const outerGlow = this.add.arc(0, 0, 14, 0, 360, false, 0xf8fafc, 0.06)
-      const innerCore = this.add.arc(0, 0, 4, 0, 360, false, 0xe8edf5, 0.25)
-      const beamGfx = this.add.graphics()
-      beamGfx.fillStyle(0xf0f4ff, 1)
-      beamGfx.fillTriangle(-8, 2, 8, 2, 18, 40)
-      beamGfx.fillTriangle(-8, 2, -18, 40, 18, 40)
-      beamGfx.setAlpha(0.03)
-      const lightContainer = this.add.container(lx, ly, [beamGfx, outerGlow, innerCore])
-      lightContainer.setDepth(-3)
-      const flickerDuration = 2000 + Math.random() * 2000
-      const flickerDelay = Math.random() * 1500
-      const baseLo = this.lightActivityMode === 'active' ? 0.2 : 0.15
-      const baseHi = this.lightActivityMode === 'active' ? 0.35 : 0.3
-      this.tweens.add({ targets: innerCore, alpha: { from: baseLo, to: baseHi }, duration: flickerDuration, yoyo: true, repeat: -1, ease: 'Sine.easeInOut', delay: flickerDelay })
-      this.tweens.add({ targets: beamGfx, alpha: { from: 0.02, to: 0.04 }, duration: flickerDuration * 1.1, yoyo: true, repeat: -1, ease: 'Sine.easeInOut', delay: flickerDelay })
-      this.ceilingLights.push(lightContainer)
-    }
+    if (this.flagContainer) { this.tweens.killTweensOf(this.flagContainer); this.flagContainer.destroy(true); this.flagContainer = null }
 
-    // Floor kept clean — no planks or rug overlay
-
-    // -------------------------------------------------------------------------
-    // BUILDING FACADE UPGRADES
-    // -------------------------------------------------------------------------
-
-    // 1. ROOF PARAPET / CORNICE — dark strip along the very top edge + AC units
-    g.fillStyle(0x1e293b, 1)
-    g.fillRect(bx, by, bw, 3)
-    {
-      const acSpacing = 40
-      const acCount = Math.floor(bw / acSpacing) - 1
-      for (let i = 1; i <= acCount; i++) {
-        const acX = bx + i * acSpacing - 2
-        g.fillStyle(0x334155, 1)
-        g.fillRect(acX, by + 3, 4, 3)
-      }
-    }
-
-    // 1b. ROOFTOP DETAILS — architectural elements above the building top edge
-    {
-      // Slightly raised roof section: a flush cap 4px above the parapet baseline
-      g.fillStyle(0x1e293b, 0.8)
-      g.fillRect(bx + 20, by - 4, bw - 40, 4)
-
-      // HVAC unit cluster — left side of the roof
-      const hvacBaseX = bx + 28
-      const hvacBaseY = by - 4
-      const hvacUnits = [
-        { x: hvacBaseX,      w: 8, h: 6 },
-        { x: hvacBaseX + 12, w: 8, h: 5 },
-        { x: hvacBaseX + 24, w: 6, h: 6 },
-      ]
-      for (const u of hvacUnits) {
-        g.fillStyle(0x475569, 0.4)
-        g.fillRect(u.x, hvacBaseY - u.h, u.w, u.h)
-        // Top highlight
-        g.fillStyle(0x64748b, 0.2)
-        g.fillRect(u.x, hvacBaseY - u.h, u.w, 1)
-      }
-
-      // Satellite dish — right side of roof (arc approximation with a filled circle slice)
-      const dishX = bx + bw - 40
-      const dishY = by - 4
-      g.fillStyle(0x64748b, 0.3)
-      g.beginPath()
-      g.arc(dishX, dishY, 4, Math.PI, 0, false)
-      g.fillPath()
-      // Dish mast stub
-      g.fillStyle(0x475569, 0.3)
-      g.fillRect(dishX - 1, dishY - 3, 2, 3)
-
-      // Antenna mast — thin vertical line with blinking aviation light
-      const antX = bx + bw - 60
-      const antBaseY = by - 4
-      const antH = 12
-      g.fillStyle(0x475569, 0.3)
-      g.fillRect(antX, antBaseY - antH, 1, antH)
-      // Red aviation light dot on tip
-      g.fillStyle(0xef4444, 0.4)
-      g.fillCircle(antX, antBaseY - antH, 1)
-
-      // Roof edge shadow — 3px strip just inside the top wall, simulates parapet cast shadow
-      g.fillStyle(0x000000, 0.06)
-      g.fillRect(bx, by + 3, bw, 3)
-
-      // Skylight — only on wide buildings
-      if (bw > 400) {
-        const slW = 24
-        const slH = 12
-        const slX = bx + Math.floor(bw / 2) - slW / 2
-        const slY = by - 4 - slH
-        // Glass fill
-        g.fillStyle(0x7dd3fc, 0.06)
-        g.fillRect(slX, slY, slW, slH)
-        // Frame
-        g.lineStyle(1, 0x475569, 0.3)
-        g.strokeRect(slX, slY, slW, slH)
-        // Centre mullion
-        g.lineBetween(slX + slW / 2, slY, slX + slW / 2, slY + slH)
-      }
-
-      // Roof access door — stairwell hatch on the right-centre roof area
-      const doorX = bx + Math.floor(bw * 0.65)
-      const doorY = by - 4 - 14
-      g.fillStyle(0x1e293b, 1)
-      g.fillRect(doorX, doorY, 10, 14)
-      g.lineStyle(1, 0x334155, 1)
-      g.strokeRect(doorX, doorY, 10, 14)
-      // Tiny door handle
-      g.fillStyle(0x64748b, 0.6)
-      g.fillRect(doorX + 7, doorY + 6, 2, 2)
-    }
-
-    // 1c. FLAG POLE + ANIMATED FLAG — left side of roof
-    {
-      // Destroy any previously created flag container so redraws don't stack
-      if (this.flagContainer) {
-        this.tweens.killTweensOf(this.flagContainer)
-        this.flagContainer.destroy(true)
-        this.flagContainer = null
-      }
-
-      if (bw > 200) {
-        // Pole: thin vertical line drawn on g (static, part of background)
-        const poleX = bx + 20
-        const poleBaseY = by - 4   // sits on the roof cap
-        const poleH = 30
-        g.fillStyle(0x94a3b8, 1)
-        g.fillRect(poleX, poleBaseY - poleH, 1, poleH)
-
-        // Animated flag: live Container so Phaser tweens can run on it
-        const flagTopY = poleBaseY - poleH
-        this.flagContainer = this.add.container(poleX + 1, flagTopY)
-        this.flagContainer.setDepth(-0.3)
-
-        // Flag body — simple filled rect with a shading strip
-        const flagGfx = this.add.graphics()
-        flagGfx.fillStyle(0x3b82f6, 1)
-        flagGfx.fillRect(0, 0, 12, 8)
-        // Subtle shading strip along bottom edge
-        flagGfx.fillStyle(0x1d4ed8, 0.4)
-        flagGfx.fillRect(0, 6, 12, 2)
-
-        // "P" label centred on the flag
-        const flagLabel = this.add.text(6, 4, 'P', {
-          fontSize: '4px',
-          color: '#ffffff',
-          fontFamily: 'monospace',
-        }).setOrigin(0.5, 0.5)
-
-        this.flagContainer.add([flagGfx, flagLabel])
-
-        // Waving animation: oscillate scaleX (wind flutter) + slight angle tilt
-        this.tweens.add({
-          targets: this.flagContainer,
-          scaleX: { from: 1.0, to: 0.85 },
-          angle: { from: -3, to: 3 },
-          duration: 1500,
-          ease: 'Sine.easeInOut',
-          yoyo: true,
-          repeat: -1,
-        })
-      }
-    }
-
-    // 2. SIDE WINDOWS — left and right walls, 3-4 windows each
-    {
-      const sideWinW = 12
-      const sideWinH = 24
-      const sideWinCount = Math.max(3, Math.floor(fh / 80))
-      const sideWinGap = fh / (sideWinCount + 1)
-      for (let i = 0; i < sideWinCount; i++) {
-        const wy = fy + sideWinGap * (i + 1) - sideWinH / 2
-        // Left wall
-        g.fillStyle(0x0b1f36, 0.62)
-        g.fillRoundedRect(bx + 1, wy, sideWinW + 2, sideWinH, 2)
-        g.fillStyle(this.windowTintColor, this.windowTintAlpha)
-        g.fillRoundedRect(bx + 2, wy + 2, sideWinW, sideWinH - 4, 1)
-        g.lineStyle(1, 0x0f172a, 0.5)
-        g.lineBetween(bx + 2 + sideWinW / 2, wy + 2, bx + 2 + sideWinW / 2, wy + sideWinH - 2)
-        // Right wall
-        const rwx = bx + bw - sideWinW - 3
-        g.fillStyle(0x0b1f36, 0.62)
-        g.fillRoundedRect(rwx, wy, sideWinW + 2, sideWinH, 2)
-        g.fillStyle(this.windowTintColor, this.windowTintAlpha)
-        g.fillRoundedRect(rwx + 1, wy + 2, sideWinW, sideWinH - 4, 1)
-        g.lineStyle(1, 0x0f172a, 0.5)
-        g.lineBetween(rwx + 1 + sideWinW / 2, wy + 2, rwx + 1 + sideWinW / 2, wy + sideWinH - 2)
-        // Curtain rods above side windows
-        g.lineStyle(1, 0x64748b, 0.3)
-        g.lineBetween(bx, wy - 1, bx + sideWinW + 4, wy - 1)
-        g.lineBetween(rwx - 1, wy - 1, rwx + sideWinW + 3, wy - 1)
-      }
-    }
-
-    // 3. STRUCTURAL PILLAR COLUMNS at 1/3 and 2/3 of the floor width
-    for (const frac of [1 / 3, 2 / 3]) {
-      const pillarX = Math.round(fx + fw * frac) - 2
-      g.fillStyle(0x334155, 0.15)
-      g.fillRect(pillarX, fy, 4, fh)
-      // Shadow on right edge
-      g.fillStyle(0x0f172a, 0.1)
-      g.fillRect(pillarX + 3, fy, 1, fh)
-    }
-
-    // Lobby, entrance, and exterior details removed — keeping the building clean
-
-    // Decorations
-    if (this.officeTilesLoaded) {
-      const DECO_SCALE = 0.65  // scaled up to match duder proportions
-      const decos: Phaser.GameObjects.Sprite[] = []
-
-      // Large plant in bottom-left corner
-      decos.push(this.add.sprite(fx + 14, fy + fh - 14, 'office', OFFICE_FRAME_PLANT).setScale(DECO_SCALE).setAlpha(0.85).setDepth(-1))
-
-      // Tall plant in bottom-right
-      decos.push(this.add.sprite(fx + fw - 14, fy + fh - 14, 'office', OFFICE_FRAME_PLANT_TALL).setScale(DECO_SCALE).setAlpha(0.8).setDepth(-1))
-
-      // Small cactus near top-right
-      decos.push(this.add.sprite(fx + fw - 14, fy + 20, 'office', OFFICE_FRAME_CACTUS).setScale(DECO_SCALE * 0.85).setAlpha(0.75).setDepth(-1))
+    // All building decorations removed — clean building
+    if (this.atmosphere.wallClockContainer) { this.atmosphere.wallClockContainer.destroy(); this.atmosphere.wallClockContainer = null }
+    if (this.whiteboardContainer) { this.whiteboardContainer.destroy(); this.whiteboardContainer = null; this.whiteboardTexts = [] }
+    if (this.atmosphere.exteriorLights) { this.atmosphere.exteriorLights.destroy(); this.atmosphere.exteriorLights = null }
+    if (false) {
+      // Dead code kept for reference — everything below is skipped
+      const DECO_SCALE = 0.65; const decos: Phaser.GameObjects.Sprite[] = []; void DECO_SCALE; void decos
 
       // Animated analog wall clock
       if (fw > 300) {
         const clockX = fx + fw / 2
         const clockY = by + 12
-        if (this.wallClockContainer) {
-          this.wallClockContainer.destroy()
-          this.wallClockContainer = null
-          this.clockHourHand = null
-          this.clockMinuteHand = null
-          this.clockSecondHand = null
+        if (this.atmosphere.wallClockContainer) {
+          this.atmosphere.wallClockContainer.destroy()
+          this.atmosphere.wallClockContainer = null
+          this.atmosphere.clockHourHand = null
+          this.atmosphere.clockMinuteHand = null
+          this.atmosphere.clockSecondHand = null
         }
         const clockFace = this.add.graphics()
         clockFace.fillStyle(0x1e293b, 0.8)
@@ -3929,13 +3385,13 @@ export class OfficeScene extends Phaser.Scene {
         const hourHand = this.add.graphics()
         const minuteHand = this.add.graphics()
         const secondHand = this.add.graphics()
-        this.wallClockContainer = this.add.container(clockX, clockY, [clockFace, hourHand, minuteHand, secondHand])
-        this.wallClockContainer.setDepth(-0.5)
-        this.wallClockContainer.setAlpha(0.88)
-        this.clockHourHand = hourHand
-        this.clockMinuteHand = minuteHand
-        this.clockSecondHand = secondHand
-        this.tickWallClock()
+        this.atmosphere.wallClockContainer = this.add.container(clockX, clockY, [clockFace, hourHand, minuteHand, secondHand])
+        this.atmosphere.wallClockContainer.setDepth(-0.5)
+        this.atmosphere.wallClockContainer.setAlpha(0.88)
+        this.atmosphere.clockHourHand = hourHand
+        this.atmosphere.clockMinuteHand = minuteHand
+        this.atmosphere.clockSecondHand = secondHand
+        this.atmosphere.tickWallClock()
       }
 
       // Picture frames along top wall
@@ -4079,9 +3535,9 @@ export class OfficeScene extends Phaser.Scene {
     // EXTERIOR LIGHTS — entrance ground floods + wall sconces
     // Built once per layout; alpha is driven live by applyDayNightCycle.
     // -------------------------------------------------------------------------
-    if (this.exteriorLights) {
-      this.exteriorLights.destroy()
-      this.exteriorLights = null
+    if (this.atmosphere.exteriorLights) {
+      this.atmosphere.exteriorLights.destroy()
+      this.atmosphere.exteriorLights = null
     }
     {
       const lightChildren: Phaser.GameObjects.GameObject[] = []
@@ -4093,7 +3549,7 @@ export class OfficeScene extends Phaser.Scene {
         evening: 0.06,
         night: 0.12,
       }
-      const initAlpha = phaseAlphaMap[this.currentTimePhase] ?? 0.0
+      const initAlpha = phaseAlphaMap[this.atmosphere.currentTimePhase] ?? 0.0
 
       // --- Entrance flood lights — 4 lights spread along the bottom building edge ---
       const floodCount = 4
@@ -4143,8 +3599,8 @@ export class OfficeScene extends Phaser.Scene {
         lightChildren.push(sconce)
       }
 
-      this.exteriorLights = this.add.container(0, 0, lightChildren)
-      this.exteriorLights.setDepth(-3.8)
+      this.atmosphere.exteriorLights = this.add.container(0, 0, lightChildren)
+      this.atmosphere.exteriorLights.setDepth(-3.8)
     }
 
     // -------------------------------------------------------------------------
@@ -4363,366 +3819,6 @@ export class OfficeScene extends Phaser.Scene {
     }
   }
 
-  // ---------------------------------------------------------------------------
-  // Penny Café — permanent coffee bar zone to the right of the building
-  // ---------------------------------------------------------------------------
-
-  private buildCafeZone(floorRight: number, floorBottom: number): void {
-    if (this.cafeContainer) {
-      this.tweens.killTweensOf(this.cafeContainer)
-      this.cafeContainer.destroy(true)
-      this.cafeContainer = null
-    }
-    this.cafeBaristas = []
-    this.coffeeRunners.clear()  // clear stale runners that reference old container
-    this.coffeeRunnerRooms.clear()
-    if (this.cafeVisitorTimer) { this.cafeVisitorTimer.destroy(); this.cafeVisitorTimer = null }
-    if (this.cafeSteamTimer) { this.cafeSteamTimer.destroy(); this.cafeSteamTimer = null }
-
-    // ── HORIZONTAL layout — coffee bar in the corner ──
-    const CAFE_W = 420   // wide coffee bar
-    const CAFE_H = 180   // comfortable height
-    const COUNTER_W = 16 // counter thickness
-    const BEHIND_W = 68  // depth of barista workspace
-
-    const cx = floorRight - CAFE_W / 2  // right-aligned
-    const cy = floorBottom
-
-    const container = this.add.container(cx, cy).setDepth(2)
-    this.cafeWorldX = cx + CAFE_W / 2
-    // Align duder walk target with stool Y position
-    // counterY = (CAFE_H - BEHIND_W - 20) - 2, stoolY = counterY - 14
-    const stoolWorldY = (CAFE_H - BEHIND_W - 20) - 2 - 14
-    this.cafeWorldY = cy + stoolWorldY
-    this.cafeContainer = container
-    const g = this.add.graphics()
-    container.add(g)
-
-    // ── Building structure ──
-    const CUSTOMER_H = CAFE_H - BEHIND_W - 20
-
-    // Drop shadow
-    g.fillStyle(0x000000, 0.15); g.fillRoundedRect(4, 4, CAFE_W, CAFE_H, 6)
-
-    // Customer area (top) — clean, minimal
-    g.fillStyle(0x1e293b, 0.35); g.fillRoundedRect(0, 0, CAFE_W, CUSTOMER_H, { tl: 6, tr: 6, bl: 0, br: 0 })
-
-    // Barista workspace (bottom) — warm brown
-    g.fillStyle(0x3d2b1f, 0.7); g.fillRoundedRect(0, CUSTOMER_H, CAFE_W, BEHIND_W + 20, { tl: 0, tr: 0, bl: 6, br: 6 })
-    g.fillStyle(0x1a1208, 0.5); g.fillRect(6, CUSTOMER_H + 6, CAFE_W - 12, BEHIND_W + 6)
-
-    // ── Header sign ──
-    g.fillStyle(0x1a0f06, 0.85); g.fillRoundedRect(6, 2, CAFE_W - 12, 26, { tl: 4, tr: 4, bl: 0, br: 0 })
-    g.lineStyle(2, 0xd97706, 0.5); g.lineBetween(6, 28, CAFE_W - 6, 28)
-    const signText = this.add.text(CAFE_W / 2, 15, '☕  PENNY CAFÉ', {
-      fontSize: '14px', fontFamily: 'system-ui, sans-serif', fontStyle: 'bold',
-      color: '#fbbf24', resolution: 2,
-    }).setOrigin(0.5)
-    container.add(signText)
-
-    // ── Counter bar ──
-    const counterY = CUSTOMER_H - 2
-    g.fillStyle(0x78350f, 0.75); g.fillRoundedRect(8, counterY, CAFE_W - 16, COUNTER_W, 3)
-    g.fillStyle(0xb45309, 0.25); g.fillRect(10, counterY + 2, CAFE_W - 20, 4)
-
-    // ── Equipment (small, behind counter) ──
-    const eqY = counterY + COUNTER_W + 8
-    const machinePositions = [30, 110]
-    for (const mx of machinePositions) {
-      g.fillStyle(0x334155, 0.7); g.fillRoundedRect(mx, eqY, 20, 22, 3)
-      g.fillStyle(0xef4444, 0.4); g.fillCircle(mx + 10, eqY + 5, 2)
-    }
-    // Menu board (small)
-    g.fillStyle(0x1e293b, 0.7); g.fillRoundedRect(200, eqY, 60, 28, 2)
-    g.lineStyle(1, 0x78350f, 0.4); g.strokeRoundedRect(200, eqY, 60, 28, 2)
-    for (let ml = 0; ml < 3; ml++) {
-      g.fillStyle(0xf8fafc, 0.06); g.fillRect(204, eqY + 4 + ml * 8, 28, 2)
-      g.fillStyle(0xfbbf24, 0.1); g.fillRect(240, eqY + 4 + ml * 8, 14, 2)
-    }
-
-    // ── BARISTAS — walk between machines, counter, make & serve drinks ──
-    const baristaWorkY = counterY + COUNTER_W + 40  // Y where baristas stand/walk
-    const counterServeY = counterY + 4               // Y where drinks are placed on counter
-    const baristaConfigs = [
-      { homeX: 60,  charIdx: 1, name: 'Latte Larry',   machineX: 30 },
-      { homeX: 200, charIdx: 0, name: 'Mocha Maya',    machineX: 110 },
-      { homeX: 350, charIdx: 1, name: 'Espresso Ed',   machineX: 200 },
-    ]
-
-    for (const cfg of baristaConfigs) {
-      const walkKey = cfg.charIdx === 1 ? 'anim-walk-2' : 'anim-walk-1'
-      const idleKey = cfg.charIdx === 1 ? 'anim-idle-2' : 'anim-idle-1'
-
-      // Put everything in a container so walking moves it all together
-      const bc = this.add.container(cfg.homeX, baristaWorkY)
-      container.add(bc)
-
-      const bSprite = this.add.sprite(0, 0, idleKey, 3)  // face counter (back view)
-        .setScale(CHAR_SCALE).setOrigin(0.5, 1)
-      bc.add(bSprite)
-
-      const apron = this.add.rectangle(0, -8, 14, 12, 0x059669, 0.35)
-      bc.add(apron)
-
-      const tag = this.add.text(0, 6, cfg.name, {
-        fontSize: '8px', fontFamily: 'system-ui, sans-serif', color: '#fbbf24',
-        backgroundColor: '#1a0f06cc', padding: { x: 3, y: 1 }, resolution: 2,
-      }).setOrigin(0.5, 0)
-      bc.add(tag)
-
-      this.cafeBaristas.push(bc)
-
-      // Face up toward customers (walk-up stand frame = frame 6)
-      bSprite.setTexture(walkKey, 6)
-      // Busy working — sway, bob, shuffle
-      this.tweens.add({ targets: bc, angle: { from: -3, to: 3 }, duration: 700 + Math.random() * 300, yoyo: true, repeat: -1, ease: 'Sine.easeInOut', delay: Math.random() * 500 })
-      this.tweens.add({ targets: bSprite, y: -2, scaleY: CHAR_SCALE * 0.97, duration: 450 + Math.random() * 200, yoyo: true, repeat: -1, ease: 'Sine.easeInOut', delay: Math.random() * 400 })
-      this.tweens.add({ targets: bc, x: cfg.homeX + 10, duration: 1600 + Math.random() * 600, yoyo: true, repeat: -1, ease: 'Sine.easeInOut', delay: Math.random() * 800 })
-    }
-
-    // ── Small stools along counter (customer side) — aligned with duder sit positions ──
-    const stoolY = counterY - 14
-    const STOOL_START = 42
-    const STOOL_GAP = 48
-    const stoolCount = Math.min(7, Math.floor((CAFE_W - STOOL_START - 20) / STOOL_GAP))
-    for (let si = 0; si < stoolCount; si++) {
-      const sx = STOOL_START + si * STOOL_GAP
-      g.fillStyle(0x475569, 0.4); g.fillCircle(sx, stoolY, 8)
-      g.fillStyle(0x334155, 0.25); g.fillRect(sx - 2, stoolY + 8, 4, 6)
-      g.fillStyle(0x334155, 0.2); g.fillRect(sx - 4, stoolY + 13, 8, 2)
-    }
-
-    // ── Animated steam ──
-    this.cafeSteamTimer = this.time.addEvent({
-      delay: 1800, loop: true,
-      callback: () => {
-        if (!this.cafeContainer?.active) return
-        const mx = machinePositions[Math.floor(Math.random() * machinePositions.length)]
-        for (let si = 0; si < 2; si++) {
-          const p = this.add.circle(mx + 10 + (si - 0.5) * 4, eqY - 2, 2, 0xffffff, 0.25)
-          container.add(p)
-          this.tweens.add({
-            targets: p, y: eqY - 16 - Math.random() * 8, x: mx + 10 + (si - 0.5) * 4 + (Math.random() - 0.5) * 6,
-            alpha: 0, duration: 900 + Math.random() * 400, delay: si * 120, ease: 'Sine.easeOut',
-            onComplete: () => { p.destroy() },
-          })
-        }
-      },
-    })
-  }
-
-    private startCoffeeRunTimer(): void {
-    if (this.coffeeRunTimer) this.coffeeRunTimer.destroy()
-    this.coffeeRunTimer = this.time.addEvent({
-      delay: 10000 + Math.random() * 8000,
-      loop: true,
-      callback: () => this.tryStartCoffeeRun(),
-    })
-  }
-
-  private tryStartCoffeeRun(): void {
-    if (!this.cafeContainer || this.rooms.size === 0) return
-    if (this.coffeeRunners.size >= 2) return
-
-    const candidates: { ws: WorkstationSprite; room: Room }[] = []
-    for (const room of this.rooms.values()) {
-      // Only one coffee runner per room at a time
-      if (this.coffeeRunnerRooms.has(room.cwd)) continue
-
-      for (const ws of room.workstations.values()) {
-        if (!ws.state) continue
-        if (ws.walkBreakTween) continue
-        if (this.coffeeRunners.has(ws.state.config.id)) continue
-        const m = ws.state.sessionMode
-        const status = ws.state.status
-        // Only truly idle agents — not working, planning, waiting, or active in any way
-        const isIdle = status === 'idle' || status === 'sleeping'
-        const isBusy = ws.state.needsInteraction || m === 'working' || m === 'plan' || m === 'compressing' || m === 'waiting' || m === 'accept-edits'
-        if (isIdle && !isBusy) candidates.push({ ws, room })
-      }
-    }
-    if (candidates.length === 0) return
-
-    const pick = candidates[Math.floor(Math.random() * candidates.length)]
-    this.sendAgentForCoffee(pick.ws, pick.room)
-  }
-
-  private sendAgentForCoffee(ws: WorkstationSprite, room: Room): void {
-    if (!ws.state || !this.cafeContainer) return
-    const agentId = ws.state.config.id
-    this.coffeeRunners.add(agentId)
-    this.coffeeRunnerRooms.add(room.cwd)
-
-    const WALK_SPEED = 55
-    const startX = room.x + ws.container.x
-    const startY = room.y + ws.container.y + WS_SPRITE_Y
-    const doorX = room.x
-    const doorY = this.getRoomDoorY(room) + (room.doorSide === 'top' ? -4 : 4)
-    const numStools = Math.min(7, Math.floor((420 - 42 - 20) / 48))
-    const stoolIdx = Math.floor(Math.random() * numStools)
-    const cafeX = (this.cafeWorldX - 210) + 42 + stoolIdx * 48
-    const cafeY = this.cafeWorldY
-    const midY = room.doorSide === 'top' ? doorY - 30 : doorY + 30
-
-    // Hide desk sprite while on coffee run — desk stays clickable
-    ws.sprite.setVisible(false)
-    this.spawnEmojiReaction(startX, startY - 25, '☕')
-
-    const charIdx = this.getAgentCharacterIndex(ws.state)
-    // Use individual walk animation strips (_256 PNGs: 6 frames at 512×512)
-    // Frames: 0=front-stepA, 1=front-stepB, 2=¾-stepA, 3=¾-stepB, 4=side-stepA, 5=side-stepB
-    const walkSuffix = charIdx === 1 ? '2' : '1'
-    const walkSheetKey = `anim-walk-${walkSuffix}`
-    const sitSheetKey = `anim-sit-${walkSuffix}`
-    const WALK_SCALE = CHAR_SCALE  // frames are 256×512, same as main spritesheet
-    const walker = this.add.sprite(startX, startY, walkSheetKey, 0)
-      .setScale(WALK_SCALE).setOrigin(0.5, 1).setDepth(9000)
-
-    // Shadow
-    const shadow = this.add.ellipse(startX, startY + 2, 16, 5, 0x000000, 0.15).setDepth(8999)
-
-    // No waddle — the walk sprite frames handle the animation
-
-    // Cleanup helper
-    let cleaned = false
-    const cleanup = () => {
-      if (cleaned) return
-      cleaned = true
-      shadow.destroy()
-      walker.destroy()
-      ws.sprite.setVisible(true)
-      this.coffeeRunners.delete(agentId)
-      this.coffeeRunnerRooms.delete(room.cwd)
-    }
-
-    // Walk through a list of waypoints sequentially
-    const goPoints = [
-      { x: doorX, y: doorY },
-      { x: doorX, y: midY },
-      { x: cafeX, y: midY },
-      { x: cafeX, y: cafeY },
-    ]
-    const backPoints = [
-      { x: cafeX, y: midY },
-      { x: doorX, y: midY },
-      { x: doorX, y: doorY },
-      { x: startX, y: startY },
-    ]
-
-    let pointIdx = 0
-    let currentPoints = goPoints
-    let phase: 'going' | 'sitting' | 'returning' = 'going'
-
-    const stepNext = () => {
-      if (!walker.active) { cleanup(); return }
-      if (pointIdx >= currentPoints.length) {
-        if (phase === 'going') {
-          // Arrived at café — sit
-          phase = 'sitting'
-          walker.setAngle(0)
-          walker.setTexture(sitSheetKey, 0)  // front-facing sit
-          walker.setFlipX(false)
-          walker.setScale(WALK_SCALE)
-          walker.setDepth(9000)
-
-          // ── Barista serves a drink ──
-          if (this.cafeContainer?.active && this.cafeBaristas.length > 0) {
-            const barista = this.cafeBaristas[Math.floor(Math.random() * this.cafeBaristas.length)]
-            if (barista?.active) {
-              // Barista reaches forward (toward counter)
-              this.time.delayedCall(600, () => {
-                if (!barista.active || !this.cafeContainer?.active) return
-                // Slide a cup from behind the counter to in front of the walker
-                const cupStartX = this.cafeContainer.x + barista.x
-                const cupStartY = this.cafeContainer.y + barista.y - 20
-                const cupEndX = walker.x
-                const cupEndY = walker.y - 10
-                const cup = this.add.circle(cupStartX, cupStartY, 3, 0x8b5cf6, 0.8).setDepth(9002)
-                // Steam wisp on the cup
-                const steam = this.add.circle(cupStartX, cupStartY - 6, 2, 0xffffff, 0.3).setDepth(9002)
-                this.tweens.add({
-                  targets: [cup, steam], x: cupEndX, y: { value: cupEndY, ease: 'Quad.easeOut' },
-                  duration: 600, ease: 'Sine.easeOut',
-                  onComplete: () => {
-                    steam.destroy()
-                    // Cup stays by the walker, then fades when they leave
-                    this.time.delayedCall(2500, () => {
-                      if (cup.active) this.tweens.add({ targets: cup, alpha: 0, duration: 400, onComplete: () => cup.destroy() })
-                    })
-                  },
-                })
-              })
-            }
-          }
-
-          this.time.delayedCall(120000, () => {  // 2 minutes coffee break
-            if (!walker.active) { cleanup(); return }
-            phase = 'returning'
-            currentPoints = backPoints
-            pointIdx = 0
-            stepNext()
-          })
-        } else {
-          // Arrived back at desk
-          cleanup()
-          this.spawnEmojiReaction(startX, startY - 25, '😊')
-        }
-        return
-      }
-
-      const target = currentPoints[pointIdx++]
-      const dx = target.x - walker.x
-      const dy = target.y - walker.y
-      const dist = Math.hypot(dx, dy)
-      if (dist < 2) { stepNext(); return }
-
-      // Pick walk frames based on direction (A = step 1, B = step 2)
-      const adx = Math.abs(dx), ady = Math.abs(dy)
-      // Walk strip: 12 frames (256×512) — 4 directions × 3 frames each
-      //   0-2:  walking DOWN  (stand, left-forward, right-forward)
-      //   3-5:  walking RIGHT (stand, left-forward, right-forward)
-      //   6-8:  walking UP    (stand, left-forward, right-forward)
-      //   9-11: walking LEFT  (stand, left-forward, right-forward)
-
-      let startFrame: number
-      if (adx > ady * 1.5) {
-        startFrame = dx > 0 ? 3 : 9
-      } else if (ady > adx * 1.5) {
-        startFrame = dy > 0 ? 0 : 6
-      } else {
-        // Diagonal — pick the dominant axis
-        if (adx > ady) { startFrame = dx > 0 ? 3 : 9 }
-        else { startFrame = dy > 0 ? 0 : 6 }
-      }
-
-      walker.setTexture(walkSheetKey, startFrame)
-      walker.setFlipX(false)
-      walker.setScale(WALK_SCALE)
-
-      const dur = Math.max(200, (dist / WALK_SPEED) * 1000)
-      let cycleIdx = 0
-      // Cycle between left-foot(1) and right-foot(2), skip stand(0) to avoid vertical bounce
-      // Add very subtle angle sway (±2°) for natural movement feel
-      const walkCycleTimer = this.time.addEvent({
-        delay: 200, loop: true,
-        callback: () => {
-          if (!walker.active) { walkCycleTimer.destroy(); return }
-          cycleIdx = cycleIdx === 0 ? 1 : 0
-          walker.setFrame(startFrame + 1 + cycleIdx)
-          walker.setAngle(cycleIdx === 0 ? -3 : 3)
-        },
-      })
-      this.tweens.add({
-        targets: walker,
-        x: target.x, y: target.y,
-        duration: dur, ease: 'Linear',
-        onComplete: () => { walkCycleTimer.destroy(); stepNext() },
-      })
-      this.tweens.add({ targets: shadow, x: target.x, y: target.y + 2, duration: dur, ease: 'Linear' })
-    }
-
-    stepNext()
-  }
 
     private rebuildNavMesh(): void {
     const rooms: Array<{ x: number; y: number; width: number; height: number; doorX: number; doorY: number }> = []
@@ -4743,10 +3839,7 @@ export class OfficeScene extends Phaser.Scene {
       }
     }
 
-    let cafeBounds: { x: number; y: number; w: number; h: number } | null = null
-    if (this.cafeContainer) {
-      cafeBounds = { x: this.cafeContainer.x, y: this.cafeContainer.y, w: 420, h: 180 }
-    }
+    const cafeBounds = this.cafe.getBounds()
 
     this.navMesh.rebuild({
       buildingBounds,
@@ -4779,515 +3872,8 @@ export class OfficeScene extends Phaser.Scene {
   // Typing spark particles
   // ---------------------------------------------------------------------------
 
-  // ---------------------------------------------------------------------------
-  // Starfield
-  // ---------------------------------------------------------------------------
+  // [Starfield, cloud layer, wall clock, day/night, ceiling lights — extracted to OfficeAtmosphere]
 
-  private initStarfield(): void {
-    // Star color palette — mostly white, occasional cool blue or warm yellow
-    const palette = [
-      { color: 0xffffff, weight: 6 },
-      { color: 0x93c5fd, weight: 2 },
-      { color: 0xfef3c7, weight: 2 },
-    ]
-    const totalWeight = palette.reduce((s, e) => s + e.weight, 0)
-
-    const count = 50 + Math.floor(Math.random() * 31) // 50-80 stars
-    for (let i = 0; i < count; i++) {
-      const x = Math.random() * 4000
-      const y = Math.random() * 3000
-      const radius = 0.5 + Math.random() * 1.0 // 0.5-1.5px
-      const baseAlpha = 0.03 + Math.random() * 0.05 // 0.03-0.08
-
-      // Weighted random color pick
-      let roll = Math.random() * totalWeight
-      let chosenColor = 0xffffff
-      for (const entry of palette) {
-        roll -= entry.weight
-        if (roll <= 0) { chosenColor = entry.color; break }
-      }
-
-      const star = this.add.circle(x, y, radius, chosenColor, baseAlpha)
-      star.setDepth(-10)
-      star.setData('baseAlpha', baseAlpha)
-      this.starPool.push(star)
-    }
-  }
-
-  // ---------------------------------------------------------------------------
-  // Cloud layer
-  // ---------------------------------------------------------------------------
-
-  private initCloudLayer(): void {
-    const CLOUD_COUNT = 5 // 4-6 clouds
-    const CLOUD_COLOR = 0x94a3b8
-
-    for (let i = 0; i < CLOUD_COUNT; i++) {
-      const gfx = this.add.graphics()
-      gfx.setDepth(-9) // above stars (-10), below building elements
-
-      // Scatter across sky area: wider than the world, y stays in upper 40% of world
-      const x = Math.random() * 4200 - 100
-      const y = Math.random() * (this.worldHeight * 0.4)
-
-      // Each cloud has 2-3 overlapping blobs
-      const blobCount = 2 + Math.floor(Math.random() * 2)
-      const baseAlpha = 0.02 + Math.random() * 0.02 // 0.02-0.04
-
-      gfx.setPosition(x, y)
-      gfx.setAlpha(baseAlpha)
-      gfx.setData('baseAlpha', baseAlpha)
-      gfx.setData('blobCount', blobCount)
-      gfx.setData('currentColor', CLOUD_COLOR)
-
-      this.redrawCloud(gfx, CLOUD_COLOR)
-      this.cloudPool.push(gfx)
-    }
-  }
-
-  private redrawCloud(gfx: Phaser.GameObjects.Graphics, color: number): void {
-    const blobCount = gfx.getData('blobCount') as number
-    gfx.clear()
-
-    // Draw 2-3 overlapping ellipses to form a soft hazy shape
-    for (let b = 0; b < blobCount; b++) {
-      const offsetX = (b - (blobCount - 1) / 2) * 45
-      const offsetY = Math.sin(b * 1.4) * 12
-      const w = 60 + Math.random() * 60  // 60-120px wide
-      const h = w * (0.35 + Math.random() * 0.2) // roughly 35-55% of width tall
-
-      gfx.fillStyle(color, 1)
-      gfx.fillEllipse(offsetX, offsetY, w, h)
-    }
-  }
-
-  private tickClouds(): void {
-    if (this.cloudPool.length === 0) return
-    const drift = 0.02
-    const rightEdge = this.worldWidth + 300
-    const leftWrap = -300
-
-    for (const cloud of this.cloudPool) {
-      cloud.x += drift
-      if (cloud.x > rightEdge) {
-        // Wrap back to the left with a slight y jitter for variety
-        cloud.x = leftWrap
-        cloud.y = Math.random() * (this.worldHeight * 0.4)
-      }
-    }
-  }
-
-  private tickStarfieldTwinkle(): void {
-    if (this.starPool.length === 0) return
-    const count = 3 + Math.floor(Math.random() * 3) // 3-5 stars per tick
-    for (let i = 0; i < count; i++) {
-      const star = this.starPool[Math.floor(Math.random() * this.starPool.length)]
-      const baseAlpha = star.getData('baseAlpha') as number
-      const currentAlpha = star.alpha
-
-      // Peak is 2x the star's current alpha ceiling (respects day/night scaling)
-      const peakAlpha = Math.min(currentAlpha * 2.5, 0.35)
-      this.tweens.killTweensOf(star)
-      this.tweens.add({
-        targets: star,
-        alpha: peakAlpha,
-        duration: 700,
-        ease: 'Sine.easeIn',
-        yoyo: true,
-        hold: 100,
-        onComplete: () => {
-          // Settle back to the phase-adjusted base alpha
-          const phaseMultiplier =
-            this.currentTimePhase === 'night' ? 1.5 :
-            this.currentTimePhase === 'day'   ? 0.5 : 1.0
-          this.tweens.add({
-            targets: star,
-            alpha: baseAlpha * phaseMultiplier,
-            duration: 800,
-            ease: 'Sine.easeOut',
-          })
-        },
-      })
-    }
-  }
-
-  private initParticlePool(): void {
-    for (let i = 0; i < 80; i++) {
-      const radius = 1 + Math.random() * 2
-      const p = this.add.circle(0, 0, radius, 0xffffff, 0).setDepth(9998).setVisible(false)
-      p.setData('busy', false)
-      this.typingParticlePool.push(p)
-    }
-  }
-
-  private spawnTypingParticle(worldX: number, worldY: number, isWaiting = false, isCompressing = false): void {
-    const p = this.typingParticlePool.find(c => !c.getData('busy'))
-    if (!p) return
-    // Colors: theme-aware for working, amber for waiting, red for compressing
-    const colors = isCompressing
-      ? [0xf87171, 0xef4444, 0xfca5a5]
-      : isWaiting
-        ? [0xfbbf24, 0xf59e0b, 0xfcd34d]
-        : activeTheme.particleColors.length > 0
-          ? activeTheme.particleColors
-          : [0x0ea5e9, 0x34d399, 0x22d3ee]
-    const radius = 0.8 + Math.random() * 1.4
-    p.setPosition(worldX + (Math.random() - 0.5) * 24, worldY)
-    p.setFillStyle(colors[Math.floor(Math.random() * colors.length)])
-    p.setRadius(radius)
-    // Flash-in: start bright, decay quickly
-    p.setAlpha(0.9).setVisible(true).setData('busy', true)
-    const driftY = -8 - Math.random() * 18
-    const driftX = (Math.random() - 0.5) * 24
-    this.tweens.add({
-      targets: p,
-      y: worldY + driftY,
-      x: p.x + driftX,
-      alpha: 0,
-      duration: 500 + Math.random() * 500,
-      ease: 'Quad.easeOut',
-      onComplete: () => { p.setVisible(false).setData('busy', false) },
-    })
-  }
-
-  private tickParticles(): void {
-    for (const room of this.rooms.values()) {
-      for (const ws of room.workstations.values()) {
-        if (!ws.state) continue
-        const m = ws.state.sessionMode
-        const isWorking = m === 'working' || m === 'plan'
-        const isCompressing = m === 'compressing'
-        const isWaiting = ws.state.needsInteraction
-        if (!isWorking && !isWaiting && !isCompressing) continue
-        const wx = room.x + ws.container.x
-        const wy = room.y + ws.container.y + WS_DESK_Y + 2
-        // Intensity scaling by mode
-        const spawnCount = isCompressing ? 3 : m === 'plan' ? 2 : 1
-        const spawnChance = isCompressing ? 0.25 : m === 'plan' ? 0.18 : 0.12
-        for (let s = 0; s < spawnCount; s++) {
-          if (Math.random() < spawnChance) this.spawnTypingParticle(wx, wy, isWaiting, isCompressing)
-        }
-      }
-    }
-  }
-
-  private initRainPool(): void {
-    const RAIN_COUNT = 40
-    for (let i = 0; i < RAIN_COUNT; i++) {
-      const len = 8 + Math.random() * 6           // 8–14px length
-      const alpha = 0.15 + Math.random() * 0.10   // 0.15–0.25 alpha
-      const speed = 3 + Math.random() * 2         // 3–5px per tick
-      const x = Math.random() * this.viewWidth
-      const y = Math.random() * this.viewHeight
-      const drop = this.add.line(0, 0, x, y, x + 1, y + len, 0x60a5fa, alpha)
-      drop.setOrigin(0, 0)
-      drop.setLineWidth(1)
-      drop.setDepth(9990)
-      drop.setScrollFactor(0)
-      drop.setVisible(false)
-      drop.setData('speed', speed)
-      this.rainDropPool.push(drop)
-    }
-  }
-
-  private tickRain(): void {
-    for (const drop of this.rainDropPool) {
-      if (!drop.visible) continue
-      const speed = drop.getData('speed') as number
-      // geom.x1/y1/x2/y2 are the raw coordinates; shift the whole line via its position
-      drop.x += 1
-      drop.y += speed
-      // When the top of the drop passes off the bottom, reset to the top
-      const y1 = drop.geom.y1
-      if (drop.y + y1 > this.viewHeight + 16) {
-        drop.x = Math.random() * this.viewWidth
-        drop.y = -16 - Math.random() * 80
-      }
-    }
-  }
-
-  private initSnowPool(): void {
-    const SNOW_COUNT = 30
-    for (let i = 0; i < SNOW_COUNT; i++) {
-      const radius = 1 + Math.random() * 1.5 // 1–2.5px
-      const alpha = 0.2 + Math.random() * 0.2 // 0.20–0.40
-      const flake = this.add.circle(Math.random() * this.viewWidth, Math.random() * this.viewHeight, radius, 0xffffff, alpha)
-      flake.setScrollFactor(0)
-      flake.setDepth(9989)
-      flake.setVisible(false)
-      flake.setData('speed', 1 + Math.random())
-      this.snowPool.push(flake)
-    }
-  }
-
-  private tickSnow(time: number): void {
-    for (let i = 0; i < this.snowPool.length; i++) {
-      const flake = this.snowPool[i]
-      if (!flake.visible) continue
-      const speed = flake.getData('speed') as number
-      flake.y += speed
-      flake.x += Math.sin(time * 0.001 + i) * 0.5
-      if (flake.y > this.viewHeight + 4) {
-        flake.x = Math.random() * this.viewWidth
-        flake.y = -4 - Math.random() * 40
-      }
-    }
-  }
-
-  private initAmbientMotePool(): void {
-    // Shared constellation graphics layer — redrawn every tick
-    this.constellationGfx = this.add.graphics().setDepth(1)
-
-    for (let i = 0; i < AMBIENT_MOTE_POOL_SIZE; i++) {
-      let m: Phaser.GameObjects.Arc | Phaser.GameObjects.Graphics
-
-      if (i % 4 === 0) {
-        // Diamond shape (rotated square) via Graphics
-        const gfx = this.add.graphics().setDepth(2).setVisible(false)
-        const s = 1.6 + Math.random() * 0.8
-        gfx.fillStyle(0xe2e8f0, 1)
-        gfx.fillPoints([{ x: 0, y: -s }, { x: s, y: 0 }, { x: 0, y: s }, { x: -s, y: 0 }], true)
-        gfx.setData('isDiamond', true)
-        gfx.setData('baseSize', s)
-        m = gfx
-      } else {
-        const r = 0.9 + Math.random() * 1.3
-        const arc = this.add.circle(0, 0, r, 0xe2e8f0, 0).setDepth(2).setVisible(false)
-        arc.setData('isDiamond', false)
-        m = arc
-      }
-
-      // Per-mote animation state — driven by sine waves each tick, no tweens
-      m.setData('busy', false)
-      m.setData('phaseOffset', Math.random() * Math.PI * 2)
-      m.setData('moteIndex', i)
-      m.setData('originX', 0)
-      m.setData('originY', 0)
-      m.setData('driftX', 0)
-      m.setData('driftY', 0)
-      m.setData('lifetime', 0)
-      m.setData('elapsed', 0)
-      m.setData('baseAlpha', 0)
-
-      this.ambientMotePool.push(m)
-    }
-  }
-
-  // ---------------------------------------------------------------------------
-  // Corridor data-flow particle trail
-  // ---------------------------------------------------------------------------
-
-  private initCorridorParticlePool(): void {
-    for (let i = 0; i < 20; i++) {
-      const arc = this.add.circle(0, 0, 1.5, 0xffffff, 0).setDepth(-1).setVisible(false)
-      arc.setData('busy', false)
-      this.corridorParticlePool.push(arc)
-    }
-  }
-
-  // ---------------------------------------------------------------------------
-  // Alert ripple pool — sound-wave rings for blocked/waiting agents
-  // ---------------------------------------------------------------------------
-
-  private initAlertRipplePool(): void {
-    for (let i = 0; i < 10; i++) {
-      const circle = this.add.circle(0, 0, 1, 0xffffff, 0).setDepth(100).setVisible(false)
-      circle.setData('busy', false)
-      this.alertRipplePool.push(circle)
-    }
-  }
-
-  private spawnAlertRipple(worldX: number, worldY: number, color: number): void {
-    const circle = this.alertRipplePool.find(c => !c.getData('busy'))
-    if (!circle) return
-
-    circle.setPosition(worldX, worldY)
-    circle.setRadius(4)
-    circle.setFillStyle(color, 0)
-    circle.setStrokeStyle(1.5, color, 0.4)
-    circle.setAlpha(0.4)
-    circle.setScale(1)
-    circle.setVisible(true)
-    circle.setData('busy', true)
-
-    this.tweens.add({
-      targets: circle,
-      scaleX: 7.5,
-      scaleY: 7.5,
-      alpha: 0,
-      duration: 800,
-      ease: 'Sine.easeOut',
-      onComplete: () => {
-        circle.setVisible(false)
-        circle.setScale(1)
-        circle.setData('busy', false)
-      },
-    })
-  }
-
-  private tickCorridorParticles(): void {
-    if (this.corridorSegments.length === 0) return
-
-    // Only spawn when at least one agent is actively working
-    const hasActiveAgent = this.agents.some(
-      a => (a.sessionMode === 'working' || a.sessionMode === 'plan') && !a.needsInteraction,
-    )
-    if (!hasActiveAgent) return
-
-    const free = this.corridorParticlePool.find(p => !p.getData('busy'))
-    if (!free) return
-
-    const seg = this.corridorSegments[Math.floor(Math.random() * this.corridorSegments.length)]
-    const palette = activeTheme.particleColors
-    const color = palette[Math.floor(Math.random() * palette.length)]
-    const targetAlpha = 0.2 + Math.random() * 0.2
-    const travelDuration = 800 + Math.random() * 400
-
-    free.setFillStyle(color)
-    free.setPosition(seg.x1, seg.y1)
-    free.setAlpha(0)
-    free.setVisible(true)
-    free.setData('busy', true)
-
-    // Fade in over 100ms, then tween to destination with fade-out over the last 15%
-    this.tweens.add({
-      targets: free,
-      alpha: targetAlpha,
-      duration: 100,
-      ease: 'Linear',
-      onComplete: () => {
-        this.tweens.add({
-          targets: free,
-          x: seg.x2,
-          y: seg.y2,
-          duration: travelDuration,
-          ease: 'Sine.easeInOut',
-          onUpdate: (_tween: Phaser.Tweens.Tween, _target: unknown, _key: string, _value: number, _start: number, progress: number) => {
-            if (progress > 0.85) {
-              free.setAlpha(targetAlpha * (1 - (progress - 0.85) / 0.15))
-            }
-          },
-          onComplete: () => {
-            free.setVisible(false)
-            free.setAlpha(0)
-            free.setData('busy', false)
-          },
-        })
-      },
-    })
-  }
-
-  private spawnAmbientMote(): void {
-    const mote = this.ambientMotePool.find(m => !m.getData('busy'))
-    if (!mote) return
-
-    const view = this.cameras.main.worldView
-    const x = view.x + Math.random() * view.width
-    const y = view.y + Math.random() * view.height
-
-    // Pick a random color from the active theme palette
-    const palette = activeTheme.particleColors
-    const color = palette[Math.floor(Math.random() * palette.length)]
-
-    if (mote.getData('isDiamond')) {
-      const gfx = mote as Phaser.GameObjects.Graphics
-      const s = mote.getData('baseSize') as number
-      gfx.clear()
-      gfx.fillStyle(color, 1)
-      gfx.fillPoints([{ x: 0, y: -s }, { x: s, y: 0 }, { x: 0, y: s }, { x: -s, y: 0 }], true)
-    } else {
-      ;(mote as Phaser.GameObjects.Arc).setFillStyle(color)
-    }
-
-    const baseAlpha = 0.18 + Math.random() * 0.18
-    const lifetime = 2600 + Math.random() * 2200
-
-    mote.setPosition(x, y)
-    mote.setAlpha(baseAlpha)
-    mote.setVisible(true)
-    mote.setData('busy', true)
-    mote.setData('originX', x)
-    mote.setData('originY', y)
-    mote.setData('driftX', (Math.random() - 0.5) * 16)
-    mote.setData('driftY', -18 - Math.random() * 24)
-    mote.setData('lifetime', lifetime)
-    mote.setData('elapsed', 0)
-    mote.setData('baseAlpha', baseAlpha)
-  }
-
-  private tickAmbientMotes(): void {
-    if (this.rooms.size === 0) return
-    if (this.cameras.main.zoom < 0.62) return
-    if (Math.random() < 0.55) this.spawnAmbientMote()
-
-    const time = this.time.now
-    const delta = this.game.loop.delta
-
-    // Advance each active mote manually (sine drift + brightness twinkle)
-    const activePositions: { x: number; y: number }[] = []
-
-    for (const mote of this.ambientMotePool) {
-      if (!mote.getData('busy')) continue
-
-      const elapsed: number = (mote.getData('elapsed') as number) + delta
-      const lifetime: number = mote.getData('lifetime') as number
-      const progress = elapsed / lifetime // 0 → 1
-
-      if (progress >= 1) {
-        mote.setVisible(false)
-        mote.setData('busy', false)
-        continue
-      }
-
-      mote.setData('elapsed', elapsed)
-
-      const originX = mote.getData('originX') as number
-      const originY = mote.getData('originY') as number
-      const driftX = mote.getData('driftX') as number
-      const driftY = mote.getData('driftY') as number
-      const phase = mote.getData('phaseOffset') as number
-      const idx = mote.getData('moteIndex') as number
-      const baseAlpha = mote.getData('baseAlpha') as number
-
-      // Sine-wave lateral sway with a unique phase offset per mote
-      const sway = Math.sin(time * 0.001 + idx + phase) * 6
-
-      mote.setPosition(originX + driftX * progress + sway, originY + driftY * progress)
-
-      // Brightness twinkle: alpha oscillates 0.15–0.4, faded by quadratic progress
-      const fadeOut = 1 - progress * progress
-      const twinkle = 0.5 + 0.5 * Math.sin(time * 0.0023 + phase * 1.7)
-      mote.setAlpha(Math.min(baseAlpha, Math.max(0, (0.15 + twinkle * 0.25) * fadeOut)))
-
-      // Collect world-space center for constellation pass
-      const anyMote = mote as unknown as { getCenter?: () => { x: number; y: number } }
-      const center = anyMote.getCenter ? anyMote.getCenter() : { x: mote.x, y: mote.y }
-      activePositions.push({ x: center.x, y: center.y })
-    }
-
-    // Constellation lines: faint connections between nearby mote pairs
-    const cgfx = this.constellationGfx
-    if (cgfx) {
-      cgfx.clear()
-      let connections = 0
-      const maxConnections = 4
-      const threshSq = 60 * 60
-      outer: for (let i = 0; i < activePositions.length - 1; i++) {
-        for (let j = i + 1; j < activePositions.length; j++) {
-          const dx = activePositions[i].x - activePositions[j].x
-          const dy = activePositions[i].y - activePositions[j].y
-          if (dx * dx + dy * dy < threshSq) {
-            cgfx.lineStyle(0.5, 0xffffff, 0.05 + Math.random() * 0.05)
-            cgfx.beginPath()
-            cgfx.moveTo(activePositions[i].x, activePositions[i].y)
-            cgfx.lineTo(activePositions[j].x, activePositions[j].y)
-            cgfx.strokePath()
-            if (++connections >= maxConnections) break outer
-          }
-        }
-      }
-    }
-  }
 
   // ---------------------------------------------------------------------------
   // Room activity bar
@@ -5401,140 +3987,10 @@ export class OfficeScene extends Phaser.Scene {
     }
   }
 
-  private drawVignetteOverlay(): void {
-    const g = this.vignetteOverlay
-    if (!g) return
-    g.clear()
-
-    const w = this.viewWidth
-    const h = this.viewHeight
-    if (w <= 0 || h <= 0) return
-
-    // Layered edge strips approximate a cheap vignette without extra textures.
-    const layers = 5
-    const baseThickness = Math.max(12, Math.round(Math.min(w, h) * 0.03))
-    for (let i = 0; i < layers; i++) {
-      const t = baseThickness + i * 8
-      const alpha = 0.035 - i * 0.005
-      if (alpha <= 0) break
-      g.fillStyle(COLOR_VIGNETTE, alpha)
-      g.fillRect(0, i * 2, w, t)                  // top
-      g.fillRect(0, h - t - i * 2, w, t)          // bottom
-      g.fillRect(i * 2, 0, t, h)                  // left
-      g.fillRect(w - t - i * 2, 0, t, h)          // right
-    }
-  }
 
   // ---------------------------------------------------------------------------
   // Coffee steam particles (idle-only)
   // ---------------------------------------------------------------------------
-
-  private spawnSteamParticles(ws: WorkstationSprite): void {
-    if (!ws.steamContainer) return
-    // Clear any lingering particles before spawning a fresh wave
-    this.clearSteamParticles(ws)
-
-    const container = ws.steamContainer
-    const tweens: Phaser.Tweens.Tween[] = []
-
-    for (let i = 0; i < 3; i++) {
-      // Slight horizontal spread around the mug center
-      const xOff = (i - 1) * 2.5 + (Math.random() - 0.5)
-      const initAlpha = 0.3 + Math.random() * 0.2   // 0.3–0.5
-      const riseY    = -12 - Math.random() * 6       // -12 to -18 px
-      const duration = 1200 + Math.random() * 600    // 1200–1800 ms
-      const swayAmp  = 2 + Math.random()             // ±2–3 px
-
-      const particle = this.add.circle(xOff, 0, 1.5, 0xffffff, initAlpha)
-      container.add(particle)
-
-      const tween = this.tweens.add({
-        targets: particle,
-        y: riseY,
-        alpha: 0,
-        duration,
-        delay: i * 400,
-        ease: 'Sine.easeOut',
-        onUpdate: (tw: Phaser.Tweens.Tween) => {
-          // Sine X sway as the particle rises
-          const progress = tw.progress
-          particle.x = xOff + Math.sin(progress * Math.PI * 2) * swayAmp
-        },
-        onComplete: () => {
-          // Remove this particle from the container and destroy it
-          container.remove(particle, true)
-        },
-      })
-      tweens.push(tween)
-    }
-
-    ws.steamTweens = tweens
-
-    // Schedule the next wave once the slowest particle finishes (~1.8s + max delay 800ms)
-    const respawnDelay = 1800 + 3 * 400 + 200
-    const respawnTimer = this.time.delayedCall(respawnDelay, () => {
-      // Only respawn if the workstation is still in idle mode
-      if (ws.lastAnimMode === 'idle' && ws.steamContainer) {
-        this.spawnSteamParticles(ws)
-      }
-    })
-    // Piggyback the timer onto steamTweens so clearSteamParticles can cancel it
-    ;(ws as unknown as { _steamRespawnTimer?: Phaser.Time.TimerEvent })._steamRespawnTimer = respawnTimer
-  }
-
-  private clearSteamParticles(ws: WorkstationSprite): void {
-    // Cancel pending respawn timer
-    const typed = ws as unknown as { _steamRespawnTimer?: Phaser.Time.TimerEvent }
-    if (typed._steamRespawnTimer) {
-      typed._steamRespawnTimer.destroy()
-      typed._steamRespawnTimer = undefined
-    }
-    // Stop and discard all active particle tweens
-    if (ws.steamTweens) {
-      for (const t of ws.steamTweens) {
-        if (t && t.isPlaying()) t.stop()
-        t.destroy()
-      }
-      ws.steamTweens = []
-    }
-    // Remove any leftover particle circles still sitting in the container
-    if (ws.steamContainer) {
-      ws.steamContainer.removeAll(true)
-    }
-  }
-
-  // ---------------------------------------------------------------------------
-  // Confetti burst
-  // ---------------------------------------------------------------------------
-
-  private burstConfetti(x: number, y: number): void {
-    const colors = activeTheme.particleColors
-    const count = 12 + Math.floor(Math.random() * 5) // 12–16
-
-    for (let i = 0; i < count; i++) {
-      const color = colors[Math.floor(Math.random() * colors.length)]
-      const rect = this.add.rectangle(x, y, 3, 3, color, 1)
-      rect.setDepth(500)
-
-      const angle = Math.random() * Math.PI * 2
-      const speed = 40 + Math.random() * 60      // 40–100 px/s equivalent
-      const vx = Math.cos(angle) * speed
-      const vy = Math.sin(angle) * speed
-      const duration = 600 + Math.random() * 300  // 600–900ms
-      const rotationDeg = (Math.random() - 0.5) * 720
-
-      this.tweens.add({
-        targets: rect,
-        x: x + vx * (duration / 1000),
-        y: y + vy * (duration / 1000) + 60,      // +60 simulates gravity drop
-        angle: rotationDeg,
-        alpha: 0,
-        duration,
-        ease: 'Quad.easeOut',
-        onComplete: () => { rect.destroy() },
-      })
-    }
-  }
 
   // ---------------------------------------------------------------------------
   // Mood indicator
@@ -5802,7 +4258,7 @@ export class OfficeScene extends Phaser.Scene {
     }
     ws.workStartTime = undefined
     // Always stop steam when transitioning; idle branch will re-spawn it
-    this.clearSteamParticles(ws)
+    this.particles.clearSteamParticles(ws)
 
     // Fade out mood emoji on mode transition; updateMood will fade the new one in
     if (ws.moodTween) { ws.moodTween.destroy(); ws.moodTween = undefined }
@@ -5965,7 +4421,7 @@ export class OfficeScene extends Phaser.Scene {
       this.restoreDeskStroke(ws)
 
       // Spawn coffee steam — agent is relaxing, mug is hot
-      this.spawnSteamParticles(ws)
+      this.particles.spawnSteamParticles(ws)
 
       // "Just finished" bounce + confetti when transitioning from working→idle
       if (prevMode === 'working') {
@@ -5979,7 +4435,7 @@ export class OfficeScene extends Phaser.Scene {
           if (room.workstations.has(agent.config.id)) {
             const worldX = room.x + ws.container.x
             const worldY = room.y + ws.container.y - 16  // slightly above the agent head
-            this.burstConfetti(worldX, worldY)
+            this.particles.burstConfetti(worldX, worldY)
             break
           }
         }
@@ -6192,17 +4648,16 @@ export class OfficeScene extends Phaser.Scene {
   }
 
   private updateMonitorGlow(ws: WorkstationSprite, isWorking: boolean, isWaiting: boolean): void {
-    if (!ws.monitorGlowOverlay) return
-    ws.monitorGlowOverlay.setVisible(true)
+    if (!ws.monitorGlowFx) return
     const isActive = isWorking || isWaiting
     const baseColor = isWaiting ? 0xfbbf24 : isWorking ? 0x0ea5e9 : 0x94a3b8
-    const baseAlpha = isActive ? 0.35 : 0.12
-    const peakAlpha = isActive ? 0.6 : 0.25
-    const duration  = isActive ? 800 : 2400
-    ws.monitorGlowOverlay.setFillStyle(baseColor)
-    ws.monitorGlowOverlay.setAlpha(baseAlpha)
+    const baseStrength = isActive ? 3 : 1
+    const peakStrength = isActive ? 6 : 2
+    const duration     = isActive ? 800 : 2400
+    ws.monitorGlowFx.color = baseColor
+    ws.monitorGlowFx.outerStrength = baseStrength
     ws.monitorGlowTween = this.tweens.add({
-      targets: ws.monitorGlowOverlay, alpha: peakAlpha,
+      targets: ws.monitorGlowFx, outerStrength: peakStrength,
       duration, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
     })
   }
@@ -7206,7 +5661,14 @@ export class OfficeScene extends Phaser.Scene {
 
     // These are managed by animation state but suppressed below L3
     if (ws.screenLines) ws.screenLines.setVisible(showFull)
-    if (ws.monitorGlowOverlay) ws.monitorGlowOverlay.setVisible(showFull)
+    if (ws.monitorGlowFx) {
+      if (showFull) {
+        if (ws.monitorGlowTween) ws.monitorGlowTween.resume()
+      } else {
+        if (ws.monitorGlowTween) ws.monitorGlowTween.pause()
+        ws.monitorGlowFx.outerStrength = 0
+      }
+    }
   }
 
   private showLodLabel(level: number): void {
@@ -7554,456 +6016,6 @@ export class OfficeScene extends Phaser.Scene {
   }
 
   // ---------------------------------------------------------------------------
-  // Day/night cycle
-  // ---------------------------------------------------------------------------
-
-  private getTimePhase(): {
-    phase: 'morning' | 'day' | 'evening' | 'night'
-    color: number
-    alpha: number
-    bgColor: number
-    glowMultiplier: number
-  } {
-    const hour = new Date().getHours()
-    if (hour >= 6 && hour < 10) {
-      return { phase: 'morning', color: 0xffa500, alpha: 0.06, bgColor: 0x151a24, glowMultiplier: 1.0 }
-    } else if (hour >= 10 && hour < 17) {
-      return { phase: 'day', color: 0x000000, alpha: 0.0, bgColor: 0x111827, glowMultiplier: 1.0 }
-    } else if (hour >= 17 && hour < 20) {
-      return { phase: 'evening', color: 0xff6a00, alpha: 0.08, bgColor: 0x14161f, glowMultiplier: 1.2 }
-    } else {
-      return { phase: 'night', color: 0x1a3a6a, alpha: 0.14, bgColor: 0x0a0e18, glowMultiplier: 1.6 }
-    }
-  }
-
-  private tickWindowGlint(time: number): void {
-    const gfx = this.windowGlintGfx
-    if (!gfx || this.windowPositions.length === 0) return
-
-    // Start a new glint sweep every GLINT_INTERVAL ms
-    if (this.glintActiveWindow === -1 && time - this.lastGlintAt >= this.GLINT_INTERVAL) {
-      this.glintActiveWindow = Math.floor(Math.random() * this.windowPositions.length)
-      this.glintStartTime = time
-      this.lastGlintAt = time
-    }
-
-    gfx.clear()
-    if (this.glintActiveWindow === -1) return
-
-    const win = this.windowPositions[this.glintActiveWindow]
-    const elapsed = time - this.glintStartTime
-    const t = Math.min(elapsed / this.GLINT_DURATION, 1)
-
-    if (t >= 1) {
-      this.glintActiveWindow = -1
-      return
-    }
-
-    // Thin vertical bar sweeping left to right across the window
-    const barW = 3
-    const barX = win.x + t * (win.w - barW)
-    gfx.fillStyle(0xffffff, 0.15)
-    gfx.fillRect(barX, win.y, barW, win.h)
-  }
-
-  private applyDayNightCycle(animate: boolean): void {
-    const { phase, color, alpha, bgColor, glowMultiplier } = this.getTimePhase()
-    if (phase === this.currentTimePhase && animate) return
-    this.currentTimePhase = phase
-
-    // Draw sky gradient for new phase
-    this.drawSkyGradient(phase)
-
-    // Update window tint based on time of day and force a redraw
-    if (phase === 'morning') {
-      this.windowTintColor = 0xfde68a
-      this.windowTintAlpha = 0.08
-    } else if (phase === 'day') {
-      this.windowTintColor = 0x7dd3fc
-      this.windowTintAlpha = 0.16
-    } else if (phase === 'evening') {
-      this.windowTintColor = 0xfbbf24
-      this.windowTintAlpha = 0.06
-    } else {
-      // night: interior glow suggesting lights inside
-      this.windowTintColor = 0xfef3c7
-      this.windowTintAlpha = 0.12
-    }
-    this.lastOfficeBgW = 0 // invalidate cache so drawOfficeBackground redraws with new tint
-
-    // Set shadow angle based on simulated sun position for this phase
-    if (phase === 'morning') {
-      this.shadowAngle = -0.3   // light from the right, shadows lean left
-    } else if (phase === 'day') {
-      this.shadowAngle = 0      // overhead light, shadows fall straight down
-    } else if (phase === 'evening') {
-      this.shadowAngle = 0.3    // light from the left, shadows lean right
-    } else {
-      this.shadowAngle = 0      // night: ambient ceiling light, no directional bias
-    }
-
-    const overlay = this.dayNightOverlay
-    if (!overlay) return
-
-    this.cameras.main.setBackgroundColor(bgColor)
-
-    if (animate) {
-      this.tweens.killTweensOf(overlay)
-      overlay.setFillStyle(color)
-      this.tweens.add({ targets: overlay, alpha, duration: 3000, ease: 'Sine.easeInOut' })
-    } else {
-      overlay.setFillStyle(color)
-      overlay.setAlpha(alpha)
-    }
-
-    // Adjust monitor glow and lamp brightness
-    for (const room of this.rooms.values()) {
-      for (const ws of room.workstations.values()) {
-        if (ws.monitorGlowOverlay) {
-          ws.monitorGlowOverlay.setScale(0.8 + (glowMultiplier - 1.0) * 0.5)
-        }
-      }
-    }
-
-    // Starfield alpha — more visible at night, barely perceptible during the day
-    for (const star of this.starPool) {
-      const baseAlpha = star.getData('baseAlpha') as number
-      let targetAlpha: number
-      if (phase === 'night') {
-        targetAlpha = baseAlpha * 1.5
-      } else if (phase === 'day') {
-        targetAlpha = baseAlpha * 0.5
-      } else {
-        // morning / evening — base alpha
-        targetAlpha = baseAlpha
-      }
-      if (animate) {
-        this.tweens.killTweensOf(star)
-        this.tweens.add({ targets: star, alpha: targetAlpha, duration: 3000, ease: 'Sine.easeInOut' })
-      } else {
-        star.setAlpha(targetAlpha)
-      }
-    }
-
-    // Cloud layer — redraw each cloud Graphics with phase-appropriate color and alpha
-    for (const cloud of this.cloudPool) {
-      const baseAlpha = cloud.getData('baseAlpha') as number
-      let targetAlpha: number
-      let targetColor: number
-      if (phase === 'night') {
-        targetAlpha = baseAlpha * 1.3
-        targetColor = 0x475569
-      } else if (phase === 'morning') {
-        targetAlpha = baseAlpha
-        targetColor = 0xcbd5e1
-      } else {
-        // day / evening
-        targetAlpha = baseAlpha
-        targetColor = 0x94a3b8
-      }
-      cloud.setData('currentColor', targetColor)
-      if (animate) {
-        this.tweens.killTweensOf(cloud)
-        this.tweens.add({ targets: cloud, alpha: targetAlpha, duration: 3000, ease: 'Sine.easeInOut' })
-      } else {
-        cloud.setAlpha(targetAlpha)
-      }
-      // Redraw the cloud shape with the new color
-      this.redrawCloud(cloud, targetColor)
-    }
-
-    // Rain: only visible during night phase
-    const shouldRain = phase === 'night'
-    if (shouldRain !== this.rainActive) {
-      this.rainActive = shouldRain
-      for (const drop of this.rainDropPool) {
-        if (shouldRain) {
-          // Scatter drops randomly across screen on activation
-          drop.x = Math.random() * this.viewWidth
-          drop.y = -16 - Math.random() * this.viewHeight
-          drop.setVisible(true)
-        } else {
-          drop.setVisible(false)
-        }
-      }
-    }
-
-    // Snow: only visible during morning phase — soft, slow, peaceful
-    const shouldSnow = phase === 'morning'
-    if (shouldSnow !== this.snowActive) {
-      this.snowActive = shouldSnow
-      for (const flake of this.snowPool) {
-        if (shouldSnow) {
-          // Scatter flakes across the full viewport on activation
-          flake.x = Math.random() * this.viewWidth
-          flake.y = Math.random() * this.viewHeight
-          flake.setVisible(true)
-        } else {
-          flake.setVisible(false)
-        }
-      }
-    }
-
-    // Exterior lights — tween container alpha so all child fixtures change together.
-    // Individual children were created with relative alphas (bulb full, halo/pool at
-    // fractions), so animating the container preserves those ratios automatically.
-    if (this.exteriorLights) {
-      const extAlphaMap: Record<string, number> = {
-        morning: 0.02,
-        day: 0.0,
-        evening: 0.06,
-        night: 0.12,
-      }
-      const extTarget = extAlphaMap[phase] ?? 0.0
-      if (animate) {
-        this.tweens.killTweensOf(this.exteriorLights)
-        this.tweens.add({
-          targets: this.exteriorLights,
-          alpha: extTarget,
-          duration: 500,
-          ease: 'Sine.easeInOut',
-        })
-      } else {
-        this.exteriorLights.setAlpha(extTarget)
-      }
-    }
-  }
-
-  // ---------------------------------------------------------------------------
-  // Sky gradient (day/night background layer, depth -11)
-  // ---------------------------------------------------------------------------
-
-  private drawSkyGradient(phase: string): void {
-    const g = this.skyGradient
-    if (!g) return
-    g.clear()
-    const W = 8000
-    const H = 8000
-    const STRIPS = 200
-    const stripH = H / STRIPS
-    let topColor: number
-    let midColor: number | null
-    let midT: number
-    let bottomColor: number
-    if (phase === 'morning') {
-      topColor = 0x1e1b4b
-      midColor = 0xf97316
-      midT = 0.55
-      bottomColor = 0xfde68a
-    } else if (phase === 'day') {
-      topColor = 0x0c4a6e
-      midColor = null
-      midT = 0.5
-      bottomColor = 0x7dd3fc
-    } else if (phase === 'evening') {
-      topColor = 0x1e1b4b
-      midColor = 0x9333ea
-      midT = 0.5
-      bottomColor = 0xf97316
-    } else {
-      topColor = 0x030712
-      midColor = null
-      midT = 0.5
-      bottomColor = 0x111827
-    }
-    const ALPHA = 0.18
-    for (let i = 0; i < STRIPS; i++) {
-      const t = i / (STRIPS - 1)
-      let c: number
-      if (midColor !== null) {
-        c =
-          t < midT
-            ? lerpColor(topColor, midColor, t / midT)
-            : lerpColor(midColor, bottomColor, (t - midT) / (1 - midT))
-      } else {
-        c = lerpColor(topColor, bottomColor, t)
-      }
-      g.fillStyle(c, ALPHA)
-      g.fillRect(0, i * stripH, W, stripH + 1)
-    }
-  }
-
-  // ---------------------------------------------------------------------------
-  // Dynamic shadows (day/night light source movement)
-  // ---------------------------------------------------------------------------
-
-  private updateShadows(): void {
-    const phase = this.currentTimePhase
-    let shadowAlpha: number
-    let shadowWidth: number
-
-    if (phase === 'morning') {
-      shadowAlpha = 0.15
-      shadowWidth = 20
-    } else if (phase === 'day') {
-      shadowAlpha = 0.25
-      shadowWidth = 22
-    } else if (phase === 'evening') {
-      shadowAlpha = 0.15
-      shadowWidth = 20
-    } else {
-      // night: dim ambient, tighter ellipse
-      shadowAlpha = 0.08
-      shadowWidth = 15
-    }
-
-    const xOffset = this.shadowAngle * 8
-
-    for (const room of this.rooms.values()) {
-      for (const ws of room.workstations.values()) {
-        if (!ws.shadow) continue
-        ws.shadow.x = xOffset
-        ws.shadow.setAlpha(shadowAlpha)
-        ws.shadow.width = shadowWidth
-      }
-    }
-  }
-
-  // ---------------------------------------------------------------------------
-  // Analog wall clock
-  // ---------------------------------------------------------------------------
-
-  private tickWallClock(): void {
-    const hourHand = this.clockHourHand
-    const minuteHand = this.clockMinuteHand
-    const secondHand = this.clockSecondHand
-    if (!hourHand || !minuteHand || !secondHand) return
-
-    const now = new Date()
-    const h = now.getHours() % 12
-    const m = now.getMinutes()
-    const s = now.getSeconds()
-
-    const secAngle   = Phaser.Math.DegToRad((s / 60) * 360 - 90)
-    const minAngle   = Phaser.Math.DegToRad((m / 60) * 360 + (s / 60) * 6 - 90)
-    const hourAngle  = Phaser.Math.DegToRad((h / 12) * 360 + (m / 60) * 30 - 90)
-
-    secondHand.clear()
-    secondHand.lineStyle(0.5, 0xef4444, 1)
-    secondHand.lineBetween(0, 0, Math.cos(secAngle) * 10, Math.sin(secAngle) * 10)
-
-    minuteHand.clear()
-    minuteHand.lineStyle(1, 0xcbd5e1, 1)
-    minuteHand.lineBetween(0, 0, Math.cos(minAngle) * 9, Math.sin(minAngle) * 9)
-
-    hourHand.clear()
-    hourHand.lineStyle(1.5, 0xe2e8f0, 1)
-    hourHand.lineBetween(0, 0, Math.cos(hourAngle) * 6, Math.sin(hourAngle) * 6)
-
-    // Clock chime on the hour
-    const hour = now.getHours()
-    if (hour !== this.lastChimeHour && m === 0 && s < 2) {
-      this.lastChimeHour = hour
-      this.triggerChimeRipple()
-      const displayHour = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour
-      this.showToast(`${displayHour}:00`, 'info')
-    }
-  }
-
-  private initChimeRipplePool(): void {
-    for (let i = 0; i < 3; i++) {
-      const circle = this.add
-        .circle(0, 0, 1, 0xfbbf24, 0)
-        .setDepth(-0.4)
-        .setVisible(false)
-      circle.setData('busy', false)
-      this.chimeRipplePool.push(circle)
-    }
-  }
-
-  private initEmojiReactionPool(): void {
-    for (let i = 0; i < 10; i++) {
-      const label = this.add
-        .text(0, 0, '', { fontSize: '12px', resolution: 2 })
-        .setDepth(500)
-        .setAlpha(0)
-        .setData('busy', false)
-      this.emojiReactionPool.push(label)
-    }
-  }
-
-  private spawnEmojiReaction(worldX: number, worldY: number, emoji: string): void {
-    const label = this.emojiReactionPool.find(t => !t.getData('busy'))
-    if (!label) return
-    const sway = (Math.random() - 0.5) * 16
-    label.setText(emoji)
-    label.setPosition(worldX + sway, worldY - 20)
-    label.setAlpha(0)
-    label.setData('busy', true)
-    this.tweens.add({
-      targets: label,
-      alpha: 1,
-      duration: 100,
-      ease: 'Linear',
-      onComplete: () => {
-        this.tweens.add({
-          targets: label,
-          y: label.y - 30,
-          alpha: 0,
-          duration: 1200,
-          ease: 'Sine.easeOut',
-          onComplete: () => {
-            label.setAlpha(0)
-            label.setData('busy', false)
-          },
-        })
-      },
-    })
-  }
-
-  private initMouseTrailPool(): void {
-    const palette = activeTheme.particleColors
-    for (let i = 0; i < 15; i++) {
-      const color = palette[i % palette.length]
-      const circle = this.add
-        .circle(0, 0, 1, color, 0)
-        .setDepth(9990)
-        .setAlpha(0)
-        .setVisible(false)
-      circle.setData('busy', false)
-      this.mouseTrailPool.push(circle)
-    }
-  }
-
-  private triggerChimeRipple(): void {
-    if (!this.wallClockContainer) return
-
-    // Resolve clock world position from its container
-    const wx = this.wallClockContainer.x
-    const wy = this.wallClockContainer.y
-
-    const delays = [0, 200, 400]
-    for (let i = 0; i < this.chimeRipplePool.length; i++) {
-      const circle = this.chimeRipplePool[i]
-      if (circle.getData('busy')) continue
-      circle.setPosition(wx, wy)
-      circle.setRadius(4)
-      circle.setFillStyle(0xfbbf24, 0.3)
-      circle.setScale(1)
-      circle.setAlpha(0.3)
-      circle.setVisible(true)
-      circle.setData('busy', true)
-
-      this.time.delayedCall(delays[i], () => {
-        this.tweens.add({
-          targets: circle,
-          scaleX: 10,
-          scaleY: 10,
-          alpha: 0,
-          duration: 1000,
-          ease: 'Sine.easeOut',
-          onComplete: () => {
-            circle.setVisible(false)
-            circle.setScale(1)
-            circle.setAlpha(0.3)
-            circle.setData('busy', false)
-          },
-        })
-      })
-    }
-  }
-
-  // ---------------------------------------------------------------------------
   // Help overlay
   // ---------------------------------------------------------------------------
 
@@ -8065,6 +6077,7 @@ export class OfficeScene extends Phaser.Scene {
       ['+  /  -', 'Zoom in / out'],
       ['1 - 9',   'Jump to agent'],
       ['H  /  ?', 'This help'],
+      ['`',       'Debug overlay'],
     ]
 
     const rowH   = 22
@@ -8115,6 +6128,152 @@ export class OfficeScene extends Phaser.Scene {
       ease: 'Quad.easeIn',
       onComplete: () => { try { overlay.destroy() } catch { /* already gone */ } },
     })
+  }
+
+  // ---------------------------------------------------------------------------
+  // Debug overlay (backtick toggle)
+  // ---------------------------------------------------------------------------
+
+  private toggleDebugOverlay(): void {
+    if (this.debugOverlayVisible) {
+      this.hideDebugOverlay()
+    } else {
+      this.showDebugOverlay()
+    }
+  }
+
+  private showDebugOverlay(): void {
+    this.debugOverlayVisible = true
+
+    // HUD text panel (screen-space)
+    const container = this.add.container(0, 0).setDepth(11000).setScrollFactor(0)
+    this.debugOverlayContainer = container
+
+    const panelGfx = this.add.graphics()
+    panelGfx.fillStyle(0x000000, 0.75)
+    panelGfx.fillRoundedRect(8, this.viewHeight - 88, 210, 80, 6)
+    panelGfx.lineStyle(1, 0x3b82f6, 0.5)
+    panelGfx.strokeRoundedRect(8, this.viewHeight - 88, 210, 80, 6)
+    container.add(panelGfx)
+
+    const textStyle: Phaser.Types.GameObjects.Text.TextStyle = {
+      fontSize: '10px', fontFamily: 'monospace', color: '#34d399', resolution: 2,
+    }
+    this.debugFpsText = this.add.text(16, this.viewHeight - 82, 'FPS: --', textStyle).setScrollFactor(0)
+    this.debugObjectCountText = this.add.text(16, this.viewHeight - 68, 'Objects: --', textStyle).setScrollFactor(0)
+    const navStats = this.navMesh.getStats()
+    const navText = this.add.text(16, this.viewHeight - 54, `NavMesh: ${navStats.walkable}/${navStats.total} walkable`, { ...textStyle, color: '#60a5fa' }).setScrollFactor(0)
+    const roomText = this.add.text(16, this.viewHeight - 40, `Rooms: ${this.rooms.size}  Agents: ${this.agents.length}`, { ...textStyle, color: '#94a3b8' }).setScrollFactor(0)
+    const hintText = this.add.text(16, this.viewHeight - 26, 'Press ` to dismiss', { ...textStyle, color: '#475569', fontSize: '9px' }).setScrollFactor(0)
+    container.add([this.debugFpsText, this.debugObjectCountText, navText, roomText, hintText])
+
+    // Nav mesh world-space overlays
+    this.debugNavMeshGfx = this.add.graphics().setDepth(50).setAlpha(0.3)
+    this.debugPathGfx = this.add.graphics().setDepth(51)
+    this.drawNavMeshDebug()
+
+    // Dump scene graph to console
+    this.dumpSceneGraph()
+
+    this.showToast('Debug overlay ON', 'info')
+  }
+
+  private hideDebugOverlay(): void {
+    this.debugOverlayVisible = false
+    if (this.debugOverlayContainer) { this.debugOverlayContainer.destroy(); this.debugOverlayContainer = null }
+    this.debugFpsText = null
+    this.debugObjectCountText = null
+    if (this.debugNavMeshGfx) { this.debugNavMeshGfx.destroy(); this.debugNavMeshGfx = null }
+    if (this.debugPathGfx) { this.debugPathGfx.destroy(); this.debugPathGfx = null }
+    this.showToast('Debug overlay OFF', 'info')
+  }
+
+  private refreshDebugOverlay(_time: number, delta: number): void {
+    const fps = Math.round(1000 / Math.max(delta, 1))
+    if (this.debugFpsText) this.debugFpsText.setText(`FPS: ${fps}  (${delta.toFixed(1)}ms)`)
+
+    // Count all display list objects across the scene
+    let objectCount = 0
+    try { objectCount = this.children.length } catch { /* noop */ }
+    if (this.debugObjectCountText) this.debugObjectCountText.setText(`Objects: ${objectCount}`)
+
+    // Redraw active paths on nav mesh debug layer
+    if (this.debugPathGfx) {
+      this.debugPathGfx.clear()
+      this.debugPathGfx.lineStyle(2, 0xfbbf24, 0.8)
+      for (const room of this.rooms.values()) {
+        for (const ws of room.workstations.values()) {
+          if (ws.onCoffeeRun && ws.sprite) {
+            // Draw the agent's current world position as a small marker
+            const wx = room.x + ws.container.x
+            const wy = room.y + ws.container.y
+            this.debugPathGfx.fillStyle(0xfbbf24, 0.9)
+            this.debugPathGfx.fillCircle(wx, wy, 3)
+          }
+        }
+      }
+    }
+  }
+
+  private drawNavMeshDebug(): void {
+    if (!this.debugNavMeshGfx) return
+    const g = this.debugNavMeshGfx
+    g.clear()
+
+    const stats = this.navMesh.getStats()
+    if (stats.total === 0) return
+
+    // Use the navMesh's public API to check walkability cell-by-cell
+    // We reconstruct the grid bounds from the navMesh stats and known origin
+    // Since NavMesh doesn't expose origin directly, sample the walkable area
+    // by iterating over the world bounds we know about
+    const cellSize = 12 // matches CELL_SIZE in nav-mesh.ts
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+    for (const room of this.rooms.values()) {
+      minX = Math.min(minX, room.x - room.width / 2 - 60)
+      minY = Math.min(minY, room.y - room.height / 2 - 60)
+      maxX = Math.max(maxX, room.x + room.width / 2 + 60)
+      maxY = Math.max(maxY, room.y + room.height / 2 + 60)
+    }
+    if (this.cafe) {
+      const cb = this.cafe.getBounds()
+      if (cb) {
+        minX = Math.min(minX, cb.x - 40)
+        minY = Math.min(minY, cb.y - 40)
+        maxX = Math.max(maxX, cb.x + cb.w + 40)
+        maxY = Math.max(maxY, cb.y + cb.h + 40)
+      }
+    }
+
+    // Draw walkable cells as green, sample every cellSize
+    for (let wy = minY; wy <= maxY; wy += cellSize) {
+      for (let wx = minX; wx <= maxX; wx += cellSize) {
+        if (this.navMesh.isPointWalkable(wx, wy)) {
+          g.fillStyle(0x22c55e, 0.25)
+          g.fillRect(wx - cellSize / 2, wy - cellSize / 2, cellSize, cellSize)
+        }
+      }
+    }
+  }
+
+  private dumpSceneGraph(): void {
+    const summary: Record<string, number> = {}
+    this.children.each((child: Phaser.GameObjects.GameObject) => {
+      const type = child.type || (child.constructor as { name?: string }).name || 'Unknown'
+      summary[type] = (summary[type] || 0) + 1
+    })
+    console.group('%c[OfficeScene Debug] Scene Graph', 'color: #34d399; font-weight: bold')
+    console.log('Total objects:', this.children.length)
+    console.table(summary)
+    console.log('Rooms:', this.rooms.size)
+    console.log('Agents:', this.agents.length)
+    console.log('NavMesh:', this.navMesh.getStats())
+    console.log('Camera:', {
+      scrollX: this.cameras.main.scrollX.toFixed(1),
+      scrollY: this.cameras.main.scrollY.toFixed(1),
+      zoom: this.cameras.main.zoom.toFixed(3),
+    })
+    console.groupEnd()
   }
 
   // ---------------------------------------------------------------------------
@@ -8185,58 +6344,18 @@ export class OfficeScene extends Phaser.Scene {
     this.focusedAgentId = null
     this.focusedWorkstationPrevDepth = null
 
-    this.dayNightTimer?.destroy()
-    this.dayNightTimer = null
-    this.dayNightOverlay?.destroy()
+    if (this.vignetteFx) {
+      this.cameras.main.postFX.remove(this.vignetteFx)
+      this.vignetteFx = null
+    }
     this.dayNightOverlay = null
-    this.skyGradient?.destroy()
     this.skyGradient = null
-    this.vignetteOverlay?.destroy()
-    this.vignetteOverlay = null
 
-    this.typingParticleTimer?.destroy()
-    this.typingParticleTimer = null
-    for (const p of this.typingParticlePool) { this.tweens.killTweensOf(p); p.destroy() }
-    this.typingParticlePool = []
-    this.ambientMoteTimer?.destroy()
-    this.ambientMoteTimer = null
-    for (const m of this.ambientMotePool) { this.tweens.killTweensOf(m); m.destroy() }
-    this.ambientMotePool = []
-    this.constellationGfx?.destroy()
-    this.constellationGfx = null
-    this.corridorParticleTimer?.destroy()
-    this.corridorParticleTimer = null
-    for (const p of this.corridorParticlePool) { this.tweens.killTweensOf(p); p.destroy() }
-    this.corridorParticlePool = []
-    for (const s of this.starPool) { this.tweens.killTweensOf(s); s.destroy() }
-    this.starPool = []
-    this.cloudTimer?.destroy()
-    this.cloudTimer = null
-    for (const c of this.cloudPool) { this.tweens.killTweensOf(c); c.destroy() }
-    this.cloudPool = []
-    for (const d of this.rainDropPool) d.destroy()
-    this.rainDropPool = []
-    this.rainActive = false
-    for (const f of this.snowPool) f.destroy()
-    this.snowPool = []
-    this.snowActive = false
-    for (const c of this.alertRipplePool) { this.tweens.killTweensOf(c); c.destroy() }
-    this.alertRipplePool = []
-    for (const c of this.chimeRipplePool) { this.tweens.killTweensOf(c); c.destroy() }
-    this.chimeRipplePool = []
-    for (const t of this.emojiReactionPool) { this.tweens.killTweensOf(t); t.destroy() }
-    this.emojiReactionPool = []
-    for (const c of this.mouseTrailPool) { this.tweens.killTweensOf(c); c.destroy() }
-    this.mouseTrailPool = []
+    this.atmosphere.destroy()
+    this.particles.destroy()
 
     // Café cleanup
-    if (this.coffeeRunTimer) { this.coffeeRunTimer.destroy(); this.coffeeRunTimer = null }
-    if (this.cafeVisitorTimer) { this.cafeVisitorTimer.destroy(); this.cafeVisitorTimer = null }
-    if (this.cafeSteamTimer) { this.cafeSteamTimer.destroy(); this.cafeSteamTimer = null }
-    this.coffeeRunners.clear()
-    this.coffeeRunnerRooms.clear()
-    if (this.cafeContainer) { this.cafeContainer.destroy(true); this.cafeContainer = null }
-    this.cafeBaristas = []
+    this.cafe.destroy()
 
     // Minimap cleanup
     this.minimapHitZone?.destroy()
@@ -8269,23 +6388,9 @@ export class OfficeScene extends Phaser.Scene {
     this.selectionRingOuter?.destroy()
     this.selectionRingOuter = null
 
-    this.destroyCeilingLights()
+    // atmosphere.destroy() already handled ceiling lights, exterior lights,
+    // wall clock, window glint, starfield, clouds, day/night overlay
 
-    if (this.exteriorLights) {
-      this.tweens.killTweensOf(this.exteriorLights)
-      this.exteriorLights.destroy()
-      this.exteriorLights = null
-    }
-
-    this.wallClockContainer?.destroy()
-    this.wallClockContainer = null
-    this.clockHourHand = null
-    this.clockMinuteHand = null
-    this.clockSecondHand = null
-
-    this.windowGlintGfx?.destroy()
-    this.windowGlintGfx = null
-    this.windowPositions = []
     for (const t of this.decoTweens) { try { t.destroy() } catch { /* gone */ } }
     this.decoTweens = []
     if (this.waterCoolerBubbleTimer) { this.waterCoolerBubbleTimer.destroy(); this.waterCoolerBubbleTimer = null }
