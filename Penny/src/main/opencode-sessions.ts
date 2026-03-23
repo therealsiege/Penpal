@@ -326,6 +326,29 @@ export async function getOpencodeSessions(): Promise<OpencodeSession[]> {
   }
 
   const sessions = Array.from(deduped.values()).map(({ source: _source, command: _command, ...session }) => session)
+
+  // Detect active gateway tunnels for runtimes that have no direct session.
+  // A gateway tunnel (ssh port-forward) means the TUI is running inside a sandbox.
+  const runtimesWithSessions = new Set(sessions.map(s => s.runtime))
+  for (const candidate of candidates) {
+    if (candidate.source !== 'gateway') continue
+    if (runtimesWithSessions.has(candidate.runtime)) continue
+    // Gateway tunnel alive = synthetic session for the remote TUI
+    sessions.push({
+      pid: candidate.pid,
+      cwd: candidate.cwd === HOME ? HOME : candidate.cwd,
+      project: candidate.runtime,
+      uptime: candidate.uptime,
+      cpu: candidate.cpu,
+      memoryMB: candidate.memoryMB,
+      alive: true,
+      startedAt: candidate.startedAt,
+      runtime: candidate.runtime,
+      tty: candidate.tty,
+    })
+    runtimesWithSessions.add(candidate.runtime)
+  }
+
   sessions.sort((a, b) => b.memoryMB - a.memoryMB)
   return sessions
 }

@@ -83,7 +83,7 @@ export function Layout({ activePanel, onNavigate, onOpenTasks, children }: Layou
         {/* Logo + Name */}
         <div className="mb-4 flex items-center gap-2 px-3">
           <img
-            src="/logo.png"
+            src="logo.png"
             alt="Penny"
             className="w-10 h-10 rounded-lg shadow-lg shrink-0"
             draggable={false}

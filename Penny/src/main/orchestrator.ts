@@ -29,7 +29,7 @@ import { checkOllamaAvailable, runOllama } from './ollama-client'
 
 export type TaskPriority = 'critical' | 'high' | 'normal' | 'low'
 export type TaskStatus = 'queued' | 'assigned' | 'active' | 'completed' | 'failed' | 'cancelled'
-export type TaskSource = 'slack' | 'dashboard' | 'api'
+export type TaskSource = 'slack' | 'dashboard' | 'api' | 'github'
 export type TaskStage = 'queued' | 'planning' | 'executing' | 'validating' | 'done'
 export type ModelProvider = 'claude' | 'ollama'
 
@@ -930,6 +930,9 @@ export function startOrchestrator(): void {
   console.log('[orchestrator] Starting dispatch loop (10s) and health monitor (30s)')
   dispatchTimer = setInterval(() => { dispatchLoop().catch(console.error) }, DISPATCH_INTERVAL)
   healthTimer = setInterval(() => { healthMonitorLoop().catch(console.error) }, HEALTH_INTERVAL)
+
+  // Start GitHub issue poller alongside the dispatch loop
+  import('./github-issues').then(m => m.startGithubIssuePoller()).catch(console.error)
 }
 
 export function stopOrchestrator(): void {
@@ -941,5 +944,9 @@ export function stopOrchestrator(): void {
     clearInterval(healthTimer)
     healthTimer = null
   }
+
+  // Stop GitHub issue poller
+  import('./github-issues').then(m => m.stopGithubIssuePoller()).catch(console.error)
+
   console.log('[orchestrator] Stopped')
 }

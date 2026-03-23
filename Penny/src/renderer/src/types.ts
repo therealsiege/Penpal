@@ -432,6 +432,19 @@ export interface OrchestratorStats {
   totalProcessed: number
 }
 
+export interface GitHubIssueCard {
+  issueNumber: number
+  repo: string
+  title: string
+  taskId: string
+  taskStatus: string
+  taskStage: string | null
+  priority: string
+  assignedAgent: string | null
+  ingestedAt: number
+  url: string
+}
+
 export interface VeritasServiceStatus {
   configured: boolean
   composeFile: string

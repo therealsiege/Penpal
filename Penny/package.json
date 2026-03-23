@@ -10,7 +10,25 @@
     "icon:generate": "node scripts/generate-icon.mjs",
     "sprites": "node scripts/build-sprites.mjs",
     "test": "npx playwright test",
-    "test:headed": "npx playwright test --headed"
+    "test:headed": "npx playwright test --headed",
+    "typecheck": "tsc --noEmit",
+    "make": "electron-vite build && electron-builder --mac",
+    "make:dir": "electron-vite build && electron-builder --mac --dir"
+  },
+  "build": {
+    "appId": "com.1putt.penny",
+    "productName": "Penny",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "out/**/*",
+      "public/**/*"
+    ],
+    "mac": {
+      "target": "dmg",
+      "category": "public.app-category.developer-tools"
+    }
   },
   "dependencies": {
     "@codemirror/autocomplete": "^6.20.1",
@@ -49,6 +67,7 @@
     "@vitejs/plugin-react": "^4.3.0",
     "autoprefixer": "^10.4.20",
     "electron": "^33.0.0",
+    "electron-builder": "^26.8.1",
     "electron-vite": "^5.0.0",
     "playwright-core": "^1.58.2",
     "postcss": "^8.5.0",

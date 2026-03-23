@@ -36,5 +36,9 @@ export function createOfficeGame(container: HTMLDivElement): {
     audio: { noAudio: true },
   })
 
+  // Expose for Playwright / debug access
+  ;(window as any).__PENNY_GAME__ = game
+  ;(window as any).__PENNY_SCENE__ = scene
+
   return { game, scene }
 }

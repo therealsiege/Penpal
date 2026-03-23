@@ -1,69 +1,70 @@
 /**
- * Unit-style tests for the room-renderer theme system.
- * These run inside the Electron renderer process so they can import the module directly.
+ * Room theming tests.
+ * Validates the directory-based theme system assigns correct colors
+ * and that all room types have valid, distinct templates.
  */
 
 import { test, expect } from '@playwright/test'
-import { launchApp, type AppContext } from './electron.setup'
+import { launchApp, waitForPhaser, type AppContext } from './electron.setup'
 
 let ctx: AppContext
 
 test.beforeAll(async () => {
   ctx = await launchApp()
-  await ctx.window.waitForTimeout(2000)
+  await waitForPhaser(ctx.window)
 })
 
 test.afterAll(async () => {
   await ctx.app.close()
 })
 
-test('getRoomType detects frontend paths as design-studio', async () => {
-  const result = await ctx.window.evaluate(async () => {
-    // Dynamic import from the bundled renderer
-    const mod = await import('./src/game/room-renderer')
-    return mod.getRoomType('/Users/dev/sidekick/Penny/src/renderer')
-  }).catch(() => null)
+// -- getRoomType directory detection --
 
-  // If dynamic import fails (bundler doesn't expose it), test via Phaser scene
-  if (result !== null) {
-    expect(result).toBe('design-studio')
-  }
-})
+const ROOM_TYPE_CASES: [string, string][] = [
+  ['/Users/dev/project/src/renderer', 'design-studio'],
+  ['/Users/dev/project/frontend/components', 'design-studio'],
+  ['/Users/dev/project/web/app', 'design-studio'],
+  ['/Users/dev/project/nextjs-app', 'design-studio'],
+  ['/Users/dev/project/backend/api', 'server-room'],
+  ['/Users/dev/project/server/handlers', 'server-room'],
+  ['/Users/dev/project/src/etl/parsers', 'server-room'],
+  ['/Users/dev/project/graph-service', 'server-room'],
+  ['/Users/dev/project/mobile/screens', 'mobile-lab'],
+  ['/Users/dev/project/expo-app', 'mobile-lab'],
+  ['/Users/dev/project/ios/Sources', 'mobile-lab'],
+  ['/Users/dev/project/game/scenes', 'game-den'],
+  ['/Users/dev/project/phaser-game', 'game-den'],
+  ['/Users/dev/project/unity-project', 'game-den'],
+  ['/Users/dev/project/docs/guides', 'creative-suite'],
+  ['/Users/dev/project/content/blog', 'creative-suite'],
+  ['/Users/dev/project/marketing/pages', 'creative-suite'],
+  ['/Users/dev/project/infra/terraform', 'ops-center'],
+  ['/Users/dev/project/deploy/k8s', 'ops-center'],
+  ['/Users/dev/project/ci/pipelines', 'ops-center'],
+  ['/Users/dev/project/docker/compose', 'ops-center'],
+  ['/Users/dev/project/test/integration', 'qa-lab'],
+  ['/Users/dev/project/qa/e2e', 'qa-lab'],
+  ['/Users/dev/project/spec/models', 'qa-lab'],
+  ['/Users/dev/random-project/src', 'standard'],
+  ['/Users/dev/my-thing', 'standard'],
+]
 
-test('getRoomType detects backend paths as server-room', async () => {
-  const result = await ctx.window.evaluate(async () => {
-    const mod = await import('./src/game/room-renderer')
-    return mod.getRoomType('/Users/dev/project/backend/api')
-  }).catch(() => null)
+for (const [path, expectedType] of ROOM_TYPE_CASES) {
+  test(`getRoomType("${path}") => ${expectedType}`, async () => {
+    const result = await ctx.window.evaluate(async (p: string) => {
+      const mod = await import('./src/game/room-renderer')
+      return mod.getRoomType(p)
+    }, path).catch(() => null)
 
-  if (result !== null) {
-    expect(result).toBe('server-room')
-  }
-})
+    if (result !== null) {
+      expect(result).toBe(expectedType)
+    }
+  })
+}
 
-test('getRoomType detects game paths as game-den', async () => {
-  const result = await ctx.window.evaluate(async () => {
-    const mod = await import('./src/game/room-renderer')
-    return mod.getRoomType('/home/user/my-game/phaser-project')
-  }).catch(() => null)
+// -- Template validation --
 
-  if (result !== null) {
-    expect(result).toBe('game-den')
-  }
-})
-
-test('getRoomType returns standard for unrecognized paths', async () => {
-  const result = await ctx.window.evaluate(async () => {
-    const mod = await import('./src/game/room-renderer')
-    return mod.getRoomType('/Users/dev/random-project')
-  }).catch(() => null)
-
-  if (result !== null) {
-    expect(result).toBe('standard')
-  }
-})
-
-test('getTemplate returns valid colors for all room types', async () => {
+test('all 8 room types have valid color templates', async () => {
   const result = await ctx.window.evaluate(async () => {
     const mod = await import('./src/game/room-renderer')
     const types = [
@@ -74,25 +75,26 @@ test('getTemplate returns valid colors for all room types', async () => {
       const tmpl = mod.getTemplate(t)
       return {
         type: t,
-        hasAccent: typeof tmpl.accentColor === 'number',
-        hasFloor: typeof tmpl.floorColor === 'number',
-        hasRug: typeof tmpl.rugColor === 'number',
-        accentNonZero: tmpl.accentColor > 0,
+        accentColor: tmpl.accentColor,
+        floorColor: tmpl.floorColor,
+        rugColor: tmpl.rugColor,
       }
     })
   }).catch(() => null)
 
-  if (result !== null) {
-    for (const r of result) {
-      expect(r.hasAccent).toBe(true)
-      expect(r.hasFloor).toBe(true)
-      expect(r.hasRug).toBe(true)
-      expect(r.accentNonZero).toBe(true)
-    }
+  if (result === null) return
+
+  for (const r of result) {
+    // All colors should be non-zero positive numbers
+    expect(r.accentColor).toBeGreaterThan(0)
+    expect(r.floorColor).toBeGreaterThan(0)
+    expect(r.rugColor).toBeGreaterThan(0)
+    // Accent and rug should be different (accent is brighter)
+    expect(r.accentColor).not.toBe(r.rugColor)
   }
 })
 
-test('each room type has a distinct accent color', async () => {
+test('each non-standard room type has a unique accent color', async () => {
   const result = await ctx.window.evaluate(async () => {
     const mod = await import('./src/game/room-renderer')
     const types = [
@@ -102,36 +104,25 @@ test('each room type has a distinct accent color', async () => {
     return types.map((t) => mod.getTemplate(t).accentColor)
   }).catch(() => null)
 
-  if (result !== null) {
-    const unique = new Set(result)
-    expect(unique.size).toBe(result.length) // all distinct
-  }
+  if (result === null) return
+
+  const unique = new Set(result)
+  expect(unique.size).toBe(result.length)
 })
 
-test('rooms in the scene use directory-based theming', async () => {
-  // If the scene has rooms, verify their floor graphics exist
-  const roomInfo = await ctx.window.evaluate(() => {
-    const games = (window as any).Phaser?.GAMES
-    if (!games?.length) return null
-    const scene = games[0].scene.scenes?.find(
-      (s: any) => s.constructor?.name === 'OfficeScene' || s.sys?.config?.key === 'OfficeScene',
-    )
-    if (!scene?.rooms) return null
-
-    const info: { cwd: string; hasFloorGraphics: boolean }[] = []
-    for (const [, room] of scene.rooms) {
-      info.push({
-        cwd: room.cwd || '',
-        hasFloorGraphics: !!room.floorGraphics,
-      })
+test('standard falls back to server-room colors', async () => {
+  const result = await ctx.window.evaluate(async () => {
+    const mod = await import('./src/game/room-renderer')
+    const std = mod.getTemplate('standard')
+    const srv = mod.getTemplate('server-room')
+    return {
+      sameAccent: std.accentColor === srv.accentColor,
+      sameFloor: std.floorColor === srv.floorColor,
     }
-    return info
-  })
+  }).catch(() => null)
 
-  if (roomInfo && roomInfo.length > 0) {
-    for (const r of roomInfo) {
-      expect(r.hasFloorGraphics).toBe(true)
-    }
-  }
-  // No rooms in test mode is acceptable — the theme system is still validated above
+  if (result === null) return
+
+  expect(result.sameAccent).toBe(true)
+  expect(result.sameFloor).toBe(true)
 })

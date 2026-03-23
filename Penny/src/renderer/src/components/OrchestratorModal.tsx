@@ -11,6 +11,7 @@ import type {
   ModelProvider,
   StageResult,
   TaskStage,
+  GitHubIssueCard,
 } from '../types'
 
 // ── OrchestratorModal ───────────────────────────────────────────────────────
@@ -25,7 +26,9 @@ export function OrchestratorModal({ onClose }: { onClose: () => void }) {
   const [veritasError, setVeritasError] = useState<string | null>(null)
   const [veritasLoading, setVeritasLoading] = useState(false)
   const [updatingVeritasTaskId, setUpdatingVeritasTaskId] = useState<string | null>(null)
-  const [tab, setTab] = useState<'queue' | 'health' | 'veritas'>('queue')
+  const [githubCards, setGithubCards] = useState<GitHubIssueCard[]>([])
+  const [githubPollerRunning, setGithubPollerRunning] = useState(false)
+  const [tab, setTab] = useState<'queue' | 'health' | 'veritas' | 'github'>('queue')
   const [showEnqueue, setShowEnqueue] = useState(false)
   const [showVeritasCreate, setShowVeritasCreate] = useState(false)
   const [provider, setProvider] = useState<ModelProvider>('claude')
@@ -94,10 +97,22 @@ export function OrchestratorModal({ onClose }: { onClose: () => void }) {
     }
   }
 
+  async function loadGithubData() {
+    try {
+      const [cards, status] = await Promise.all([
+        window.api.githubIssueCards(),
+        window.api.githubPollerStatus(),
+      ])
+      if (Array.isArray(cards)) setGithubCards(cards)
+      if (status && typeof status.running === 'boolean') setGithubPollerRunning(status.running)
+    } catch { /* keep last known */ }
+  }
+
   async function loadData() {
     await Promise.all([
       loadOrchestratorData(),
       loadVeritasData(),
+      loadGithubData(),
     ])
   }
 
@@ -157,6 +172,16 @@ export function OrchestratorModal({ onClose }: { onClose: () => void }) {
                 )}
               </div>
             )}
+            {tab === 'github' && githubCards.length > 0 && (
+              <div className="flex items-center gap-3 text-xs text-slate-400">
+                <span>{githubCards.filter(c => c.taskStatus === 'queued').length} queued</span>
+                <span>{githubCards.filter(c => c.taskStatus === 'active' || c.taskStatus === 'assigned').length} active</span>
+                <span className="text-emerald-400">{githubCards.filter(c => c.taskStatus === 'completed').length} done</span>
+                {githubCards.filter(c => c.taskStatus === 'failed').length > 0 && (
+                  <span className="text-red-400">{githubCards.filter(c => c.taskStatus === 'failed').length} failed</span>
+                )}
+              </div>
+            )}
             {tab === 'veritas' && veritasCounts && (
               <div className="flex items-center gap-3 text-xs text-slate-400">
                 <span>{veritasCounts.todo} todo</span>
@@ -195,6 +220,9 @@ export function OrchestratorModal({ onClose }: { onClose: () => void }) {
           <TabButton active={tab === 'queue'} onClick={() => setTab('queue')}>Task Queue</TabButton>
           <TabButton active={tab === 'health'} onClick={() => setTab('health')}>Agent Health</TabButton>
           <TabButton active={tab === 'veritas'} onClick={() => setTab('veritas')}>Veritas Board</TabButton>
+          <TabButton active={tab === 'github'} onClick={() => setTab('github')}>
+            GitHub Issues{githubCards.length > 0 && ` (${githubCards.length})`}
+          </TabButton>
           <div className="flex-1" />
           {tab === 'queue' && (
             <button
@@ -220,6 +248,26 @@ export function OrchestratorModal({ onClose }: { onClose: () => void }) {
               </button>
             </div>
           )}
+          {tab === 'github' && (
+            <div className="flex items-center gap-2">
+              <span className={`text-[10px] px-2 py-0.5 rounded-full border ${
+                githubPollerRunning
+                  ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
+                  : 'bg-slate-700/50 text-slate-500 border-slate-600/30'
+              }`}>
+                {githubPollerRunning ? 'Polling' : 'Stopped'}
+              </span>
+              <button
+                onClick={async () => {
+                  await window.api.githubPollNow()
+                  await loadGithubData()
+                }}
+                className="px-3 py-1 bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs rounded-md"
+              >
+                Poll Now
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Content */}
@@ -228,6 +276,8 @@ export function OrchestratorModal({ onClose }: { onClose: () => void }) {
             <TaskQueueView tasks={tasks} onRefresh={loadData} />
           ) : tab === 'health' ? (
             <AgentHealthView health={health} onRefresh={loadData} />
+          ) : tab === 'github' ? (
+            <GitHubKanbanView cards={githubCards} onRefresh={loadGithubData} />
           ) : (
             <VeritasBoardView
               tasks={veritasTasks}
@@ -817,6 +867,117 @@ function VeritasCreateTaskModal({
           </button>
         </div>
       </div>
+    </div>
+  )
+}
+
+// ── GitHub Kanban View ──────────────────────────────────────────────────
+
+const KANBAN_COLUMNS: { key: string; label: string; statuses: string[]; color: string }[] = [
+  { key: 'queued', label: 'Queued', statuses: ['queued'], color: 'border-yellow-500/40' },
+  { key: 'active', label: 'In Progress', statuses: ['assigned', 'active'], color: 'border-blue-500/40' },
+  { key: 'done', label: 'Done', statuses: ['completed'], color: 'border-emerald-500/40' },
+  { key: 'failed', label: 'Failed', statuses: ['failed', 'cancelled'], color: 'border-red-500/40' },
+]
+
+function GitHubKanbanView({ cards, onRefresh }: { cards: GitHubIssueCard[]; onRefresh: () => void }) {
+  if (cards.length === 0) {
+    return (
+      <div className="text-center text-slate-500 py-12 space-y-2">
+        <p className="text-sm">No GitHub issues ingested yet.</p>
+        <p className="text-xs">Label issues with <code className="px-1.5 py-0.5 bg-slate-800 rounded text-emerald-400">agent-ready</code> on GitHub to queue them.</p>
+        <button
+          onClick={async () => { await window.api.githubPollNow(); onRefresh() }}
+          className="mt-3 px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs rounded-md"
+        >
+          Poll Now
+        </button>
+      </div>
+    )
+  }
+
+  const columns = KANBAN_COLUMNS.map(col => ({
+    ...col,
+    cards: cards.filter(c => col.statuses.includes(c.taskStatus)),
+  }))
+
+  return (
+    <div className="grid grid-cols-4 gap-3 min-h-[300px]">
+      {columns.map(col => (
+        <div key={col.key} className={`rounded-lg border ${col.color} bg-slate-800/20 flex flex-col`}>
+          <div className="px-3 py-2 border-b border-slate-700/30 flex items-center justify-between">
+            <span className="text-xs font-medium text-slate-300">{col.label}</span>
+            <span className="text-[10px] text-slate-500 bg-slate-800 px-1.5 py-0.5 rounded-full">
+              {col.cards.length}
+            </span>
+          </div>
+          <div className="flex-1 overflow-y-auto p-2 space-y-2">
+            {col.cards.map(card => (
+              <GitHubIssueCardItem key={card.taskId} card={card} onRefresh={onRefresh} />
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function GitHubIssueCardItem({ card, onRefresh }: { card: GitHubIssueCard; onRefresh: () => void }) {
+  const priorityDot: Record<string, string> = {
+    critical: 'bg-red-400',
+    high: 'bg-orange-400',
+    normal: 'bg-slate-400',
+    low: 'bg-slate-600',
+  }
+
+  const stageLabel = card.taskStage && card.taskStage !== 'queued' && card.taskStage !== 'done'
+    ? card.taskStage
+    : null
+
+  return (
+    <div className="bg-slate-800/60 border border-slate-700/40 rounded-md p-2.5 space-y-1.5 hover:border-slate-600/60 transition-colors">
+      <div className="flex items-start gap-1.5">
+        <div className={`w-1.5 h-1.5 rounded-full mt-1.5 flex-shrink-0 ${priorityDot[card.priority] || 'bg-slate-400'}`} />
+        <span className="text-xs text-slate-200 leading-tight line-clamp-2">{card.title}</span>
+      </div>
+      <div className="flex items-center gap-1.5 flex-wrap">
+        <a
+          href={card.url}
+          onClick={(e) => { e.preventDefault(); void window.api.openDownloads() }}
+          className="text-[10px] text-blue-400 hover:text-blue-300 font-mono"
+          title={card.url}
+        >
+          #{card.issueNumber}
+        </a>
+        <span className="text-[10px] text-slate-600">{card.repo.split('/')[1]}</span>
+        {stageLabel && (
+          <span className="text-[9px] px-1 py-0.5 rounded bg-blue-500/15 text-blue-400 border border-blue-500/20">
+            {stageLabel}
+          </span>
+        )}
+        {card.assignedAgent && (
+          <span className="text-[10px] text-slate-500 truncate max-w-[80px]" title={card.assignedAgent}>
+            {card.assignedAgent}
+          </span>
+        )}
+      </div>
+      <div className="text-[10px] text-slate-600">{formatAge(card.ingestedAt)}</div>
+      {(card.taskStatus === 'queued' || card.taskStatus === 'assigned' || card.taskStatus === 'active') && (
+        <button
+          onClick={async () => { await window.api.orchestratorCancelTask(card.taskId); onRefresh() }}
+          className="text-[9px] text-red-400/60 hover:text-red-400 transition-colors"
+        >
+          Cancel
+        </button>
+      )}
+      {card.taskStatus === 'failed' && (
+        <button
+          onClick={async () => { await window.api.orchestratorRetryTask(card.taskId); onRefresh() }}
+          className="text-[9px] text-blue-400/60 hover:text-blue-400 transition-colors"
+        >
+          Retry
+        </button>
+      )}
     </div>
   )
 }

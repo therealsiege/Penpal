@@ -1,0 +1,165 @@
+// ---------------------------------------------------------------------------
+// office-helpers.ts
+// Pure stateless utility functions extracted from OfficeScene.ts.
+// ---------------------------------------------------------------------------
+
+import type { AgentState } from '../types'
+import {
+  CHAR_COLS, NUM_CHARS,
+  POSE_IDLE, POSE_INTERACT, POSE_SIT, POSE_SURPRISE, POSE_HURT, POSE_WALK,
+} from './office-constants'
+
+/** Minimal room shape needed for door-Y calculation */
+export interface DoorRoom {
+  y: number
+  height: number
+  doorSide: 'top' | 'bottom'
+}
+
+// ---------------------------------------------------------------------------
+// Sprite / pose helpers
+// ---------------------------------------------------------------------------
+
+export function getPoseFrame(charIdx: number, agent: AgentState): number {
+  const base = charIdx * CHAR_COLS
+
+  // Priority: interaction needs > error/compress > working > idle/default
+  if (agent.needsInteraction) {
+    // Surprise for questions or edits pending
+    if (agent.interactionType === 'question' || agent.interactionType === 'accept-edits') {
+      return base + POSE_SURPRISE
+    }
+    // Hurt/panic animation for tool approvals that need attention
+    if (agent.interactionType === 'tool-approval') {
+      return base + POSE_HURT
+    }
+    // Default wait state
+    return base + POSE_WALK
+  }
+
+  // Working states
+  if (agent.sessionMode === 'working' || agent.sessionMode === 'plan') {
+    return base + POSE_INTERACT
+  }
+
+  // Special states
+  if (agent.sessionMode === 'compressing') {
+    return base + POSE_HURT  // Struggle animation for compression
+  }
+
+  if (agent.sessionMode === 'accept-edits') {
+    return base + POSE_SURPRISE  // Alert about pending edits
+  }
+
+  if (agent.sessionMode === 'waiting') {
+    return base + POSE_WALK  // Waiting/moving animation
+  }
+
+  // Idle or default
+  if (agent.sessionMode === 'idle' || !agent.sessionMode) {
+    return base + POSE_SIT
+  }
+
+  return base + POSE_IDLE
+}
+
+// ---------------------------------------------------------------------------
+// Room helpers
+// ---------------------------------------------------------------------------
+
+/** World-space Y of the room's door opening. */
+export function getRoomDoorY(room: DoorRoom): number {
+  return room.doorSide === 'top'
+    ? room.y - room.height / 2 + 20
+    : room.y + room.height / 2
+}
+
+// ---------------------------------------------------------------------------
+// Agent status helpers
+// ---------------------------------------------------------------------------
+
+export function getStatusColor(agent: AgentState): number {
+  if (agent.needsInteraction) {
+    if (agent.interactionType === 'tool-approval') return 0xf87171  // Red for approval needed
+    return 0xfbbf24  // Yellow for other interactions
+  }
+  if (agent.sessionMode === 'working')       return 0x34d399  // Green for working
+  if (agent.sessionMode === 'plan')          return 0xa78bfa  // Purple for planning
+  if (agent.sessionMode === 'accept-edits')  return 0x60a5fa  // Blue for pending edits
+  if (agent.sessionMode === 'compressing')   return 0xf87171  // Red for compressing
+  if (agent.sessionMode === 'waiting')       return 0xfbbf24  // Yellow for waiting
+  return 0x64748b  // Gray for idle
+}
+
+export function isCursorAgent(agent: AgentState): boolean {
+  return agent.config.model === 'cursor-agent'
+}
+
+export function isOpencodeAgent(agent: AgentState): boolean {
+  const model = agent.config.model
+  return model === 'opencode' ||
+    model === 'openclaw' ||
+    model === 'nemoclaw' ||
+    agent.config.id.startsWith('opencode-') ||
+    agent.config.id.startsWith('openclaw-') ||
+    agent.config.id.startsWith('nemoclaw-')
+}
+
+// ---------------------------------------------------------------------------
+// Hash / character helpers
+// ---------------------------------------------------------------------------
+
+export function hashToken(value: string): number {
+  let hash = 0
+  for (let i = 0; i < value.length; i++) {
+    hash = ((hash << 5) - hash) + value.charCodeAt(i)
+    hash |= 0
+  }
+  return Math.abs(hash)
+}
+
+export function getCharacterIndex(name: string): number {
+  return hashToken(name) % NUM_CHARS
+}
+
+export function getAgentCharacterIndex(agent: AgentState): number {
+  if (isCursorAgent(agent)) return 1
+  if (isOpencodeAgent(agent)) return 2  // Tinted character sprite
+  return getCharacterIndex(agent.config.name)
+}
+
+// ---------------------------------------------------------------------------
+// Team / cwd helpers
+// ---------------------------------------------------------------------------
+
+export function getTeamInfo(cwd: string): { key: string; label: string } {
+  if (cwd === '__unassigned__') return { key: '__unassigned__', label: 'Unassigned' }
+  const parts = cwd.replace(/\/$/, '').split('/').filter(Boolean)
+  const leaf = parts[parts.length - 1] || cwd
+  const parent = parts.length >= 3 ? parts[parts.length - 2] : leaf
+  return { key: parent, label: parent }
+}
+
+export function getTeamColor(teamKey: string): number {
+  if (teamKey === '__unassigned__') return 0x94a3b8
+  const palette = [0x3b82f6, 0x14b8a6, 0x8b5cf6, 0xf59e0b, 0x22c55e, 0xec4899]
+  return palette[hashToken(teamKey) % palette.length]
+}
+
+export function cwdToLabel(cwd: string): string {
+  if (cwd === '__unassigned__') return 'Unassigned'
+  const parts = cwd.replace(/\/$/, '').split('/')
+  return parts[parts.length - 1] || cwd
+}
+
+// ---------------------------------------------------------------------------
+// Label / display helpers
+// ---------------------------------------------------------------------------
+
+export function formatLabel(label: string): string {
+  return label
+}
+
+export function truncName(name: string): string {
+  return name.length > 14 ? name.slice(0, 12) + '..' : name
+}

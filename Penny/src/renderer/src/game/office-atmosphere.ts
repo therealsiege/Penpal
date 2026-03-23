@@ -436,6 +436,7 @@ export class OfficeAtmosphere {
     if (this.glintActiveWindow === -1) return
 
     const win = this.windowPositions[this.glintActiveWindow]
+    if (!win) { this.glintActiveWindow = -1; return }
     const elapsed = time - this.glintStartTime
     const t = Math.min(elapsed / this.GLINT_DURATION, 1)
 

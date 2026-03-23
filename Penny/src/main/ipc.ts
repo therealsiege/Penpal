@@ -71,6 +71,13 @@ import {
 } from './orchestrator'
 import { checkOllamaAvailable } from './ollama-client'
 import {
+  getGithubIssuePollerStatus,
+  pollGithubIssuesNow,
+  getSeenIssues,
+  getGithubIssueCards,
+  addWatchedRepo,
+} from './github-issues'
+import {
   getVeritasStatus,
   startVeritasService,
   stopVeritasService,
@@ -491,6 +498,13 @@ export function registerIpcHandlers() {
     return { sent, failed }
   }))
 
+  ipcMain.handle('shell:open-url', wrapHandler(async (url: unknown) => {
+    if (typeof url !== 'string') throw new Error('url must be a string')
+    if (!url.startsWith('https://')) throw new Error('Only https URLs are allowed')
+    await shell.openExternal(url)
+    return { success: true }
+  }))
+
   ipcMain.handle('shell:open-downloads', wrapHandler(async () => {
     const downloadsPath = path.join(os.homedir(), 'Downloads')
     await shell.openPath(downloadsPath)
@@ -721,7 +735,9 @@ export function registerIpcHandlers() {
 
   // ── Opencode Sessions ──────────────────────────────────────────────────────
   ipcMain.handle('opencode:sessions', wrapHandler(async () => {
-    return getOpencodeSessions()
+    const sessions = await getOpencodeSessions()
+    if (sessions.length > 0) console.log('[opencode] sessions:', sessions.map(s => ({ runtime: s.runtime, project: s.project, pid: s.pid, tty: s.tty })))
+    return sessions
   }))
   ipcMain.handle('orchestrator:queue', wrapHandler(() => getTaskQueue()))
   ipcMain.handle('orchestrator:enqueue', wrapHandler((
@@ -761,5 +777,18 @@ export function registerIpcHandlers() {
   }))
   ipcMain.handle('orchestrator:get-provider', wrapHandler(async () => {
     return { provider: getModelProvider(), ollamaAvailable: await checkOllamaAvailable() }
+  }))
+
+  // ── GitHub issue poller ──────────────────────────────────────────────────
+  ipcMain.handle('github:status', wrapHandler(() => getGithubIssuePollerStatus()))
+  ipcMain.handle('github:poll-now', wrapHandler(() => pollGithubIssuesNow()))
+  ipcMain.handle('github:seen', wrapHandler(() => getSeenIssues()))
+  ipcMain.handle('github:cards', wrapHandler(() => getGithubIssueCards()))
+  ipcMain.handle('github:add-repo', wrapHandler((owner: unknown, repo: unknown, localPath: unknown) => {
+    if (typeof owner !== 'string' || typeof repo !== 'string' || typeof localPath !== 'string') {
+      throw new Error('owner, repo, and localPath must be strings')
+    }
+    addWatchedRepo(owner, repo, localPath)
+    return { ok: true }
   }))
 }
