@@ -5,8 +5,9 @@
  *   1. Room interiors (tightly inset from walls)
  *   2. Door openings (narrow strip connecting room to corridor)
  *   3. Corridors (from corridorSegments data — the actual drawn hallways)
- *   4. Café interior
- *   5. A narrow path connecting the lowest corridor to the café
+ *   4. GitHub building interior
+ *   5. Café interior
+ *   6. Narrow paths connecting café and GitHub building to corridors
  *
  * Walls, space between rooms, and the building floor itself are NOT walkable.
  * Agents MUST go through doors and corridors.
@@ -43,6 +44,7 @@ export class NavMesh {
     }>
     corridorSegments: Array<{ x1: number; y1: number; x2: number; y2: number }>
     cafeBounds: { x: number; y: number; w: number; h: number } | null
+    githubBuildingBounds?: { x: number; y: number; w: number; h: number } | null
   }): void {
     if (!config.buildingBounds) {
       this.grid = []; this.gridW = 0; this.gridH = 0; return
@@ -55,6 +57,11 @@ export class NavMesh {
       const cb = config.cafeBounds
       minX = Math.min(minX, cb.x - 20); minY = Math.min(minY, cb.y - 20)
       maxX = Math.max(maxX, cb.x + cb.w + 20); maxY = Math.max(maxY, cb.y + cb.h + 20)
+    }
+    if (config.githubBuildingBounds) {
+      const gb = config.githubBuildingBounds
+      minX = Math.min(minX, gb.x - 20); minY = Math.min(minY, gb.y - 20)
+      maxX = Math.max(maxX, gb.x + gb.w + 20); maxY = Math.max(maxY, gb.y + gb.h + 20)
     }
 
     this.originX = minX; this.originY = minY
@@ -94,35 +101,71 @@ export class NavMesh {
       }
     }
 
-    // 4. Café interior
+    // 4. GitHub building interior
+    if (config.githubBuildingBounds) {
+      const gb = config.githubBuildingBounds
+      this.markRect(gb.x + 4, gb.y + 4, gb.w - 8, gb.h - 8)
+
+      // Connect to nearest corridor segment (L-shaped path)
+      const gbCX = gb.x + gb.w / 2
+      const gbCY = gb.y + gb.h / 2
+      let gNearDist = Infinity, gNearX = gbCX, gNearY = gbCY
+      for (const seg of config.corridorSegments) {
+        for (const pt of [
+          { x: seg.x1, y: seg.y1 }, { x: seg.x2, y: seg.y2 },
+          { x: (seg.x1 + seg.x2) / 2, y: (seg.y1 + seg.y2) / 2 },
+        ]) {
+          const d = Math.hypot(pt.x - gbCX, pt.y - gbCY)
+          if (d < gNearDist) { gNearDist = d; gNearX = pt.x; gNearY = pt.y }
+        }
+      }
+      if (gNearDist < Infinity && gNearDist > 0) {
+        const pw = 16
+        const myMin = Math.min(gNearY, gbCY), myMax = Math.max(gNearY, gbCY)
+        const mxMin = Math.min(gNearX, gbCX), mxMax = Math.max(gNearX, gbCX)
+        this.markRect(gNearX - pw / 2, myMin - 4, pw, myMax - myMin + 8)
+        this.markRect(mxMin - 4, gbCY - pw / 2, mxMax - mxMin + 8, pw)
+      }
+    }
+
+    // 5. Café interior
     if (config.cafeBounds) {
       const cb = config.cafeBounds
       this.markRect(cb.x + 4, cb.y + 4, cb.w - 8, cb.h - 8)
 
-      // 5. Narrow path from lowest corridor to café
-      // Find the lowest (max Y) corridor endpoint
-      let lowestCorridorY = 0
-      let lowestCorridorX = cb.x + cb.w / 2
+      // 6. Connect café to the nearest corridor segment
+      const cafeCX = cb.x + cb.w / 2
+      const cafeCY = cb.y + cb.h / 2
+      let nearestDist = Infinity
+      let nearestX = cafeCX
+      let nearestY = cafeCY
       for (const seg of config.corridorSegments) {
-        const maxSegY = Math.max(seg.y1, seg.y2)
-        if (maxSegY > lowestCorridorY) {
-          lowestCorridorY = maxSegY
-          // Use the X that's closest to the café
-          lowestCorridorX = Math.abs(seg.x1 - cb.x) < Math.abs(seg.x2 - cb.x) ? seg.x1 : seg.x2
+        // Check both endpoints and midpoint of each segment
+        for (const pt of [
+          { x: seg.x1, y: seg.y1 },
+          { x: seg.x2, y: seg.y2 },
+          { x: (seg.x1 + seg.x2) / 2, y: (seg.y1 + seg.y2) / 2 },
+        ]) {
+          const d = Math.hypot(pt.x - cafeCX, pt.y - cafeCY)
+          if (d < nearestDist) {
+            nearestDist = d
+            nearestX = pt.x
+            nearestY = pt.y
+          }
         }
       }
 
-      // Draw a narrow L-shaped path: corridor → down → across → café
-      if (lowestCorridorY > 0) {
+      // Draw an L-shaped path from nearest corridor point to café center
+      if (nearestDist < Infinity && nearestDist > 0) {
         const pathWidth = 16
-        // Vertical leg down from corridor to café Y
-        const legTopY = lowestCorridorY - 4
-        const legBotY = cb.y + cb.h / 2
-        this.markRect(lowestCorridorX - pathWidth / 2, legTopY, pathWidth, Math.max(0, legBotY - legTopY))
-        // Horizontal leg from corridor X to café X
-        const leftX = Math.min(lowestCorridorX, cb.x + cb.w / 2)
-        const rightX = Math.max(lowestCorridorX, cb.x + cb.w / 2)
-        this.markRect(leftX - 4, legBotY - pathWidth / 2, rightX - leftX + 8, pathWidth)
+        const minY = Math.min(nearestY, cafeCY)
+        const maxY = Math.max(nearestY, cafeCY)
+        const minX = Math.min(nearestX, cafeCX)
+        const maxX = Math.max(nearestX, cafeCX)
+        // Vertical leg
+        this.markRect(nearestX - pathWidth / 2, minY - 4, pathWidth, maxY - minY + 8)
+        // Horizontal leg
+        this.markRect(minX - 4, cafeCY - pathWidth / 2, maxX - minX + 8, pathWidth)
       }
     }
   }

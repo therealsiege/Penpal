@@ -1,27 +1,26 @@
 import Phaser from 'phaser'
 import type { AgentState } from '../types'
 import { WS_SPRITE_Y, WS_DESK_Y, CHAR_SCALE, ROOM_GAP } from './office-constants'
+import { getAgentCharacterIndex, getRoomDoorY } from './office-helpers'
 
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
 
-const CAFE_W = 420
+const CAFE_W = 340
 const CAFE_H = 180
 const COUNTER_W = 16
 const BEHIND_W = 68
 const STOOL_GAP = 48
 const WALK_SPEED = 55
-const NUM_STOOLS = 8
+const NUM_STOOLS = 6
 const TOTAL_STOOLS_W = (NUM_STOOLS - 1) * STOOL_GAP
 const STOOL_START_X = (CAFE_W - TOTAL_STOOLS_W) / 2
 
-// Tuning — more traffic, shorter visits
-const MAX_RUNNERS = 4
-const RUN_TIMER_MIN = 6000
-const RUN_TIMER_VAR = 6000
-const SIT_TIME_MIN = 30000
-const SIT_TIME_VAR = 30000
+// Tuning — high traffic, stay until recalled
+const MAX_RUNNERS = 10
+const RUN_TIMER_MIN = 3000
+const RUN_TIMER_VAR = 5000
 
 // Social interaction emojis
 const CHAT_EMOJIS = ['\uD83D\uDE04', '\uD83D\uDC4D', '\u2615', '\uD83D\uDCA1', '\uD83E\uDD14', '\uD83D\uDE02', '\uD83D\uDE0E', '\uD83C\uDF1F']
@@ -33,8 +32,6 @@ const CHAT_EMOJIS = ['\uD83D\uDE04', '\uD83D\uDC4D', '\u2615', '\uD83D\uDCA1', '
 export interface CafeHostScene extends Phaser.Scene {
   rooms: Map<string, CafeRoom>
   spawnEmojiReaction(worldX: number, worldY: number, emoji: string): void
-  getAgentCharacterIndex(agent: AgentState): number
-  getRoomDoorY(room: CafeRoom): number
 }
 
 export interface CafeRoom {
@@ -66,6 +63,8 @@ interface CafeVisitor {
   cup: Phaser.GameObjects.Arc | null
   sipTimer: Phaser.Time.TimerEvent | null
   chatPartner: string | null
+  /** Trigger walk-back to desk (called by cancelCoffeeRun when seated) */
+  triggerReturn?: () => void
 }
 
 interface ChatSession {
@@ -91,7 +90,7 @@ export class PennyCafe {
   private steamTimer: Phaser.Time.TimerEvent | null = null
   private coffeeRunTimer: Phaser.Time.TimerEvent | null = null
   readonly coffeeRunners = new Set<string>()
-  private coffeeRunnerRooms = new Set<string>()
+  private coffeeRunnerRooms = new Map<string, number>()
   private stoolOccupied = new Set<number>()
   private seatedVisitors = new Map<string, CafeVisitor>()
   private chatSessions: ChatSession[] = []
@@ -173,9 +172,8 @@ export class PennyCafe {
     // ── Baristas ──
     const baristaWorkY = BEHIND_W - 14
     const baristaConfigs = [
-      { homeX: 60, charIdx: 1, name: 'Latte Larry' },
-      { homeX: 200, charIdx: 0, name: 'Mocha Maya' },
-      { homeX: 350, charIdx: 1, name: 'Espresso Ed' },
+      { homeX: 80, charIdx: 1, name: 'Latte Larry' },
+      { homeX: 250, charIdx: 0, name: 'Mocha Maya' },
     ]
 
     this.baristaHomeX = []
@@ -259,13 +257,15 @@ export class PennyCafe {
     return this.coffeeRunners.has(agentId)
   }
 
-  /** Cancel a coffee run (e.g. agent started working). */
+  /** Cancel a coffee run — trigger walk back to desk. */
   cancelCoffeeRun(agentId: string): void {
-    this.coffeeRunners.delete(agentId)
-    // Clean up visitor state if seated
     const visitor = this.seatedVisitors.get(agentId)
-    if (visitor) {
-      this.cleanupVisitor(agentId)
+    if (visitor?.triggerReturn) {
+      // Trigger the walk-back animation (cleanup happens on arrival)
+      visitor.triggerReturn()
+    } else {
+      // Not yet seated or no return path — just clean up immediately
+      this.coffeeRunners.delete(agentId)
     }
   }
 
@@ -329,26 +329,31 @@ export class PennyCafe {
   private tryStartCoffeeRun(): void {
     if (!this.container || this.scene.rooms.size === 0) return
     if (this.coffeeRunners.size >= MAX_RUNNERS) return
-    if (this.stoolOccupied.size >= NUM_STOOLS) return
 
     const candidates: { ws: CafeWorkstation; room: CafeRoom }[] = []
     for (const room of this.scene.rooms.values()) {
-      if (this.coffeeRunnerRooms.has(room.cwd)) continue
       for (const ws of room.workstations.values()) {
         if (!ws.state) continue
         if (ws.walkBreakTween) continue
         if (this.coffeeRunners.has(ws.state.config.id)) continue
+        // Remote gateway agents (nemoclaw, openclaw) have no reliable status — keep at desk
+        const mdl = ws.state.config.model
+        if (mdl === 'nemoclaw' || mdl === 'openclaw') continue
         const m = ws.state.sessionMode
-        const status = ws.state.status
-        const isIdle = status === 'idle' || status === 'sleeping'
-        const isBusy = ws.state.needsInteraction || m === 'working' || m === 'plan' || m === 'compressing' || m === 'waiting' || m === 'accept-edits'
-        if (isIdle && !isBusy) candidates.push({ ws, room })
+        const isBusy = m === 'working' || m === 'plan' || m === 'compressing' || m === 'accept-edits' || ws.state.needsInteraction || ws.state.status === 'active'
+        if (isBusy) continue
+        candidates.push({ ws, room })
       }
     }
     if (candidates.length === 0) return
 
-    const pick = candidates[Math.floor(Math.random() * candidates.length)]
-    this.sendAgentForCoffee(pick.ws, pick.room)
+    // Dispatch up to 3 agents per tick for faster cafe fill
+    const dispatches = Math.min(3, candidates.length, MAX_RUNNERS - this.coffeeRunners.size)
+    for (let i = 0; i < dispatches; i++) {
+      const idx = Math.floor(Math.random() * candidates.length)
+      const pick = candidates.splice(idx, 1)[0]
+      this.sendAgentForCoffee(pick.ws, pick.room)
+    }
   }
 
   private sendAgentForCoffee(ws: CafeWorkstation, room: CafeRoom): void {
@@ -356,26 +361,31 @@ export class PennyCafe {
     const scene = this.scene
     const agentId = ws.state.config.id
 
-    const stoolIdx = this.pickStool()
-    if (stoolIdx === null) return // No free stools
+    const stoolIdx = this.pickStool() // null = standing overflow
+    const isStanding = stoolIdx === null
 
     this.coffeeRunners.add(agentId)
-    this.coffeeRunnerRooms.add(room.cwd)
-    this.stoolOccupied.add(stoolIdx)
+    this.coffeeRunnerRooms.set(room.cwd, (this.coffeeRunnerRooms.get(room.cwd) ?? 0) + 1)
+    if (stoolIdx !== null) this.stoolOccupied.add(stoolIdx)
 
     const startX = room.x + ws.container.x
     const startY = room.y + ws.container.y + WS_SPRITE_Y
     const doorX = room.x
-    const doorY = scene.getRoomDoorY(room)
-    const cafeX = this.stoolWorldX(stoolIdx)
-    const cafeY = this.worldY
+    const doorY = getRoomDoorY(room)
+    // Standing agents cluster below the counter area with random spread
+    const cafeX = stoolIdx !== null
+      ? this.stoolWorldX(stoolIdx)
+      : (this.worldX - CAFE_W / 2) + 40 + Math.random() * (CAFE_W - 80)
+    const cafeY = stoolIdx !== null
+      ? this.worldY
+      : this.worldY + 28 + Math.random() * 16
 
-    // Safe right X — past ALL rooms on ALL rows
-    let safeRightX = 0
+    // Safe corridor X — past all rooms to the LEFT (cafe is top-left)
+    let safeLeftX = Infinity
     for (const r of scene.rooms.values()) {
-      safeRightX = Math.max(safeRightX, r.x + r.width / 2)
+      safeLeftX = Math.min(safeLeftX, r.x - r.width / 2)
     }
-    safeRightX += 20
+    safeLeftX -= 20
 
     // Row corridor Y
     const thisRowTop = Math.round(room.y - room.height / 2)
@@ -401,7 +411,7 @@ export class PennyCafe {
     ws.sprite.setVisible(false)
     scene.spawnEmojiReaction(startX, startY - 25, '\u2615')
 
-    const charIdx = scene.getAgentCharacterIndex(ws.state)
+    const charIdx = getAgentCharacterIndex(ws.state)
     const walkSuffix = charIdx === 1 ? '2' : '1'
     const walkSheetKey = `anim-walk-${walkSuffix}`
     const sitSheetKey = `anim-sit-${walkSuffix}`
@@ -413,30 +423,33 @@ export class PennyCafe {
     const cleanup = () => {
       if (cleaned) return
       cleaned = true
-      this.stoolOccupied.delete(stoolIdx)
+      if (stoolIdx !== null) this.stoolOccupied.delete(stoolIdx)
       this.cleanupVisitor(agentId)
       shadow.destroy()
       walker.destroy()
       ws.sprite.setVisible(true)
       this.coffeeRunners.delete(agentId)
-      this.coffeeRunnerRooms.delete(room.cwd)
+      const rc = (this.coffeeRunnerRooms.get(room.cwd) ?? 1) - 1
+      if (rc <= 0) this.coffeeRunnerRooms.delete(room.cwd)
+      else this.coffeeRunnerRooms.set(room.cwd, rc)
     }
 
     const deskBottomY = room.y + ws.container.y + WS_DESK_Y + 14
 
+    // Walk path: desk → door → corridor → left past buildings → up/down to cafe row → cafe stool
     const goPoints = [
       { x: startX, y: deskBottomY },
       { x: room.x, y: deskBottomY },
       { x: room.x, y: doorY },
       { x: room.x, y: localCorridorY },
       { x: room.x, y: rowCorridorY },
-      { x: safeRightX, y: rowCorridorY },
-      { x: safeRightX, y: cafeY },
+      { x: safeLeftX, y: rowCorridorY },
+      { x: safeLeftX, y: cafeY },
       { x: cafeX, y: cafeY },
     ]
     const backPoints = [
-      { x: safeRightX, y: cafeY },
-      { x: safeRightX, y: rowCorridorY },
+      { x: safeLeftX, y: cafeY },
+      { x: safeLeftX, y: rowCorridorY },
       { x: room.x, y: rowCorridorY },
       { x: room.x, y: localCorridorY },
       { x: room.x, y: doorY },
@@ -453,18 +466,29 @@ export class PennyCafe {
       if (!walker.active) { cleanup(); return }
       if (pointIdx >= currentPoints.length) {
         if (phase === 'going') {
-          // Arrived at cafe — sit down
+          // Arrived at cafe
           phase = 'sitting'
           walker.setAngle(0)
-          walker.setTexture(sitSheetKey, 3)
-          walker.setFlipX(false)
           walker.setScale(CHAR_SCALE)
           walker.setDepth(9000)
 
-          // Register as seated visitor
+          if (isStanding) {
+            // Standing with coffee — idle facing counter, slight sway
+            walker.setTexture(walkSheetKey, 6) // face up toward counter
+            walker.setFlipX(false)
+            scene.tweens.add({
+              targets: walker, angle: { from: -2, to: 2 },
+              duration: 2000 + Math.random() * 800, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
+            })
+          } else {
+            walker.setTexture(sitSheetKey, 3)
+            walker.setFlipX(false)
+          }
+
+          // Register as visitor (seated or standing)
           const visitor: CafeVisitor = {
             agentId,
-            stoolIdx,
+            stoolIdx: stoolIdx ?? -1,
             walker,
             shadow,
             cup: null,
@@ -473,22 +497,41 @@ export class PennyCafe {
           }
           this.seatedVisitors.set(agentId, visitor)
 
-          // Barista serves the drink
-          this.serveDrink(visitor)
+          if (isStanding) {
+            // Standing agents get a cup right away
+            const cup = scene.add.circle(walker.x + 6, walker.y - 12, 3, 0x8b5cf6, 0.8).setDepth(9002)
+            visitor.cup = cup
+            visitor.sipTimer = scene.time.addEvent({
+              delay: 6000 + Math.random() * 6000, loop: true,
+              callback: () => this.sipAnimation(visitor),
+            })
+            // Periodic emoji while standing around
+            scene.time.addEvent({
+              delay: 5000 + Math.random() * 5000, loop: true,
+              callback: () => {
+                if (!walker.active) return
+                const emoji = CHAT_EMOJIS[Math.floor(Math.random() * CHAT_EMOJIS.length)]
+                scene.spawnEmojiReaction(walker.x, walker.y - 30, emoji)
+              },
+            })
+          } else {
+            // Barista serves the drink
+            this.serveDrink(visitor)
+            // Check for adjacent seated neighbors to start chatting
+            this.tryStartChat(agentId)
+          }
 
-          // Check for adjacent seated neighbors to start chatting
-          this.tryStartChat(agentId)
-
-          // Schedule departure
-          const sitDuration = SIT_TIME_MIN + Math.random() * SIT_TIME_VAR
-          scene.time.delayedCall(sitDuration, () => {
-            if (!walker.active) { cleanup(); return }
+          // No auto-return timer — agent stays until desk is clicked or work arrives.
+          // Store a return callback so cancelCoffeeRun can trigger the walk back.
+          visitor.triggerReturn = () => {
+            if (phase !== 'sitting' || !walker.active) return
             phase = 'returning'
+            walker.setTexture(walkSheetKey, 0)
             currentPoints = backPoints
             pointIdx = 0
             this.cleanupVisitor(agentId)
             stepNext()
-          })
+          }
         } else {
           // Arrived back at desk
           cleanup()
@@ -648,17 +691,49 @@ export class PennyCafe {
     // Already in a chat?
     if (newVisitor.chatPartner) return
 
-    // Find an adjacent seated neighbor not already chatting
+    // Find an adjacent seated neighbor
     for (const [otherId, other] of this.seatedVisitors) {
       if (otherId === newAgentId) continue
-      if (other.chatPartner) continue
       const stoolDiff = Math.abs(other.stoolIdx - newVisitor.stoolIdx)
       if (stoolDiff !== 1) continue
 
-      // Found an adjacent neighbor — start chatting
+      if (other.chatPartner) {
+        // Neighbor is already chatting — join as group observer with periodic emoji reactions
+        this.startGroupReactions(newAgentId, otherId)
+        return
+      }
+
+      // Found a free adjacent neighbor — start chatting
       this.startChatSession(newAgentId, otherId)
       return
     }
+  }
+
+  /** Group chat: a third agent near an existing chat pair spawns periodic emoji reactions */
+  private startGroupReactions(observerId: string, nearChatAgentId: string): void {
+    const observer = this.seatedVisitors.get(observerId)
+    if (!observer) return
+    const scene = this.scene
+
+    // Mark observer as "chatting" with the neighbor so they face each other
+    observer.chatPartner = nearChatAgentId
+    const other = this.seatedVisitors.get(nearChatAgentId)
+    if (other) {
+      const obsIsLeft = observer.stoolIdx < other.stoolIdx
+      observer.walker.setFrame(2)
+      observer.walker.setFlipX(!obsIsLeft)
+    }
+
+    // Periodic emoji reactions from the observer
+    const groupTimer = scene.time.addEvent({
+      delay: 3000 + Math.random() * 3000,
+      loop: true,
+      callback: () => {
+        if (!observer.walker.active) { groupTimer.destroy(); return }
+        const emoji = CHAT_EMOJIS[Math.floor(Math.random() * CHAT_EMOJIS.length)]
+        scene.spawnEmojiReaction(observer.walker.x, observer.walker.y - 30, emoji)
+      },
+    })
   }
 
   private startChatSession(agentA: string, agentB: string): void {
@@ -688,7 +763,7 @@ export class PennyCafe {
     // Alternate bubbles — simulate turn-taking
     let turnA = true
     const turnTimer = scene.time.addEvent({
-      delay: 2000 + Math.random() * 1500,
+      delay: 1500 + Math.random() * 1000,
       loop: true,
       callback: () => {
         if (!visA.walker.active || !visB.walker.active) return
@@ -704,7 +779,7 @@ export class PennyCafe {
 
     // Emoji reactions between the two
     const emojiTimer = scene.time.addEvent({
-      delay: 8000 + Math.random() * 6000,
+      delay: 4000 + Math.random() * 4000,
       loop: true,
       callback: () => {
         if (!visA.walker.active || !visB.walker.active) return
@@ -716,7 +791,7 @@ export class PennyCafe {
 
     // Lean-in gesture — one agent leans toward the other
     const leanTimer = scene.time.addEvent({
-      delay: 12000 + Math.random() * 8000,
+      delay: 6000 + Math.random() * 6000,
       loop: true,
       callback: () => {
         const leaner = Math.random() > 0.5 ? visA : visB
@@ -813,13 +888,12 @@ export class PennyCafe {
       })
     }
 
-    // Clean up cup
+    // Clean up cup immediately
     if (visitor.sipTimer) { visitor.sipTimer.destroy(); visitor.sipTimer = null }
     if (visitor.cup?.active) {
-      this.scene.tweens.add({
-        targets: visitor.cup, alpha: 0, duration: 300,
-        onComplete: () => { if (visitor.cup?.active) visitor.cup.destroy() },
-      })
+      this.scene.tweens.killTweensOf(visitor.cup)
+      visitor.cup.destroy()
+      visitor.cup = null
     }
 
     this.seatedVisitors.delete(agentId)

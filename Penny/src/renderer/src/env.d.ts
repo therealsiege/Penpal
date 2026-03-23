@@ -57,6 +57,7 @@ declare global {
       listVentures: (relativePath: string) => Promise<{ name: string; isDirectory: boolean; path: string }[]>
       readVentureFile: (relativePath: string) => Promise<string | null>
       // Shell APIs
+      openUrl: (url: string) => Promise<{ success: boolean }>
       openDownloads: () => Promise<{ success: boolean }>
       pickDirectory: () => Promise<string | null>
       getSystemPaths: () => Promise<SystemPaths>
@@ -130,6 +131,12 @@ declare global {
       orchestratorXP: () => Promise<Record<string, import('./types').AgentXP>>
       orchestratorSetProvider: (provider: string) => Promise<{ provider: string }>
       orchestratorGetProvider: () => Promise<{ provider: import('./types').ModelProvider; ollamaAvailable: boolean }>
+      // GitHub Issue Poller
+      githubPollerStatus: () => Promise<{ running: boolean; repos: string[]; seenCount: number; lastPoll: number | null; pollIntervalMs: number }>
+      githubPollNow: () => Promise<{ enqueued: number }>
+      githubSeenIssues: () => Promise<{ number: number; repo: string; taskId: string; ingestedAt: number }[]>
+      githubIssueCards: () => Promise<import('./types').GitHubIssueCard[]>
+      githubAddRepo: (owner: string, repo: string, localPath: string) => Promise<{ ok: boolean }>
       // Opencode Sessions
       getOpencodeSessions: () => Promise<OpencodeSession[]>
     }

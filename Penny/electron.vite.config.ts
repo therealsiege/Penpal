@@ -10,6 +10,7 @@ export default defineConfig({
     plugins: [externalizeDepsPlugin()],
   },
   renderer: {
+    base: './',
     server: {
       port: 7749,
     },

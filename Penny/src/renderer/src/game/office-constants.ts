@@ -146,5 +146,10 @@ export const MINIMAP_BG = 0x0f172a
 export const MINIMAP_ROOM_COLOR = 0x334155
 export const MINIMAP_VIEWPORT_COLOR = 0x3b82f6
 export const MINIMAP_REFRESH_MS = 120
-export const TRIPLET_REFRESH_MS = 90
+export const POD_REFRESH_MS = 90
 export const AMBIENT_MOTE_POOL_SIZE = 26
+
+// GitHub Building
+export const GITHUB_BUILDING_W = 520
+export const GITHUB_BUILDING_H = 180
+export const GITHUB_POLL_MS = 10_000

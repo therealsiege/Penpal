@@ -47,6 +47,7 @@ contextBridge.exposeInMainWorld('api', {
   approveSession: (tty: string, choice: string) => ipcRenderer.invoke('sessions:approve', tty, choice),
   approveAllSessions: (choice: string) => ipcRenderer.invoke('sessions:approve-all', choice),
   // Shell APIs
+  openUrl: (url: string) => ipcRenderer.invoke('shell:open-url', url),
   openDownloads: () => ipcRenderer.invoke('shell:open-downloads'),
   pickDirectory: () => ipcRenderer.invoke('dialog:open-directory') as Promise<string | null>,
   getSystemPaths: () => ipcRenderer.invoke('system:paths'),
@@ -116,6 +117,13 @@ contextBridge.exposeInMainWorld('api', {
   orchestratorXP: () => ipcRenderer.invoke('orchestrator:xp'),
   orchestratorSetProvider: (provider: string) => ipcRenderer.invoke('orchestrator:set-provider', provider),
   orchestratorGetProvider: () => ipcRenderer.invoke('orchestrator:get-provider'),
+  // GitHub Issue Poller
+  githubPollerStatus: () => ipcRenderer.invoke('github:status'),
+  githubPollNow: () => ipcRenderer.invoke('github:poll-now'),
+  githubSeenIssues: () => ipcRenderer.invoke('github:seen'),
+  githubIssueCards: () => ipcRenderer.invoke('github:cards'),
+  githubAddRepo: (owner: string, repo: string, localPath: string) =>
+    ipcRenderer.invoke('github:add-repo', owner, repo, localPath),
   // Opencode Sessions
   getOpencodeSessions: () => ipcRenderer.invoke('opencode:sessions'),
 })

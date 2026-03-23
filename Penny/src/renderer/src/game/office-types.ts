@@ -83,6 +83,7 @@ export interface WorkstationSprite {
   taskCountFlashTween?: Phaser.Tweens.Tween
   localTaskCount: number
   onCoffeeRun?: boolean
+  coffeeIndicator?: Phaser.GameObjects.Text
 }
 
 export interface Room {
@@ -145,13 +146,19 @@ export interface MinimapProjection {
   pad: number
 }
 
-// Triplet workflow info for connecting lines
-export interface TripletLineInfo {
+// Pod workflow info for connecting lines
+export interface PodLineInfo {
   workflowId: string
   solverAgentId: string
   reviewerAgentId: string
   executorAgentId: string
   status: string
+}
+
+export interface MinimapExtraBuilding {
+  label: string
+  bounds: { x: number; y: number; w: number; h: number }
+  color: number
 }
 
 export interface OfficeDebugSnapshot {

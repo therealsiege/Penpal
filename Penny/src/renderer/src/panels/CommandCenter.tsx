@@ -1078,7 +1078,7 @@ export function CommandCenter(props: CommandCenterProps) {
           executorAgentId: wf.executor.agentId,
           status: wf.status,
         }))
-      sceneRef.current.setTripletWorkflows(activeWorkflows)
+      sceneRef.current.setPodWorkflows(activeWorkflows)
     }
   }, [tripletWorkflows])
 
