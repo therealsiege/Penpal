@@ -16,9 +16,9 @@ This file is shared across all agents in the Penny platform. Reference it for te
 - Tailwind for styling, no CSS modules
 - IPC pattern: main → `ipcMain.handle`, preload → `contextBridge`, renderer → `window.api.*`
 
-## Triplet Workflow Protocol
+## Pod Workflow Protocol
 
-When working in a triplet (Solver/Reviewer/Executor):
+When working in a pod (Solver/Reviewer/Executor):
 - **Solver**: Implement the task completely. Provide a summary of changes.
 - **Reviewer**: Design test criteria independently WITHOUT seeing implementation code. Focus on expected behavior from the task description.
 - **Executor**: Verify implementation against test plan. Report structured PASS/FAIL results.
@@ -35,9 +35,9 @@ When working in a triplet (Solver/Reviewer/Executor):
 
 - Agent sessions are tracked via `~/.claude/sessions/*.json` and JSONL transcripts
 - Agent state is polled every 5s from the renderer
-- Triplet workflows are orchestrated by a state machine in `src/main/triplets.ts`
+- Pod workflows are orchestrated by a state machine in `src/main/pods.ts`
 - Use `sendToSession()` for inter-agent communication via iTerm TTY
 
 ## Updates
 
-_This file is automatically updated after completed triplet workflows._
+_This file is automatically updated after completed pod workflows._

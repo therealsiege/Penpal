@@ -184,7 +184,7 @@ export function VaultPanel() {
         <div className="drag-region flex-1 h-2" />
         <button
           onClick={() => setShowQuickSwitcher(true)}
-          className="text-xs text-slate-500 hover:text-slate-300 px-2 py-1 rounded bg-slate-800/40 transition-colors"
+          className="text-[15px] text-slate-500 hover:text-slate-300 px-2.5 py-1.5 rounded bg-slate-800/40 transition-colors"
           title="Quick Open (Cmd+P)"
         >
           Open...
@@ -199,7 +199,7 @@ export function VaultPanel() {
         <TagFilter activeTag={activeTag} onSelectTag={setActiveTag} />
         <button
           onClick={() => setShowRightSidebar(s => !s)}
-          className={`text-xs px-2 py-1 rounded transition-colors ${
+          className={`text-[15px] px-2.5 py-1.5 rounded transition-colors ${
             showRightSidebar ? 'bg-blue-600/30 text-blue-300' : 'text-slate-500 hover:text-slate-300 bg-slate-800/40'
           }`}
           title="Toggle Outline (Cmd+\\)"
@@ -221,7 +221,7 @@ export function VaultPanel() {
               <button
                 key={mode}
                 onClick={() => setLeftSidebarMode(mode)}
-                className={`flex-1 px-2 py-1.5 text-xs capitalize transition-colors ${
+                className={`flex-1 px-2 py-1.5 text-[15px] capitalize transition-colors ${
                   leftSidebarMode === mode
                     ? 'text-blue-300 bg-slate-800/40'
                     : 'text-slate-500 hover:text-slate-300'
@@ -270,7 +270,7 @@ export function VaultPanel() {
 
       {/* Bottom bar */}
       <div className="shrink-0 flex items-center justify-between px-3 py-2 border-t border-slate-800/60 bg-slate-900/40">
-        <div className="text-xs text-slate-500">
+        <div className="text-[15px] text-slate-500">
           {selectedFiles.size > 0
             ? `${selectedFiles.size} file${selectedFiles.size > 1 ? 's' : ''} selected`
             : tabs.length > 0
@@ -288,9 +288,9 @@ export function VaultPanel() {
         <div className="flex items-center gap-1">
           <SendToAgent selectedFiles={selectedFiles} />
           <span className="mx-2 w-px h-4 bg-slate-800/60" />
-          <button onClick={zoomOut} className="w-6 h-6 rounded text-slate-500 hover:text-slate-300 hover:bg-slate-800/60 flex items-center justify-center text-xs transition-colors" title="Zoom Out (Cmd+-)">-</button>
-          <button onClick={zoomReset} className="px-1 h-6 rounded text-slate-500 hover:text-slate-300 hover:bg-slate-800/60 text-[10px] tabular-nums transition-colors" title="Reset Zoom (Cmd+0)">{Math.round(zoom * 100)}%</button>
-          <button onClick={zoomIn} className="w-6 h-6 rounded text-slate-500 hover:text-slate-300 hover:bg-slate-800/60 flex items-center justify-center text-xs transition-colors" title="Zoom In (Cmd+=)">+</button>
+          <button onClick={zoomOut} className="w-7 h-7 rounded text-slate-500 hover:text-slate-300 hover:bg-slate-800/60 flex items-center justify-center text-[15px] transition-colors" title="Zoom Out (Cmd+-)">-</button>
+          <button onClick={zoomReset} className="px-1.5 h-7 rounded text-slate-500 hover:text-slate-300 hover:bg-slate-800/60 text-xs tabular-nums transition-colors" title="Reset Zoom (Cmd+0)">{Math.round(zoom * 100)}%</button>
+          <button onClick={zoomIn} className="w-7 h-7 rounded text-slate-500 hover:text-slate-300 hover:bg-slate-800/60 flex items-center justify-center text-[15px] transition-colors" title="Zoom In (Cmd+=)">+</button>
         </div>
       </div>
     </div>

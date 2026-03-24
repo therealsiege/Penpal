@@ -145,7 +145,7 @@ export interface AgentConfig {
   id: string
   name: string
   title: string
-  tripletRole: 'solver' | 'reviewer' | 'executor'
+  podRole: 'solver' | 'reviewer' | 'executor'
   persona?: AgentPersona
   systemPrompt: string
   model: string
@@ -278,9 +278,9 @@ export interface ProjectLeaderboardEntry {
 }
 
 
-// ── Triplet Workflow Types ──────────────────────────────────────────────────
+// ── Pod Workflow Types ──────────────────────────────────────────────────
 
-export type TripletStatus =
+export type PodStatus =
   | 'pending'
   | 'solving'
   | 'reviewing'
@@ -290,7 +290,7 @@ export type TripletStatus =
   | 'failed'
   | 'paused'
 
-export interface TripletRole {
+export interface PodRole {
   agentId: string
   tty?: string
   sessionId?: string
@@ -298,25 +298,25 @@ export interface TripletRole {
   output?: string
 }
 
-export interface TripletWorkflow {
+export interface PodWorkflow {
   id: string
   name: string
-  status: TripletStatus
+  status: PodStatus
   task: string
   cwd: string
-  solver: TripletRole
-  reviewer: TripletRole
-  executor: TripletRole
+  solver: PodRole
+  reviewer: PodRole
+  executor: PodRole
   iteration: number
   maxIterations: number
   artifacts: { stage: string; path: string; iteration: number; timestamp: number }[]
   createdAt: number
   updatedAt: number
   error?: string
-  stageHistory: { stage: TripletStatus; enteredAt: number }[]
+  stageHistory: { stage: PodStatus; enteredAt: number }[]
 }
 
-export interface TripletPreset {
+export interface PodPreset {
   id: string
   solver: string
   reviewer: string

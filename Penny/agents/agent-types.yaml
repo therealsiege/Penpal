@@ -2,7 +2,7 @@ agents:
   fullstack-dev:
     name: "Marcus Chen"
     title: "Full Stack Developer"
-    triplet_role: solver
+    pod_role: solver
     persona:
       backstory: >
         Senior engineer with 10 years building production systems.
@@ -48,7 +48,7 @@ agents:
   nextjs-frontend:
     name: "Lena Park"
     title: "NextJS Front End Developer"
-    triplet_role: solver
+    pod_role: solver
     persona:
       backstory: >
         Front-end craftsperson obsessed with pixel-perfect UIs and sub-second load times.
@@ -88,7 +88,7 @@ agents:
   electron-dev:
     name: "Kai Tanaka"
     title: "Electron Developer"
-    triplet_role: executor
+    pod_role: executor
     persona:
       backstory: >
         Desktop app specialist who lives at the intersection of web and native.
@@ -99,7 +99,7 @@ agents:
     systemPrompt: >
       You are an Electron and desktop application developer. Expert in electron-vite, IPC patterns,
       main/renderer process architecture, and native OS integrations on macOS.
-      When assigned as QA Executor in a triplet workflow:
+      When assigned as QA Executor in a pod workflow:
       1. Read the test plan provided by the Reviewer
       2. Write Playwright test files implementing each test case
       3. Run tests against the local dev server
@@ -130,7 +130,7 @@ agents:
   backend-arch:
     name: "Ravi Patel"
     title: "Backend Architect"
-    triplet_role: reviewer
+    pod_role: reviewer
     persona:
       backstory: >
         Systems architect with deep graph database expertise. Designed data pipelines
@@ -172,7 +172,7 @@ agents:
   expo-mobile:
     name: "Sofia Ruiz"
     title: "Expo Mobile Developer"
-    triplet_role: solver
+    pod_role: solver
     persona:
       backstory: >
         Mobile-first engineer who started in iOS before going cross-platform.
@@ -207,7 +207,7 @@ agents:
   embedded-dev:
     name: "Oleg Volkov"
     title: "Embedded Device Programmer"
-    triplet_role: solver
+    pod_role: solver
     persona:
       backstory: >
         Firmware engineer who thinks in clock cycles. Started programming on
@@ -244,7 +244,7 @@ agents:
   videogame-dev:
     name: "Zara Kim"
     title: "Video Game Developer"
-    triplet_role: solver
+    pod_role: solver
     persona:
       backstory: >
         Game developer who grew up modding classics. Expert in real-time rendering,
@@ -278,7 +278,7 @@ agents:
   ui-designer:
     name: "Ava Reyes"
     title: "UI/UX Designer"
-    triplet_role: reviewer
+    pod_role: reviewer
     persona:
       backstory: >
         Design systems architect with WCAG expertise. Spent 8 years at
@@ -317,7 +317,7 @@ agents:
   product-mgr:
     name: "Jordan Miles"
     title: "Product Manager"
-    triplet_role: reviewer
+    pod_role: reviewer
     persona:
       backstory: >
         Former ER nurse turned product manager. Understands healthcare workflows
@@ -353,7 +353,7 @@ agents:
   product-marketer:
     name: "Dana Webb"
     title: "Product Marketer"
-    triplet_role: solver
+    pod_role: solver
     persona:
       backstory: >
         Positioning expert who turned a struggling B2B SaaS from "what is this?"
@@ -383,7 +383,7 @@ agents:
   exec-assistant:
     name: "Sam Torres"
     title: "Executive Assistant"
-    triplet_role: executor
+    pod_role: executor
     persona:
       backstory: >
         Chief of staff mindset in an assistant role. Former operations lead
@@ -410,8 +410,8 @@ agents:
     desk: { row: 3, col: 2 }
     autonomy: default
 
-# ── Triplet Presets ────────────────────────────────────────────────────────
-triplet_presets:
+# ── Pod Presets ────────────────────────────────────────────────────────
+pod_presets:
   frontend-feature:
     solver: nextjs-frontend
     reviewer: ui-designer

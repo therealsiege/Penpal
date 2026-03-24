@@ -36,11 +36,11 @@ Each extracted module is a class that receives `Phaser.Scene` in its constructor
 | `office-rooms.ts` | 646 | Room creation, rendering, doors, headers. Defines `RoomsHostScene`. |
 | `office-selection.ts` | 546 | Keyboard agent selection (Tab/Shift-Tab), selection ring, auto-pan cycling, focus mode. Defines `SelectionHostScene`. |
 | `office-minimap.ts` | 440 | Screen-space minimap with room outlines, viewport indicator, click-to-pan, hover labels, room flash alerts. |
-| `office-triplets.ts` | 344 | Triplet connecting lines between agent teams and agent-to-agent chat dot animations. |
+| `office-pods.ts` | 344 | Pod connecting lines between agent teams and agent-to-agent chat dot animations. |
 | `office-ambient.ts` | 256 | Ambient office-life micro-animations: paper airplanes, coffee refills, phone rings, printer noise, door peeks. |
 | `nav-mesh.ts` | 248 | `NavMesh` class. A* grid pathfinding on 12px cells. Blocked-by-default with walkable rooms, corridors, doors, and cafe. |
 | `office-theme.ts` | 216 | 3 color themes (`dark` / `light` / `neon`). Exports `activeTheme`, `setActiveTheme()`, `lerpColor()`. |
-| `office-types.ts` | 170 | Shared type definitions: `WorkstationSprite`, `Room`, `TripletLineInfo`, `TeamAreaLayout`, `MinimapProjection`, etc. |
+| `office-types.ts` | 170 | Shared type definitions: `WorkstationSprite`, `Room`, `PodLineInfo`, `TeamAreaLayout`, `MinimapProjection`, etc. |
 | `office-helpers.ts` | 165 | Pure stateless utility functions: `getPoseFrame()`, door-Y calculation, sprite index helpers. No class or scene dependency. |
 | `office-constants.ts` | 150 | All numeric/string constants: spritesheet geometry, zoom limits, layout gaps, pool sizes, color values. `UPPER_SNAKE_CASE`. |
 | `events.ts` | 75 | `EventBus` singleton (pub/sub) for scene-to-React communication. Event constants: `AGENT_CLICKED`, `BROADCAST`, etc. |

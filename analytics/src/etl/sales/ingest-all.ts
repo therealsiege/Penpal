@@ -21,7 +21,7 @@ async function main() {
   const runAlerts = !sourceFilter || sourceFilter === "alerts";
   const runRss = !sourceFilter || sourceFilter === "rss";
 
-  let alertStats = { emailsFetched: 0, redditPosts: 0, hnPosts: 0, articlesParsed: 0, companiesFound: 0, leadsWritten: 0 };
+  let alertStats = { emailsFetched: 0, redditPosts: 0, hnPosts: 0, articlesParsed: 0, companiesFound: 0, leadsWritten: 0, emailsArchived: 0 };
   let rssStats = { feedsFetched: 0, articlesTotal: 0, articlesNew: 0, companiesFound: 0, leadsWritten: 0 };
 
   if (runAlerts) {

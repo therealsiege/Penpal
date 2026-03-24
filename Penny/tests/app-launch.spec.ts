@@ -48,7 +48,7 @@ test('renderer exposes window.api with expected methods', async () => {
   expect(methods).toContain('getHealth')
   expect(methods).toContain('getClaudeSessions')
   expect(methods).toContain('getAgents')
-  expect(methods).toContain('createTriplet')
+  expect(methods).toContain('createPod')
   expect(methods).toContain('searchLeads')
 })
 

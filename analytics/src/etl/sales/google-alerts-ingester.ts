@@ -21,19 +21,19 @@ const execAsync = promisify(exec);
 const GOG = "/opt/homebrew/bin/gog";
 const GOOGLE_ALERTS_ACCOUNT = process.env.GOOGLE_ALERTS_ACCOUNT
   || process.env.GMAIL_ACCOUNT
-  || (process.env.USER ? `${process.env.USER}@gmail.com` : "");
+  || "fuzeelogik@gmail.com";
 
 // ─── Step 1: Fetch Google Alert emails ───────────────────────────────────────
 
-async function fetchAlertEmails(maxMessages = 50): Promise<string[]> {
-  console.log("Fetching Google Alert emails...");
+async function fetchAlertEmails(maxMessages = 50, newerThan = "2d"): Promise<string[]> {
+  console.log(`Fetching Google Alert emails (newer_than:${newerThan})...`);
   if (!GOOGLE_ALERTS_ACCOUNT) {
     console.warn("  GOOGLE_ALERTS_ACCOUNT is not set; skipping Gmail alert ingestion.");
     return [];
   }
   try {
     const { stdout } = await execAsync(
-      `${GOG} gmail messages search 'in:"Google Alerts" newer_than:2d' --max ${maxMessages} --json --account ${GOOGLE_ALERTS_ACCOUNT}`,
+      `${GOG} gmail messages search 'label:"Google Alerts" newer_than:${newerThan}' --max ${maxMessages} --json --account ${GOOGLE_ALERTS_ACCOUNT}`,
       { timeout: 30000 },
     );
     const parsed = JSON.parse(stdout);
@@ -48,6 +48,25 @@ async function fetchAlertEmails(maxMessages = 50): Promise<string[]> {
     console.warn("  Failed to fetch alert emails:", (err as Error).message);
     return [];
   }
+}
+
+async function archiveEmails(messageIds: string[]): Promise<number> {
+  if (!GOOGLE_ALERTS_ACCOUNT || messageIds.length === 0) return 0;
+  console.log(`\nArchiving ${messageIds.length} processed alert emails...`);
+  let archived = 0;
+  for (const id of messageIds) {
+    try {
+      await execAsync(
+        `${GOG} gmail messages modify ${id} --remove INBOX --force --account ${GOOGLE_ALERTS_ACCOUNT}`,
+        { timeout: 10000 },
+      );
+      archived++;
+    } catch (err) {
+      console.warn(`  Failed to archive ${id}:`, (err as Error).message);
+    }
+  }
+  console.log(`  Archived ${archived}/${messageIds.length} emails`);
+  return archived;
 }
 
 async function fetchMessageBody(messageId: string): Promise<{ subject: string; body: string } | null> {
@@ -246,22 +265,26 @@ function parseAlertEmail(subject: string, content: string): SourceArticle[] {
 
 // ─── Main ────────────────────────────────────────────────────────────────────
 
-export async function ingestAlerts(targetVentures?: VentureProfile[]): Promise<{
+export async function ingestAlerts(targetVentures?: VentureProfile[], options?: { newerThan?: string; archive?: boolean }): Promise<{
   emailsFetched: number;
   redditPosts: number;
   hnPosts: number;
   articlesParsed: number;
   companiesFound: number;
   leadsWritten: number;
+  emailsArchived: number;
 }> {
   const ventures = targetVentures || getTargetVentures();
-  const stats = { emailsFetched: 0, redditPosts: 0, hnPosts: 0, articlesParsed: 0, companiesFound: 0, leadsWritten: 0 };
+  const newerThan = options?.newerThan || "2d";
+  const shouldArchive = options?.archive ?? true;
+  const stats = { emailsFetched: 0, redditPosts: 0, hnPosts: 0, articlesParsed: 0, companiesFound: 0, leadsWritten: 0, emailsArchived: 0 };
 
   console.log("=== Lead Ingestion (Google Alerts + Reddit + HN) ===");
-  console.log(`  Ventures: ${ventures.map((v) => v.name).join(", ")}\n`);
+  console.log(`  Ventures: ${ventures.map((v) => v.name).join(", ")}`);
+  console.log(`  Window: ${newerThan}, Archive: ${shouldArchive}\n`);
 
   // 1. Fetch alert emails
-  const messageIds = await fetchAlertEmails();
+  const messageIds = await fetchAlertEmails(50, newerThan);
   stats.emailsFetched = messageIds.length;
 
   // 2. Fetch and parse each email
@@ -362,6 +385,11 @@ export async function ingestAlerts(targetVentures?: VentureProfile[]): Promise<{
     await importer.flush();
   }
 
+  // Archive processed emails
+  if (shouldArchive && messageIds.length > 0) {
+    stats.emailsArchived = await archiveEmails(messageIds);
+  }
+
   await closeConnections();
   return stats;
 }
@@ -369,7 +397,11 @@ export async function ingestAlerts(targetVentures?: VentureProfile[]): Promise<{
 // ─── CLI Entry Point ─────────────────────────────────────────────────────────
 
 async function main() {
-  const stats = await ingestAlerts();
+  const newerIdx = process.argv.indexOf("--newer");
+  const newerThan = newerIdx !== -1 && process.argv[newerIdx + 1] ? process.argv[newerIdx + 1] : "7d";
+  const noArchive = process.argv.includes("--no-archive");
+
+  const stats = await ingestAlerts(undefined, { newerThan, archive: !noArchive });
 
   console.log(`\n=== Done ===`);
   console.log(`  Alert emails fetched: ${stats.emailsFetched}`);
@@ -378,6 +410,7 @@ async function main() {
   console.log(`  Articles total: ${stats.articlesParsed}`);
   console.log(`  Companies found: ${stats.companiesFound}`);
   console.log(`  New leads written: ${stats.leadsWritten}`);
+  console.log(`  Emails archived: ${stats.emailsArchived}`);
 }
 
 // Only run main() when invoked directly (not imported by ingest-all)

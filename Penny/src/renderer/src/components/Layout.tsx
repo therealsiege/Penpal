@@ -3,7 +3,6 @@ import type { ReactNode } from 'react'
 interface LayoutProps {
   activePanel: string
   onNavigate: (panel: string) => void
-  onOpenTasks?: () => void
   children: ReactNode
 }
 
@@ -33,7 +32,7 @@ function NavButton({
       <button
         onClick={onClick}
         title={label}
-        className={`no-drag relative w-full h-9 rounded-lg flex items-center gap-2 px-3 transition-all overflow-visible ${
+        className={`no-drag relative w-full h-10 rounded-lg flex items-center gap-2.5 px-3 transition-all overflow-visible ${
           active
             ? 'bg-[#0a2018] text-[#00ff88] shadow-inner'
             : 'text-[#4a5a52] hover:text-[#a0c8b0] hover:bg-[#0d1f17]/60'
@@ -52,7 +51,7 @@ function NavButton({
           {icon}
         </span>
 
-        <span className="text-sm font-medium">{label}</span>
+        <span className="text-[15px] font-medium">{label}</span>
       </button>
 
       {/* Tooltip — only visible when not active, slides in from left */}
@@ -73,13 +72,13 @@ function NavButton({
   )
 }
 
-export function Layout({ activePanel, onNavigate, onOpenTasks, children }: LayoutProps) {
+export function Layout({ activePanel, onNavigate, children }: LayoutProps) {
   return (
     <div className="flex h-screen bg-[#080c10] text-slate-100 select-none overflow-hidden">
       {/* Sidebar */}
       <aside className="w-[160px] bg-[#0d1117] border-r border-[#1a3a2a] flex flex-col shrink-0 items-center">
         {/* Drag region for macOS traffic lights */}
-        <div className="drag-region w-full pt-8 pb-2" />
+        <div className="drag-region w-full pt-11 pb-3" />
 
         {/* Logo + Name */}
         <div className="mb-4 flex items-center gap-2 px-3">
@@ -120,6 +119,20 @@ export function Layout({ activePanel, onNavigate, onOpenTasks, children }: Layou
           />
 
           <NavButton
+            panel="tasks"
+            label="Tasks"
+            active={activePanel === 'tasks'}
+            onClick={() => onNavigate('tasks')}
+            icon={
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="3" width="18" height="4" rx="1" />
+                <rect x="3" y="10" width="18" height="4" rx="1" />
+                <rect x="3" y="17" width="18" height="4" rx="1" />
+              </svg>
+            }
+          />
+
+          <NavButton
             panel="vault"
             label="Vault"
             active={activePanel === 'vault'}
@@ -131,19 +144,6 @@ export function Layout({ activePanel, onNavigate, onOpenTasks, children }: Layou
                 <line x1="16" y1="13" x2="8" y2="13" />
                 <line x1="16" y1="17" x2="8" y2="17" />
                 <polyline points="10 9 9 9 8 9" />
-              </svg>
-            }
-          />
-
-
-          <NavButton
-            panel="github"
-            label="GitHub"
-            active={activePanel === 'github'}
-            onClick={() => onNavigate('github')}
-            icon={
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22" />
               </svg>
             }
           />
@@ -161,37 +161,6 @@ export function Layout({ activePanel, onNavigate, onOpenTasks, children }: Layou
               </svg>
             }
           />
-
-          {onOpenTasks && (
-            <div className="relative group">
-              <button
-                onClick={onOpenTasks}
-                title="Tasks"
-                className="no-drag w-full h-9 rounded-lg flex items-center gap-2 px-3 transition-all text-[#4a5a52] hover:text-[#a0c8b0] hover:bg-[#0d1f17]/60"
-              >
-                <span className="shrink-0 transition-transform duration-150 group-hover:scale-110 flex items-center">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <rect x="3" y="3" width="18" height="4" rx="1" />
-                    <rect x="3" y="10" width="18" height="4" rx="1" />
-                    <rect x="3" y="17" width="18" height="4" rx="1" />
-                  </svg>
-                </span>
-                <span className="text-sm font-medium">Tasks</span>
-              </button>
-              {/* Tasks tooltip */}
-              <span
-                className="
-                  pointer-events-none absolute left-full top-1/2 -translate-y-1/2 ml-2 z-50
-                  px-2 py-1 rounded-md bg-[#0d1117] text-[#a0c8b0] text-xs font-medium whitespace-nowrap
-                  shadow-lg border border-[#1a3a2a]
-                  opacity-0 -translate-x-1 group-hover:opacity-100 group-hover:translate-x-0
-                  transition-all duration-200
-                "
-              >
-                Tasks
-              </span>
-            </div>
-          )}
 
           <NavButton
             panel="settings"

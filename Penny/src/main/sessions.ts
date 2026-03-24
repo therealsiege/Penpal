@@ -224,7 +224,7 @@ interface SessionAnalysis {
   subAgentInvocations: SubAgentInvocation[]
 }
 
-// Public wrapper that reads the file (for external callers like triplets.ts)
+// Public wrapper that reads the file (for external callers like pods.ts)
 export function analyzeSession(sessionId: string): SessionAnalysis {
   const jsonlPath = findJsonlPath(sessionId)
   if (!jsonlPath) return { waitingForInput: false, mode: 'idle', interactionType: 'none', subAgentInvocations: [] }

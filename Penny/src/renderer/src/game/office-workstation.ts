@@ -636,7 +636,7 @@ export class OfficeWorkstations {
 
     // ── Role badge (S / R / E) ────────────────────────────────────────────────
     if (ws.roleBadge) {
-      const podRole = agent.config.tripletRole
+      const podRole = agent.config.podRole
       if (podRole) {
         const roleLabel = podRole === 'solver' ? 'S' : podRole === 'reviewer' ? 'R' : 'E'
         const roleBgColor: Record<string, string> = { solver: '#3b82f6', reviewer: '#8b5cf6', executor: '#22c55e' }

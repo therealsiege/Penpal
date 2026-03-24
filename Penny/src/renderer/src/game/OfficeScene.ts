@@ -670,7 +670,7 @@ export class OfficeScene extends Phaser.Scene {
             id: `${runtime}-${session.pid}`,
             name: runtime,
             title: runtimeTitle,
-            tripletRole: 'solver',
+            podRole: 'solver',
             systemPrompt: '',
             model: runtime,
             mcpProfile: '',

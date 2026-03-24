@@ -2,11 +2,11 @@ import { EventEmitter } from 'events'
 import fs from 'fs'
 import path from 'path'
 import { runAgentHeadless } from './sessions'
-import { getAgentConfig, loadTripletPresets } from './agents'
+import { getAgentConfig, loadPodPresets } from './agents'
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
-export type TripletStatus =
+export type PodStatus =
   | 'pending'
   | 'solving'
   | 'reviewing'
@@ -16,7 +16,7 @@ export type TripletStatus =
   | 'failed'
   | 'paused'
 
-export interface TripletRole {
+export interface PodRole {
   agentId: string
   tty?: string
   sessionId?: string
@@ -31,25 +31,25 @@ export interface WorkflowArtifact {
   timestamp: number
 }
 
-export interface TripletWorkflow {
+export interface PodWorkflow {
   id: string
   name: string
-  status: TripletStatus
+  status: PodStatus
   task: string
   cwd: string
-  solver: TripletRole
-  reviewer: TripletRole
-  executor: TripletRole
+  solver: PodRole
+  reviewer: PodRole
+  executor: PodRole
   iteration: number
   maxIterations: number
   artifacts: WorkflowArtifact[]
   createdAt: number
   updatedAt: number
   error?: string
-  stageHistory: { stage: TripletStatus; enteredAt: number }[]
+  stageHistory: { stage: PodStatus; enteredAt: number }[]
 }
 
-export interface TripletPreset {
+export interface PodPreset {
   id: string
   solver: string
   reviewer: string
@@ -60,13 +60,13 @@ export interface TripletPreset {
 // ── Presets ──────────────────────────────────────────────────────────────────
 
 // Load presets from YAML (Fix 14), falling back to hardcoded defaults
-let _cachedPresets: TripletPreset[] | null = null
+let _cachedPresets: PodPreset[] | null = null
 
-function getPresets(): TripletPreset[] {
+function getPresets(): PodPreset[] {
   if (_cachedPresets) return _cachedPresets
 
   // Try loading from YAML first
-  const yamlPresets = loadTripletPresets()
+  const yamlPresets = loadPodPresets()
   if (yamlPresets.length > 0) {
     _cachedPresets = yamlPresets
     return _cachedPresets
@@ -108,57 +108,57 @@ function getPresets(): TripletPreset[] {
 
 // ── Persistence (Fix 4) ─────────────────────────────────────────────────────
 
-const PERSIST_PATH = path.resolve(__dirname, '..', '..', 'data', 'triplet-workflows.json')
+const PERSIST_PATH = path.resolve(__dirname, '..', '..', 'data', 'pod-workflows.json')
 
-function saveTriplets(): void {
+function savePods(): void {
   try {
     const dir = path.dirname(PERSIST_PATH)
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
     const data = Array.from(workflows.values())
     fs.writeFileSync(PERSIST_PATH, JSON.stringify(data, null, 2))
   } catch (err) {
-    console.error('[triplets] Failed to save workflows:', err)
+    console.error('[pods] Failed to save workflows:', err)
   }
 }
 
-function loadTriplets(): void {
+function loadPods(): void {
   try {
     if (!fs.existsSync(PERSIST_PATH)) return
-    const data = JSON.parse(fs.readFileSync(PERSIST_PATH, 'utf-8')) as TripletWorkflow[]
+    const data = JSON.parse(fs.readFileSync(PERSIST_PATH, 'utf-8')) as PodWorkflow[]
     for (const wf of data) {
       workflows.set(wf.id, wf)
-      if (wf.id.startsWith('triplet-')) {
+      if (wf.id.startsWith('pod-')) {
         const num = parseInt(wf.id.split('-')[1] || '0', 10)
         if (num > workflowCounter) workflowCounter = num
       }
     }
   } catch (err) {
-    console.error('[triplets] Failed to load workflows:', err)
+    console.error('[pods] Failed to load workflows:', err)
   }
 }
 
 // ── Engine ───────────────────────────────────────────────────────────────────
 
 let workflowCounter = 0
-const workflows = new Map<string, TripletWorkflow>()
+const workflows = new Map<string, PodWorkflow>()
 const activeWorkflowPromises = new Map<string, Promise<void>>() // Fix 3: track running workflows
 
-export const tripletEvents = new EventEmitter()
+export const podEvents = new EventEmitter()
 
 // Load persisted workflows on module init (Fix 4)
-loadTriplets()
+loadPods()
 
 function generateId(): string {
   workflowCounter += 1
-  return `triplet-${Date.now()}-${workflowCounter}`
+  return `pod-${Date.now()}-${workflowCounter}`
 }
 
-function setStatus(wf: TripletWorkflow, status: TripletStatus): void {
+function setStatus(wf: PodWorkflow, status: PodStatus): void {
   wf.status = status
   wf.updatedAt = Date.now()
   wf.stageHistory.push({ stage: status, enteredAt: Date.now() })
-  tripletEvents.emit('status-change', wf)
-  saveTriplets() // Persist after every state transition (Fix 4)
+  podEvents.emit('status-change', wf)
+  savePods() // Persist after every state transition (Fix 4)
 }
 
 // ── Headless execution helpers ──────────────────────────────────────────────
@@ -168,8 +168,8 @@ const EXECUTE_TIMEOUT_MS = 1_800_000  // 30 min for execution
 
 // ── Message formatting ──────────────────────────────────────────────────────
 
-function formatSolverMessage(wf: TripletWorkflow, feedbackFromExecutor?: string): string {
-  const header = `## Triplet Workflow: ${wf.name}\n### Stage: Solve (Iteration ${wf.iteration}/${wf.maxIterations})\n`
+function formatSolverMessage(wf: PodWorkflow, feedbackFromExecutor?: string): string {
+  const header = `## Pod Workflow: ${wf.name}\n### Stage: Solve (Iteration ${wf.iteration}/${wf.maxIterations})\n`
   const projectSection = `**Project Directory**: \`${wf.cwd}\`\n`
   const taskSection = `${projectSection}**Task**: ${wf.task}\n`
 
@@ -189,9 +189,9 @@ function formatSolverMessage(wf: TripletWorkflow, feedbackFromExecutor?: string)
   ].join('\n')
 }
 
-function formatReviewerMessage(wf: TripletWorkflow): string {
+function formatReviewerMessage(wf: PodWorkflow): string {
   return [
-    `## Triplet Workflow: ${wf.name}`,
+    `## Pod Workflow: ${wf.name}`,
     `### Stage: Review (Iteration ${wf.iteration}/${wf.maxIterations})`,
     '',
     `**Project Directory**: \`${wf.cwd}\``,
@@ -211,9 +211,9 @@ function formatReviewerMessage(wf: TripletWorkflow): string {
   ].join('\n')
 }
 
-function formatExecutorMessage(wf: TripletWorkflow, solverOutput?: string, reviewerOutput?: string): string {
+function formatExecutorMessage(wf: PodWorkflow, solverOutput?: string, reviewerOutput?: string): string {
   return [
-    `## Triplet Workflow: ${wf.name}`,
+    `## Pod Workflow: ${wf.name}`,
     `### Stage: Execute (Iteration ${wf.iteration}/${wf.maxIterations})`,
     '',
     `**Project Directory**: \`${wf.cwd}\``,
@@ -247,14 +247,14 @@ function formatExecutorMessage(wf: TripletWorkflow, solverOutput?: string, revie
 
 // ── Core workflow loop (headless) ────────────────────────────────────────────
 
-async function runSolveStage(wf: TripletWorkflow, feedback?: string): Promise<boolean> {
+async function runSolveStage(wf: PodWorkflow, feedback?: string): Promise<boolean> {
   setStatus(wf, 'solving')
   wf.solver.status = 'active'
   wf.reviewer.status = 'waiting'
   wf.executor.status = 'waiting'
 
   const prompt = formatSolverMessage(wf, feedback)
-  console.log(`[triplets] Running solver ${wf.solver.agentId} headless in ${wf.cwd}`)
+  console.log(`[pods] Running solver ${wf.solver.agentId} headless in ${wf.cwd}`)
   const result = await runAgentHeadless(wf.solver.agentId, wf.cwd, prompt, {
     timeoutMs: EXECUTE_TIMEOUT_MS,
   })
@@ -267,16 +267,16 @@ async function runSolveStage(wf: TripletWorkflow, feedback?: string): Promise<bo
 
   wf.solver.status = 'complete'
   wf.solver.output = result.output
-  console.log(`[triplets] Solver done (${Math.round(result.durationMs / 1000)}s)`)
+  console.log(`[pods] Solver done (${Math.round(result.durationMs / 1000)}s)`)
   return true
 }
 
-async function runReviewStage(wf: TripletWorkflow): Promise<boolean> {
+async function runReviewStage(wf: PodWorkflow): Promise<boolean> {
   setStatus(wf, 'reviewing')
   wf.reviewer.status = 'active'
 
   const prompt = formatReviewerMessage(wf)
-  console.log(`[triplets] Running reviewer ${wf.reviewer.agentId} headless (plan mode) in ${wf.cwd}`)
+  console.log(`[pods] Running reviewer ${wf.reviewer.agentId} headless (plan mode) in ${wf.cwd}`)
   const result = await runAgentHeadless(wf.reviewer.agentId, wf.cwd, prompt, {
     permissionMode: 'plan',
     timeoutMs: PLAN_TIMEOUT_MS,
@@ -290,16 +290,16 @@ async function runReviewStage(wf: TripletWorkflow): Promise<boolean> {
 
   wf.reviewer.status = 'complete'
   wf.reviewer.output = result.output
-  console.log(`[triplets] Reviewer done (${Math.round(result.durationMs / 1000)}s)`)
+  console.log(`[pods] Reviewer done (${Math.round(result.durationMs / 1000)}s)`)
   return true
 }
 
-async function runExecuteStage(wf: TripletWorkflow): Promise<{ passed: boolean }> {
+async function runExecuteStage(wf: PodWorkflow): Promise<{ passed: boolean }> {
   setStatus(wf, 'executing')
   wf.executor.status = 'active'
 
   const prompt = formatExecutorMessage(wf, wf.solver.output, wf.reviewer.output)
-  console.log(`[triplets] Running executor ${wf.executor.agentId} headless in ${wf.cwd}`)
+  console.log(`[pods] Running executor ${wf.executor.agentId} headless in ${wf.cwd}`)
   const result = await runAgentHeadless(wf.executor.agentId, wf.cwd, prompt, {
     timeoutMs: EXECUTE_TIMEOUT_MS,
   })
@@ -312,7 +312,7 @@ async function runExecuteStage(wf: TripletWorkflow): Promise<{ passed: boolean }
 
   wf.executor.status = 'complete'
   wf.executor.output = result.output
-  console.log(`[triplets] Executor done (${Math.round(result.durationMs / 1000)}s)`)
+  console.log(`[pods] Executor done (${Math.round(result.durationMs / 1000)}s)`)
 
   const output = (wf.executor.output || '').toUpperCase()
   const passed = output.includes('RESULT: PASS') || (output.includes('PASS') && !output.includes('FAIL'))
@@ -321,7 +321,7 @@ async function runExecuteStage(wf: TripletWorkflow): Promise<{ passed: boolean }
 
 // ── CLAUDE.md auto-update (Fix 8) ──────────────────────────────────────────
 
-function appendWorkflowSummary(wf: TripletWorkflow): void {
+function appendWorkflowSummary(wf: PodWorkflow): void {
   const sharedMemoryPath = path.resolve(__dirname, '..', '..', 'agents', 'CLAUDE.md')
   if (!fs.existsSync(sharedMemoryPath)) return
 
@@ -339,13 +339,13 @@ function appendWorkflowSummary(wf: TripletWorkflow): void {
     ].join('\n')
 
     fs.appendFileSync(sharedMemoryPath, summary)
-    console.log(`[triplets] Appended workflow summary to CLAUDE.md`)
+    console.log(`[pods] Appended workflow summary to CLAUDE.md`)
   } catch (err) {
-    console.error('[triplets] Failed to update CLAUDE.md:', err)
+    console.error('[pods] Failed to update CLAUDE.md:', err)
   }
 }
 
-async function runWorkflow(wf: TripletWorkflow): Promise<void> {
+async function runWorkflow(wf: PodWorkflow): Promise<void> {
   try {
     for (let i = wf.iteration; i <= wf.maxIterations; i++) {
       wf.iteration = i
@@ -402,7 +402,7 @@ async function runWorkflow(wf: TripletWorkflow): Promise<void> {
 
 // ── Public API ──────────────────────────────────────────────────────────────
 
-export interface CreateTripletOpts {
+export interface CreatePodOpts {
   name?: string
   cwd?: string
   maxIterations?: number
@@ -412,7 +412,7 @@ export interface CreateTripletOpts {
   executorAgent?: string
 }
 
-export function createTriplet(task: string, opts: CreateTripletOpts = {}): TripletWorkflow {
+export function createPod(task: string, opts: CreatePodOpts = {}): PodWorkflow {
   let solver: string
   let reviewer: string
   let executor: string
@@ -434,7 +434,7 @@ export function createTriplet(task: string, opts: CreateTripletOpts = {}): Tripl
   // Fix 2: Validate that all three roles use different agentIds
   if (solver === reviewer || solver === executor || reviewer === executor) {
     throw new Error(
-      `All three triplet roles must use different agents. Got solver=${solver}, reviewer=${reviewer}, executor=${executor}`,
+      `All three pod roles must use different agents. Got solver=${solver}, reviewer=${reviewer}, executor=${executor}`,
     )
   }
 
@@ -445,7 +445,7 @@ export function createTriplet(task: string, opts: CreateTripletOpts = {}): Tripl
     cwd = solverCfg?.defaultRepos[0] || process.env.HOME || '/tmp'
   }
 
-  const wf: TripletWorkflow = {
+  const wf: PodWorkflow = {
     id: generateId(),
     name: opts.name || task.slice(0, 60),
     status: 'pending',
@@ -463,7 +463,7 @@ export function createTriplet(task: string, opts: CreateTripletOpts = {}): Tripl
   }
 
   workflows.set(wf.id, wf)
-  saveTriplets() // Fix 4: persist immediately
+  savePods() // Fix 4: persist immediately
 
   // Start workflow asynchronously, track the promise (Fix 3)
   const promise = runWorkflow(wf)
@@ -472,28 +472,28 @@ export function createTriplet(task: string, opts: CreateTripletOpts = {}): Tripl
   return wf
 }
 
-export function getTripletStatus(workflowId: string): TripletWorkflow | null {
+export function getPodStatus(workflowId: string): PodWorkflow | null {
   return workflows.get(workflowId) ?? null
 }
 
-export function listTriplets(): TripletWorkflow[] {
+export function listPods(): PodWorkflow[] {
   return Array.from(workflows.values()).sort((a, b) => b.updatedAt - a.updatedAt)
 }
 
-export function pauseTriplet(workflowId: string): boolean {
+export function pausePod(workflowId: string): boolean {
   const wf = workflows.get(workflowId)
   if (!wf || wf.status === 'complete' || wf.status === 'failed') return false
   setStatus(wf, 'paused')
   return true
 }
 
-export function resumeTriplet(workflowId: string): boolean {
+export function resumePod(workflowId: string): boolean {
   const wf = workflows.get(workflowId)
   if (!wf || wf.status !== 'paused') return false
 
   // Fix 3: Check if a workflow promise is already running
   if (activeWorkflowPromises.has(workflowId)) {
-    console.warn(`[triplets] Workflow ${workflowId} already has an active promise, skipping resume`)
+    console.warn(`[pods] Workflow ${workflowId} already has an active promise, skipping resume`)
     return false
   }
 
@@ -503,7 +503,7 @@ export function resumeTriplet(workflowId: string): boolean {
   return true
 }
 
-export function cancelTriplet(workflowId: string): boolean {
+export function cancelPod(workflowId: string): boolean {
   const wf = workflows.get(workflowId)
   if (!wf) return false
   wf.error = 'Cancelled by user'
@@ -512,6 +512,6 @@ export function cancelTriplet(workflowId: string): boolean {
   return true
 }
 
-export function getTripletPresets(): TripletPreset[] {
+export function getPodPresets(): PodPreset[] {
   return getPresets()
 }
