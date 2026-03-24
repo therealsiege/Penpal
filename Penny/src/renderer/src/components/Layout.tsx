@@ -35,15 +35,16 @@ function NavButton({
         title={label}
         className={`no-drag relative w-full h-9 rounded-lg flex items-center gap-2 px-3 transition-all overflow-visible ${
           active
-            ? 'bg-slate-700/80 text-white shadow-inner'
-            : 'text-slate-500 hover:text-slate-300 hover:bg-slate-800/60'
+            ? 'bg-[#0a2018] text-[#00ff88] shadow-inner'
+            : 'text-[#4a5a52] hover:text-[#a0c8b0] hover:bg-[#0d1f17]/60'
         }`}
       >
         {/* Active indicator bar — left edge */}
         <span
-          className={`absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-4 rounded-full bg-blue-500 transition-transform duration-200 origin-center ${
+          className={`absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-4 rounded-full bg-[#00ff88] transition-transform duration-200 origin-center ${
             active ? 'scale-y-100' : 'scale-y-0'
           }`}
+          style={active ? { boxShadow: '0 0 6px #00ff88aa' } : {}}
         />
 
         {/* Icon — scales on hover via group */}
@@ -59,8 +60,8 @@ function NavButton({
         <span
           className="
             pointer-events-none absolute left-full top-1/2 -translate-y-1/2 ml-2 z-50
-            px-2 py-1 rounded-md bg-slate-800 text-slate-200 text-xs font-medium whitespace-nowrap
-            shadow-lg border border-slate-700/60
+            px-2 py-1 rounded-md bg-[#0d1117] text-[#a0c8b0] text-xs font-medium whitespace-nowrap
+            shadow-lg border border-[#1a3a2a]
             opacity-0 -translate-x-1 group-hover:opacity-100 group-hover:translate-x-0
             transition-all duration-200
           "
@@ -74,9 +75,9 @@ function NavButton({
 
 export function Layout({ activePanel, onNavigate, onOpenTasks, children }: LayoutProps) {
   return (
-    <div className="flex h-screen bg-slate-950 text-slate-100 select-none overflow-hidden">
+    <div className="flex h-screen bg-[#080c10] text-slate-100 select-none overflow-hidden">
       {/* Sidebar */}
-      <aside className="w-[160px] bg-slate-900/80 border-r border-slate-800/60 flex flex-col shrink-0 items-center">
+      <aside className="w-[160px] bg-[#0d1117] border-r border-[#1a3a2a] flex flex-col shrink-0 items-center">
         {/* Drag region for macOS traffic lights */}
         <div className="drag-region w-full pt-8 pb-2" />
 
@@ -91,10 +92,12 @@ export function Layout({ activePanel, onNavigate, onOpenTasks, children }: Layou
             style={{ animation: 'bounce 0.6s ease-out 0.3s 1 both' }}
           />
           <span
-            className="text-2xl font-light text-slate-200 tracking-wide"
+            className="text-2xl font-light tracking-wide"
             style={{
               fontFamily: "-apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif",
               letterSpacing: '0.08em',
+              color: '#00ff88',
+              textShadow: '0 0 10px #00ff8866',
             }}
           >
             Penny
@@ -132,18 +135,15 @@ export function Layout({ activePanel, onNavigate, onOpenTasks, children }: Layou
             }
           />
 
+
           <NavButton
-            panel="graph"
-            label="Graph"
-            active={activePanel === 'graph'}
-            onClick={() => onNavigate('graph')}
+            panel="github"
+            label="GitHub"
+            active={activePanel === 'github'}
+            onClick={() => onNavigate('github')}
             icon={
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="6" cy="6" r="3" />
-                <circle cx="18" cy="18" r="3" />
-                <circle cx="18" cy="6" r="3" />
-                <line x1="8.5" y1="7.5" x2="15.5" y2="16.5" />
-                <line x1="15.5" y1="7.5" x2="8.5" y2="16.5" />
+                <path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22" />
               </svg>
             }
           />
@@ -167,7 +167,7 @@ export function Layout({ activePanel, onNavigate, onOpenTasks, children }: Layou
               <button
                 onClick={onOpenTasks}
                 title="Tasks"
-                className="no-drag w-full h-9 rounded-lg flex items-center gap-2 px-3 transition-all text-slate-500 hover:text-slate-300 hover:bg-slate-800/60"
+                className="no-drag w-full h-9 rounded-lg flex items-center gap-2 px-3 transition-all text-[#4a5a52] hover:text-[#a0c8b0] hover:bg-[#0d1f17]/60"
               >
                 <span className="shrink-0 transition-transform duration-150 group-hover:scale-110 flex items-center">
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -182,8 +182,8 @@ export function Layout({ activePanel, onNavigate, onOpenTasks, children }: Layou
               <span
                 className="
                   pointer-events-none absolute left-full top-1/2 -translate-y-1/2 ml-2 z-50
-                  px-2 py-1 rounded-md bg-slate-800 text-slate-200 text-xs font-medium whitespace-nowrap
-                  shadow-lg border border-slate-700/60
+                  px-2 py-1 rounded-md bg-[#0d1117] text-[#a0c8b0] text-xs font-medium whitespace-nowrap
+                  shadow-lg border border-[#1a3a2a]
                   opacity-0 -translate-x-1 group-hover:opacity-100 group-hover:translate-x-0
                   transition-all duration-200
                 "
@@ -213,7 +213,7 @@ export function Layout({ activePanel, onNavigate, onOpenTasks, children }: Layou
             <button
               title="Command Palette (⌘K)"
               onClick={() => document.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', metaKey: true }))}
-              className="no-drag w-10 h-10 rounded-lg flex items-center justify-center text-slate-600 hover:text-slate-400 hover:bg-slate-800/60 transition-all"
+              className="no-drag w-10 h-10 rounded-lg flex items-center justify-center text-[#2a4a38] hover:text-[#00ff88] hover:bg-[#0a2018]/60 transition-all"
             >
               <span className="transition-transform duration-150 group-hover:scale-110 flex items-center">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -226,8 +226,8 @@ export function Layout({ activePanel, onNavigate, onOpenTasks, children }: Layou
             <span
               className="
                 pointer-events-none absolute left-full top-1/2 -translate-y-1/2 ml-2 z-50
-                px-2 py-1 rounded-md bg-slate-800 text-slate-200 text-xs font-medium whitespace-nowrap
-                shadow-lg border border-slate-700/60
+                px-2 py-1 rounded-md bg-[#0d1117] text-[#a0c8b0] text-xs font-medium whitespace-nowrap
+                shadow-lg border border-[#1a3a2a]
                 opacity-0 -translate-x-1 group-hover:opacity-100 group-hover:translate-x-0
                 transition-all duration-200
               "

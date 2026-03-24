@@ -118,20 +118,20 @@ export class PennyCafe {
     const g = scene.add.graphics()
     container.add(g)
 
-    // ── Barista workspace (top) — warm brown ──
-    g.fillStyle(0x3d2b1f, 0.7)
+    // ── Barista workspace (top) — dark gunmetal ──
+    g.fillStyle(0x1a2030, 0.9)
     g.fillRoundedRect(0, 0, CAFE_W, BEHIND_W, { tl: 6, tr: 6, bl: 0, br: 0 })
-    g.fillStyle(0x1a1208, 0.5)
+    g.fillStyle(0x0d1117, 0.6)
     g.fillRect(6, 6, CAFE_W - 12, BEHIND_W - 12)
 
     // ── Header sign ──
-    g.fillStyle(0x1a0f06, 0.85)
+    g.fillStyle(0x0a0f1a, 0.9)
     g.fillRoundedRect(6, 2, CAFE_W - 12, 24, { tl: 4, tr: 4, bl: 0, br: 0 })
-    g.lineStyle(2, 0xd97706, 0.5)
+    g.lineStyle(2, 0x00ff88, 0.5)
     g.lineBetween(6, 26, CAFE_W - 6, 26)
     const signText = scene.add.text(CAFE_W / 2, 14, 'PENNY CAFE', {
       fontSize: '14px', fontFamily: 'system-ui, sans-serif', fontStyle: 'bold',
-      color: '#fbbf24', resolution: 2,
+      color: '#00ff88', resolution: 2,
     }).setOrigin(0.5)
     container.add(signText)
 
@@ -145,28 +145,28 @@ export class PennyCafe {
       g.fillCircle(mx + 10, eqY + 5, 2)
     }
     // Menu board
-    g.fillStyle(0x1e293b, 0.7)
+    g.fillStyle(0x0d1117, 0.85)
     g.fillRoundedRect(200, eqY, 60, 28, 2)
-    g.lineStyle(1, 0x78350f, 0.4)
+    g.lineStyle(1, 0x00e5ff, 0.4)
     g.strokeRoundedRect(200, eqY, 60, 28, 2)
     for (let ml = 0; ml < 3; ml++) {
-      g.fillStyle(0xf8fafc, 0.06)
+      g.fillStyle(0x00e5ff, 0.08)
       g.fillRect(204, eqY + 4 + ml * 8, 28, 2)
-      g.fillStyle(0xfbbf24, 0.1)
+      g.fillStyle(0x00ff88, 0.12)
       g.fillRect(240, eqY + 4 + ml * 8, 14, 2)
     }
 
     // ── Counter bar ──
     const counterY = BEHIND_W
-    g.fillStyle(0x78350f, 0.75)
+    g.fillStyle(0x2a3040, 0.9)
     g.fillRoundedRect(8, counterY, CAFE_W - 16, COUNTER_W, 3)
-    g.fillStyle(0xb45309, 0.25)
+    g.fillStyle(0x00e5ff, 0.15)
     g.fillRect(10, counterY + 2, CAFE_W - 20, 4)
 
     // ── Customer area (bottom) ──
     const customerTopY = counterY + COUNTER_W
     const customerH = CAFE_H - BEHIND_W - COUNTER_W
-    g.fillStyle(0x1e293b, 0.35)
+    g.fillStyle(0x1a2030, 0.55)
     g.fillRoundedRect(0, customerTopY, CAFE_W, customerH, { tl: 0, tr: 0, bl: 6, br: 6 })
 
     // ── Baristas ──
@@ -190,8 +190,8 @@ export class PennyCafe {
       bc.add(apron)
 
       const tag = scene.add.text(0, 6, cfg.name, {
-        fontSize: '8px', fontFamily: 'system-ui, sans-serif', color: '#fbbf24',
-        backgroundColor: '#1a0f06cc', padding: { x: 3, y: 1 }, resolution: 2,
+        fontSize: '8px', fontFamily: 'system-ui, sans-serif', color: '#00ff88',
+        backgroundColor: '#0a0f1acc', padding: { x: 3, y: 1 }, resolution: 2,
       }).setOrigin(0.5, 0)
       bc.add(tag)
 
@@ -207,11 +207,11 @@ export class PennyCafe {
     const stoolY = counterY + COUNTER_W + 16
     for (let si = 0; si < NUM_STOOLS; si++) {
       const sx = STOOL_START_X + si * STOOL_GAP
-      g.fillStyle(0x475569, 0.4)
+      g.fillStyle(0x3a4a5c, 0.6)
       g.fillCircle(sx, stoolY, 8)
-      g.fillStyle(0x334155, 0.25)
+      g.fillStyle(0x00e5ff, 0.12)
       g.fillRect(sx - 2, stoolY + 8, 4, 6)
-      g.fillStyle(0x334155, 0.2)
+      g.fillStyle(0x2a3a4a, 0.35)
       g.fillRect(sx - 4, stoolY + 13, 8, 2)
     }
 
@@ -224,7 +224,7 @@ export class PennyCafe {
         if (!this.container?.active) return
         const mx = machinePositions[Math.floor(Math.random() * machinePositions.length)]
         for (let si = 0; si < 2; si++) {
-          const p = scene.add.circle(mx + 10 + (si - 0.5) * 4, eqY - 2, 2, 0xffffff, 0.25)
+          const p = scene.add.circle(mx + 10 + (si - 0.5) * 4, eqY - 2, 2, 0x00e5ff, 0.22)
           container.add(p)
           scene.tweens.add({
             targets: p, y: eqY - 16 - Math.random() * 8, x: mx + 10 + (si - 0.5) * 4 + (Math.random() - 0.5) * 6,
@@ -503,7 +503,7 @@ export class PennyCafe {
 
           if (isStanding) {
             // Standing agents get a cup right away
-            const cup = scene.add.circle(walker.x + 6, walker.y - 12, 3, 0x8b5cf6, 0.8).setDepth(9002)
+            const cup = scene.add.circle(walker.x + 6, walker.y - 12, 3, 0x00ff88, 0.8).setDepth(9002)
             visitor.cup = cup
             visitor.sipTimer = scene.time.addEvent({
               delay: 6000 + Math.random() * 6000, loop: true,
@@ -623,8 +623,8 @@ export class PennyCafe {
         // Place cup on counter, then slide to agent
         const cupX = this.container.x + targetX
         const cupY = this.container.y + counterTopLocalY
-        const cup = scene.add.circle(cupX, cupY, 3, 0x8b5cf6, 0.8).setDepth(9002)
-        const steam = scene.add.circle(cupX, cupY - 6, 2, 0xffffff, 0.3).setDepth(9002)
+        const cup = scene.add.circle(cupX, cupY, 3, 0x00ff88, 0.8).setDepth(9002)
+        const steam = scene.add.circle(cupX, cupY - 6, 2, 0x00e5ff, 0.25).setDepth(9002)
 
         // Slide cup to agent
         scene.time.delayedCall(300, () => {
@@ -826,7 +826,7 @@ export class PennyCafe {
 
     // Small rounded bubble with "..."
     const bg = scene.add.graphics()
-    bg.fillStyle(0xffffff, 0.85)
+    bg.fillStyle(0x0d1a2a, 0.9)
     bg.fillRoundedRect(-10, -7, 20, 14, 4)
     // Speech tail
     bg.fillTriangle(-2, 7, 2, 7, 0, 11)
@@ -834,7 +834,7 @@ export class PennyCafe {
 
     const dots = scene.add.text(0, 0, '...', {
       fontSize: '8px', fontFamily: 'system-ui, sans-serif',
-      color: '#334155', resolution: 2,
+      color: '#00ff88', resolution: 2,
     }).setOrigin(0.5)
     c.add(dots)
 

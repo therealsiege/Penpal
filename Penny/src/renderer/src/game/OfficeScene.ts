@@ -4,7 +4,6 @@ import type { AgentState, OpencodeSession } from '../types'
 import { activeTheme, setActiveTheme, lerpColor, THEMES, type ThemeName } from './office-theme'
 import { NavMesh } from './nav-mesh'
 import { PennyCafe, type CafeHostScene } from './penny-cafe'
-import { GitHubBuilding, type GitHubBuildingHostScene } from './office-github'
 import { OfficeParticles } from './office-particles'
 import { OfficeAtmosphere } from './office-atmosphere'
 import { OfficeUI } from './office-ui'
@@ -58,18 +57,8 @@ export class OfficeScene extends Phaser.Scene {
   // Office background — extracted to OfficeBackground
   private background!: OfficeBackground
 
-  // Tooltip state (managed by showRichTooltip / hideTooltip)
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private tooltipFadeTween: any = null
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private tooltipContainer: any = null
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private tooltipGraphics: any = null
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private hoverRingGraphics: any = null
 
   private cafe!: PennyCafe
-  private githubBuilding!: GitHubBuilding
   private cafeFloorMask: Phaser.GameObjects.Graphics | null = null
   private navMesh = new NavMesh()
   // Window glint graphics passed to atmosphere.init()
@@ -109,8 +98,8 @@ export class OfficeScene extends Phaser.Scene {
   private lastCamZoom = 1
   private lastHallwayPulseAt = 0
   private pendingCameraRecoveryUntil = 0
+  private hasInitialFit = false
 
-  private lastClockTick = 0
 
   // Screen-space UI overlays (toasts, tooltip, hover ring, help, debug, LOD label, status bar)
   private ui!: OfficeUI
@@ -129,6 +118,7 @@ export class OfficeScene extends Phaser.Scene {
   private broadcastFadeTimer: Phaser.Time.TimerEvent | null = null
   private broadcastLedTimer: Phaser.Time.TimerEvent | null = null
   private broadcastHandler: ((msg: unknown) => void) | null = null
+  private agentClickedHandler: ((agentId: string) => void) | null = null
 
   constructor() {
     super({ key: 'OfficeScene' })
@@ -175,7 +165,6 @@ export class OfficeScene extends Phaser.Scene {
 
   create(): void {
     this.cafe = new PennyCafe(this as unknown as CafeHostScene)
-    this.githubBuilding = new GitHubBuilding(this as unknown as GitHubBuildingHostScene)
 
     const cam = this.cameras.main
     cam.setBackgroundColor(COLOR_BG)
@@ -209,7 +198,6 @@ export class OfficeScene extends Phaser.Scene {
       setCorridorData: (segs, active) => { if (this.particles) this.particles.setCorridorData(segs, active) },
       getAtmosphere: () => this.atmosphere,
       getCafe: () => this.cafe,
-      getGithubBuilding: () => this.githubBuilding,
       getCafeFloorMask: () => this.cafeFloorMask,
       setCafeFloorMask: (g) => { this.cafeFloorMask = g },
     })
@@ -466,11 +454,12 @@ export class OfficeScene extends Phaser.Scene {
     EventBus.on(EVENTS.BROADCAST, this.broadcastHandler)
 
     // Desk click recall — if agent is at cafe, cancel their coffee run so they walk back
-    EventBus.on(EVENTS.AGENT_CLICKED, (agentId: string) => {
+    this.agentClickedHandler = (agentId: string) => {
       if (this.cafe.isOnCoffeeRun(agentId)) {
         this.cafe.cancelCoffeeRun(agentId)
       }
-    })
+    }
+    EventBus.on(EVENTS.AGENT_CLICKED, this.agentClickedHandler)
 
     this.isReady = true
     this.cafe.startCoffeeRunTimer()
@@ -513,7 +502,6 @@ export class OfficeScene extends Phaser.Scene {
         burstConfetti: (x, y) => scene.particles.burstConfetti(x, y),
         spawnSteamParticles: (ws) => scene.particles.spawnSteamParticles(ws),
         clearSteamParticles: (ws) => scene.particles.clearSteamParticles(ws),
-        queueMinimapRoomFlash: () => {},
         getAgentCharacterIndex: (agent) => getAgentCharacterIndex(agent),
         getPoseFrame: (idx, agent) => getPoseFrame(idx, agent),
         getStatusColor: (agent) => getStatusColor(agent),
@@ -585,10 +573,6 @@ export class OfficeScene extends Phaser.Scene {
       this.ui.applyLod(lodLevel, this.rooms, null, [], [])
     }
 
-    // GitHub building LOD + poll (always call — building may rebuild between LOD changes)
-    this.githubBuilding.applyLod(cam.zoom)
-    this.githubBuilding.tick(time)
-
     if (this.pods.podLines.length > 0 && (this.pods.isDirty() || this.pods.hasAnimatedPods()) && time - this.pods.getLastDrawAt() >= POD_REFRESH_MS) {
       this.pods.drawPodLines(time, this.rooms)
       this.pods.setLastDrawAt(time)
@@ -632,13 +616,8 @@ export class OfficeScene extends Phaser.Scene {
 
     if (this.particles.isRainActive()) this.particles.tickRain(this.viewWidth, this.viewHeight)
     if (this.particles.isSnowActive()) this.particles.tickSnow(time, this.viewWidth, this.viewHeight)
-    try { this.atmosphere.tickWindowGlint(time) } catch { /* guard: stale window index after HMR */ }
     this.atmosphere.tick(time, this.particles.isRainActive(), this.particles.isSnowActive())
     this.atmosphere.tickCeilingLightActivity(time, this.rooms)
-    if (this.atmosphere.wallClockContainer && time - this.lastClockTick >= 1000) {
-      this.lastClockTick = time
-      this.atmosphere.tickWallClock()
-    }
     if (this.background.hasWhiteboardContainer() && time - this.background.getLastWhiteboardUpdateAt() >= 5000) {
       this.background.setLastWhiteboardUpdateAt(time)
       this.background.updateWhiteboardStats()
@@ -752,8 +731,9 @@ export class OfficeScene extends Phaser.Scene {
     this.updateCameraBounds()
     this.background.updateWhiteboardStats()
 
-    // Keep live agents visible on each refresh.
-    if (this.rooms.size > 0) {
+    // Fit camera on first layout only — don't hijack user's pan on every poll.
+    if (this.rooms.size > 0 && !this.hasInitialFit) {
+      this.hasInitialFit = true
       this.followTarget = null
       this.zoomToFit(false)
       this.pendingCameraRecoveryUntil = this.time.now + 1500
@@ -1069,14 +1049,12 @@ export class OfficeScene extends Phaser.Scene {
     }
 
     const cafeBounds = this.cafe.getBounds()
-    const githubBuildingBounds = this.githubBuilding.getBounds()
 
     this.navMesh.rebuild({
       buildingBounds,
       rooms,
       corridorSegments: this.background.getCorridorSegments(),
       cafeBounds,
-      githubBuildingBounds: githubBuildingBounds.w > 0 ? githubBuildingBounds : null,
     })
   }
 
@@ -1098,12 +1076,6 @@ export class OfficeScene extends Phaser.Scene {
     if (cafeBounds) {
       contentW = Math.max(contentW, cafeBounds.x + cafeBounds.w + WORLD_MARGIN)
       contentH = Math.max(contentH, cafeBounds.y + cafeBounds.h + WORLD_MARGIN)
-    }
-    // Include GitHub building
-    const ghBounds = this.githubBuilding.getBounds()
-    if (ghBounds.w > 0) {
-      contentW = Math.max(contentW, ghBounds.x + ghBounds.w + WORLD_MARGIN)
-      contentH = Math.max(contentH, ghBounds.y + ghBounds.h + WORLD_MARGIN)
     }
     this.worldWidth = Math.max(contentW, this.viewWidth)
     this.worldHeight = Math.max(contentH, this.viewHeight)
@@ -1207,73 +1179,18 @@ export class OfficeScene extends Phaser.Scene {
 
 
   // ---------------------------------------------------------------------------
-  // Rich hover tooltip + hover ring
+  // Rich hover tooltip + hover ring — delegated to OfficeUI
   // ---------------------------------------------------------------------------
 
   private showRichTooltip(agent: AgentState, screenX: number, screenY: number): void {
-    if (this.tooltipFadeTween) { this.tooltipFadeTween.destroy(); this.tooltipFadeTween = null }
-    if (this.tooltipContainer) { this.tooltipContainer.destroy(); this.tooltipContainer = null }
-    if (this.tooltipGraphics)  { this.tooltipGraphics.destroy();  this.tooltipGraphics  = null }
-    const name   = agent.config.name  ?? 'Agent'
-    const title  = agent.config.title ?? ''
-    const role   = agent.config.tripletRole ? agent.config.tripletRole.toUpperCase() : ''
-    const uptime = agent.uptime ?? ''
-    const resources = [agent.cpu ? `CPU ${agent.cpu}` : '', agent.memoryMB ? `${Math.round(agent.memoryMB)}MB` : ''].filter(Boolean).join('  ')
-    let statusLabel = 'idle', statusHex = '#64748b'
-    if (agent.needsInteraction) { statusLabel = agent.interactionType === 'tool-approval' ? 'needs approval' : agent.interactionType === 'question' ? 'question' : agent.interactionType === 'accept-edits' ? 'accept edits' : 'waiting'; statusHex = '#fbbf24' }
-    else if (agent.sessionMode === 'working') { statusLabel = 'working'; statusHex = '#34d399' }
-    else if (agent.sessionMode === 'plan') { statusLabel = 'planning'; statusHex = '#a78bfa' }
-    else if (agent.sessionMode === 'compressing') { statusLabel = 'compressing'; statusHex = '#60a5fa' }
-    const raw = (agent.lastAssistantBlurb ?? agent.lastUserMessage ?? '').trim()
-    const blurb = raw.length > 110 ? raw.slice(0, 108) + '..' : raw
-    const bs = agent.config.persona?.backstory ?? ''
-    const sub = blurb || (bs.length > 80 ? bs.slice(0, 78) + '..' : bs)
-    const TW = 220, PX = 10, PY = 8, LH = 16, AH = 7
-    const hasR = resources.length > 0, hasS = sub.length > 0
-    const subL = hasS ? Math.max(1, Math.ceil(sub.length / 26)) : 0
-    const tH = PY + LH + (title ? LH : 0) + 4 + LH + (hasR ? LH : 0) + (hasS ? 6 + subL * LH : 0) + PY, tW = TW + PX * 2
-    const flip = screenY < tH + AH + 20
-    const aY = flip ? screenY + AH + 2 : screenY - AH - 2 - tH
-    const cX = Math.max(8, Math.min(screenX - tW / 2, this.viewWidth - tW - 8))
-    const g = this.add.graphics(); g.setScrollFactor(0).setDepth(10000); this.tooltipGraphics = g
-    g.fillStyle(0x000000, 0.35); g.fillRoundedRect(cX + 3, aY + 3, tW, tH, 7)
-    g.fillStyle(0x0f172a, 0.97); g.fillRoundedRect(cX, aY, tW, tH, 7)
-    g.lineStyle(1, 0x475569, 0.8); g.strokeRoundedRect(cX, aY, tW, tH, 7)
-    const aInt = parseInt(statusHex.replace('#', ''), 16), arX = Math.min(Math.max(screenX, cX + 14), cX + tW - 14)
-    g.fillStyle(0x0f172a, 0.97)
-    if (!flip) { g.fillTriangle(arX - 6, aY + tH, arX, aY + tH + AH, arX + 6, aY + tH); g.lineStyle(1, 0x0f172a, 1); g.lineBetween(arX - 5, aY + tH, arX + 5, aY + tH) }
-    else { g.fillTriangle(arX - 6, aY, arX, aY - AH, arX + 6, aY); g.lineStyle(1, 0x0f172a, 1); g.lineBetween(arX - 5, aY, arX + 5, aY) }
-    g.lineStyle(2, aInt, 0.6); g.lineBetween(cX + 7, aY, cX + tW - 7, aY)
-    const ct = this.add.container(0, 0); ct.setScrollFactor(0).setDepth(10001); this.tooltipContainer = ct
-    const tx = cX + PX; let ty = aY + PY
-    ct.add(this.add.text(tx, ty, name, { fontSize: '12px', color: '#f1f5f9', fontFamily: 'system-ui, sans-serif', fontStyle: 'bold', resolution: 2 }))
-    if (role) { const rc: Record<string, string> = { SOLVER: '#3b82f6', REVIEWER: '#8b5cf6', EXECUTOR: '#22c55e' }; ct.add(this.add.text(cX + tW - PX, ty + 1, role, { fontSize: '9px', color: '#ffffff', fontFamily: 'system-ui, monospace', fontStyle: 'bold', backgroundColor: rc[role] ?? '#475569', padding: { x: 4, y: 2 }, resolution: 2 }).setOrigin(1, 0)) }
-    ty += LH
-    if (title) { ct.add(this.add.text(tx, ty, title, { fontSize: '10px', color: '#94a3b8', fontFamily: 'system-ui, sans-serif', resolution: 2 })); ty += LH }
-    ty += 4
-    ct.add(this.add.circle(tx + 3.5, ty + LH / 2, 3.5, aInt, 1)); ct.add(this.add.text(tx + 12, ty, statusLabel, { fontSize: '10px', color: statusHex, fontFamily: 'system-ui, sans-serif', fontStyle: 'bold', resolution: 2 }))
-    if (uptime) ct.add(this.add.text(cX + tW - PX, ty, uptime, { fontSize: '10px', color: '#64748b', fontFamily: 'system-ui, monospace', resolution: 2 }).setOrigin(1, 0))
-    ty += LH
-    if (hasR) { ct.add(this.add.text(tx + 12, ty, resources, { fontSize: '9px', color: '#64748b', fontFamily: 'system-ui, monospace', resolution: 2 })); ty += LH }
-    if (hasS) { ty += 2; const dg = this.add.graphics(); dg.setScrollFactor(0); dg.lineStyle(1, 0x334155, 0.6); dg.lineBetween(tx, ty, cX + tW - PX, ty); ct.add(dg); ty += 4; ct.add(this.add.text(tx, ty, sub, { fontSize: '10px', color: '#94a3b8', fontFamily: 'system-ui, sans-serif', wordWrap: { width: TW }, resolution: 2 })) }
-    ct.setAlpha(0); g.setAlpha(0)
-    this.tooltipFadeTween = this.tweens.add({ targets: [ct, g], alpha: 1, duration: 150, ease: 'Quad.easeOut' })
+    this.ui.showRichTooltip(agent, screenX, screenY)
   }
 
-  private hideTooltip(): void {
-    if (this.tooltipFadeTween) { this.tooltipFadeTween.destroy(); this.tooltipFadeTween = null }
-    if (this.tooltipContainer) {
-      const c = this.tooltipContainer, gfx = this.tooltipGraphics
-      this.tooltipContainer = null; this.tooltipGraphics = null
-      this.tweens.add({ targets: [c, gfx].filter(Boolean), alpha: 0, duration: 120, ease: 'Quad.easeIn', onComplete: () => { c.destroy(); gfx?.destroy() } })
-    }
-  }
+  private hideTooltip(): void { this.ui.hideTooltip() }
 
-  private drawHoverRing(worldX: number, worldY: number): void {
-    void worldX; void worldY // moved to OfficeUI
-  }
+  private drawHoverRing(worldX: number, worldY: number): void { this.ui.drawHoverRing(worldX, worldY) }
 
-  private clearHoverRing(): void { this.hoverRingGraphics?.clear() }
+  private clearHoverRing(): void { this.ui.clearHoverRing() }
 
   // ---------------------------------------------------------------------------
   // Camera & navigation helpers
@@ -1417,6 +1334,10 @@ export class OfficeScene extends Phaser.Scene {
 
     // PA system broadcast banner cleanup
     this._destroyBroadcastBanner()
+    if (this.agentClickedHandler) {
+      EventBus.off(EVENTS.AGENT_CLICKED, this.agentClickedHandler)
+      this.agentClickedHandler = null
+    }
     if (this.broadcastHandler) {
       EventBus.off(EVENTS.BROADCAST, this.broadcastHandler)
       this.broadcastHandler = null
@@ -1437,9 +1358,6 @@ export class OfficeScene extends Phaser.Scene {
 
     // Café cleanup
     this.cafe.destroy()
-
-    // GitHub building cleanup
-    this.githubBuilding.destroy()
 
     // atmosphere.destroy() already handled ceiling lights, exterior lights,
     // wall clock, window glint, starfield, clouds, day/night overlay

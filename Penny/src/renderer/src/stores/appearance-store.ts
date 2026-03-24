@@ -108,6 +108,3 @@ export const useAppearanceStore = create<AppearanceState>((set, get) => {
     zoomReset: () => update({ zoom: 1.0 }),
   }
 })
-
-// Re-export for backward compat with theme-store consumers
-export const useThemeStore = useAppearanceStore

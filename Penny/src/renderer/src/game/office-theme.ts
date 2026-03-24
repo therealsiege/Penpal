@@ -66,45 +66,45 @@ export interface OfficeTheme {
 }
 
 export const THEMES: Record<ThemeName, OfficeTheme> = {
-  // ---- DARK (current slate palette) ----
+  // ---- DARK (FF7 Midgar industrial palette) ----
   dark: {
-    bg: 0x111827,
-    roomFloor: 0x94a3b8,
-    roomFloor2: 0x8b97a8,
-    wall: 0xcbd5e1,
-    wallInner: 0xe2e8f0,
-    deskBody: 0x475569,
-    deskTop: 0x64748b,
-    headerBg: 0x1e293b,
-    doorFrame: 0x3b82f6,
-    officeFloor: 0x0f172a,
-    officeGrid: 0x1e293b,
-    rugFill: 0x1e3a5f,
-    rugStroke: 0x2563eb,
-    headerText: '#e2e8f0',
-    badgeText: '#94a3b8',
-    badgeBg: '#1e293b',
-    nameText: '#e2e8f0',
-    nameBg: '#0f172acc',
-    tooltipBg: 0x0f172a,
-    tooltipStroke: 0x334155,
-    tooltipText: '#e2e8f0',
-    monitorGlowActive: 0x0ea5e9,
-    monitorGlowIdle: 0x94a3b8,
-    thoughtDefault: 0x475569,
-    thoughtWorking: 0x059669,
-    thoughtPlan: 0x8b5cf6,
-    thoughtAcceptEdits: 0x3b82f6,
-    deskStrokeIdle: 0x64748b,
-    deskStrokeWorking: 0x34d399,
+    bg: 0x0a1020,
+    roomFloor: 0x1a2030,
+    roomFloor2: 0x1e2538,
+    wall: 0x2a3040,
+    wallInner: 0x4a5568,
+    deskBody: 0x2a3a4a,
+    deskTop: 0x3a4a5a,
+    headerBg: 0x0a1020,
+    doorFrame: 0x00ff88,
+    officeFloor: 0x0d1117,
+    officeGrid: 0x1a2235,
+    rugFill: 0x0d1a2a,
+    rugStroke: 0x00e5ff,
+    headerText: '#00ff88',
+    badgeText: '#00e5ff',
+    badgeBg: '#0d1a2a',
+    nameText: '#c8d0e0',
+    nameBg: '#0a1020cc',
+    tooltipBg: 0x0d1117,
+    tooltipStroke: 0x00ff88,
+    tooltipText: '#c8d0e0',
+    monitorGlowActive: 0x00e5ff,
+    monitorGlowIdle: 0x2a6a4a,
+    thoughtDefault: 0x3a4a5a,
+    thoughtWorking: 0x00ff88,
+    thoughtPlan: 0x00e5ff,
+    thoughtAcceptEdits: 0x00e5ff,
+    deskStrokeIdle: 0x3a4a5a,
+    deskStrokeWorking: 0x00ff88,
     deskStrokeWaiting: 0xfbbf24,
-    deskStrokeHover: 0x3b82f6,
-    particleColors: [0x0ea5e9, 0x34d399, 0xffffff],
-    screenLineColors: [0x0ea5e9, 0x34d399],
-    lampMetal: 0x94a3b8,
-    lampShade: 0xfbbf24,
-    mugBody: 0x8b5cf6,
-    mugHandle: 0x6d28d9,
+    deskStrokeHover: 0x00e5ff,
+    particleColors: [0x00ff88, 0x00e5ff, 0xffffff],
+    screenLineColors: [0x00ff88, 0x00e5ff],
+    lampMetal: 0x4a5568,
+    lampShade: 0x00ff88,
+    mugBody: 0x00e5ff,
+    mugHandle: 0x007a8a,
   },
 
   // ---- LIGHT (bright office) ----
@@ -193,13 +193,9 @@ export const THEMES: Record<ThemeName, OfficeTheme> = {
 /** The currently active theme — mutated by setActiveTheme() */
 export let activeTheme: OfficeTheme = THEMES.dark
 
-/** Current theme name */
-export let currentThemeName: ThemeName = 'dark'
-
 /** Switch the active theme (does NOT redraw — caller must trigger redraw) */
 export function setActiveTheme(name: ThemeName): { oldBg: number; newBg: number } {
   const oldBg = activeTheme.bg
-  currentThemeName = name
   activeTheme = THEMES[name]
   return { oldBg, newBg: activeTheme.bg }
 }

@@ -6,8 +6,6 @@
 
 // Keyboard shortcut constants
 export const KB_ZOOM_STEP = 0.15
-export const KB_ZOOM_DURATION = 200
-export const KB_PAN_DURATION = 400
 export const KB_AUTO_PAN_INTERVAL = 3000
 
 // ---------------------------------------------------------------------------
@@ -25,29 +23,6 @@ export const POSE_SIT      = 2
 export const POSE_SURPRISE = 3
 export const POSE_HURT     = 4
 export const POSE_WALK     = 5
-
-// Compact spritesheet frame map (duder-compact / duder-compact-2)
-// Row 1: idle(4 rotations) + walk(12 rotations) + sit(1) = 17 frames
-// Rotation order: front, 3/4-right, side-right, back-right, back, back-left, side-left, 3/4-left, ...
-export const COMPACT_COLS = 17
-export const COMPACT_IDLE_START    = 0   // 4 frames: front, 3/4, side, back
-export const COMPACT_WALK_START    = 4   // 12 frames: full rotation walk cycle
-export const COMPACT_SIT_START     = 16  // 1 frame
-// Walk rotation indices (offset from COMPACT_WALK_START)
-// Step A (first walk pose): 8 directions
-export const WALK_A_FRONT     = 0
-export const WALK_A_FRONT_R   = 1
-export const WALK_A_SIDE_R    = 2
-export const WALK_A_BACK_R    = 3
-export const WALK_A_BACK      = 4
-export const WALK_A_BACK_L    = 5
-export const WALK_A_SIDE_L    = 6
-export const WALK_A_FRONT_L   = 7
-// Step B (alternate walk pose): 4 key directions
-export const WALK_B_FRONT     = 8
-export const WALK_B_FRONT_R   = 9
-export const WALK_B_SIDE_R    = 10
-export const WALK_B_BACK_R    = 11
 
 export const OFFICE_TILE_SIZE = 48
 export const FRAME_CHAIR_DARK   = 112
@@ -109,16 +84,11 @@ export const IDLE_WALK_RANGE_X = 20
 
 // Colors
 export const COLOR_BG          = 0x111827
-export const COLOR_ROOM_FLOOR  = 0x1e293b
-export const COLOR_ROOM_FLOOR2 = 0x334155
 export const COLOR_WALL        = 0x334155
-export const COLOR_WALL_INNER  = 0x475569
 export const COLOR_DESK_BODY   = 0x475569
 export const COLOR_DESK_TOP    = 0x64748b
 export const COLOR_HEADER_BG   = 0x0f172a
 export const COLOR_DOOR_FRAME  = 0x3b82f6
-export const COLOR_POD_EDGE    = 0x64748b
-export const COLOR_POD_GROOVE  = 0x0f172a
 export const COLOR_DOOR_FILL   = 0x0f172a
 export const COLOR_DOOR_ACCENT = 0x3b82f6
 export const COLOR_LED_GREEN   = 0x34d399
@@ -139,17 +109,5 @@ export const FOLLOW_LERP_SPEED = 0.06
 // Level 3 (zoom > LOD_L2_MAX): full detail — all accessories, particles, monitor content
 export const LOD_L1_MAX = 0.5
 export const LOD_L2_MAX = 0.85
-export const MINIMAP_W = 160
-export const MINIMAP_H = 100
-export const MINIMAP_MARGIN = 12
-export const MINIMAP_BG = 0x0f172a
-export const MINIMAP_ROOM_COLOR = 0x334155
-export const MINIMAP_VIEWPORT_COLOR = 0x3b82f6
-export const MINIMAP_REFRESH_MS = 120
 export const POD_REFRESH_MS = 90
 export const AMBIENT_MOTE_POOL_SIZE = 26
-
-// GitHub Building
-export const GITHUB_BUILDING_W = 520
-export const GITHUB_BUILDING_H = 180
-export const GITHUB_POLL_MS = 10_000

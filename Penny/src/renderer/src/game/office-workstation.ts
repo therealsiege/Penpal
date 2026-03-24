@@ -53,8 +53,6 @@ export interface WorkstationHost {
   burstConfetti(x: number, y: number): void
   spawnSteamParticles(ws: WorkstationSprite): void
   clearSteamParticles(ws: WorkstationSprite): void
-  // Minimap
-  queueMinimapRoomFlash(cwd: string, color: number, durationMs: number): void
   // Agent helpers (kept on OfficeScene as they relate to broader scene state)
   getAgentCharacterIndex(agent: AgentState): number
   getPoseFrame(charIdx: number, agent: AgentState): number
@@ -517,7 +515,7 @@ export class OfficeWorkstations {
         if (wsContainer.active) { wsContainer.setAlpha(1).setScale(1) }
       },
     })
-    this.host.queueMinimapRoomFlash(room.cwd, 0x34d399, 1500)
+
 
     return ws
   }
@@ -564,7 +562,6 @@ export class OfficeWorkstations {
       const isWorking = (agent.sessionMode === 'working' || agent.sessionMode === 'plan') && !agent.needsInteraction
       const roomKey = agent.cwd ?? '__unassigned__'
       if (agent.needsInteraction && !prevState.needsInteraction) {
-        this.host.queueMinimapRoomFlash(roomKey, COLOR_LED_AMBER, 1600)
         if (agent.interactionType === 'accept-edits') {
           this.host.showToast(`${name} has edits to review`, 'info')
         } else if (agent.interactionType === 'question') {
@@ -595,12 +592,10 @@ export class OfficeWorkstations {
       }
 
       if (wasWorking && !isWorking && !agent.needsInteraction) {
-        this.host.queueMinimapRoomFlash(roomKey, COLOR_LED_GREEN, 1200)
         this.host.showToast(`${name} finished task`, 'success')
         const roomC = this.host.getRooms().get(roomKey)
         if (roomC) this.host.spawnEmojiReaction(roomC.x + ws.container.x, roomC.y + ws.container.y, '\u2705') // completed: ✅
       } else if (!wasWorking && isWorking) {
-        this.host.queueMinimapRoomFlash(roomKey, COLOR_DOOR_FRAME, 900)
         this.host.showToast(`${name} started working`, 'info')
         const roomS = this.host.getRooms().get(roomKey)
         if (roomS) this.host.spawnEmojiReaction(roomS.x + ws.container.x, roomS.y + ws.container.y, '\u26A1') // started: ⚡
