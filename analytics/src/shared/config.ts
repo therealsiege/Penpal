@@ -6,9 +6,15 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // Load .env from analytics root (two levels up from src/shared/)
 dotenv.config({ path: path.resolve(__dirname, "..", "..", ".env") });
-// config.ts lives at analytics/src/shared/ — vault root is 3 levels up
-const defaultVaultPath = path.resolve(__dirname, "..", "..", "..");
+// Vault lives in ~/Documents/Vault (iCloud-backed, machine-agnostic)
 const homeDir = process.env.HOME || "/tmp";
+const defaultVaultPath = path.join(homeDir, "Documents", "Vault");
+
+function resolveHome(p: string): string {
+  if (p.startsWith("~/")) return path.join(homeDir, p.slice(2));
+  if (p.startsWith("$HOME/")) return path.join(homeDir, p.slice(6));
+  return p;
+}
 
 export interface VentureConfig {
   name: string;
@@ -76,7 +82,7 @@ export const ventures: Record<string, VentureConfig> = {
 };
 
 export const config = {
-  vaultPath: process.env.VAULT_PATH || defaultVaultPath,
+  vaultPath: process.env.VAULT_PATH ? resolveHome(process.env.VAULT_PATH) : defaultVaultPath,
   memgraphUri: process.env.MEMGRAPH_URI || "bolt://localhost:7687",
   memgraphUser: process.env.MEMGRAPH_USER || "",
   memgraphPassword: process.env.MEMGRAPH_PASSWORD || "",
