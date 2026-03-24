@@ -25,7 +25,7 @@ export const ventureProfiles: Record<string, VentureProfile> = {
   medscrub: {
     name: "MedScrub",
     slug: "medscrub",
-    leadsDir: "Docs/1Putt/MedScrub KB/Sales/Leads",
+    leadsDir: "1Putt/MedScrub KB/Sales/Leads",
     alertKeywords: [
       "independent physician practice AI",
       "clinical AI small practice",
@@ -52,7 +52,7 @@ Only include a company if the article suggests they are BUILDING technology, not
   medhook: {
     name: "MedHook",
     slug: "medhook",
-    leadsDir: "Docs/1Putt/MedHook KB/Sales/Leads",
+    leadsDir: "1Putt/MedHook KB/Sales/Leads",
     alertKeywords: [
       "healthcare data integration",
       "FHIR integration startup",
@@ -79,7 +79,7 @@ Only include companies that appear to be BUILDING integration technology or STRU
   "1putt": {
     name: "1Putt Health",
     slug: "1putt",
-    leadsDir: "Docs/1Putt/Sales/Leads",
+    leadsDir: "1Putt/Sales/Leads",
     alertKeywords: [
       "healthcare CTO hire",
       "FHIR consultant",
