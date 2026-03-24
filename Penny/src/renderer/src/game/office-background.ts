@@ -557,8 +557,8 @@ export class OfficeBackground {
 
       // Team label
       const labelText = this.scene.add.text(x + width / 2 + 4, y + BANNER_H / 2, area.teamLabel, {
-        fontSize: '12px',
-        color: '#e2e8f0',
+        fontSize: '14px',
+        color: activeTheme.headerText,
         fontFamily: 'system-ui, monospace',
         fontStyle: 'bold',
         resolution: 2,
@@ -599,8 +599,8 @@ export class OfficeBackground {
       const badgePadX = 5
       const badgePadY = 3
       const badgeTextObj = this.scene.add.text(0, 0, badgeLabel, {
-        fontSize: '8px',
-        color: '#ffffff',
+        fontSize: '10px',
+        color: '#00e5ff',
         fontFamily: 'system-ui, monospace',
         resolution: 2,
       })

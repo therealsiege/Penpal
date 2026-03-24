@@ -258,7 +258,7 @@ async function main() {
   await closeConnections();
 
   // Write to vault
-  const briefingDir = resolveVaultPath("Docs/1Putt/Daily Briefings");
+  const briefingDir = resolveVaultPath("1Putt/Daily Briefings");
   if (!fs.existsSync(briefingDir)) {
     fs.mkdirSync(briefingDir, { recursive: true });
   }

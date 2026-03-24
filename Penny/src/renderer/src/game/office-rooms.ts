@@ -8,6 +8,7 @@ import type { AgentState } from '../types'
 import type { Room } from './office-types'
 import type { OfficeAtmosphere } from './office-atmosphere'
 import { getRoomType, getTemplate } from './room-renderer'
+import { activeTheme } from './office-theme'
 import {
   COLOR_HEADER_BG,
   COLOR_LED_GRAY,
@@ -586,7 +587,7 @@ export class OfficeRooms {
       headerY,
       this.host.formatLabel(room.label),
       {
-        fontSize: '12px', color: '#e2e8f0',
+        fontSize: '14px', color: activeTheme.headerText,
         fontFamily: 'system-ui, monospace', fontStyle: 'bold', align: 'center',
         resolution: 2,
       },
@@ -633,11 +634,11 @@ export class OfficeRooms {
       headerY,
       `${room.agents.length}`,
       {
-        fontSize: '10px',
-        color: isActive ? '#34d399' : isWaiting ? '#fbbf24' : '#94a3b8',
+        fontSize: '11px',
+        color: isActive ? '#00ff88' : isWaiting ? '#fbbf24' : '#4a5a52',
         fontFamily: 'system-ui, monospace',
-        backgroundColor: '#1e293b',
-        padding: { x: 4, y: 2 },
+        backgroundColor: '#0a1020cc',
+        padding: { x: 5, y: 2 },
         resolution: 2,
       },
     ).setOrigin(1, 0.5).setName('agentBadge')

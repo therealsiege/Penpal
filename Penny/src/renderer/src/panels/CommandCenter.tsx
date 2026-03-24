@@ -1317,22 +1317,22 @@ export function CommandCenter(props: CommandCenterProps) {
   // ---------------------------------------------------------------------------
 
   return (
-    <div className="flex flex-col h-full bg-slate-950 text-slate-200 select-none overflow-hidden">
+    <div className="flex flex-col h-full bg-[#080c10] text-[#c8d0e0] select-none overflow-hidden">
 
       {/* ------------------------------------------------------------------ */}
       {/* Status Bar                                                           */}
       {/* ------------------------------------------------------------------ */}
-      <div className="flex-none flex items-center justify-between px-4 py-2 bg-slate-900/80 border-b border-slate-800 backdrop-blur">
+      <div className="flex-none flex items-center justify-between px-4 py-2 bg-[#0d1117]/90 border-b border-[#1a3a2a] backdrop-blur">
         {/* Left side */}
         <div className="flex items-center gap-4">
           {/* Agent count */}
           <div className="flex items-center gap-1.5">
-            <span className="text-[13px] text-slate-500">Agents</span>
-            <span className="text-[13px] font-semibold text-slate-300">
+            <span className="text-[13px] text-[#4a5a52]">Agents</span>
+            <span className="text-[13px] font-semibold text-[#00ff88]">
               {activeAgentCount}/{agents.length}
             </span>
             <span
-              className="text-[10px] text-slate-500 font-mono"
+              className="text-[10px] text-[#4a5a52] font-mono"
               title={`Claude ${claudeAgentCount} | Cursor ${cursorAgentCount} | OpenCode/Claw ${externalCliAgentCount}`}
             >
               C{claudeAgentCount} Cu{cursorAgentCount} X{externalCliAgentCount}
@@ -1340,10 +1340,7 @@ export function CommandCenter(props: CommandCenterProps) {
           </div>
 
           {/* Clock */}
-          <span
-            className="text-[13px] font-mono text-slate-400"
-
-          >
+          <span className="text-[13px] font-mono text-[#00e5ff]/70">
             {clock}
           </span>
         </div>
@@ -1354,7 +1351,7 @@ export function CommandCenter(props: CommandCenterProps) {
           {hotLeadCount > 0 && (
             <button
               onClick={props.onOpenPipeline}
-              className="flex items-center gap-1 px-2 py-0.5 bg-amber-500/15 border border-amber-500/30 rounded-full text-amber-400 hover:bg-amber-500/25 transition-colors"
+              className="flex items-center gap-1 px-2 py-0.5 bg-[#00e5ff]/10 border border-[#00e5ff]/25 rounded-full text-[#00e5ff] hover:bg-[#00e5ff]/20 transition-colors"
             >
               <span className="text-[13px] font-semibold">{hotLeadCount}</span>
               <span className="text-[13px]">hot leads</span>
@@ -1368,7 +1365,7 @@ export function CommandCenter(props: CommandCenterProps) {
               className={`flex items-center gap-1 px-2 py-0.5 rounded-full border text-[13px] transition-colors ${
                 failedJobs.length > 0
                   ? 'bg-red-500/15 border-red-500/30 text-red-400 hover:bg-red-500/25'
-                  : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400/80 hover:bg-emerald-500/20'
+                  : 'bg-[#00ff88]/10 border-[#00ff88]/20 text-[#00ff88]/80 hover:bg-[#00ff88]/20'
               }`}
             >
               {failedJobs.length > 0 ? (
@@ -1382,7 +1379,7 @@ export function CommandCenter(props: CommandCenterProps) {
           <button
             onClick={() => { void runOfficeSmokeCheck() }}
             disabled={smokeCheckRunning}
-            className="flex items-center gap-1 px-2.5 py-1 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-md text-slate-400 text-[13px] transition-colors disabled:opacity-50 disabled:cursor-default"
+            className="flex items-center gap-1 px-2.5 py-1 bg-[#0a2018] hover:bg-[#0d2a20] border border-[#1a3a2a] rounded-md text-[#a0c8b0] text-[13px] transition-colors disabled:opacity-50 disabled:cursor-default"
           >
             {smokeCheckRunning ? 'Checking...' : 'Smoke'}
           </button>
@@ -1390,7 +1387,7 @@ export function CommandCenter(props: CommandCenterProps) {
           {/* Leaderboard button */}
           <button
             onClick={() => setShowLeaderboard(true)}
-            className="flex items-center gap-1 px-2.5 py-1 bg-amber-600/20 hover:bg-amber-600/30 border border-amber-500/30 rounded-md text-amber-400 text-[13px] transition-colors"
+            className="flex items-center gap-1 px-2.5 py-1 bg-[#00e5ff]/10 hover:bg-[#00e5ff]/20 border border-[#00e5ff]/25 rounded-md text-[#00e5ff] text-[13px] transition-colors"
           >
             🏆
             Ranks
@@ -1399,7 +1396,7 @@ export function CommandCenter(props: CommandCenterProps) {
           {/* Downloads button */}
           <button
             onClick={() => window.api.openDownloads()}
-            className="flex items-center gap-1 px-2.5 py-1 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-md text-slate-400 text-[13px] transition-colors"
+            className="flex items-center gap-1 px-2.5 py-1 bg-[#0a2018] hover:bg-[#0d2a20] border border-[#1a3a2a] rounded-md text-[#a0c8b0] text-[13px] transition-colors"
           >
             <IconDownload />
             Downloads

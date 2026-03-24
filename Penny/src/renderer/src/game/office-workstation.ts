@@ -337,8 +337,8 @@ export class OfficeWorkstations {
     // Thought bubble — dark card with accent border and live blurb text
     const thoughtBubbleBg = this.scene.add.graphics()
     const thoughtBubbleText = this.scene.add.text(0, 0, '', {
-      fontSize: '9px', color: '#e2e8f0', fontFamily: 'system-ui, sans-serif',
-      wordWrap: { width: 90, useAdvancedWrap: false },
+      fontSize: '10px', color: '#c8d0e0', fontFamily: 'system-ui, sans-serif',
+      wordWrap: { width: 95, useAdvancedWrap: false },
       align: 'left', resolution: 2, lineSpacing: 1,
     }).setOrigin(0.5)
     const thoughtBubble = this.scene.add.container(4, WS_SPRITE_Y - 60, [thoughtBubbleBg, thoughtBubbleText]).setVisible(false)
@@ -346,8 +346,8 @@ export class OfficeWorkstations {
 
     // Show persona name (e.g. "Marcus Chen") instead of title
     const nameText = this.scene.add.text(0, WS_NAME_Y, '', {
-      fontSize: '11px', color: '#e2e8f0', fontFamily: 'system-ui, sans-serif',
-      backgroundColor: '#0f172acc', padding: { x: 4, y: 2 }, align: 'center',
+      fontSize: '13px', color: activeTheme.nameText, fontFamily: 'system-ui, sans-serif',
+      backgroundColor: activeTheme.nameBg, padding: { x: 5, y: 2 }, align: 'center',
       resolution: 2,
     }).setOrigin(0.5).setVisible(false)
     wsContainer.add(nameText)
@@ -358,9 +358,9 @@ export class OfficeWorkstations {
 
     // Role badge (S / R / E) — shown when agent has a pod role assigned.
     // Sits to the left of the name tag; revealed/hidden in updateWorkstation.
-    const roleBadge = this.scene.add.text(-28, WS_NAME_Y, '', {
-      fontSize: '7px', color: '#0f172a', fontFamily: 'system-ui, monospace',
-      fontStyle: 'bold', backgroundColor: '#3b82f6',
+    const roleBadge = this.scene.add.text(-30, WS_NAME_Y, '', {
+      fontSize: '9px', color: '#0a1020', fontFamily: 'system-ui, monospace',
+      fontStyle: 'bold', backgroundColor: '#00e5ff',
       padding: { x: 3, y: 1 }, resolution: 2,
     }).setOrigin(0.5).setVisible(false)
     wsContainer.add(roleBadge)

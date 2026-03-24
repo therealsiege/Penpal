@@ -25,9 +25,13 @@ const configuredSidekickRoot = process.env.SIDEKICK_ROOT
   ? resolveUserPath(process.env.SIDEKICK_ROOT)
   : path.join(HOME_DIR, 'sidekick')
 
+const vaultRoot = process.env.VAULT_PATH
+  ? resolveUserPath(process.env.VAULT_PATH)
+  : path.join(HOME_DIR, 'Documents', 'Vault')
+
 const configuredDocsRoot = process.env.SIDEKICK_DOCS_ROOT
   ? resolveUserPath(process.env.SIDEKICK_DOCS_ROOT)
-  : path.join(configuredSidekickRoot, 'Docs')
+  : vaultRoot
 
 export const SIDEKICK_ROOT = path.resolve(configuredSidekickRoot)
 export const DOCS_ROOT = path.resolve(configuredDocsRoot)

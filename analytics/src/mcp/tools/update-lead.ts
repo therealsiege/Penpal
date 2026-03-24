@@ -73,9 +73,9 @@ export async function updateLead(args: {
 
   // 1. Find the lead markdown file in vault (search all venture lead directories)
   const leadsDirs = [
-    resolveVaultPath("Docs/1Putt/MedScrub KB/Sales/Leads"),
-    resolveVaultPath("Docs/1Putt/MedHook KB/Sales/Leads"),
-    resolveVaultPath("Docs/1Putt/Sales/Leads"),
+    resolveVaultPath("1Putt/MedScrub KB/Sales/Leads"),
+    resolveVaultPath("1Putt/MedHook KB/Sales/Leads"),
+    resolveVaultPath("1Putt/Sales/Leads"),
   ];
 
   let leadFilePath: string | null = null;
