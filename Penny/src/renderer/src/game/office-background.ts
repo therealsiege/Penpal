@@ -68,14 +68,6 @@ export interface BackgroundHostScene {
     getBounds(): { x: number; y: number; w: number; h: number } | null
   }
 
-  // GitHub building
-  getGithubBuilding(): {
-    width: number
-    height: number
-    build(cx: number, cy: number): void
-    getBounds(): { x: number; y: number; w: number; h: number }
-  }
-
   // Cafe floor mask management
   getCafeFloorMask(): Phaser.GameObjects.Graphics | null
   setCafeFloorMask(g: Phaser.GameObjects.Graphics | null): void
@@ -92,6 +84,10 @@ export class OfficeBackground {
   private host: BackgroundHostScene
 
   // Graphics layers
+  private terrainGraphics: Phaser.GameObjects.Graphics | null = null
+  private terrainDecos: Phaser.GameObjects.GameObject[] = []
+  private lastTerrainW = 0
+  private lastTerrainH = 0
   private officeGraphics: Phaser.GameObjects.Graphics | null = null
   private teamAreaGraphics: Phaser.GameObjects.Graphics | null = null
   private corridorGraphics: Phaser.GameObjects.Graphics | null = null
@@ -134,6 +130,7 @@ export class OfficeBackground {
   // ---------------------------------------------------------------------------
 
   init(): void {
+    this.terrainGraphics = this.scene.add.graphics().setDepth(-10)
     this.officeGraphics = this.scene.add.graphics().setDepth(-4)
     this.teamAreaGraphics = this.scene.add.graphics().setDepth(-3)
     this.corridorGraphics = this.scene.add.graphics().setDepth(-2)
@@ -208,16 +205,11 @@ export class OfficeBackground {
 
       // Still build service buildings even with no agent rooms
       const cafe = this.host.getCafe()
-      const ghBuilding = this.host.getGithubBuilding()
       const cafeX = WORLD_MARGIN + cafe.width / 2
       const cafeTopY = WORLD_MARGIN
-      const ghGap = TEAM_AREA_GAP_X
-      const ghX = WORLD_MARGIN + cafe.width + ghGap + ghBuilding.width / 2
-      const ghY = WORLD_MARGIN + ghBuilding.height / 2
       cafe.build(cafeX, cafeTopY)
-      ghBuilding.build(ghX, ghY)
-      const serviceMaxX = WORLD_MARGIN + cafe.width + ghGap + ghBuilding.width + WORLD_MARGIN
-      const serviceMaxY = WORLD_MARGIN + Math.max(cafe.height, ghBuilding.height) + WORLD_MARGIN
+      const serviceMaxX = WORLD_MARGIN + cafe.width + WORLD_MARGIN
+      const serviceMaxY = WORLD_MARGIN + cafe.height + WORLD_MARGIN
       this.host.setWorldSize(Math.max(serviceMaxX, 800), Math.max(serviceMaxY, 600))
       this.host.updateCameraBounds()
       this.host.rebuildNavMesh()
@@ -315,11 +307,10 @@ export class OfficeBackground {
 
     type TeamDraft = typeof teamDrafts[number]
 
-    // ── Row 0: Service buildings (cafe + GitHub dispatch) ──
+    // ── Row 0: Service buildings (cafe) ──
     // These occupy a dedicated top row; agent offices start below.
     const cafe = this.host.getCafe()
-    const ghBuilding = this.host.getGithubBuilding()
-    const serviceRowH = Math.max(cafe.height, ghBuilding.height)
+    const serviceRowH = cafe.height
     const serviceRowBottomY = serviceRowH + areaGapY
 
     // ── Row 1+: Agent office teams ──
@@ -401,14 +392,10 @@ export class OfficeBackground {
     }
 
     // ── Position service buildings in top row ──
-    // Vertically center each service building in the service row
+    // Vertically center cafe in the service row
     const cafeX = WORLD_MARGIN + cafe.width / 2
     const cafeTopY = WORLD_MARGIN + (serviceRowH - cafe.height) / 2
     const cafeBottomY = cafeTopY + cafe.height
-
-    const ghGap = areaGapX
-    const ghX = WORLD_MARGIN + cafe.width + ghGap + ghBuilding.width / 2
-    const ghY = WORLD_MARGIN + serviceRowH / 2
 
     // Background cleanup + decoration positioning
     if (this.officeGraphics) {
@@ -418,16 +405,18 @@ export class OfficeBackground {
     }
 
     // World size: include all team areas + service buildings
-    const serviceMaxX = WORLD_MARGIN + cafe.width + ghGap + ghBuilding.width
+    const serviceMaxX = WORLD_MARGIN + cafe.width
     const totalMaxX = Math.max(maxX, serviceMaxX)
-    const totalMaxY = Math.max(maxY, cafeBottomY, ghY + ghBuilding.height / 2)
+    const totalMaxY = Math.max(maxY, cafeBottomY)
     this.host.setWorldSize(totalMaxX + WORLD_MARGIN, totalMaxY + WORLD_MARGIN)
+
+    // Draw outdoor terrain (grass, trees, paths) around buildings
+    this.drawOutdoorTerrain(totalMaxX + WORLD_MARGIN, totalMaxY + WORLD_MARGIN)
     this.host.markPodsDirty()
 
     // Build service buildings
     if (rooms.size > 0) {
       cafe.build(cafeX, cafeTopY)
-      ghBuilding.build(ghX, ghY)
     }
 
     // Clean up stale floor mask (L-shape building handles this natively now)
@@ -831,19 +820,8 @@ export class OfficeBackground {
       g.fillRect(connX - 1, upper.y, 2, lower.y - upper.y)
     }
 
-    // Connect service buildings (cafe ↔ GitHub dispatch — horizontal corridor)
-    const cafe3 = this.host.getCafe()
-    const cafeBounds = cafe3.getBounds()
-    const ghBuilding2 = this.host.getGithubBuilding()
-    const ghBounds = ghBuilding2.getBounds()
-    if (ghBounds.w > 0 && cafeBounds) {
-      const cafeRight = cafeBounds.x + cafeBounds.w
-      const ghLeft = ghBounds.x
-      const connY = cafeBounds.y + cafeBounds.h / 2
-      this.corridorSegments.push({ x1: cafeRight, y1: connY, x2: ghLeft, y2: connY, color: 0x7c3aed })
-    }
-
     // Connect service row down to the first agent office row
+    const cafeBounds = this.host.getCafe().getBounds()
     if (cafeBounds && rowCenters.length > 0) {
       const nearestRow = rowCenters[0]
       const serviceBottomY = cafeBounds.y + cafeBounds.h
@@ -1056,6 +1034,312 @@ export class OfficeBackground {
     if (month >= 2 && month <= 4) return { color: 0x86efac, accent: 0xfbbf24, extraDecorType: 'spring' }
     if (month >= 5 && month <= 7) return { color: 0xfde68a, accent: 0x0ea5e9, extraDecorType: 'summer' }
     return { color: 0xfbbf24, accent: 0xea580c, extraDecorType: 'autumn' }
+  }
+
+  // ---------------------------------------------------------------------------
+  // drawOutdoorTerrain — RPG-style grass, trees, paths around buildings
+  // ---------------------------------------------------------------------------
+
+  drawOutdoorTerrain(worldW: number, worldH: number): void {
+    if (worldW === this.lastTerrainW && worldH === this.lastTerrainH) return
+    this.lastTerrainW = worldW
+    this.lastTerrainH = worldH
+
+    const g = this.terrainGraphics
+    if (!g) return
+    g.clear()
+    for (const d of this.terrainDecos) { try { (d as { destroy(): void }).destroy() } catch { /* */ } }
+    this.terrainDecos = []
+
+    // FF7 Midgar industrial theme — steel plates, mako glow, pipes, grating
+
+    const PAD = 300
+    const x0 = -PAD
+    const y0 = -PAD
+    const w = worldW + PAD * 2
+    const h = worldH + PAD * 2
+
+    let seed = 42
+    const rand = (): number => { seed = (seed * 16807 + 11) % 2147483647; return (seed & 0x7fffffff) / 0x7fffffff }
+
+    // Building rects for collision
+    const rooms = this.host.getRooms()
+    const buildingRects: { x: number; y: number; w: number; h: number }[] = []
+    for (const room of rooms.values()) {
+      buildingRects.push({
+        x: room.x - room.width / 2 - 30,
+        y: room.y - room.height / 2 - 30,
+        w: room.width + 60,
+        h: room.height + 60,
+      })
+    }
+    const isOverlapping = (tx: number, ty: number, radius: number): boolean => {
+      for (const r of buildingRects) {
+        if (tx + radius > r.x && tx - radius < r.x + r.w && ty + radius > r.y && ty - radius < r.y + r.h) return true
+      }
+      return false
+    }
+
+    // ── 1. Base metal floor — dark steel plate ──
+    g.fillStyle(0x1a1e2a, 1)
+    g.fillRect(x0, y0, w, h)
+
+    // Steel plate grid lines
+    const PLATE = 80
+    g.lineStyle(1, 0x2a3040, 0.35)
+    for (let gx = x0; gx < x0 + w; gx += PLATE) {
+      g.lineBetween(gx, y0, gx, y0 + h)
+    }
+    for (let gy = y0; gy < y0 + h; gy += PLATE) {
+      g.lineBetween(x0, gy, x0 + w, gy)
+    }
+
+    // Plate variation — some panels slightly lighter/darker
+    for (let gx = x0; gx < x0 + w; gx += PLATE) {
+      for (let gy = y0; gy < y0 + h; gy += PLATE) {
+        const r = rand()
+        if (r < 0.12) {
+          g.fillStyle(0x242a38, 0.3)
+          g.fillRect(gx + 1, gy + 1, PLATE - 2, PLATE - 2)
+        } else if (r < 0.2) {
+          g.fillStyle(0x141822, 0.25)
+          g.fillRect(gx + 1, gy + 1, PLATE - 2, PLATE - 2)
+        }
+      }
+    }
+
+    // Bolts at plate corners
+    g.fillStyle(0x3a4050, 0.3)
+    for (let gx = x0; gx < x0 + w; gx += PLATE) {
+      for (let gy = y0; gy < y0 + h; gy += PLATE) {
+        if (rand() > 0.4) continue
+        g.fillCircle(gx + 8, gy + 8, 4)
+        g.fillCircle(gx + PLATE - 8, gy + 8, 4)
+        g.fillCircle(gx + 8, gy + PLATE - 8, 4)
+        g.fillCircle(gx + PLATE - 8, gy + PLATE - 8, 4)
+      }
+    }
+
+    // ── 2. Mako energy seams — glowing green/cyan lines in the floor ──
+    const MAKO_GREEN = 0x00ff88
+    const MAKO_CYAN = 0x00e5ff
+
+    // Horizontal mako seam
+    const seamY = WORLD_MARGIN - 40
+    g.lineStyle(5, MAKO_GREEN, 0.25)
+    g.lineBetween(x0, seamY, x0 + w, seamY)
+    // Glow around seam
+    g.fillStyle(MAKO_GREEN, 0.04)
+    g.fillRect(x0, seamY - 16, w, 32)
+    g.fillStyle(MAKO_GREEN, 0.02)
+    g.fillRect(x0, seamY - 32, w, 64)
+
+    // Vertical mako seams
+    const vertSeamX1 = WORLD_MARGIN + 60
+    const vertSeamX2 = worldW - WORLD_MARGIN - 60
+    if (worldH > 300) {
+      for (const sx of [vertSeamX1, vertSeamX2]) {
+        g.lineStyle(4, MAKO_CYAN, 0.18)
+        g.lineBetween(sx, seamY, sx, worldH + PAD)
+        g.fillStyle(MAKO_CYAN, 0.03)
+        g.fillRect(sx - 16, seamY, 32, worldH + PAD - seamY)
+      }
+    }
+
+    // Mako pool / reactor vent — lower-right area
+    const poolCX = worldW - WORLD_MARGIN - 180
+    const poolCY = worldH - WORLD_MARGIN - 130
+    const poolRX = 110 + rand() * 30
+    const poolRY = 70 + rand() * 18
+    if (!isOverlapping(poolCX, poolCY, Math.max(poolRX, poolRY) + 30)) {
+      // Outer rim — dark metal
+      g.fillStyle(0x2a3040, 0.5)
+      g.fillEllipse(poolCX, poolCY, poolRX + 22, poolRY + 16)
+      // Grating ring
+      g.lineStyle(3, 0x3a4a5a, 0.4)
+      g.strokeEllipse(poolCX, poolCY, poolRX + 12, poolRY + 8)
+      // Mako pool
+      g.fillStyle(MAKO_GREEN, 0.2)
+      g.fillEllipse(poolCX, poolCY, poolRX, poolRY)
+      // Brighter center
+      g.fillStyle(MAKO_GREEN, 0.15)
+      g.fillEllipse(poolCX, poolCY, poolRX * 0.6, poolRY * 0.6)
+      g.fillStyle(0xaaffcc, 0.08)
+      g.fillEllipse(poolCX, poolCY, poolRX * 0.3, poolRY * 0.3)
+      // Ripple rings
+      g.lineStyle(1, MAKO_GREEN, 0.12)
+      g.strokeEllipse(poolCX - 18, poolCY - 8, 50, 28)
+      g.strokeEllipse(poolCX + 22, poolCY + 6, 36, 22)
+      // Warning stripes around pool
+      const stripeCount = 16
+      for (let si = 0; si < stripeCount; si++) {
+        const angle = (si / stripeCount) * Math.PI * 2
+        const sx1 = poolCX + Math.cos(angle) * (poolRX + 24)
+        const sy1 = poolCY + Math.sin(angle) * (poolRY + 18)
+        const sx2 = poolCX + Math.cos(angle) * (poolRX + 38)
+        const sy2 = poolCY + Math.sin(angle) * (poolRY + 28)
+        g.lineStyle(4, 0xfbbf24, 0.2)
+        g.lineBetween(sx1, sy1, sx2, sy2)
+      }
+    }
+
+    // ── 3. Pipes — horizontal and vertical runs ──
+    const pipePositions: { x1: number; y1: number; x2: number; y2: number; r: number }[] = []
+    for (let attempt = 0; attempt < 12; attempt++) {
+      const isVert = rand() > 0.5
+      const pr = 8 + rand() * 6 // 16-28px diameter
+      let px1: number, py1: number, px2: number, py2: number
+      if (isVert) {
+        px1 = px2 = x0 + 80 + rand() * (w - 160)
+        py1 = y0 + rand() * h * 0.3
+        py2 = py1 + 150 + rand() * 300
+      } else {
+        py1 = py2 = y0 + 80 + rand() * (h - 160)
+        px1 = x0 + rand() * w * 0.3
+        px2 = px1 + 150 + rand() * 300
+      }
+      const midX = (px1 + px2) / 2, midY = (py1 + py2) / 2
+      if (isOverlapping(midX, midY, 50)) continue
+      pipePositions.push({ x1: px1, y1: py1, x2: px2, y2: py2, r: pr })
+    }
+
+    for (const pipe of pipePositions) {
+      // Pipe shadow
+      g.fillStyle(0x000000, 0.08)
+      const isVert = pipe.x1 === pipe.x2
+      if (isVert) {
+        g.fillRect(pipe.x1 - pipe.r + 4, pipe.y1 + 4, pipe.r * 2, pipe.y2 - pipe.y1)
+      } else {
+        g.fillRect(pipe.x1 + 4, pipe.y1 - pipe.r + 4, pipe.x2 - pipe.x1, pipe.r * 2)
+      }
+      // Pipe body
+      g.fillStyle(0x4a5568, 0.5)
+      if (isVert) {
+        g.fillRect(pipe.x1 - pipe.r, pipe.y1, pipe.r * 2, pipe.y2 - pipe.y1)
+      } else {
+        g.fillRect(pipe.x1, pipe.y1 - pipe.r, pipe.x2 - pipe.x1, pipe.r * 2)
+      }
+      // Highlight stripe
+      g.fillStyle(0x6b7a8a, 0.25)
+      if (isVert) {
+        g.fillRect(pipe.x1 - pipe.r + 3, pipe.y1, 5, pipe.y2 - pipe.y1)
+      } else {
+        g.fillRect(pipe.x1, pipe.y1 - pipe.r + 3, pipe.x2 - pipe.x1, 5)
+      }
+      // Joint rings
+      const len = isVert ? pipe.y2 - pipe.y1 : pipe.x2 - pipe.x1
+      const joints = Math.floor(len / 100)
+      for (let ji = 0; ji <= joints; ji++) {
+        const t = ji / Math.max(1, joints)
+        const jx = pipe.x1 + (pipe.x2 - pipe.x1) * t
+        const jy = pipe.y1 + (pipe.y2 - pipe.y1) * t
+        g.fillStyle(0x5a6a7a, 0.4)
+        if (isVert) {
+          g.fillRect(jx - pipe.r - 3, jy - 3, pipe.r * 2 + 6, 7)
+        } else {
+          g.fillRect(jx - 3, jy - pipe.r - 3, 7, pipe.r * 2 + 6)
+        }
+      }
+    }
+
+    // ── 4. Floor detail — rust patches, oil stains, scorch marks ──
+    // Rust stains — orange-brown splotches
+    for (let i = 0; i < 12; i++) {
+      const rx = x0 + rand() * w
+      const ry = y0 + rand() * h
+      if (isOverlapping(rx, ry, 20)) continue
+      const rr = 15 + rand() * 25
+      g.fillStyle(0x8a4a1a, 0.06 + rand() * 0.04)
+      g.fillEllipse(rx, ry, rr, rr * (0.6 + rand() * 0.4))
+      // Darker center
+      g.fillStyle(0x6a3a0a, 0.04)
+      g.fillEllipse(rx + 2, ry + 2, rr * 0.5, rr * 0.4)
+    }
+
+    // Oil stains — dark iridescent puddles
+    for (let i = 0; i < 8; i++) {
+      const ox = x0 + rand() * w
+      const oy = y0 + rand() * h
+      if (isOverlapping(ox, oy, 16)) continue
+      const or_ = 12 + rand() * 20
+      g.fillStyle(0x0a0a1a, 0.12 + rand() * 0.06)
+      g.fillEllipse(ox, oy, or_, or_ * (0.5 + rand() * 0.3))
+      // Iridescent shimmer highlight
+      g.fillStyle(0x4a3a6a, 0.04)
+      g.fillEllipse(ox - 3, oy - 2, or_ * 0.6, or_ * 0.3)
+    }
+
+    // Scorch marks — dark radial burns
+    for (let i = 0; i < 5; i++) {
+      const sx = x0 + rand() * w
+      const sy = y0 + rand() * h
+      if (isOverlapping(sx, sy, 20)) continue
+      const sr = 10 + rand() * 18
+      g.fillStyle(0x0a0a0a, 0.08 + rand() * 0.04)
+      g.fillCircle(sx, sy, sr)
+      g.fillStyle(0x1a1a1a, 0.05)
+      g.fillCircle(sx, sy, sr * 0.5)
+    }
+
+    // Scratch marks — thin diagonal lines on plates
+    g.lineStyle(1, 0x3a4a5a, 0.12)
+    for (let i = 0; i < 20; i++) {
+      const sx = x0 + rand() * w
+      const sy = y0 + rand() * h
+      const sLen = 15 + rand() * 30
+      const angle = rand() * Math.PI
+      g.lineBetween(sx, sy, sx + Math.cos(angle) * sLen, sy + Math.sin(angle) * sLen)
+    }
+
+    // ── 5. Manhole covers — subtle circular floor hatches ──
+    for (let i = 0; i < 5; i++) {
+      const mx = WORLD_MARGIN + 60 + rand() * (worldW - WORLD_MARGIN * 2 - 120)
+      const my = WORLD_MARGIN + 60 + rand() * (worldH - WORLD_MARGIN * 2 - 120)
+      if (isOverlapping(mx, my, 24)) continue
+      const mr = 18 + rand() * 8
+      g.fillStyle(0x2a3040, 0.35)
+      g.fillCircle(mx, my, mr + 4)
+      g.fillStyle(0x222a38, 0.4)
+      g.fillCircle(mx, my, mr)
+      g.lineStyle(2, 0x3a4a5a, 0.2)
+      g.lineBetween(mx - mr + 5, my, mx + mr - 5, my)
+      g.lineBetween(mx, my - mr + 5, mx, my + mr - 5)
+      g.lineStyle(1, 0x3a4a5a, 0.15)
+      g.strokeCircle(mx, my, mr * 0.6)
+    }
+
+    // ── 6. Caution tape near buildings ──
+    for (const rect of buildingRects) {
+      if (rand() > 0.35) continue
+      const sy = rect.y + rect.h
+      const sx = rect.x + 14
+      const sw = rect.w - 28
+      for (let stripe = 0; stripe < sw; stripe += 36) {
+        g.fillStyle(0xfbbf24, 0.1)
+        g.fillRect(sx + stripe, sy + 3, 18, 10)
+        g.fillStyle(0x1a1e2a, 0.12)
+        g.fillRect(sx + stripe + 18, sy + 3, 18, 10)
+      }
+    }
+
+    // ── 7. Mako glow pools — small floor glows scattered around ──
+    for (let i = 0; i < 6; i++) {
+      const gx = x0 + 100 + rand() * (w - 200)
+      const gy = y0 + 100 + rand() * (h - 200)
+      if (isOverlapping(gx, gy, 30)) continue
+      const gr = 20 + rand() * 15
+      g.fillStyle(MAKO_GREEN, 0.035)
+      g.fillCircle(gx, gy, gr)
+      g.fillStyle(MAKO_GREEN, 0.06)
+      g.fillCircle(gx, gy, gr * 0.4)
+      // Tiny vent grating at center
+      g.fillStyle(0x2a3040, 0.3)
+      g.fillRoundedRect(gx - 8, gy - 5, 16, 10, 2)
+      g.lineStyle(2, 0x1a2030, 0.3)
+      g.lineBetween(gx - 4, gy - 4, gx - 4, gy + 4)
+      g.lineBetween(gx, gy - 4, gx, gy + 4)
+      g.lineBetween(gx + 4, gy - 4, gx + 4, gy + 4)
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -1654,6 +1938,9 @@ export class OfficeBackground {
     for (const t of this.corridorSignTexts) t.destroy()
     this.corridorSignTexts = []
     this.officeGraphics?.destroy(); this.officeGraphics = null
+    this.terrainGraphics?.destroy(); this.terrainGraphics = null
+    for (const d of this.terrainDecos) { try { (d as { destroy(): void }).destroy() } catch { /* */ } }
+    this.terrainDecos = []
     if (this.flagContainer) {
       this.scene.tweens.killTweensOf(this.flagContainer)
       this.flagContainer.destroy(true)

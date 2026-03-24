@@ -160,6 +160,3 @@ export function formatLabel(label: string): string {
   return label
 }
 
-export function truncName(name: string): string {
-  return name.length > 14 ? name.slice(0, 12) + '..' : name
-}

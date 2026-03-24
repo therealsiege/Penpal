@@ -137,15 +137,6 @@ export interface TeamAreaLayout {
   agentCount: number
 }
 
-export interface MinimapProjection {
-  minX: number
-  minY: number
-  drawW: number
-  drawH: number
-  scale: number
-  pad: number
-}
-
 // Pod workflow info for connecting lines
 export interface PodLineInfo {
   workflowId: string
@@ -153,12 +144,6 @@ export interface PodLineInfo {
   reviewerAgentId: string
   executorAgentId: string
   status: string
-}
-
-export interface MinimapExtraBuilding {
-  label: string
-  bounds: { x: number; y: number; w: number; h: number }
-  color: number
 }
 
 export interface OfficeDebugSnapshot {

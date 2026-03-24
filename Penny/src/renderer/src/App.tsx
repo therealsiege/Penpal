@@ -11,9 +11,9 @@ import { ActivityModal } from './components/ActivityModal'
 import { OrchestratorModal } from './components/OrchestratorModal'
 import { CommandCenter } from './panels/CommandCenter'
 import { VaultPanel } from './panels/VaultPanel'
-import { GraphPanel } from './panels/GraphPanel'
 import { SettingsPanel } from './panels/SettingsPanel'
 import { SoundboardPanel } from './panels/SoundboardPanel'
+import { GitHubPanel } from './panels/GitHubPanel'
 import type { SystemPaths } from './types'
 import { getPathPresets } from './utils/path-presets'
 import { EventBus, EVENTS } from './game/events'
@@ -303,13 +303,6 @@ function AppContent() {
       category: 'Vault',
       action: () => setActivePanel('vault'),
     },
-    {
-      id: 'vault-graph',
-      label: 'Open Graph View',
-      description: 'Visual knowledge graph',
-      category: 'Vault',
-      action: () => setActivePanel('graph'),
-    },
   ], [toast, systemPaths])
 
   return (
@@ -339,7 +332,7 @@ function AppContent() {
           />
         )}
         {activePanel === 'vault' && <VaultPanel />}
-        {activePanel === 'graph' && <GraphPanel />}
+        {activePanel === 'github' && <GitHubPanel />}
         {activePanel === 'soundboard' && <SoundboardPanel />}
         {activePanel === 'settings' && <SettingsPanel />}
       </Layout>
