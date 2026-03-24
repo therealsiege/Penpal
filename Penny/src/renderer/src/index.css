@@ -16,7 +16,7 @@
   --ui-font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
   --ui-font-size: 15px;
   --editor-font-family: ui-monospace, 'SF Mono', 'Cascadia Code', 'Fira Code', Menlo, monospace;
-  --editor-font-size: 15px;
+  --editor-font-size: 16px;
   --editor-line-height: 1.6;
 }
 
@@ -29,6 +29,13 @@ html, body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
+
+/* Scale up small text globally for readability (except inside Phaser canvas) */
+.text-xs     { font-size: 0.85rem !important;  /* 12px → ~13.6px */ }
+.text-\[10px\] { font-size: 12px !important; }
+.text-\[11px\] { font-size: 13px !important; }
+.text-\[12px\] { font-size: 13px !important; }
+.text-\[13px\] { font-size: 14px !important; }
 
 /* ── Drag regions ──────────────────────────────────────────────────────────── */
 
@@ -459,6 +466,10 @@ body::before {
   border-left: 2px solid #3b82f6;
   animation: cp-border-pulse 1.4s ease-in-out infinite;
 }
+
+/* ── Vault Panel — 130% base font ──────────────────────────────────────── */
+
+.vault-panel { font-size: 130%; }
 
 /* ── Vault Markdown Preview ─────────────────────────────────────────────── */
 

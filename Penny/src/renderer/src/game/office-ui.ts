@@ -68,8 +68,7 @@ export class OfficeUI {
     // Notification toast container (screen-space, top-right)
     this.toastContainer = this.scene.add.container(0, 0).setDepth(9998).setScrollFactor(0)
 
-    // Status bar (bottom of viewport)
-    this.buildStatusBar()
+    // Status bar disabled — info is in the React header bar
   }
 
   /** Call whenever the viewport is resized */
