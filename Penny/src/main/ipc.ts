@@ -31,14 +31,14 @@ import {
   type AgentState,
 } from './agents'
 import {
-  createTriplet,
-  listTriplets,
-  getTripletStatus,
-  pauseTriplet,
-  resumeTriplet,
-  cancelTriplet,
-  getTripletPresets,
-} from './triplets'
+  createPod,
+  listPods,
+  getPodStatus,
+  pausePod,
+  resumePod,
+  cancelPod,
+  getPodPresets,
+} from './pods'
 import {
   listVaultDir,
   readVaultFile,
@@ -76,6 +76,8 @@ import {
   getSeenIssues,
   getGithubIssueCards,
   addWatchedRepo,
+  removeWatchedRepo,
+  getWatchedRepos,
 } from './github-issues'
 import {
   getVeritasStatus,
@@ -378,7 +380,7 @@ export function registerIpcHandlers() {
         id: `cursor-${cs.pid}`,
         name: `Cursor: ${projectName}`,
         title: `Cursor Agent`,
-        tripletRole: 'solver',
+        podRole: 'solver',
         systemPrompt: '',
         model: 'cursor-agent',
         mcpProfile: '',
@@ -553,35 +555,35 @@ export function registerIpcHandlers() {
   // ── Cursor Agent Handlers ────────────────────────────────────────────
   ipcMain.handle('cursor:focus', wrapHandler(() => focusCursorIDE()))
 
-  // ── Triplet Workflow Handlers ──────────────────────────────────────────
-  ipcMain.handle('triplet:create', wrapHandler((task: unknown, opts: unknown) => {
+  // ── Pod Workflow Handlers ──────────────────────────────────────────
+  ipcMain.handle('pod:create', wrapHandler((task: unknown, opts: unknown) => {
     if (typeof task !== 'string') throw new Error('task must be a string')
-    return createTriplet(task, (opts as Record<string, unknown>) || {})
+    return createPod(task, (opts as Record<string, unknown>) || {})
   }))
 
-  ipcMain.handle('triplet:list', wrapHandler(() => listTriplets()))
+  ipcMain.handle('pod:list', wrapHandler(() => listPods()))
 
-  ipcMain.handle('triplet:status', wrapHandler((workflowId: unknown) => {
+  ipcMain.handle('pod:status', wrapHandler((workflowId: unknown) => {
     if (typeof workflowId !== 'string') throw new Error('workflowId must be a string')
-    return getTripletStatus(workflowId)
+    return getPodStatus(workflowId)
   }))
 
-  ipcMain.handle('triplet:pause', wrapHandler((workflowId: unknown) => {
+  ipcMain.handle('pod:pause', wrapHandler((workflowId: unknown) => {
     if (typeof workflowId !== 'string') throw new Error('workflowId must be a string')
-    return pauseTriplet(workflowId)
+    return pausePod(workflowId)
   }))
 
-  ipcMain.handle('triplet:resume', wrapHandler((workflowId: unknown) => {
+  ipcMain.handle('pod:resume', wrapHandler((workflowId: unknown) => {
     if (typeof workflowId !== 'string') throw new Error('workflowId must be a string')
-    return resumeTriplet(workflowId)
+    return resumePod(workflowId)
   }))
 
-  ipcMain.handle('triplet:cancel', wrapHandler((workflowId: unknown) => {
+  ipcMain.handle('pod:cancel', wrapHandler((workflowId: unknown) => {
     if (typeof workflowId !== 'string') throw new Error('workflowId must be a string')
-    return cancelTriplet(workflowId)
+    return cancelPod(workflowId)
   }))
 
-  ipcMain.handle('triplet:presets', wrapHandler(() => getTripletPresets()))
+  ipcMain.handle('pod:presets', wrapHandler(() => getPodPresets()))
 
   // ── Vault File Manager ───────────────────────────────────────────────────
   ipcMain.handle('vault:list', wrapHandler((relativePath: unknown) => {
@@ -791,4 +793,12 @@ export function registerIpcHandlers() {
     addWatchedRepo(owner, repo, localPath)
     return { ok: true }
   }))
+  ipcMain.handle('github:remove-repo', wrapHandler((owner: unknown, repo: unknown) => {
+    if (typeof owner !== 'string' || typeof repo !== 'string') {
+      throw new Error('owner and repo must be strings')
+    }
+    removeWatchedRepo(owner, repo)
+    return { ok: true }
+  }))
+  ipcMain.handle('github:list-repos', wrapHandler(() => getWatchedRepos()))
 }

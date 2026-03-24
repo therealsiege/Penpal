@@ -85,12 +85,28 @@ If no qualifying companies found, return [].`,
     ],
   });
 
-  const text = response.content[0].type === "text" ? response.content[0].text : "";
-  const jsonMatch = text.match(/\[[\s\S]*\]/);
-  if (!jsonMatch) return new Map();
+  const rawText = response.content[0].type === "text" ? response.content[0].text : "";
+  // Strip markdown code fences if present
+  const text = rawText.replace(/```(?:json)?\s*/g, "").replace(/```/g, "").trim();
+
+  // Find the outermost JSON array by bracket matching
+  let jsonStr: string | null = null;
+  const start = text.indexOf("[");
+  if (start !== -1) {
+    let depth = 0;
+    for (let i = start; i < text.length; i++) {
+      if (text[i] === "[") depth++;
+      else if (text[i] === "]") depth--;
+      if (depth === 0) {
+        jsonStr = text.slice(start, i + 1);
+        break;
+      }
+    }
+  }
+  if (!jsonStr) return new Map();
 
   try {
-    const extracted: Array<{ company: string; signal?: string; articles: number[] }> = JSON.parse(jsonMatch[0]);
+    const extracted: Array<{ company: string; signal?: string; articles: number[] }> = JSON.parse(jsonStr);
     const companyMap = new Map<string, SourceArticle[]>();
 
     for (const entry of extracted) {
@@ -108,8 +124,9 @@ If no qualifying companies found, return [].`,
     }
 
     return companyMap;
-  } catch {
-    console.warn("  Failed to parse company extraction response");
+  } catch (err) {
+    console.warn("  Failed to parse company extraction response:", (err as Error).message);
+    console.warn("  Raw response:", text.slice(0, 500));
     return new Map();
   }
 }

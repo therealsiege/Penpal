@@ -70,14 +70,14 @@ declare global {
       getAgentStatuses: () => Promise<AgentState[]>
       launchAgent: (agentId: string, cwd: string) => Promise<SessionActionResult>
       focusAgent: (agentId: string) => Promise<SessionActionResult>
-      // Triplet Workflows
-      createTriplet: (task: string, opts?: Record<string, unknown>) => Promise<import('./types').TripletWorkflow>
-      listTriplets: () => Promise<import('./types').TripletWorkflow[]>
-      getTripletStatus: (workflowId: string) => Promise<import('./types').TripletWorkflow | null>
-      pauseTriplet: (workflowId: string) => Promise<boolean>
-      resumeTriplet: (workflowId: string) => Promise<boolean>
-      cancelTriplet: (workflowId: string) => Promise<boolean>
-      getTripletPresets: () => Promise<import('./types').TripletPreset[]>
+      // Pod Workflows
+      createPod: (task: string, opts?: Record<string, unknown>) => Promise<import('./types').PodWorkflow>
+      listPods: () => Promise<import('./types').PodWorkflow[]>
+      getPodStatus: (workflowId: string) => Promise<import('./types').PodWorkflow | null>
+      pausePod: (workflowId: string) => Promise<boolean>
+      resumePod: (workflowId: string) => Promise<boolean>
+      cancelPod: (workflowId: string) => Promise<boolean>
+      getPodPresets: () => Promise<import('./types').PodPreset[]>
       // Vault File Manager
       vaultList: (relativePath: string) => Promise<import('./types').VaultEntry[]>
       vaultRead: (relativePath: string) => Promise<import('./types').VaultFileContent | null>
@@ -137,6 +137,8 @@ declare global {
       githubSeenIssues: () => Promise<{ number: number; repo: string; taskId: string; ingestedAt: number }[]>
       githubIssueCards: () => Promise<import('./types').GitHubIssueCard[]>
       githubAddRepo: (owner: string, repo: string, localPath: string) => Promise<{ ok: boolean }>
+      githubRemoveRepo: (owner: string, repo: string) => Promise<{ ok: boolean }>
+      githubListRepos: () => Promise<{ owner: string; repo: string; localPath: string }[]>
       // Opencode Sessions
       getOpencodeSessions: () => Promise<OpencodeSession[]>
     }

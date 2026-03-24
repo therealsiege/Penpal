@@ -8,12 +8,11 @@ import { VenturesModal } from './components/VenturesModal'
 import { BriefingModal } from './components/BriefingModal'
 import { PipelineModal } from './components/PipelineModal'
 import { ActivityModal } from './components/ActivityModal'
-import { OrchestratorModal } from './components/OrchestratorModal'
+import { OrchestratorModal, TasksPanel } from './components/OrchestratorModal'
 import { CommandCenter } from './panels/CommandCenter'
 import { VaultPanel } from './panels/VaultPanel'
 import { SettingsPanel } from './panels/SettingsPanel'
 import { SoundboardPanel } from './panels/SoundboardPanel'
-import { GitHubPanel } from './panels/GitHubPanel'
 import type { SystemPaths } from './types'
 import { getPathPresets } from './utils/path-presets'
 import { EventBus, EVENTS } from './game/events'
@@ -318,7 +317,6 @@ function AppContent() {
       <Layout
         activePanel={activePanel}
         onNavigate={setActivePanel}
-        onOpenTasks={() => setShowTasksModal(true)}
       >
         {activePanel === 'office' && (
           <CommandCenter
@@ -328,11 +326,11 @@ function AppContent() {
             onOpenBriefing={() => setShowBriefingModal(true)}
             onOpenPipeline={() => setShowPipelineModal(true)}
             onOpenActivity={() => setShowActivityModal(true)}
-            onOpenTasks={() => setShowTasksModal(true)}
+            onOpenTasks={() => setActivePanel('tasks')}
           />
         )}
+        {activePanel === 'tasks' && <TasksPanel />}
         {activePanel === 'vault' && <VaultPanel />}
-        {activePanel === 'github' && <GitHubPanel />}
         {activePanel === 'soundboard' && <SoundboardPanel />}
         {activePanel === 'settings' && <SettingsPanel />}
       </Layout>

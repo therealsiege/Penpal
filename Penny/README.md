@@ -25,7 +25,7 @@ The main process connects directly to Memgraph, reads Claude session files, mana
 | `sessions.ts` | Discovers running Claude Code sessions via `~/.claude/sessions/*.json`, reads JSONL transcripts, analyzes session state (idle/working/waiting), sends messages via iTerm2 AppleScript |
 | `cursor-sessions.ts` | Discovers Cursor agent processes via `ps`/`lsof`, parses `~/.cursor/projects/*/agent-transcripts/*.jsonl` transcripts, classifies session state (working/waiting/idle-prompt) |
 | `agents.ts` | Loads agent configs from `agents/agent-types.yaml`, builds CLI args, manages agent-session persistence (`data/agent-sessions.json`) |
-| `triplets.ts` | Solver/Reviewer/Executor workflow engine -- deterministic state machine that chains three agents with feedback loops |
+| `pods.ts` | Solver/Reviewer/Executor workflow engine -- deterministic state machine that chains three agents with feedback loops |
 | `orchestrator.ts` | Task queue with priority routing, agent selection scoring, dispatch loop (10s), health monitor (30s), graceful shutdown |
 | `slack-bridge.ts` | Per-project Slack channels via Socket Mode, bidirectional message routing, `!task` command parsing, orchestrator status updates |
 | `graph.ts` | Memgraph queries -- pipeline summary, hot leads, territories, graph stats, lead search/detail |
@@ -50,7 +50,7 @@ React 18 + Tailwind 3 SPA. No routing -- panel switching is managed by `App.tsx`
 
 | Panel | Description |
 |-------|-------------|
-| `CommandCenter.tsx` | Default view -- Phaser office scene, agent cards with inline actions (send/approve/focus), quick-action bar, embedded terminal, triplet launcher, orchestrator modal |
+| `CommandCenter.tsx` | Default view -- Phaser office scene, agent cards with inline actions (send/approve/focus), quick-action bar, embedded terminal, pod launcher, orchestrator modal |
 | `VaultPanel.tsx` | Full-featured markdown editor with file tree, tabs, wikilinks, frontmatter editor, outline, templates, search, graph view |
 | `HealthPanel.tsx` | Service health dashboard |
 | `SchedulerPanel.tsx` | Cron job status and history |
@@ -65,7 +65,7 @@ React 18 + Tailwind 3 SPA. No routing -- panel switching is managed by `App.tsx`
 | Component | Description |
 |-----------|-------------|
 | `OrchestratorModal.tsx` | Task queue table + agent health cards, inline enqueue form |
-| `TripletModal.tsx` | Triplet launcher (preset picker), status viewer, workflow list |
+| `PodModal.tsx` | Pod launcher (preset picker), status viewer, workflow list |
 | `Terminal.tsx` | xterm.js embedded terminal connected to node-pty |
 | `AgentAvatar.tsx` | Pixel-art avatar renderer for agents |
 | `BriefingModal.tsx` | Daily briefing viewer |
@@ -96,7 +96,7 @@ React 18 + Tailwind 3 SPA. No routing -- panel switching is managed by `App.tsx`
 
 | File | Description |
 |------|-------------|
-| `agent-types.yaml` | Agent definitions -- name, persona, skills, model, defaultRepos, desk position, autonomy level, triplet role |
+| `agent-types.yaml` | Agent definitions -- name, persona, skills, model, defaultRepos, desk position, autonomy level, pod role |
 | `CLAUDE.md` | Shared team memory injected into all agent system prompts |
 | `mcp-profiles/` | MCP server configurations per agent role (e.g. `qa-executor.json` with Playwright) |
 
@@ -108,7 +108,7 @@ Runtime state files (JSON). Not committed.
 |------|-------------|
 | `agent-sessions.json` | Agent ID -> session/PID mapping |
 | `task-queue.json` | Orchestrator task queue (persistent) |
-| `triplet-workflows.json` | Triplet workflow state |
+| `pod-workflows.json` | Pod workflow state |
 | `agent-stats.json` | Agent statistics |
 
 ## Key Systems
@@ -159,9 +159,9 @@ The orchestrator (`src/main/orchestrator.ts`) provides centralized task manageme
 - Slack: `!task Fix the login bug` / `!task priority:high agent:marcus Refactor the lead scorer`
 - API: `enqueueTask()` from any main-process module
 
-### Triplet Workflows
+### Pod Workflows
 
-Three-agent workflow engine (`src/main/triplets.ts`):
+Three-agent workflow engine (`src/main/pods.ts`):
 
 1. **Solver** implements the task
 2. **Reviewer** independently designs test criteria (does NOT see solver's code)
@@ -261,12 +261,12 @@ All IPC calls go through `window.api.*`. Each handler uses `wrapHandler` which c
 - `launchAgent(agentId, cwd)` -- launch agent in iTerm2
 - `focusAgent(agentId)` -- focus agent's iTerm2 tab
 
-**Triplets**
-- `createTriplet(task, opts?)` -- launch solver/reviewer/executor workflow
-- `listTriplets()` -- all workflows
-- `getTripletStatus(workflowId)` -- workflow detail
-- `pauseTriplet(workflowId)` / `resumeTriplet(workflowId)` / `cancelTriplet(workflowId)`
-- `getTripletPresets()` -- available team presets
+**Pods**
+- `createPod(task, opts?)` -- launch solver/reviewer/executor workflow
+- `listPods()` -- all workflows
+- `getPodStatus(workflowId)` -- workflow detail
+- `pausePod(workflowId)` / `resumePod(workflowId)` / `cancelPod(workflowId)`
+- `getPodPresets()` -- available team presets
 
 **Orchestrator**
 - `orchestratorQueue()` -- all tasks

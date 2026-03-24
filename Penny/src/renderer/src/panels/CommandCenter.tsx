@@ -3,8 +3,8 @@ import { usePolling } from '../hooks/usePolling'
 import { AgentAvatar } from '../components/AgentAvatar'
 import { useToast } from '../components/Toast'
 import { Terminal } from '../components/Terminal'
-import type { AgentConfig, AgentState, HealthResult, HotLead, JobStatus, TripletWorkflow, TripletPreset, ProjectLeaderboardEntry, OpencodeSession, AgentXP, getRankForXP } from '../types'
-import { TripletLauncherModal, TripletStatusModal, TripletListModal } from '../components/TripletModal'
+import type { AgentConfig, AgentState, HealthResult, HotLead, JobStatus, PodWorkflow, PodPreset, ProjectLeaderboardEntry, OpencodeSession, AgentXP, getRankForXP } from '../types'
+import { PodLauncherModal, PodStatusModal, PodListModal } from '../components/PodModal'
 import { createOfficeGame } from '../game/OfficeGame'
 import { OfficeScene } from '../game/OfficeScene'
 import { EventBus, EVENTS } from '../game/events'
@@ -96,13 +96,13 @@ function AgentActionPopup({
                   {state.sessionMode}
                 </span>
               )}
-              {state.config.tripletRole && (
+              {state.config.podRole && (
                 <span className={`text-[10px] px-1.5 py-0.5 rounded border font-medium ${
-                  state.config.tripletRole === 'solver' ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20' :
-                  state.config.tripletRole === 'reviewer' ? 'text-blue-400 bg-blue-500/10 border-blue-500/20' :
+                  state.config.podRole === 'solver' ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20' :
+                  state.config.podRole === 'reviewer' ? 'text-blue-400 bg-blue-500/10 border-blue-500/20' :
                   'text-orange-400 bg-orange-500/10 border-orange-500/20'
                 }`}>
-                  {state.config.tripletRole === 'solver' ? '\u{1F527}' : state.config.tripletRole === 'reviewer' ? '\u{1F50D}' : '\u{25B6}'} {state.config.tripletRole}
+                  {state.config.podRole === 'solver' ? '\u{1F527}' : state.config.podRole === 'reviewer' ? '\u{1F50D}' : '\u{25B6}'} {state.config.podRole}
                 </span>
               )}
             </div>
@@ -987,20 +987,20 @@ export function CommandCenter(props: CommandCenterProps) {
   const [launchConfig, setLaunchConfig] = useState<AgentConfig | null>(null)
   const [shareSource, setShareSource] = useState<AgentState | null>(null)
   const [showLeaderboard, setShowLeaderboard] = useState(false)
-  const [showTripletLauncher, setShowTripletLauncher] = useState(false)
-  const [showTripletList, setShowTripletList] = useState(false)
-  const [viewingTriplet, setViewingTriplet] = useState<TripletWorkflow | null>(null)
-  const [tripletPresets, setTripletPresets] = useState<TripletPreset[]>([])
+  const [showPodLauncher, setShowPodLauncher] = useState(false)
+  const [showPodList, setShowPodList] = useState(false)
+  const [viewingPod, setViewingPod] = useState<PodWorkflow | null>(null)
+  const [podPresets, setPodPresets] = useState<PodPreset[]>([])
   const [smokeCheckRunning, setSmokeCheckRunning] = useState(false)
 
-  // Load triplet presets once
+  // Load pod presets once
   useEffect(() => {
-    window.api.getTripletPresets().then(setTripletPresets).catch(() => {})
+    window.api.getPodPresets().then(setPodPresets).catch(() => {})
   }, [])
 
-  // Poll triplet workflows for badge display (Fix 9)
-  const { data: tripletWorkflows } = usePolling<TripletWorkflow[]>(
-    () => window.api.listTriplets().catch(() => []),
+  // Poll pod workflows for badge display (Fix 9)
+  const { data: podWorkflows } = usePolling<PodWorkflow[]>(
+    () => window.api.listPods().catch(() => []),
     5000,
   )
 
@@ -1066,10 +1066,10 @@ export function CommandCenter(props: CommandCenterProps) {
     [allConfigs, isCursorState],
   )
 
-  // --- Push triplet workflow data into Phaser scene for connecting lines (Fix 11) ---
+  // --- Push pod workflow data into Phaser scene for connecting lines (Fix 11) ---
   useEffect(() => {
-    if (sceneRef.current && tripletWorkflows) {
-      const activeWorkflows = tripletWorkflows
+    if (sceneRef.current && podWorkflows) {
+      const activeWorkflows = podWorkflows
         .filter(wf => !['complete', 'failed'].includes(wf.status))
         .map(wf => ({
           workflowId: wf.id,
@@ -1080,7 +1080,7 @@ export function CommandCenter(props: CommandCenterProps) {
         }))
       sceneRef.current.setPodWorkflows(activeWorkflows)
     }
-  }, [tripletWorkflows])
+  }, [podWorkflows])
 
   // --- Wire EventBus to React state ---
   useEffect(() => {
@@ -1221,11 +1221,11 @@ export function CommandCenter(props: CommandCenterProps) {
     setLaunchConfig(cfg)
   }, [])
 
-  // Fix 9: Open triplet status modal by workflow ID
-  const handleViewTriplet = useCallback((workflowId: string) => {
-    const wf = tripletWorkflows?.find(w => w.id === workflowId)
-    if (wf) setViewingTriplet(wf)
-  }, [tripletWorkflows])
+  // Fix 9: Open pod status modal by workflow ID
+  const handleViewPod = useCallback((workflowId: string) => {
+    const wf = podWorkflows?.find(w => w.id === workflowId)
+    if (wf) setViewingPod(wf)
+  }, [podWorkflows])
 
   const handleShare = useCallback(async (source: AgentState, target: AgentState) => {
     if (!target.tty || !source.lastAssistantBlurb) return
@@ -1325,20 +1325,6 @@ export function CommandCenter(props: CommandCenterProps) {
       <div className="flex-none flex items-center justify-between px-4 py-2 bg-slate-900/80 border-b border-slate-800 backdrop-blur">
         {/* Left side */}
         <div className="flex items-center gap-4">
-          {/* Health dot */}
-          <button
-            onClick={props.onOpenHealth}
-            className="flex items-center gap-1.5 group"
-            title={`System ${healthLabel}`}
-          >
-            <span
-              className={`w-2 h-2 rounded-full ${healthColor} ${health?.overall === 'degraded' ? 'animate-pulse' : ''}`}
-            />
-            <span className="text-[13px] text-slate-400 group-hover:text-slate-200 transition-colors">
-              {healthLabel}
-            </span>
-          </button>
-
           {/* Agent count */}
           <div className="flex items-center gap-1.5">
             <span className="text-[13px] text-slate-500">Agents</span>
@@ -1410,38 +1396,6 @@ export function CommandCenter(props: CommandCenterProps) {
             Ranks
           </button>
 
-          {/* Triplet buttons */}
-          <button
-            onClick={props.onOpenTasks}
-            className="flex items-center gap-1 px-2.5 py-1 bg-violet-600/20 hover:bg-violet-600/30 border border-violet-500/30 rounded-md text-violet-400 text-xs transition-colors"
-            title="Open Penny tasks and Veritas board"
-          >
-            <IconQueue />
-            Tasks
-          </button>
-          <button
-            onClick={() => setShowTripletLauncher(true)}
-            className="flex items-center gap-1 px-2.5 py-1 bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/30 rounded-md text-emerald-400 text-[13px] transition-colors"
-          >
-            <IconPlus />
-            Triplet
-          </button>
-          <button
-            onClick={() => setShowTripletList(true)}
-            className="flex items-center gap-1 px-2.5 py-1 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-md text-slate-400 text-[13px] transition-colors"
-          >
-            Workflows
-          </button>
-
-          {/* Hire button */}
-          <button
-            onClick={() => setShowTypePicker(true)}
-            className="flex items-center gap-1 px-2.5 py-1 bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/30 rounded-md text-blue-400 text-[13px] transition-colors"
-          >
-            <IconPlus />
-            Hire
-          </button>
-
           {/* Downloads button */}
           <button
             onClick={() => window.api.openDownloads()}
@@ -1480,20 +1434,6 @@ export function CommandCenter(props: CommandCenterProps) {
         </div>
       )}
 
-      {/* ------------------------------------------------------------------ */}
-      {/* Quick Actions Bar                                                   */}
-      {/* ------------------------------------------------------------------ */}
-      <div className="flex-none border-t border-slate-800 bg-slate-900/60 px-4 py-3">
-        <div className="flex items-center gap-2">
-          <QuickActionButton icon={<IconHeart />} label="Health" onClick={props.onOpenHealth} />
-          <QuickActionButton icon={<IconClock />} label="Scheduler" onClick={props.onOpenScheduler} />
-          <QuickActionButton icon={<IconFolder />} label="Docs" onClick={props.onOpenVentures} />
-          <QuickActionButton icon={<IconNewspaper />} label="Briefing" onClick={props.onOpenBriefing} />
-          <QuickActionButton icon={<IconFunnel />} label="Pipeline" onClick={props.onOpenPipeline} />
-          <QuickActionButton icon={<IconActivity />} label="Activity" onClick={props.onOpenActivity} />
-          <QuickActionButton icon={<IconQueue />} label="Tasks" onClick={props.onOpenTasks} />
-        </div>
-      </div>
 
       {/* ------------------------------------------------------------------ */}
       {/* Modals                                                              */}
@@ -1545,50 +1485,50 @@ export function CommandCenter(props: CommandCenterProps) {
         />
       )}
 
-      {showTripletLauncher && (
-        <TripletLauncherModal
-          presets={tripletPresets}
+      {showPodLauncher && (
+        <PodLauncherModal
+          presets={podPresets}
           agents={allConfigs}
           onLaunch={async (task, opts) => {
             try {
-              const wf = await window.api.createTriplet(task, opts)
-              setShowTripletLauncher(false)
-              setViewingTriplet(wf)
-              toast('Triplet workflow launched', 'success')
+              const wf = await window.api.createPod(task, opts)
+              setShowPodLauncher(false)
+              setViewingPod(wf)
+              toast('Pod workflow launched', 'success')
             } catch {
-              toast('Failed to launch triplet', 'error')
+              toast('Failed to launch pod', 'error')
             }
           }}
-          onClose={() => setShowTripletLauncher(false)}
+          onClose={() => setShowPodLauncher(false)}
         />
       )}
 
-      {showTripletList && (
-        <TripletListModal
+      {showPodList && (
+        <PodListModal
           onSelect={wf => {
-            setShowTripletList(false)
-            setViewingTriplet(wf)
+            setShowPodList(false)
+            setViewingPod(wf)
           }}
-          onClose={() => setShowTripletList(false)}
+          onClose={() => setShowPodList(false)}
         />
       )}
 
-      {viewingTriplet && (
-        <TripletStatusModal
-          workflow={viewingTriplet}
+      {viewingPod && (
+        <PodStatusModal
+          workflow={viewingPod}
           onPause={async (id) => {
-            await window.api.pauseTriplet(id)
+            await window.api.pausePod(id)
             toast('Workflow paused', 'success')
           }}
           onResume={async (id) => {
-            await window.api.resumeTriplet(id)
+            await window.api.resumePod(id)
             toast('Workflow resumed', 'success')
           }}
           onCancel={async (id) => {
-            await window.api.cancelTriplet(id)
+            await window.api.cancelPod(id)
             toast('Workflow cancelled', 'success')
           }}
-          onClose={() => setViewingTriplet(null)}
+          onClose={() => setViewingPod(null)}
         />
       )}
 

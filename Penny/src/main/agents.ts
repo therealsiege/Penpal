@@ -15,7 +15,7 @@ export interface AgentConfig {
   id: string
   name: string
   title: string
-  tripletRole: 'solver' | 'reviewer' | 'executor'
+  podRole: 'solver' | 'reviewer' | 'executor'
   persona?: AgentPersona
   systemPrompt: string
   model: string
@@ -84,7 +84,7 @@ export function loadAgentConfigs(): AgentConfig[] {
         id,
         name: (cfg.name as string) || id,
         title: (cfg.title as string) || (cfg.name as string) || id,
-        tripletRole: ((cfg.triplet_role as string) || 'solver') as AgentConfig['tripletRole'],
+        podRole: ((cfg.pod_role as string) || (cfg.triplet_role as string) || 'solver') as AgentConfig['podRole'],
         persona: persona ? {
           backstory: (persona.backstory || '').trim(),
           style: (persona.style || '').trim(),
@@ -120,7 +120,7 @@ export function getAgentConfig(agentId: string): AgentConfig | undefined {
 
 // ── YAML Preset Loader (Fix 14) ─────────────────────────────────────────────
 
-export interface TripletPresetYaml {
+export interface PodPresetYaml {
   id: string
   solver: string
   reviewer: string
@@ -128,12 +128,13 @@ export interface TripletPresetYaml {
   description: string
 }
 
-export function loadTripletPresets(): TripletPresetYaml[] {
+export function loadPodPresets(): PodPresetYaml[] {
   try {
     const raw = fs.readFileSync(AGENTS_YAML, 'utf-8')
-    const doc = yaml.load(raw) as { triplet_presets?: Record<string, Record<string, string>> }
-    if (!doc.triplet_presets) return []
-    return Object.entries(doc.triplet_presets).map(([id, cfg]) => ({
+    const doc = yaml.load(raw) as { pod_presets?: Record<string, Record<string, string>>; triplet_presets?: Record<string, Record<string, string>> }
+    const presets = doc.pod_presets || doc.triplet_presets
+    if (!presets) return []
+    return Object.entries(presets).map(([id, cfg]) => ({
       id,
       solver: cfg.solver || 'fullstack-dev',
       reviewer: cfg.reviewer || 'backend-arch',

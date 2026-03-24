@@ -59,6 +59,13 @@ interface TrackedIssue {
 }
 
 let trackedIssues: TrackedIssue[] = []
+// Eagerly load tracked issues so cards are available before poller starts
+try {
+  if (fs.existsSync(SEEN_PATH)) {
+    const _raw = JSON.parse(fs.readFileSync(SEEN_PATH, 'utf-8'))
+    if (Array.isArray(_raw)) trackedIssues = _raw
+  }
+} catch { /* will be loaded again when poller starts */ }
 
 function loadTracked(): void {
   try {
@@ -389,7 +396,46 @@ export function getGithubIssueCards(): GitHubIssueCard[] {
   })
 }
 
-/** Add a repo to watch at runtime. */
+// ── Repo management (persisted) ────────────────────────────────────────────
+
+const REPOS_PATH = path.join(DATA_DIR, 'github-watched-repos.json')
+
+function loadPersistedRepos(): void {
+  try {
+    if (fs.existsSync(REPOS_PATH)) {
+      const data = JSON.parse(fs.readFileSync(REPOS_PATH, 'utf-8'))
+      if (Array.isArray(data)) {
+        for (const r of data) {
+          if (r.owner && r.repo && !REPOS.find(e => e.owner === r.owner && e.repo === r.repo)) {
+            REPOS.push({
+              owner: r.owner,
+              repo: r.repo,
+              label: r.label || 'agent-ready',
+              workingLabel: r.workingLabel || 'agent-working',
+              localPath: r.localPath || '',
+              project: r.project || r.repo,
+            })
+          }
+        }
+      }
+    }
+  } catch { /* ignore */ }
+}
+
+function savePersistedRepos(): void {
+  try {
+    fs.mkdirSync(DATA_DIR, { recursive: true })
+    fs.writeFileSync(REPOS_PATH, JSON.stringify(REPOS.map(r => ({
+      owner: r.owner, repo: r.repo, label: r.label,
+      workingLabel: r.workingLabel, localPath: r.localPath, project: r.project,
+    })), null, 2))
+  } catch { /* ignore */ }
+}
+
+// Load persisted repos on module init
+loadPersistedRepos()
+
+/** Add a repo to watch. Persisted to disk. */
 export function addWatchedRepo(owner: string, repo: string, localPath: string): void {
   const existing = REPOS.find(r => r.owner === owner && r.repo === repo)
   if (existing) return
@@ -401,5 +447,20 @@ export function addWatchedRepo(owner: string, repo: string, localPath: string): 
     localPath,
     project: repo,
   })
+  savePersistedRepos()
   console.log(`[github-issues] Now watching ${owner}/${repo}`)
+}
+
+/** Remove a repo from the watch list. */
+export function removeWatchedRepo(owner: string, repo: string): void {
+  const idx = REPOS.findIndex(r => r.owner === owner && r.repo === repo)
+  if (idx === -1) return
+  REPOS.splice(idx, 1)
+  savePersistedRepos()
+  console.log(`[github-issues] Stopped watching ${owner}/${repo}`)
+}
+
+/** List all watched repos. */
+export function getWatchedRepos(): { owner: string; repo: string; localPath: string }[] {
+  return REPOS.map(r => ({ owner: r.owner, repo: r.repo, localPath: r.localPath }))
 }

@@ -57,14 +57,14 @@ contextBridge.exposeInMainWorld('api', {
   getAgentStatuses: () => ipcRenderer.invoke('agents:statuses'),
   launchAgent: (agentId: string, cwd: string) => ipcRenderer.invoke('agents:launch', agentId, cwd),
   focusAgent: (agentId: string) => ipcRenderer.invoke('agents:focus', agentId),
-  // Triplet Workflow APIs
-  createTriplet: (task: string, opts?: Record<string, unknown>) => ipcRenderer.invoke('triplet:create', task, opts),
-  listTriplets: () => ipcRenderer.invoke('triplet:list'),
-  getTripletStatus: (workflowId: string) => ipcRenderer.invoke('triplet:status', workflowId),
-  pauseTriplet: (workflowId: string) => ipcRenderer.invoke('triplet:pause', workflowId),
-  resumeTriplet: (workflowId: string) => ipcRenderer.invoke('triplet:resume', workflowId),
-  cancelTriplet: (workflowId: string) => ipcRenderer.invoke('triplet:cancel', workflowId),
-  getTripletPresets: () => ipcRenderer.invoke('triplet:presets'),
+  // Pod Workflow APIs
+  createPod: (task: string, opts?: Record<string, unknown>) => ipcRenderer.invoke('pod:create', task, opts),
+  listPods: () => ipcRenderer.invoke('pod:list'),
+  getPodStatus: (workflowId: string) => ipcRenderer.invoke('pod:status', workflowId),
+  pausePod: (workflowId: string) => ipcRenderer.invoke('pod:pause', workflowId),
+  resumePod: (workflowId: string) => ipcRenderer.invoke('pod:resume', workflowId),
+  cancelPod: (workflowId: string) => ipcRenderer.invoke('pod:cancel', workflowId),
+  getPodPresets: () => ipcRenderer.invoke('pod:presets'),
   // Vault File Manager
   vaultList: (relativePath: string) => ipcRenderer.invoke('vault:list', relativePath),
   vaultRead: (relativePath: string) => ipcRenderer.invoke('vault:read', relativePath),
@@ -124,6 +124,9 @@ contextBridge.exposeInMainWorld('api', {
   githubIssueCards: () => ipcRenderer.invoke('github:cards'),
   githubAddRepo: (owner: string, repo: string, localPath: string) =>
     ipcRenderer.invoke('github:add-repo', owner, repo, localPath),
+  githubRemoveRepo: (owner: string, repo: string) =>
+    ipcRenderer.invoke('github:remove-repo', owner, repo),
+  githubListRepos: () => ipcRenderer.invoke('github:list-repos'),
   // Opencode Sessions
   getOpencodeSessions: () => ipcRenderer.invoke('opencode:sessions'),
 })

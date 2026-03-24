@@ -228,7 +228,7 @@ export class OfficeUI {
     if (this.tooltipGraphics)  { this.tooltipGraphics.destroy();  this.tooltipGraphics  = null }
     const name   = agent.config.name  ?? 'Agent'
     const title  = agent.config.title ?? ''
-    const role   = agent.config.tripletRole ? agent.config.tripletRole.toUpperCase() : ''
+    const role   = agent.config.podRole ? agent.config.podRole.toUpperCase() : ''
     const uptime = agent.uptime ?? ''
     const resources = [agent.cpu ? `CPU ${agent.cpu}` : '', agent.memoryMB ? `${Math.round(agent.memoryMB)}MB` : ''].filter(Boolean).join('  ')
     let statusLabel = 'idle', statusHex = '#64748b'

@@ -155,7 +155,7 @@ function TreeNode({
       */}
       <div
         className={[
-          'flex items-center gap-1 py-0.5 px-1 cursor-pointer rounded text-sm group',
+          'flex items-center gap-1.5 py-1 px-1.5 cursor-pointer rounded text-[16px] group',
           // Feature 2: hover translate + bg
           'transition-all duration-100 hover:bg-slate-800/50 hover:translate-x-0.5',
           // Feature 3: previewed state base colors (animation handles the flash on entry)
@@ -202,7 +202,7 @@ function TreeNode({
           */
           <span
             className={[
-              'w-4 text-center text-slate-500 shrink-0 text-xs inline-block',
+              'w-4 text-center text-slate-500 shrink-0 text-[15px] inline-block',
               'transition-transform duration-200',
               expanded ? 'rotate-90' : 'rotate-0',
             ].join(' ')}
@@ -257,7 +257,7 @@ function TreeNode({
           ))}
           {!loaded && (
             <div
-              className="text-slate-600 text-xs"
+              className="text-slate-600 text-[15px]"
               style={{ paddingLeft: `${(depth + 1) * 14 + 4}px` }}
             >
               Loading...
@@ -299,7 +299,7 @@ export function FileTree({
   }, [])
 
   return (
-    <div className="overflow-y-auto h-full py-1 text-xs relative">
+    <div className="overflow-y-auto h-full py-1 text-[16px] relative">
       {rootEntries.map((entry) => (
         <TreeNode
           key={entry.path}
@@ -316,7 +316,7 @@ export function FileTree({
         />
       ))}
       {rootEntries.length === 0 && (
-        <div className="text-slate-600 text-xs px-3 py-4 text-center">No files found</div>
+        <div className="text-slate-600 text-[15px] px-3 py-4 text-center">No files found</div>
       )}
       {contextMenu && (
         <FileContextMenu

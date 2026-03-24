@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react'
-import type { TripletWorkflow, TripletPreset, TripletStatus, AgentConfig } from '../types'
+import type { PodWorkflow, PodPreset, PodStatus, AgentConfig } from '../types'
 import { usePolling } from '../hooks/usePolling'
 
 // ── Status helpers ──────────────────────────────────────────────────────────
 
-function statusColor(status: TripletStatus): string {
+function statusColor(status: PodStatus): string {
   switch (status) {
     case 'pending': return 'text-slate-400 bg-slate-500/10 border-slate-500/20'
     case 'solving': return 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20'
@@ -39,15 +39,15 @@ function formatTime(ms: number): string {
   return d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })
 }
 
-// ── Triplet Launcher ────────────────────────────────────────────────────────
+// ── Pod Launcher ────────────────────────────────────────────────────────
 
-export function TripletLauncherModal({
+export function PodLauncherModal({
   presets,
   agents,
   onLaunch,
   onClose,
 }: {
-  presets: TripletPreset[]
+  presets: PodPreset[]
   agents: AgentConfig[]
   onLaunch: (task: string, opts: Record<string, unknown>) => void
   onClose: () => void
@@ -93,7 +93,7 @@ export function TripletLauncherModal({
       <div className="bg-slate-900 border border-slate-700 rounded-xl p-5 w-[560px] shadow-2xl max-h-[85vh] overflow-y-auto animate-modal-scale-in" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-4">
           <div>
-            <h3 className="text-[15px] font-bold text-white">Launch Triplet Workflow</h3>
+            <h3 className="text-[15px] font-bold text-white">Launch Pod Workflow</h3>
             <p className="text-[12px] text-slate-500 mt-0.5">Solver + Reviewer + Executor</p>
           </div>
           <button onClick={onClose} className="text-slate-500 hover:text-slate-300 text-lg">x</button>
@@ -256,7 +256,7 @@ export function TripletLauncherModal({
             disabled={!task.trim() || !effectiveCwd}
             className="px-4 py-1.5 text-[12px] bg-emerald-600 hover:bg-emerald-500 rounded-md text-white transition-colors disabled:opacity-40 font-semibold"
           >
-            Launch Triplet
+            Launch Pod
           </button>
         </div>
       </div>
@@ -264,24 +264,24 @@ export function TripletLauncherModal({
   )
 }
 
-// ── Triplet Status Modal ────────────────────────────────────────────────────
+// ── Pod Status Modal ────────────────────────────────────────────────────
 
-export function TripletStatusModal({
+export function PodStatusModal({
   workflow: initialWorkflow,
   onPause,
   onResume,
   onCancel,
   onClose,
 }: {
-  workflow: TripletWorkflow
+  workflow: PodWorkflow
   onPause: (id: string) => void
   onResume: (id: string) => void
   onCancel: (id: string) => void
   onClose: () => void
 }) {
   // Poll for live updates
-  const { data: liveWorkflow } = usePolling<TripletWorkflow | null>(
-    () => window.api.getTripletStatus(initialWorkflow.id),
+  const { data: liveWorkflow } = usePolling<PodWorkflow | null>(
+    () => window.api.getPodStatus(initialWorkflow.id),
     2000,
   )
   const wf = liveWorkflow ?? initialWorkflow
@@ -465,17 +465,17 @@ function RoleColumn({
   )
 }
 
-// ── Triplet List Modal ──────────────────────────────────────────────────────
+// ── Pod List Modal ──────────────────────────────────────────────────────
 
-export function TripletListModal({
+export function PodListModal({
   onSelect,
   onClose,
 }: {
-  onSelect: (wf: TripletWorkflow) => void
+  onSelect: (wf: PodWorkflow) => void
   onClose: () => void
 }) {
-  const { data: workflows } = usePolling<TripletWorkflow[]>(
-    () => window.api.listTriplets(),
+  const { data: workflows } = usePolling<PodWorkflow[]>(
+    () => window.api.listPods(),
     3000,
   )
 
@@ -485,7 +485,7 @@ export function TripletListModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 animate-backdrop-fade-in" onClick={onClose}>
       <div className="bg-slate-900 border border-slate-700 rounded-xl p-5 w-[520px] shadow-2xl max-h-[70vh] overflow-y-auto animate-modal-scale-in" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-[15px] font-bold text-white">Triplet Workflows</h3>
+          <h3 className="text-[15px] font-bold text-white">Pod Workflows</h3>
           <button onClick={onClose} className="text-slate-500 hover:text-slate-300 text-lg">x</button>
         </div>
 
