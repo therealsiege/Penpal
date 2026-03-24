@@ -144,5 +144,9 @@ vite.config.ts.timestamp-*
 # Obsidian
 .obsidian/
 
+# Vault content (lives in ~/Documents/Vault, backed by iCloud)
+Docs/
+Resources/
+
 # ETL artifacts
 new_entities.json
