@@ -9,14 +9,13 @@ export function createOfficeGame(container: HTMLDivElement): {
 
   const scene = new OfficeScene()
 
+  // RESIZE mode: Phaser auto-sizes to the parent container.
   // NO_CENTER avoids the flex-layout drift/jump we saw with CENTER_BOTH.
   // No DPR zoom/resolution overrides — RESIZE mode reports CSS pixels directly,
   // which is what all layout math expects.  Text objects set resolution: 2 individually.
   const game = new Phaser.Game({
     type: Phaser.AUTO,
     parent: container,
-    // If the container hasn't measured yet, start tiny and let RESIZE mode
-    // immediately grow to the real size on the first layout tick.
     width: Math.max(1, Math.floor(rect.width)),
     height: Math.max(1, Math.floor(rect.height)),
     transparent: true,
@@ -35,6 +34,17 @@ export function createOfficeGame(container: HTMLDivElement): {
     },
     audio: { noAudio: true },
   })
+
+  // Take the canvas out of document flow so it can never inflate its flex parent.
+  // This breaks the RESIZE-mode feedback loop at the CSS level:
+  //   container size → Phaser reads it → sets canvas size → container unaffected (absolute)
+  const canvas = game.canvas
+  if (canvas) {
+    canvas.style.position = 'absolute'
+    canvas.style.top = '0'
+    canvas.style.left = '0'
+    canvas.style.display = 'block'
+  }
 
   // Expose for Playwright / debug access
   ;(window as any).__PENNY_GAME__ = game

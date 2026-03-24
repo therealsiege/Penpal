@@ -89,7 +89,7 @@ export class PennyCafe {
   private visitorTimer: Phaser.Time.TimerEvent | null = null
   private steamTimer: Phaser.Time.TimerEvent | null = null
   private coffeeRunTimer: Phaser.Time.TimerEvent | null = null
-  readonly coffeeRunners = new Set<string>()
+  readonly coffeeRunners = new Map<string, () => void>()
   private coffeeRunnerRooms = new Map<string, number>()
   private stoolOccupied = new Set<number>()
   private seatedVisitors = new Map<string, CafeVisitor>()
@@ -264,8 +264,9 @@ export class PennyCafe {
       // Trigger the walk-back animation (cleanup happens on arrival)
       visitor.triggerReturn()
     } else {
-      // Not yet seated or no return path — just clean up immediately
-      this.coffeeRunners.delete(agentId)
+      // Not yet seated — force-cleanup the walker immediately to prevent orphan clones
+      const forceCleanup = this.coffeeRunners.get(agentId)
+      if (forceCleanup) forceCleanup()
     }
   }
 
@@ -364,7 +365,8 @@ export class PennyCafe {
     const stoolIdx = this.pickStool() // null = standing overflow
     const isStanding = stoolIdx === null
 
-    this.coffeeRunners.add(agentId)
+    // Placeholder — real cleanup stored after it's defined below
+    this.coffeeRunners.set(agentId, () => {})
     this.coffeeRunnerRooms.set(room.cwd, (this.coffeeRunnerRooms.get(room.cwd) ?? 0) + 1)
     if (stoolIdx !== null) this.stoolOccupied.add(stoolIdx)
 
@@ -433,6 +435,8 @@ export class PennyCafe {
       if (rc <= 0) this.coffeeRunnerRooms.delete(room.cwd)
       else this.coffeeRunnerRooms.set(room.cwd, rc)
     }
+    // Now store the real cleanup so cancelCoffeeRun can force-destroy mid-walk
+    this.coffeeRunners.set(agentId, cleanup)
 
     const deskBottomY = room.y + ws.container.y + WS_DESK_Y + 14
 

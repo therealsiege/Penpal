@@ -161,12 +161,13 @@ export class OfficeMinimap {
 
   /** Reposition the minimap panel after a viewport resize. */
   reposition(viewWidth: number, viewHeight: number): void {
+    if (!this.minimapContainer) return
+    if (viewWidth < 10 || viewHeight < 10) return
     this.viewWidth = viewWidth
     this.viewHeight = viewHeight
-    if (!this.minimapContainer) return
     this.minimapContainer.setPosition(
       viewWidth - MINIMAP_W - MINIMAP_MARGIN,
-      viewHeight - MINIMAP_H - MINIMAP_MARGIN - 24,
+      viewHeight - MINIMAP_H - MINIMAP_MARGIN,
     )
   }
 

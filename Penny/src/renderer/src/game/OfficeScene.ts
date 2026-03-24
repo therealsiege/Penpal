@@ -11,7 +11,6 @@ import { OfficeUI } from './office-ui'
 import { OfficeAmbient } from './office-ambient'
 import { OfficePods } from './office-pods'
 import { OfficeSelection } from './office-selection'
-import { OfficeMinimap } from './office-minimap'
 import { OfficeRooms } from './office-rooms'
 import { OfficeWorkstations } from './office-workstation'
 import { OfficeBackground } from './office-background'
@@ -30,7 +29,6 @@ import {
   COLOR_BG, COLOR_LED_GREEN, COLOR_LED_AMBER, COLOR_LED_GRAY,
   WORLD_MARGIN, ZOOM_MIN, ZOOM_MAX, ZOOM_FIT_MAX, ZOOM_LERP_SPEED, FOLLOW_LERP_SPEED,
   LOD_L1_MAX, LOD_L2_MAX,
-  MINIMAP_REFRESH_MS,
   POD_REFRESH_MS,
 } from './office-constants'
 
@@ -102,8 +100,6 @@ export class OfficeScene extends Phaser.Scene {
   private resizeTimer: ReturnType<typeof setTimeout> | null = null
   /** Current LOD level: 1=overview, 2=room, 3=full detail. Initialized to 3 so first frame always applies the correct state. */
   private lastLodLevel = 3
-  // Minimap subsystem (extracted to OfficeMinimap)
-  private minimap!: OfficeMinimap
   // Room rendering subsystem (extracted to OfficeRooms)
   private roomRenderer!: OfficeRooms
   // Workstation lifecycle subsystem (extracted to OfficeWorkstations)
@@ -338,14 +334,13 @@ export class OfficeScene extends Phaser.Scene {
       lastSceneClickTime = now
     })
 
-    // Resize — reposition overlays immediately (no zoom compensation needed for
-    // setScrollFactor(0) objects — they use gameSize coordinates directly).
+    // Resize handler. gameSize values can bounce (Phaser ↔ flex feedback).
+    // Use gameSize for Phaser coordinate space, reposition overlays here.
     this.scale.on('resize', (gameSize: Phaser.Structs.Size) => {
       this.viewWidth  = gameSize.width
       this.viewHeight = gameSize.height
 
-      if (this.minimap) { this.minimap.reposition(gameSize.width, gameSize.height); this.minimap.markDirty() }
-      if (this.ui) { this.ui.setViewSize(gameSize.width, gameSize.height); this.ui.repositionStatusBar() }
+      if (this.ui) { this.ui.setViewSize(gameSize.width, gameSize.height) }
 
       if (this.resizeTimer) clearTimeout(this.resizeTimer)
       this.resizeTimer = setTimeout(() => {
@@ -452,13 +447,6 @@ export class OfficeScene extends Phaser.Scene {
       })
     }
 
-    // Create minimap overlay — temporarily disabled for debugging
-    this.minimap = new OfficeMinimap(this, (worldX, worldY) => {
-      this.followTarget = { x: worldX, y: worldY }
-    })
-    // this.minimap.init(this.viewWidth, this.viewHeight)
-    // this.minimap.markDirty()
-
     // Vignette: subtle screen-space edge shading
     this.vignetteFx = this.cameras.main.postFX.addVignette(0.5, 0.5, 0.85, 0.35)
 
@@ -525,7 +513,7 @@ export class OfficeScene extends Phaser.Scene {
         burstConfetti: (x, y) => scene.particles.burstConfetti(x, y),
         spawnSteamParticles: (ws) => scene.particles.spawnSteamParticles(ws),
         clearSteamParticles: (ws) => scene.particles.clearSteamParticles(ws),
-        queueMinimapRoomFlash: (cwd, color, ms) => { if (scene.minimap) scene.minimap.queueFlash(cwd, color, ms) },
+        queueMinimapRoomFlash: () => {},
         getAgentCharacterIndex: (agent) => getAgentCharacterIndex(agent),
         getPoseFrame: (idx, agent) => getPoseFrame(idx, agent),
         getStatusColor: (agent) => getStatusColor(agent),
@@ -625,7 +613,7 @@ export class OfficeScene extends Phaser.Scene {
       this.background.clearFloorArrows()
     }
 
-    // Minimap refresh (throttled + dirty on camera/data movement)
+    // Track camera movement for other systems
     const cameraChanged =
       Math.abs(cam.scrollX - this.lastCamScrollX) > 0.5 ||
       Math.abs(cam.scrollY - this.lastCamScrollY) > 0.5 ||
@@ -634,15 +622,7 @@ export class OfficeScene extends Phaser.Scene {
       this.lastCamScrollX = cam.scrollX
       this.lastCamScrollY = cam.scrollY
       this.lastCamZoom = cam.zoom
-      this.minimap.markDirty()
     }
-
-    const minimapExtras: { label: string; bounds: { x: number; y: number; w: number; h: number }; color: number }[] = []
-    const cafeBounds3 = this.cafe.getBounds()
-    if (cafeBounds3) minimapExtras.push({ label: 'Cafe', bounds: cafeBounds3, color: 0xd97706 })
-    const ghBounds2 = this.githubBuilding.getBounds()
-    if (ghBounds2.w > 0) minimapExtras.push({ label: 'GitHub', bounds: ghBounds2, color: 0x7c3aed })
-    this.minimap.tick(time, MINIMAP_REFRESH_MS, this.rooms, minimapExtras)
 
     // Debug overlay refresh (throttled to 250ms)
     if (this.ui.debugOverlayVisible && time - this.lastDebugRefreshAt >= 250) {
@@ -770,7 +750,6 @@ export class OfficeScene extends Phaser.Scene {
 
     this.layoutRooms()
     this.updateCameraBounds()
-    this.minimap.markDirty()
     this.background.updateWhiteboardStats()
 
     // Keep live agents visible on each refresh.
@@ -1461,9 +1440,6 @@ export class OfficeScene extends Phaser.Scene {
 
     // GitHub building cleanup
     this.githubBuilding.destroy()
-
-    // Minimap cleanup
-    this.minimap.destroy()
 
     // atmosphere.destroy() already handled ceiling lights, exterior lights,
     // wall clock, window glint, starfield, clouds, day/night overlay

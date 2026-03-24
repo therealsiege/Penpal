@@ -170,7 +170,7 @@ export function VaultPanel() {
   }, [activeTabId, closeTab, cycleTab, zoomIn, zoomOut, zoomReset])
 
   return (
-    <div className="flex flex-col h-full vault-zoom" style={{ zoom }}>
+    <div className="flex flex-col h-full vault-zoom vault-panel" style={{ zoom }}>
       {/* Quick Switcher overlay */}
       {showQuickSwitcher && (
         <QuickSwitcher
