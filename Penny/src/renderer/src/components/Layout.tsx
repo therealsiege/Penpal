@@ -34,8 +34,8 @@ function NavButton({
         title={label}
         className={`no-drag relative w-full h-10 rounded-lg flex items-center gap-2.5 px-3 transition-all overflow-visible ${
           active
-            ? 'bg-[#0a2018] text-[#00ff88] shadow-inner'
-            : 'text-[#4a5a52] hover:text-[#a0c8b0] hover:bg-[#0d1f17]/60'
+            ? 'bg-[#0a1a10] text-[#00ff88] shadow-inner'
+            : 'text-[#3a4858] hover:text-[#8a96a4] hover:bg-[#0a1a10]/60'
         }`}
       >
         {/* Active indicator bar — left edge */}
@@ -59,8 +59,8 @@ function NavButton({
         <span
           className="
             pointer-events-none absolute left-full top-1/2 -translate-y-1/2 ml-2 z-50
-            px-2 py-1 rounded-md bg-[#0d1117] text-[#a0c8b0] text-xs font-medium whitespace-nowrap
-            shadow-lg border border-[#1a3a2a]
+            px-2 py-1 rounded-md bg-[#0c1018] text-[#8a96a4] text-xs font-medium whitespace-nowrap
+            shadow-lg border border-[#2a3440]
             opacity-0 -translate-x-1 group-hover:opacity-100 group-hover:translate-x-0
             transition-all duration-200
           "
@@ -74,9 +74,9 @@ function NavButton({
 
 export function Layout({ activePanel, onNavigate, children }: LayoutProps) {
   return (
-    <div className="flex h-screen bg-[#080c10] text-slate-100 select-none overflow-hidden">
+    <div className="flex h-screen bg-[#080a0e] text-slate-100 select-none overflow-hidden">
       {/* Sidebar */}
-      <aside className="w-[160px] bg-[#0d1117] border-r border-[#1a3a2a] flex flex-col shrink-0 items-center">
+      <aside className="w-[160px] bg-[#0c1018] border-r border-[#2a3440] flex flex-col shrink-0 items-center">
         {/* Drag region for macOS traffic lights */}
         <div className="drag-region w-full pt-11 pb-3" />
 
@@ -182,7 +182,7 @@ export function Layout({ activePanel, onNavigate, children }: LayoutProps) {
             <button
               title="Command Palette (⌘K)"
               onClick={() => document.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', metaKey: true }))}
-              className="no-drag w-10 h-10 rounded-lg flex items-center justify-center text-[#2a4a38] hover:text-[#00ff88] hover:bg-[#0a2018]/60 transition-all"
+              className="no-drag w-10 h-10 rounded-lg flex items-center justify-center text-[#2a3440] hover:text-[#00ff88] hover:bg-[#0a1a10]/60 transition-all"
             >
               <span className="transition-transform duration-150 group-hover:scale-110 flex items-center">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -195,8 +195,8 @@ export function Layout({ activePanel, onNavigate, children }: LayoutProps) {
             <span
               className="
                 pointer-events-none absolute left-full top-1/2 -translate-y-1/2 ml-2 z-50
-                px-2 py-1 rounded-md bg-[#0d1117] text-[#a0c8b0] text-xs font-medium whitespace-nowrap
-                shadow-lg border border-[#1a3a2a]
+                px-2 py-1 rounded-md bg-[#0c1018] text-[#8a96a4] text-xs font-medium whitespace-nowrap
+                shadow-lg border border-[#2a3440]
                 opacity-0 -translate-x-1 group-hover:opacity-100 group-hover:translate-x-0
                 transition-all duration-200
               "

@@ -23,7 +23,7 @@
 html, body {
   margin: 0;
   background: #020617;
-  color: #e2e8f0;
+  color: #c4ccd6;
   font-family: var(--ui-font-family);
   font-size: var(--ui-font-size);
   -webkit-font-smoothing: antialiased;
@@ -446,7 +446,7 @@ body::before {
 
 @keyframes cp-border-pulse {
   0%, 100% { border-left-color: #3b82f6; }
-  50%       { border-left-color: #93c5fd; }
+  50%       { border-left-color: #00e5ff; }
 }
 
 .cp-backdrop-exit {
@@ -473,10 +473,10 @@ body::before {
 
 /* ── Vault Markdown Preview ─────────────────────────────────────────────── */
 
-.vault-markdown h1 { font-size: 1.4em; font-weight: 700; margin: 1em 0 0.5em; color: #e2e8f0; }
-.vault-markdown h2 { font-size: 1.2em; font-weight: 600; margin: 0.8em 0 0.4em; color: #cbd5e1; }
-.vault-markdown h3 { font-size: 1.05em; font-weight: 600; margin: 0.6em 0 0.3em; color: #94a3b8; }
-.vault-markdown h4, .vault-markdown h5, .vault-markdown h6 { font-size: 0.95em; font-weight: 600; margin: 0.5em 0 0.2em; color: #94a3b8; }
+.vault-markdown h1 { font-size: 1.4em; font-weight: 700; margin: 1em 0 0.5em; color: #c4ccd6; }
+.vault-markdown h2 { font-size: 1.2em; font-weight: 600; margin: 0.8em 0 0.4em; color: #8a96a4; }
+.vault-markdown h3 { font-size: 1.05em; font-weight: 600; margin: 0.6em 0 0.3em; color: #5a6a7a; }
+.vault-markdown h4, .vault-markdown h5, .vault-markdown h6 { font-size: 0.95em; font-weight: 600; margin: 0.5em 0 0.2em; color: #5a6a7a; }
 
 .vault-markdown p { margin: 0.4em 0; line-height: 1.6; }
 .vault-markdown ul, .vault-markdown ol { margin: 0.4em 0; padding-left: 1.5em; }
@@ -484,20 +484,20 @@ body::before {
 .vault-markdown li > ul, .vault-markdown li > ol { margin: 0.1em 0; }
 
 .vault-markdown a { color: #60a5fa; text-decoration: underline; text-underline-offset: 2px; }
-.vault-markdown strong { color: #e2e8f0; }
-.vault-markdown em { color: #94a3b8; }
+.vault-markdown strong { color: #c4ccd6; }
+.vault-markdown em { color: #5a6a7a; }
 
 .vault-markdown code {
-  background: rgba(30, 41, 59, 0.6);
+  background: rgba(10, 14, 20, 0.6);
   padding: 0.15em 0.35em;
   border-radius: 3px;
   font-size: 0.85em;
-  color: #93c5fd;
+  color: #00e5ff;
 }
 
 .vault-markdown pre {
-  background: rgba(15, 23, 42, 0.8);
-  border: 1px solid rgba(51, 65, 85, 0.4);
+  background: rgba(10, 14, 20, 0.8);
+  border: 1px solid rgba(42, 52, 64, 0.4);
   border-radius: 6px;
   padding: 0.8em 1em;
   overflow-x: auto;
@@ -507,20 +507,20 @@ body::before {
 .vault-markdown pre code {
   background: none;
   padding: 0;
-  color: #cbd5e1;
+  color: #8a96a4;
   font-size: 0.8em;
 }
 
 .vault-markdown blockquote {
-  border-left: 3px solid #334155;
+  border-left: 3px solid #2a3440;
   padding-left: 0.8em;
   margin: 0.5em 0;
-  color: #94a3b8;
+  color: #5a6a7a;
 }
 
 .vault-markdown hr {
   border: none;
-  border-top: 1px solid #1e293b;
+  border-top: 1px solid #141a22;
   margin: 1em 0;
 }
 
@@ -532,17 +532,17 @@ body::before {
 }
 
 .vault-markdown th {
-  background: rgba(30, 41, 59, 0.5);
+  background: rgba(10, 14, 20, 0.5);
   text-align: left;
   padding: 0.4em 0.6em;
-  border: 1px solid #1e293b;
+  border: 1px solid #141a22;
   font-weight: 600;
-  color: #cbd5e1;
+  color: #8a96a4;
 }
 
 .vault-markdown td {
   padding: 0.35em 0.6em;
-  border: 1px solid #1e293b;
+  border: 1px solid #141a22;
 }
 
 .vault-markdown img {

@@ -456,7 +456,7 @@ export class OfficeBackground {
       const BWALL = 4
       g.fillStyle(COLOR_WALL)
       g.fillRoundedRect(x - 6, y - 6, width + 12, height + 12, 6)
-      g.fillStyle(0x0f172a)
+      g.fillStyle(0x0a0e14)
       g.fillRoundedRect(x - 6 + BWALL, y - 6 + BWALL, width + 12 - BWALL * 2, height + 12 - BWALL * 2, 3)
 
       // Windows along the top wall of each team building (for atmosphere glint effect)
@@ -476,9 +476,9 @@ export class OfficeBackground {
       const lightX = x + width / 2
       const lightY = y + BANNER_H + 10
       const lightGfx = this.scene.add.graphics()
-      lightGfx.fillStyle(0xfbbf24, 0.08)
+      lightGfx.fillStyle(0xd4a017, 0.08)
       lightGfx.fillCircle(0, 0, 20)
-      lightGfx.fillStyle(0xfbbf24, 0.15)
+      lightGfx.fillStyle(0xd4a017, 0.15)
       lightGfx.fillCircle(0, 0, 6)
       lightGfx.fillStyle(0xffffff, 0.3)
       lightGfx.fillCircle(0, 0, 2)
@@ -670,7 +670,7 @@ export class OfficeBackground {
       const HALL_H = 12
       const HALL_FLOOR = 0x0f1520
       const HALL_STRIPE = 0x1a2535
-      const HALL_EDGE = 0x1e293b
+      const HALL_EDGE = 0x1e2830
       const LEG_W = 6
       const JUNC_W = 8
       const CHEVRON_GAP = 40
@@ -725,7 +725,7 @@ export class OfficeBackground {
         g.fillRect(room.x - JUNC_W / 2, hallY - HALL_H / 2, JUNC_W, 1)
         g.fillRect(room.x - JUNC_W / 2, hallY + HALL_H / 2 - 1, JUNC_W, 1)
 
-        g.fillStyle(0xfbbf24, 0.1)
+        g.fillStyle(0x00ff88, 0.1)
         g.fillCircle(room.x, hallY, 3)
 
         this.corridorSegments.push({ x1: room.x, y1: doorY, x2: room.x, y2: hallY, color: lineColor })
@@ -738,7 +738,7 @@ export class OfficeBackground {
         const signX = room.x - signW / 2
         const signY = hallY - HALL_H / 2 - signH - 2
 
-        g.fillStyle(0x0f172a, 0.82)
+        g.fillStyle(0x0a0e14, 0.82)
         g.fillRect(signX, signY, signW, signH)
         g.lineStyle(1, lineColor, 0.28)
         g.strokeRect(signX, signY, signW, signH)
@@ -746,7 +746,7 @@ export class OfficeBackground {
         const signText = this.scene.add.text(room.x, signY + signH / 2, signLabel, {
           fontSize: '5px',
           fontFamily: 'monospace',
-          color: '#94a3b8',
+          color: '#8a96a4',
           resolution: 2,
         })
         signText.setOrigin(0.5, 0.5)
@@ -782,7 +782,7 @@ export class OfficeBackground {
             Math.abs(s.y1 - hallY) < 20 && s.x1 <= fromX && s.x2 >= toX
           )
           if (!alreadyConnected) {
-            this.corridorSegments.push({ x1: fromX, y1: hallY, x2: toX, y2: hallY, color: 0x475569 })
+            this.corridorSegments.push({ x1: fromX, y1: hallY, x2: toX, y2: hallY, color: 0x2a3440 })
             // Draw the connector visually
             g.fillStyle(0x0f1520, 0.5)
             g.fillRect(fromX, hallY - 4, toX - fromX, 8)
@@ -813,7 +813,7 @@ export class OfficeBackground {
       const lower = rowCenters[i + 1]
       // Vertical connector at the leftmost team X
       const connX = Math.min(upper.minX, lower.minX)
-      this.corridorSegments.push({ x1: connX, y1: upper.y, x2: connX, y2: lower.y, color: 0x475569 })
+      this.corridorSegments.push({ x1: connX, y1: upper.y, x2: connX, y2: lower.y, color: 0x2a3440 })
       g.fillStyle(0x0f1520, 0.5)
       g.fillRect(connX - 4, upper.y, 8, lower.y - upper.y)
       g.fillStyle(0x1a2535, 0.6)
@@ -827,10 +827,10 @@ export class OfficeBackground {
       const serviceBottomY = cafeBounds.y + cafeBounds.h
       const connX = cafeBounds.x + cafeBounds.w / 2
       // Vertical corridor from service row bottom to agent row corridor
-      this.corridorSegments.push({ x1: connX, y1: serviceBottomY, x2: connX, y2: nearestRow.y, color: 0x475569 })
+      this.corridorSegments.push({ x1: connX, y1: serviceBottomY, x2: connX, y2: nearestRow.y, color: 0x2a3440 })
       // Horizontal leg to connect to the nearest team
       if (Math.abs(connX - nearestRow.minX) > 10) {
-        this.corridorSegments.push({ x1: connX, y1: nearestRow.y, x2: nearestRow.minX, y2: nearestRow.y, color: 0x475569 })
+        this.corridorSegments.push({ x1: connX, y1: nearestRow.y, x2: nearestRow.minX, y2: nearestRow.y, color: 0x2a3440 })
       }
     }
 
@@ -858,7 +858,7 @@ export class OfficeBackground {
       const py = Phaser.Math.Linear(seg.y1, seg.y2, t)
       g.fillStyle(seg.color, 0.2)
       g.fillCircle(px, py, 4.2)
-      g.fillStyle(0xe2e8f0, 0.72)
+      g.fillStyle(0xd4a017, 0.72)
       g.fillCircle(px, py, 1.6)
     }
   }
@@ -1006,7 +1006,7 @@ export class OfficeBackground {
     }))
 
     // Simpler: draw the floor as the union of two inset rects
-    g.fillStyle(0x0f172a)
+    g.fillStyle(0x0a0e14)
     // Row 1 floor
     g.fillRect(left + WALL_T, top + WALL_T, right - left - WALL_T * 2, rects[0].bottom - top - WALL_T)
     // Corridor connector + Row 2 floor
@@ -1031,9 +1031,9 @@ export class OfficeBackground {
   } {
     const month = new Date().getMonth()
     if (month === 11 || month <= 1) return { color: 0x93c5fd, accent: 0xef4444, extraDecorType: 'winter' }
-    if (month >= 2 && month <= 4) return { color: 0x86efac, accent: 0xfbbf24, extraDecorType: 'spring' }
-    if (month >= 5 && month <= 7) return { color: 0xfde68a, accent: 0x0ea5e9, extraDecorType: 'summer' }
-    return { color: 0xfbbf24, accent: 0xea580c, extraDecorType: 'autumn' }
+    if (month >= 2 && month <= 4) return { color: 0x86efac, accent: 0xd4a017, extraDecorType: 'spring' }
+    if (month >= 5 && month <= 7) return { color: 0x00e5ff, accent: 0x00ff88, extraDecorType: 'summer' }
+    return { color: 0xd4a017, accent: 0xd4a017, extraDecorType: 'autumn' }
   }
 
   // ---------------------------------------------------------------------------
@@ -1178,7 +1178,7 @@ export class OfficeBackground {
         const sy1 = poolCY + Math.sin(angle) * (poolRY + 18)
         const sx2 = poolCX + Math.cos(angle) * (poolRX + 38)
         const sy2 = poolCY + Math.sin(angle) * (poolRY + 28)
-        g.lineStyle(4, 0xfbbf24, 0.2)
+        g.lineStyle(4, 0x00e5ff, 0.2)
         g.lineBetween(sx1, sy1, sx2, sy2)
       }
     }
@@ -1315,7 +1315,7 @@ export class OfficeBackground {
       const sx = rect.x + 14
       const sw = rect.w - 28
       for (let stripe = 0; stripe < sw; stripe += 36) {
-        g.fillStyle(0xfbbf24, 0.1)
+        g.fillStyle(0xd4a017, 0.1)
         g.fillRect(sx + stripe, sy + 3, 18, 10)
         g.fillStyle(0x1a1e2a, 0.12)
         g.fillRect(sx + stripe + 18, sy + 3, 18, 10)
@@ -1399,11 +1399,11 @@ export class OfficeBackground {
           ;(atm2 as { wallClockContainer: Phaser.GameObjects.Container | null }).wallClockContainer = null
         }
         const clockFace = this.scene.add.graphics()
-        clockFace.fillStyle(0x1e293b, 0.8)
+        clockFace.fillStyle(0x141a22, 0.8)
         clockFace.fillCircle(0, 0, 12)
-        clockFace.lineStyle(1, 0x475569, 1)
+        clockFace.lineStyle(1, 0x2a3440, 1)
         clockFace.strokeCircle(0, 0, 12)
-        clockFace.lineStyle(1, 0x64748b, 0.8)
+        clockFace.lineStyle(1, 0x3a4858, 0.8)
         for (let t = 0; t < 12; t++) {
           const ang = Phaser.Math.DegToRad(t * 30 - 90)
           clockFace.lineBetween(Math.cos(ang) * 10, Math.sin(ang) * 10, Math.cos(ang) * 12, Math.sin(ang) * 12)
@@ -1514,16 +1514,16 @@ export class OfficeBackground {
         ? this.scene.add.sprite(0, 0, 'office', OFFICE_FRAME_WHITEBOARD).setScale(0.32).setAlpha(0.55).setDepth(-0.5)
         : null
       const titleText = this.scene.add.text(0, -11, 'TEAM STATUS', {
-        fontSize: '5px', fontFamily: 'monospace', color: '#94a3b8', fontStyle: 'bold', resolution: 2,
+        fontSize: '5px', fontFamily: 'monospace', color: '#8a96a4', fontStyle: 'bold', resolution: 2,
       }).setOrigin(0.5, 0).setAlpha(0.9).setDepth(0)
       const agentLine = this.scene.add.text(0, -3, 'Agents: 0', {
-        fontSize: '4px', fontFamily: 'monospace', color: '#64748b', resolution: 2,
+        fontSize: '4px', fontFamily: 'monospace', color: '#5a6a7a', resolution: 2,
       }).setOrigin(0.5, 0).setAlpha(0.7).setDepth(0)
       const activeLine = this.scene.add.text(0, 4, 'Active: 0', {
-        fontSize: '4px', fontFamily: 'monospace', color: '#64748b', resolution: 2,
+        fontSize: '4px', fontFamily: 'monospace', color: '#5a6a7a', resolution: 2,
       }).setOrigin(0.5, 0).setAlpha(0.7).setDepth(0)
       const roomLine = this.scene.add.text(0, 11, 'Rooms: 0', {
-        fontSize: '4px', fontFamily: 'monospace', color: '#64748b', resolution: 2,
+        fontSize: '4px', fontFamily: 'monospace', color: '#5a6a7a', resolution: 2,
       }).setOrigin(0.5, 0).setAlpha(0.7).setDepth(0)
       const wbChildren: Phaser.GameObjects.GameObject[] = [wbBg, titleText, agentLine, activeLine, roomLine]
       if (wbSprite) wbChildren.unshift(wbSprite)
@@ -1557,18 +1557,18 @@ export class OfficeBackground {
         const flx = bx + floodSpacing * (fi + 1)
 
         const pool = this.scene.add.graphics()
-        pool.fillStyle(0xfbbf24, 1)
+        pool.fillStyle(0xd4a017, 1)
         pool.fillTriangle(-14, 0, 14, 0, 22, 32)
         pool.fillTriangle(-14, 0, -22, 32, 22, 32)
         pool.setPosition(flx, floodY)
         pool.setAlpha(initAlpha * 0.35)
         lightChildren.push(pool)
 
-        const halo = this.scene.add.arc(flx, floodY - 2, 10, 0, 360, false, 0xfbbf24, 1)
+        const halo = this.scene.add.arc(flx, floodY - 2, 10, 0, 360, false, 0xd4a017, 1)
         halo.setAlpha(initAlpha * 0.25)
         lightChildren.push(halo)
 
-        const bulb = this.scene.add.arc(flx, floodY - 2, 4, 0, 360, false, 0xfbbf24, 1)
+        const bulb = this.scene.add.arc(flx, floodY - 2, 4, 0, 360, false, 0xd4a017, 1)
         bulb.setAlpha(initAlpha)
         lightChildren.push(bulb)
       }
@@ -1579,13 +1579,13 @@ export class OfficeBackground {
         const side = wallX === bx ? 1 : -1
 
         const wallPool = this.scene.add.graphics()
-        wallPool.fillStyle(0xfbbf24, 1)
+        wallPool.fillStyle(0xd4a017, 1)
         wallPool.fillTriangle(0, -10, 0, 10, side * 24, 0)
         wallPool.setPosition(wallX, sconceY)
         wallPool.setAlpha(initAlpha * 0.3)
         lightChildren.push(wallPool)
 
-        const sconce = this.scene.add.arc(wallX, sconceY, 4, 270, 90, false, 0xfbbf24, 1)
+        const sconce = this.scene.add.arc(wallX, sconceY, 4, 270, 90, false, 0xd4a017, 1)
         sconce.setAlpha(initAlpha)
         lightChildren.push(sconce)
       }
@@ -1602,7 +1602,7 @@ export class OfficeBackground {
       if (seasonal.extraDecorType === 'winter') {
         const lightColors = [0xef4444, 0x22c55e, 0x3b82f6]
         const lightY = by + 1.5
-        g.lineStyle(1, 0x475569, 0.1)
+        g.lineStyle(1, 0x2a3440, 0.1)
         g.lineBetween(bx + 4, lightY, bx + bw - 4, lightY)
         let colorIdx = 0
         for (let lx = bx + 4; lx < bx + bw - 4; lx += 8) {
@@ -1622,7 +1622,7 @@ export class OfficeBackground {
           { cx: fx + fw - 14, cy: fy + fh - 14 },
           { cx: fx + 40, cy: fy + fh - 25 },
         ]
-        const flowerColors = [0xf9a8d4, 0xfbbf24, 0xfafafa]
+        const flowerColors = [0xd4a017, 0xd4a017, 0xfafafa]
         let seed = 7
         const rand = (): number => {
           seed = (seed * 16807) % 2147483647
@@ -1789,7 +1789,7 @@ export class OfficeBackground {
     const newActiveText = `Active: ${activeAgents}`
     if (activeLine.text !== newActiveText) {
       activeLine.setText(newActiveText)
-      activeLine.setColor(activeAgents > 0 ? '#34d399' : '#64748b')
+      activeLine.setColor(activeAgents > 0 ? '#34d399' : '#5a6a7a')
       this.scene.tweens.killTweensOf(activeLine)
       this.scene.tweens.add({
         targets: activeLine, alpha: 1, duration: 150, ease: 'Sine.easeOut',
@@ -1859,7 +1859,7 @@ export class OfficeBackground {
       const WALL_T = 3
       const WALL_I = 1
       const floorW = room.width - (WALL_T + WALL_I) * 2
-      const stripColor = hasWaiting ? 0xfbbf24 : activeCount > 0 ? 0x34d399 : 0x64748b
+      const stripColor = hasWaiting ? 0xfbbf24 : activeCount > 0 ? 0x34d399 : 0x2a3440
       const stripAlpha = hasWaiting ? 0.75 : activeCount > 0 ? 0.7 : 0.35
       const targetW = agents.length > 0
         ? Math.max(2, (activeCount / agents.length) * floorW)

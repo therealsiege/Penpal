@@ -147,17 +147,17 @@ export function BriefingModal({ onClose }: BriefingModalProps) {
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-backdrop-fade-in"
       onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
     >
-      <div className="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl shadow-2xl w-[820px] max-h-[80vh] overflow-hidden flex flex-col animate-modal-scale-in">
+      <div className="bg-[#0c1018] border border-[#2a3440] rounded-xl shadow-2xl w-[820px] max-h-[80vh] overflow-hidden flex flex-col animate-modal-scale-in">
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200 dark:border-slate-800">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-[#2a3440]">
           <div className="flex items-center gap-3">
             <div className="w-2.5 h-2.5 rounded-full bg-blue-400" />
-            <h2 className="text-sm font-semibold text-slate-900 dark:text-white">Mission Control</h2>
-            <span className="text-xs font-medium px-2 py-0.5 rounded-full border bg-blue-500/10 border-blue-500/20 text-blue-500 dark:text-blue-400">
+            <h2 className="text-sm font-semibold text-white">Mission Control</h2>
+            <span className="text-xs font-medium px-2 py-0.5 rounded-full border bg-blue-500/10 border-blue-500/20 text-blue-400">
               BRIEFING
             </span>
             {briefingDate && (
-              <span className="text-xs text-slate-500 ml-2">{briefingDate}</span>
+              <span className="text-xs text-[#3a4858] ml-2">{briefingDate}</span>
             )}
           </div>
           <div className="flex items-center gap-2">
@@ -184,7 +184,7 @@ export function BriefingModal({ onClose }: BriefingModalProps) {
             </button>
             <button
               onClick={onClose}
-              className="text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-white transition-colors text-lg leading-none px-1"
+              className="text-[#3a4858] hover:text-white transition-colors text-lg leading-none px-1"
             >
               &times;
             </button>
@@ -194,21 +194,21 @@ export function BriefingModal({ onClose }: BriefingModalProps) {
         {/* Body */}
         <div className="flex-1 overflow-hidden flex min-h-0">
           {/* Sidebar — past briefings */}
-          <div className="w-[180px] border-r border-slate-200 dark:border-slate-800 overflow-auto shrink-0">
-            <div className="px-3 py-2 border-b border-slate-200 dark:border-slate-800">
-              <p className="text-xs text-slate-500 uppercase font-medium">History</p>
+          <div className="w-[180px] border-r border-[#2a3440] overflow-auto shrink-0">
+            <div className="px-3 py-2 border-b border-[#2a3440]">
+              <p className="text-xs text-[#3a4858] uppercase font-medium">History</p>
             </div>
             {allDates.length === 0 && !loading && (
-              <p className="text-xs text-slate-400 dark:text-slate-600 px-3 py-2">No briefings yet</p>
+              <p className="text-xs text-[#2a3440] px-3 py-2">No briefings yet</p>
             )}
             {allDates.map(date => (
               <button
                 key={date}
                 onClick={() => loadBriefing(date)}
-                className={`stagger-item w-full text-left px-3 py-2 text-xs hover:bg-slate-100 dark:hover:bg-slate-800/60 transition-colors border-b border-slate-200/70 dark:border-slate-800/50 ${
+                className={`stagger-item w-full text-left px-3 py-2 text-xs hover:bg-[#141a22]/60 transition-colors border-b border-[#2a3440]/50 ${
                   briefingDate === date
-                    ? 'bg-slate-200/80 dark:bg-slate-800/80 text-blue-500 dark:text-blue-400 border-l-2 border-blue-500'
-                    : 'text-slate-500 dark:text-slate-400'
+                    ? 'bg-[#141a22]/80 text-blue-400 border-l-2 border-blue-500'
+                    : 'text-[#5a6a7a]'
                 }`}
               >
                 {date}
@@ -220,16 +220,16 @@ export function BriefingModal({ onClose }: BriefingModalProps) {
           <div className="flex-1 overflow-auto px-5 py-4">
             {loading && (
               <div className="flex flex-col gap-3 pt-2">
-                <div className="animate-shimmer h-3 w-full bg-slate-800/50 rounded" />
-                <div className="animate-shimmer h-3 w-4/5 bg-slate-800/50 rounded" />
-                <div className="animate-shimmer h-3 w-3/5 bg-slate-800/50 rounded" />
+                <div className="animate-shimmer h-3 w-full bg-[#141a22]/50 rounded" />
+                <div className="animate-shimmer h-3 w-4/5 bg-[#141a22]/50 rounded" />
+                <div className="animate-shimmer h-3 w-3/5 bg-[#141a22]/50 rounded" />
               </div>
             )}
             {!loading && !content && (
               <div className="flex flex-col items-center justify-center h-full gap-4">
                 <div className="text-center">
-                  <p className="text-slate-600 dark:text-slate-400 text-sm font-medium mb-1">No briefings found</p>
-                  <p className="text-slate-400 dark:text-slate-600 text-xs">Generate your first daily briefing to get started.</p>
+                  <p className="text-[#5a6a7a] text-sm font-medium mb-1">No briefings found</p>
+                  <p className="text-[#2a3440] text-xs">Generate your first daily briefing to get started.</p>
                 </div>
                 <button
                   onClick={generateNow}
@@ -252,13 +252,13 @@ export function BriefingModal({ onClose }: BriefingModalProps) {
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between px-5 py-3 border-t border-slate-200 dark:border-slate-800">
-          <p className="text-xs text-slate-400 dark:text-slate-600">
+        <div className="flex items-center justify-between px-5 py-3 border-t border-[#2a3440]">
+          <p className="text-xs text-[#2a3440]">
             {allDates.length} briefing{allDates.length !== 1 ? 's' : ''} available
           </p>
           <button
             onClick={loadLatest}
-            className="px-3 py-1 text-xs bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 rounded border border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-300 transition-colors"
+            className="px-3 py-1 text-xs bg-[#141a22] hover:bg-[#2a3440] rounded border border-[#2a3440] text-[#8a96a4] transition-colors"
           >
             Refresh
           </button>

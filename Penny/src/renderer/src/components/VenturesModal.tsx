@@ -180,38 +180,38 @@ export function VenturesModal({ onClose }: VenturesModalProps) {
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-backdrop-fade-in"
       onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
     >
-      <div className="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl shadow-2xl w-[780px] max-h-[80vh] overflow-hidden flex flex-col animate-modal-scale-in">
+      <div className="bg-[#0c1018] border border-[#2a3440] rounded-xl shadow-2xl w-[780px] max-h-[80vh] overflow-hidden flex flex-col animate-modal-scale-in">
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200 dark:border-slate-800">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-[#2a3440]">
           <div className="flex items-center gap-3">
             <div className="w-2.5 h-2.5 rounded-full bg-amber-400" />
-            <h2 className="text-sm font-semibold text-slate-900 dark:text-white">File Cabinet</h2>
-            <span className="text-xs font-medium px-2 py-0.5 rounded-full border bg-amber-500/10 border-amber-500/20 text-amber-600 dark:text-amber-400">
+            <h2 className="text-sm font-semibold text-white">File Cabinet</h2>
+            <span className="text-xs font-medium px-2 py-0.5 rounded-full border bg-amber-500/10 border-amber-500/20 text-amber-400">
               DOCS
             </span>
           </div>
           <button
             onClick={onClose}
-            className="text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-white transition-colors text-lg leading-none px-1"
+            className="text-[#3a4858] hover:text-white transition-colors text-lg leading-none px-1"
           >
             &times;
           </button>
         </div>
 
         {/* Breadcrumbs */}
-        <div className="px-5 py-2 border-b border-slate-200 dark:border-slate-800 flex items-center gap-1 text-[11px] overflow-x-auto">
+        <div className="px-5 py-2 border-b border-[#2a3440] flex items-center gap-1 text-[11px] overflow-x-auto">
           {breadcrumbs.map((crumb, i) => (
             <span
               key={crumb.path}
               className="flex items-center gap-1 shrink-0 transition-all duration-150"
             >
-              {i > 0 && <span className="text-slate-400 dark:text-slate-600">/</span>}
+              {i > 0 && <span className="text-[#2a3440]">/</span>}
               <button
                 onClick={() => navigateTo(crumb.path)}
-                className={`transition-all duration-150 hover:text-slate-900 dark:hover:text-white ${
+                className={`transition-all duration-150 hover:text-[#0c1018] hover:text-white ${
                   i === breadcrumbs.length - 1
-                    ? 'text-slate-700 dark:text-slate-200 font-medium'
-                    : 'text-slate-500'
+                    ? 'text-[#c4ccd6] font-medium'
+                    : 'text-[#3a4858]'
                 }`}
               >
                 {crumb.label}
@@ -223,15 +223,15 @@ export function VenturesModal({ onClose }: VenturesModalProps) {
         {/* Body — two-panel layout */}
         <div className="flex-1 overflow-hidden flex min-h-0">
           {/* Left: file list */}
-          <div className="w-[280px] border-r border-slate-200 dark:border-slate-800 overflow-auto">
+          <div className="w-[280px] border-r border-[#2a3440] overflow-auto">
             {/* Loading skeleton */}
             {loading && entries.length === 0 && (
               <div className="px-4 py-3 space-y-2.5">
                 {Array.from({ length: 6 }).map((_, i) => (
                   <div key={i} className="flex items-center gap-2.5">
-                    <div className="w-4 h-4 rounded animate-shimmer bg-slate-700/40 shrink-0" />
+                    <div className="w-4 h-4 rounded animate-shimmer bg-[#2a3440]/40 shrink-0" />
                     <div
-                      className="h-2.5 rounded animate-shimmer bg-slate-700/40"
+                      className="h-2.5 rounded animate-shimmer bg-[#2a3440]/40"
                       style={{ width: `${55 + (i % 3) * 15}%` }}
                     />
                   </div>
@@ -243,7 +243,7 @@ export function VenturesModal({ onClose }: VenturesModalProps) {
             {!loading && entries.length === 0 && (
               <div className="flex flex-col items-center justify-center gap-2 py-10 animate-card-enter">
                 <span className="text-2xl opacity-30">📂</span>
-                <p className="text-slate-500 dark:text-slate-600 text-xs">Empty directory</p>
+                <p className="text-[#2a3440] text-xs">Empty directory</p>
               </div>
             )}
 
@@ -254,16 +254,16 @@ export function VenturesModal({ onClose }: VenturesModalProps) {
                   key={entry.path}
                   onClick={() => openFile(entry)}
                   style={{ animationDelay: `${Math.min(idx, 19) * 0.03}s` }}
-                  className={`stagger-item w-full text-left px-4 py-2 flex items-center gap-2.5 hover:bg-slate-100 dark:hover:bg-slate-800/60 transition-colors border-b border-slate-200/70 dark:border-slate-800/50 ${
-                    selectedFile === entry.path ? 'bg-slate-200/80 dark:bg-slate-800/80' : ''
+                  className={`stagger-item w-full text-left px-4 py-2 flex items-center gap-2.5 hover:bg-[#141a22]/60 transition-colors border-b border-[#2a3440]/50 ${
+                    selectedFile === entry.path ? 'bg-[#141a22]/80' : ''
                   }`}
                 >
                   <span className="text-sm shrink-0 hover:scale-110 transition-transform duration-100 inline-block">
                     {fileIcon(entry)}
                   </span>
-                  <span className="text-xs text-slate-700 dark:text-slate-300 truncate">{entry.name}</span>
+                  <span className="text-xs text-[#8a96a4] truncate">{entry.name}</span>
                   {entry.isDirectory && (
-                    <span className="text-xs text-slate-400 dark:text-slate-600 ml-auto shrink-0">&rsaquo;</span>
+                    <span className="text-xs text-[#2a3440] ml-auto shrink-0">&rsaquo;</span>
                   )}
                 </button>
               ))}
@@ -275,12 +275,12 @@ export function VenturesModal({ onClose }: VenturesModalProps) {
             {/* File loading skeleton */}
             {loading && selectedFile && (
               <div className="space-y-3 pt-1">
-                <div className="h-3 w-1/2 rounded animate-shimmer bg-slate-700/40" />
-                <div className="h-px w-full bg-slate-800/60" />
+                <div className="h-3 w-1/2 rounded animate-shimmer bg-[#2a3440]/40" />
+                <div className="h-px w-full bg-[#141a22]/60" />
                 {Array.from({ length: 8 }).map((_, i) => (
                   <div
                     key={i}
-                    className="h-2 rounded animate-shimmer bg-slate-700/30"
+                    className="h-2 rounded animate-shimmer bg-[#2a3440]/30"
                     style={{ width: `${40 + (i % 5) * 12}%` }}
                   />
                 ))}
@@ -290,15 +290,15 @@ export function VenturesModal({ onClose }: VenturesModalProps) {
             {/* Empty prompt */}
             {!selectedFile && !fileContent && !loading && (
               <div className="flex items-center justify-center h-full">
-                <p className="text-slate-400 dark:text-slate-600 text-xs">Select a file to preview</p>
+                <p className="text-[#2a3440] text-xs">Select a file to preview</p>
               </div>
             )}
 
             {/* File preview */}
             {fileContent !== null && selectedFile && !loading && (
               <div key={previewKey} className="ventures-md animate-card-enter">
-                <div className="mb-3 pb-2 border-b border-slate-200 dark:border-slate-800">
-                  <p className="text-xs text-slate-500 font-mono truncate">{selectedFile}</p>
+                <div className="mb-3 pb-2 border-b border-[#2a3440]">
+                  <p className="text-xs text-[#3a4858] font-mono truncate">{selectedFile}</p>
                 </div>
                 <div
                   className="md-content"
@@ -310,13 +310,13 @@ export function VenturesModal({ onClose }: VenturesModalProps) {
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between px-5 py-3 border-t border-slate-200 dark:border-slate-800">
-          <p className="text-xs text-slate-400 dark:text-slate-600">
+        <div className="flex items-center justify-between px-5 py-3 border-t border-[#2a3440]">
+          <p className="text-xs text-[#2a3440]">
             {entries.length} items {currentPath ? `in ${currentPath}` : ''}
           </p>
           <button
             onClick={() => loadDir(currentPath)}
-            className="px-3 py-1 text-xs bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 rounded border border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-300 transition-colors"
+            className="px-3 py-1 text-xs bg-[#141a22] hover:bg-[#2a3440] rounded border border-[#2a3440] text-[#8a96a4] transition-colors"
           >
             Refresh
           </button>

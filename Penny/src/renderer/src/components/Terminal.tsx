@@ -104,16 +104,16 @@ export function Terminal({ ptyId, onClose, title }: TerminalProps) {
   return (
     <div className="flex flex-col h-full">
       {/* Terminal header */}
-      <div className="flex items-center justify-between px-3 py-1.5 bg-slate-900 border-b border-slate-700">
+      <div className="flex items-center justify-between px-3 py-1.5 bg-[#0c1018] border-b border-[#2a3440]">
         <div className="flex items-center gap-2">
-          <span className="text-[10px] text-slate-400 font-mono">{title || ptyId}</span>
+          <span className="text-[10px] text-[#5a6a7a] font-mono">{title || ptyId}</span>
           {exited && (
-            <span className="text-[9px] text-slate-600 bg-slate-800 px-1.5 py-0.5 rounded">exited</span>
+            <span className="text-[9px] text-[#2a3440] bg-[#141a22] px-1.5 py-0.5 rounded">exited</span>
           )}
         </div>
         <button
           onClick={onClose}
-          className="text-slate-500 hover:text-slate-300 text-sm leading-none px-1"
+          className="text-[#3a4858] hover:text-[#8a96a4] text-sm leading-none px-1"
           title="Close terminal"
         >
           ×

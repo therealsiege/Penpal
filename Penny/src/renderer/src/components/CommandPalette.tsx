@@ -163,11 +163,11 @@ export function CommandPalette({ actions }: Props) {
 
       {/* Modal */}
       <div
-        className={`fixed top-[15%] left-1/2 -translate-x-1/2 w-[520px] bg-slate-900 border border-slate-700 rounded-xl shadow-2xl z-[201] overflow-hidden ${modalClass}`}
+        className={`fixed top-[15%] left-1/2 -translate-x-1/2 w-[520px] bg-[#0c1018] border border-[#2a3440] rounded-xl shadow-2xl z-[201] overflow-hidden ${modalClass}`}
       >
         {/* Search input row */}
-        <div className="border-b border-slate-800 px-4 py-3 flex items-center gap-3">
-          <span className="text-slate-500 text-sm select-none">&#8984;</span>
+        <div className="border-b border-[#2a3440] px-4 py-3 flex items-center gap-3">
+          <span className="text-[#3a4858] text-sm select-none">&#8984;</span>
           <input
             ref={inputRef}
             type="text"
@@ -178,14 +178,14 @@ export function CommandPalette({ actions }: Props) {
             onFocus={() => setInputFocused(true)}
             onBlur={() => setInputFocused(false)}
             className={[
-              'flex-1 bg-transparent text-sm text-slate-200 placeholder-slate-600',
+              'flex-1 bg-transparent text-sm text-[#c4ccd6] placeholder-[#2a3440]',
               'focus:outline-none rounded px-1 py-0.5 transition-all duration-150',
               inputFocused
                 ? 'ring-2 ring-blue-500/50'
                 : 'ring-2 ring-blue-500/0 hover:ring-blue-500/20',
             ].join(' ')}
           />
-          <kbd className="text-xs text-slate-600 bg-slate-800 px-1.5 py-0.5 rounded border border-slate-700 select-none">
+          <kbd className="text-xs text-[#2a3440] bg-[#141a22] px-1.5 py-0.5 rounded border border-[#2a3440] select-none">
             ESC
           </kbd>
         </div>
@@ -193,13 +193,13 @@ export function CommandPalette({ actions }: Props) {
         {/* Results list */}
         <div className="max-h-[400px] overflow-y-auto py-2">
           {filtered.length === 0 ? (
-            <p className="text-xs text-slate-500 px-4 py-6 text-center">
+            <p className="text-xs text-[#3a4858] px-4 py-6 text-center">
               No matching commands
             </p>
           ) : (
             Array.from(groups.entries()).map(([category, items]) => (
               <div key={category}>
-                <p className="text-xs text-slate-600 uppercase tracking-wider px-4 py-1.5 select-none">
+                <p className="text-xs text-[#2a3440] uppercase tracking-wider px-4 py-1.5 select-none">
                   {category}
                 </p>
                 {items.map(item => {
@@ -218,20 +218,20 @@ export function CommandPalette({ actions }: Props) {
                         // Active item gets border-pulse class; non-active gets transparent placeholder
                         isSelected
                           ? 'cp-border-pulse bg-blue-600/15 text-blue-100'
-                          : 'border-l-2 border-transparent text-slate-300 hover:bg-slate-800 hover:text-slate-100',
+                          : 'border-l-2 border-transparent text-[#8a96a4] hover:bg-[#141a22] hover:text-[#c4ccd6]',
                       ].join(' ')}
                       style={{ animationDelay: staggerDelay(idx) }}
                     >
                       <div className="flex items-center gap-0 min-w-0">
                         <span className="text-sm truncate">{item.label}</span>
                         {item.description && (
-                          <span className="text-xs text-slate-500 ml-2 truncate">
+                          <span className="text-xs text-[#3a4858] ml-2 truncate">
                             {item.description}
                           </span>
                         )}
                       </div>
                       {item.shortcut && (
-                        <kbd className="ml-3 shrink-0 text-xs text-slate-500 bg-slate-800 px-1.5 py-0.5 rounded border border-slate-700">
+                        <kbd className="ml-3 shrink-0 text-xs text-[#3a4858] bg-[#141a22] px-1.5 py-0.5 rounded border border-[#2a3440]">
                           {item.shortcut}
                         </kbd>
                       )}

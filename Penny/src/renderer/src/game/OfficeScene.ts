@@ -826,8 +826,8 @@ export class OfficeScene extends Phaser.Scene {
       .setOrigin(0, 0)
     this.broadcastBannerContainer.add(this.broadcastBannerBg)
 
-    // Amber accent line at the top edge of the banner
-    const accentLine = this.add.rectangle(0, 0, viewW, 2, 0xfbbf24, 0.7).setOrigin(0, 0)
+    // Mako green accent line at the top edge of the banner
+    const accentLine = this.add.rectangle(0, 0, viewW, 2, 0x00ff88, 0.7).setOrigin(0, 0)
     this.broadcastBannerContainer.add(accentLine)
 
     // Scrolling text — starts just off the right edge, scrolls to past the left edge

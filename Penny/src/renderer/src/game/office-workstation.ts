@@ -136,10 +136,10 @@ export class OfficeWorkstations {
       chairSprite.setScale(0.44).setAlpha(0.85)
       wsContainer.add(chairSprite)
     } else {
-      wsContainer.add(this.scene.add.rectangle(0, WS_CHAIR_Y, 18, 13, 0x2d3748).setStrokeStyle(1, 0x4a5568, 0.6))
+      wsContainer.add(this.scene.add.rectangle(0, WS_CHAIR_Y, 18, 13, 0x1e2830).setStrokeStyle(1, 0x2a3440, 0.6))
     }
 
-    const deskBody = this.scene.add.rectangle(0, WS_DESK_Y, 64, 21, COLOR_DESK_BODY).setStrokeStyle(1, 0x64748b, 0.5)
+    const deskBody = this.scene.add.rectangle(0, WS_DESK_Y, 64, 21, COLOR_DESK_BODY).setStrokeStyle(1, activeTheme.deskStrokeIdle, 0.5)
     wsContainer.add(deskBody)
 
     const deskTop = this.scene.add.rectangle(0, WS_DESK_Y - 8, 61, 3, COLOR_DESK_TOP)
@@ -174,14 +174,14 @@ export class OfficeWorkstations {
       })
       screenTween.pause()
     } else {
-      wsContainer.add(this.scene.add.rectangle(0, WS_MONITOR_Y, 16, 13, 0x1a1a2e).setStrokeStyle(1, 0x4a5568, 0.8))
+      wsContainer.add(this.scene.add.rectangle(0, WS_MONITOR_Y, 16, 13, 0x141a22).setStrokeStyle(1, 0x2a3440, 0.8))
     }
 
     // Monitor blurb text — tiny live text overlaid on the monitor screen
     const monitorText = this.scene.add.text(0, WS_MONITOR_Y - 1, '', {
       fontSize: '4px',
       fontFamily: 'monospace',
-      color: '#64748b',
+      color: '#5a6a7a',
       wordWrap: { width: 14, useAdvancedWrap: false },
       resolution: 3,
     }).setOrigin(0.5, 0).setAlpha(0.7).setVisible(false)
@@ -200,13 +200,13 @@ export class OfficeWorkstations {
     const steamTweens: Phaser.Tweens.Tween[] = []
 
     // Desk lamp
-    const lampBase = this.scene.add.rectangle(-24, WS_DESK_Y - 2, 6, 3, 0x94a3b8)
+    const lampBase = this.scene.add.rectangle(-24, WS_DESK_Y - 2, 6, 3, 0x3a4858)
     wsContainer.add(lampBase)
-    const lampArm = this.scene.add.rectangle(-24, WS_DESK_Y - 8, 1.5, 10, 0x94a3b8)
+    const lampArm = this.scene.add.rectangle(-24, WS_DESK_Y - 8, 1.5, 10, 0x3a4858)
     wsContainer.add(lampArm)
-    const lampShade = this.scene.add.triangle(-24, WS_DESK_Y - 14, -5, 6, 0, -2, 5, 6, 0xfbbf24, 0.8)
+    const lampShade = this.scene.add.triangle(-24, WS_DESK_Y - 14, -5, 6, 0, -2, 5, 6, activeTheme.lampShade, 0.8)
     wsContainer.add(lampShade)
-    const lampLight = this.scene.add.triangle(-24, WS_DESK_Y - 4, -10, 18, 0, 0, 10, 18, 0xfbbf24, 0.04)
+    const lampLight = this.scene.add.triangle(-24, WS_DESK_Y - 4, -10, 18, 0, 0, 10, 18, activeTheme.lampShade, 0.04)
     wsContainer.add(lampLight)
 
     // Desk accessories (deterministic per agent name)
@@ -217,23 +217,23 @@ export class OfficeWorkstations {
     nameHash = Math.abs(nameHash)
 
     // Keyboard
-    const keyboard = this.scene.add.rectangle(0, WS_DESK_Y + 2, 18, 5, 0x1e293b).setAlpha(0.8)
+    const keyboard = this.scene.add.rectangle(0, WS_DESK_Y + 2, 18, 5, 0x141a22).setAlpha(0.8)
     wsContainer.add(keyboard)
     const kbLines = this.scene.add.graphics()
-    kbLines.lineStyle(0.5, 0x334155, 0.6)
+    kbLines.lineStyle(0.5, 0x2a3440, 0.6)
     for (let r = 0; r < 3; r++) kbLines.lineBetween(-7, WS_DESK_Y + r * 1.5, 7, WS_DESK_Y + r * 1.5)
     wsContainer.add(kbLines)
 
     // Desk communicator / phone — left side of desk
-    const phoneBody = this.scene.add.rectangle(-20, WS_DESK_Y - 2, 4, 6, 0x334155)
+    const phoneBody = this.scene.add.rectangle(-20, WS_DESK_Y - 2, 4, 6, 0x2a3440)
     wsContainer.add(phoneBody)
-    const phoneScreen = this.scene.add.rectangle(-20, WS_DESK_Y - 5, 3, 2, 0x1e293b)
+    const phoneScreen = this.scene.add.rectangle(-20, WS_DESK_Y - 5, 3, 2, 0x141a22)
     wsContainer.add(phoneScreen)
-    const phoneLight = this.scene.add.arc(-18, WS_DESK_Y - 6, 1.5, 0, 360, false, 0xfbbf24, 0)
+    const phoneLight = this.scene.add.arc(-18, WS_DESK_Y - 6, 1.5, 0, 360, false, 0x00e5ff, 0)
     wsContainer.add(phoneLight)
 
     // Sticky note (color varies)
-    const stickyColors = [0x38bdf8, 0x818cf8, 0x34d399, 0xfbbf24, 0xf472b6]
+    const stickyColors = [0x00e5ff, 0xd4a017, 0xd4a017, 0xa78bfa, 0x00ff88]
     const stickyX = nameHash % 2 === 0 ? 14 : -14
     const sticky = this.scene.add.rectangle(stickyX, WS_DESK_Y - 6, 7, 6, stickyColors[nameHash % 5], 0.7)
     wsContainer.add(sticky)
@@ -242,9 +242,9 @@ export class OfficeWorkstations {
     const extraDecos: Phaser.GameObjects.GameObject[] = []
     if (nameHash % 5 >= 2) {
       const phX = nameHash % 2 === 0 ? -14 : 14
-      const cup = this.scene.add.rectangle(phX, WS_DESK_Y - 5, 5, 7, 0x475569, 0.7)
+      const cup = this.scene.add.rectangle(phX, WS_DESK_Y - 5, 5, 7, 0x2a3440, 0.7)
       wsContainer.add(cup); extraDecos.push(cup)
-      const p1 = this.scene.add.rectangle(phX - 1, WS_DESK_Y - 10, 1, 6, 0xfbbf24, 0.6).setAngle(-5)
+      const p1 = this.scene.add.rectangle(phX - 1, WS_DESK_Y - 10, 1, 6, 0xd4a017, 0.6).setAngle(-5)
       wsContainer.add(p1); extraDecos.push(p1)
       const p2 = this.scene.add.rectangle(phX + 1, WS_DESK_Y - 10, 1, 6, 0xef4444, 0.5).setAngle(7)
       wsContainer.add(p2); extraDecos.push(p2)
@@ -254,7 +254,7 @@ export class OfficeWorkstations {
     let deskPlantLeaf: Phaser.GameObjects.Arc | null = null
     if (nameHash % 5 < 2) {
       const plX = nameHash % 2 === 0 ? -16 : 16
-      const pot = this.scene.add.rectangle(plX, WS_DESK_Y - 2, 5, 4, 0x475569, 0.7)
+      const pot = this.scene.add.rectangle(plX, WS_DESK_Y - 2, 5, 4, 0x2a3440, 0.7)
       wsContainer.add(pot); extraDecos.push(pot)
       const leaf = this.scene.add.circle(plX, WS_DESK_Y - 6, 3, 0x34d399, 0.6)
       wsContainer.add(leaf); extraDecos.push(leaf)
@@ -271,7 +271,7 @@ export class OfficeWorkstations {
     // bg rect at (26, WS_DESK_Y - 12); text centered inside at (33, WS_DESK_Y - 8).
     // Color tiers: 0 = hidden, 1-4 = gray, 5-9 = blue, 10+ = gold.
     const taskCountBg = this.scene.add.graphics()
-    taskCountBg.fillStyle(0x0f172a, 0.6)
+    taskCountBg.fillStyle(0x0a0e14, 0.6)
     taskCountBg.fillRoundedRect(0, 0, 14, 8, 2)
     taskCountBg.setPosition(26, WS_DESK_Y - 12)
     taskCountBg.setAlpha(0)        // hidden until first task completes
@@ -280,7 +280,7 @@ export class OfficeWorkstations {
     const taskCountText = this.scene.add.text(33, WS_DESK_Y - 8, '0', {
       fontSize: '5px',
       fontFamily: 'system-ui, monospace',
-      color: '#64748b',
+      color: '#5a6a7a',
       resolution: 3,
     }).setOrigin(0.5).setAlpha(0)  // hidden until first task completes
     wsContainer.add(taskCountText)
@@ -359,7 +359,7 @@ export class OfficeWorkstations {
     // Role badge (S / R / E) — shown when agent has a pod role assigned.
     // Sits to the left of the name tag; revealed/hidden in updateWorkstation.
     const roleBadge = this.scene.add.text(-30, WS_NAME_Y, '', {
-      fontSize: '9px', color: '#0a1020', fontFamily: 'system-ui, monospace',
+      fontSize: '9px', color: '#0a0e14', fontFamily: 'system-ui, monospace',
       fontStyle: 'bold', backgroundColor: '#00e5ff',
       padding: { x: 3, y: 1 }, resolution: 2,
     }).setOrigin(0.5).setVisible(false)
@@ -368,7 +368,7 @@ export class OfficeWorkstations {
 
     // Uptime indicator — tiny dim counter just below the name tag
     const uptimeText = this.scene.add.text(0, WS_NAME_Y + 12, '', {
-      fontSize: '6px', color: '#475569', fontFamily: 'system-ui, monospace',
+      fontSize: '6px', color: '#3a4858', fontFamily: 'system-ui, monospace',
       resolution: 2, align: 'center',
     }).setOrigin(0.5).setAlpha(0.7).setVisible(false)
     wsContainer.add(uptimeText)
@@ -379,7 +379,7 @@ export class OfficeWorkstations {
     const XP_BAR_H  = 3
     const XP_BAR_Y  = WS_NAME_Y + 14
 
-    const xpBarBg = this.scene.add.rectangle(0, XP_BAR_Y, XP_BAR_W, XP_BAR_H, 0x1e293b)
+    const xpBarBg = this.scene.add.rectangle(0, XP_BAR_Y, XP_BAR_W, XP_BAR_H, 0x141a22)
       .setOrigin(0.5).setAlpha(0.6).setVisible(false)
     wsContainer.add(xpBarBg)
 
@@ -389,7 +389,7 @@ export class OfficeWorkstations {
 
     const XP_TEXT_Y = XP_BAR_Y + 6
     const xpBarText = this.scene.add.text(0, XP_TEXT_Y, '', {
-      fontSize: '5px', color: '#64748b', fontFamily: 'system-ui, sans-serif',
+      fontSize: '5px', color: '#5a6a7a', fontFamily: 'system-ui, sans-serif',
       resolution: 2, align: 'center',
     }).setOrigin(0.5).setVisible(false)
     wsContainer.add(xpBarText)
@@ -402,7 +402,7 @@ export class OfficeWorkstations {
     const blockedIndicatorBadge = this.scene.add.circle(0, 0, 6.5, 0xfbbf24, 0.95)
     const blockedIndicatorText = this.scene.add.text(0, -0.5, '!', {
       fontSize: '10px',
-      color: '#0f172a',
+      color: '#0a0e14',
       fontFamily: 'system-ui, monospace',
       fontStyle: 'bold',
       resolution: 2,
@@ -630,8 +630,8 @@ export class OfficeWorkstations {
     const isWorking = (agent.sessionMode === 'working' || isPlan) && !isWaiting
 
     // ── Name tag color + background tint based on state ──────────────────────
-    const nameColor = isWorking ? '#34d399' : isWaiting ? '#fbbf24' : isPlan ? '#a78bfa' : '#94a3b8'
-    const nameBg    = isWorking ? '#071a0f' : isWaiting ? '#1a1500' : '#0f172acc'
+    const nameColor = isWorking ? '#00e5ff' : isWaiting ? '#fbbf24' : isPlan ? '#a78bfa' : '#8a96a4'
+    const nameBg    = isWorking ? '#0a1a2a' : isWaiting ? '#1a1500' : '#0a0e14cc'
     ws.nameText.setColor(nameColor).setBackgroundColor(nameBg)
 
     // ── Role badge (S / R / E) ────────────────────────────────────────────────
@@ -640,7 +640,7 @@ export class OfficeWorkstations {
       if (podRole) {
         const roleLabel = podRole === 'solver' ? 'S' : podRole === 'reviewer' ? 'R' : 'E'
         const roleBgColor: Record<string, string> = { solver: '#3b82f6', reviewer: '#8b5cf6', executor: '#22c55e' }
-        ws.roleBadge.setText(roleLabel).setBackgroundColor(roleBgColor[podRole] ?? '#475569').setVisible(true)
+        ws.roleBadge.setText(roleLabel).setBackgroundColor(roleBgColor[podRole] ?? '#3a4858').setVisible(true)
 
         // Pulse the badge when this agent is actively part of a running pod
         const podLines = this.host.getPodLines()
@@ -742,7 +742,7 @@ export class OfficeWorkstations {
           : 'idle'
         ws.monitorText
           .setText(idleText)
-          .setColor('#64748b')
+          .setColor('#5a6a7a')
           .setAlpha(0.5)
           .setY(WS_MONITOR_Y - 1)
           .setVisible(true)
@@ -814,7 +814,7 @@ export class OfficeWorkstations {
 
         if (n >= 2) {
           // Axis lines at 0.15 alpha
-          gfx.lineStyle(0.5, 0x475569, 0.15)
+          gfx.lineStyle(0.5, 0x2a3440, 0.15)
           gfx.beginPath()
           gfx.moveTo(0, H); gfx.lineTo(W, H)
           gfx.moveTo(0, H / 2); gfx.lineTo(W, H / 2)
@@ -826,7 +826,7 @@ export class OfficeWorkstations {
             const y0 = toY(history[i - 1])
             const y1 = toY(history[i])
             const v1 = history[i]
-            const col = v1 >= 1 ? 0x34d399 : v1 >= 0.5 ? 0xfbbf24 : 0x475569
+            const col = v1 >= 1 ? 0x34d399 : v1 >= 0.5 ? 0xfbbf24 : 0x2a3440
 
             // Polyline segment
             gfx.lineStyle(1, col, 0.85)
@@ -960,7 +960,7 @@ export class OfficeWorkstations {
    *
    * Color tiers:
    *   0       — badge hidden (initial state before any task finishes)
-   *   1-4     — gray  (#64748b) — "getting started"
+   *   1-4     — gray  (#5a6a7a) — "getting started"
    *   5-9     — blue  (#3b82f6) — productive
    *   10+     — gold  (#fbbf24) — productivity champion
    *
@@ -979,7 +979,7 @@ export class OfficeWorkstations {
     } else if (count >= 5) {
       tierColor = '#3b82f6'  // blue — productive
     } else {
-      tierColor = '#64748b'  // gray — getting started
+      tierColor = '#5a6a7a'  // gray — getting started
     }
 
     // Make visible if this is the first completion
@@ -1039,7 +1039,7 @@ export class OfficeWorkstations {
     if (agent.sessionMode === 'compressing') {
       return { emoji: '😵', color: '#f87171' }
     }
-    return { emoji: '☕', color: '#64748b' }
+    return { emoji: '☕', color: '#5a6a7a' }
   }
 
   updateMood(ws: WorkstationSprite, agent: AgentState): void {
@@ -1125,7 +1125,7 @@ export class OfficeWorkstations {
     g.clear()
 
     // Dark background card
-    g.fillStyle(0x0f172a, 0.92)
+    g.fillStyle(0x0a0e14, 0.92)
     g.fillRoundedRect(-bw / 2, -bh / 2, bw, bh, CORNER)
 
     // Accent left border
@@ -1136,7 +1136,7 @@ export class OfficeWorkstations {
     const tailW = 6
     const tailH = 6
     const tailY = bh / 2
-    g.fillStyle(0x0f172a, 0.92)
+    g.fillStyle(0x0a0e14, 0.92)
     g.fillTriangle(-tailW / 2, tailY, tailW / 2, tailY, 0, tailY + tailH)
   }
 
@@ -1361,15 +1361,15 @@ export class OfficeWorkstations {
       if (ws.soundWaveGfx) {
         const gfx = ws.soundWaveGfx
         gfx.clear()
-        gfx.lineStyle(1, 0x94a3b8, 0.15)
+        gfx.lineStyle(1, 0x3a4858, 0.15)
         gfx.beginPath()
         gfx.arc(0, 0, 3, Phaser.Math.DegToRad(-45), Phaser.Math.DegToRad(45), false)
         gfx.strokePath()
-        gfx.lineStyle(1, 0x94a3b8, 0.10)
+        gfx.lineStyle(1, 0x3a4858, 0.10)
         gfx.beginPath()
         gfx.arc(0, 0, 5, Phaser.Math.DegToRad(-45), Phaser.Math.DegToRad(45), false)
         gfx.strokePath()
-        gfx.lineStyle(1, 0x94a3b8, 0.05)
+        gfx.lineStyle(1, 0x3a4858, 0.05)
         gfx.beginPath()
         gfx.arc(0, 0, 7, Phaser.Math.DegToRad(-45), Phaser.Math.DegToRad(45), false)
         gfx.strokePath()
@@ -1389,7 +1389,7 @@ export class OfficeWorkstations {
           if (!ring.active) return
           ring.clear()
           // Background track
-          ring.lineStyle(1.5, 0x334155, 0.3)
+          ring.lineStyle(1.5, 0x2a3440, 0.3)
           ring.beginPath()
           ring.arc(0, 0, RING_R, 0, Math.PI * 2, false)
           ring.strokePath()
@@ -1672,7 +1672,7 @@ export class OfficeWorkstations {
   updateMonitorGlow(ws: WorkstationSprite, isWorking: boolean, isWaiting: boolean): void {
     if (!ws.monitorGlowFx) return
     const isActive = isWorking || isWaiting
-    const baseColor = isWaiting ? 0xfbbf24 : isWorking ? 0x0ea5e9 : 0x94a3b8
+    const baseColor = isWaiting ? 0xfbbf24 : isWorking ? 0x0ea5e9 : 0x1e2830
     const baseStrength = isActive ? 3 : 1
     const peakStrength = isActive ? 6 : 2
     const duration     = isActive ? 800 : 2400
@@ -1714,7 +1714,7 @@ export class OfficeWorkstations {
     } else if (s?.sessionMode === 'working' || s?.sessionMode === 'plan') {
       ws.deskBody.setStrokeStyle(1, 0x34d399, 0.5)
     } else {
-      ws.deskBody.setStrokeStyle(1, 0x64748b, 0.5)
+      ws.deskBody.setStrokeStyle(1, activeTheme.deskStrokeIdle, 0.5)
     }
   }
 }

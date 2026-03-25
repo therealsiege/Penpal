@@ -608,7 +608,7 @@ export class OfficeRooms {
     const waitingCount = room.agents.filter(a => a.needsInteraction).length
     const isActive = workingCount > 0
     const isWaiting = waitingCount > 0
-    const dotColor = isWaiting ? 0xfbbf24 : isActive ? 0x34d399 : 0x475569
+    const dotColor = isWaiting ? 0xfbbf24 : isActive ? 0x34d399 : 0x3a4858
 
     // Small filled circle left of the count number
     const badgeRightX = room.width / 2 - WALL_T - WALL_I - 8
@@ -635,9 +635,9 @@ export class OfficeRooms {
       `${room.agents.length}`,
       {
         fontSize: '11px',
-        color: isActive ? '#00ff88' : isWaiting ? '#fbbf24' : '#4a5a52',
+        color: isActive ? '#00e5ff' : isWaiting ? '#fbbf24' : '#3a4858',
         fontFamily: 'system-ui, monospace',
-        backgroundColor: '#0a1020cc',
+        backgroundColor: '#0a0e14cc',
         padding: { x: 5, y: 2 },
         resolution: 2,
       },

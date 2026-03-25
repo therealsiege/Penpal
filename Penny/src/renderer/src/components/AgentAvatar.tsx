@@ -290,7 +290,7 @@ export function AgentAvatar({ name, status, sessionMode, needsInteraction, size 
 
       {/* Name tag with drop-shadow polish */}
       <div
-        className="absolute -bottom-1 left-1/2 -translate-x-1/2 px-2 py-0.5 bg-slate-800/90 border border-slate-700/50 rounded text-[10px] text-slate-300 whitespace-nowrap truncate max-w-[80px] text-center"
+        className="absolute -bottom-1 left-1/2 -translate-x-1/2 px-2 py-0.5 bg-[#141a22]/90 border border-[#2a3440]/50 rounded text-[10px] text-[#8a96a4] whitespace-nowrap truncate max-w-[80px] text-center"
         style={{ filter: 'drop-shadow(0 1px 3px rgba(0,0,0,0.3))' }}
       >
         {name.split(' ')[0]}
