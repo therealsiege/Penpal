@@ -51,11 +51,13 @@ process.on('uncaughtException', (err) => {
 let mainWindow: BrowserWindow | null = null
 
 function createWindow() {
+  const isTest = process.env.NODE_ENV === 'test'
   mainWindow = new BrowserWindow({
     width: 1280,
     height: 800,
     minWidth: 900,
     minHeight: 600,
+    show: !isTest,
     backgroundColor: '#020617',
     icon: path.join(__dirname, '../../resources/icon.png'),
     titleBarStyle: 'hiddenInset',

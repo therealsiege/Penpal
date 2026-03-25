@@ -7,6 +7,7 @@ export default defineConfig({
   workers: 1, // Electron tests must run serially
   reporter: [['list'], ['html', { open: 'never' }]],
   use: {
+    headless: true,
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
   },

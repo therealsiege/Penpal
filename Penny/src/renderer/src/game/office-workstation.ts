@@ -852,9 +852,9 @@ export class OfficeWorkstations {
 
     const WALL_T = 8
     const WALL_I = 4
-    const DOOR_CLEARANCE = 16 // extra padding near door so desks don't block exit
+    const DOOR_CLEARANCE = 30 // keep desks well clear of the door
     const topDoorPad = room.doorSide === 'top' ? DOOR_CLEARANCE : 0
-    const botDoorPad = (room.doorSide === 'bottom' || !room.doorSide) ? DOOR_CLEARANCE : 0
+    const botDoorPad = room.doorSide === 'bottom' ? DOOR_CLEARANCE : 0
     const floorStartX = -room.width  / 2 + WALL_T + WALL_I + ROOM_PADDING
     const floorStartY = -room.height / 2 + WALL_T + WALL_I + ROOM_HEADER_H + ROOM_PADDING + ROOM_TOP_EXTRA + topDoorPad
 
@@ -864,11 +864,15 @@ export class OfficeWorkstations {
     const cellW = usableW / cols
     const cellH = usableH / rows
 
+    // Pack desks away from the door: bottom-up when door is top, top-down when door is bottom
+    const flipRows = room.doorSide === 'top'
+
     agents.forEach((ws, i) => {
       const col = i % cols
       const row = Math.floor(i / cols)
+      const effectiveRow = flipRows ? (rows - 1 - row) : row
       const cx  = floorStartX + col * cellW + cellW / 2
-      const cy  = floorStartY + row * cellH + cellH / 2
+      const cy  = floorStartY + effectiveRow * cellH + cellH / 2
 
       this.scene.tweens.killTweensOf(ws.container)
       this.scene.tweens.add({ targets: ws.container, x: cx, y: cy, duration: 280, ease: 'Power2' })
