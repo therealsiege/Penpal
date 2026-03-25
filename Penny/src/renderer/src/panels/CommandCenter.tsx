@@ -1347,17 +1347,6 @@ export function CommandCenter(props: CommandCenterProps) {
 
         {/* Right side */}
         <div className="flex items-center gap-2">
-          {/* Hot leads pill */}
-          {hotLeadCount > 0 && (
-            <button
-              onClick={props.onOpenPipeline}
-              className="flex items-center gap-1 px-2 py-0.5 bg-[#00e5ff]/10 border border-[#00e5ff]/25 rounded-full text-[#00e5ff] hover:bg-[#00e5ff]/20 transition-colors"
-            >
-              <span className="text-[13px] font-semibold">{hotLeadCount}</span>
-              <span className="text-[13px]">hot leads</span>
-            </button>
-          )}
-
           {/* Jobs summary */}
           {schedulerJobs && schedulerJobs.length > 0 && (
             <button

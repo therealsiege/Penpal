@@ -187,18 +187,6 @@ export class OfficeWorkstations {
     }).setOrigin(0.5, 0).setAlpha(0.7).setVisible(false)
     wsContainer.add(monitorText)
 
-    // Coffee mug
-    const mugBody = this.scene.add.rectangle(22, WS_DESK_Y - 3, 5, 6, 0x8b5cf6).setStrokeStyle(0.5, 0x6d28d9, 0.8)
-    wsContainer.add(mugBody)
-    const mugHandle = this.scene.add.arc(25, WS_DESK_Y - 3, 2.5, 0, 180, false, 0x000000, 0).setStrokeStyle(1, 0x8b5cf6, 0.8)
-    wsContainer.add(mugHandle)
-
-    // Coffee steam — particles spawned dynamically only while agent is idle
-    // (see spawnSteamParticles / clearSteamParticles)
-    const steamContainer = this.scene.add.container(22, WS_DESK_Y - 7)
-    wsContainer.add(steamContainer)
-    const steamTweens: Phaser.Tweens.Tween[] = []
-
     // Desk lamp
     const lampBase = this.scene.add.rectangle(-24, WS_DESK_Y - 2, 6, 3, 0x3a4858)
     wsContainer.add(lampBase)
@@ -292,7 +280,7 @@ export class OfficeWorkstations {
     ]
     // LOD level 3 only: micro-accessories only visible at full detail zoom
     const lodLevel3Objects: Phaser.GameObjects.GameObject[] = [
-      mugBody, mugHandle, steamContainer, lampBase, lampArm, lampShade, lampLight,
+      lampBase, lampArm, lampShade, lampLight,
       ...extraDecos, ledGlow, monitorText,
       phoneBody, phoneScreen, phoneLight,
       taskCountBg, taskCountText,
@@ -433,7 +421,7 @@ export class OfficeWorkstations {
       monitorText,
       blockedIndicator, blockedIndicatorPulse, blockedIndicatorBadge, blockedIndicatorStem, blockedIndicatorText,
       thoughtBubble, thoughtBubbleText, thoughtBubbleBg, state: agent,
-      steamTweens, steamContainer,
+      steamTweens: [] as Phaser.Tweens.Tween[], steamContainer: null as Phaser.GameObjects.Container | null,
       ledGlow,
       moodEmoji,
       soundWaveGfx,
@@ -864,11 +852,14 @@ export class OfficeWorkstations {
 
     const WALL_T = 8
     const WALL_I = 4
+    const DOOR_CLEARANCE = 16 // extra padding near door so desks don't block exit
+    const topDoorPad = room.doorSide === 'top' ? DOOR_CLEARANCE : 0
+    const botDoorPad = (room.doorSide === 'bottom' || !room.doorSide) ? DOOR_CLEARANCE : 0
     const floorStartX = -room.width  / 2 + WALL_T + WALL_I + ROOM_PADDING
-    const floorStartY = -room.height / 2 + WALL_T + WALL_I + ROOM_HEADER_H + ROOM_PADDING + ROOM_TOP_EXTRA
+    const floorStartY = -room.height / 2 + WALL_T + WALL_I + ROOM_HEADER_H + ROOM_PADDING + ROOM_TOP_EXTRA + topDoorPad
 
     const usableW = room.width  - (WALL_T + WALL_I + ROOM_PADDING) * 2
-    const usableH = room.height - (WALL_T + WALL_I) * 2 - ROOM_HEADER_H - ROOM_PADDING * 2 - ROOM_TOP_EXTRA
+    const usableH = room.height - (WALL_T + WALL_I) * 2 - ROOM_HEADER_H - ROOM_PADDING * 2 - ROOM_TOP_EXTRA - topDoorPad - botDoorPad
 
     const cellW = usableW / cols
     const cellH = usableH / rows
@@ -1443,9 +1434,6 @@ export class OfficeWorkstations {
         this.scene.tweens.add({ targets: ws.ledGlow, alpha: 0.1, duration: 600, ease: 'Sine.easeOut' })
       }
       this.restoreDeskStroke(ws)
-
-      // Spawn coffee steam — agent is relaxing, mug is hot
-      this.host.spawnSteamParticles(ws)
 
       // "Just finished" bounce + confetti when transitioning from working→idle
       if (prevMode === 'working') {

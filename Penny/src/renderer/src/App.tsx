@@ -13,6 +13,7 @@ import { CommandCenter } from './panels/CommandCenter'
 import { VaultPanel } from './panels/VaultPanel'
 import { SettingsPanel } from './panels/SettingsPanel'
 import { SoundboardPanel } from './panels/SoundboardPanel'
+import { DataPanel } from './panels/DataPanel'
 import type { SystemPaths } from './types'
 import { getPathPresets } from './utils/path-presets'
 import { EventBus, EVENTS } from './game/events'
@@ -109,6 +110,13 @@ function AppContent() {
       description: 'Browse vault files and send to agents',
       category: 'Navigation',
       action: () => setActivePanel('vault'),
+    },
+    {
+      id: 'open-data',
+      label: 'Open Data',
+      description: 'Run ETL, ingestion, and enrichment scripts',
+      category: 'Navigation',
+      action: () => setActivePanel('data'),
     },
     {
       id: 'open-soundboard',
@@ -330,6 +338,7 @@ function AppContent() {
           />
         )}
         {activePanel === 'tasks' && <TasksPanel />}
+        {activePanel === 'data' && <DataPanel />}
         {activePanel === 'vault' && <VaultPanel />}
         {activePanel === 'soundboard' && <SoundboardPanel />}
         {activePanel === 'settings' && <SettingsPanel />}

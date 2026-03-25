@@ -141,6 +141,13 @@ declare global {
       githubListRepos: () => Promise<{ owner: string; repo: string; localPath: string }[]>
       // Opencode Sessions
       getOpencodeSessions: () => Promise<OpencodeSession[]>
+      // Data Scripts
+      runDataScript: (script: string, opts?: { rootDir?: string }) => Promise<string>
+      cancelDataScript: (runId: string) => Promise<boolean>
+      onScriptOutput: (callback: (data: { id: string; stream: string; line: string }) => void) => () => void
+      onScriptDone: (callback: (data: { id: string; exitCode: number; durationMs: number; error?: string }) => void) => () => void
+      getBriefingSchedule: () => Promise<{ cron: string; enabled: boolean }>
+      setBriefingSchedule: (cron: string, enabled: boolean) => Promise<void>
     }
   }
 }

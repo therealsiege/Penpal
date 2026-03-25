@@ -17,7 +17,6 @@
     "publish": "electron-vite build && electron-forge publish"
   },
   "dependencies": {
-    "electron-updater": "^6.8.3",
     "@codemirror/autocomplete": "^6.20.1",
     "@codemirror/commands": "^6.10.3",
     "@codemirror/lang-markdown": "^6.5.0",
@@ -33,6 +32,7 @@
     "@xterm/xterm": "^6.0.0",
     "chokidar": "^5.0.0",
     "dotenv": "^17.3.1",
+    "electron-updater": "^6.8.3",
     "gray-matter": "^4.0.3",
     "js-yaml": "^4.1.1",
     "minisearch": "^7.2.0",
@@ -44,6 +44,7 @@
     "rehype-highlight": "^7.0.2",
     "remark-frontmatter": "^5.0.0",
     "remark-gfm": "^4.0.1",
+    "yaml": "^2.8.3",
     "zustand": "^5.0.12"
   },
   "devDependencies": {
@@ -56,7 +57,7 @@
     "@electron-forge/plugin-auto-unpack-natives": "^7.11.1",
     "@electron-forge/plugin-fuses": "^7.11.1",
     "@electron-forge/publisher-github": "^7.11.1",
-    "@electron/fuses": "^2.1.0",
+    "@electron/fuses": "^1.8.0",
     "@playwright/test": "^1.58.2",
     "@types/js-yaml": "^4.0.9",
     "@types/react": "^18.3.0",

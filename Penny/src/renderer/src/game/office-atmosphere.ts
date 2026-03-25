@@ -264,18 +264,18 @@ export class OfficeAtmosphere {
 
     // Update window tint based on time of day and force a redraw
     if (phase === 'morning') {
-      this.windowTintColor = 0xfde68a
+      this.windowTintColor = 0x93c5fd
       this.windowTintAlpha = 0.08
     } else if (phase === 'day') {
       this.windowTintColor = 0x7dd3fc
       this.windowTintAlpha = 0.16
     } else if (phase === 'evening') {
-      this.windowTintColor = 0xd4a017
+      this.windowTintColor = 0x7dd3fc
       this.windowTintAlpha = 0.06
     } else {
-      // night: interior glow suggesting lights inside
-      this.windowTintColor = 0xd4a017
-      this.windowTintAlpha = 0.12
+      // night: cool interior glow
+      this.windowTintColor = 0x93c5fd
+      this.windowTintAlpha = 0.10
     }
     this.callbacks.invalidateOfficeBgCache()
 
