@@ -81,25 +81,26 @@ export function Layout({ activePanel, onNavigate, children }: LayoutProps) {
         <div className="drag-region w-full pt-11 pb-3" />
 
         {/* Logo + Name */}
-        <div className="mb-4 flex items-center gap-2 px-3">
+        <div className="mb-4 flex flex-col items-center gap-1 px-3">
           <img
             src="logo.png"
-            alt="Penny"
+            alt="PenPal"
             className="w-10 h-10 rounded-lg shadow-lg shrink-0"
             draggable={false}
             // Single bounce on mount: 0.6s ease-out, 0.3s delay, 1 iteration, keep end state
             style={{ animation: 'bounce 0.6s ease-out 0.3s 1 both' }}
           />
           <span
-            className="text-2xl font-light tracking-wide"
+            className="uppercase"
             style={{
-              fontFamily: "-apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif",
-              letterSpacing: '0.08em',
-              color: '#00ff88',
-              textShadow: '0 0 10px #00ff8866',
+              fontFamily: "'Monogram', monospace",
+              fontSize: '36px',
+              letterSpacing: '0.25em',
+              color: '#e8b84b',
+              textShadow: '0 0 8px #e8b84baa, 0 0 20px #e8b84b44',
             }}
           >
-            Penny
+            PenPal
           </span>
         </div>
 
@@ -128,6 +129,20 @@ export function Layout({ activePanel, onNavigate, children }: LayoutProps) {
                 <rect x="3" y="3" width="18" height="4" rx="1" />
                 <rect x="3" y="10" width="18" height="4" rx="1" />
                 <rect x="3" y="17" width="18" height="4" rx="1" />
+              </svg>
+            }
+          />
+
+          <NavButton
+            panel="data"
+            label="Data"
+            active={activePanel === 'data'}
+            onClick={() => onNavigate('data')}
+            icon={
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <ellipse cx="12" cy="5" rx="9" ry="3" />
+                <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3" />
+                <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5" />
               </svg>
             }
           />

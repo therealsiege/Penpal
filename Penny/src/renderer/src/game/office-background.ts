@@ -483,13 +483,13 @@ export class OfficeBackground {
       const lightX = x + width / 2
       const lightY = y + BANNER_H + 10
       const lightGfx = this.scene.add.graphics()
-      lightGfx.fillStyle(0xd4a017, 0.08)
+      lightGfx.fillStyle(0x94a3b8, 0.06)
       lightGfx.fillCircle(0, 0, 20)
-      lightGfx.fillStyle(0xd4a017, 0.15)
+      lightGfx.fillStyle(0xcbd5e1, 0.12)
       lightGfx.fillCircle(0, 0, 6)
-      lightGfx.fillStyle(0xffffff, 0.3)
+      lightGfx.fillStyle(0xffffff, 0.25)
       lightGfx.fillCircle(0, 0, 2)
-      const lightContainer = this.scene.add.container(lightX, lightY, [lightGfx]).setDepth(-1).setAlpha(0.6)
+      const lightContainer = this.scene.add.container(lightX, lightY, [lightGfx]).setDepth(-1).setAlpha(0.5)
       atmosphere.ceilingLights.push(lightContainer)
 
       // Gradient-style team overlay on top of the building floor
@@ -865,6 +865,28 @@ export class OfficeBackground {
       const connX = cafeBounds.x + cafeBounds.w / 2
       // Vertical corridor from service row bottom to agent row corridor
       this.corridorSegments.push({ x1: connX, y1: serviceBottomY, x2: connX, y2: nearestRow.y, color: 0x2a3440 })
+      // Draw the vertical pipe visually
+      g.fillStyle(0x0f1520, 0.5)
+      g.fillRect(connX - 4, serviceBottomY, 8, nearestRow.y - serviceBottomY)
+      g.fillStyle(0x1a2535, 0.6)
+      g.fillRect(connX - 1, serviceBottomY, 2, nearestRow.y - serviceBottomY)
+
+      // Draw a proper door at the top of the corridor (service row exit)
+      const doorW = 22
+      const doorH = 10
+      const doorX = connX - doorW / 2
+      const doorY = serviceBottomY - 2
+      g.fillStyle(0x3b82f6, 0.6)
+      g.fillRoundedRect(doorX - 2, doorY - 2, doorW + 4, doorH + 4, 3)
+      g.fillStyle(0x0f172a, 1)
+      g.fillRoundedRect(doorX, doorY, doorW, doorH, 2)
+      g.fillStyle(0x3b82f6, 0.4)
+      g.fillRect(doorX + 3, doorY + 2, doorW - 6, 2)
+      g.lineStyle(1, 0x3b82f6, 0.3)
+      g.lineBetween(connX, doorY + 1, connX, doorY + doorH - 1)
+      g.fillStyle(0xfbbf24, 1)
+      g.fillCircle(doorX + doorW - 4, doorY + doorH / 2, 1.5)
+
       // Horizontal leg to connect to the nearest team
       if (Math.abs(connX - nearestRow.minX) > 10) {
         this.corridorSegments.push({ x1: connX, y1: nearestRow.y, x2: nearestRow.minX, y2: nearestRow.y, color: 0x2a3440 })
@@ -895,7 +917,7 @@ export class OfficeBackground {
       const py = Phaser.Math.Linear(seg.y1, seg.y2, t)
       g.fillStyle(seg.color, 0.2)
       g.fillCircle(px, py, 4.2)
-      g.fillStyle(0xd4a017, 0.72)
+      g.fillStyle(0xcbd5e1, 0.6)
       g.fillCircle(px, py, 1.6)
     }
   }

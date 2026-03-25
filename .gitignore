@@ -150,3 +150,6 @@ Resources/
 
 # ETL artifacts
 new_entities.json
+
+# Forge build output
+forge-out/

@@ -129,7 +129,7 @@ export class PennyCafe {
     g.fillRoundedRect(6, 2, CAFE_W - 12, 24, { tl: 4, tr: 4, bl: 0, br: 0 })
     g.lineStyle(2, 0x00ff88, 0.5)
     g.lineBetween(6, 26, CAFE_W - 6, 26)
-    const signText = scene.add.text(CAFE_W / 2, 14, 'PENNY CAFE', {
+    const signText = scene.add.text(CAFE_W / 2, 14, 'PENPAL CAFE', {
       fontSize: '14px', fontFamily: 'system-ui, sans-serif', fontStyle: 'bold',
       color: '#00ff88', resolution: 2,
     }).setOrigin(0.5)
@@ -207,12 +207,21 @@ export class PennyCafe {
     const stoolY = counterY + COUNTER_W + 16
     for (let si = 0; si < NUM_STOOLS; si++) {
       const sx = STOOL_START_X + si * STOOL_GAP
-      g.fillStyle(0x3a4a5c, 0.6)
-      g.fillCircle(sx, stoolY, 8)
-      g.fillStyle(0x00e5ff, 0.12)
-      g.fillRect(sx - 2, stoolY + 8, 4, 6)
-      g.fillStyle(0x2a3a4a, 0.35)
-      g.fillRect(sx - 4, stoolY + 13, 8, 2)
+      // Footrest ring
+      g.lineStyle(1.5, 0x4a5a6c, 0.4)
+      g.strokeCircle(sx, stoolY + 12, 6)
+      // Center post
+      g.fillStyle(0x64748b, 0.7)
+      g.fillRect(sx - 1.5, stoolY + 2, 3, 12)
+      // Seat cushion (rounded)
+      g.fillStyle(0x334155, 0.85)
+      g.fillCircle(sx, stoolY, 7)
+      // Seat highlight
+      g.fillStyle(0x475569, 0.6)
+      g.fillCircle(sx, stoolY - 1, 5)
+      // Seat rim
+      g.lineStyle(1, 0x00e5ff, 0.15)
+      g.strokeCircle(sx, stoolY, 7)
     }
 
     this.worldY = cy + stoolY

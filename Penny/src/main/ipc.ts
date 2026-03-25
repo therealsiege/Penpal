@@ -95,6 +95,7 @@ import {
   type VeritasTaskStatus,
 } from './veritas-api'
 import { DOCS_ROOT, getSystemPaths } from './paths'
+import { registerDataScriptHandlers } from './data-scripts'
 
 const VAULT_ROOT = DOCS_ROOT
 const BRIEFINGS_DIR = path.join(VAULT_ROOT, '1Putt', 'Daily Briefings')
@@ -801,4 +802,7 @@ export function registerIpcHandlers() {
     return { ok: true }
   }))
   ipcMain.handle('github:list-repos', wrapHandler(() => getWatchedRepos()))
+
+  // ── Data Scripts ──────────────────────────────────────────────────────
+  registerDataScriptHandlers()
 }

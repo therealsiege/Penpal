@@ -129,4 +129,20 @@ contextBridge.exposeInMainWorld('api', {
   githubListRepos: () => ipcRenderer.invoke('github:list-repos'),
   // Opencode Sessions
   getOpencodeSessions: () => ipcRenderer.invoke('opencode:sessions'),
+  // Data Scripts
+  runDataScript: (script: string, opts?: { rootDir?: string }) =>
+    ipcRenderer.invoke('data:run-script', script, opts),
+  cancelDataScript: (runId: string) => ipcRenderer.invoke('data:cancel-script', runId),
+  onScriptOutput: (callback: (data: { id: string; stream: string; line: string }) => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, data: { id: string; stream: string; line: string }) => callback(data)
+    ipcRenderer.on('data:script-output', handler)
+    return () => ipcRenderer.removeListener('data:script-output', handler)
+  },
+  onScriptDone: (callback: (data: { id: string; exitCode: number; durationMs: number; error?: string }) => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, data: { id: string; exitCode: number; durationMs: number; error?: string }) => callback(data)
+    ipcRenderer.on('data:script-done', handler)
+    return () => ipcRenderer.removeListener('data:script-done', handler)
+  },
+  getBriefingSchedule: () => ipcRenderer.invoke('data:get-briefing-schedule') as Promise<{ cron: string; enabled: boolean }>,
+  setBriefingSchedule: (cron: string, enabled: boolean) => ipcRenderer.invoke('data:set-briefing-schedule', cron, enabled),
 })
