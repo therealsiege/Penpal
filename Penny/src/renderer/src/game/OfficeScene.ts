@@ -616,6 +616,11 @@ export class OfficeScene extends Phaser.Scene {
 
     if (this.particles.isRainActive()) this.particles.tickRain(this.viewWidth, this.viewHeight)
     if (this.particles.isSnowActive()) this.particles.tickSnow(time, this.viewWidth, this.viewHeight)
+    const camWWorld = cam.width / cam.zoom
+    const camHWorld = cam.height / cam.zoom
+    this.particles.tickMakoMotes(cam.scrollX, cam.scrollY, camWWorld, camHWorld, cam.zoom)
+    this.particles.tickSparks(cam.scrollX, cam.scrollY, camWWorld, camHWorld, cam.zoom)
+    this.particles.tickSteam(cam.scrollX, cam.scrollY, camWWorld, camHWorld, cam.zoom)
     this.atmosphere.tick(time, this.particles.isRainActive(), this.particles.isSnowActive())
     this.atmosphere.tickCeilingLightActivity(time, this.rooms)
     if (this.background.hasWhiteboardContainer() && time - this.background.getLastWhiteboardUpdateAt() >= 5000) {

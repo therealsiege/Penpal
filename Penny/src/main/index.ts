@@ -18,6 +18,7 @@ protocol.registerSchemesAsPrivileged([
 ])
 import { startFileWatcher, stopFileWatcher } from './file-watcher'
 import { startOrchestrator, stopOrchestrator } from './orchestrator'
+import { initAutoUpdater } from './auto-updater'
 
 // Load analytics/.env for Memgraph/Qdrant connection strings
 // __dirname is out/main (or src/main in dev) — go up to Penny/
@@ -102,6 +103,7 @@ app.whenReady().then(() => {
   startSlackBridge()
   startFileWatcher()
   startOrchestrator()
+  initAutoUpdater()
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()

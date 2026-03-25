@@ -70,6 +70,11 @@ export class OfficeAtmosphere {
   // Exterior lights
   exteriorLights: Phaser.GameObjects.Container | null = null
 
+  // Ambient haze / fog layer
+  private hazeOverlay: Phaser.GameObjects.Graphics | null = null
+  private hazeAlphaScale = 0.5
+  private hazeBreathTime = 0
+
   // World dimensions (needed for cloud wrapping)
   private worldWidth = 2400
   private worldHeight = 1200
@@ -100,6 +105,7 @@ export class OfficeAtmosphere {
     this.initStarfield()
     this.initCloudLayer()
     this.initChimeRipplePool()
+    this.initHaze()
 
     this.applyDayNightCycle(false)
 
@@ -118,6 +124,38 @@ export class OfficeAtmosphere {
   }
 
   // ---------------------------------------------------------------------------
+  // Ambient haze / fog layer
+  // ---------------------------------------------------------------------------
+
+  private initHaze(): void {
+    const W = 4000  // generous fixed size to cover any viewport
+    const H = 4000
+    const gfx = this.scene.add.graphics()
+    gfx.setDepth(9996)       // just below day/night overlay (9997)
+    gfx.setScrollFactor(0)
+
+    // Vertical gradient: transparent at top, slightly foggy in the lower 40%
+    const FOG_COLOR = 0x141a22
+    const STRIPS = 100
+    const stripH = H / STRIPS
+    const fogStart = 0.6  // top 60% is clear, bottom 40% has fog
+
+    for (let i = 0; i < STRIPS; i++) {
+      const t = i / (STRIPS - 1)
+      let alpha = 0
+      if (t > fogStart) {
+        // Ramp from 0 to 0.04 over the bottom 40%
+        alpha = ((t - fogStart) / (1 - fogStart)) * 0.04
+      }
+      gfx.fillStyle(FOG_COLOR, alpha)
+      gfx.fillRect(0, i * stripH, W, stripH + 1)
+    }
+
+    gfx.setAlpha(this.hazeAlphaScale)
+    this.hazeOverlay = gfx
+  }
+
+  // ---------------------------------------------------------------------------
   // Update — called from OfficeScene.update()
   // ---------------------------------------------------------------------------
 
@@ -130,6 +168,12 @@ export class OfficeAtmosphere {
       this.tickStarfieldTwinkle()
     }
     this.tickClouds()
+    // Haze breathing: slow sine modulation (~8s period, amplitude 0.01)
+    if (this.hazeOverlay) {
+      this.hazeBreathTime = time
+      const breath = Math.sin(time / 1000 * (Math.PI * 2 / 8)) * 0.01
+      this.hazeOverlay.setAlpha(Math.max(0, this.hazeAlphaScale + breath))
+    }
     if (this.wallClockContainer && time - this.lastClockTick >= 1000) {
       this.lastClockTick = time
       this.tickWallClock()
@@ -179,6 +223,12 @@ export class OfficeAtmosphere {
     this.windowGlintGfx?.destroy()
     this.windowGlintGfx = null
     this.windowPositions = []
+
+    if (this.hazeOverlay) {
+      this.scene.tweens.killTweensOf(this.hazeOverlay)
+      this.hazeOverlay.destroy()
+      this.hazeOverlay = null
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -323,6 +373,29 @@ export class OfficeAtmosphere {
         })
       } else {
         this.exteriorLights.setAlpha(extTarget)
+      }
+    }
+
+    // Ambient haze — phase-dependent intensity
+    if (this.hazeOverlay) {
+      const hazeScaleMap: Record<string, number> = {
+        morning: 0.6,
+        day: 0.5,
+        evening: 0.8,
+        night: 1.0,
+      }
+      const targetScale = hazeScaleMap[phase] ?? 0.5
+      this.hazeAlphaScale = targetScale
+      if (animate) {
+        this.scene.tweens.killTweensOf(this.hazeOverlay)
+        this.scene.tweens.add({
+          targets: this.hazeOverlay,
+          alpha: targetScale,
+          duration: 2000,
+          ease: 'Sine.easeInOut',
+        })
+      } else {
+        this.hazeOverlay.setAlpha(targetScale)
       }
     }
   }
