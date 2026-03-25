@@ -852,7 +852,7 @@ export class OfficeParticles {
 
   private initMakoMotePool(): void {
     for (let i = 0; i < MAKO_MOTE_POOL_SIZE; i++) {
-      const radius = 1 + Math.random() * 1.5
+      const radius = 3 + Math.random() * 3
       const arc = this.scene.add.circle(0, 0, radius, 0x00ff88, 0)
         .setDepth(2)
         .setBlendMode(Phaser.BlendModes.ADD)
@@ -864,8 +864,8 @@ export class OfficeParticles {
 
   tickMakoMotes(camX: number, camY: number, camW: number, camH: number, zoom: number): void {
     const now = this.scene.time.now
-    if (now - this.lastMakoSpawnAt < 400) return
-    if (zoom < 0.5) return
+    if (now - this.lastMakoSpawnAt < 300) return
+    if (zoom < 0.3) return
     this.lastMakoSpawnAt = now
 
     const mote = this.makoMotePool.find(m => !m.getData('busy'))
@@ -875,11 +875,11 @@ export class OfficeParticles {
     const worldY = camY + Math.random() * camH
     const color = Math.random() < 0.5 ? 0x00ff88 : 0x00e5ff
     const duration = 3000 + Math.random() * 2000
-    const riseY = 40 + Math.random() * 40
+    const riseY = 60 + Math.random() * 60
 
     mote.setPosition(worldX, worldY)
     mote.setFillStyle(color)
-    mote.setAlpha(0.12)
+    mote.setAlpha(0.25)
     mote.setVisible(true)
     mote.setData('busy', true)
 
@@ -894,7 +894,7 @@ export class OfficeParticles {
       ease: 'Sine.easeOut',
       onUpdate: (tween: Phaser.Tweens.Tween) => {
         const progress = tween.progress
-        mote.x = startX + Math.sin(progress * Math.PI * 2 + phaseOffset) * 15
+        mote.x = startX + Math.sin(progress * Math.PI * 2 + phaseOffset) * 25
       },
       onComplete: () => {
         mote.setVisible(false)
@@ -910,7 +910,7 @@ export class OfficeParticles {
   private initSparkPool(): void {
     const sparkColors = [0xd4a017, 0xff8c00, 0xffffff]
     for (let i = 0; i < SPARK_POOL_SIZE; i++) {
-      const radius = 0.5 + Math.random() * 1.0
+      const radius = 1.5 + Math.random() * 2.0
       const color = sparkColors[i % sparkColors.length]
       const arc = this.scene.add.circle(0, 0, radius, color, 0)
         .setDepth(3)
@@ -923,8 +923,8 @@ export class OfficeParticles {
 
   tickSparks(camX: number, camY: number, camW: number, camH: number, zoom: number): void {
     const now = this.scene.time.now
-    if (now - this.lastSparkBurstAt < 3000) return
-    if (zoom < 0.8) return
+    if (now - this.lastSparkBurstAt < 2000) return
+    if (zoom < 0.5) return
     this.lastSparkBurstAt = now
 
     const centerX = camX + camW * 0.5
@@ -939,14 +939,14 @@ export class OfficeParticles {
       if (!spark) break
 
       const color = sparkColors[Math.floor(Math.random() * sparkColors.length)]
-      const driftX = (Math.random() - 0.5) * 24
-      const driftY = 8 + Math.random() * 7
+      const driftX = (Math.random() - 0.5) * 36
+      const driftY = 12 + Math.random() * 12
       const duration = 200 + Math.random() * 300
 
       spark.setPosition(burstX, burstY)
       spark.setFillStyle(color)
-      spark.setAlpha(0.9)
-      spark.setScale(1.5)
+      spark.setAlpha(1.0)
+      spark.setScale(2.5)
       spark.setVisible(true)
       spark.setData('busy', true)
 
@@ -985,7 +985,7 @@ export class OfficeParticles {
   tickSteam(camX: number, camY: number, camW: number, camH: number, zoom: number): void {
     const now = this.scene.time.now
     if (now - this.lastSteamSpawnAt < 1500) return
-    if (zoom < 0.6) return
+    if (zoom < 0.3) return
     this.lastSteamSpawnAt = now
 
     const gfx = this.steamWispPool.find(g => !g.getData('busy'))
@@ -997,11 +997,11 @@ export class OfficeParticles {
     const worldY = centerY + (Math.random() * 0.3 + 0.35) * camH
 
     gfx.clear()
-    const alpha = 0.04 + Math.random() * 0.04
+    const alpha = 0.06 + Math.random() * 0.06
     gfx.fillStyle(0x8a96a4, alpha)
-    gfx.fillCircle(0, 0, 3 + Math.random() * 2)
-    gfx.fillCircle(2.5, -1.5, 2.5 + Math.random() * 1.5)
-    gfx.fillCircle(-2, -2, 2 + Math.random() * 1.5)
+    gfx.fillCircle(0, 0, 6 + Math.random() * 4)
+    gfx.fillCircle(4, -2.5, 5 + Math.random() * 3)
+    gfx.fillCircle(-3.5, -3.5, 4 + Math.random() * 3)
 
     gfx.setPosition(worldX, worldY)
     gfx.setAlpha(1)
@@ -1009,15 +1009,15 @@ export class OfficeParticles {
     gfx.setVisible(true)
     gfx.setData('busy', true)
 
-    const riseY = 20 + Math.random() * 10
+    const riseY = 35 + Math.random() * 20
     const duration = 2000 + Math.random() * 1000
 
     this.scene.tweens.add({
       targets: gfx,
       y: worldY - riseY,
       alpha: 0,
-      scaleX: 1.5,
-      scaleY: 1.5,
+      scaleX: 2.0,
+      scaleY: 2.0,
       duration,
       ease: 'Sine.easeOut',
       onComplete: () => {
