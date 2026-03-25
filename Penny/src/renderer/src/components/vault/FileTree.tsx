@@ -147,7 +147,7 @@ function TreeNode({
         Row element.
 
         Animations applied here:
-        - Feature 2: hover translate + bg (transition-all duration-100 hover:bg-slate-800/50 hover:translate-x-0.5)
+        - Feature 2: hover translate + bg (transition-all duration-100 hover:bg-[#141a22]/50 hover:translate-x-0.5)
         - Feature 3: active file highlight — border-l-2 border-blue-500 + animate-card-enter
                      The `key` on the wrapping span forces React to remount the element,
                      restarting the CSS animation on each selection change.
@@ -157,11 +157,11 @@ function TreeNode({
         className={[
           'flex items-center gap-1.5 py-1 px-1.5 cursor-pointer rounded text-[16px] group',
           // Feature 2: hover translate + bg
-          'transition-all duration-100 hover:bg-slate-800/50 hover:translate-x-0.5',
+          'transition-all duration-100 hover:bg-[#141a22]/50 hover:translate-x-0.5',
           // Feature 3: previewed state base colors (animation handles the flash on entry)
           isPreviewed
             ? 'bg-blue-600/20 text-blue-300 border-l-2 border-blue-500'
-            : 'text-slate-400 border-l-2 border-transparent',
+            : 'text-[#5a6a7a] border-l-2 border-transparent',
           // Feature 4: new-file flash
           !entry.isDirectory && flashingPaths.has(entry.path) ? 'animate-new-file-flash' : '',
         ]
@@ -190,7 +190,7 @@ function TreeNode({
               onToggleSelect(entry.path)
             }}
             onClick={(e) => e.stopPropagation()}
-            className="w-3 h-3 rounded border-slate-600 bg-slate-800 accent-blue-500 shrink-0 cursor-pointer"
+            className="w-3 h-3 rounded border-[#2a3440] bg-[#141a22] accent-[#00e5ff] shrink-0 cursor-pointer"
           />
         )}
 
@@ -202,7 +202,7 @@ function TreeNode({
           */
           <span
             className={[
-              'w-4 text-center text-slate-500 shrink-0 text-[15px] inline-block',
+              'w-4 text-center text-[#3a4858] shrink-0 text-[15px] inline-block',
               'transition-transform duration-200',
               expanded ? 'rotate-90' : 'rotate-0',
             ].join(' ')}
@@ -210,12 +210,12 @@ function TreeNode({
             {'\u25B6'}
           </span>
         ) : (
-          <span className="w-4 text-center text-slate-600 shrink-0 text-[9px] font-mono">
+          <span className="w-4 text-center text-[#2a3440] shrink-0 text-[9px] font-mono">
             {getIcon(entry.name)}
           </span>
         )}
 
-        <span className={`truncate ${entry.isDirectory ? 'text-slate-300 font-medium' : ''}`}>
+        <span className={`truncate ${entry.isDirectory ? 'text-[#8a96a4] font-medium' : ''}`}>
           {entry.name}
         </span>
       </div>
@@ -257,7 +257,7 @@ function TreeNode({
           ))}
           {!loaded && (
             <div
-              className="text-slate-600 text-[15px]"
+              className="text-[#2a3440] text-[15px]"
               style={{ paddingLeft: `${(depth + 1) * 14 + 4}px` }}
             >
               Loading...
@@ -316,7 +316,7 @@ export function FileTree({
         />
       ))}
       {rootEntries.length === 0 && (
-        <div className="text-slate-600 text-[15px] px-3 py-4 text-center">No files found</div>
+        <div className="text-[#2a3440] text-[15px] px-3 py-4 text-center">No files found</div>
       )}
       {contextMenu && (
         <FileContextMenu

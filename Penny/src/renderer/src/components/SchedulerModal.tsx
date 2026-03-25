@@ -114,19 +114,19 @@ export function SchedulerModal({ onClose }: SchedulerModalProps) {
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-backdrop-fade-in"
       onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
     >
-      <div className="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl shadow-2xl w-[700px] max-h-[80vh] overflow-hidden flex flex-col animate-modal-scale-in">
+      <div className="bg-[#0c1018] border border-[#2a3440] rounded-xl shadow-2xl w-[700px] max-h-[80vh] overflow-hidden flex flex-col animate-modal-scale-in">
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200 dark:border-slate-800">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-[#2a3440]">
           <div className="flex items-center gap-3">
             <div className="w-2.5 h-2.5 rounded-full bg-blue-400 animate-pulse" />
-            <h2 className="text-sm font-semibold text-slate-900 dark:text-white">Scheduler</h2>
-            <span className="text-xs font-medium px-2 py-0.5 rounded-full border bg-blue-500/10 border-blue-500/20 text-blue-500 dark:text-blue-400">
+            <h2 className="text-sm font-semibold text-white">Scheduler</h2>
+            <span className="text-xs font-medium px-2 py-0.5 rounded-full border bg-blue-500/10 border-blue-500/20 text-blue-400">
               {activeCount} ACTIVE
             </span>
           </div>
           <button
             onClick={onClose}
-            className="text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-white transition-colors text-lg leading-none px-1"
+            className="text-[#3a4858] hover:text-white transition-colors text-lg leading-none px-1"
           >
             &times;
           </button>
@@ -134,16 +134,16 @@ export function SchedulerModal({ onClose }: SchedulerModalProps) {
 
         {/* Body */}
         <div className="flex-1 overflow-auto px-5 py-4 space-y-5">
-          {loading && <p className="text-slate-500 text-xs">Loading scheduler...</p>}
+          {loading && <p className="text-[#3a4858] text-xs">Loading scheduler...</p>}
 
           {/* Jobs */}
           {jobs && jobs.length > 0 && (
             <div>
-              <h3 className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-2">Jobs</h3>
-              <div className="bg-slate-100 dark:bg-slate-800/50 rounded-lg overflow-hidden">
+              <h3 className="text-xs font-medium text-[#3a4858] uppercase tracking-wider mb-2">Jobs</h3>
+              <div className="bg-[#141a22]/50 rounded-lg overflow-hidden">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="border-b border-slate-200 dark:border-slate-700/50 text-slate-500 text-xs">
+                    <tr className="border-b border-[#2a3440]/50 text-[#3a4858] text-xs">
                       <th className="text-left px-3 py-2 font-medium">Job</th>
                       <th className="text-left px-3 py-2 font-medium">Schedule</th>
                       <th className="text-left px-3 py-2 font-medium">Status</th>
@@ -176,7 +176,7 @@ export function SchedulerModal({ onClose }: SchedulerModalProps) {
                       return (
                         <tr
                           key={job.name}
-                          className={`stagger-item border-b border-slate-200/70 dark:border-slate-700/30 hover:bg-slate-200/50 dark:hover:bg-slate-800/30 transition-colors duration-150 ${flashClass}`}
+                          className={`stagger-item border-b border-[#2a3440]/30 hover:bg-[#141a22]/30 transition-colors duration-150 ${flashClass}`}
                           style={{ animationDelay: `${idx * 0.04}s` }}
                         >
                           {/* Job name + description */}
@@ -195,9 +195,9 @@ export function SchedulerModal({ onClose }: SchedulerModalProps) {
                                 </svg>
                               )}
                               <div>
-                                <div className="text-xs font-medium text-slate-800 dark:text-slate-200">{job.name}</div>
+                                <div className="text-xs font-medium text-[#c4ccd6]">{job.name}</div>
                                 {job.description && (
-                                  <div className="text-xs text-slate-500">{job.description}</div>
+                                  <div className="text-xs text-[#3a4858]">{job.description}</div>
                                 )}
                               </div>
                             </div>
@@ -210,16 +210,16 @@ export function SchedulerModal({ onClose }: SchedulerModalProps) {
                               onMouseEnter={() => setHoveredCron(job.name)}
                               onMouseLeave={() => setHoveredCron(null)}
                             >
-                              <code className="text-xs text-slate-500 dark:text-slate-400 bg-slate-200 dark:bg-slate-800 px-1.5 py-0.5 rounded cursor-default select-none">
+                              <code className="text-xs text-[#5a6a7a] bg-[#141a22] px-1.5 py-0.5 rounded cursor-default select-none">
                                 {job.cron}
                               </code>
                               {hoveredCron === job.name && (
                                 <div className="absolute bottom-full left-0 mb-1.5 z-10 animate-fade-slide-down">
-                                  <div className="bg-slate-800 dark:bg-slate-950 border border-slate-600 dark:border-slate-700 text-slate-200 text-[11px] px-2 py-1 rounded shadow-lg whitespace-nowrap">
+                                  <div className="bg-[#080a0e] border border-[#2a3440] text-[#c4ccd6] text-[11px] px-2 py-1 rounded shadow-lg whitespace-nowrap">
                                     {describeCron(job.cron)}
                                   </div>
                                   {/* Arrow */}
-                                  <div className="w-2 h-2 bg-slate-800 dark:bg-slate-950 border-r border-b border-slate-600 dark:border-slate-700 rotate-45 ml-2 -mt-1" />
+                                  <div className="w-2 h-2 bg-[#080a0e] border-r border-b border-[#2a3440] rotate-45 ml-2 -mt-1" />
                                 </div>
                               )}
                             </div>
@@ -233,10 +233,10 @@ export function SchedulerModal({ onClose }: SchedulerModalProps) {
                           </td>
 
                           {/* Timestamps with smooth transition */}
-                          <td className="px-3 py-2.5 text-xs text-slate-500 dark:text-slate-400 transition-all duration-200">
+                          <td className="px-3 py-2.5 text-xs text-[#5a6a7a] transition-all duration-200">
                             {formatTime(job.last_run)}
                           </td>
-                          <td className="px-3 py-2.5 text-xs text-slate-500 dark:text-slate-400 transition-all duration-200">
+                          <td className="px-3 py-2.5 text-xs text-[#5a6a7a] transition-all duration-200">
                             {formatTime(job.next_run)}
                           </td>
 
@@ -247,10 +247,10 @@ export function SchedulerModal({ onClose }: SchedulerModalProps) {
                               disabled={running !== null}
                               className={`px-2 py-0.5 text-xs rounded border transition-all duration-100 hover:scale-[1.02] active:scale-[0.98] ${
                                 isRunningNow
-                                  ? 'bg-blue-600/20 border-blue-500/30 text-blue-500 dark:text-blue-400 cursor-not-allowed'
+                                  ? 'bg-blue-600/20 border-blue-500/30 text-blue-400 cursor-not-allowed'
                                   : running !== null
-                                    ? 'bg-slate-200 dark:bg-slate-800 border-slate-300 dark:border-slate-700 text-slate-400 dark:text-slate-500 cursor-not-allowed'
-                                    : 'bg-slate-200 dark:bg-slate-800 border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-700'
+                                    ? 'bg-[#141a22] border-[#2a3440] text-[#3a4858] cursor-not-allowed'
+                                    : 'bg-[#141a22] border-[#2a3440] text-[#8a96a4] hover:bg-[#2a3440]'
                               }`}
                             >
                               {isRunningNow ? 'Running...' : 'Run'}
@@ -267,47 +267,47 @@ export function SchedulerModal({ onClose }: SchedulerModalProps) {
 
           {/* Recent Runs */}
           <div>
-            <h3 className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-2">Recent Runs</h3>
-            <div className="bg-slate-100 dark:bg-slate-800/50 rounded-lg overflow-hidden">
+            <h3 className="text-xs font-medium text-[#3a4858] uppercase tracking-wider mb-2">Recent Runs</h3>
+            <div className="bg-[#141a22]/50 rounded-lg overflow-hidden">
               {!history || history.length === 0 ? (
-                <p className="text-xs text-slate-500 p-3">No runs recorded yet.</p>
+                <p className="text-xs text-[#3a4858] p-3">No runs recorded yet.</p>
               ) : (
-                <div className="divide-y divide-slate-200 dark:divide-slate-700/30">
+                <div className="divide-y divide-[#2a3440]/30">
                   {history.slice(-10).reverse().map((run, i) => (
                     <div key={i} className="stagger-item" style={{ animationDelay: `${i * 0.03}s` }}>
                       <div
-                        className="flex items-center gap-3 px-3 py-2 text-xs cursor-pointer hover:bg-slate-200/60 dark:hover:bg-slate-800/30"
+                        className="flex items-center gap-3 px-3 py-2 text-xs cursor-pointer hover:bg-[#141a22]/30"
                         onClick={() => setExpandedRun(expandedRun === i ? null : i)}
                       >
                         <StatusBadge status={run.success ? 'ok' : 'fail'} />
-                        <span className="font-medium text-slate-700 dark:text-slate-300 w-28">{run.job}</span>
-                        <span className="text-slate-500 text-xs transition-all duration-200">{formatTime(run.started_at)}</span>
-                        <span className="text-slate-400 dark:text-slate-600 text-xs">{formatDuration(run.duration_ms)}</span>
+                        <span className="font-medium text-[#8a96a4] w-28">{run.job}</span>
+                        <span className="text-[#3a4858] text-xs transition-all duration-200">{formatTime(run.started_at)}</span>
+                        <span className="text-[#2a3440] text-xs">{formatDuration(run.duration_ms)}</span>
                         {!run.success && run.stderr_tail && expandedRun !== i && (
-                          <span className="text-red-500 dark:text-red-400 text-xs truncate flex-1">{run.stderr_tail.split('\n')[0]}</span>
+                          <span className="text-red-400 text-xs truncate flex-1">{run.stderr_tail.split('\n')[0]}</span>
                         )}
-                        <span className="text-slate-400 dark:text-slate-600 ml-auto text-xs">{expandedRun === i ? '\u25B2' : '\u25BC'}</span>
+                        <span className="text-[#2a3440] ml-auto text-xs">{expandedRun === i ? '\u25B2' : '\u25BC'}</span>
                       </div>
                       {expandedRun === i && (
                         <div className="px-3 pb-2.5 animate-fade-slide-down">
                           {run.stdout_tail && (
                             <div className="mb-2">
-                              <p className="text-xs text-slate-400 dark:text-slate-600 mb-1">stdout</p>
-                              <pre className="text-xs text-slate-600 dark:text-slate-400 bg-slate-200 dark:bg-slate-950 rounded p-2 overflow-x-auto whitespace-pre-wrap max-h-32 overflow-y-auto font-mono leading-relaxed">
+                              <p className="text-xs text-[#2a3440] mb-1">stdout</p>
+                              <pre className="text-xs text-[#5a6a7a] bg-[#080a0e] rounded p-2 overflow-x-auto whitespace-pre-wrap max-h-32 overflow-y-auto font-mono leading-relaxed">
                                 {run.stdout_tail}
                               </pre>
                             </div>
                           )}
                           {run.stderr_tail && (
                             <div>
-                              <p className="text-xs text-slate-400 dark:text-slate-600 mb-1">stderr</p>
-                              <pre className="text-xs text-red-500 dark:text-red-400/80 bg-slate-200 dark:bg-slate-950 rounded p-2 overflow-x-auto whitespace-pre-wrap max-h-24 overflow-y-auto font-mono leading-relaxed">
+                              <p className="text-xs text-[#2a3440] mb-1">stderr</p>
+                              <pre className="text-xs text-red-400/80 bg-[#080a0e] rounded p-2 overflow-x-auto whitespace-pre-wrap max-h-24 overflow-y-auto font-mono leading-relaxed">
                                 {run.stderr_tail}
                               </pre>
                             </div>
                           )}
                           {!run.stdout_tail && !run.stderr_tail && (
-                            <p className="text-xs text-slate-400 dark:text-slate-600 italic">No output captured.</p>
+                            <p className="text-xs text-[#2a3440] italic">No output captured.</p>
                           )}
                         </div>
                       )}
@@ -320,13 +320,13 @@ export function SchedulerModal({ onClose }: SchedulerModalProps) {
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between px-5 py-3 border-t border-slate-200 dark:border-slate-800">
-          <p className="text-xs text-slate-400 dark:text-slate-600">
+        <div className="flex items-center justify-between px-5 py-3 border-t border-[#2a3440]">
+          <p className="text-xs text-[#2a3440]">
             {jobs ? `${jobs.length} jobs configured` : ''}
           </p>
           <button
             onClick={() => { refresh(); refreshHistory() }}
-            className="px-3 py-1 text-xs bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 rounded border border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-300 transition-all duration-100 hover:scale-[1.02] active:scale-[0.98]"
+            className="px-3 py-1 text-xs bg-[#141a22] hover:bg-[#2a3440] rounded border border-[#2a3440] text-[#8a96a4] transition-all duration-100 hover:scale-[1.02] active:scale-[0.98]"
           >
             Refresh
           </button>

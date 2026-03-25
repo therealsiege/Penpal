@@ -40,14 +40,14 @@ const DOT_COLORS = {
   ok: 'bg-emerald-500',
   fail: 'bg-red-500',
   warn: 'bg-amber-500',
-  none: 'bg-slate-600',
+  none: 'bg-[#2a3440]',
 }
 
 const TEXT_COLORS = {
   ok: 'text-emerald-400',
   fail: 'text-red-400',
   warn: 'text-amber-400',
-  none: 'text-slate-500',
+  none: 'text-[#3a4858]',
 }
 
 export function StatusBadge({ status, label, size = 'sm' }: StatusBadgeProps) {

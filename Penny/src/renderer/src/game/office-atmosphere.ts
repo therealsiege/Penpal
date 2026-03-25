@@ -220,11 +220,11 @@ export class OfficeAtmosphere {
       this.windowTintColor = 0x7dd3fc
       this.windowTintAlpha = 0.16
     } else if (phase === 'evening') {
-      this.windowTintColor = 0xfbbf24
+      this.windowTintColor = 0xd4a017
       this.windowTintAlpha = 0.06
     } else {
       // night: interior glow suggesting lights inside
-      this.windowTintColor = 0xfef3c7
+      this.windowTintColor = 0xd4a017
       this.windowTintAlpha = 0.12
     }
     this.callbacks.invalidateOfficeBgCache()
@@ -628,7 +628,7 @@ export class OfficeAtmosphere {
   private initChimeRipplePool(): void {
     for (let i = 0; i < 3; i++) {
       const circle = this.scene.add
-        .circle(0, 0, 1, 0xfbbf24, 0)
+        .circle(0, 0, 1, 0x00e5ff, 0)
         .setDepth(-0.4)
         .setVisible(false)
       circle.setData('busy', false)
@@ -649,7 +649,7 @@ export class OfficeAtmosphere {
       if (circle.getData('busy')) continue
       circle.setPosition(wx, wy)
       circle.setRadius(4)
-      circle.setFillStyle(0xfbbf24, 0.3)
+      circle.setFillStyle(0x00e5ff, 0.3)
       circle.setScale(1)
       circle.setAlpha(0.3)
       circle.setVisible(true)

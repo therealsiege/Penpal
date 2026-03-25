@@ -190,8 +190,8 @@ export class PennyCafe {
       bc.add(apron)
 
       const tag = scene.add.text(0, 6, cfg.name, {
-        fontSize: '10px', fontFamily: 'system-ui, sans-serif', color: '#00ff88',
-        backgroundColor: '#0a1020cc', padding: { x: 4, y: 2 }, resolution: 2,
+        fontSize: '10px', fontFamily: 'system-ui, sans-serif', color: '#00e5ff',
+        backgroundColor: '#0a0e14cc', padding: { x: 4, y: 2 }, resolution: 2,
       }).setOrigin(0.5, 0)
       bc.add(tag)
 

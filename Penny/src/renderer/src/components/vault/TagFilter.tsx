@@ -40,7 +40,7 @@ export function TagFilter({ activeTag, onSelectTag }: TagFilterProps) {
         className={`px-2 py-1.5 rounded text-xs border transition-colors flex items-center gap-1 ${
           activeTag
             ? 'bg-blue-600/20 border-blue-600/40 text-blue-300'
-            : 'bg-slate-800/60 border-slate-700/50 text-slate-400 hover:text-slate-300'
+            : 'bg-[#141a22]/60 border-[#2a3440]/50 text-[#5a6a7a] hover:text-[#8a96a4]'
         }`}
       >
         {activeTag ? (
@@ -51,7 +51,7 @@ export function TagFilter({ activeTag, onSelectTag }: TagFilterProps) {
                 e.stopPropagation()
                 onSelectTag(null)
               }}
-              className="text-slate-500 hover:text-slate-300 ml-1"
+              className="text-[#3a4858] hover:text-[#8a96a4] ml-1"
             >
               x
             </span>
@@ -62,12 +62,12 @@ export function TagFilter({ activeTag, onSelectTag }: TagFilterProps) {
       </button>
 
       {open && (
-        <div className="absolute top-full right-0 mt-1 w-56 bg-slate-900 border border-slate-700/50 rounded shadow-xl z-50 max-h-64 overflow-y-auto">
+        <div className="absolute top-full right-0 mt-1 w-56 bg-[#0c1018] border border-[#2a3440]/50 rounded shadow-xl z-50 max-h-64 overflow-y-auto">
           {!loaded && (
-            <div className="px-3 py-2 text-xs text-slate-500">Loading tags...</div>
+            <div className="px-3 py-2 text-xs text-[#3a4858]">Loading tags...</div>
           )}
           {loaded && tags.length === 0 && (
-            <div className="px-3 py-2 text-xs text-slate-600">No tags found</div>
+            <div className="px-3 py-2 text-xs text-[#2a3440]">No tags found</div>
           )}
           {tags.map(t => (
             <button
@@ -76,12 +76,12 @@ export function TagFilter({ activeTag, onSelectTag }: TagFilterProps) {
                 onSelectTag(t.name === activeTag ? null : t.name)
                 setOpen(false)
               }}
-              className={`w-full text-left px-3 py-1.5 hover:bg-slate-800/60 transition-colors flex items-center justify-between ${
-                t.name === activeTag ? 'text-blue-300' : 'text-slate-400'
+              className={`w-full text-left px-3 py-1.5 hover:bg-[#141a22]/60 transition-colors flex items-center justify-between ${
+                t.name === activeTag ? 'text-blue-300' : 'text-[#5a6a7a]'
               }`}
             >
               <span className="text-xs truncate">#{t.name}</span>
-              <span className="text-[10px] text-slate-600 shrink-0 ml-2">{t.count}</span>
+              <span className="text-[10px] text-[#2a3440] shrink-0 ml-2">{t.count}</span>
             </button>
           ))}
         </div>

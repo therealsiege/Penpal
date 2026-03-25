@@ -94,12 +94,12 @@ export function HealthModal({ onClose }: HealthModalProps) {
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-backdrop-fade-in"
       onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
     >
-      <div className="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl shadow-2xl w-[520px] max-h-[80vh] overflow-hidden flex flex-col animate-modal-scale-in">
+      <div className="bg-[#0c1018] border border-[#2a3440] rounded-xl shadow-2xl w-[520px] max-h-[80vh] overflow-hidden flex flex-col animate-modal-scale-in">
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200 dark:border-slate-800">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-[#2a3440]">
           <div className="flex items-center gap-3">
-            <div className={`w-2.5 h-2.5 rounded-full ${style?.dot || 'bg-slate-400 dark:bg-slate-600'} ${data ? dotAnimClass : ''}`} />
-            <h2 className="text-base font-semibold text-slate-900 dark:text-white">System Status</h2>
+            <div className={`w-2.5 h-2.5 rounded-full ${style?.dot || 'bg-[#2a3440]'} ${data ? dotAnimClass : ''}`} />
+            <h2 className="text-base font-semibold text-white">System Status</h2>
             {data && (
               <span className={`text-xs font-medium px-2 py-0.5 rounded-full border ${style?.bg} ${style?.color}`}>
                 {data.overall.toUpperCase()}
@@ -108,7 +108,7 @@ export function HealthModal({ onClose }: HealthModalProps) {
           </div>
           <button
             onClick={onClose}
-            className="text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-white transition-colors text-lg leading-none px-1"
+            className="text-[#3a4858] hover:text-white transition-colors text-lg leading-none px-1"
           >
             &times;
           </button>
@@ -116,30 +116,30 @@ export function HealthModal({ onClose }: HealthModalProps) {
 
         {/* Body */}
         <div className="flex-1 overflow-auto px-5 py-4 space-y-5">
-          {loading && <p className="text-slate-500 text-xs">Checking infrastructure...</p>}
-          {error && <p className="text-red-500 dark:text-red-400 text-xs">Health check failed: {error}</p>}
+          {loading && <p className="text-[#3a4858] text-xs">Checking infrastructure...</p>}
+          {error && <p className="text-red-400 text-xs">Health check failed: {error}</p>}
 
           {data && (
             <>
               {/* Services */}
               <div>
-                <h3 className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-2">Services</h3>
+                <h3 className="text-xs font-medium text-[#3a4858] uppercase tracking-wider mb-2">Services</h3>
                 <div className="space-y-1.5">
                   {infraChecks.map((check, index) => (
                     <div
                       key={check.name}
-                      className="flex items-center justify-between bg-slate-100 dark:bg-slate-800/50 rounded-lg px-3 py-2 animate-card-enter"
+                      className="flex items-center justify-between bg-[#141a22]/50 rounded-lg px-3 py-2 animate-card-enter"
                       style={{ animationDelay: `${index * 50}ms` }}
                     >
                       <div className="flex items-center gap-2">
                         <StatusBadge status={check.status} size="md" />
-                        <span className="text-xs font-medium text-slate-700 dark:text-slate-200">{INFRA_NAMES[check.name] || check.name}</span>
+                        <span className="text-xs font-medium text-[#c4ccd6]">{INFRA_NAMES[check.name] || check.name}</span>
                       </div>
                       <div className="flex items-center gap-3">
                         {check.latency_ms > 0 && (
-                          <span className="text-xs text-slate-500 font-mono">{check.latency_ms}ms</span>
+                          <span className="text-xs text-[#3a4858] font-mono">{check.latency_ms}ms</span>
                         )}
-                        <span className="text-xs text-slate-500 dark:text-slate-400">{check.message || '-'}</span>
+                        <span className="text-xs text-[#5a6a7a]">{check.message || '-'}</span>
                       </div>
                     </div>
                   ))}
@@ -148,19 +148,19 @@ export function HealthModal({ onClose }: HealthModalProps) {
 
               {/* API Keys */}
               <div>
-                <h3 className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-2">API Keys</h3>
+                <h3 className="text-xs font-medium text-[#3a4858] uppercase tracking-wider mb-2">API Keys</h3>
                 <div className="space-y-1.5">
                   {keyChecks.map((check, index) => (
                     <div
                       key={check.name}
-                      className="flex items-center justify-between bg-slate-100 dark:bg-slate-800/50 rounded-lg px-3 py-2 animate-card-enter"
+                      className="flex items-center justify-between bg-[#141a22]/50 rounded-lg px-3 py-2 animate-card-enter"
                       style={{ animationDelay: `${(infraChecks.length + index) * 50}ms` }}
                     >
                       <div className="flex items-center gap-2">
                         <StatusBadge status={check.status} size="md" />
-                        <span className="text-xs font-medium text-slate-700 dark:text-slate-200">{INFRA_NAMES[check.name] || check.name}</span>
+                        <span className="text-xs font-medium text-[#c4ccd6]">{INFRA_NAMES[check.name] || check.name}</span>
                       </div>
-                      <span className="text-xs text-slate-500 dark:text-slate-400">{check.message || '-'}</span>
+                      <span className="text-xs text-[#5a6a7a]">{check.message || '-'}</span>
                     </div>
                   ))}
                 </div>
@@ -169,17 +169,17 @@ export function HealthModal({ onClose }: HealthModalProps) {
               {/* Graph Stats */}
               {graphStats && (
                 <div>
-                  <h3 className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-2">Knowledge Graph</h3>
+                  <h3 className="text-xs font-medium text-[#3a4858] uppercase tracking-wider mb-2">Knowledge Graph</h3>
                   <div className="grid grid-cols-2 gap-3">
-                    <div className="bg-slate-100 dark:bg-slate-800/50 rounded-lg px-3 py-2">
-                      <p className="text-xs text-slate-500">Nodes</p>
-                      <p className="text-sm font-bold text-slate-900 dark:text-white">
+                    <div className="bg-[#141a22]/50 rounded-lg px-3 py-2">
+                      <p className="text-xs text-[#3a4858]">Nodes</p>
+                      <p className="text-sm font-bold text-white">
                         <AnimatedNumber target={graphStats.totalNodes} />
                       </p>
                     </div>
-                    <div className="bg-slate-100 dark:bg-slate-800/50 rounded-lg px-3 py-2">
-                      <p className="text-xs text-slate-500">Relationships</p>
-                      <p className="text-sm font-bold text-slate-900 dark:text-white">
+                    <div className="bg-[#141a22]/50 rounded-lg px-3 py-2">
+                      <p className="text-xs text-[#3a4858]">Relationships</p>
+                      <p className="text-sm font-bold text-white">
                         <AnimatedNumber target={graphStats.totalRelationships} />
                       </p>
                     </div>
@@ -189,19 +189,19 @@ export function HealthModal({ onClose }: HealthModalProps) {
 
               {/* Config */}
               <div>
-                <h3 className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-2">Config</h3>
+                <h3 className="text-xs font-medium text-[#3a4858] uppercase tracking-wider mb-2">Config</h3>
                 <div className="space-y-1.5">
-                  <div className="flex items-center justify-between bg-slate-100 dark:bg-slate-800/50 rounded-lg px-3 py-2">
-                    <span className="text-xs text-slate-600 dark:text-slate-300">Vault</span>
-                    <span className="text-xs text-slate-500 font-mono">{paths.sidekickRoot}</span>
+                  <div className="flex items-center justify-between bg-[#141a22]/50 rounded-lg px-3 py-2">
+                    <span className="text-xs text-[#8a96a4]">Vault</span>
+                    <span className="text-xs text-[#3a4858] font-mono">{paths.sidekickRoot}</span>
                   </div>
-                  <div className="flex items-center justify-between bg-slate-100 dark:bg-slate-800/50 rounded-lg px-3 py-2">
-                    <span className="text-xs text-slate-600 dark:text-slate-300">Graph DB</span>
-                    <span className="text-xs text-slate-500 font-mono">bolt://localhost:7687</span>
+                  <div className="flex items-center justify-between bg-[#141a22]/50 rounded-lg px-3 py-2">
+                    <span className="text-xs text-[#8a96a4]">Graph DB</span>
+                    <span className="text-xs text-[#3a4858] font-mono">bolt://localhost:7687</span>
                   </div>
-                  <div className="flex items-center justify-between bg-slate-100 dark:bg-slate-800/50 rounded-lg px-3 py-2">
-                    <span className="text-xs text-slate-600 dark:text-slate-300">Vector DB</span>
-                    <span className="text-xs text-slate-500 font-mono">http://localhost:6333</span>
+                  <div className="flex items-center justify-between bg-[#141a22]/50 rounded-lg px-3 py-2">
+                    <span className="text-xs text-[#8a96a4]">Vector DB</span>
+                    <span className="text-xs text-[#3a4858] font-mono">http://localhost:6333</span>
                   </div>
                 </div>
               </div>
@@ -210,13 +210,13 @@ export function HealthModal({ onClose }: HealthModalProps) {
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between px-5 py-3 border-t border-slate-200 dark:border-slate-800">
-          <p className="text-xs text-slate-400 dark:text-slate-600">
+        <div className="flex items-center justify-between px-5 py-3 border-t border-[#2a3440]">
+          <p className="text-xs text-[#2a3440]">
             {data ? `Last checked ${new Date(data.timestamp).toLocaleTimeString()}` : ''}
           </p>
           <button
             onClick={refresh}
-            className="flex items-center gap-1.5 px-3 py-1 text-xs bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 rounded border border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-300 transition-colors"
+            className="flex items-center gap-1.5 px-3 py-1 text-xs bg-[#141a22] hover:bg-[#2a3440] rounded border border-[#2a3440] text-[#8a96a4] transition-colors"
           >
             <svg
               viewBox="0 0 16 16"

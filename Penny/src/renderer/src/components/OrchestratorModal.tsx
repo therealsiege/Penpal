@@ -43,35 +43,35 @@ export function TasksPanel() {
   }, [])
 
   const columns = [
-    { key: 'queued', label: 'Queued', statuses: ['queued'], dot: 'bg-slate-400' },
+    { key: 'queued', label: 'Queued', statuses: ['queued'], dot: 'bg-[#3a4858]' },
     { key: 'active', label: 'In Progress', statuses: ['assigned', 'active'], dot: 'bg-amber-400' },
     { key: 'done', label: 'Done', statuses: ['completed'], dot: 'bg-emerald-400' },
     { key: 'failed', label: 'Failed', statuses: ['failed', 'cancelled'], dot: 'bg-red-400' },
   ]
 
   return (
-    <div className="h-full flex flex-col bg-slate-950 text-slate-100">
+    <div className="h-full flex flex-col bg-[#080a0e] text-[#c4ccd6]">
       {/* Header */}
-      <div className="shrink-0 px-6 pt-6 pb-4 border-b border-slate-800/60">
+      <div className="shrink-0 px-6 pt-6 pb-4 border-b border-[#2a3440]/60">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-[#00ff88]">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-[#00e5ff]">
               <path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22" />
             </svg>
             <h1 className="text-lg font-semibold">Tasks</h1>
-            <span className="text-sm text-slate-500">{cards.length} issues</span>
+            <span className="text-sm text-[#3a4858]">{cards.length} issues</span>
           </div>
           <div className="flex items-center gap-3">
             <span className={`text-[11px] px-2 py-0.5 rounded-full border ${
               pollerRunning
                 ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
-                : 'bg-slate-700/50 text-slate-500 border-slate-600/30'
+                : 'bg-[#2a3440]/50 text-[#3a4858] border-[#2a3440]/30'
             }`}>
               {pollerRunning ? 'Polling' : 'Stopped'}
             </span>
             <button
               onClick={async () => { await window.api.githubPollNow(); setTimeout(refresh, 1500) }}
-              className="px-3 py-1.5 text-xs rounded-md bg-slate-800 hover:bg-slate-700 border border-slate-700/60 transition-colors"
+              className="px-3 py-1.5 text-xs rounded-md bg-[#141a22] hover:bg-[#2a3440] border border-[#2a3440]/60 transition-colors"
             >
               Poll Now
             </button>
@@ -80,13 +80,13 @@ export function TasksPanel() {
 
         {/* Watched repos */}
         <div className="flex items-center gap-2 mt-3 flex-wrap">
-          <span className="text-[11px] text-slate-500 uppercase tracking-wider">Watching:</span>
+          <span className="text-[11px] text-[#3a4858] uppercase tracking-wider">Watching:</span>
           {repos.map(r => (
-            <span key={`${r.owner}/${r.repo}`} className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-slate-800/60 border border-slate-700/40 text-xs text-slate-300">
+            <span key={`${r.owner}/${r.repo}`} className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-[#141a22]/60 border border-[#2a3440]/40 text-xs text-[#8a96a4]">
               {r.owner}/{r.repo}
               <button
                 onClick={async () => { await window.api.githubRemoveRepo(r.owner, r.repo); refresh() }}
-                className="text-slate-600 hover:text-red-400 text-[10px] leading-none ml-0.5"
+                className="text-[#2a3440] hover:text-red-400 text-[10px] leading-none ml-0.5"
                 title="Stop watching"
               >
                 x
@@ -95,7 +95,7 @@ export function TasksPanel() {
           ))}
           <button
             onClick={() => setShowAddRepo(true)}
-            className="px-2 py-0.5 text-xs rounded-md bg-[#0a2018] text-[#00ff88] border border-[#1a3a2a] hover:bg-[#0d2a20] transition-colors"
+            className="px-2 py-0.5 text-xs rounded-md bg-[#141a22] text-[#00e5ff] border border-[#2a3440] hover:bg-[#1e2830] transition-colors"
           >
             + Add Repo
           </button>
@@ -105,12 +105,12 @@ export function TasksPanel() {
       {/* Kanban board */}
       <div className="flex-1 overflow-x-auto overflow-y-hidden p-4">
         {cards.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full text-slate-500 gap-2">
-            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-slate-600">
+          <div className="flex flex-col items-center justify-center h-full text-[#3a4858] gap-2">
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-[#2a3440]">
               <path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22" />
             </svg>
             <p className="text-sm">No issues tracked yet</p>
-            <p className="text-xs text-slate-600">Label issues with <code className="px-1.5 py-0.5 bg-slate-800 rounded text-[#00ff88]">agent-ready</code> to queue them</p>
+            <p className="text-xs text-[#2a3440]">Label issues with <code className="px-1.5 py-0.5 bg-[#141a22] rounded text-[#00e5ff]">agent-ready</code> to queue them</p>
           </div>
         ) : (
           <div className="flex gap-3 h-full min-w-max">
@@ -120,14 +120,14 @@ export function TasksPanel() {
                 <div key={col.key} className="w-64 flex flex-col shrink-0">
                   <div className="flex items-center gap-2 px-3 py-2 mb-2">
                     <span className={`w-2 h-2 rounded-full ${col.dot}`} />
-                    <span className="text-sm font-medium text-slate-300">{col.label}</span>
-                    <span className="text-xs text-slate-500 ml-auto">{colCards.length}</span>
+                    <span className="text-sm font-medium text-[#8a96a4]">{col.label}</span>
+                    <span className="text-xs text-[#3a4858] ml-auto">{colCards.length}</span>
                   </div>
                   <div className="flex-1 overflow-y-auto space-y-2 px-1">
                     {colCards.map(card => (
                       <div
                         key={card.taskId}
-                        className="bg-slate-800/60 border border-slate-700/40 rounded-lg p-3 space-y-1.5 hover:border-slate-600/60 transition-colors"
+                        className="bg-[#141a22]/60 border border-[#2a3440]/40 rounded-lg p-3 space-y-1.5 hover:border-[#2a3440]/60 transition-colors"
                       >
                         <div className="flex items-start justify-between gap-2">
                           <a
@@ -140,18 +140,18 @@ export function TasksPanel() {
                           <span className={`text-[10px] px-1.5 py-0.5 rounded border ${
                             card.priority === 'critical' ? 'bg-red-500/20 text-red-300 border-red-500/30' :
                             card.priority === 'high' ? 'bg-orange-500/20 text-orange-300 border-orange-500/30' :
-                            'bg-slate-500/20 text-slate-300 border-slate-500/30'
+                            'bg-[#3a4858]/20 text-[#8a96a4] border-[#2a3440]/30'
                           }`}>
                             {card.priority}
                           </span>
                         </div>
-                        <p className="text-sm text-slate-200 leading-snug line-clamp-2">{card.title}</p>
-                        <div className="flex items-center justify-between text-[11px] text-slate-500">
+                        <p className="text-sm text-[#c4ccd6] leading-snug line-clamp-2">{card.title}</p>
+                        <div className="flex items-center justify-between text-[11px] text-[#3a4858]">
                           <span className="truncate max-w-[120px]">{card.repo}</span>
                           <span>{tasksTimeAgo(card.ingestedAt)}</span>
                         </div>
                         {card.assignedAgent && (
-                          <div className="text-[11px] text-[#00ff88]/70 truncate">{card.assignedAgent}</div>
+                          <div className="text-[11px] text-[#00e5ff]/70 truncate">{card.assignedAgent}</div>
                         )}
                         <div className="flex gap-1 pt-1">
                           {(card.taskStatus === 'queued' || card.taskStatus === 'assigned' || card.taskStatus === 'active') && (
@@ -209,37 +209,37 @@ function AddRepoModal({ onSubmit, onClose }: {
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50">
-      <div className="bg-slate-900 border border-slate-700 rounded-xl w-[440px] p-5 space-y-4">
-        <h3 className="text-lg font-semibold text-slate-100">Watch Repository</h3>
+      <div className="bg-[#0c1018] border border-[#2a3440] rounded-xl w-[440px] p-5 space-y-4">
+        <h3 className="text-lg font-semibold text-[#c4ccd6]">Watch Repository</h3>
         <div>
-          <label className="text-xs text-slate-400 mb-1 block">Repository (URL or owner/repo)</label>
+          <label className="text-xs text-[#5a6a7a] mb-1 block">Repository (URL or owner/repo)</label>
           <input
             value={repoUrl}
             onChange={e => setRepoUrl(e.target.value)}
             placeholder="e.g. graphiteatlas/atlas or https://github.com/org/repo"
-            className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-[#00ff88]"
+            className="w-full px-3 py-2 bg-[#141a22] border border-[#2a3440] rounded-lg text-sm text-[#c4ccd6] placeholder-[#2a3440] focus:outline-none focus:border-[#00e5ff]"
           />
           {owner && repo && (
-            <p className="text-xs text-[#00ff88] mt-1">{owner}/{repo}</p>
+            <p className="text-xs text-[#00e5ff] mt-1">{owner}/{repo}</p>
           )}
         </div>
         <div>
-          <label className="text-xs text-slate-400 mb-1 block">Local clone path (for agent cwd)</label>
+          <label className="text-xs text-[#5a6a7a] mb-1 block">Local clone path (for agent cwd)</label>
           <input
             value={localPath}
             onChange={e => setLocalPath(e.target.value)}
             placeholder="e.g. ~/ComSci/Workspace/org/repo"
-            className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-[#00ff88]"
+            className="w-full px-3 py-2 bg-[#141a22] border border-[#2a3440] rounded-lg text-sm text-[#c4ccd6] placeholder-[#2a3440] focus:outline-none focus:border-[#00e5ff]"
           />
         </div>
         <div className="flex justify-end gap-2 pt-2">
-          <button onClick={onClose} className="px-4 py-2 text-sm text-slate-400 hover:text-slate-200">
+          <button onClick={onClose} className="px-4 py-2 text-sm text-[#5a6a7a] hover:text-[#c4ccd6]">
             Cancel
           </button>
           <button
             onClick={() => { if (owner && repo && localPath.trim()) onSubmit(owner, repo, localPath.trim()) }}
             disabled={!owner || !repo || !localPath.trim()}
-            className="px-4 py-2 text-sm bg-[#00ff88] hover:bg-[#00dd77] disabled:opacity-30 text-slate-900 font-medium rounded-lg"
+            className="px-4 py-2 text-sm bg-[#00ff88] hover:bg-[#00cc6e] disabled:opacity-30 text-[#0a0e14] font-medium rounded-lg"
           >
             Watch
           </button>
@@ -399,11 +399,11 @@ function OrchestratorContent({ onClose }: { onClose?: () => void }) {
   return (
     <>
       {/* Header */}
-      <div className="flex items-center justify-between px-5 py-4 border-b border-slate-800 shrink-0">
+      <div className="flex items-center justify-between px-5 py-4 border-b border-[#2a3440] shrink-0">
         <div className="flex items-center gap-3">
-          <span className="text-lg font-semibold text-slate-100">Tasks</span>
+          <span className="text-lg font-semibold text-[#c4ccd6]">Tasks</span>
           {tab !== 'veritas' && stats && (
-            <div className="flex items-center gap-3 text-xs text-slate-400">
+            <div className="flex items-center gap-3 text-xs text-[#5a6a7a]">
               <span>{stats.queueDepth} queued</span>
               <span>{stats.activeTasks} active</span>
               <span className="text-emerald-400">{stats.completedToday} done today</span>
@@ -413,7 +413,7 @@ function OrchestratorContent({ onClose }: { onClose?: () => void }) {
             </div>
           )}
           {tab === 'github' && githubCards.length > 0 && (
-            <div className="flex items-center gap-3 text-xs text-slate-400">
+            <div className="flex items-center gap-3 text-xs text-[#5a6a7a]">
               <span>{githubCards.filter(c => c.taskStatus === 'queued').length} queued</span>
               <span>{githubCards.filter(c => c.taskStatus === 'active' || c.taskStatus === 'assigned').length} active</span>
               <span className="text-emerald-400">{githubCards.filter(c => c.taskStatus === 'completed').length} done</span>
@@ -423,7 +423,7 @@ function OrchestratorContent({ onClose }: { onClose?: () => void }) {
             </div>
           )}
           {tab === 'veritas' && veritasCounts && (
-            <div className="flex items-center gap-3 text-xs text-slate-400">
+            <div className="flex items-center gap-3 text-xs text-[#5a6a7a]">
               <span>{veritasCounts.todo} todo</span>
               <span>{veritasCounts['in-progress']} in progress</span>
               <span>{veritasCounts.blocked} blocked</span>
@@ -449,7 +449,7 @@ function OrchestratorContent({ onClose }: { onClose?: () => void }) {
           {onClose && (
             <button
               onClick={onClose}
-              className="text-slate-500 hover:text-slate-300 text-xl leading-none"
+              className="text-[#3a4858] hover:text-[#8a96a4] text-xl leading-none"
             >
               x
             </button>
@@ -478,7 +478,7 @@ function OrchestratorContent({ onClose }: { onClose?: () => void }) {
           <div className="flex items-center gap-2">
             <button
               onClick={() => { void window.api.veritasOpen() }}
-              className="px-3 py-1 bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs rounded-md"
+              className="px-3 py-1 bg-[#2a3440] hover:bg-[#2a3440] text-[#c4ccd6] text-xs rounded-md"
             >
               Open Board
             </button>
@@ -495,7 +495,7 @@ function OrchestratorContent({ onClose }: { onClose?: () => void }) {
             <span className={`text-[10px] px-2 py-0.5 rounded-full border ${
               githubPollerRunning
                 ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
-                : 'bg-slate-700/50 text-slate-500 border-slate-600/30'
+                : 'bg-[#2a3440]/50 text-[#3a4858] border-[#2a3440]/30'
             }`}>
               {githubPollerRunning ? 'Polling' : 'Stopped'}
             </span>
@@ -504,7 +504,7 @@ function OrchestratorContent({ onClose }: { onClose?: () => void }) {
                 await window.api.githubPollNow()
                 await loadGithubData()
               }}
-              className="px-3 py-1 bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs rounded-md"
+              className="px-3 py-1 bg-[#2a3440] hover:bg-[#2a3440] text-[#c4ccd6] text-xs rounded-md"
             >
               Poll Now
             </button>
@@ -564,7 +564,7 @@ export function OrchestratorModal({ onClose }: { onClose: () => void }) {
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-backdrop-fade-in"
       data-disable-office-hotkeys="true"
     >
-      <div className="bg-slate-900 border border-slate-700 rounded-xl w-[900px] max-h-[84vh] flex flex-col shadow-2xl animate-modal-scale-in">
+      <div className="bg-[#0c1018] border border-[#2a3440] rounded-xl w-[900px] max-h-[84vh] flex flex-col shadow-2xl animate-modal-scale-in">
         <OrchestratorContent onClose={onClose} />
       </div>
     </div>
@@ -578,9 +578,9 @@ function TaskQueueView({ tasks, onRefresh }: { tasks: Task[]; onRefresh: () => v
     return (
       <div className="space-y-2">
         {[1, 2, 3].map(n => (
-          <div key={n} className="animate-shimmer h-14 rounded-lg bg-slate-800/50 border border-slate-700/50" />
+          <div key={n} className="animate-shimmer h-14 rounded-lg bg-[#141a22]/50 border border-[#2a3440]/50" />
         ))}
-        <div className="text-center text-slate-500 py-4 text-xs">
+        <div className="text-center text-[#3a4858] py-4 text-xs">
           No tasks in queue. Create one with the + button or use <code>!task</code> in Slack.
         </div>
       </div>
@@ -607,14 +607,14 @@ function TaskRow({ task, onRefresh }: { task: Task; onRefresh: () => void }) {
     active: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30',
     completed: 'bg-green-500/20 text-green-400 border-green-500/30',
     failed: 'bg-red-500/20 text-red-400 border-red-500/30',
-    cancelled: 'bg-slate-500/20 text-slate-400 border-slate-500/30',
+    cancelled: 'bg-[#3a4858]/20 text-[#5a6a7a] border-[#2a3440]/30',
   }
 
   const priorityColors: Record<string, string> = {
     critical: 'text-red-400',
     high: 'text-orange-400',
-    normal: 'text-slate-300',
-    low: 'text-slate-500',
+    normal: 'text-[#8a96a4]',
+    low: 'text-[#3a4858]',
   }
 
   const age = formatAge(task.createdAt)
@@ -622,21 +622,21 @@ function TaskRow({ task, onRefresh }: { task: Task; onRefresh: () => void }) {
   const hasStages = task.stageResults && task.stageResults.length > 0
 
   return (
-    <div className="bg-slate-800/50 border border-slate-700/50 rounded-lg">
+    <div className="bg-[#141a22]/50 border border-[#2a3440]/50 rounded-lg">
       <div className="flex items-center gap-3 p-3">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
             <span className={`text-[11px] font-medium ${priorityColors[task.priority]}`}>
               {task.priority.toUpperCase()}
             </span>
-            <span className="text-sm text-slate-200 truncate">{task.title}</span>
+            <span className="text-sm text-[#c4ccd6] truncate">{task.title}</span>
             {task.provider === 'ollama' && (
               <span className="text-[9px] px-1.5 py-0.5 rounded bg-purple-600/20 text-purple-400 border border-purple-500/30">
                 ollama
               </span>
             )}
           </div>
-          <div className="flex items-center gap-2 mt-1 text-xs text-slate-500">
+          <div className="flex items-center gap-2 mt-1 text-xs text-[#3a4858]">
             <span>{age}</span>
             <span>via {task.source}</span>
             {task.assignedAgent && <span>{'-> '}{task.assignedAgent}</span>}
@@ -656,7 +656,7 @@ function TaskRow({ task, onRefresh }: { task: Task; onRefresh: () => void }) {
           {hasStages && (
             <button
               onClick={() => setExpanded(!expanded)}
-              className="px-2 py-1 text-[10px] bg-slate-700/50 text-slate-400 hover:bg-slate-700 rounded"
+              className="px-2 py-1 text-[10px] bg-[#2a3440]/50 text-[#5a6a7a] hover:bg-[#2a3440] rounded"
             >
               {expanded ? 'Hide' : 'Detail'}
             </button>
@@ -682,7 +682,7 @@ function TaskRow({ task, onRefresh }: { task: Task; onRefresh: () => void }) {
 
       {/* Expanded stage detail */}
       {expanded && hasStages && (
-        <div className="px-3 pb-3 space-y-2 border-t border-slate-700/30 pt-2 animate-fade-slide-down">
+        <div className="px-3 pb-3 space-y-2 border-t border-[#2a3440]/30 pt-2 animate-fade-slide-down">
           {task.stageResults!.map((sr, i) => (
             <StageResultRow key={i} result={sr} />
           ))}
@@ -716,14 +716,14 @@ function StageDots({
         const isFailed = result?.success === false
         const isOllama = result?.provider === 'ollama'
 
-        let dotClass = 'bg-slate-600 text-slate-500'
+        let dotClass = 'bg-[#2a3440] text-[#3a4858]'
         if (isDone) dotClass = 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40'
         else if (isFailed) dotClass = 'bg-red-500/20 text-red-400 border-red-500/40'
         else if (isActive) dotClass = 'bg-blue-500/20 text-blue-400 border-blue-500/40 animate-breathe-glow'
 
         return (
           <div key={stage} className="flex items-center">
-            {idx > 0 && <div className="w-2 h-px bg-slate-600 mx-0.5" />}
+            {idx > 0 && <div className="w-2 h-px bg-[#2a3440] mx-0.5" />}
             <span
               className={`px-1.5 py-0.5 rounded text-[9px] font-medium border ${dotClass}`}
               title={result ? `${stage}: ${result.success ? 'PASS' : 'FAIL'} (${Math.round(result.durationMs / 1000)}s, ${result.provider})` : stage}
@@ -745,7 +745,7 @@ function StageResultRow({ result }: { result: StageResult }) {
         <span className={`font-medium ${result.success ? 'text-emerald-400' : 'text-red-400'}`}>
           {STAGE_LABELS[result.stage] || result.stage}
         </span>
-        <span className="text-slate-500">{Math.round(result.durationMs / 1000)}s</span>
+        <span className="text-[#3a4858]">{Math.round(result.durationMs / 1000)}s</span>
         <span className={`px-1 rounded text-[9px] ${
           result.provider === 'ollama'
             ? 'bg-purple-600/20 text-purple-400'
@@ -757,7 +757,7 @@ function StageResultRow({ result }: { result: StageResult }) {
           {result.success ? 'PASS' : 'FAIL'}
         </span>
       </div>
-      <pre className="text-slate-400 whitespace-pre-wrap text-[10px] max-h-24 overflow-y-auto bg-slate-900/50 rounded px-2 py-1">
+      <pre className="text-[#5a6a7a] whitespace-pre-wrap text-[10px] max-h-24 overflow-y-auto bg-[#0c1018]/50 rounded px-2 py-1">
         {result.output.slice(0, 500) || '(no output)'}
       </pre>
     </div>
@@ -768,7 +768,7 @@ function StageResultRow({ result }: { result: StageResult }) {
 
 function AgentHealthView({ health, onRefresh }: { health: AgentHealthStatus[]; onRefresh: () => void }) {
   if (health.length === 0) {
-    return <div className="text-center text-slate-500 py-12">No agents configured.</div>
+    return <div className="text-center text-[#3a4858] py-12">No agents configured.</div>
   }
 
   return (
@@ -786,15 +786,15 @@ function AgentHealthRow({ agent, onRefresh }: { agent: AgentHealthStatus; onRefr
   const statusDot = {
     healthy: 'bg-emerald-400',
     warning: 'bg-yellow-400',
-    dead: 'bg-slate-600',
+    dead: 'bg-[#2a3440]',
   }[agent.status]
 
   return (
-    <div className="flex items-center gap-3 p-3 bg-slate-800/50 border border-slate-700/50 rounded-lg">
+    <div className="flex items-center gap-3 p-3 bg-[#141a22]/50 border border-[#2a3440]/50 rounded-lg">
       <div className={`w-2.5 h-2.5 rounded-full ${statusDot}`} />
       <div className="flex-1 min-w-0">
-        <div className="text-sm text-slate-200">{agent.name}</div>
-        <div className="flex items-center gap-3 mt-0.5 text-xs text-slate-500">
+        <div className="text-sm text-[#c4ccd6]">{agent.name}</div>
+        <div className="flex items-center gap-3 mt-0.5 text-xs text-[#3a4858]">
           {agent.alive && (
             <>
               <span>PID {agent.pid}</span>
@@ -846,15 +846,15 @@ function VeritasBoardView({
 }) {
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between p-3 bg-slate-800/40 border border-slate-700/40 rounded-lg">
+      <div className="flex items-center justify-between p-3 bg-[#141a22]/40 border border-[#2a3440]/40 rounded-lg">
         <div>
-          <p className="text-sm text-slate-200">Veritas API</p>
-          <p className="text-xs text-slate-500">
+          <p className="text-sm text-[#c4ccd6]">Veritas API</p>
+          <p className="text-xs text-[#3a4858]">
             {status?.apiUrl || 'Unknown URL'}
           </p>
         </div>
         <div className="flex items-center gap-3 text-xs">
-          <span className={status?.running ? 'text-emerald-400' : 'text-slate-500'}>
+          <span className={status?.running ? 'text-emerald-400' : 'text-[#3a4858]'}>
             Service: {status?.running ? 'running' : 'stopped'}
           </span>
           <span className={status?.apiReachable ? 'text-emerald-400' : 'text-amber-400'}>
@@ -862,7 +862,7 @@ function VeritasBoardView({
           </span>
           <button
             onClick={onRefresh}
-            className="px-2 py-1 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded"
+            className="px-2 py-1 bg-[#2a3440] hover:bg-[#2a3440] text-[#c4ccd6] rounded"
           >
             Refresh
           </button>
@@ -887,9 +887,9 @@ function VeritasBoardView({
       )}
 
       {loading && tasks.length === 0 ? (
-        <div className="text-center text-slate-500 py-12">Loading Veritas tasks...</div>
+        <div className="text-center text-[#3a4858] py-12">Loading Veritas tasks...</div>
       ) : tasks.length === 0 ? (
-        <div className="text-center text-slate-500 py-12">
+        <div className="text-center text-[#3a4858] py-12">
           No Veritas tasks found. Create one with the button above.
         </div>
       ) : (
@@ -911,9 +911,9 @@ function VeritasBoardView({
 
 function VeritasCountCard({ label, value }: { label: string; value: number }) {
   return (
-    <div className="rounded border border-slate-700/40 bg-slate-800/30 px-2 py-1.5">
-      <p className="text-[10px] uppercase tracking-wide text-slate-500">{label}</p>
-      <p className="text-sm text-slate-200 font-semibold">{value}</p>
+    <div className="rounded border border-[#2a3440]/40 bg-[#141a22]/30 px-2 py-1.5">
+      <p className="text-[10px] uppercase tracking-wide text-[#3a4858]">{label}</p>
+      <p className="text-sm text-[#c4ccd6] font-semibold">{value}</p>
     </div>
   )
 }
@@ -928,28 +928,28 @@ function VeritasTaskRow({
   onUpdateStatus: (taskId: string, status: VeritasTaskStatus) => Promise<void>
 }) {
   const statusColors: Record<VeritasTaskStatus, string> = {
-    todo: 'bg-slate-500/20 text-slate-300 border-slate-500/30',
+    todo: 'bg-[#3a4858]/20 text-[#8a96a4] border-[#2a3440]/30',
     'in-progress': 'bg-blue-500/20 text-blue-300 border-blue-500/30',
     blocked: 'bg-amber-500/20 text-amber-300 border-amber-500/30',
     done: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30',
   }
 
   const priorityColors: Record<VeritasTaskPriority, string> = {
-    low: 'text-slate-400',
-    medium: 'text-slate-200',
+    low: 'text-[#5a6a7a]',
+    medium: 'text-[#c4ccd6]',
     high: 'text-orange-300',
   }
 
   return (
-    <div className="flex items-center gap-3 p-3 bg-slate-800/50 border border-slate-700/50 rounded-lg">
+    <div className="flex items-center gap-3 p-3 bg-[#141a22]/50 border border-[#2a3440]/50 rounded-lg">
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
           <span className={`text-[11px] font-medium ${priorityColors[task.priority]}`}>
             {task.priority.toUpperCase()}
           </span>
-          <span className="text-sm text-slate-100 truncate">{task.title}</span>
+          <span className="text-sm text-[#c4ccd6] truncate">{task.title}</span>
         </div>
-        <div className="flex items-center gap-2 mt-1 text-xs text-slate-500">
+        <div className="flex items-center gap-2 mt-1 text-xs text-[#3a4858]">
           <span>{formatAge(task.updated || task.created || '')}</span>
           <span>{task.id}</span>
           {task.project && <span>{task.project}</span>}
@@ -968,7 +968,7 @@ function VeritasTaskRow({
         value={task.status}
         onChange={e => { void onUpdateStatus(task.id, e.target.value as VeritasTaskStatus) }}
         disabled={updating}
-        className="bg-slate-800 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200 disabled:opacity-50"
+        className="bg-[#141a22] border border-[#2a3440] rounded px-2 py-1 text-xs text-[#c4ccd6] disabled:opacity-50"
         title="Update Veritas task status"
       >
         <option value="todo">todo</option>
@@ -996,31 +996,31 @@ function EnqueueModal({
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50">
-      <div className="bg-slate-900 border border-slate-700 rounded-xl w-[480px] p-5 space-y-4">
-        <h3 className="text-lg font-semibold text-slate-100">New Task</h3>
+      <div className="bg-[#0c1018] border border-[#2a3440] rounded-xl w-[480px] p-5 space-y-4">
+        <h3 className="text-lg font-semibold text-[#c4ccd6]">New Task</h3>
         <input
           value={title}
           onChange={e => setTitle(e.target.value)}
           placeholder="Task title"
-          className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-blue-500"
+          className="w-full px-3 py-2 bg-[#141a22] border border-[#2a3440] rounded-lg text-sm text-[#c4ccd6] placeholder-[#2a3440] focus:outline-none focus:border-blue-500"
         />
         <textarea
           value={description}
           onChange={e => setDescription(e.target.value)}
           placeholder="Full task description (sent to the agent)"
           rows={4}
-          className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-blue-500 resize-none"
+          className="w-full px-3 py-2 bg-[#141a22] border border-[#2a3440] rounded-lg text-sm text-[#c4ccd6] placeholder-[#2a3440] focus:outline-none focus:border-blue-500 resize-none"
         />
         <input
           value={project}
           onChange={e => setProject(e.target.value)}
           placeholder="Project path (e.g. ~/sidekick)"
-          className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-blue-500"
+          className="w-full px-3 py-2 bg-[#141a22] border border-[#2a3440] rounded-lg text-sm text-[#c4ccd6] placeholder-[#2a3440] focus:outline-none focus:border-blue-500"
         />
         <select
           value={priority}
           onChange={e => setPriority(e.target.value)}
-          className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-sm text-slate-200 focus:outline-none focus:border-blue-500"
+          className="w-full px-3 py-2 bg-[#141a22] border border-[#2a3440] rounded-lg text-sm text-[#c4ccd6] focus:outline-none focus:border-blue-500"
         >
           <option value="critical">Critical</option>
           <option value="high">High</option>
@@ -1030,7 +1030,7 @@ function EnqueueModal({
         <div className="flex justify-end gap-2">
           <button
             onClick={onClose}
-            className="px-4 py-2 text-sm text-slate-400 hover:text-slate-200"
+            className="px-4 py-2 text-sm text-[#5a6a7a] hover:text-[#c4ccd6]"
           >
             Cancel
           </button>
@@ -1067,31 +1067,31 @@ function VeritasCreateTaskModal({
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50">
-      <div className="bg-slate-900 border border-slate-700 rounded-xl w-[520px] p-5 space-y-4">
-        <h3 className="text-lg font-semibold text-slate-100">New Veritas Task</h3>
+      <div className="bg-[#0c1018] border border-[#2a3440] rounded-xl w-[520px] p-5 space-y-4">
+        <h3 className="text-lg font-semibold text-[#c4ccd6]">New Veritas Task</h3>
         <input
           value={title}
           onChange={e => setTitle(e.target.value)}
           placeholder="Task title"
-          className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-violet-500"
+          className="w-full px-3 py-2 bg-[#141a22] border border-[#2a3440] rounded-lg text-sm text-[#c4ccd6] placeholder-[#2a3440] focus:outline-none focus:border-violet-500"
         />
         <textarea
           value={description}
           onChange={e => setDescription(e.target.value)}
           placeholder="Description (optional)"
           rows={4}
-          className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-violet-500 resize-none"
+          className="w-full px-3 py-2 bg-[#141a22] border border-[#2a3440] rounded-lg text-sm text-[#c4ccd6] placeholder-[#2a3440] focus:outline-none focus:border-violet-500 resize-none"
         />
         <input
           value={project}
           onChange={e => setProject(e.target.value)}
           placeholder="Project (optional)"
-          className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-violet-500"
+          className="w-full px-3 py-2 bg-[#141a22] border border-[#2a3440] rounded-lg text-sm text-[#c4ccd6] placeholder-[#2a3440] focus:outline-none focus:border-violet-500"
         />
         <select
           value={priority}
           onChange={e => setPriority(e.target.value as VeritasTaskPriority)}
-          className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-sm text-slate-200 focus:outline-none focus:border-violet-500"
+          className="w-full px-3 py-2 bg-[#141a22] border border-[#2a3440] rounded-lg text-sm text-[#c4ccd6] focus:outline-none focus:border-violet-500"
         >
           <option value="low">Low</option>
           <option value="medium">Medium</option>
@@ -1101,7 +1101,7 @@ function VeritasCreateTaskModal({
           <button
             onClick={onClose}
             disabled={submitting}
-            className="px-4 py-2 text-sm text-slate-400 hover:text-slate-200 disabled:opacity-50"
+            className="px-4 py-2 text-sm text-[#5a6a7a] hover:text-[#c4ccd6] disabled:opacity-50"
           >
             Cancel
           </button>
@@ -1138,12 +1138,12 @@ const KANBAN_COLUMNS: { key: string; label: string; statuses: string[]; color: s
 function GitHubKanbanView({ cards, onRefresh }: { cards: GitHubIssueCard[]; onRefresh: () => void }) {
   if (cards.length === 0) {
     return (
-      <div className="text-center text-slate-500 py-12 space-y-2">
+      <div className="text-center text-[#3a4858] py-12 space-y-2">
         <p className="text-sm">No GitHub issues ingested yet.</p>
-        <p className="text-xs">Label issues with <code className="px-1.5 py-0.5 bg-slate-800 rounded text-emerald-400">agent-ready</code> on GitHub to queue them.</p>
+        <p className="text-xs">Label issues with <code className="px-1.5 py-0.5 bg-[#141a22] rounded text-emerald-400">agent-ready</code> on GitHub to queue them.</p>
         <button
           onClick={async () => { await window.api.githubPollNow(); onRefresh() }}
-          className="mt-3 px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs rounded-md"
+          className="mt-3 px-3 py-1.5 bg-[#2a3440] hover:bg-[#2a3440] text-[#c4ccd6] text-xs rounded-md"
         >
           Poll Now
         </button>
@@ -1159,10 +1159,10 @@ function GitHubKanbanView({ cards, onRefresh }: { cards: GitHubIssueCard[]; onRe
   return (
     <div className="grid grid-cols-4 gap-3 min-h-[300px]">
       {columns.map(col => (
-        <div key={col.key} className={`rounded-lg border ${col.color} bg-slate-800/20 flex flex-col`}>
-          <div className="px-3 py-2 border-b border-slate-700/30 flex items-center justify-between">
-            <span className="text-xs font-medium text-slate-300">{col.label}</span>
-            <span className="text-[10px] text-slate-500 bg-slate-800 px-1.5 py-0.5 rounded-full">
+        <div key={col.key} className={`rounded-lg border ${col.color} bg-[#141a22]/20 flex flex-col`}>
+          <div className="px-3 py-2 border-b border-[#2a3440]/30 flex items-center justify-between">
+            <span className="text-xs font-medium text-[#8a96a4]">{col.label}</span>
+            <span className="text-[10px] text-[#3a4858] bg-[#141a22] px-1.5 py-0.5 rounded-full">
               {col.cards.length}
             </span>
           </div>
@@ -1181,8 +1181,8 @@ function GitHubIssueCardItem({ card, onRefresh }: { card: GitHubIssueCard; onRef
   const priorityDot: Record<string, string> = {
     critical: 'bg-red-400',
     high: 'bg-orange-400',
-    normal: 'bg-slate-400',
-    low: 'bg-slate-600',
+    normal: 'bg-[#3a4858]',
+    low: 'bg-[#2a3440]',
   }
 
   const stageLabel = card.taskStage && card.taskStage !== 'queued' && card.taskStage !== 'done'
@@ -1190,10 +1190,10 @@ function GitHubIssueCardItem({ card, onRefresh }: { card: GitHubIssueCard; onRef
     : null
 
   return (
-    <div className="bg-slate-800/60 border border-slate-700/40 rounded-md p-2.5 space-y-1.5 hover:border-slate-600/60 transition-colors">
+    <div className="bg-[#141a22]/60 border border-[#2a3440]/40 rounded-md p-2.5 space-y-1.5 hover:border-[#2a3440]/60 transition-colors">
       <div className="flex items-start gap-1.5">
-        <div className={`w-1.5 h-1.5 rounded-full mt-1.5 flex-shrink-0 ${priorityDot[card.priority] || 'bg-slate-400'}`} />
-        <span className="text-xs text-slate-200 leading-tight line-clamp-2">{card.title}</span>
+        <div className={`w-1.5 h-1.5 rounded-full mt-1.5 flex-shrink-0 ${priorityDot[card.priority] || 'bg-[#3a4858]'}`} />
+        <span className="text-xs text-[#c4ccd6] leading-tight line-clamp-2">{card.title}</span>
       </div>
       <div className="flex items-center gap-1.5 flex-wrap">
         <a
@@ -1204,19 +1204,19 @@ function GitHubIssueCardItem({ card, onRefresh }: { card: GitHubIssueCard; onRef
         >
           #{card.issueNumber}
         </a>
-        <span className="text-[10px] text-slate-600">{card.repo.split('/')[1]}</span>
+        <span className="text-[10px] text-[#2a3440]">{card.repo.split('/')[1]}</span>
         {stageLabel && (
           <span className="text-[9px] px-1 py-0.5 rounded bg-blue-500/15 text-blue-400 border border-blue-500/20">
             {stageLabel}
           </span>
         )}
         {card.assignedAgent && (
-          <span className="text-[10px] text-slate-500 truncate max-w-[80px]" title={card.assignedAgent}>
+          <span className="text-[10px] text-[#3a4858] truncate max-w-[80px]" title={card.assignedAgent}>
             {card.assignedAgent}
           </span>
         )}
       </div>
-      <div className="text-[10px] text-slate-600">{formatAge(card.ingestedAt)}</div>
+      <div className="text-[10px] text-[#2a3440]">{formatAge(card.ingestedAt)}</div>
       {(card.taskStatus === 'queued' || card.taskStatus === 'assigned' || card.taskStatus === 'active') && (
         <button
           onClick={async () => { await window.api.orchestratorCancelTask(card.taskId); onRefresh() }}
@@ -1245,8 +1245,8 @@ function TabButton({ active, onClick, children }: { active: boolean; onClick: ()
       onClick={onClick}
       className={`px-3 py-1.5 text-xs rounded-md transition-all duration-150 ${
         active
-          ? 'bg-slate-700 text-slate-100'
-          : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+          ? 'bg-[#2a3440] text-[#c4ccd6]'
+          : 'text-[#5a6a7a] hover:text-[#c4ccd6] hover:bg-[#141a22]'
       }`}
     >
       {children}

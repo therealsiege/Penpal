@@ -90,25 +90,25 @@ export function SendToAgent({ selectedFiles }: SendToAgentProps) {
       </button>
 
       {open && (
-        <div className="absolute bottom-full right-0 mb-1 w-64 bg-slate-900 border border-slate-700/50 rounded shadow-xl z-50 max-h-64 overflow-y-auto">
+        <div className="absolute bottom-full right-0 mb-1 w-64 bg-[#0c1018] border border-[#2a3440]/50 rounded shadow-xl z-50 max-h-64 overflow-y-auto">
           {activeAgents.length === 0 && (
-            <div className="px-3 py-2 text-xs text-slate-600">No agents with active sessions</div>
+            <div className="px-3 py-2 text-xs text-[#2a3440]">No agents with active sessions</div>
           )}
           {activeAgents.map(agent => (
             <button
               key={agent.config.id}
               onClick={() => handleSend(agent)}
               disabled={sending}
-              className="w-full text-left px-3 py-2 hover:bg-slate-800/60 transition-colors flex items-center gap-2"
+              className="w-full text-left px-3 py-2 hover:bg-[#141a22]/60 transition-colors flex items-center gap-2"
             >
               <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${
                 agent.status === 'active' ? 'bg-green-400' : 'bg-yellow-400'
               }`} />
               <div className="min-w-0 flex-1">
-                <div className="text-xs text-slate-300 truncate">{agent.config.name}</div>
-                <div className="text-[10px] text-slate-600 truncate">{agent.cwd?.split('/').pop()}</div>
+                <div className="text-xs text-[#8a96a4] truncate">{agent.config.name}</div>
+                <div className="text-[10px] text-[#2a3440] truncate">{agent.cwd?.split('/').pop()}</div>
               </div>
-              <span className="text-[10px] text-slate-600 shrink-0">{agent.status}</span>
+              <span className="text-[10px] text-[#2a3440] shrink-0">{agent.status}</span>
             </button>
           ))}
         </div>
