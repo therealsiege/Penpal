@@ -125,6 +125,9 @@ export interface Room {
   miniWhiteboard?: Phaser.GameObjects.Container
   miniWhiteboardTexts?: Phaser.GameObjects.Text[]
   doorSide: 'top' | 'bottom'
+  // Neon signage glow on room header text
+  headerGlowFx?: Phaser.FX.Glow
+  headerGlowTween?: Phaser.Tweens.Tween
 }
 
 export interface TeamAreaLayout {

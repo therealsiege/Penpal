@@ -111,3 +111,6 @@ export const LOD_L1_MAX = 0.5
 export const LOD_L2_MAX = 0.85
 export const POD_REFRESH_MS = 90
 export const AMBIENT_MOTE_POOL_SIZE = 26
+export const MAKO_MOTE_POOL_SIZE = 15
+export const SPARK_POOL_SIZE = 12
+export const STEAM_WISP_POOL_SIZE = 8

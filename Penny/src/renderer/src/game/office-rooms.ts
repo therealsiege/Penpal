@@ -152,6 +152,8 @@ export class OfficeRooms {
     if (room.badgeDotTween) room.badgeDotTween.destroy()
     if (room.heatTween) room.heatTween.destroy()
     if (room.heatOverlay) room.heatOverlay.destroy()
+    if (room.headerGlowTween) room.headerGlowTween.destroy()
+    room.headerGlowFx = undefined
     if (room.floorTileSprites) {
       for (const s of room.floorTileSprites) s.destroy()
       room.floorTileSprites = []
@@ -222,29 +224,48 @@ export class OfficeRooms {
     g.fillStyle(roomStyle.floor)
     g.fillRect(floorX, floorY, floorW, floorH)
 
-    // Herringbone / parquet floor pattern — alternating rows of parallelogram planks
-    const PLANK_W = 8
-    const PLANK_H = 3
-    const PLANK_SKEW = 3
-    g.fillStyle(roomStyle.floorGrid, 0.15)
-    const rowCount = Math.ceil(floorH / PLANK_H)
-    const colCount = Math.ceil(floorW / PLANK_W) + 2
-    for (let row = 0; row < rowCount; row++) {
-      const py = floorY + row * PLANK_H
-      if (py > floorY + floorH) break
-      const skew = row % 2 === 0 ? PLANK_SKEW : -PLANK_SKEW
-      for (let col = row % 2 === 0 ? 0 : 1; col < colCount; col += 2) {
-        const px = floorX + col * PLANK_W
-        if (px > floorX + floorW) break
-        g.fillPoints(
-          [
-            { x: px + skew, y: py },
-            { x: px + PLANK_W + skew, y: py },
-            { x: px + PLANK_W - skew, y: py + PLANK_H },
-            { x: px - skew, y: py + PLANK_H },
-          ],
-          true,
-        )
+    // Diamond-plate steel grating pattern — raised diamond bumps in a cross layout
+    const CELL = 12
+    const DS = 1.8 // diamond half-size
+    const cellCols = Math.ceil(floorW / CELL)
+    const cellRows = Math.ceil(floorH / CELL)
+    g.fillStyle(roomStyle.floorGrid, 0.10)
+    for (let cr = 0; cr < cellRows; cr++) {
+      for (let cc = 0; cc < cellCols; cc++) {
+        const cx = floorX + cc * CELL + CELL / 2
+        const cy = floorY + cr * CELL + CELL / 2
+        if (cx > floorX + floorW || cy > floorY + floorH) continue
+        // 4 tiny rhombuses arranged in a cross pattern around cell center
+        const offsets = [
+          { dx: 0, dy: -3 },
+          { dx: 3, dy: 0 },
+          { dx: 0, dy: 3 },
+          { dx: -3, dy: 0 },
+        ]
+        for (const { dx, dy } of offsets) {
+          const rx = cx + dx, ry = cy + dy
+          g.fillPoints([
+            { x: rx, y: ry - DS },
+            { x: rx + DS, y: ry },
+            { x: rx, y: ry + DS },
+            { x: rx - DS, y: ry },
+          ], true)
+        }
+      }
+    }
+    // Steel plate joint grid lines every 48px
+    g.lineStyle(0.5, 0x3a4858, 0.08)
+    for (let jy = floorY; jy <= floorY + floorH; jy += 48) {
+      g.lineBetween(floorX, jy, floorX + floorW, jy)
+    }
+    for (let jx = floorX; jx <= floorX + floorW; jx += 48) {
+      g.lineBetween(jx, floorY, jx, floorY + floorH)
+    }
+    // Bolt circles at plate corners
+    g.fillStyle(0x4a5a6a, 0.15)
+    for (let by = floorY; by <= floorY + floorH; by += 48) {
+      for (let bx = floorX; bx <= floorX + floorW; bx += 48) {
+        g.fillCircle(bx, by, 1.5)
       }
     }
 
@@ -482,6 +503,9 @@ export class OfficeRooms {
     // Door is now drawn in separate graphics objects so it can be animated.
     this.drawDoorPanel(room, floorW, roomStyle.accent)
 
+    // Industrial detail overlays (vent grates, pipes, brackets)
+    this.drawIndustrialDetail(g, floorX, floorY, floorW, floorH, room.cwd)
+
     // Stash room index for downstream use
     ;(room as unknown as Record<string, unknown>)._roomIndex = roomIndex
 
@@ -574,9 +598,83 @@ export class OfficeRooms {
     }
   }
 
+  // -------------------------------------------------------------------------
+  // Industrial detail — vent grates, pipes, brackets
+  // -------------------------------------------------------------------------
+
+  private drawIndustrialDetail(
+    g: Phaser.GameObjects.Graphics,
+    floorX: number,
+    floorY: number,
+    floorW: number,
+    floorH: number,
+    roomCwd: string,
+  ): void {
+    // Use a hash of the cwd to vary which details appear
+    const h = this.hashToken(roomCwd)
+    const showVents = (h % 3) !== 2        // ~2/3 of rooms get vents
+    const showPipe = (h % 5) !== 0         // ~4/5 of rooms get pipe
+    const pipeSide = (h % 2) === 0 ? 'left' : 'right'
+
+    // Vent grates along the top wall (near ceiling)
+    if (showVents) {
+      const ventW = 16
+      const ventH = 6
+      const ventY = floorY + 4
+      const ventSpacing = Math.floor(floorW / 3)
+      for (let vi = 0; vi < 2; vi++) {
+        const ventX = floorX + ventSpacing * (vi + 0.5) - ventW / 2
+        // Dark vent body
+        g.fillStyle(0x1a2230, 0.35)
+        g.fillRect(ventX, ventY, ventW, ventH)
+        // Louver bars (3-4 vertical bars)
+        g.lineStyle(0.5, 0x3a4858, 0.25)
+        const louverCount = 3 + (h % 2)
+        const louverGap = ventW / (louverCount + 1)
+        for (let li = 1; li <= louverCount; li++) {
+          const lx = ventX + li * louverGap
+          g.lineBetween(lx, ventY + 1, lx, ventY + ventH - 1)
+        }
+        // Thin border
+        g.lineStyle(0.5, 0x4a5a6a, 0.15)
+        g.strokeRect(ventX, ventY, ventW, ventH)
+      }
+    }
+
+    // Horizontal pipe run along one wall interior
+    if (showPipe) {
+      const pipeW = 4
+      const pipeX = pipeSide === 'left' ? floorX + 2 : floorX + floorW - 2 - pipeW
+      const pipeStartY = floorY + 12
+      const pipeEndY = floorY + floorH - 8
+      const pipeLen = pipeEndY - pipeStartY
+      if (pipeLen > 20) {
+        // Main pipe body
+        g.fillStyle(0x3a4858, 0.20)
+        g.fillRect(pipeX, pipeStartY, pipeW, pipeLen)
+        // Highlight stripe (1px)
+        g.fillStyle(0x64748b, 0.12)
+        g.fillRect(pipeX + 1, pipeStartY, 1, pipeLen)
+        // Bracket mounts (2-3 along the pipe)
+        const bracketCount = pipeLen > 60 ? 3 : 2
+        g.fillStyle(0x4a5a6a, 0.25)
+        for (let bi = 0; bi < bracketCount; bi++) {
+          const by = pipeStartY + ((bi + 1) * pipeLen) / (bracketCount + 1)
+          g.fillRect(pipeX - 1, by - 1, pipeW + 2, 3)
+        }
+      }
+    }
+  }
+
   refreshRoomHeaderText(room: Room): void {
+    // Clean up previous header glow FX and tween before rebuilding
+    if (room.headerGlowTween) { room.headerGlowTween.destroy(); room.headerGlowTween = undefined }
+    if (room.headerGlowFx) { room.headerGlowFx = undefined }
+
     const existing = room.container.getByName('headerText') as Phaser.GameObjects.Text | null
     if (existing) existing.destroy()
+    const existingBloom = room.container.getByName('headerAccentBloom') as Phaser.GameObjects.Graphics | null
+    if (existingBloom) existingBloom.destroy()
 
     const WALL_T = 8
     const WALL_I = 4
@@ -593,6 +691,31 @@ export class OfficeRooms {
       },
     ).setOrigin(0.5, 0.5).setName('headerText')
     room.container.add(headerText)
+
+    // Neon signage glow on header text
+    const glowFx = headerText.postFX.addGlow(0x00ff88, 2, 0, false, 0.08, 10)
+    room.headerGlowFx = glowFx
+    room.headerGlowTween = this.scene.tweens.add({
+      targets: glowFx,
+      outerStrength: { from: 1.5, to: 3.5 },
+      duration: 2500,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
+    })
+
+    // Bloom accent line beneath the header — draw a wider, low-alpha duplicate for glow effect
+    {
+      const accentLineY = -room.height / 2 + WALL_T + WALL_I + ROOM_HEADER_H
+      const template = getTemplate(getRoomType(room.cwd))
+      const lineX1 = -room.width / 2 + 3 + 1  // WALL_T=3, WALL_I=1 from drawRoomBackground
+      const lineX2 = room.width / 2 - 3 - 1
+      const bloomG = this.scene.add.graphics()
+      bloomG.setName('headerAccentBloom')
+      bloomG.lineStyle(6, template.accentColor, 0.12)
+      bloomG.lineBetween(lineX1, accentLineY, lineX2, accentLineY)
+      room.container.add(bloomG)
+    }
 
     // Destroy existing badge, dot, and dot tween before rebuilding
     const badgeExisting = room.container.getByName('agentBadge') as Phaser.GameObjects.Text | null

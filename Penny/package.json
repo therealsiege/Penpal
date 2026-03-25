@@ -12,25 +12,12 @@
     "test": "npx playwright test",
     "test:headed": "npx playwright test --headed",
     "typecheck": "tsc --noEmit",
-    "make": "electron-vite build && electron-builder --mac",
-    "make:dir": "electron-vite build && electron-builder --mac --dir"
-  },
-  "build": {
-    "appId": "com.1putt.penny",
-    "productName": "Penny",
-    "directories": {
-      "output": "dist"
-    },
-    "files": [
-      "out/**/*",
-      "public/**/*"
-    ],
-    "mac": {
-      "target": "dmg",
-      "category": "public.app-category.developer-tools"
-    }
+    "package": "electron-vite build && electron-forge package",
+    "make": "electron-vite build && electron-forge make",
+    "publish": "electron-vite build && electron-forge publish"
   },
   "dependencies": {
+    "electron-updater": "^6.8.3",
     "@codemirror/autocomplete": "^6.20.1",
     "@codemirror/commands": "^6.10.3",
     "@codemirror/lang-markdown": "^6.5.0",
@@ -60,6 +47,16 @@
     "zustand": "^5.0.12"
   },
   "devDependencies": {
+    "@electron-forge/cli": "^7.11.1",
+    "@electron-forge/maker-deb": "^7.11.1",
+    "@electron-forge/maker-dmg": "^7.11.1",
+    "@electron-forge/maker-rpm": "^7.11.1",
+    "@electron-forge/maker-squirrel": "^7.11.1",
+    "@electron-forge/maker-zip": "^7.11.1",
+    "@electron-forge/plugin-auto-unpack-natives": "^7.11.1",
+    "@electron-forge/plugin-fuses": "^7.11.1",
+    "@electron-forge/publisher-github": "^7.11.1",
+    "@electron/fuses": "^2.1.0",
     "@playwright/test": "^1.58.2",
     "@types/js-yaml": "^4.0.9",
     "@types/react": "^18.3.0",
@@ -67,7 +64,6 @@
     "@vitejs/plugin-react": "^4.3.0",
     "autoprefixer": "^10.4.20",
     "electron": "^33.0.0",
-    "electron-builder": "^26.8.1",
     "electron-vite": "^5.0.0",
     "playwright-core": "^1.58.2",
     "postcss": "^8.5.0",

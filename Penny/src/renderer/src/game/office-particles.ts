@@ -1,6 +1,6 @@
 import Phaser from 'phaser'
 import { activeTheme } from './office-theme'
-import { WS_DESK_Y, AMBIENT_MOTE_POOL_SIZE } from './office-constants'
+import { WS_DESK_Y, AMBIENT_MOTE_POOL_SIZE, MAKO_MOTE_POOL_SIZE, SPARK_POOL_SIZE, STEAM_WISP_POOL_SIZE } from './office-constants'
 
 // ---------------------------------------------------------------------------
 // Minimal interface for workstation steam particle host
@@ -85,6 +85,18 @@ export class OfficeParticles {
   // Chime ripple pool
   private chimeRipplePool: Phaser.GameObjects.Arc[] = []
 
+  // Mako energy motes
+  private makoMotePool: Phaser.GameObjects.Arc[] = []
+  private lastMakoSpawnAt = 0
+
+  // Spark burst particles
+  private sparkPool: Phaser.GameObjects.Arc[] = []
+  private lastSparkBurstAt = 0
+
+  // Steam wisps
+  private steamWispPool: Phaser.GameObjects.Graphics[] = []
+  private lastSteamSpawnAt = 0
+
   constructor(scene: Phaser.Scene) {
     this.scene = scene
   }
@@ -124,6 +136,9 @@ export class OfficeParticles {
     this.initChimeRipplePool()
     this.initEmojiReactionPool()
     this.initMouseTrailPool()
+    this.initMakoMotePool()
+    this.initSparkPool()
+    this.initSteamWispPool()
 
     // Confetti burst emitter
     const confettiGfx = this.scene.make.graphics({ x: 0, y: 0, add: false })
@@ -185,6 +200,15 @@ export class OfficeParticles {
 
     for (const c of this.mouseTrailPool) { this.scene.tweens.killTweensOf(c); c.destroy() }
     this.mouseTrailPool = []
+
+    for (const m of this.makoMotePool) { this.scene.tweens.killTweensOf(m); m.destroy() }
+    this.makoMotePool = []
+
+    for (const s of this.sparkPool) { this.scene.tweens.killTweensOf(s); s.destroy() }
+    this.sparkPool = []
+
+    for (const g of this.steamWispPool) { this.scene.tweens.killTweensOf(g); g.destroy() }
+    this.steamWispPool = []
 
     if (this.confettiEmitter) {
       this.confettiEmitter.destroy()
@@ -820,5 +844,186 @@ export class OfficeParticles {
         })
       })
     }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Floating Mako motes — green energy drifting upward
+  // ---------------------------------------------------------------------------
+
+  private initMakoMotePool(): void {
+    for (let i = 0; i < MAKO_MOTE_POOL_SIZE; i++) {
+      const radius = 1 + Math.random() * 1.5
+      const arc = this.scene.add.circle(0, 0, radius, 0x00ff88, 0)
+        .setDepth(2)
+        .setBlendMode(Phaser.BlendModes.ADD)
+        .setVisible(false)
+      arc.setData('busy', false)
+      this.makoMotePool.push(arc)
+    }
+  }
+
+  tickMakoMotes(camX: number, camY: number, camW: number, camH: number, zoom: number): void {
+    const now = this.scene.time.now
+    if (now - this.lastMakoSpawnAt < 400) return
+    if (zoom < 0.5) return
+    this.lastMakoSpawnAt = now
+
+    const mote = this.makoMotePool.find(m => !m.getData('busy'))
+    if (!mote) return
+
+    const worldX = camX + Math.random() * camW
+    const worldY = camY + Math.random() * camH
+    const color = Math.random() < 0.5 ? 0x00ff88 : 0x00e5ff
+    const duration = 3000 + Math.random() * 2000
+    const riseY = 40 + Math.random() * 40
+
+    mote.setPosition(worldX, worldY)
+    mote.setFillStyle(color)
+    mote.setAlpha(0.12)
+    mote.setVisible(true)
+    mote.setData('busy', true)
+
+    const startX = worldX
+    const phaseOffset = Math.random() * Math.PI * 2
+
+    this.scene.tweens.add({
+      targets: mote,
+      y: worldY - riseY,
+      alpha: 0,
+      duration,
+      ease: 'Sine.easeOut',
+      onUpdate: (tween: Phaser.Tweens.Tween) => {
+        const progress = tween.progress
+        mote.x = startX + Math.sin(progress * Math.PI * 2 + phaseOffset) * 15
+      },
+      onComplete: () => {
+        mote.setVisible(false)
+        mote.setData('busy', false)
+      },
+    })
+  }
+
+  // ---------------------------------------------------------------------------
+  // Spark bursts from pipe joints
+  // ---------------------------------------------------------------------------
+
+  private initSparkPool(): void {
+    const sparkColors = [0xd4a017, 0xff8c00, 0xffffff]
+    for (let i = 0; i < SPARK_POOL_SIZE; i++) {
+      const radius = 0.5 + Math.random() * 1.0
+      const color = sparkColors[i % sparkColors.length]
+      const arc = this.scene.add.circle(0, 0, radius, color, 0)
+        .setDepth(3)
+        .setBlendMode(Phaser.BlendModes.ADD)
+        .setVisible(false)
+      arc.setData('busy', false)
+      this.sparkPool.push(arc)
+    }
+  }
+
+  tickSparks(camX: number, camY: number, camW: number, camH: number, zoom: number): void {
+    const now = this.scene.time.now
+    if (now - this.lastSparkBurstAt < 3000) return
+    if (zoom < 0.8) return
+    this.lastSparkBurstAt = now
+
+    const centerX = camX + camW * 0.5
+    const centerY = camY + camH * 0.5
+    const burstX = centerX + (Math.random() - 0.5) * 400
+    const burstY = centerY + (Math.random() - 0.5) * 400
+    const sparkCount = 3 + Math.floor(Math.random() * 2)
+    const sparkColors = [0xd4a017, 0xff8c00, 0xffffff]
+
+    for (let i = 0; i < sparkCount; i++) {
+      const spark = this.sparkPool.find(s => !s.getData('busy'))
+      if (!spark) break
+
+      const color = sparkColors[Math.floor(Math.random() * sparkColors.length)]
+      const driftX = (Math.random() - 0.5) * 24
+      const driftY = 8 + Math.random() * 7
+      const duration = 200 + Math.random() * 300
+
+      spark.setPosition(burstX, burstY)
+      spark.setFillStyle(color)
+      spark.setAlpha(0.9)
+      spark.setScale(1.5)
+      spark.setVisible(true)
+      spark.setData('busy', true)
+
+      this.scene.time.delayedCall(50, () => {
+        spark.setScale(1.0)
+      })
+
+      this.scene.tweens.add({
+        targets: spark,
+        x: burstX + driftX,
+        y: burstY + driftY,
+        alpha: 0,
+        duration,
+        ease: 'Quad.easeOut',
+        onComplete: () => {
+          spark.setVisible(false)
+          spark.setScale(1)
+          spark.setData('busy', false)
+        },
+      })
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Steam wisps rising from vents
+  // ---------------------------------------------------------------------------
+
+  private initSteamWispPool(): void {
+    for (let i = 0; i < STEAM_WISP_POOL_SIZE; i++) {
+      const gfx = this.scene.add.graphics().setDepth(1).setVisible(false)
+      gfx.setData('busy', false)
+      this.steamWispPool.push(gfx)
+    }
+  }
+
+  tickSteam(camX: number, camY: number, camW: number, camH: number, zoom: number): void {
+    const now = this.scene.time.now
+    if (now - this.lastSteamSpawnAt < 1500) return
+    if (zoom < 0.6) return
+    this.lastSteamSpawnAt = now
+
+    const gfx = this.steamWispPool.find(g => !g.getData('busy'))
+    if (!gfx) return
+
+    const centerX = camX + camW * 0.5
+    const centerY = camY + camH * 0.5
+    const worldX = centerX + (Math.random() - 0.5) * 300
+    const worldY = centerY + (Math.random() * 0.3 + 0.35) * camH
+
+    gfx.clear()
+    const alpha = 0.04 + Math.random() * 0.04
+    gfx.fillStyle(0x8a96a4, alpha)
+    gfx.fillCircle(0, 0, 3 + Math.random() * 2)
+    gfx.fillCircle(2.5, -1.5, 2.5 + Math.random() * 1.5)
+    gfx.fillCircle(-2, -2, 2 + Math.random() * 1.5)
+
+    gfx.setPosition(worldX, worldY)
+    gfx.setAlpha(1)
+    gfx.setScale(1)
+    gfx.setVisible(true)
+    gfx.setData('busy', true)
+
+    const riseY = 20 + Math.random() * 10
+    const duration = 2000 + Math.random() * 1000
+
+    this.scene.tweens.add({
+      targets: gfx,
+      y: worldY - riseY,
+      alpha: 0,
+      scaleX: 1.5,
+      scaleY: 1.5,
+      duration,
+      ease: 'Sine.easeOut',
+      onComplete: () => {
+        gfx.setVisible(false)
+        gfx.setData('busy', false)
+      },
+    })
   }
 }
