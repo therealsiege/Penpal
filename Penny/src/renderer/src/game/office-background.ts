@@ -694,17 +694,17 @@ export class OfficeBackground {
 
       // ── Industrial pipe shading — 3D cylindrical effect ──
       // Highlight stripe along top edge
-      g.fillStyle(0x5a6a7a, 0.15)
-      g.fillRect(minX - LEG_W / 2, hallY - HALL_H / 2 + 1, hallWidth + LEG_W, 2)
+      g.fillStyle(0x5a6a7a, 0.25)
+      g.fillRect(minX - LEG_W / 2, hallY - HALL_H / 2 + 1, hallWidth + LEG_W, 3)
       // Darker bottom edge
-      g.fillStyle(0x0a0e14, 0.2)
-      g.fillRect(minX - LEG_W / 2, hallY + HALL_H / 2 - 3, hallWidth + LEG_W, 2)
+      g.fillStyle(0x0a0e14, 0.3)
+      g.fillRect(minX - LEG_W / 2, hallY + HALL_H / 2 - 4, hallWidth + LEG_W, 3)
 
       // ── Rivets/bolts along main corridor runs ──
-      g.fillStyle(0x4a5a6a, 0.2)
+      g.fillStyle(0x4a5a6a, 0.3)
       for (let rx = minX; rx <= maxX; rx += 50) {
-        g.fillCircle(rx, hallY - HALL_H / 2 + 3, 1.5)
-        g.fillCircle(rx, hallY + HALL_H / 2 - 3, 1.5)
+        g.fillCircle(rx, hallY - HALL_H / 2 + 3, 2.5)
+        g.fillCircle(rx, hallY + HALL_H / 2 - 3, 2.5)
       }
 
       const chevronSize = 3
@@ -740,15 +740,15 @@ export class OfficeBackground {
           g.fillRect(room.x - LEG_W / 2, legTop, 1, legBot - legTop)
           g.fillRect(room.x + LEG_W / 2 - 1, legTop, 1, legBot - legTop)
           // ── Vertical leg pipe shading ──
-          g.fillStyle(0x5a6a7a, 0.15)
-          g.fillRect(room.x - LEG_W / 2 + 1, legTop, 2, legBot - legTop)
-          g.fillStyle(0x0a0e14, 0.2)
-          g.fillRect(room.x + LEG_W / 2 - 3, legTop, 2, legBot - legTop)
+          g.fillStyle(0x5a6a7a, 0.25)
+          g.fillRect(room.x - LEG_W / 2 + 1, legTop, 3, legBot - legTop)
+          g.fillStyle(0x0a0e14, 0.3)
+          g.fillRect(room.x + LEG_W / 2 - 4, legTop, 3, legBot - legTop)
           // Rivets along vertical legs
-          g.fillStyle(0x4a5a6a, 0.2)
+          g.fillStyle(0x4a5a6a, 0.3)
           for (let ry = legTop; ry <= legBot; ry += 50) {
-            g.fillCircle(room.x - LEG_W / 2 + 3, ry, 1.5)
-            g.fillCircle(room.x + LEG_W / 2 - 3, ry, 1.5)
+            g.fillCircle(room.x - LEG_W / 2 + 3, ry, 2.5)
+            g.fillCircle(room.x + LEG_W / 2 - 3, ry, 2.5)
           }
         }
 
@@ -759,8 +759,8 @@ export class OfficeBackground {
         g.fillRect(room.x - JUNC_W / 2, hallY + HALL_H / 2 - 1, JUNC_W, 1)
 
         // ── Pipe collar/flange at junction ──
-        g.fillStyle(0x4a5a6a, 0.2)
-        g.fillRect(room.x - (JUNC_W + 6) / 2, hallY - 3, JUNC_W + 6, 6)
+        g.fillStyle(0x4a5a6a, 0.3)
+        g.fillRect(room.x - (JUNC_W + 8) / 2, hallY - 3, JUNC_W + 8, 6)
 
         g.fillStyle(0x00ff88, 0.1)
         g.fillCircle(room.x, hallY, 3)
@@ -1977,19 +1977,19 @@ export class OfficeBackground {
     const gfx = this.scene.add.graphics().setDepth(-9.5)
 
     // Draw 3 concentric ellipses radiating outward
-    gfx.fillStyle(0x00ff88, 0.06)
+    gfx.fillStyle(0x00ff88, 0.12)
     gfx.fillEllipse(x, y, rx * 2, ry * 2)       // 1x — inner
-    gfx.fillStyle(0x00ff88, 0.03)
-    gfx.fillEllipse(x, y, rx * 3, ry * 3)       // 1.5x — mid
-    gfx.fillStyle(0x00ff88, 0.015)
-    gfx.fillEllipse(x, y, rx * 4.4, ry * 4.4)   // 2.2x — outer
+    gfx.fillStyle(0x00ff88, 0.08)
+    gfx.fillEllipse(x, y, rx * 3.6, ry * 3.6)   // 1.8x — mid
+    gfx.fillStyle(0x00ff88, 0.04)
+    gfx.fillEllipse(x, y, rx * 6, ry * 6)       // 3x — outer
 
     this.reactorGlowGfx = gfx
 
     // Pulsing tween — oscillates alpha between 0.5 and 1.0
     this.reactorPulseTween = this.scene.tweens.add({
       targets: gfx,
-      alpha: { from: 0.5, to: 1.0 },
+      alpha: { from: 0.6, to: 1.0 },
       duration: 3000,
       yoyo: true,
       repeat: -1,
@@ -2008,17 +2008,17 @@ export class OfficeBackground {
 
     // Modulate inner ring alpha based on sine for churning mako effect
     const churn = Math.sin(time * 0.001)
-    const innerAlpha = 0.06 + churn * 0.02   // oscillates 0.04 – 0.08
-    const midAlpha = 0.03 + churn * 0.008    // oscillates 0.022 – 0.038
-    const outerAlpha = 0.015 + churn * 0.005 // oscillates 0.01 – 0.02
+    const innerAlpha = 0.12 + churn * 0.04   // oscillates 0.08 – 0.16
+    const midAlpha = 0.08 + churn * 0.02     // oscillates 0.06 – 0.10
+    const outerAlpha = 0.04 + churn * 0.012  // oscillates 0.028 – 0.052
 
     gfx.clear()
     gfx.fillStyle(0x00ff88, innerAlpha)
     gfx.fillEllipse(x, y, rx * 2, ry * 2)
     gfx.fillStyle(0x00ff88, midAlpha)
-    gfx.fillEllipse(x, y, rx * 3, ry * 3)
+    gfx.fillEllipse(x, y, rx * 3.6, ry * 3.6)
     gfx.fillStyle(0x00ff88, outerAlpha)
-    gfx.fillEllipse(x, y, rx * 4.4, ry * 4.4)
+    gfx.fillEllipse(x, y, rx * 6, ry * 6)
   }
 
   destroy(): void {

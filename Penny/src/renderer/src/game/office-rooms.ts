@@ -229,7 +229,7 @@ export class OfficeRooms {
     const DS = 1.8 // diamond half-size
     const cellCols = Math.ceil(floorW / CELL)
     const cellRows = Math.ceil(floorH / CELL)
-    g.fillStyle(roomStyle.floorGrid, 0.10)
+    g.fillStyle(roomStyle.floorGrid, 0.18)
     for (let cr = 0; cr < cellRows; cr++) {
       for (let cc = 0; cc < cellCols; cc++) {
         const cx = floorX + cc * CELL + CELL / 2
@@ -254,7 +254,7 @@ export class OfficeRooms {
       }
     }
     // Steel plate joint grid lines every 48px
-    g.lineStyle(0.5, 0x3a4858, 0.08)
+    g.lineStyle(1.0, 0x3a4858, 0.14)
     for (let jy = floorY; jy <= floorY + floorH; jy += 48) {
       g.lineBetween(floorX, jy, floorX + floorW, jy)
     }
@@ -262,10 +262,10 @@ export class OfficeRooms {
       g.lineBetween(jx, floorY, jx, floorY + floorH)
     }
     // Bolt circles at plate corners
-    g.fillStyle(0x4a5a6a, 0.15)
+    g.fillStyle(0x4a5a6a, 0.25)
     for (let by = floorY; by <= floorY + floorH; by += 48) {
       for (let bx = floorX; bx <= floorX + floorW; bx += 48) {
-        g.fillCircle(bx, by, 1.5)
+        g.fillCircle(bx, by, 2.0)
       }
     }
 
@@ -618,17 +618,17 @@ export class OfficeRooms {
 
     // Vent grates along the top wall (near ceiling)
     if (showVents) {
-      const ventW = 16
-      const ventH = 6
+      const ventW = 22
+      const ventH = 8
       const ventY = floorY + 4
       const ventSpacing = Math.floor(floorW / 3)
       for (let vi = 0; vi < 2; vi++) {
         const ventX = floorX + ventSpacing * (vi + 0.5) - ventW / 2
         // Dark vent body
-        g.fillStyle(0x1a2230, 0.35)
+        g.fillStyle(0x1a2230, 0.525)
         g.fillRect(ventX, ventY, ventW, ventH)
         // Louver bars (3-4 vertical bars)
-        g.lineStyle(0.5, 0x3a4858, 0.25)
+        g.lineStyle(1.5, 0x3a4858, 0.375)
         const louverCount = 3 + (h % 2)
         const louverGap = ventW / (louverCount + 1)
         for (let li = 1; li <= louverCount; li++) {
@@ -636,31 +636,31 @@ export class OfficeRooms {
           g.lineBetween(lx, ventY + 1, lx, ventY + ventH - 1)
         }
         // Thin border
-        g.lineStyle(0.5, 0x4a5a6a, 0.15)
+        g.lineStyle(0.5, 0x4a5a6a, 0.225)
         g.strokeRect(ventX, ventY, ventW, ventH)
       }
     }
 
     // Horizontal pipe run along one wall interior
     if (showPipe) {
-      const pipeW = 4
+      const pipeW = 6
       const pipeX = pipeSide === 'left' ? floorX + 2 : floorX + floorW - 2 - pipeW
       const pipeStartY = floorY + 12
       const pipeEndY = floorY + floorH - 8
       const pipeLen = pipeEndY - pipeStartY
       if (pipeLen > 20) {
         // Main pipe body
-        g.fillStyle(0x3a4858, 0.20)
+        g.fillStyle(0x3a4858, 0.30)
         g.fillRect(pipeX, pipeStartY, pipeW, pipeLen)
-        // Highlight stripe (1px)
-        g.fillStyle(0x64748b, 0.12)
-        g.fillRect(pipeX + 1, pipeStartY, 1, pipeLen)
+        // Highlight stripe (2px)
+        g.fillStyle(0x64748b, 0.18)
+        g.fillRect(pipeX + 1, pipeStartY, 2, pipeLen)
         // Bracket mounts (2-3 along the pipe)
         const bracketCount = pipeLen > 60 ? 3 : 2
-        g.fillStyle(0x4a5a6a, 0.25)
+        g.fillStyle(0x4a5a6a, 0.35)
         for (let bi = 0; bi < bracketCount; bi++) {
           const by = pipeStartY + ((bi + 1) * pipeLen) / (bracketCount + 1)
-          g.fillRect(pipeX - 1, by - 1, pipeW + 2, 3)
+          g.fillRect(pipeX - 2, by - 2, pipeW + 4, 4)
         }
       }
     }
@@ -697,7 +697,7 @@ export class OfficeRooms {
     room.headerGlowFx = glowFx
     room.headerGlowTween = this.scene.tweens.add({
       targets: glowFx,
-      outerStrength: { from: 1.5, to: 3.5 },
+      outerStrength: { from: 2.5, to: 5.0 },
       duration: 2500,
       yoyo: true,
       repeat: -1,
@@ -712,7 +712,7 @@ export class OfficeRooms {
       const lineX2 = room.width / 2 - 3 - 1
       const bloomG = this.scene.add.graphics()
       bloomG.setName('headerAccentBloom')
-      bloomG.lineStyle(6, template.accentColor, 0.12)
+      bloomG.lineStyle(8, template.accentColor, 0.20)
       bloomG.lineBetween(lineX1, accentLineY, lineX2, accentLineY)
       room.container.add(bloomG)
     }

@@ -145,7 +145,7 @@ export class OfficeAtmosphere {
       let alpha = 0
       if (t > fogStart) {
         // Ramp from 0 to 0.04 over the bottom 40%
-        alpha = ((t - fogStart) / (1 - fogStart)) * 0.04
+        alpha = ((t - fogStart) / (1 - fogStart)) * 0.06
       }
       gfx.fillStyle(FOG_COLOR, alpha)
       gfx.fillRect(0, i * stripH, W, stripH + 1)
@@ -171,7 +171,7 @@ export class OfficeAtmosphere {
     // Haze breathing: slow sine modulation (~8s period, amplitude 0.01)
     if (this.hazeOverlay) {
       this.hazeBreathTime = time
-      const breath = Math.sin(time / 1000 * (Math.PI * 2 / 8)) * 0.01
+      const breath = Math.sin(time / 1000 * (Math.PI * 2 / 8)) * 0.015
       this.hazeOverlay.setAlpha(Math.max(0, this.hazeAlphaScale + breath))
     }
     if (this.wallClockContainer && time - this.lastClockTick >= 1000) {
@@ -382,7 +382,7 @@ export class OfficeAtmosphere {
         morning: 0.6,
         day: 0.5,
         evening: 0.8,
-        night: 1.0,
+        night: 1.2,
       }
       const targetScale = hazeScaleMap[phase] ?? 0.5
       this.hazeAlphaScale = targetScale
