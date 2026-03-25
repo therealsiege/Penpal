@@ -179,9 +179,10 @@ export class OfficeBackground {
     const rows = Math.ceil(n / cols)
     const WALL_T = 8
     const WALL_I = 4
+    const DOOR_CLEARANCE = 30 // matches layoutWorkstations — space for door exit
     return {
       width:  (WALL_T + WALL_I + ROOM_PADDING) * 2 + cols * WORKSTATION_W,
-      height: (WALL_T + WALL_I) * 2 + ROOM_HEADER_H + ROOM_PADDING * 2 + ROOM_TOP_EXTRA + rows * WORKSTATION_H,
+      height: (WALL_T + WALL_I) * 2 + ROOM_HEADER_H + ROOM_PADDING * 2 + ROOM_TOP_EXTRA + rows * WORKSTATION_H + DOOR_CLEARANCE,
     }
   }
 
@@ -865,28 +866,6 @@ export class OfficeBackground {
       const connX = cafeBounds.x + cafeBounds.w / 2
       // Vertical corridor from service row bottom to agent row corridor
       this.corridorSegments.push({ x1: connX, y1: serviceBottomY, x2: connX, y2: nearestRow.y, color: 0x2a3440 })
-      // Draw the vertical pipe visually
-      g.fillStyle(0x0f1520, 0.5)
-      g.fillRect(connX - 4, serviceBottomY, 8, nearestRow.y - serviceBottomY)
-      g.fillStyle(0x1a2535, 0.6)
-      g.fillRect(connX - 1, serviceBottomY, 2, nearestRow.y - serviceBottomY)
-
-      // Draw a proper door at the top of the corridor (service row exit)
-      const doorW = 22
-      const doorH = 10
-      const doorX = connX - doorW / 2
-      const doorY = serviceBottomY - 2
-      g.fillStyle(0x3b82f6, 0.6)
-      g.fillRoundedRect(doorX - 2, doorY - 2, doorW + 4, doorH + 4, 3)
-      g.fillStyle(0x0f172a, 1)
-      g.fillRoundedRect(doorX, doorY, doorW, doorH, 2)
-      g.fillStyle(0x3b82f6, 0.4)
-      g.fillRect(doorX + 3, doorY + 2, doorW - 6, 2)
-      g.lineStyle(1, 0x3b82f6, 0.3)
-      g.lineBetween(connX, doorY + 1, connX, doorY + doorH - 1)
-      g.fillStyle(0xfbbf24, 1)
-      g.fillCircle(doorX + doorW - 4, doorY + doorH / 2, 1.5)
-
       // Horizontal leg to connect to the nearest team
       if (Math.abs(connX - nearestRow.minX) > 10) {
         this.corridorSegments.push({ x1: connX, y1: nearestRow.y, x2: nearestRow.minX, y2: nearestRow.y, color: 0x2a3440 })

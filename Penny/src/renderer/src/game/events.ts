@@ -28,6 +28,7 @@ class GameEventBus {
 export const EventBus = new GameEventBus()
 
 export const EVENTS = {
+  // --- Agent interaction ---
   /** Fired when an agent sprite is single-clicked. Payload: (agentId: string, state: AgentState) */
   AGENT_CLICKED: 'agent:clicked',
   /** Fired when an agent sprite is double-clicked. Payload: (agentId: string, state: AgentState) */
@@ -38,12 +39,50 @@ export const EVENTS = {
   AGENT_DESELECTED: 'agent:deselected',
   /** Fired when an agent is dragged to a different room. Payload: (agentId: string, roomId: string) */
   AGENT_DRAGGED_TO_ROOM: 'agent:draggedToRoom',
+  /** Fired when an agent transitions to a new state. Payload: (agentId: string, newState: AgentState, prevState: AgentState) */
+  AGENT_STATE_CHANGED: 'agent:stateChanged',
+  /** Fired when a new agent is added to the scene. Payload: (agentId: string, state: AgentState) */
+  AGENT_ARRIVED: 'agent:arrived',
+  /** Fired when an agent is removed from the scene. Payload: (agentId: string) */
+  AGENT_DEPARTED: 'agent:departed',
+  /** Fired when the keyboard-selected agent changes. Payload: (agentId: string | null) */
+  SELECTION_CHANGED: 'selection:changed',
+
+  // --- Room ---
+  /** Fired when the camera focus enters a room. Payload: (roomId: string) */
+  ROOM_ENTERED: 'room:entered',
+  /** Fired when the camera focus leaves a room. Payload: (roomId: string) */
+  ROOM_EXITED: 'room:exited',
+
+  // --- Input ---
+  /** Fired when all game input is locked (e.g. during modal). No payload. */
+  INPUT_LOCKED: 'input:locked',
+  /** Fired when game input is re-enabled. No payload. */
+  INPUT_UNLOCKED: 'input:unlocked',
+
+  // --- UI / HUD ---
+  /** Fired when an XP or progress bar value changes. Payload: (barId: string, value: number, max: number) */
+  BAR_UPDATED: 'bar:updated',
+  /** Generic notification for toast/feed display. Payload: (message: string, level: 'info' | 'warn' | 'error') */
+  NOTIFICATION: 'notification',
   /** Fired when the "Add Worker" button or tile is clicked. No payload. */
   ADD_WORKER_CLICKED: 'addWorker:clicked',
   /** Fired when an empty desk is clicked. Payload: (deskId: string) */
   DESK_CLICKED: 'desk:clicked',
   /** Fired to show a broadcast message in the scene. Payload: (message: string) */
   BROADCAST: 'broadcast',
+
+  // --- Workstation lifecycle ---
+  /** Fired when a workstation is created for an agent. Payload: (agentId: string, deskId: string) */
+  WORKSTATION_CREATED: 'workstation:created',
+  /** Fired when a workstation is destroyed. Payload: (agentId: string) */
+  WORKSTATION_DESTROYED: 'workstation:destroyed',
+
+  // --- Theme ---
+  /** Fired when the active color theme changes. Payload: (themeName: string) */
+  THEME_CHANGED: 'theme:changed',
+
+  // --- External ---
   /** Fired when a GitHub issue card is clicked. Payload: (url: string, issueNumber: number, repo: string) */
   GITHUB_ISSUE_CLICKED: 'github:issueClicked',
 } as const
@@ -58,6 +97,7 @@ export const EVENTS = {
  *   EventBus.on(EVENTS.AGENT_CLICKED, (_id, state) => { ... })
  */
 export interface EventPayloadMap {
+  // --- Agent interaction ---
   /** (agentId: string, state: AgentState) */
   [EVENTS.AGENT_CLICKED]: [agentId: string, state: AgentState]
   /** (agentId: string, state: AgentState) */
@@ -68,12 +108,50 @@ export interface EventPayloadMap {
   [EVENTS.AGENT_DESELECTED]: []
   /** (agentId: string, roomId: string) */
   [EVENTS.AGENT_DRAGGED_TO_ROOM]: [agentId: string, roomId: string]
+  /** (agentId: string, newState: AgentState, prevState: AgentState) */
+  [EVENTS.AGENT_STATE_CHANGED]: [agentId: string, newState: AgentState, prevState: AgentState]
+  /** (agentId: string, state: AgentState) */
+  [EVENTS.AGENT_ARRIVED]: [agentId: string, state: AgentState]
+  /** (agentId: string) */
+  [EVENTS.AGENT_DEPARTED]: [agentId: string]
+  /** (agentId: string | null) */
+  [EVENTS.SELECTION_CHANGED]: [agentId: string | null]
+
+  // --- Room ---
+  /** (roomId: string) */
+  [EVENTS.ROOM_ENTERED]: [roomId: string]
+  /** (roomId: string) */
+  [EVENTS.ROOM_EXITED]: [roomId: string]
+
+  // --- Input ---
+  /** No payload */
+  [EVENTS.INPUT_LOCKED]: []
+  /** No payload */
+  [EVENTS.INPUT_UNLOCKED]: []
+
+  // --- UI / HUD ---
+  /** (barId: string, value: number, max: number) */
+  [EVENTS.BAR_UPDATED]: [barId: string, value: number, max: number]
+  /** (message: string, level: 'info' | 'warn' | 'error') */
+  [EVENTS.NOTIFICATION]: [message: string, level: 'info' | 'warn' | 'error']
   /** No payload */
   [EVENTS.ADD_WORKER_CLICKED]: []
   /** (deskId: string) */
   [EVENTS.DESK_CLICKED]: [deskId: string]
   /** (message: string) */
   [EVENTS.BROADCAST]: [message: string]
+
+  // --- Workstation lifecycle ---
+  /** (agentId: string, deskId: string) */
+  [EVENTS.WORKSTATION_CREATED]: [agentId: string, deskId: string]
+  /** (agentId: string) */
+  [EVENTS.WORKSTATION_DESTROYED]: [agentId: string]
+
+  // --- Theme ---
+  /** (themeName: string) */
+  [EVENTS.THEME_CHANGED]: [themeName: string]
+
+  // --- External ---
   /** (url: string, issueNumber: number, repo: string) */
   [EVENTS.GITHUB_ISSUE_CLICKED]: [url: string, issueNumber: number, repo: string]
 }

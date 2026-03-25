@@ -520,8 +520,8 @@ export class OfficeRooms {
     const h = room.height
     const WALL_T = 3
     const WALL_I = 1
-    const doorW = Math.max(20, Math.min(34, floorW * 0.22))
-    const doorH = 12
+    const doorW = Math.max(24, Math.min(50, floorW * 0.28))
+    const doorH = Math.max(14, Math.min(20, h * 0.08))
     const doorLeftX = -doorW / 2
     // Bottom door: near bottom wall. Top door: near top wall (below header).
     const doorY = room.doorSide === 'top'

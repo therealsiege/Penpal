@@ -207,21 +207,46 @@ export class PennyCafe {
     const stoolY = counterY + COUNTER_W + 16
     for (let si = 0; si < NUM_STOOLS; si++) {
       const sx = STOOL_START_X + si * STOOL_GAP
-      // Footrest ring
-      g.lineStyle(1.5, 0x4a5a6c, 0.4)
-      g.strokeCircle(sx, stoolY + 12, 6)
-      // Center post
-      g.fillStyle(0x64748b, 0.7)
-      g.fillRect(sx - 1.5, stoolY + 2, 3, 12)
-      // Seat cushion (rounded)
-      g.fillStyle(0x334155, 0.85)
-      g.fillCircle(sx, stoolY, 7)
-      // Seat highlight
-      g.fillStyle(0x475569, 0.6)
-      g.fillCircle(sx, stoolY - 1, 5)
-      // Seat rim
-      g.lineStyle(1, 0x00e5ff, 0.15)
-      g.strokeCircle(sx, stoolY, 7)
+      // 4 legs splayed out
+      g.lineStyle(1.5, 0x4a5a6c, 0.55)
+      g.lineBetween(sx - 6, stoolY + 16, sx - 2, stoolY + 4)
+      g.lineBetween(sx + 6, stoolY + 16, sx + 2, stoolY + 4)
+      g.lineBetween(sx - 4, stoolY + 14, sx - 1, stoolY + 4)
+      g.lineBetween(sx + 4, stoolY + 14, sx + 1, stoolY + 4)
+      // Footrest crossbar
+      g.lineStyle(1.5, 0x5a6a7c, 0.45)
+      g.lineBetween(sx - 5, stoolY + 12, sx + 5, stoolY + 12)
+      // Center post (chrome)
+      g.fillStyle(0x7a8a9c, 0.8)
+      g.fillRect(sx - 1, stoolY + 2, 2, 10)
+      // Seat — padded leather cushion
+      g.fillStyle(0x1e293b, 0.95)
+      g.fillEllipse(sx, stoolY, 16, 8)
+      // Seat top highlight
+      g.fillStyle(0x334155, 0.7)
+      g.fillEllipse(sx, stoolY - 1, 12, 5)
+      // Stitching detail
+      g.lineStyle(0.5, 0x475569, 0.3)
+      g.lineBetween(sx - 4, stoolY, sx + 4, stoolY)
+    }
+
+    // ── Coffee cups on counter — static decor ──
+    const cupPositions = [60, 140, 190, 260]
+    for (const cupX of cupPositions) {
+      // Cup body
+      g.fillStyle(0x334155, 0.9)
+      g.fillRect(cupX - 3, counterY + 2, 6, 7)
+      // Cup rim
+      g.fillStyle(0x475569, 0.8)
+      g.fillRect(cupX - 3, counterY + 1, 6, 2)
+      // Handle
+      g.lineStyle(1, 0x475569, 0.6)
+      g.beginPath()
+      g.arc(cupX + 4, counterY + 5, 2.5, -Math.PI * 0.5, Math.PI * 0.5, false)
+      g.strokePath()
+      // Coffee fill
+      g.fillStyle(0x6b4423, 0.6)
+      g.fillRect(cupX - 2, counterY + 3, 4, 3)
     }
 
     this.worldY = cy + stoolY
