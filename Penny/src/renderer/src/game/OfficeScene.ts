@@ -13,6 +13,8 @@ import { OfficeSelection } from './office-selection'
 import { OfficeRooms } from './office-rooms'
 import { OfficeWorkstations } from './office-workstation'
 import { OfficeBackground } from './office-background'
+import { OfficeBroadcast } from './office-broadcast'
+import { OfficeCamera } from './office-camera'
 import type { WorkstationSprite, Room, PodLineInfo, OfficeDebugSnapshot } from './office-types'
 import {
   getPoseFrame, getRoomDoorY, getStatusColor,
@@ -20,13 +22,20 @@ import {
   cwdToLabel, formatLabel,
 } from './office-helpers'
 
+import { SPRITESHEET_KEYS, ANIM_KEYS, SCENE_KEYS } from './office-asset-keys'
+import { RoomVisibilityManager } from './room-visibility'
+import { soundEngine } from './sound-engine'
+import { achievements } from './achievements'
+import { CelebrationManager } from './celebrations'
+import { AgentMoodManager } from './agent-mood'
+import { InteractivePropsManager } from './interactive-props'
+
 import {
   KB_ZOOM_STEP,
   CHAR_FRAME_W, CHAR_FRAME_H,
   OFFICE_TILE_SIZE, ROOM_TILE_SIZE,
-  WORKSTATION_W, WORKSTATION_H,
-  COLOR_BG, COLOR_LED_GREEN, COLOR_LED_AMBER, COLOR_LED_GRAY,
-  WORLD_MARGIN, ZOOM_MIN, ZOOM_MAX, ZOOM_FIT_MAX, ZOOM_LERP_SPEED, FOLLOW_LERP_SPEED,
+  WORKSTATION_W, WORKSTATION_H, WS_DESK_Y,
+  COLOR_BG, ZOOM_MAX,
   LOD_L1_MAX, LOD_L2_MAX,
   POD_REFRESH_MS,
 } from './office-constants'
@@ -83,9 +92,8 @@ export class OfficeScene extends Phaser.Scene {
   // Keyboard selection — managed by OfficeSelection
   private selection!: OfficeSelection
 
-  // Camera & navigation state
-  private targetZoom = 1
-  private followTarget: { x: number; y: number } | null = null
+  // Camera & navigation — extracted to OfficeCamera
+  private officeCamera!: OfficeCamera
   private resizeTimer: ReturnType<typeof setTimeout> | null = null
   /** Current LOD level: 1=overview, 2=room, 3=full detail. Initialized to 3 so first frame always applies the correct state. */
   private lastLodLevel = 3
@@ -93,12 +101,17 @@ export class OfficeScene extends Phaser.Scene {
   private roomRenderer!: OfficeRooms
   // Workstation lifecycle subsystem (extracted to OfficeWorkstations)
   private wsManager!: OfficeWorkstations
-  private lastCamScrollX = 0
-  private lastCamScrollY = 0
-  private lastCamZoom = 1
   private lastHallwayPulseAt = 0
-  private pendingCameraRecoveryUntil = 0
-  private hasInitialFit = false
+
+  // Room-based object culling — managed by RoomVisibilityManager
+  private _roomVisibility = new RoomVisibilityManager()
+  private lastRoomCheckAt = 0
+
+  // Game systems
+  private celebrations!: CelebrationManager
+  private moodManager!: AgentMoodManager
+  private propsManager!: InteractivePropsManager
+  private lastMoodUpdateAt = 0
 
 
   // Screen-space UI overlays (toasts, tooltip, hover ring, help, debug, LOD label, status bar)
@@ -110,18 +123,13 @@ export class OfficeScene extends Phaser.Scene {
   // Ambient office-life activity subsystem (paper airplanes, coffee refills, phone rings, etc.)
   private ambient!: OfficeAmbient
 
-  // PA system broadcast banner (screen-space, below status bar)
-  private broadcastBannerContainer: Phaser.GameObjects.Container | null = null
-  private broadcastBannerBg: Phaser.GameObjects.Rectangle | null = null
-  private broadcastBannerText: Phaser.GameObjects.Text | null = null
-  private broadcastScrollTween: Phaser.Tweens.Tween | null = null
-  private broadcastFadeTimer: Phaser.Time.TimerEvent | null = null
-  private broadcastLedTimer: Phaser.Time.TimerEvent | null = null
+  // PA system broadcast banner — extracted to OfficeBroadcast
+  private broadcast!: OfficeBroadcast
   private broadcastHandler: ((msg: unknown) => void) | null = null
   private agentClickedHandler: ((agentId: string) => void) | null = null
 
   constructor() {
-    super({ key: 'OfficeScene' })
+    super({ key: SCENE_KEYS.OFFICE })
   }
 
   // ---------------------------------------------------------------------------
@@ -129,23 +137,23 @@ export class OfficeScene extends Phaser.Scene {
   // ---------------------------------------------------------------------------
 
   preload(): void {
-    this.load.spritesheet('characters', './sprites/characters.png', {
+    this.load.spritesheet(SPRITESHEET_KEYS.CHARACTERS, './sprites/characters.png', {
       frameWidth:  CHAR_FRAME_W,
       frameHeight: CHAR_FRAME_H,
     })
-    this.load.spritesheet('office', './sprites/office-tiles.png', {
+    this.load.spritesheet(SPRITESHEET_KEYS.OFFICE, './sprites/office-tiles.png', {
       frameWidth:  OFFICE_TILE_SIZE,
       frameHeight: OFFICE_TILE_SIZE,
     })
-    this.load.spritesheet('rooms', './sprites/room-tiles.png', {
+    this.load.spritesheet(SPRITESHEET_KEYS.ROOMS, './sprites/room-tiles.png', {
       frameWidth:  ROOM_TILE_SIZE,
       frameHeight: ROOM_TILE_SIZE,
     })
-    this.load.spritesheet('duder1', './sprites/duder-compact.png', {
+    this.load.spritesheet(SPRITESHEET_KEYS.DUDER_1, './sprites/duder-compact.png', {
       frameWidth: CHAR_FRAME_W,
       frameHeight: CHAR_FRAME_H,
     })
-    this.load.spritesheet('duder2', './sprites/duder-compact-2.png', {
+    this.load.spritesheet(SPRITESHEET_KEYS.DUDER_2, './sprites/duder-compact-2.png', {
       frameWidth: CHAR_FRAME_W,
       frameHeight: CHAR_FRAME_H,
     })
@@ -154,12 +162,12 @@ export class OfficeScene extends Phaser.Scene {
     // Idle: 1024×512 = 4 frames (4 rotations)
     // Sit:  1024×512 = 4 frames (4 rotations)
     const ANIM_FW = 256, ANIM_FH = 512
-    this.load.spritesheet('anim-walk-1', './sprites/walk-1.png', { frameWidth: ANIM_FW, frameHeight: ANIM_FH })
-    this.load.spritesheet('anim-walk-2', './sprites/walk-2.png', { frameWidth: ANIM_FW, frameHeight: ANIM_FH })
-    this.load.spritesheet('anim-idle-1', './sprites/idle-1.png', { frameWidth: ANIM_FW, frameHeight: ANIM_FH })
-    this.load.spritesheet('anim-idle-2', './sprites/idle-2.png', { frameWidth: ANIM_FW, frameHeight: ANIM_FH })
-    this.load.spritesheet('anim-sit-1',  './sprites/sit-1.png',  { frameWidth: ANIM_FW, frameHeight: ANIM_FH })
-    this.load.spritesheet('anim-sit-2',  './sprites/sit-2.png',  { frameWidth: ANIM_FW, frameHeight: ANIM_FH })
+    this.load.spritesheet(ANIM_KEYS.WALK_1, './sprites/walk-1.png', { frameWidth: ANIM_FW, frameHeight: ANIM_FH })
+    this.load.spritesheet(ANIM_KEYS.WALK_2, './sprites/walk-2.png', { frameWidth: ANIM_FW, frameHeight: ANIM_FH })
+    this.load.spritesheet(ANIM_KEYS.IDLE_1, './sprites/idle-1.png', { frameWidth: ANIM_FW, frameHeight: ANIM_FH })
+    this.load.spritesheet(ANIM_KEYS.IDLE_2, './sprites/idle-2.png', { frameWidth: ANIM_FW, frameHeight: ANIM_FH })
+    this.load.spritesheet(ANIM_KEYS.SIT_1,  './sprites/sit-1.png',  { frameWidth: ANIM_FW, frameHeight: ANIM_FH })
+    this.load.spritesheet(ANIM_KEYS.SIT_2,  './sprites/sit-2.png',  { frameWidth: ANIM_FW, frameHeight: ANIM_FH })
     this.load.on('filecomplete-spritesheet-office', () => { this.officeTilesLoaded = true })
   }
 
@@ -168,12 +176,20 @@ export class OfficeScene extends Phaser.Scene {
 
     const cam = this.cameras.main
     cam.setBackgroundColor(COLOR_BG)
-    this.lastCamScrollX = cam.scrollX
-    this.lastCamScrollY = cam.scrollY
-    this.lastCamZoom = cam.zoom
 
     this.viewWidth  = this.scale.width
     this.viewHeight = this.scale.height
+
+    // Camera navigation — extracted to OfficeCamera
+    this.officeCamera = new OfficeCamera(this, {
+      getRooms: () => this.rooms,
+      getBackground: () => this.background,
+      getCafe: () => this.cafe,
+      getViewSize: () => ({ viewWidth: this.viewWidth, viewHeight: this.viewHeight }),
+      getWorldSize: () => ({ worldWidth: this.worldWidth, worldHeight: this.worldHeight }),
+      setWorldSize: (w, h) => { this.worldWidth = w; this.worldHeight = h },
+    })
+    this.officeCamera.init()
 
     // Office background — extracted to OfficeBackground
     this.background = new OfficeBackground(this, {
@@ -187,12 +203,11 @@ export class OfficeScene extends Phaser.Scene {
       hashToken: (v) => hashToken(v),
       formatLabel: (l) => formatLabel(l),
       getRoomDoorY: (r) => getRoomDoorY(r),
-      drawDashedLine: (g, x1, y1, x2, y2, dl, gl) => this.drawDashedLine(g, x1, y1, x2, y2, dl, gl),
       refreshRoomHeaderText: (r) => { this.ensureRoomRenderer(); this.roomRenderer.refreshRoomHeaderText(r) },
       drawDoorPanel: (r, fw, ac) => { this.ensureRoomRenderer(); this.roomRenderer.drawDoorPanel(r, fw, ac) },
       getTeamInfo: (cwd) => getTeamInfo(cwd),
       rebuildNavMesh: () => this.rebuildNavMesh(),
-      updateCameraBounds: () => this.updateCameraBounds(),
+      updateCameraBounds: () => this.officeCamera.updateCameraBounds(),
       setWorldSize: (w, h) => { this.worldWidth = w; this.worldHeight = h },
       markPodsDirty: () => { if (this.pods) this.pods.markDirty() },
       setCorridorData: (segs, active) => { if (this.particles) this.particles.setCorridorData(segs, active) },
@@ -251,7 +266,7 @@ export class OfficeScene extends Phaser.Scene {
       if (p.isDown && !this.isDraggingAgent) {
         cam.scrollX -= (p.x - p.prevPosition.x) / cam.zoom
         cam.scrollY -= (p.y - p.prevPosition.y) / cam.zoom
-        this.followTarget = null
+        this.officeCamera.followTarget = null
       }
 
       // Sparkle trail — only when not panning, throttled to 25/sec max
@@ -293,12 +308,11 @@ export class OfficeScene extends Phaser.Scene {
     })
 
     // Smooth zoom -- sets target for lerp in update()
-    this.targetZoom = cam.zoom
     this.input.on(
       'wheel',
       (_p: Phaser.Input.Pointer, _gx: unknown, _gy: unknown, _gz: unknown, deltaY: number) => {
-        this.targetZoom = Phaser.Math.Clamp(this.targetZoom - deltaY * 0.001, this.getMinZoom(), ZOOM_MAX)
-        this.followTarget = null
+        this.officeCamera.targetZoom = Phaser.Math.Clamp(this.officeCamera.targetZoom - deltaY * 0.001, this.officeCamera.getMinZoom(), ZOOM_MAX)
+        this.officeCamera.followTarget = null
       },
     )
 
@@ -316,7 +330,7 @@ export class OfficeScene extends Phaser.Scene {
       if (now - lastSceneClickTime < 350) {
         const wp = cam.getWorldPoint(p.x, p.y)
         if (!this.getAgentAtWorldPoint(wp.x, wp.y)) {
-          this.zoomToFit(true)
+          this.officeCamera.zoomToFit(true)
         }
       }
       lastSceneClickTime = now
@@ -334,9 +348,9 @@ export class OfficeScene extends Phaser.Scene {
       this.resizeTimer = setTimeout(() => {
         this.resizeTimer = null
         this.background.invalidateBgCache()
-        this.layoutRooms()
-        this.updateCameraBounds()
-        if (this.rooms.size > 0) this.zoomToFit(true)
+        this.background.layoutRooms()
+        this.officeCamera.updateCameraBounds()
+        if (this.rooms.size > 0) this.officeCamera.zoomToFit(true)
       }, 100)
     })
 
@@ -449,8 +463,9 @@ export class OfficeScene extends Phaser.Scene {
       () => ({ worldWidth: this.worldWidth, worldHeight: this.worldHeight }),
     )
 
-    // PA system broadcast — listen for cross-component broadcast events
-    this.broadcastHandler = (msg: unknown) => this.showBroadcastEffect(String(msg))
+    // PA system broadcast — extracted to OfficeBroadcast
+    this.broadcast = new OfficeBroadcast(this)
+    this.broadcastHandler = (msg: unknown) => this.broadcast.showBroadcastEffect(String(msg), () => this.rooms)
     EventBus.on(EVENTS.BROADCAST, this.broadcastHandler)
 
     // Desk click recall — if agent is at cafe, cancel their coffee run so they walk back
@@ -461,6 +476,16 @@ export class OfficeScene extends Phaser.Scene {
     }
     EventBus.on(EVENTS.AGENT_CLICKED, this.agentClickedHandler)
 
+    // Game systems — celebrations, mood, achievements, sound, props
+    this.celebrations = new CelebrationManager(this)
+    this.moodManager = new AgentMoodManager(this)
+    this.propsManager = new InteractivePropsManager(this)
+    soundEngine.wireEvents()
+    achievements.load()
+
+    // Launch UIScene as a parallel overlay — owns all screen-space HUD elements
+    this.scene.launch(SCENE_KEYS.UI_SCENE)
+
     this.isReady = true
     this.cafe.startCoffeeRunTimer()
     if (this.pendingAgents) {
@@ -468,8 +493,8 @@ export class OfficeScene extends Phaser.Scene {
       this.pendingAgents = null
     } else {
       // Build service buildings immediately even with no agents
-      this.layoutRooms()
-      this.updateCameraBounds()
+      this.background.layoutRooms()
+      this.officeCamera.updateCameraBounds()
     }
   }
 
@@ -481,10 +506,13 @@ export class OfficeScene extends Phaser.Scene {
     if (!this.roomRenderer) {
       this.roomRenderer = new OfficeRooms(this, {
         atmosphere: this.atmosphere,
-        calcRoomSize: (n) => this.calcRoomSize(n),
-        syncWorkstations: (room, agents) => this.syncWorkstations(room, agents),
-        updateRoomActivity: (room) => this.updateRoomActivity(room),
-        destroyWorkstation: (ws) => this.destroyWorkstation(ws),
+        calcRoomSize: (n, cwd?) => this.background.calcRoomSize(n, cwd),
+        syncWorkstations: (room, agents) => {
+          this.ensureWsManager()
+          this.wsManager.syncWorkstations(room, agents, (r) => this.roomRenderer.triggerDoorAnimation(r))
+        },
+        updateRoomActivity: (room) => this.background.updateRoomActivity(room),
+        destroyWorkstation: (ws) => { this.ensureWsManager(); this.wsManager.destroyWorkstation(ws) },
         formatLabel: (label) => formatLabel(label),
       })
     }
@@ -508,15 +536,18 @@ export class OfficeScene extends Phaser.Scene {
         getPodLines: () => scene.pods?.podLines ?? [],
         applyLodToWorkstation: (ws, level, fade) => scene.applyLodToWorkstation(ws, level, fade),
         getLastLodLevel: () => scene.lastLodLevel,
-        enterFocusMode: (id) => scene.enterFocusMode(id),
-        drawHoverRing: (x, y) => scene.drawHoverRing(x, y),
-        clearHoverRing: () => scene.clearHoverRing(),
-        showRichTooltip: (agent, sx, sy) => scene.showRichTooltip(agent, sx, sy),
-        hideTooltip: () => scene.hideTooltip(),
+        enterFocusMode: (id) => scene.selection.enterFocusMode(id),
+        drawHoverRing: (x, y) => scene.ui.drawHoverRing(x, y),
+        clearHoverRing: () => scene.ui.clearHoverRing(),
+        showRichTooltip: (agent, sx, sy) => scene.ui.showRichTooltip(agent, sx, sy),
+        hideTooltip: () => scene.ui.hideTooltip(),
         get officeTilesLoaded() { return scene.officeTilesLoaded },
         getRooms: () => scene.rooms,
         isCoffeeRunActive: (id) => scene.cafe.isOnCoffeeRun(id),
         cancelCoffeeRun: (id) => scene.cafe.cancelCoffeeRun(id),
+        celebrations: scene.celebrations,
+        propsManager: scene.propsManager,
+        getNavMesh: () => scene.navMesh,
       })
     }
   }
@@ -528,42 +559,8 @@ export class OfficeScene extends Phaser.Scene {
   update(time: number, _delta: number): void {
     const cam = this.cameras.main
 
-    // Smooth zoom lerp
-    const zoomDiff = this.targetZoom - cam.zoom
-    if (Math.abs(zoomDiff) > 0.001) {
-      cam.setZoom(Phaser.Math.Clamp(cam.zoom + zoomDiff * ZOOM_LERP_SPEED, this.getMinZoom(), ZOOM_MAX))
-    } else if (Math.abs(zoomDiff) > 0) {
-      cam.setZoom(this.targetZoom)
-    }
-
-    // Smooth camera follow
-    if (this.followTarget) {
-      const cx = cam.scrollX + cam.width / (2 * cam.zoom)
-      const cy = cam.scrollY + cam.height / (2 * cam.zoom)
-      const dx = this.followTarget.x - cx
-      const dy = this.followTarget.y - cy
-      if (Math.abs(dx) > 1 || Math.abs(dy) > 1) {
-        cam.scrollX += dx * FOLLOW_LERP_SPEED
-        cam.scrollY += dy * FOLLOW_LERP_SPEED
-      } else {
-        cam.scrollX += dx
-        cam.scrollY += dy
-        this.followTarget = null
-      }
-    }
-
-    // Short safety window after layout/data changes to ensure agents stay discoverable.
-    if (this.pendingCameraRecoveryUntil > 0 && this.rooms.size > 0) {
-      if (!this.isAnyRoomVisible()) {
-        this.followTarget = null
-        this.zoomToFit(false)
-      } else {
-        this.pendingCameraRecoveryUntil = 0
-      }
-      if (time >= this.pendingCameraRecoveryUntil) {
-        this.pendingCameraRecoveryUntil = 0
-      }
-    }
+    // Camera smooth zoom + follow + recovery
+    this.officeCamera.updateZoomAndFollow(time)
 
     // Zoom-dependent multi-level LOD
     const lodLevel = cam.zoom < LOD_L1_MAX ? 1 : cam.zoom <= LOD_L2_MAX ? 2 : 3
@@ -595,17 +592,6 @@ export class OfficeScene extends Phaser.Scene {
       this.background.setLastFloorArrowAt(time)
     } else if (cam.zoom <= LOD_L1_MAX) {
       this.background.clearFloorArrows()
-    }
-
-    // Track camera movement for other systems
-    const cameraChanged =
-      Math.abs(cam.scrollX - this.lastCamScrollX) > 0.5 ||
-      Math.abs(cam.scrollY - this.lastCamScrollY) > 0.5 ||
-      Math.abs(cam.zoom - this.lastCamZoom) > 0.001
-    if (cameraChanged) {
-      this.lastCamScrollX = cam.scrollX
-      this.lastCamScrollY = cam.scrollY
-      this.lastCamZoom = cam.zoom
     }
 
     // Debug overlay refresh (throttled to 250ms)
@@ -645,6 +631,31 @@ export class OfficeScene extends Phaser.Scene {
     // Chat animations — advance traveling dots and fade expired lines
     if (this.pods.hasChatAnimations()) {
       this.pods.tickChatAnimations(time)
+    }
+
+    // Room-based object culling — throttled to 200ms, matching floor-arrow cadence
+    if (this.rooms.size > 0 && time - this.lastRoomCheckAt >= 200) {
+      this.lastRoomCheckAt = time
+      this._roomVisibility.update(this.cameras.main)
+    }
+
+    // Agent mood bubbles — throttled to 2s
+    if (this.moodManager && time - this.lastMoodUpdateAt >= 2000) {
+      this.lastMoodUpdateAt = time
+      const agentMap = new Map<string, { x: number; y: number; status: string; blocked: boolean; uptime: number }>()
+      for (const room of this.rooms.values()) {
+        for (const [id, ws] of room.workstations) {
+          if (!ws.state) continue
+          agentMap.set(id, {
+            x: room.x + ws.container.x,
+            y: room.y + ws.container.y,
+            status: ws.state.status ?? 'idle',
+            blocked: ws.state.needsInteraction ?? false,
+            uptime: typeof ws.state.uptime === 'string' ? parseInt(ws.state.uptime, 10) * 1000 : 0,
+          })
+        }
+      }
+      this.moodManager.update(agentMap)
     }
   }
 
@@ -732,16 +743,46 @@ export class OfficeScene extends Phaser.Scene {
       }
     }
 
-    this.layoutRooms()
-    this.updateCameraBounds()
+    this.background.layoutRooms()
+    this.officeCamera.updateCameraBounds()
     this.background.updateWhiteboardStats()
 
+    // Re-register all rooms with the visibility manager after layout finalises positions.
+    // Registration replaces any previous entry for the same id, so this is safe to call on
+    // every sync cycle.  Workstation containers are the primary managed objects; the room
+    // container itself is also included so header/floor graphics cull with the room.
+    for (const [cwd, room] of this.rooms) {
+      const objects: Phaser.GameObjects.GameObject[] = [room.container]
+      for (const ws of room.workstations.values()) {
+        objects.push(ws.container)
+      }
+      this._roomVisibility.registerRoom({
+        id: cwd,
+        bounds: {
+          x: room.x - room.width / 2,
+          y: room.y - room.height / 2,
+          width: room.width,
+          height: room.height,
+        },
+        objects,
+      })
+    }
+    // Unregister rooms that were removed this cycle.
+    for (const id of this._roomVisibility.getActiveRooms()) {
+      if (!this.rooms.has(id)) this._roomVisibility.unregisterRoom(id)
+    }
+
+    // Achievement tracking
+    achievements.trackAgentCount(allAgents.length)
+
+
+
     // Fit camera on first layout only — don't hijack user's pan on every poll.
-    if (this.rooms.size > 0 && !this.hasInitialFit) {
-      this.hasInitialFit = true
-      this.followTarget = null
-      this.zoomToFit(false)
-      this.pendingCameraRecoveryUntil = this.time.now + 1500
+    if (this.rooms.size > 0 && !this.officeCamera.hasInitialFit) {
+      this.officeCamera.hasInitialFit = true
+      this.officeCamera.followTarget = null
+      this.officeCamera.zoomToFit(false)
+      this.officeCamera.pendingCameraRecoveryUntil = this.time.now + 1500
     }
   }
 
@@ -779,7 +820,8 @@ export class OfficeScene extends Phaser.Scene {
         if (highlight) {
           ws.deskBody.setStrokeStyle(3, 0x3b82f6, 1)
         } else {
-          this.restoreDeskStroke(ws)
+          this.ensureWsManager()
+          this.wsManager.restoreDeskStroke(ws)
         }
         return
       }
@@ -788,119 +830,12 @@ export class OfficeScene extends Phaser.Scene {
 
   /** Public: smooth-pan camera to center on a specific agent */
   panToAgent(agentId: string): void {
-    const pos = this.getWorkstationWorldPos(agentId)
-    if (pos) {
-      this.followTarget = { x: pos.x, y: pos.y }
-      if (this.targetZoom < 0.8) this.targetZoom = 0.9
-    }
+    this.officeCamera.panToAgent(agentId, this.rooms)
   }
 
-  // ---------------------------------------------------------------------------
-  // PA system broadcast effect
-  // ---------------------------------------------------------------------------
-
-  /**
-   * Displays a marquee banner below the status bar and pulses all room LEDs
-   * amber — triggered whenever the user broadcasts a message to all agents.
-   */
   /** Delegate for CafeHostScene — cafe calls scene.spawnEmojiReaction() */
   public spawnEmojiReaction(worldX: number, worldY: number, emoji: string): void {
     this.particles.spawnEmojiReaction(worldX, worldY, emoji)
-  }
-
-  public showBroadcastEffect(message: string): void {
-    const viewW = this.scale.width
-    const BANNER_Y = 28
-    const BANNER_H = 30
-    const BANNER_COLOR = 0x0f172a
-    const BANNER_ALPHA = 0.9
-    const TEXT_COLOR = '#fbbf24'
-    const DURATION_MS = 5000
-    const FADE_MS = 400
-
-    // Tear down any existing broadcast banner before creating a new one
-    this._destroyBroadcastBanner()
-
-    // Container pinned to screen space (ignores camera scroll)
-    this.broadcastBannerContainer = this.add.container(0, BANNER_Y)
-      .setDepth(9999)
-      .setScrollFactor(0)
-
-    // Dark background strip
-    this.broadcastBannerBg = this.add.rectangle(0, 0, viewW, BANNER_H, BANNER_COLOR, BANNER_ALPHA)
-      .setOrigin(0, 0)
-    this.broadcastBannerContainer.add(this.broadcastBannerBg)
-
-    // Mako green accent line at the top edge of the banner
-    const accentLine = this.add.rectangle(0, 0, viewW, 2, 0x00ff88, 0.7).setOrigin(0, 0)
-    this.broadcastBannerContainer.add(accentLine)
-
-    // Scrolling text — starts just off the right edge, scrolls to past the left edge
-    const label = '\u{1F4E2}  BROADCAST:  ' + message
-    this.broadcastBannerText = this.add.text(viewW + 10, BANNER_H / 2, label, {
-      fontSize: '10px',
-      fontFamily: 'ui-monospace, monospace',
-      color: TEXT_COLOR,
-      resolution: 2,
-    }).setOrigin(0, 0.5)
-    this.broadcastBannerContainer.add(this.broadcastBannerText)
-
-    // Marquee: scroll the text from right to left over the active duration
-    const textW = this.broadcastBannerText.width
-    this.broadcastScrollTween = this.tweens.add({
-      targets: this.broadcastBannerText,
-      x: -(textW + 10),
-      duration: DURATION_MS - FADE_MS,
-      ease: 'Linear',
-    })
-
-    // Pulse all room status LEDs amber 3 times (6 timer ticks: on/off x3)
-    let pulseCount = 0
-    this.broadcastLedTimer = this.time.addEvent({
-      delay: 500,
-      repeat: 5,
-      callback: () => {
-        pulseCount++
-        const isOn = pulseCount % 2 === 1
-        for (const room of this.rooms.values()) {
-          if (isOn) {
-            room.statusLed.setFillStyle(COLOR_LED_AMBER, 1)
-            room.statusLedGlow?.setFillStyle(COLOR_LED_AMBER, 0.4)
-          } else {
-            const restoreColor =
-              room.ledMode === 'active'  ? COLOR_LED_GREEN :
-              room.ledMode === 'waiting' ? COLOR_LED_AMBER : COLOR_LED_GRAY
-            room.statusLed.setFillStyle(restoreColor, 1)
-            room.statusLedGlow?.setFillStyle(restoreColor, 0.25)
-          }
-        }
-      },
-    })
-
-    // After the scroll completes, fade the banner out then destroy it
-    this.broadcastFadeTimer = this.time.delayedCall(DURATION_MS - FADE_MS, () => {
-      if (!this.broadcastBannerContainer) return
-      this.tweens.add({
-        targets: this.broadcastBannerContainer,
-        alpha: 0,
-        duration: FADE_MS,
-        ease: 'Sine.easeIn',
-        onComplete: () => this._destroyBroadcastBanner(),
-      })
-    })
-  }
-
-  private _destroyBroadcastBanner(): void {
-    if (this.broadcastScrollTween) { this.broadcastScrollTween.destroy(); this.broadcastScrollTween = null }
-    if (this.broadcastFadeTimer)   { this.broadcastFadeTimer.destroy();   this.broadcastFadeTimer   = null }
-    if (this.broadcastLedTimer)    { this.broadcastLedTimer.destroy();    this.broadcastLedTimer    = null }
-    if (this.broadcastBannerContainer) {
-      this.tweens.killTweensOf(this.broadcastBannerContainer)
-      this.broadcastBannerContainer.destroy(true)
-      this.broadcastBannerContainer = null
-    }
-    this.broadcastBannerBg   = null
-    this.broadcastBannerText = null
   }
 
   /** Switch theme with smooth 500ms background color transition */
@@ -948,24 +883,22 @@ export class OfficeScene extends Phaser.Scene {
   /** Redraw all scene elements with the current activeTheme colors */
   private _applyThemeToAll(): void {
     this.ensureRoomRenderer()
+    this.ensureWsManager()
     const t = activeTheme
     for (const room of this.rooms.values()) {
       this.roomRenderer.drawRoomBackground(room)
       for (const ws of room.workstations.values()) {
         ws.deskBody.setFillStyle(t.deskBody)
         ws.deskTop.setFillStyle(t.deskTop)
-        this.restoreDeskStroke(ws)
+        this.wsManager.restoreDeskStroke(ws)
         if (ws.monitorGlowFx) {
           const isWorking = ws.state && (ws.state.sessionMode === 'working' || ws.state.sessionMode === 'plan') && !ws.state.needsInteraction
           const isWaiting = ws.state?.needsInteraction
           ws.monitorGlowFx.color = isWaiting ? t.deskStrokeWaiting : isWorking ? t.monitorGlowActive : t.monitorGlowIdle
         }
         ws.lastAnimMode = undefined
-        if (ws.state) this.updateWorkstation(ws, ws.state)
+        if (ws.state) this.wsManager.updateWorkstation(ws, ws.state)
       }
-    }
-    {
-      // Background is drawn by layoutRooms which has café bounds for L-shape
     }
     this.pods.markDirty()
     this.pods.drawPodLines(this.time.now, this.rooms)
@@ -975,56 +908,11 @@ export class OfficeScene extends Phaser.Scene {
 
 
   // ---------------------------------------------------------------------------
-  // Workstation management — delegated to OfficeWorkstations
-  // ---------------------------------------------------------------------------
-
-  private syncWorkstations(room: Room, agents: AgentState[]): void {
-    this.ensureWsManager()
-    this.wsManager.syncWorkstations(room, agents, (r) => this.roomRenderer.triggerDoorAnimation(r))
-  }
-
-  private createWorkstation(room: Room, agent: AgentState): WorkstationSprite { this.ensureWsManager(); return this.wsManager.createWorkstation(room, agent) }
-
-  private updateWorkstation(ws: WorkstationSprite, agent: AgentState): void { this.ensureWsManager(); this.wsManager.updateWorkstation(ws, agent) }
-
-  private layoutWorkstations(room: Room): void { this.ensureWsManager(); this.wsManager.layoutWorkstations(room) }
-
-  private destroyWorkstation(ws: WorkstationSprite): void { this.ensureWsManager(); this.wsManager.destroyWorkstation(ws) }
-
-  // ---------------------------------------------------------------------------
-  // Task count badge
-  // ---------------------------------------------------------------------------
-
-  /**
-   * Redraws the task-completion counter badge on a workstation.
-   *
-   * Color tiers:
-   *   0       — badge hidden (initial state before any task finishes)
-   *   1-4     — gray  (#64748b) — "getting started"
-   *   5-9     — blue  (#3b82f6) — productive
-   *   10+     — gold  (#fbbf24) — productivity champion
-   *
-   * On every increment a brief green flash animates the bg alpha 0.6→1→0.6
-   * and the text color briefly switches to green (#34d399) then returns to
-   * the tier color over 500ms.
-   */
-  private refreshTaskCountDisplay(ws: WorkstationSprite): void { this.ensureWsManager(); this.wsManager.refreshTaskCountDisplay(ws) }
-
-  // ---------------------------------------------------------------------------
   // Room layout — delegated to OfficeBackground
   // ---------------------------------------------------------------------------
 
-  private calcRoomSize(agentCount: number): { width: number; height: number } {
-    return this.background.calcRoomSize(agentCount)
-  }
-
-  private layoutRooms(): void {
-    this.background.layoutRooms()
-  }
-
-  private updateRoomActivity(room: Room): void {
-    this.background.updateRoomActivity(room)
-  }
+  /** Expose NavMesh for CoffeRunHostScene and other consumers. */
+  getNavMesh(): NavMesh { return this.navMesh }
 
   private rebuildNavMesh(): void {
     const rooms: Array<{ x: number; y: number; width: number; height: number; doorX: number; doorY: number }> = []
@@ -1061,66 +949,30 @@ export class OfficeScene extends Phaser.Scene {
       corridorSegments: this.background.getCorridorSegments(),
       cafeBounds,
     })
-  }
 
-  private updateCameraBounds(): void {
-    const cam = this.cameras.main
-    let maxX = 0
-    let maxY = 0
+    // Block desk footprints so agents walk around furniture
+    const DESK_BLOCK_W = 64
+    const DESK_BLOCK_H = 21
     for (const room of this.rooms.values()) {
-      maxX = Math.max(maxX, room.x + room.width / 2 + WORLD_MARGIN)
-      maxY = Math.max(maxY, room.y + room.height / 2 + WORLD_MARGIN)
+      for (const ws of room.workstations.values()) {
+        const deskWorldX = room.x + ws.container.x - DESK_BLOCK_W / 2
+        const deskWorldY = room.y + ws.container.y + WS_DESK_Y - DESK_BLOCK_H / 2
+        this.navMesh.blockRect(deskWorldX, deskWorldY, DESK_BLOCK_W, DESK_BLOCK_H)
+      }
     }
-    // Include building background extents (rooms only, no cafe)
-    const hasRooms = this.rooms.size > 0
-    const bgDims2 = this.background.getBgDimensions()
-    let contentW = Math.max(maxX, hasRooms ? bgDims2.w + 30 : 0)
-    let contentH = Math.max(maxY, hasRooms ? bgDims2.h + 30 : 0)
-    // Include cafe (positioned outside the building)
-    const cafeBounds = this.cafe.getBounds()
-    if (cafeBounds) {
-      contentW = Math.max(contentW, cafeBounds.x + cafeBounds.w + WORLD_MARGIN)
-      contentH = Math.max(contentH, cafeBounds.y + cafeBounds.h + WORLD_MARGIN)
-    }
-    this.worldWidth = Math.max(contentW, this.viewWidth)
-    this.worldHeight = Math.max(contentH, this.viewHeight)
-    cam.setBounds(-WORLD_MARGIN, -WORLD_MARGIN, this.worldWidth + WORLD_MARGIN * 2, this.worldHeight + WORLD_MARGIN * 2)
   }
 
-  // ---------------------------------------------------------------------------
-  // Mood indicator / workstation state
-  // ---------------------------------------------------------------------------
-
-  private getAgentMood(agent: AgentState): { emoji: string; color: string } { this.ensureWsManager(); return this.wsManager.getAgentMood(agent) }
-
-  private updateMood(ws: WorkstationSprite, agent: AgentState): void { this.ensureWsManager(); this.wsManager.updateMood(ws, agent) }
-
-  // ---------------------------------------------------------------------------
-  // Thought bubble — rich live-text with typing animation, auto-sizing, and fade
-  // ---------------------------------------------------------------------------
-
-  private drawThoughtBubbleBg(ws: WorkstationSprite, accentColor: number): void { this.ensureWsManager(); this.wsManager.drawThoughtBubbleBg(ws, accentColor) }
-
-  private updateThoughtBubble(ws: WorkstationSprite, agent: AgentState, shouldShow: boolean, accentColor: number, isWorking: boolean): void { this.ensureWsManager(); this.wsManager.updateThoughtBubble(ws, agent, shouldShow, accentColor, isWorking) }
-
-  // ---------------------------------------------------------------------------
-  // Animations
-  // ---------------------------------------------------------------------------
-
-  private updateAnimation(ws: WorkstationSprite, agent: AgentState): void { this.ensureWsManager(); this.wsManager.updateAnimation(ws, agent) }
-
-  private updateBlockedIndicator(ws: WorkstationSprite, agent: AgentState): void { this.ensureWsManager(); this.wsManager.updateBlockedIndicator(ws, agent) }
-
-  private updateMonitorGlow(ws: WorkstationSprite, isWorking: boolean, isWaiting: boolean): void { this.ensureWsManager(); this.wsManager.updateMonitorGlow(ws, isWorking, isWaiting) }
-
-  private restoreDeskStroke(ws: WorkstationSprite): void { this.ensureWsManager(); this.wsManager.restoreDeskStroke(ws) }
 
   // ---------------------------------------------------------------------------
   // Notification toasts
   // ---------------------------------------------------------------------------
 
   private showToast(text: string, type: 'info' | 'success' | 'warning' | 'error' = 'info'): void {
-    this.ui.showToast(text, type); return
+    this.ui.showToast(text, type)
+    // Also push to UIScene via EventBus so the parallel overlay scene receives it.
+    // UIScene uses 'warn' where OfficeUI uses 'warning'; map here at the source.
+    const level = type === 'warning' ? 'warn' : (type === 'success' ? 'info' : type) as 'info' | 'warn' | 'error'
+    EventBus.emit(EVENTS.NOTIFICATION, text, level)
   }
 
 
@@ -1128,42 +980,6 @@ export class OfficeScene extends Phaser.Scene {
   // Pod lines and chat animations: extracted to OfficePods module
   // ---------------------------------------------------------------------------
 
-  // drawPodLines moved to OfficePods.drawPodLines()
-
-  // isPodAnimatedStatus, getPodPulseSegments, drawPodPulse: moved to OfficePods
-
-  private drawDashedLine(g: Phaser.GameObjects.Graphics, x1: number, y1: number, x2: number, y2: number, dashLen: number, gapLen: number): void {
-    const dx = x2 - x1
-    const dy = y2 - y1
-    const len = Math.sqrt(dx * dx + dy * dy)
-    if (len < 0.001) return
-    const ux = dx / len
-    const uy = dy / len
-    let d = 0
-    let drawing = true
-    g.beginPath()
-    g.moveTo(x1, y1)
-    while (d < len) {
-      const step = drawing ? dashLen : gapLen
-      d = Math.min(d + step, len)
-      const px = x1 + ux * d
-      const py = y1 + uy * d
-      if (drawing) g.lineTo(px, py)
-      else g.moveTo(px, py)
-      drawing = !drawing
-    }
-    g.strokePath()
-  }
-
-  private getWorkstationWorldPos(agentId: string): { x: number; y: number } | null {
-    for (const room of this.rooms.values()) {
-      const ws = room.workstations.get(agentId)
-      if (ws) {
-        return { x: room.x + ws.container.x, y: room.y + ws.container.y }
-      }
-    }
-    return null
-  }
 
   // ---------------------------------------------------------------------------
   // Agent chat connection animations
@@ -1183,82 +999,6 @@ export class OfficeScene extends Phaser.Scene {
   }
 
 
-  // ---------------------------------------------------------------------------
-  // Rich hover tooltip + hover ring — delegated to OfficeUI
-  // ---------------------------------------------------------------------------
-
-  private showRichTooltip(agent: AgentState, screenX: number, screenY: number): void {
-    this.ui.showRichTooltip(agent, screenX, screenY)
-  }
-
-  private hideTooltip(): void { this.ui.hideTooltip() }
-
-  private drawHoverRing(worldX: number, worldY: number): void { this.ui.drawHoverRing(worldX, worldY) }
-
-  private clearHoverRing(): void { this.ui.clearHoverRing() }
-
-  // ---------------------------------------------------------------------------
-  // Camera & navigation helpers
-  // ---------------------------------------------------------------------------
-
-  private isAnyRoomVisible(padding = 24): boolean {
-    if (this.rooms.size === 0) return false
-    const view = this.cameras.main.worldView
-    const vx1 = view.x - padding
-    const vy1 = view.y - padding
-    const vx2 = view.right + padding
-    const vy2 = view.bottom + padding
-    for (const room of this.rooms.values()) {
-      const rx1 = room.x - room.width / 2
-      const ry1 = room.y - room.height / 2
-      const rx2 = room.x + room.width / 2
-      const ry2 = room.y + room.height / 2
-      if (rx2 >= vx1 && rx1 <= vx2 && ry2 >= vy1 && ry1 <= vy2) return true
-    }
-    return false
-  }
-
-  private getMinZoom(): number {
-    return ZOOM_MIN
-  }
-
-  private zoomToFit(animated: boolean): void {
-    if (this.rooms.size === 0) return
-    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
-    for (const room of this.rooms.values()) {
-      minX = Math.min(minX, room.x - room.width / 2)
-      minY = Math.min(minY, room.y - room.height / 2)
-      maxX = Math.max(maxX, room.x + room.width / 2)
-      maxY = Math.max(maxY, room.y + room.height / 2)
-    }
-    // Expand bounds to include the building rect (rooms only)
-    const bgDims = this.background.getBgDimensions()
-    if (bgDims.w > 0) {
-      minX = Math.min(minX, 0)
-      minY = Math.min(minY, 0)
-      maxX = Math.max(maxX, bgDims.w + 30)
-      maxY = Math.max(maxY, bgDims.h + 30)
-    }
-    // Don't include the cafe in zoom-to-fit — it's a peripheral area.
-    // Including it forces the camera to zoom out too far to fit the wide content.
-    // The cafe is reachable by panning and visible on the minimap.
-    const padFactor = 1.08
-    // Prevent auto-fit from over-zooming small room sets (looks like "2x agents").
-    const fitZoom = Phaser.Math.Clamp(
-      Math.min(this.viewWidth / ((maxX - minX) * padFactor), this.viewHeight / ((maxY - minY) * padFactor)),
-      this.getMinZoom(), Math.min(ZOOM_MAX, ZOOM_FIT_MAX),
-    )
-    const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2
-    if (animated) {
-      this.targetZoom = fitZoom
-      this.followTarget = { x: cx, y: cy }
-    } else {
-      this.targetZoom = fitZoom
-      this.followTarget = null
-      this.cameras.main.setZoom(fitZoom)
-      this.cameras.main.centerOn(cx, cy)
-    }
-  }
 
 
   // ---------------------------------------------------------------------------
@@ -1318,10 +1058,6 @@ export class OfficeScene extends Phaser.Scene {
 
 
 
-  // ---------------------------------------------------------------------------
-  // Focus mode — delegates to OfficeSelection
-  // ---------------------------------------------------------------------------
-
   public enterFocusMode(agentId: string): void {
     this.selection.enterFocusMode(agentId)
   }
@@ -1338,7 +1074,7 @@ export class OfficeScene extends Phaser.Scene {
     if (this.resizeTimer) { clearTimeout(this.resizeTimer); this.resizeTimer = null }
 
     // PA system broadcast banner cleanup
-    this._destroyBroadcastBanner()
+    this.broadcast.destroy()
     if (this.agentClickedHandler) {
       EventBus.off(EVENTS.AGENT_CLICKED, this.agentClickedHandler)
       this.agentClickedHandler = null

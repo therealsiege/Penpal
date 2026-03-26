@@ -3,6 +3,7 @@
 // Pure stateless utility functions extracted from OfficeScene.ts.
 // ---------------------------------------------------------------------------
 
+import Phaser from 'phaser'
 import type { AgentState } from '../types'
 import {
   CHAR_COLS, NUM_CHARS,
@@ -158,5 +159,33 @@ export function cwdToLabel(cwd: string): string {
 
 export function formatLabel(label: string): string {
   return label
+}
+
+// ---------------------------------------------------------------------------
+// Geometry helpers
+// ---------------------------------------------------------------------------
+
+/** Draw a dashed line on a Phaser Graphics object. Pure geometry, no scene dependency. */
+export function drawDashedLine(g: Phaser.GameObjects.Graphics, x1: number, y1: number, x2: number, y2: number, dashLen: number, gapLen: number): void {
+  const dx = x2 - x1
+  const dy = y2 - y1
+  const len = Math.sqrt(dx * dx + dy * dy)
+  if (len < 0.001) return
+  const ux = dx / len
+  const uy = dy / len
+  let d = 0
+  let drawing = true
+  g.beginPath()
+  g.moveTo(x1, y1)
+  while (d < len) {
+    const step = drawing ? dashLen : gapLen
+    d = Math.min(d + step, len)
+    const px = x1 + ux * d
+    const py = y1 + uy * d
+    if (drawing) g.lineTo(px, py)
+    else g.moveTo(px, py)
+    drawing = !drawing
+  }
+  g.strokePath()
 }
 

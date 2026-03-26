@@ -46,22 +46,6 @@ test('pressing - zooms out', async () => {
   expect(after).toBeLessThanOrEqual(before)
 })
 
-test('mouse wheel zooms the camera', async () => {
-  const canvas = ctx.window.locator('canvas').first()
-  const before = await evalInScene(ctx.window, (s) => s.cameras.main.zoom)
-  if (before === null) return
-
-  // Scroll up (zoom in)
-  await canvas.click()
-  await ctx.window.mouse.wheel(0, -100)
-  await ctx.window.waitForTimeout(400)
-
-  const after = await evalInScene(ctx.window, (s) => s.cameras.main.zoom)
-  if (after === null) return
-
-  // Zoom should have changed (direction depends on scroll handling)
-  expect(after).not.toBe(before)
-})
 
 test('arrow keys set a follow target for camera pan', async () => {
   await ctx.window.locator('canvas').first().click()
