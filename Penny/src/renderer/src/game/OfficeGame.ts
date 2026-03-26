@@ -1,5 +1,6 @@
 import Phaser from 'phaser'
 import { OfficeScene } from './OfficeScene'
+import { UIScene } from './ui-scene'
 
 export function createOfficeGame(container: HTMLDivElement): {
   game: Phaser.Game
@@ -19,7 +20,7 @@ export function createOfficeGame(container: HTMLDivElement): {
     width: Math.max(1, Math.floor(rect.width)),
     height: Math.max(1, Math.floor(rect.height)),
     transparent: true,
-    scene: [scene],
+    scene: [scene, new UIScene()],
     scale: {
       mode: Phaser.Scale.RESIZE,
       autoCenter: Phaser.Scale.NO_CENTER,
@@ -43,6 +44,10 @@ export function createOfficeGame(container: HTMLDivElement): {
     canvas.style.position = 'absolute'
     canvas.style.top = '0'
     canvas.style.left = '0'
+    canvas.style.right = '0'
+    canvas.style.bottom = '0'
+    canvas.style.width = '100%'
+    canvas.style.height = '100%'
     canvas.style.display = 'block'
   }
 

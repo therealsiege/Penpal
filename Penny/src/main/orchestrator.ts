@@ -216,6 +216,57 @@ export function getAllAgentXP(): Record<string, AgentXP> {
   return { ...agentXPData }
 }
 
+// ── Credits (cosmetic economy, tracked alongside XP) ────────────────────────
+
+const CREDIT_PERSIST_PATH = path.join(DATA_DIR, 'agent-credits.json')
+
+interface CreditData {
+  balance: number
+  totalEarned: number
+}
+
+function loadCredits(): Record<string, CreditData> {
+  try {
+    if (fs.existsSync(CREDIT_PERSIST_PATH)) {
+      return JSON.parse(fs.readFileSync(CREDIT_PERSIST_PATH, 'utf-8'))
+    }
+  } catch (err) {
+    console.error('[orchestrator] Failed to load credits:', err)
+  }
+  return {}
+}
+
+const creditData = loadCredits()
+
+function saveCredits(): void {
+  try {
+    if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true })
+    fs.writeFileSync(CREDIT_PERSIST_PATH, JSON.stringify(creditData, null, 2))
+  } catch (err) {
+    console.error('[orchestrator] Failed to save credits:', err)
+  }
+}
+
+const PRIORITY_CREDITS: Record<string, number> = { critical: 150, high: 75, normal: 50, low: 25 }
+
+function awardCredits(agentId: string, credits: number): CreditData {
+  let data = creditData[agentId]
+  if (!data) data = { balance: 0, totalEarned: 0 }
+  data.balance += credits
+  data.totalEarned += credits
+  creditData[agentId] = data
+  saveCredits()
+  return data
+}
+
+export function getAgentCredits(agentId: string): CreditData | null {
+  return creditData[agentId] || null
+}
+
+export function getAllAgentCredits(): Record<string, CreditData> {
+  return { ...creditData }
+}
+
 // ── State ───────────────────────────────────────────────────────────────────
 
 const tasks: Task[] = []
@@ -562,6 +613,7 @@ async function dispatchTask(task: Task, agent: ScoredAgent): Promise<void> {
   task.status = 'active'
   saveTasks()
   orchestratorEvents.emit('task-updated', task)
+  orchestratorEvents.emit('task-dispatched', { taskId: task.id, agentId: agent.config.id, title: task.title, priority: task.priority })
 
   // ── Stage 1: Planning ──
   task.currentStage = 'planning'
@@ -664,10 +716,16 @@ async function dispatchTask(task: Task, agent: ScoredAgent): Promise<void> {
     if (task.assignedAgent) {
       const xpEarned = calculateTaskXP(task)
       const newXP = awardXP(task.assignedAgent, xpEarned, 'completed')
-      orchestratorEvents.emit('xp-awarded', { agentId: task.assignedAgent, xp: newXP })
+      const creditsEarned = PRIORITY_CREDITS[task.priority] ?? 50
+      const newCredits = awardCredits(task.assignedAgent, creditsEarned)
+      orchestratorEvents.emit('xp-awarded', { agentId: task.assignedAgent, xp: newXP, credits: newCredits })
+      orchestratorEvents.emit('task-completed', { taskId: task.id, agentId: task.assignedAgent, priority: task.priority, durationMs: totalDuration })
     }
   } else {
     handleStageFailure(task, 'validating', valResult.output ? 'Validation returned FAIL' : 'Validation failed')
+    if (task.assignedAgent) {
+      orchestratorEvents.emit('task-failed', { taskId: task.id, agentId: task.assignedAgent })
+    }
   }
 
   saveTasks()

@@ -13,6 +13,7 @@ import type {
   TaskStage,
   GitHubIssueCard,
 } from '../types'
+import { PanelBackground } from './PanelBackground'
 
 // ── OrchestratorModal ───────────────────────────────────────────────────────
 
@@ -50,7 +51,8 @@ export function TasksPanel() {
   ]
 
   return (
-    <div className="h-full flex flex-col bg-[#080a0e] text-[#c4ccd6]">
+    <PanelBackground>
+    <div className="h-full flex flex-col text-[#c4ccd6]">
       {/* Header */}
       <div className="shrink-0 px-6 pt-6 pb-4 border-b border-[#2a3440]/60">
         <div className="flex items-center justify-between">
@@ -193,6 +195,7 @@ export function TasksPanel() {
         />
       )}
     </div>
+    </PanelBackground>
   )
 }
 

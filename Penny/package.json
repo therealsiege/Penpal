@@ -9,6 +9,7 @@
     "preview": "electron-vite preview",
     "icon:generate": "node scripts/generate-icon.mjs",
     "sprites": "node scripts/build-sprites.mjs",
+    "sprites:icons": "node scripts/build-game-icons.mjs",
     "test": "npx playwright test",
     "test:headed": "npx playwright test --headed",
     "typecheck": "tsc --noEmit",

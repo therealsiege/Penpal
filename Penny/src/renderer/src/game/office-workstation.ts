@@ -1,44 +1,34 @@
 // ---------------------------------------------------------------------------
 // office-workstation.ts
-// Extracted workstation lifecycle management from OfficeScene.ts
+// OfficeWorkstations orchestrator — coordinates WorkstationFactory and
+// WorkstationAnimator. Handles sync, state updates, task counts, and
+// desk-stroke restoration. All heavy logic lives in the two sub-modules.
 // ---------------------------------------------------------------------------
 
 import Phaser from 'phaser'
+import { flash, pulse, shake } from './juice-utils'
+import { STATUS_DOT_FRAMES, ICON_FRAMES } from './office-asset-keys'
 import { EventBus, EVENTS } from './events'
 import type { AgentState } from '../types'
 import { XP_RANKS, getXPForLevel } from '../types'
 import type { WorkstationSprite, Room, PodLineInfo } from './office-types'
 import { activeTheme } from './office-theme'
+import { CelebrationManager } from './celebrations'
+import { achievements } from './achievements'
+import { soundEngine } from './sound-engine'
+import { leaderboardManager } from './leaderboard'
+import { seasonManager } from './seasons'
+import type { InteractivePropsManager } from './interactive-props'
 import {
-  CHAR_COLS,
-  FRAME_CHAIR_DARK,
-  FRAME_MONITOR,
-  POSE_IDLE,
-  POSE_INTERACT,
-  POSE_SIT,
-  POSE_WALK,
-  CHAR_SCALE,
-  WORKSTATION_W,
-  WORKSTATION_H,
-  ROOM_PADDING,
-  ROOM_TOP_EXTRA,
-  ROOM_HEADER_H,
-  MAX_AGENTS_PER_ROW,
-  WS_CHAIR_Y,
-  WS_SPRITE_Y,
-  WS_DESK_Y,
+  WS_DOT_GAP,
   WS_MONITOR_Y,
   WS_NAME_Y,
-  WS_DOT_GAP,
-  IDLE_WALK_BREAK_MIN_MS,
-  IDLE_WALK_BREAK_VAR_MS,
-  IDLE_WALK_RANGE_X,
-  COLOR_DESK_BODY,
-  COLOR_DESK_TOP,
-  COLOR_LED_AMBER,
-  COLOR_LED_GREEN,
-  COLOR_DOOR_FRAME,
 } from './office-constants'
+import { WorkstationFactory } from './workstation-creation'
+import { WorkstationAnimator } from './workstation-animation'
+
+// Re-export so callers that import WorkstationHost from this file continue to work.
+export type { WorkstationHost }
 
 // ---------------------------------------------------------------------------
 // Host interface — callbacks into OfficeScene for cross-module calls
@@ -49,6 +39,7 @@ export interface WorkstationHost {
   showToast(text: string, type?: 'info' | 'success' | 'warning' | 'error'): void
   // Particle / effect calls
   spawnEmojiReaction(x: number, y: number, emoji: string): void
+  spawnSpriteReaction(x: number, y: number, frame: number): void
   spawnAlertRipple(x: number, y: number, color: number): void
   burstConfetti(x: number, y: number): void
   spawnSteamParticles(ws: WorkstationSprite): void
@@ -74,19 +65,40 @@ export interface WorkstationHost {
   // Coffee run checks
   isCoffeeRunActive(agentId: string): boolean
   cancelCoffeeRun(agentId: string): void
+  // Game systems
+  celebrations: CelebrationManager
+  propsManager: InteractivePropsManager
+  // NavMesh for pathfinding
+  getNavMesh(): import('./nav-mesh').NavMesh
 }
 
 // ---------------------------------------------------------------------------
-// OfficeWorkstations class
+// OfficeWorkstations class — orchestrator
 // ---------------------------------------------------------------------------
 
 export class OfficeWorkstations {
   private scene: Phaser.Scene
   private host: WorkstationHost
+  private factory: WorkstationFactory
+  private animator: WorkstationAnimator
 
   constructor(scene: Phaser.Scene, host: WorkstationHost) {
     this.scene = scene
     this.host = host
+
+    this.animator = new WorkstationAnimator(
+      scene,
+      host,
+      (ws) => this.restoreDeskStroke(ws),
+      (ws) => this.refreshTaskCountDisplay(ws),
+    )
+
+    this.factory = new WorkstationFactory(
+      scene,
+      host,
+      (ws, agent) => this.updateWorkstation(ws, agent),
+      (ws) => this.restoreDeskStroke(ws),
+    )
   }
 
   // ---------------------------------------------------------------------------
@@ -100,6 +112,7 @@ export class OfficeWorkstations {
       if (!currentIds.has(id)) {
         this.destroyWorkstation(ws)
         room.workstations.delete(id)
+        EventBus.emit(EVENTS.AGENT_DEPARTED, id)
       }
     }
 
@@ -110,6 +123,7 @@ export class OfficeWorkstations {
       } else {
         const ws = this.createWorkstation(room, agent)
         room.workstations.set(agent.config.id, ws)
+        EventBus.emit(EVENTS.AGENT_ARRIVED, agent.config.id, agent)
       }
     }
 
@@ -123,389 +137,65 @@ export class OfficeWorkstations {
   }
 
   // ---------------------------------------------------------------------------
-  // createWorkstation — creates all desk/chair/monitor/sprite objects
+  // Delegation to WorkstationFactory
   // ---------------------------------------------------------------------------
 
   createWorkstation(room: Room, agent: AgentState): WorkstationSprite {
-    const wsContainer = this.scene.add.container(0, 0)
-    room.container.add(wsContainer)
+    return this.factory.create(room, agent)
+  }
 
-    let chairSprite: Phaser.GameObjects.Sprite | null = null
-    if (this.host.officeTilesLoaded) {
-      chairSprite = this.scene.add.sprite(0, WS_CHAIR_Y + 4, 'office', FRAME_CHAIR_DARK)
-      chairSprite.setScale(0.44).setAlpha(0.85)
-      wsContainer.add(chairSprite)
-    } else {
-      wsContainer.add(this.scene.add.rectangle(0, WS_CHAIR_Y, 18, 13, 0x1e2830).setStrokeStyle(1, 0x2a3440, 0.6))
-    }
+  layoutWorkstations(room: Room): void {
+    this.factory.layout(room)
+  }
 
-    const deskBody = this.scene.add.rectangle(0, WS_DESK_Y, 64, 21, COLOR_DESK_BODY).setStrokeStyle(1, activeTheme.deskStrokeIdle, 0.5)
-    wsContainer.add(deskBody)
+  destroyWorkstation(ws: WorkstationSprite): void {
+    this.factory.destroy(ws)
+  }
 
-    const deskTop = this.scene.add.rectangle(0, WS_DESK_Y - 8, 61, 3, COLOR_DESK_TOP)
-    wsContainer.add(deskTop)
+  ensureCoffeeIndicator(ws: WorkstationSprite): void {
+    this.factory.ensureCoffeeIndicator(ws)
+  }
 
-    let monitorSprite: Phaser.GameObjects.Sprite | null = null
-    let monitorGlowFx: Phaser.FX.Glow | undefined
-    let screenLines: Phaser.GameObjects.Graphics | undefined
-    let screenTween: Phaser.Tweens.Tween | undefined
-    if (this.host.officeTilesLoaded) {
-      monitorSprite = this.scene.add.sprite(0, WS_MONITOR_Y, 'office', FRAME_MONITOR).setScale(0.42)
-      wsContainer.add(monitorSprite)
-      monitorGlowFx = monitorSprite.postFX.addGlow(0x0ea5e9, 0, 0, false, 0.1, 16)
-      // Scrolling screen content lines
-      screenLines = this.scene.add.graphics().setVisible(false)
-      wsContainer.add(screenLines)
-      const LINE_COLORS = [0x0ea5e9, 0x34d399]
-      const lineWidths = Array.from({ length: 4 }, () => 6 + Math.random() * 6)
-      const lineColors = lineWidths.map(() => LINE_COLORS[Math.floor(Math.random() * LINE_COLORS.length)])
-      screenTween = this.scene.tweens.addCounter({
-        from: 0, to: 1, duration: 1200 + Math.random() * 600, repeat: -1, ease: 'Linear',
-        onUpdate: (tw) => {
-          if (!screenLines?.active) return
-          screenLines.clear()
-          const v = tw.getValue()
-          for (let i = 0; i < 4; i++) {
-            const y = WS_MONITOR_Y + ((v * 13 + i * 3.25) % 13) - 6.5
-            screenLines.fillStyle(lineColors[i], 0.5)
-            screenLines.fillRect(-lineWidths[i] / 2, y, lineWidths[i], 1)
-          }
-        },
-      })
-      screenTween.pause()
-    } else {
-      wsContainer.add(this.scene.add.rectangle(0, WS_MONITOR_Y, 16, 13, 0x141a22).setStrokeStyle(1, 0x2a3440, 0.8))
-    }
+  removeCoffeeIndicator(ws: WorkstationSprite): void {
+    this.factory.removeCoffeeIndicator(ws)
+  }
 
-    // Monitor blurb text — tiny live text overlaid on the monitor screen
-    const monitorText = this.scene.add.text(0, WS_MONITOR_Y - 1, '', {
-      fontSize: '4px',
-      fontFamily: 'monospace',
-      color: '#5a6a7a',
-      wordWrap: { width: 14, useAdvancedWrap: false },
-      resolution: 3,
-    }).setOrigin(0.5, 0).setAlpha(0.7).setVisible(false)
-    wsContainer.add(monitorText)
+  // ---------------------------------------------------------------------------
+  // Delegation to WorkstationAnimator
+  // ---------------------------------------------------------------------------
 
-    // Desk lamp
-    const lampBase = this.scene.add.rectangle(-24, WS_DESK_Y - 2, 6, 3, 0x3a4858)
-    wsContainer.add(lampBase)
-    const lampArm = this.scene.add.rectangle(-24, WS_DESK_Y - 8, 1.5, 10, 0x3a4858)
-    wsContainer.add(lampArm)
-    const lampShade = this.scene.add.triangle(-24, WS_DESK_Y - 14, -5, 6, 0, -2, 5, 6, activeTheme.lampShade, 0.8)
-    wsContainer.add(lampShade)
-    const lampLight = this.scene.add.triangle(-24, WS_DESK_Y - 4, -10, 18, 0, 0, 10, 18, activeTheme.lampShade, 0.04)
-    wsContainer.add(lampLight)
+  updateAnimation(ws: WorkstationSprite, agent: AgentState): void {
+    this.animator.updateAnimation(ws, agent)
+  }
 
-    // Desk accessories (deterministic per agent name)
-    let nameHash = 0
-    for (let i = 0; i < agent.config.name.length; i++) {
-      nameHash = ((nameHash << 5) - nameHash) + agent.config.name.charCodeAt(i); nameHash |= 0
-    }
-    nameHash = Math.abs(nameHash)
+  updateMonitorGlow(ws: WorkstationSprite, isWorking: boolean, isWaiting: boolean): void {
+    this.animator.updateMonitorGlow(ws, isWorking, isWaiting)
+  }
 
-    // Keyboard
-    const keyboard = this.scene.add.rectangle(0, WS_DESK_Y + 2, 18, 5, 0x141a22).setAlpha(0.8)
-    wsContainer.add(keyboard)
-    const kbLines = this.scene.add.graphics()
-    kbLines.lineStyle(0.5, 0x2a3440, 0.6)
-    for (let r = 0; r < 3; r++) kbLines.lineBetween(-7, WS_DESK_Y + r * 1.5, 7, WS_DESK_Y + r * 1.5)
-    wsContainer.add(kbLines)
+  updateBlockedIndicator(ws: WorkstationSprite, agent: AgentState): void {
+    this.animator.updateBlockedIndicator(ws, agent)
+  }
 
-    // Desk communicator / phone — left side of desk
-    const phoneBody = this.scene.add.rectangle(-20, WS_DESK_Y - 2, 4, 6, 0x2a3440)
-    wsContainer.add(phoneBody)
-    const phoneScreen = this.scene.add.rectangle(-20, WS_DESK_Y - 5, 3, 2, 0x141a22)
-    wsContainer.add(phoneScreen)
-    const phoneLight = this.scene.add.arc(-18, WS_DESK_Y - 6, 1.5, 0, 360, false, 0x00e5ff, 0)
-    wsContainer.add(phoneLight)
+  getAgentMood(agent: AgentState): { emoji: string; color: string } {
+    return this.animator.getAgentMood(agent)
+  }
 
-    // Sticky note (color varies)
-    const stickyColors = [0x00e5ff, 0xd4a017, 0xd4a017, 0xa78bfa, 0x00ff88]
-    const stickyX = nameHash % 2 === 0 ? 14 : -14
-    const sticky = this.scene.add.rectangle(stickyX, WS_DESK_Y - 6, 7, 6, stickyColors[nameHash % 5], 0.7)
-    wsContainer.add(sticky)
+  updateMood(ws: WorkstationSprite, agent: AgentState): void {
+    this.animator.updateMood(ws, agent)
+  }
 
-    // Pencil holder (~60% of desks)
-    const extraDecos: Phaser.GameObjects.GameObject[] = []
-    if (nameHash % 5 >= 2) {
-      const phX = nameHash % 2 === 0 ? -14 : 14
-      const cup = this.scene.add.rectangle(phX, WS_DESK_Y - 5, 5, 7, 0x2a3440, 0.7)
-      wsContainer.add(cup); extraDecos.push(cup)
-      const p1 = this.scene.add.rectangle(phX - 1, WS_DESK_Y - 10, 1, 6, 0xd4a017, 0.6).setAngle(-5)
-      wsContainer.add(p1); extraDecos.push(p1)
-      const p2 = this.scene.add.rectangle(phX + 1, WS_DESK_Y - 10, 1, 6, 0xef4444, 0.5).setAngle(7)
-      wsContainer.add(p2); extraDecos.push(p2)
-    }
+  drawThoughtBubbleBg(ws: WorkstationSprite, accentColor: number): void {
+    this.animator.drawThoughtBubbleBg(ws, accentColor)
+  }
 
-    // Desk plant (~40% of desks)
-    let deskPlantLeaf: Phaser.GameObjects.Arc | null = null
-    if (nameHash % 5 < 2) {
-      const plX = nameHash % 2 === 0 ? -16 : 16
-      const pot = this.scene.add.rectangle(plX, WS_DESK_Y - 2, 5, 4, 0x2a3440, 0.7)
-      wsContainer.add(pot); extraDecos.push(pot)
-      const leaf = this.scene.add.circle(plX, WS_DESK_Y - 6, 3, 0x34d399, 0.6)
-      wsContainer.add(leaf); extraDecos.push(leaf)
-      deskPlantLeaf = leaf
-    }
-
-    // LED underglow strip — drawn just beneath the desk body
-    const ledGlow = this.scene.add.graphics()
-    ledGlow.fillStyle(activeTheme.deskStrokeIdle, 0.3)
-    ledGlow.fillRoundedRect(-26, WS_DESK_Y + 4, 52, 2, 1)
-    wsContainer.add(ledGlow)
-
-    // Task completion counter — 14×8px pill at top-right of the desk surface.
-    // bg rect at (26, WS_DESK_Y - 12); text centered inside at (33, WS_DESK_Y - 8).
-    // Color tiers: 0 = hidden, 1-4 = gray, 5-9 = blue, 10+ = gold.
-    const taskCountBg = this.scene.add.graphics()
-    taskCountBg.fillStyle(0x0a0e14, 0.6)
-    taskCountBg.fillRoundedRect(0, 0, 14, 8, 2)
-    taskCountBg.setPosition(26, WS_DESK_Y - 12)
-    taskCountBg.setAlpha(0)        // hidden until first task completes
-    wsContainer.add(taskCountBg)
-
-    const taskCountText = this.scene.add.text(33, WS_DESK_Y - 8, '0', {
-      fontSize: '5px',
-      fontFamily: 'system-ui, monospace',
-      color: '#5a6a7a',
-      resolution: 3,
-    }).setOrigin(0.5).setAlpha(0)  // hidden until first task completes
-    wsContainer.add(taskCountText)
-
-    // LOD level 2+: shown at room-level zoom (sprite, desk body/top, monitor, chair are always visible at L2+;
-    // these extras add context at the room-view scale without requiring full detail)
-    const lodLevel2Objects: Phaser.GameObjects.GameObject[] = [
-      keyboard, kbLines, sticky,
-    ]
-    // LOD level 3 only: micro-accessories only visible at full detail zoom
-    const lodLevel3Objects: Phaser.GameObjects.GameObject[] = [
-      lampBase, lampArm, lampShade, lampLight,
-      ...extraDecos, ledGlow, monitorText,
-      phoneBody, phoneScreen, phoneLight,
-      taskCountBg, taskCountText,
-    ]
-
-    // Ambient sound-wave indicator — concentric arcs to the left of the agent.
-    // Drawn/cleared dynamically in updateAnimation; registered here so it
-    // participates in the LOD system from the start (LOD 3 only).
-    const soundWaveGfx = this.scene.add.graphics()
-    soundWaveGfx.x = -28
-    soundWaveGfx.y = WS_SPRITE_Y - 8
-    wsContainer.add(soundWaveGfx)
-    lodLevel3Objects.push(soundWaveGfx)
-
-    // Productivity sparkline — tiny area graph on the right side of the desk surface
-    // showing the agent's recent activity pattern (last 20 ticks).
-    // Redrawn in updateWorkstation whenever the activity value changes.
-    const sparklineGfx = this.scene.add.graphics()
-    sparklineGfx.setPosition(18, WS_DESK_Y - 12)
-    wsContainer.add(sparklineGfx)
-    lodLevel3Objects.push(sparklineGfx)
-
-    // Circular progress ring — drawn above the agent's head while they are working.
-    // The arc fills clockwise over 60 seconds giving a visual sense of task duration.
-    // Registered in lodLevel2Objects so it is visible at room-level zoom and above.
-    const progressRing = this.scene.add.graphics()
-    progressRing.setPosition(0, WS_SPRITE_Y - 12)
-    progressRing.setAlpha(0)
-    wsContainer.add(progressRing)
-    lodLevel2Objects.push(progressRing)
-
-    // Character shadow
-    const shadow = this.scene.add.ellipse(0, WS_SPRITE_Y + 2, 20, 6, 0x000000, 0.2)
-    wsContainer.add(shadow)
-
-    const charIdx = this.host.getAgentCharacterIndex(agent)
-    const frame   = this.host.getPoseFrame(charIdx, agent)
-    const sprite  = this.scene.add.sprite(0, WS_SPRITE_Y, 'characters', frame)
-    sprite.setScale(CHAR_SCALE).setOrigin(0.5, 1)
-    wsContainer.add(sprite)
-
-    // Thought bubble — dark card with accent border and live blurb text
-    const thoughtBubbleBg = this.scene.add.graphics()
-    const thoughtBubbleText = this.scene.add.text(0, 0, '', {
-      fontSize: '10px', color: '#c8d0e0', fontFamily: 'system-ui, sans-serif',
-      wordWrap: { width: 95, useAdvancedWrap: false },
-      align: 'left', resolution: 2, lineSpacing: 1,
-    }).setOrigin(0.5)
-    const thoughtBubble = this.scene.add.container(4, WS_SPRITE_Y - 60, [thoughtBubbleBg, thoughtBubbleText]).setVisible(false)
-    wsContainer.add(thoughtBubble)
-
-    // Show persona name (e.g. "Marcus Chen") instead of title
-    const nameText = this.scene.add.text(0, WS_NAME_Y, '', {
-      fontSize: '13px', color: activeTheme.nameText, fontFamily: 'system-ui, sans-serif',
-      backgroundColor: activeTheme.nameBg, padding: { x: 5, y: 2 }, align: 'center',
-      resolution: 2,
-    }).setOrigin(0.5).setVisible(false)
-    wsContainer.add(nameText)
-
-    const dotColor  = this.host.getStatusColor(agent)
-    const statusDot = this.scene.add.circle(nameText.width / 2 + WS_DOT_GAP, WS_NAME_Y, 3.5, dotColor).setVisible(false)
-    wsContainer.add(statusDot)
-
-    // Role badge (S / R / E) — shown when agent has a pod role assigned.
-    // Sits to the left of the name tag; revealed/hidden in updateWorkstation.
-    const roleBadge = this.scene.add.text(-30, WS_NAME_Y, '', {
-      fontSize: '9px', color: '#0a0e14', fontFamily: 'system-ui, monospace',
-      fontStyle: 'bold', backgroundColor: '#00e5ff',
-      padding: { x: 3, y: 1 }, resolution: 2,
-    }).setOrigin(0.5).setVisible(false)
-    wsContainer.add(roleBadge)
-    lodLevel3Objects.push(roleBadge)
-
-    // Uptime indicator — tiny dim counter just below the name tag
-    const uptimeText = this.scene.add.text(0, WS_NAME_Y + 12, '', {
-      fontSize: '6px', color: '#3a4858', fontFamily: 'system-ui, monospace',
-      resolution: 2, align: 'center',
-    }).setOrigin(0.5).setAlpha(0.7).setVisible(false)
-    wsContainer.add(uptimeText)
-    lodLevel3Objects.push(uptimeText)
-
-    // XP progress bar — thin strip below the name tag
-    const XP_BAR_W  = 30
-    const XP_BAR_H  = 3
-    const XP_BAR_Y  = WS_NAME_Y + 14
-
-    const xpBarBg = this.scene.add.rectangle(0, XP_BAR_Y, XP_BAR_W, XP_BAR_H, 0x141a22)
-      .setOrigin(0.5).setAlpha(0.6).setVisible(false)
-    wsContainer.add(xpBarBg)
-
-    const xpBarFill = this.scene.add.rectangle(-XP_BAR_W / 2, XP_BAR_Y, 0, XP_BAR_H, 0x3b82f6)
-      .setOrigin(0, 0.5).setVisible(false)
-    wsContainer.add(xpBarFill)
-
-    const XP_TEXT_Y = XP_BAR_Y + 6
-    const xpBarText = this.scene.add.text(0, XP_TEXT_Y, '', {
-      fontSize: '5px', color: '#5a6a7a', fontFamily: 'system-ui, sans-serif',
-      resolution: 2, align: 'center',
-    }).setOrigin(0.5).setVisible(false)
-    wsContainer.add(xpBarText)
-
-    lodLevel3Objects.push(xpBarBg, xpBarFill, xpBarText)
-
-    // "Blocked" clarity marker for needsInteraction agents.
-    const blockedIndicatorPulse = this.scene.add.circle(0, 0, 10, 0xfbbf24, 0.16)
-    const blockedIndicatorStem = this.scene.add.rectangle(0, 8, 1.5, 7, 0xfbbf24, 0.55)
-    const blockedIndicatorBadge = this.scene.add.circle(0, 0, 6.5, 0xfbbf24, 0.95)
-    const blockedIndicatorText = this.scene.add.text(0, -0.5, '!', {
-      fontSize: '10px',
-      color: '#0a0e14',
-      fontFamily: 'system-ui, monospace',
-      fontStyle: 'bold',
-      resolution: 2,
-    }).setOrigin(0.5)
-    const blockedIndicator = this.scene.add
-      .container(27, WS_SPRITE_Y - 34, [blockedIndicatorPulse, blockedIndicatorStem, blockedIndicatorBadge, blockedIndicatorText])
-      .setVisible(false)
-    wsContainer.add(blockedIndicator)
-
-    // Mood emoji indicator — shown top-left above the agent, fades in/out on state change
-    const moodEmoji = this.scene.add.text(
-      -WORKSTATION_W / 2 + 4,
-      WS_SPRITE_Y - 20,
-      '',
-      { fontSize: '8px', fontFamily: 'system-ui, sans-serif', resolution: 2 },
-    ).setOrigin(0, 1).setAlpha(0)
-    wsContainer.add(moodEmoji)
-    lodLevel3Objects.push(moodEmoji)
-
-    const hitArea = this.scene.add.rectangle(0, 5, WORKSTATION_W - 6, WORKSTATION_H - 10, 0x000000, 0)
-      .setInteractive({ useHandCursor: true })
-    wsContainer.add(hitArea)
-
-    const ws: WorkstationSprite = {
-      container: wsContainer, sprite, nameText, statusDot, roleBadge,
-      deskBody, deskTop, monitorSprite, chairSprite,
-      monitorGlowFx, screenLines, screenTween,
-      monitorText,
-      blockedIndicator, blockedIndicatorPulse, blockedIndicatorBadge, blockedIndicatorStem, blockedIndicatorText,
-      thoughtBubble, thoughtBubbleText, thoughtBubbleBg, state: agent,
-      steamTweens: [] as Phaser.Tweens.Tween[], steamContainer: null as Phaser.GameObjects.Container | null,
-      ledGlow,
-      moodEmoji,
-      soundWaveGfx,
-      sparklineGfx,
-      shadow,
-      activityHistory: [],
-      phoneLight,
-      progressRing,
-      lodLevel2Objects,
-      lodLevel3Objects,
-      xpBarBg,
-      xpBarFill,
-      xpBarText,
-      uptimeText,
-      taskCountBg,
-      taskCountText,
-      localTaskCount: 0,
-    }
-
-    // Desk plant micro-sway — subtle y-oscillation on the leaf circle
-    if (deskPlantLeaf) {
-      const leafBaseY = deskPlantLeaf.y
-      ws.deskPlantTween = this.scene.tweens.add({
-        targets: deskPlantLeaf,
-        y: { from: leafBaseY - 1, to: leafBaseY + 1 },
-        duration: 3000,
-        yoyo: true,
-        repeat: -1,
-        ease: 'Sine.easeInOut',
-        delay: Math.random() * 1500,
-      })
-    }
-
-    // Apply current LOD state immediately to the newly created workstation.
-    this.host.applyLodToWorkstation(ws, this.host.getLastLodLevel(), false)
-
-    let lastClickTime = 0
-    hitArea.on('pointerdown', () => {
-      const now = Date.now()
-      if (now - lastClickTime < 350) {
-        EventBus.emit(EVENTS.AGENT_DOUBLE_CLICKED, agent.config.id, ws.state)
-        this.host.enterFocusMode(agent.config.id)
-      } else {
-        EventBus.emit(EVENTS.AGENT_CLICKED, agent.config.id, ws.state)
-      }
-      lastClickTime = now
-    })
-
-    hitArea.on('pointerover', () => {
-      this.scene.tweens.killTweensOf(wsContainer)
-      this.scene.tweens.add({ targets: wsContainer, scaleX: 1.07, scaleY: 1.07, duration: 140, ease: 'Back.easeOut' })
-      ws.deskBody.setStrokeStyle(2, 0x3b82f6, 0.9)
-      // Highlight ring around desk in world-space
-      const rWx = room.container.x + wsContainer.x
-      const rWy = room.container.y + wsContainer.y
-      this.host.drawHoverRing(rWx, rWy)
-      // Rich tooltip near pointer in screen-space
-      const ptr = (this.scene.input as Phaser.Input.InputPlugin).activePointer
-      this.host.showRichTooltip(ws.state ?? agent, ptr.x, ptr.y)
-    })
-
-    hitArea.on('pointerout', () => {
-      this.scene.tweens.killTweensOf(wsContainer)
-      this.scene.tweens.add({ targets: wsContainer, scaleX: 1, scaleY: 1, duration: 140, ease: 'Power2' })
-      this.restoreDeskStroke(ws)
-      this.host.clearHoverRing()
-      this.host.hideTooltip()
-    })
-
-    this.updateWorkstation(ws, agent)
-
-    // --- Entrance animation ---
-    wsContainer.setAlpha(0.3).setScale(0.85)
-    this.scene.tweens.add({
-      targets: wsContainer,
-      alpha: 1, scaleX: 1, scaleY: 1,
-      duration: 250, ease: 'Back.easeOut',
-      onComplete: () => {
-        if (wsContainer.active) { wsContainer.setAlpha(1).setScale(1) }
-      },
-    })
-
-
-    return ws
+  updateThoughtBubble(
+    ws: WorkstationSprite,
+    agent: AgentState,
+    shouldShow: boolean,
+    accentColor: number,
+    isWorking: boolean,
+  ): void {
+    this.animator.updateThoughtBubble(ws, agent, shouldShow, accentColor, isWorking)
   }
 
   // ---------------------------------------------------------------------------
@@ -569,36 +259,39 @@ export class OfficeWorkstations {
             else if (agent.interactionType === 'question') rippleColor = 0x60a5fa
             else if (agent.interactionType === 'accept-edits') rippleColor = 0x3b82f6
             this.host.spawnAlertRipple(wx, wy, rippleColor)
-            this.host.spawnEmojiReaction(wx, wy, '\uD83D\uDD14') // blocked: 🔔
+            this.host.spawnSpriteReaction(wx, wy, ICON_FRAMES.CIRCLE_YELLOW) // blocked
           }
         }
+        // Juice: shake the workstation container and flash the sprite red to signal attention needed
+        shake(ws.container, this.scene, { intensity: 3, duration: 260 })
+        flash(ws.sprite, this.scene, { tint: 0xff4444, duration: 100, repeat: 3 })
       } else if (!agent.needsInteraction && prevState.needsInteraction) {
         // Reset ripple guard so the next blocked event fires a fresh ripple
         ws.rippleFired = false
         const roomU = this.host.getRooms().get(roomKey)
-        if (roomU) this.host.spawnEmojiReaction(roomU.x + ws.container.x, roomU.y + ws.container.y, '\uD83D\uDC4D') // unblocked: 👍
+        if (roomU) this.host.spawnSpriteReaction(roomU.x + ws.container.x, roomU.y + ws.container.y, ICON_FRAMES.CHECKMARK) // unblocked
       }
 
       if (wasWorking && !isWorking && !agent.needsInteraction) {
         this.host.showToast(`${name} finished task`, 'success')
         const roomC = this.host.getRooms().get(roomKey)
-        if (roomC) this.host.spawnEmojiReaction(roomC.x + ws.container.x, roomC.y + ws.container.y, '\u2705') // completed: ✅
+        if (roomC) this.host.spawnSpriteReaction(roomC.x + ws.container.x, roomC.y + ws.container.y, ICON_FRAMES.CHECKMARK) // completed
       } else if (!wasWorking && isWorking) {
         this.host.showToast(`${name} started working`, 'info')
         const roomS = this.host.getRooms().get(roomKey)
-        if (roomS) this.host.spawnEmojiReaction(roomS.x + ws.container.x, roomS.y + ws.container.y, '\u26A1') // started: ⚡
+        if (roomS) this.host.spawnSpriteReaction(roomS.x + ws.container.x, roomS.y + ws.container.y, ICON_FRAMES.PLAY_DARK) // started working
       }
 
       // Plan mode entry
       if (agent.sessionMode === 'plan' && prevState.sessionMode !== 'plan') {
         const roomP = this.host.getRooms().get(roomKey)
-        if (roomP) this.host.spawnEmojiReaction(roomP.x + ws.container.x, roomP.y + ws.container.y, '\uD83D\uDCCB') // plan: 📋
+        if (roomP) this.host.spawnSpriteReaction(roomP.x + ws.container.x, roomP.y + ws.container.y, ICON_FRAMES.ARROW_EAST) // plan mode
       }
 
       // Compressing entry
       if (agent.sessionMode === 'compressing' && prevState.sessionMode !== 'compressing') {
         const roomZ = this.host.getRooms().get(roomKey)
-        if (roomZ) this.host.spawnEmojiReaction(roomZ.x + ws.container.x, roomZ.y + ws.container.y, '\uD83D\uDCA8') // compressing: 💨
+        if (roomZ) this.host.spawnSpriteReaction(roomZ.x + ws.container.x, roomZ.y + ws.container.y, ICON_FRAMES.REPEAT_DARK) // compressing
       }
     }
 
@@ -606,15 +299,20 @@ export class OfficeWorkstations {
     ws.sprite.setFrame(this.host.getPoseFrame(charIdx, agent))
 
     const dotColor = this.host.getStatusColor(agent)
-    ws.statusDot.setFillStyle(dotColor)
+    const prevDotColor = ws.statusDot.getData('lastColor') as number | undefined
+    const dotFrame = STATUS_DOT_FRAMES[dotColor] ?? ICON_FRAMES.CIRCLE_GREY
+    ws.statusDot.setFrame(dotFrame)
     ws.statusDot.setPosition(ws.nameText.width / 2 + WS_DOT_GAP, WS_NAME_Y)
+    if (prevDotColor !== dotColor) {
+      ws.statusDot.setData('lastColor', dotColor)
+      pulse(ws.statusDot, this.scene, { scale: 1.5, duration: 180 })
+    }
 
     ws.nameText.setVisible(true)
     ws.statusDot.setVisible(true)
 
     const isWaiting = agent.needsInteraction
     const isPlan = agent.sessionMode === 'plan'
-    const isAcceptEdits = agent.interactionType === 'accept-edits' && isWaiting
     const isWorking = (agent.sessionMode === 'working' || isPlan) && !isWaiting
 
     // ── Name tag color + background tint based on state ──────────────────────
@@ -658,6 +356,56 @@ export class OfficeWorkstations {
         ws.roleBadgePulseTween?.destroy()
         ws.roleBadgePulseTween = undefined
         ws.roleBadge.setVisible(false).setAlpha(1)
+      }
+    }
+
+    // ── MVP medal indicator ──────────────────────────────────────────────────
+    if (ws.mvpMedal) {
+      const isMVP = leaderboardManager.isMVP(agent.config.id)
+      if (isMVP && !ws.mvpMedal.visible) {
+        ws.mvpMedal.setVisible(true).setAlpha(0)
+        this.scene.tweens.add({ targets: ws.mvpMedal, alpha: 1, duration: 400, ease: 'Back.easeOut' })
+        if (!ws.mvpMedalTween) {
+          ws.mvpMedalTween = this.scene.tweens.add({
+            targets: ws.mvpMedal, y: ws.mvpMedal.y - 2,
+            duration: 1400, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
+          })
+        }
+      } else if (!isMVP && ws.mvpMedal.visible) {
+        ws.mvpMedalTween?.destroy(); ws.mvpMedalTween = undefined
+        this.scene.tweens.add({ targets: ws.mvpMedal, alpha: 0, duration: 200, ease: 'Sine.easeOut',
+          onComplete: () => { ws.mvpMedal?.setVisible(false) },
+        })
+      }
+    }
+
+    // ── Rivalry indicator ────────────────────────────────────────────────────
+    if (ws.rivalryIndicator) {
+      const rivalries = leaderboardManager.getRivalries()
+      const hasRival = rivalries.some(
+        r => r.agent1Id === agent.config.id || r.agent2Id === agent.config.id,
+      )
+      if (hasRival && !ws.rivalryIndicator.visible) {
+        ws.rivalryIndicator.setVisible(true).setAlpha(0)
+        this.scene.tweens.add({ targets: ws.rivalryIndicator, alpha: 0.6, duration: 300, ease: 'Back.easeOut' })
+        if (!ws.rivalryGlowTween) {
+          ws.rivalryGlowTween = this.scene.tweens.add({
+            targets: ws.rivalryIndicator,
+            scaleX: { from: 0.35, to: 0.5 },
+            scaleY: { from: 0.35, to: 0.5 },
+            alpha: { from: 0.6, to: 1.0 },
+            duration: 1500,
+            yoyo: true,
+            repeat: -1,
+            ease: 'Sine.easeInOut',
+          })
+        }
+      } else if (!hasRival && ws.rivalryIndicator.visible) {
+        ws.rivalryGlowTween?.destroy(); ws.rivalryGlowTween = undefined
+        this.scene.tweens.add({
+          targets: ws.rivalryIndicator, alpha: 0, duration: 200, ease: 'Sine.easeOut',
+          onComplete: () => { ws.rivalryIndicator?.setVisible(false) },
+        })
       }
     }
 
@@ -747,8 +495,8 @@ export class OfficeWorkstations {
     this.updateAnimation(ws, agent)
     this.updateMood(ws, agent)
 
-    // XP progress bar — update fill width and rank label
-    if (ws.xpBarBg && ws.xpBarFill && ws.xpBarText && agent.xp) {
+    // XP progress bar — update fill percentage and rank label
+    if (ws.xpBar && ws.xpBarText && agent.xp) {
       const xp = agent.xp
       const currentRankIdx = XP_RANKS.findIndex(r => r.level === xp.level)
       const currentMin = getXPForLevel(xp.level)
@@ -760,25 +508,45 @@ export class OfficeWorkstations {
         nextMin > currentMin
           ? Math.min(1, Math.max(0, (xp.totalXP - currentMin) / (nextMin - currentMin)))
           : 1
-      const XP_BAR_W = 30
-      const targetW  = Math.max(0, Math.floor(XP_BAR_W * pct))
       const fillColor = xp.level >= 8 ? 0xf59e0b : xp.level >= 5 ? 0xa855f7 : 0x3b82f6
 
-      ws.xpBarBg.setVisible(true)
-      ws.xpBarFill.setFillStyle(fillColor).setVisible(true)
+      const prevRank = ws.xpBarText.text
+      ws.xpBar.graphics.setAlpha(1).setVisible(true)
+      ws.xpBar.setFillColor(fillColor)
+      ws.xpBar.setPercent(pct, true)
       ws.xpBarText.setText(xp.rank).setVisible(true)
 
-      if (ws.xpBarTween) { ws.xpBarTween.destroy(); ws.xpBarTween = undefined }
-      ws.xpBarTween = this.scene.tweens.add({
-        targets: ws.xpBarFill,
-        displayWidth: targetW,
-        duration: 300,
-        ease: 'Power2',
-      })
-    } else if (ws.xpBarBg) {
-      ws.xpBarBg.setVisible(false)
-      ws.xpBarFill?.setVisible(false)
+      // Lego brick segment visibility — each segment represents 20% of the bar
+      if (ws.legoSegments) {
+        for (let i = 0; i < ws.legoSegments.length; i++) {
+          ws.legoSegments[i].setVisible(pct >= (i + 1) * 0.2)
+        }
+      }
+
+      // Rank-up celebration
+      if (prevRank && prevRank !== xp.rank && prevRank !== '') {
+        const rooms = this.host.getRooms()
+        for (const room of rooms.values()) {
+          if (room.workstations.has(agent.config?.id ?? '')) {
+            const wx = room.x + ws.container.x
+            const wy = room.y + ws.container.y
+            this.host.celebrations.rankUp(wx, wy, agent.config?.name ?? 'Agent', xp.rank, fillColor)
+            this.host.celebrations.taskComplete(wx, wy)
+            achievements.trackRankUp()
+            soundEngine.levelUp()
+            // Track in leaderboard + season
+            leaderboardManager.recordXP(agent.config.id, agent.config.name, 0, xp.level, xp.rank)
+            seasonManager.trackAgentLevel(xp.level)
+            break
+          }
+        }
+      }
+    } else if (ws.xpBar) {
+      ws.xpBar.graphics.setVisible(false)
       ws.xpBarText?.setVisible(false)
+      if (ws.legoSegments) {
+        for (const seg of ws.legoSegments) seg.setVisible(false)
+      }
     }
 
     // Productivity sparkline — track activity and redraw only when value changes
@@ -836,113 +604,36 @@ export class OfficeWorkstations {
         }
       }
     }
-  }
 
-  // ---------------------------------------------------------------------------
-  // layoutWorkstations — positions workstations in a grid within a room
-  // ---------------------------------------------------------------------------
-
-  layoutWorkstations(room: Room): void {
-    const agents = Array.from(room.workstations.values())
-    const count  = agents.length
-    if (count === 0) return
-
-    const cols = Math.min(count, MAX_AGENTS_PER_ROW)
-    const rows = Math.ceil(count / cols)
-
-    const WALL_T = 8
-    const WALL_I = 4
-    const DOOR_CLEARANCE = 30 // keep desks well clear of the door
-    const topDoorPad = room.doorSide === 'top' ? DOOR_CLEARANCE : 0
-    const botDoorPad = room.doorSide === 'bottom' ? DOOR_CLEARANCE : 0
-    const floorStartX = -room.width  / 2 + WALL_T + WALL_I + ROOM_PADDING
-    const floorStartY = -room.height / 2 + WALL_T + WALL_I + ROOM_HEADER_H + ROOM_PADDING + ROOM_TOP_EXTRA + topDoorPad
-
-    const usableW = room.width  - (WALL_T + WALL_I + ROOM_PADDING) * 2
-    const usableH = room.height - (WALL_T + WALL_I) * 2 - ROOM_HEADER_H - ROOM_PADDING * 2 - ROOM_TOP_EXTRA - topDoorPad - botDoorPad
-
-    const cellW = usableW / cols
-    const cellH = usableH / rows
-
-    // Pack desks away from the door: bottom-up when door is top, top-down when door is bottom
-    const flipRows = room.doorSide === 'top'
-
-    agents.forEach((ws, i) => {
-      const col = i % cols
-      const row = Math.floor(i / cols)
-      const effectiveRow = flipRows ? (rows - 1 - row) : row
-      const cx  = floorStartX + col * cellW + cellW / 2
-      const cy  = floorStartY + effectiveRow * cellH + cellH / 2
-
-      this.scene.tweens.killTweensOf(ws.container)
-      this.scene.tweens.add({ targets: ws.container, x: cx, y: cy, duration: 280, ease: 'Power2' })
-      ws.container.setDepth(cy + room.y)
-    })
-  }
-
-  // ---------------------------------------------------------------------------
-  // destroyWorkstation — cleanup
-  // ---------------------------------------------------------------------------
-
-  destroyWorkstation(ws: WorkstationSprite): void {
-    if (ws.breathTween)      ws.breathTween.destroy()
-    if (ws.bounceTween)      ws.bounceTween.destroy()
-    if (ws.dotPulseTween)    ws.dotPulseTween.destroy()
-    if (ws.blockedIndicatorTween) ws.blockedIndicatorTween.destroy()
-    if (ws.walkBreakTween)   ws.walkBreakTween.destroy()
-    if (ws.typingTween)      ws.typingTween.destroy()
-    if (ws.headTiltTween)    ws.headTiltTween.destroy()
-    if (ws.monitorGlowTween) ws.monitorGlowTween.destroy()
-    if (ws.screenTween)      ws.screenTween.destroy()
-    if (ws.monitorTextTween) ws.monitorTextTween.destroy()
-    if (ws.pulseTween)       ws.pulseTween.destroy()
-    if (ws.ledPulseTween)    ws.ledPulseTween.destroy()
-    if (ws.lookAroundTimer)     ws.lookAroundTimer.destroy()
-    if (ws.stretchTimer)        ws.stretchTimer.destroy()
-    if (ws.walkBreakTimer)      ws.walkBreakTimer.destroy()
-    if (ws.lookAtNeighborTimer) ws.lookAtNeighborTimer.destroy()
-    if (ws.yawnTimer)           ws.yawnTimer.destroy()
-    this.host.clearSteamParticles(ws)
-    this.scene.tweens.killTweensOf(ws.thoughtBubble)
-    if (ws.blurbFadeTimer)          ws.blurbFadeTimer.destroy()
-    if (ws.blurbTypingTween)        ws.blurbTypingTween.destroy()
-    if (ws.thoughtBubbleFloatTween) ws.thoughtBubbleFloatTween.destroy()
-    if (ws.moodTween) ws.moodTween.destroy()
-    if (ws.moodEmoji) this.scene.tweens.killTweensOf(ws.moodEmoji)
-    if (ws.deskPlantTween)   ws.deskPlantTween.destroy()
-    if (ws.xpBarTween)       ws.xpBarTween.destroy()
-    if (ws.soundWaveTween)   ws.soundWaveTween.destroy()
-    if (ws.soundWaveGfx)     ws.soundWaveGfx.destroy()
-    if (ws.shadow)           ws.shadow.destroy()
-    if (ws.sparklineGfx)     { ws.sparklineGfx.clear(); ws.sparklineGfx.destroy() }
-    if (ws.phoneLightTween)      ws.phoneLightTween.destroy()
-    if (ws.progressRingTween)    ws.progressRingTween.destroy()
-    if (ws.progressRing)         { ws.progressRing.clear(); ws.progressRing.destroy() }
-    if (ws.roleBadgePulseTween)  ws.roleBadgePulseTween.destroy()
-    if (ws.taskCountFlashTween)  ws.taskCountFlashTween.destroy()
-    if (ws.taskCountBg)          { ws.taskCountBg.clear(); ws.taskCountBg.destroy() }
-    if (ws.taskCountText)        ws.taskCountText.destroy()
-    ws.activityHistory = []
-
-    // Exit animation: shrink + fade, then destroy.
-    // Detach from room container first so deferred destroy can't interfere with layout.
-    try {
-      const agentName = ws.state?.config.name || 'Agent'
-      if (ws.container.active && this.scene.scene.isActive()) {
-        const parent = ws.container.parentContainer
-        if (parent) parent.remove(ws.container)
-        this.host.showToast(`${agentName} left`, 'info')
-        this.scene.tweens.add({
-          targets: ws.container,
-          alpha: 0, scaleX: 0.3, scaleY: 0.3,
-          duration: 300, ease: 'Quad.easeIn',
-          onComplete: () => { try { ws.container.destroy() } catch { /* already gone */ } },
-        })
+    // ── Energy bar drain/recovery ──────────────────────────────────────────
+    if (ws.energyFill) {
+      const onCoffee = ws.onCoffeeRun ?? false
+      if (isWorking) {
+        // Drain slowly while working (min 0.1)
+        ws.energyLevel = Math.max(0.1, ws.energyLevel - 0.001)
+      } else if (onCoffee) {
+        // Fast recovery on coffee run
+        ws.energyLevel = Math.min(1.0, ws.energyLevel + 0.005)
       } else {
-        ws.container.destroy()
+        // Idle recovery
+        ws.energyLevel = Math.min(1.0, ws.energyLevel + 0.002)
       }
-    } catch {
-      try { ws.container.destroy() } catch { /* noop */ }
+
+      // Update crop — show fill from bottom up
+      const tex = ws.energyFill.texture.getSourceImage() as HTMLImageElement
+      const fullW = tex.width
+      const fullH = tex.height
+      const pct = ws.energyLevel
+      ws.energyFill.setCrop(0, Math.round((1 - pct) * fullH), fullW, Math.round(pct * fullH))
+
+      // Tint based on level: >0.5 = blue (default), 0.25-0.5 = yellow, <0.25 = red
+      if (pct > 0.5) {
+        ws.energyFill.clearTint()
+      } else if (pct > 0.25) {
+        ws.energyFill.setTint(0xfbbf24)
+      } else {
+        ws.energyFill.setTint(0xef4444)
+      }
     }
   }
 
@@ -1015,689 +706,8 @@ export class OfficeWorkstations {
   }
 
   // ---------------------------------------------------------------------------
-  // Mood indicator
+  // restoreDeskStroke — reset desk outline based on current agent state
   // ---------------------------------------------------------------------------
-
-  getAgentMood(agent: AgentState): { emoji: string; color: string } {
-    if (agent.needsInteraction && agent.interactionType === 'tool-approval') {
-      return { emoji: '😤', color: '#f97316' }
-    }
-    if (agent.needsInteraction && agent.interactionType === 'question') {
-      return { emoji: '🤔', color: '#60a5fa' }
-    }
-    if (agent.sessionMode === 'working') {
-      return { emoji: '💻', color: '#34d399' }
-    }
-    if (agent.sessionMode === 'plan') {
-      return { emoji: '🧠', color: '#a78bfa' }
-    }
-    if (agent.sessionMode === 'compressing') {
-      return { emoji: '😵', color: '#f87171' }
-    }
-    return { emoji: '☕', color: '#5a6a7a' }
-  }
-
-  updateMood(ws: WorkstationSprite, agent: AgentState): void {
-    if (!ws.moodEmoji) return
-    const { emoji } = this.getAgentMood(agent)
-    const currentEmoji = ws.moodEmoji.getData('currentEmoji') as string | undefined
-
-    if (currentEmoji === emoji) return
-
-    // Emoji changed — stop existing float tween, fade out, then swap and bounce in
-    if (ws.moodTween) {
-      ws.moodTween.destroy()
-      ws.moodTween = undefined
-    }
-
-    const moodText = ws.moodEmoji
-    moodText.setData('currentEmoji', emoji)
-
-    // Fade out current emoji, then swap and bounce in
-    this.scene.tweens.add({
-      targets: moodText,
-      alpha: 0,
-      duration: 200,
-      ease: 'Sine.easeOut',
-      onComplete: () => {
-        if (!moodText.active) return
-        moodText.setText(emoji)
-        moodText.setScale(0)
-        // Bounce in: 0 → 1.2 → 1
-        this.scene.tweens.add({
-          targets: moodText,
-          scaleX: 1.2,
-          scaleY: 1.2,
-          alpha: 1,
-          duration: 180,
-          ease: 'Back.easeOut',
-          onComplete: () => {
-            if (!moodText.active) return
-            this.scene.tweens.add({
-              targets: moodText,
-              scaleX: 1,
-              scaleY: 1,
-              duration: 120,
-              ease: 'Sine.easeOut',
-              onComplete: () => {
-                if (!moodText.active) return
-                // Gentle infinite float: oscillate y ±2px
-                const baseY = moodText.y
-                ws.moodTween = this.scene.tweens.add({
-                  targets: moodText,
-                  y: baseY - 2,
-                  duration: 2000,
-                  yoyo: true,
-                  repeat: -1,
-                  ease: 'Sine.easeInOut',
-                })
-              },
-            })
-          },
-        })
-      },
-    })
-  }
-
-  // ---------------------------------------------------------------------------
-  // Thought bubble — rich live-text with typing animation, auto-sizing, and fade
-  // ---------------------------------------------------------------------------
-
-  drawThoughtBubbleBg(ws: WorkstationSprite, accentColor: number): void {
-    const PAD_X = 8
-    const PAD_Y = 5
-    const ACCENT_W = 3
-    const CORNER = 5
-
-    const tw = ws.thoughtBubbleText.width
-    const th = ws.thoughtBubbleText.height
-    const bw = tw + PAD_X * 2 + ACCENT_W
-    const bh = th + PAD_Y * 2
-
-    ws.thoughtBubbleText.setPosition(ACCENT_W / 2 + PAD_X / 2, 0)
-
-    const g = ws.thoughtBubbleBg
-    g.clear()
-
-    // Dark background card
-    g.fillStyle(0x0a0e14, 0.92)
-    g.fillRoundedRect(-bw / 2, -bh / 2, bw, bh, CORNER)
-
-    // Accent left border
-    g.fillStyle(accentColor, 0.9)
-    g.fillRoundedRect(-bw / 2, -bh / 2, ACCENT_W, bh, CORNER)
-
-    // Downward tail
-    const tailW = 6
-    const tailH = 6
-    const tailY = bh / 2
-    g.fillStyle(0x0a0e14, 0.92)
-    g.fillTriangle(-tailW / 2, tailY, tailW / 2, tailY, 0, tailY + tailH)
-  }
-
-  updateThoughtBubble(
-    ws: WorkstationSprite,
-    agent: AgentState,
-    shouldShow: boolean,
-    accentColor: number,
-    isWorking: boolean,
-  ): void {
-    if (!shouldShow) {
-      this.scene.tweens.killTweensOf(ws.thoughtBubble)
-      ws.thoughtBubble.setVisible(false)
-      return
-    }
-
-    const rawBlurb = (agent.lastAssistantBlurb ?? '').trim()
-    const MAX_CHARS = 60
-    let displayText: string
-
-    if (rawBlurb) {
-      displayText = rawBlurb.length > MAX_CHARS ? rawBlurb.slice(0, MAX_CHARS) + '...' : rawBlurb
-    } else if (agent.sessionMode === 'compressing') {
-      displayText = 'compressing...'
-    } else if (agent.sessionMode === 'plan') {
-      displayText = 'planning...'
-    } else if (agent.needsInteraction) {
-      displayText = 'waiting for input'
-    } else if (agent.sessionMode === 'working' || !agent.sessionMode) {
-      displayText = 'working...'
-    } else {
-      displayText = '\u2615 idle'
-    }
-
-    const blurbChanged = ws.lastShownBlurb !== displayText
-    ws.lastShownBlurb = displayText
-
-    if (ws.blurbFadeTimer) {
-      ws.blurbFadeTimer.destroy()
-      ws.blurbFadeTimer = undefined
-    }
-
-    ws.thoughtBubble.setVisible(true)
-    this.scene.tweens.killTweensOf(ws.thoughtBubble)
-    ws.thoughtBubble.setAlpha(1)
-
-    const baseY = WS_SPRITE_Y - 62
-
-    if (blurbChanged && rawBlurb) {
-      if (ws.blurbTypingTween) {
-        ws.blurbTypingTween.destroy()
-        ws.blurbTypingTween = undefined
-      }
-      ws.thoughtBubbleText.setText('')
-      ws.thoughtBubble.y = baseY
-      this.drawThoughtBubbleBg(ws, accentColor)
-
-      const counter = { val: 0 }
-      ws.blurbTypingTween = this.scene.tweens.add({
-        targets: counter,
-        val: displayText.length,
-        duration: Math.min(500, displayText.length * 18),
-        ease: 'Linear',
-        onUpdate: () => {
-          ws.thoughtBubbleText.setText(displayText.slice(0, Math.floor(counter.val)))
-          this.drawThoughtBubbleBg(ws, accentColor)
-        },
-        onComplete: () => {
-          ws.thoughtBubbleText.setText(displayText)
-          this.drawThoughtBubbleBg(ws, accentColor)
-          ws.blurbTypingTween = undefined
-        },
-      })
-    } else {
-      ws.thoughtBubbleText.setText(displayText)
-      this.drawThoughtBubbleBg(ws, accentColor)
-      ws.thoughtBubble.y = baseY
-    }
-
-    if (ws.thoughtBubbleFloatTween) {
-      ws.thoughtBubbleFloatTween.destroy()
-    }
-    ws.thoughtBubbleFloatTween = this.scene.tweens.add({
-      targets: ws.thoughtBubble,
-      y: baseY - 3,
-      duration: isWorking ? 1200 : 2000,
-      yoyo: true,
-      repeat: -1,
-      ease: 'Sine.easeInOut',
-    })
-
-    if (rawBlurb) {
-      ws.blurbFadeTimer = this.scene.time.delayedCall(5000, () => {
-        if (!ws.thoughtBubble.active) return
-        this.scene.tweens.add({
-          targets: ws.thoughtBubble,
-          alpha: 0,
-          duration: 300,
-          ease: 'Sine.easeOut',
-          onComplete: () => {
-            if (ws.thoughtBubble.active) ws.thoughtBubble.setVisible(false)
-          },
-        })
-        ws.blurbFadeTimer = undefined
-      })
-    }
-  }
-
-  // ---------------------------------------------------------------------------
-  // Animations
-  // ---------------------------------------------------------------------------
-
-  updateAnimation(ws: WorkstationSprite, agent: AgentState): void {
-    const isWaiting = agent.needsInteraction
-    const isWorking = (agent.sessionMode === 'working' || agent.sessionMode === 'plan') && !isWaiting
-
-    const mode: 'idle' | 'working' | 'waiting' = isWaiting ? 'waiting' : isWorking ? 'working' : 'idle'
-    if (ws.lastAnimMode === mode) return
-    const prevMode = ws.lastAnimMode
-    ws.lastAnimMode = mode
-
-    // Tear down all animation state
-    if (ws.bounceTween)      { ws.bounceTween.destroy();      ws.bounceTween      = undefined }
-    if (ws.dotPulseTween)    { ws.dotPulseTween.destroy();    ws.dotPulseTween    = undefined; ws.statusDot.setAlpha(1) }
-    if (ws.typingTween)      { ws.typingTween.destroy();      ws.typingTween      = undefined; ws.sprite.x = 0 }
-    if (ws.monitorGlowTween) { ws.monitorGlowTween.destroy(); ws.monitorGlowTween = undefined }
-    if (ws.breathTween)      { ws.breathTween.destroy();      ws.breathTween      = undefined }
-    if (ws.headTiltTween)    { ws.headTiltTween.destroy();    ws.headTiltTween    = undefined }
-    if (ws.pulseTween)       { ws.pulseTween.destroy();       ws.pulseTween       = undefined }
-    if (ws.ledPulseTween)    { ws.ledPulseTween.destroy();    ws.ledPulseTween    = undefined }
-    if (ws.walkBreakTween)   { ws.walkBreakTween.destroy();   ws.walkBreakTween   = undefined }
-    if (ws.lookAroundTimer)     { ws.lookAroundTimer.destroy();     ws.lookAroundTimer     = undefined }
-    if (ws.stretchTimer)        { ws.stretchTimer.destroy();        ws.stretchTimer        = undefined }
-    if (ws.walkBreakTimer)      { ws.walkBreakTimer.destroy();      ws.walkBreakTimer      = undefined }
-    if (ws.lookAtNeighborTimer) { ws.lookAtNeighborTimer.destroy(); ws.lookAtNeighborTimer = undefined }
-    if (ws.yawnTimer)           { ws.yawnTimer.destroy();           ws.yawnTimer           = undefined }
-    // Clear ambient sound-wave indicator on every mode transition; working branch re-draws it
-    if (ws.soundWaveTween) { ws.soundWaveTween.destroy(); ws.soundWaveTween = undefined }
-    if (ws.soundWaveGfx)   { ws.soundWaveGfx.clear(); ws.soundWaveGfx.setAlpha(1) }
-    // Fade out progress ring when leaving working mode; working branch re-starts it
-    if (ws.progressRingTween) { ws.progressRingTween.destroy(); ws.progressRingTween = undefined }
-    if (ws.progressRing && ws.progressRing.alpha > 0) {
-      this.scene.tweens.add({ targets: ws.progressRing, alpha: 0, duration: 300, ease: 'Sine.easeOut',
-        onComplete: () => { ws.progressRing?.clear() },
-      })
-    }
-    ws.workStartTime = undefined
-    // Always stop steam when transitioning; idle branch will re-spawn it
-    this.host.clearSteamParticles(ws)
-
-    // Fade out mood emoji on mode transition; updateMood will fade the new one in
-    if (ws.moodTween) { ws.moodTween.destroy(); ws.moodTween = undefined }
-    if (ws.moodEmoji) {
-      this.scene.tweens.add({ targets: ws.moodEmoji, alpha: 0, duration: 200, ease: 'Sine.easeOut' })
-    }
-
-    ws.sprite.y = WS_SPRITE_Y
-    ws.sprite.x = 0
-    ws.sprite.setScale(CHAR_SCALE)
-    ws.sprite.setAngle(0)
-
-    this.updateMonitorGlow(ws, isWorking, isWaiting)
-
-    const charIdx = this.host.getAgentCharacterIndex(agent)
-    const base = charIdx * CHAR_COLS
-
-    if (isWaiting) {
-      ws.sprite.setFrame(base + POSE_IDLE)
-      ws.pulseTween = this.scene.tweens.add({
-        targets: ws.sprite, scaleX: CHAR_SCALE * 1.06, scaleY: CHAR_SCALE * 1.06,
-        duration: 900, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
-      })
-      ws.typingTween = this.scene.tweens.add({
-        targets: ws.sprite, x: 1.2,
-        duration: 600, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
-      })
-      ws.dotPulseTween = this.scene.tweens.add({
-        targets: ws.statusDot, alpha: 0.3,
-        duration: 600, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
-      })
-      // LED: waiting — amber steady glow
-      if (ws.ledGlow) {
-        ws.ledGlow.clear()
-        ws.ledGlow.fillStyle(activeTheme.deskStrokeWaiting, 1)
-        ws.ledGlow.fillRoundedRect(-26, WS_DESK_Y + 4, 52, 2, 1)
-        this.scene.tweens.add({ targets: ws.ledGlow, alpha: 0.5, duration: 300, ease: 'Sine.easeOut' })
-      }
-      this.restoreDeskStroke(ws)
-    } else if (isWorking) {
-      ws.sprite.setFrame(base + POSE_INTERACT)
-      ws.typingTween = this.scene.tweens.add({
-        targets: ws.sprite, x: 0.8,
-        duration: 400, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
-      })
-      ws.bounceTween = this.scene.tweens.add({
-        targets: ws.sprite, y: WS_SPRITE_Y - 2,
-        duration: 800, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
-      })
-      ws.headTiltTween = this.scene.tweens.add({
-        targets: ws.sprite, angle: 1.5,
-        duration: 1600, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
-      })
-      ws.deskBody.setStrokeStyle(1, 0x34d399, 0.55)
-      // LED: working — green pulsing glow
-      if (ws.ledGlow) {
-        ws.ledGlow.clear()
-        ws.ledGlow.fillStyle(activeTheme.deskStrokeWorking, 1)
-        ws.ledGlow.fillRoundedRect(-26, WS_DESK_Y + 4, 52, 2, 1)
-        this.scene.tweens.add({ targets: ws.ledGlow, alpha: 0.6, duration: 300, ease: 'Sine.easeOut',
-          onComplete: () => {
-            if (!ws.ledGlow) return
-            ws.ledGlow.setAlpha(0.4)
-            ws.ledPulseTween = this.scene.tweens.add({
-              targets: ws.ledGlow, alpha: 0.7,
-              duration: 1000, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
-            })
-          },
-        })
-      }
-      // Ambient sound-wave indicator — three concentric quarter-circle arcs drawn
-      // to the left of the agent, suggesting keyboard/typing audio ambiance.
-      if (ws.soundWaveGfx) {
-        const gfx = ws.soundWaveGfx
-        gfx.clear()
-        gfx.lineStyle(1, 0x3a4858, 0.15)
-        gfx.beginPath()
-        gfx.arc(0, 0, 3, Phaser.Math.DegToRad(-45), Phaser.Math.DegToRad(45), false)
-        gfx.strokePath()
-        gfx.lineStyle(1, 0x3a4858, 0.10)
-        gfx.beginPath()
-        gfx.arc(0, 0, 5, Phaser.Math.DegToRad(-45), Phaser.Math.DegToRad(45), false)
-        gfx.strokePath()
-        gfx.lineStyle(1, 0x3a4858, 0.05)
-        gfx.beginPath()
-        gfx.arc(0, 0, 7, Phaser.Math.DegToRad(-45), Phaser.Math.DegToRad(45), false)
-        gfx.strokePath()
-        gfx.setAlpha(1)
-        ws.soundWaveTween = this.scene.tweens.add({
-          targets: gfx, alpha: 0,
-          duration: 1500, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
-        })
-      }
-      // Progress ring — circular arc that fills clockwise over 60 seconds.
-      if (ws.progressRing) {
-        ws.workStartTime = Date.now()
-        const ring = ws.progressRing
-        const RING_DURATION_MS = 60_000
-        const RING_R = 10
-        const drawRing = (progress: number) => {
-          if (!ring.active) return
-          ring.clear()
-          // Background track
-          ring.lineStyle(1.5, 0x2a3440, 0.3)
-          ring.beginPath()
-          ring.arc(0, 0, RING_R, 0, Math.PI * 2, false)
-          ring.strokePath()
-          // Filled arc from top (-90deg) clockwise
-          const fill = Math.min(progress, 1)
-          if (fill > 0) {
-            const arcColor = fill < 0.8 ? 0x34d399 : 0xfbbf24
-            ring.lineStyle(1.5, arcColor, 0.5)
-            ring.beginPath()
-            ring.arc(0, 0, RING_R,
-              Phaser.Math.DegToRad(-90),
-              Phaser.Math.DegToRad(fill * 360 - 90),
-              false,
-            )
-            ring.strokePath()
-          }
-        }
-        // Fade in, then start counter tween 0->100 over RING_DURATION_MS
-        ring.setAlpha(0)
-        drawRing(0)
-        this.scene.tweens.add({ targets: ring, alpha: 1, duration: 400, ease: 'Sine.easeOut' })
-        ws.progressRingTween = this.scene.tweens.addCounter({
-          from: 0, to: 100,
-          duration: RING_DURATION_MS,
-          ease: 'Linear',
-          onUpdate: (tw) => {
-            const pct = tw.getValue() / 100
-            drawRing(pct)
-          },
-          onComplete: () => {
-            // Ring is full — pulse alpha to signal overtime
-            drawRing(1)
-            ws.progressRingTween = this.scene.tweens.add({
-              targets: ring, alpha: 0.35,
-              duration: 800, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
-            })
-          },
-        })
-      }
-    } else {
-      ws.sprite.setFrame(base + POSE_SIT)
-      ws.breathTween = this.scene.tweens.add({
-        targets: ws.sprite, scaleY: CHAR_SCALE * 0.97,
-        duration: 2800, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
-      })
-      // LED: idle — muted dim glow
-      if (ws.ledGlow) {
-        ws.ledGlow.clear()
-        ws.ledGlow.fillStyle(activeTheme.deskStrokeIdle, 1)
-        ws.ledGlow.fillRoundedRect(-26, WS_DESK_Y + 4, 52, 2, 1)
-        this.scene.tweens.add({ targets: ws.ledGlow, alpha: 0.1, duration: 600, ease: 'Sine.easeOut' })
-      }
-      this.restoreDeskStroke(ws)
-
-      // "Just finished" bounce + confetti when transitioning from working→idle
-      if (prevMode === 'working') {
-        this.scene.tweens.add({
-          targets: ws.sprite, y: WS_SPRITE_Y - 6,
-          duration: 200, yoyo: true, ease: 'Back.easeOut',
-          onComplete: () => { ws.sprite.y = WS_SPRITE_Y },
-        })
-        // Find the room that owns this workstation to compute world position
-        for (const room of this.host.getRooms().values()) {
-          if (room.workstations.has(agent.config.id)) {
-            const worldX = room.x + ws.container.x
-            const worldY = room.y + ws.container.y - 16  // slightly above the agent head
-            this.host.burstConfetti(worldX, worldY)
-            break
-          }
-        }
-
-        // Task completion tally — increment counter and refresh the desk badge
-        ws.localTaskCount++
-        this.refreshTaskCountDisplay(ws)
-      }
-
-      // Stamp idleSince so later timers can detect prolonged boredom
-      ws.sprite.setData('idleSince', Date.now())
-
-      // Head tilt: tween angle -4..+4 degrees every 8-15s, hold 1s, return to 0
-      ws.lookAroundTimer = this.scene.time.addEvent({
-        delay: 8000 + Math.random() * 7000,
-        loop: true,
-        callback: () => {
-          if (ws.headTiltTween) ws.headTiltTween.destroy()
-          const angle = (Math.random() - 0.5) * 8   // -4 to +4 degrees
-          ws.headTiltTween = this.scene.tweens.add({
-            targets: ws.sprite, angle,
-            duration: 400, hold: 1000, yoyo: true, ease: 'Sine.easeInOut',
-            onComplete: () => { ws.sprite.setAngle(0); ws.headTiltTween = undefined },
-          })
-        },
-      })
-
-      // Stretch: scaleY 1→1.04 over 300ms, hold 200ms, back to 1 every 20-30s
-      ws.stretchTimer = this.scene.time.addEvent({
-        delay: 20000 + Math.random() * 10000,
-        loop: true,
-        callback: () => {
-          this.scene.tweens.add({
-            targets: ws.sprite,
-            scaleY: CHAR_SCALE * 1.04,
-            duration: 300, ease: 'Sine.easeOut',
-            onComplete: () => {
-              this.scene.time.delayedCall(200, () => {
-                this.scene.tweens.add({
-                  targets: ws.sprite,
-                  scaleY: CHAR_SCALE,
-                  duration: 300, ease: 'Sine.easeIn',
-                })
-              })
-            },
-          })
-        },
-      })
-
-      // Look at neighbor: tilt -3/+3 degrees toward a working peer every 12-18s
-      ws.lookAtNeighborTimer = this.scene.time.addEvent({
-        delay: 12000 + Math.random() * 6000,
-        loop: true,
-        callback: () => {
-          if (ws.walkBreakTween || ws.headTiltTween) return
-          let neighborContainerX: number | null = null
-          for (const room of this.host.getRooms().values()) {
-            if (!room.workstations.has(agent.config.id)) continue
-            for (const [otherId, otherWs] of room.workstations) {
-              if (otherId === agent.config.id) continue
-              const otherMode = otherWs.state?.sessionMode
-              const isOtherWorking =
-                (otherMode === 'working' || otherMode === 'plan') &&
-                !otherWs.state?.needsInteraction
-              if (isOtherWorking) {
-                neighborContainerX = otherWs.container.x
-                break
-              }
-            }
-            break
-          }
-          if (neighborContainerX === null) return
-          const tiltAngle = neighborContainerX < ws.container.x ? -3 : 3
-          if (ws.headTiltTween) ws.headTiltTween.destroy()
-          ws.headTiltTween = this.scene.tweens.add({
-            targets: ws.sprite, angle: tiltAngle,
-            duration: 350, ease: 'Sine.easeOut',
-            onComplete: () => {
-              this.scene.time.delayedCall(2000, () => {
-                this.scene.tweens.add({
-                  targets: ws.sprite, angle: 0,
-                  duration: 350, ease: 'Sine.easeIn',
-                  onComplete: () => { ws.headTiltTween = undefined },
-                })
-              })
-            },
-          })
-        },
-      })
-
-      // Yawn/bored pose: after 60s+ idle, briefly switch to POSE_INTERACT (fidget) for 1.5s
-      ws.yawnTimer = this.scene.time.addEvent({
-        delay: 65000 + Math.random() * 10000,
-        loop: true,
-        callback: () => {
-          const idleSince: number = ws.sprite.getData('idleSince') ?? Date.now()
-          if (Date.now() - idleSince < 60000) return
-          if (ws.walkBreakTween) return
-          ws.sprite.setFrame(base + POSE_INTERACT)
-          this.scene.time.delayedCall(1500, () => {
-            if (ws.lastAnimMode === 'idle') {
-              ws.sprite.setFrame(base + POSE_SIT)
-            }
-          })
-        },
-      })
-
-      ws.walkBreakTimer = this.scene.time.addEvent({
-        delay: IDLE_WALK_BREAK_MIN_MS + Math.random() * IDLE_WALK_BREAK_VAR_MS,
-        loop: true,
-        callback: () => {
-          if (!ws.state || ws.walkBreakTween) return
-          const stillIdle =
-            !ws.state.needsInteraction &&
-            ws.state.sessionMode !== 'working' &&
-            ws.state.sessionMode !== 'plan' &&
-            ws.state.sessionMode !== 'compressing'
-          if (!stillIdle) return
-
-          const walkTargetX = Phaser.Math.Between(-IDLE_WALK_RANGE_X, IDLE_WALK_RANGE_X)
-          const walkTargetY = WS_SPRITE_Y + Phaser.Math.Between(2, 8)
-          ws.sprite.setFrame(base + POSE_WALK)
-          ws.walkBreakTween = this.scene.tweens.add({
-            targets: ws.sprite,
-            x: walkTargetX,
-            y: walkTargetY,
-            duration: 520 + Math.random() * 240,
-            yoyo: true,
-            hold: 280 + Math.random() * 240,
-            ease: 'Sine.easeInOut',
-            onComplete: () => {
-              ws.walkBreakTween = undefined
-              ws.sprite.x = 0
-              ws.sprite.y = WS_SPRITE_Y
-              ws.sprite.setFrame(base + POSE_SIT)
-            },
-          })
-        },
-      })
-    }
-  }
-
-  updateBlockedIndicator(ws: WorkstationSprite, agent: AgentState): void {
-    if (ws.blockedIndicatorTween) {
-      ws.blockedIndicatorTween.destroy()
-      ws.blockedIndicatorTween = undefined
-    }
-
-    // Phone light: stop and hide on every re-evaluation before deciding state
-    if (ws.phoneLightTween) {
-      ws.phoneLightTween.destroy()
-      ws.phoneLightTween = undefined
-    }
-    if (ws.phoneLight) {
-      ws.phoneLight.setAlpha(0)
-    }
-
-    if (!agent.needsInteraction) {
-      ws.blockedIndicator.setVisible(false)
-      ws.blockedIndicator.setAlpha(1)
-      ws.blockedIndicator.setScale(1)
-      return
-    }
-
-    let color = COLOR_LED_AMBER
-    let glyph = '!'
-    if (agent.interactionType === 'question') {
-      color = 0x60a5fa
-      glyph = '?'
-    } else if (agent.interactionType === 'accept-edits') {
-      color = 0x3b82f6
-      glyph = '~'
-    } else if (agent.interactionType === 'tool-approval') {
-      color = 0xf97316
-      glyph = '!'
-    }
-
-    ws.blockedIndicatorBadge.setFillStyle(color, 0.95)
-    ws.blockedIndicatorPulse.setFillStyle(color, 0.16)
-    ws.blockedIndicatorStem.setFillStyle(color, 0.55)
-    ws.blockedIndicatorText.setText(glyph)
-    ws.blockedIndicator.setVisible(true)
-
-    ws.blockedIndicatorTween = this.scene.tweens.add({
-      targets: ws.blockedIndicator,
-      scaleX: 1.08,
-      scaleY: 1.08,
-      alpha: 0.78,
-      duration: 520,
-      yoyo: true,
-      repeat: -1,
-      ease: 'Sine.easeInOut',
-    })
-
-    // Phone notification light — blink the desk communicator dot in interaction-type color
-    if (ws.phoneLight) {
-      ws.phoneLight.setFillStyle(color, 1)
-      ws.phoneLight.setAlpha(0)
-      ws.phoneLightTween = this.scene.tweens.add({
-        targets: ws.phoneLight,
-        alpha: { from: 0, to: 1 },
-        duration: 500,
-        yoyo: true,
-        repeat: -1,
-        ease: 'Sine.easeInOut',
-      })
-    }
-  }
-
-  updateMonitorGlow(ws: WorkstationSprite, isWorking: boolean, isWaiting: boolean): void {
-    if (!ws.monitorGlowFx) return
-    const isActive = isWorking || isWaiting
-    const baseColor = isWaiting ? 0xfbbf24 : isWorking ? 0x0ea5e9 : 0x1e2830
-    const baseStrength = isActive ? 3 : 1
-    const peakStrength = isActive ? 6 : 2
-    const duration     = isActive ? 800 : 2400
-    ws.monitorGlowFx.color = baseColor
-    ws.monitorGlowFx.outerStrength = baseStrength
-    ws.monitorGlowTween = this.scene.tweens.add({
-      targets: ws.monitorGlowFx, outerStrength: peakStrength,
-      duration, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
-    })
-  }
-
-  /** Show a small coffee cup emoji on the desk when the agent is at the cafe */
-  private ensureCoffeeIndicator(ws: WorkstationSprite): void {
-    if (ws.coffeeIndicator) return
-    const indicator = this.scene.add.text(0, WS_SPRITE_Y - 8, '\u2615', {
-      fontSize: '14px', resolution: 2,
-    }).setOrigin(0.5).setAlpha(0.8)
-    ws.container.add(indicator)
-    ws.coffeeIndicator = indicator
-    // Gentle bob
-    this.scene.tweens.add({
-      targets: indicator, y: WS_SPRITE_Y - 11,
-      duration: 1200, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
-    })
-  }
-
-  /** Remove the coffee indicator when the agent returns */
-  private removeCoffeeIndicator(ws: WorkstationSprite): void {
-    if (!ws.coffeeIndicator) return
-    this.scene.tweens.killTweensOf(ws.coffeeIndicator)
-    ws.coffeeIndicator.destroy()
-    ws.coffeeIndicator = undefined
-  }
 
   restoreDeskStroke(ws: WorkstationSprite): void {
     const s = ws.state
@@ -1710,3 +720,8 @@ export class OfficeWorkstations {
     }
   }
 }
+
+// Suppress unused-import warnings — these are used in the host interface above
+// and in EVENTS reference kept for consumers that might import EventBus here.
+void EventBus
+void EVENTS

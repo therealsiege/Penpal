@@ -3,6 +3,7 @@ import { computeRoomLayout, detectRoomType } from './office-layout'
 import type { Room, TeamAreaLayout } from './office-types'
 import type { AgentState } from '../types'
 import { activeTheme } from './office-theme'
+import { SPRITESHEET_KEYS, ICON_FRAMES } from './office-asset-keys'
 import {
   ROOM_GAP,
   TEAM_AREA_PAD_X, TEAM_AREA_PAD_Y, TEAM_AREA_GAP_X, TEAM_AREA_GAP_Y, TEAM_LABEL_H,
@@ -327,7 +328,7 @@ export class OfficeBackground {
 
     for (let rowIdx = 0; rowIdx < rows.length; rowIdx++) {
       const row = rows[rowIdx]
-      const doorSide: 'top' | 'bottom' = rowIdx % 2 === 0 ? 'bottom' : 'top'
+      const doorSide: 'top' | 'bottom' = 'top'
       let areaCursorX = 0
       for (const draft of row.drafts) {
         const areaX = WORLD_MARGIN + areaCursorX
@@ -465,11 +466,13 @@ export class OfficeBackground {
       const lightGfx = this.scene.add.graphics()
       lightGfx.fillStyle(0x94a3b8, 0.06)
       lightGfx.fillCircle(0, 0, 20)
-      lightGfx.fillStyle(0xcbd5e1, 0.12)
-      lightGfx.fillCircle(0, 0, 6)
-      lightGfx.fillStyle(0xffffff, 0.25)
-      lightGfx.fillCircle(0, 0, 2)
-      const lightContainer = this.scene.add.container(lightX, lightY, [lightGfx]).setDepth(-1).setAlpha(0.5)
+      // Mid glow ring — sprite circle
+      const lightMid = this.scene.add.sprite(0, 0, SPRITESHEET_KEYS.GAME_ICONS, ICON_FRAMES.CIRCLE_GREY)
+        .setScale(0.12).setAlpha(0.12).setTint(0xcbd5e1)
+      // Center bright dot — sprite circle
+      const lightCenter = this.scene.add.sprite(0, 0, SPRITESHEET_KEYS.GAME_ICONS, ICON_FRAMES.CIRCLE_GREY)
+        .setScale(0.06).setAlpha(0.25).setTint(0xffffff)
+      const lightContainer = this.scene.add.container(lightX, lightY, [lightGfx, lightMid, lightCenter]).setDepth(-1).setAlpha(0.5)
       atmosphere.ceilingLights.push(lightContainer)
 
       // Gradient-style team overlay on top of the building floor
@@ -635,6 +638,7 @@ export class OfficeBackground {
 
   tickReactorGlow(time: number): void {
     this.interior.tickReactorGlow(time)
+    this.terrain.tickReactorPulse(time)
   }
 
   // ---------------------------------------------------------------------------

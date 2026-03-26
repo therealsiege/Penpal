@@ -4,6 +4,8 @@ import type { WorkstationSprite, Room } from './office-types'
 import { NavMesh } from './nav-mesh'
 import type { PennyCafe } from './penny-cafe'
 import { WS_DESK_Y } from './office-constants'
+import { SPRITESHEET_KEYS, TOAST_ICON_FRAMES, ICON_FRAMES, ITEM_FRAMES, IMAGE_KEYS } from './office-asset-keys'
+import { SIGNATURE_ITEM_NAMES } from './workstation-creation'
 
 // ---------------------------------------------------------------------------
 // OfficeUI — owns all screen-space UI state for OfficeScene
@@ -27,6 +29,7 @@ export class OfficeUI {
 
   // World-space highlight ring around hovered desk
   private hoverRingGraphics: Phaser.GameObjects.Graphics | null = null
+  private hoverRingAccent: Phaser.GameObjects.Sprite | null = null
 
   // Keyboard shortcut help overlay
   private helpOverlay: Phaser.GameObjects.Container | null = null
@@ -97,6 +100,7 @@ export class OfficeUI {
     if (this.tooltipGraphics)  { this.tooltipGraphics.destroy(); this.tooltipGraphics = null }
 
     if (this.hoverRingGraphics) { this.hoverRingGraphics.destroy(); this.hoverRingGraphics = null }
+    if (this.hoverRingAccent) { this.hoverRingAccent.destroy(); this.hoverRingAccent = null }
 
     if (this.toastContainer) { this.toastContainer.destroy(); this.toastContainer = null }
     this.activeToasts = []
@@ -159,10 +163,10 @@ export class OfficeUI {
     bg.fillStyle(bgColor, 0.92)
     bg.fillRoundedRect(0, 0, TOAST_W, TOAST_H, 6)
 
-    // Type-indicator dot — small circle on the left edge, vertically centred
-    const dot = this.scene.add.graphics()
-    dot.fillStyle(iconColor, 1)
-    dot.fillCircle(16, TOAST_H / 2, 3)
+    // Type-indicator icon — sprite from game-icons sheet, vertically centred
+    const iconFrame = TOAST_ICON_FRAMES[type] ?? ICON_FRAMES.CIRCLE_BLUE
+    const dot = this.scene.add.sprite(16, TOAST_H / 2, SPRITESHEET_KEYS.GAME_ICONS, iconFrame)
+      .setScale(0.3).setOrigin(0.5)
 
     // Label — offset right to clear the dot
     const label = this.scene.add.text(26, 6, text, {
@@ -240,10 +244,27 @@ export class OfficeUI {
     const blurb = raw.length > 110 ? raw.slice(0, 108) + '..' : raw
     const bs = agent.config.persona?.backstory ?? ''
     const sub = blurb || (bs.length > 80 ? bs.slice(0, 78) + '..' : bs)
+    // Compute signature item trait from agent name hash
+    let sigTrait = ''
+    {
+      let nh = 0
+      const aName = agent.config.name ?? ''
+      for (let i = 0; i < aName.length; i++) { nh = ((nh << 5) - nh) + aName.charCodeAt(i); nh |= 0 }
+      nh = Math.abs(nh)
+      const sigItems = [
+        ITEM_FRAMES.COFFEE_CUP, ITEM_FRAMES.BOOK, ITEM_FRAMES.HEADPHONES,
+        ITEM_FRAMES.PIZZA, ITEM_FRAMES.PAINT_PALETTE, ITEM_FRAMES.WRENCH,
+        ITEM_FRAMES.BEER, ITEM_FRAMES.CAMERA, ITEM_FRAMES.DONUT,
+        ITEM_FRAMES.FIRST_AID, ITEM_FRAMES.PHONE, ITEM_FRAMES.MONITOR,
+      ]
+      const sigFrame = sigItems[nh % sigItems.length]
+      sigTrait = SIGNATURE_ITEM_NAMES[sigFrame] ?? ''
+    }
+    const hasTrait = sigTrait.length > 0
     const TW = 220, PX = 10, PY = 8, LH = 16, AH = 7
     const hasR = resources.length > 0, hasS = sub.length > 0
     const subL = hasS ? Math.max(1, Math.ceil(sub.length / 26)) : 0
-    const tH = PY + LH + (title ? LH : 0) + 4 + LH + (hasR ? LH : 0) + (hasS ? 6 + subL * LH : 0) + PY, tW = TW + PX * 2
+    const tH = PY + LH + (title ? LH : 0) + 4 + LH + (hasR ? LH : 0) + (hasTrait ? LH : 0) + (hasS ? 6 + subL * LH : 0) + PY, tW = TW + PX * 2
     const flip = screenY < tH + AH + 20
     const aY = flip ? screenY + AH + 2 : screenY - AH - 2 - tH
     const cX = Math.max(8, Math.min(screenX - tW / 2, this.viewWidth - tW - 8))
@@ -267,6 +288,7 @@ export class OfficeUI {
     if (uptime) ct.add(this.scene.add.text(cX + tW - PX, ty, uptime, { fontSize: '10px', color: '#5a6a7a', fontFamily: 'system-ui, monospace', resolution: 2 }).setOrigin(1, 0))
     ty += LH
     if (hasR) { ct.add(this.scene.add.text(tx + 12, ty, resources, { fontSize: '9px', color: '#5a6a7a', fontFamily: 'system-ui, monospace', resolution: 2 })); ty += LH }
+    if (hasTrait) { ct.add(this.scene.add.text(tx + 12, ty, sigTrait, { fontSize: '9px', color: '#a78bfa', fontFamily: 'system-ui, sans-serif', fontStyle: 'italic', resolution: 2 })); ty += LH }
     if (hasS) { ty += 2; const dg = this.scene.add.graphics(); dg.setScrollFactor(0); dg.lineStyle(1, 0x2a3440, 0.6); dg.lineBetween(tx, ty, cX + tW - PX, ty); ct.add(dg); ty += 4; ct.add(this.scene.add.text(tx, ty, sub, { fontSize: '10px', color: '#8a96a4', fontFamily: 'system-ui, sans-serif', wordWrap: { width: TW }, resolution: 2 })) }
     ct.setAlpha(0); g.setAlpha(0)
     this.tooltipFadeTween = this.scene.tweens.add({ targets: [ct, g], alpha: 1, duration: 150, ease: 'Quad.easeOut' })
@@ -292,9 +314,24 @@ export class OfficeUI {
     g.lineStyle(5, 0x60a5fa, 0.12); g.strokeEllipse(worldX, cy, 82, 46)
     g.lineStyle(2.5, 0x3b82f6, 0.32); g.strokeEllipse(worldX, cy, 74, 38)
     g.lineStyle(1.5, 0x3b82f6, 0.72); g.strokeEllipse(worldX, cy, 68, 32)
+
+    // Highlight accent sprite at the ring's peak (top of the innermost ellipse)
+    if (!this.hoverRingAccent && this.scene.textures.exists(SPRITESHEET_KEYS.GAME_ICONS)) {
+      this.hoverRingAccent = this.scene.add.sprite(0, 0, SPRITESHEET_KEYS.GAME_ICONS, ICON_FRAMES.CIRCLE_BLUE)
+        .setScale(0.2)
+        .setAlpha(0.7)
+        .setDepth(501)
+    }
+    if (this.hoverRingAccent) {
+      // Innermost ellipse is 68 wide x 32 tall — top is cy - 16
+      this.hoverRingAccent.setPosition(worldX, cy - 16).setVisible(true)
+    }
   }
 
-  clearHoverRing(): void { this.hoverRingGraphics?.clear() }
+  clearHoverRing(): void {
+    this.hoverRingGraphics?.clear()
+    this.hoverRingAccent?.setVisible(false)
+  }
 
   // ---------------------------------------------------------------------------
   // Help overlay
@@ -377,15 +414,34 @@ export class OfficeUI {
       )
     }
 
+    // Divider sprite above dismiss hint (if loaded), else Graphics fallback
+    if (this.scene.textures.exists(IMAGE_KEYS.DIVIDER)) {
+      container.add(
+        this.scene.add.image(panelX, panelY + PH / 2 - 28, IMAGE_KEYS.DIVIDER)
+          .setDisplaySize(PW - 32, 4).setAlpha(0.5).setScrollFactor(0),
+      )
+    } else {
+      const hintDiv = this.scene.add.graphics()
+      hintDiv.lineStyle(1, 0x2a3440, 0.4)
+      hintDiv.lineBetween(panelX - PW / 2 + 16, panelY + PH / 2 - 28, panelX + PW / 2 - 16, panelY + PH / 2 - 28)
+      container.add(hintDiv)
+    }
+
+    // Button sprite accent next to dismiss hint
+    container.add(
+      this.scene.add.sprite(panelX - 80, panelY + PH / 2 - 12, SPRITESHEET_KEYS.GAME_ICONS, ICON_FRAMES.BUTTON_ROUND)
+        .setScale(0.35).setOrigin(0.5, 0.5).setAlpha(0.6).setScrollFactor(0),
+    )
+
     // Dismiss hint at bottom of panel
     container.add(
       this.scene.add
-        .text(panelX, panelY + PH / 2 - 12, 'Press H or ESC to dismiss', {
+        .text(panelX - 66, panelY + PH / 2 - 12, 'Press H or ESC to dismiss', {
           fontSize: '9px',
           color: '#3a4858',
           fontFamily: 'monospace',
         })
-        .setOrigin(0.5, 1)
+        .setOrigin(0, 0.5)
         .setScrollFactor(0),
     )
 
@@ -627,6 +683,12 @@ export class OfficeUI {
       if (room.doorGraphics) room.doorGraphics.setVisible(showRoomInterior)
       if (room.doorFrameGraphics) room.doorFrameGraphics.setVisible(showRoomInterior)
       if (room.miniWhiteboard) room.miniWhiteboard.setVisible(level >= 3)
+      // Header status dots are an overview-zoom summary — visible at L1,
+      // hidden at L2+ where individual workstation status dots take over.
+      if (room.headerStatusDots) {
+        const showOverviewDots = level === 1
+        for (const d of room.headerStatusDots) d.setVisible(showOverviewDots)
+      }
     }
 
     if (whiteboardContainer) whiteboardContainer.setVisible(level >= 3)

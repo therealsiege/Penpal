@@ -1,6 +1,9 @@
 import Phaser from 'phaser'
 import { activeTheme } from './office-theme'
-import { WS_DESK_Y, AMBIENT_MOTE_POOL_SIZE, MAKO_MOTE_POOL_SIZE, SPARK_POOL_SIZE, STEAM_WISP_POOL_SIZE } from './office-constants'
+import { WS_DESK_Y } from './office-constants'
+import { SPRITESHEET_KEYS } from './office-asset-keys'
+import { WeatherParticles } from './particles-weather'
+import { AmbientParticles } from './particles-ambient'
 
 // ---------------------------------------------------------------------------
 // Minimal interface for workstation steam particle host
@@ -48,14 +51,13 @@ export interface CorridorSegment {
 export class OfficeParticles {
   private scene: Phaser.Scene
 
+  // Sub-modules
+  private weather: WeatherParticles
+  private ambient: AmbientParticles
+
   // Typing spark particles
   private typingParticlePool: Phaser.GameObjects.Arc[] = []
   private typingParticleTimer: Phaser.Time.TimerEvent | null = null
-
-  // Ambient motes
-  private ambientMotePool: (Phaser.GameObjects.Arc | Phaser.GameObjects.Graphics)[] = []
-  private ambientMoteTimer: Phaser.Time.TimerEvent | null = null
-  private constellationGfx: Phaser.GameObjects.Graphics | null = null
 
   // Corridor data-flow particle trail
   private corridorParticlePool: Phaser.GameObjects.Arc[] = []
@@ -71,13 +73,8 @@ export class OfficeParticles {
   // Emoji reaction bubble pool
   private emojiReactionPool: Phaser.GameObjects.Text[] = []
 
-  // Window rain effect (screen-space)
-  private rainDropPool: Phaser.GameObjects.Line[] = []
-  private rainActive = false
-
-  // Window snow effect (screen-space)
-  private snowPool: Phaser.GameObjects.Arc[] = []
-  private snowActive = false
+  // Sprite-based reaction pool (game-icons spritesheet)
+  private spriteReactionPool: Phaser.GameObjects.Sprite[] = []
 
   // Confetti burst particle emitter
   private confettiEmitter: Phaser.GameObjects.Particles.ParticleEmitter | null = null
@@ -85,20 +82,10 @@ export class OfficeParticles {
   // Chime ripple pool
   private chimeRipplePool: Phaser.GameObjects.Arc[] = []
 
-  // Mako energy motes
-  private makoMotePool: Phaser.GameObjects.Arc[] = []
-  private lastMakoSpawnAt = 0
-
-  // Spark burst particles
-  private sparkPool: Phaser.GameObjects.Arc[] = []
-  private lastSparkBurstAt = 0
-
-  // Steam wisps
-  private steamWispPool: Phaser.GameObjects.Graphics[] = []
-  private lastSteamSpawnAt = 0
-
   constructor(scene: Phaser.Scene) {
     this.scene = scene
+    this.weather = new WeatherParticles(scene)
+    this.ambient = new AmbientParticles(scene)
   }
 
   // ---------------------------------------------------------------------------
@@ -118,14 +105,8 @@ export class OfficeParticles {
     this.typingParticleTimer = this.scene.time.addEvent({
       delay: 200, callback: () => this.tickParticlesInternal(), loop: true,
     })
-    this.initAmbientMotePool()
-    this.initRainPool(viewWidth, viewHeight)
-    this.initSnowPool(viewWidth, viewHeight)
-    this.ambientMoteTimer = this.scene.time.addEvent({
-      delay: 420,
-      callback: () => this.tickAmbientMotes(),
-      loop: true,
-    })
+    this.ambient.init()
+    this.weather.init(viewWidth, viewHeight)
     this.initCorridorParticlePool()
     this.corridorParticleTimer = this.scene.time.addEvent({
       delay: 300,
@@ -135,10 +116,8 @@ export class OfficeParticles {
     this.initAlertRipplePool()
     this.initChimeRipplePool()
     this.initEmojiReactionPool()
+    this.initSpriteReactionPool()
     this.initMouseTrailPool()
-    this.initMakoMotePool()
-    this.initSparkPool()
-    this.initSteamWispPool()
 
     // Confetti burst emitter
     const confettiGfx = this.scene.make.graphics({ x: 0, y: 0, add: false })
@@ -169,25 +148,14 @@ export class OfficeParticles {
     for (const p of this.typingParticlePool) { this.scene.tweens.killTweensOf(p); p.destroy() }
     this.typingParticlePool = []
 
-    this.ambientMoteTimer?.destroy()
-    this.ambientMoteTimer = null
-    for (const m of this.ambientMotePool) { this.scene.tweens.killTweensOf(m); m.destroy() }
-    this.ambientMotePool = []
-    this.constellationGfx?.destroy()
-    this.constellationGfx = null
+    this.ambient.destroy()
 
     this.corridorParticleTimer?.destroy()
     this.corridorParticleTimer = null
     for (const p of this.corridorParticlePool) { this.scene.tweens.killTweensOf(p); p.destroy() }
     this.corridorParticlePool = []
 
-    for (const d of this.rainDropPool) d.destroy()
-    this.rainDropPool = []
-    this.rainActive = false
-
-    for (const f of this.snowPool) f.destroy()
-    this.snowPool = []
-    this.snowActive = false
+    this.weather.destroy()
 
     for (const c of this.alertRipplePool) { this.scene.tweens.killTweensOf(c); c.destroy() }
     this.alertRipplePool = []
@@ -198,22 +166,51 @@ export class OfficeParticles {
     for (const t of this.emojiReactionPool) { this.scene.tweens.killTweensOf(t); t.destroy() }
     this.emojiReactionPool = []
 
+    for (const s of this.spriteReactionPool) { this.scene.tweens.killTweensOf(s); s.destroy() }
+    this.spriteReactionPool = []
+
     for (const c of this.mouseTrailPool) { this.scene.tweens.killTweensOf(c); c.destroy() }
     this.mouseTrailPool = []
-
-    for (const m of this.makoMotePool) { this.scene.tweens.killTweensOf(m); m.destroy() }
-    this.makoMotePool = []
-
-    for (const s of this.sparkPool) { this.scene.tweens.killTweensOf(s); s.destroy() }
-    this.sparkPool = []
-
-    for (const g of this.steamWispPool) { this.scene.tweens.killTweensOf(g); g.destroy() }
-    this.steamWispPool = []
 
     if (this.confettiEmitter) {
       this.confettiEmitter.destroy()
       this.confettiEmitter = null
     }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Weather delegation
+  // ---------------------------------------------------------------------------
+
+  setWeather(phase: 'morning' | 'day' | 'evening' | 'night', viewWidth: number, viewHeight: number): void {
+    this.weather.setWeather(phase, viewWidth, viewHeight)
+  }
+
+  isRainActive(): boolean { return this.weather.isRainActive() }
+  isSnowActive(): boolean { return this.weather.isSnowActive() }
+
+  tickRain(viewWidth: number, viewHeight: number): void {
+    this.weather.tickRain(viewWidth, viewHeight)
+  }
+
+  tickSnow(time: number, viewWidth: number, viewHeight: number): void {
+    this.weather.tickSnow(time, viewWidth, viewHeight)
+  }
+
+  // ---------------------------------------------------------------------------
+  // Ambient delegation
+  // ---------------------------------------------------------------------------
+
+  tickMakoMotes(camX: number, camY: number, camW: number, camH: number, zoom: number): void {
+    this.ambient.tickMakoMotes(camX, camY, camW, camH, zoom)
+  }
+
+  tickSparks(camX: number, camY: number, camW: number, camH: number, zoom: number): void {
+    this.ambient.tickSparks(camX, camY, camW, camH, zoom)
+  }
+
+  tickSteam(camX: number, camY: number, camW: number, camH: number, zoom: number): void {
+    this.ambient.tickSteam(camX, camY, camW, camH, zoom)
   }
 
   // ---------------------------------------------------------------------------
@@ -284,256 +281,6 @@ export class OfficeParticles {
         const spawnChance = isCompressing ? 0.25 : m === 'plan' ? 0.18 : 0.12
         for (let s = 0; s < spawnCount; s++) {
           if (Math.random() < spawnChance) this.spawnTypingParticle(wx, wy, isWaiting, isCompressing)
-        }
-      }
-    }
-  }
-
-  // ---------------------------------------------------------------------------
-  // Rain pool (screen-space)
-  // ---------------------------------------------------------------------------
-
-  private initRainPool(viewWidth: number, viewHeight: number): void {
-    const RAIN_COUNT = 40
-    for (let i = 0; i < RAIN_COUNT; i++) {
-      const len = 8 + Math.random() * 6
-      const alpha = 0.15 + Math.random() * 0.10
-      const speed = 3 + Math.random() * 2
-      const x = Math.random() * viewWidth
-      const y = Math.random() * viewHeight
-      const drop = this.scene.add.line(0, 0, x, y, x + 1, y + len, 0x60a5fa, alpha)
-      drop.setOrigin(0, 0)
-      drop.setLineWidth(1)
-      drop.setDepth(9990)
-      drop.setScrollFactor(0)
-      drop.setVisible(false)
-      drop.setData('speed', speed)
-      this.rainDropPool.push(drop)
-    }
-  }
-
-  tickRain(viewWidth: number, viewHeight: number): void {
-    for (const drop of this.rainDropPool) {
-      if (!drop.visible) continue
-      const speed = drop.getData('speed') as number
-      drop.x += 1
-      drop.y += speed
-      const y1 = drop.geom.y1
-      if (drop.y + y1 > viewHeight + 16) {
-        drop.x = Math.random() * viewWidth
-        drop.y = -16 - Math.random() * 80
-      }
-    }
-  }
-
-  // ---------------------------------------------------------------------------
-  // Snow pool (screen-space)
-  // ---------------------------------------------------------------------------
-
-  private initSnowPool(viewWidth: number, viewHeight: number): void {
-    const SNOW_COUNT = 30
-    for (let i = 0; i < SNOW_COUNT; i++) {
-      const radius = 1 + Math.random() * 1.5
-      const alpha = 0.2 + Math.random() * 0.2
-      const flake = this.scene.add.circle(Math.random() * viewWidth, Math.random() * viewHeight, radius, 0xffffff, alpha)
-      flake.setScrollFactor(0)
-      flake.setDepth(9989)
-      flake.setVisible(false)
-      flake.setData('speed', 1 + Math.random())
-      this.snowPool.push(flake)
-    }
-  }
-
-  tickSnow(time: number, viewWidth: number, viewHeight: number): void {
-    for (let i = 0; i < this.snowPool.length; i++) {
-      const flake = this.snowPool[i]
-      if (!flake.visible) continue
-      const speed = flake.getData('speed') as number
-      flake.y += speed
-      flake.x += Math.sin(time * 0.001 + i) * 0.5
-      if (flake.y > viewHeight + 4) {
-        flake.x = Math.random() * viewWidth
-        flake.y = -4 - Math.random() * 40
-      }
-    }
-  }
-
-  // ---------------------------------------------------------------------------
-  // Weather control (called from applyDayNightPhase in OfficeScene)
-  // ---------------------------------------------------------------------------
-
-  setWeather(phase: 'morning' | 'day' | 'evening' | 'night', viewWidth: number, viewHeight: number): void {
-    const shouldRain = phase === 'night'
-    if (shouldRain !== this.rainActive) {
-      this.rainActive = shouldRain
-      for (const drop of this.rainDropPool) {
-        if (shouldRain) {
-          drop.x = Math.random() * viewWidth
-          drop.y = -16 - Math.random() * viewHeight
-          drop.setVisible(true)
-        } else {
-          drop.setVisible(false)
-        }
-      }
-    }
-
-    const shouldSnow = phase === 'morning'
-    if (shouldSnow !== this.snowActive) {
-      this.snowActive = shouldSnow
-      for (const flake of this.snowPool) {
-        if (shouldSnow) {
-          flake.x = Math.random() * viewWidth
-          flake.y = Math.random() * viewHeight
-          flake.setVisible(true)
-        } else {
-          flake.setVisible(false)
-        }
-      }
-    }
-  }
-
-  isRainActive(): boolean { return this.rainActive }
-  isSnowActive(): boolean { return this.snowActive }
-
-  // ---------------------------------------------------------------------------
-  // Ambient mote pool
-  // ---------------------------------------------------------------------------
-
-  private initAmbientMotePool(): void {
-    this.constellationGfx = this.scene.add.graphics().setDepth(1)
-
-    for (let i = 0; i < AMBIENT_MOTE_POOL_SIZE; i++) {
-      let m: Phaser.GameObjects.Arc | Phaser.GameObjects.Graphics
-
-      if (i % 4 === 0) {
-        const gfx = this.scene.add.graphics().setDepth(2).setVisible(false)
-        const s = 1.6 + Math.random() * 0.8
-        gfx.fillStyle(0xe2e8f0, 1)
-        gfx.fillPoints([{ x: 0, y: -s }, { x: s, y: 0 }, { x: 0, y: s }, { x: -s, y: 0 }], true)
-        gfx.setData('isDiamond', true)
-        gfx.setData('baseSize', s)
-        m = gfx
-      } else {
-        const r = 0.9 + Math.random() * 1.3
-        const arc = this.scene.add.circle(0, 0, r, 0xe2e8f0, 0).setDepth(2).setVisible(false).setBlendMode(Phaser.BlendModes.ADD)
-        arc.setData('isDiamond', false)
-        m = arc
-      }
-
-      m.setData('busy', false)
-      m.setData('phaseOffset', Math.random() * Math.PI * 2)
-      m.setData('moteIndex', i)
-      m.setData('originX', 0)
-      m.setData('originY', 0)
-      m.setData('driftX', 0)
-      m.setData('driftY', 0)
-      m.setData('lifetime', 0)
-      m.setData('elapsed', 0)
-      m.setData('baseAlpha', 0)
-
-      this.ambientMotePool.push(m)
-    }
-  }
-
-  private spawnAmbientMote(): void {
-    const mote = this.ambientMotePool.find(m => !m.getData('busy'))
-    if (!mote) return
-
-    const view = this.scene.cameras.main.worldView
-    const x = view.x + Math.random() * view.width
-    const y = view.y + Math.random() * view.height
-
-    const palette = activeTheme.particleColors
-    const color = palette[Math.floor(Math.random() * palette.length)]
-
-    if (mote.getData('isDiamond')) {
-      const gfx = mote as Phaser.GameObjects.Graphics
-      const s = mote.getData('baseSize') as number
-      gfx.clear()
-      gfx.fillStyle(color, 1)
-      gfx.fillPoints([{ x: 0, y: -s }, { x: s, y: 0 }, { x: 0, y: s }, { x: -s, y: 0 }], true)
-    } else {
-      ;(mote as Phaser.GameObjects.Arc).setFillStyle(color)
-    }
-
-    const baseAlpha = 0.18 + Math.random() * 0.18
-    const lifetime = 2600 + Math.random() * 2200
-
-    mote.setPosition(x, y)
-    mote.setAlpha(baseAlpha)
-    mote.setVisible(true)
-    mote.setData('busy', true)
-    mote.setData('originX', x)
-    mote.setData('originY', y)
-    mote.setData('driftX', (Math.random() - 0.5) * 16)
-    mote.setData('driftY', -18 - Math.random() * 24)
-    mote.setData('lifetime', lifetime)
-    mote.setData('elapsed', 0)
-    mote.setData('baseAlpha', baseAlpha)
-  }
-
-  tickAmbientMotes(): void {
-    if (this.scene.cameras.main.zoom < 0.62) return
-    if (Math.random() < 0.55) this.spawnAmbientMote()
-
-    const time = this.scene.time.now
-    const delta = this.scene.game.loop.delta
-
-    const activePositions: { x: number; y: number }[] = []
-
-    for (const mote of this.ambientMotePool) {
-      if (!mote.getData('busy')) continue
-
-      const elapsed: number = (mote.getData('elapsed') as number) + delta
-      const lifetime: number = mote.getData('lifetime') as number
-      const progress = elapsed / lifetime
-
-      if (progress >= 1) {
-        mote.setVisible(false)
-        mote.setData('busy', false)
-        continue
-      }
-
-      mote.setData('elapsed', elapsed)
-
-      const originX = mote.getData('originX') as number
-      const originY = mote.getData('originY') as number
-      const driftX = mote.getData('driftX') as number
-      const driftY = mote.getData('driftY') as number
-      const phase = mote.getData('phaseOffset') as number
-      const idx = mote.getData('moteIndex') as number
-      const baseAlpha = mote.getData('baseAlpha') as number
-
-      const sway = Math.sin(time * 0.001 + idx + phase) * 6
-      mote.setPosition(originX + driftX * progress + sway, originY + driftY * progress)
-
-      const fadeOut = 1 - progress * progress
-      const twinkle = 0.5 + 0.5 * Math.sin(time * 0.0023 + phase * 1.7)
-      mote.setAlpha(Math.min(baseAlpha, Math.max(0, (0.15 + twinkle * 0.25) * fadeOut)))
-
-      const anyMote = mote as unknown as { getCenter?: () => { x: number; y: number } }
-      const center = anyMote.getCenter ? anyMote.getCenter() : { x: mote.x, y: mote.y }
-      activePositions.push({ x: center.x, y: center.y })
-    }
-
-    const cgfx = this.constellationGfx
-    if (cgfx) {
-      cgfx.clear()
-      let connections = 0
-      const maxConnections = 4
-      const threshSq = 60 * 60
-      outer: for (let i = 0; i < activePositions.length - 1; i++) {
-        for (let j = i + 1; j < activePositions.length; j++) {
-          const dx = activePositions[i].x - activePositions[j].x
-          const dy = activePositions[i].y - activePositions[j].y
-          if (dx * dx + dy * dy < threshSq) {
-            cgfx.lineStyle(0.5, 0xffffff, 0.05 + Math.random() * 0.05)
-            cgfx.beginPath()
-            cgfx.moveTo(activePositions[i].x, activePositions[i].y)
-            cgfx.lineTo(activePositions[j].x, activePositions[j].y)
-            cgfx.strokePath()
-            if (++connections >= maxConnections) break outer
-          }
         }
       }
     }
@@ -775,6 +522,63 @@ export class OfficeParticles {
   }
 
   // ---------------------------------------------------------------------------
+  // Sprite-based reaction pool (game-icons spritesheet)
+  // ---------------------------------------------------------------------------
+
+  private initSpriteReactionPool(): void {
+    for (let i = 0; i < 12; i++) {
+      const spr = this.scene.add
+        .sprite(0, 0, SPRITESHEET_KEYS.GAME_ICONS, 0)
+        .setDepth(500)
+        .setAlpha(0)
+        .setScale(0.5)
+        .setVisible(false)
+      spr.setData('busy', false)
+      this.spriteReactionPool.push(spr)
+    }
+  }
+
+  spawnSpriteReaction(worldX: number, worldY: number, frame: number): void {
+    const spr = this.spriteReactionPool.find(s => !s.getData('busy'))
+    if (!spr) return
+
+    const sway = (Math.random() - 0.5) * 16
+    spr.setFrame(frame)
+    spr.setPosition(worldX + sway, worldY - 20)
+    spr.setAlpha(0)
+    spr.setScale(0.3)
+    spr.setVisible(true)
+    spr.setData('busy', true)
+
+    // Phase 1: fade in + scale bounce
+    this.scene.tweens.add({
+      targets: spr,
+      alpha: 1,
+      scaleX: 0.65,
+      scaleY: 0.65,
+      duration: 120,
+      ease: 'Back.easeOut',
+      onComplete: () => {
+        // Phase 2: settle scale + rise upward + fade out
+        this.scene.tweens.add({
+          targets: spr,
+          y: spr.y - 30,
+          scaleX: 0.5,
+          scaleY: 0.5,
+          alpha: 0,
+          duration: 1000,
+          ease: 'Sine.easeOut',
+          onComplete: () => {
+            spr.setVisible(false)
+            spr.setAlpha(0)
+            spr.setData('busy', false)
+          },
+        })
+      },
+    })
+  }
+
+  // ---------------------------------------------------------------------------
   // Mouse trail pool (created here; spawning logic stays in OfficeScene
   // pointermove handler which has access to camera & input)
   // ---------------------------------------------------------------------------
@@ -844,186 +648,5 @@ export class OfficeParticles {
         })
       })
     }
-  }
-
-  // ---------------------------------------------------------------------------
-  // Floating Mako motes — green energy drifting upward
-  // ---------------------------------------------------------------------------
-
-  private initMakoMotePool(): void {
-    for (let i = 0; i < MAKO_MOTE_POOL_SIZE; i++) {
-      const radius = 3 + Math.random() * 3
-      const arc = this.scene.add.circle(0, 0, radius, 0x00ff88, 0)
-        .setDepth(2)
-        .setBlendMode(Phaser.BlendModes.ADD)
-        .setVisible(false)
-      arc.setData('busy', false)
-      this.makoMotePool.push(arc)
-    }
-  }
-
-  tickMakoMotes(camX: number, camY: number, camW: number, camH: number, zoom: number): void {
-    const now = this.scene.time.now
-    if (now - this.lastMakoSpawnAt < 300) return
-    if (zoom < 0.3) return
-    this.lastMakoSpawnAt = now
-
-    const mote = this.makoMotePool.find(m => !m.getData('busy'))
-    if (!mote) return
-
-    const worldX = camX + Math.random() * camW
-    const worldY = camY + Math.random() * camH
-    const color = Math.random() < 0.5 ? 0x00ff88 : 0x00e5ff
-    const duration = 3000 + Math.random() * 2000
-    const riseY = 60 + Math.random() * 60
-
-    mote.setPosition(worldX, worldY)
-    mote.setFillStyle(color)
-    mote.setAlpha(0.25)
-    mote.setVisible(true)
-    mote.setData('busy', true)
-
-    const startX = worldX
-    const phaseOffset = Math.random() * Math.PI * 2
-
-    this.scene.tweens.add({
-      targets: mote,
-      y: worldY - riseY,
-      alpha: 0,
-      duration,
-      ease: 'Sine.easeOut',
-      onUpdate: (tween: Phaser.Tweens.Tween) => {
-        const progress = tween.progress
-        mote.x = startX + Math.sin(progress * Math.PI * 2 + phaseOffset) * 25
-      },
-      onComplete: () => {
-        mote.setVisible(false)
-        mote.setData('busy', false)
-      },
-    })
-  }
-
-  // ---------------------------------------------------------------------------
-  // Spark bursts from pipe joints
-  // ---------------------------------------------------------------------------
-
-  private initSparkPool(): void {
-    const sparkColors = [0xd4a017, 0xff8c00, 0xffffff]
-    for (let i = 0; i < SPARK_POOL_SIZE; i++) {
-      const radius = 1.5 + Math.random() * 2.0
-      const color = sparkColors[i % sparkColors.length]
-      const arc = this.scene.add.circle(0, 0, radius, color, 0)
-        .setDepth(3)
-        .setBlendMode(Phaser.BlendModes.ADD)
-        .setVisible(false)
-      arc.setData('busy', false)
-      this.sparkPool.push(arc)
-    }
-  }
-
-  tickSparks(camX: number, camY: number, camW: number, camH: number, zoom: number): void {
-    const now = this.scene.time.now
-    if (now - this.lastSparkBurstAt < 2000) return
-    if (zoom < 0.5) return
-    this.lastSparkBurstAt = now
-
-    const centerX = camX + camW * 0.5
-    const centerY = camY + camH * 0.5
-    const burstX = centerX + (Math.random() - 0.5) * 400
-    const burstY = centerY + (Math.random() - 0.5) * 400
-    const sparkCount = 3 + Math.floor(Math.random() * 2)
-    const sparkColors = [0xd4a017, 0xff8c00, 0xffffff]
-
-    for (let i = 0; i < sparkCount; i++) {
-      const spark = this.sparkPool.find(s => !s.getData('busy'))
-      if (!spark) break
-
-      const color = sparkColors[Math.floor(Math.random() * sparkColors.length)]
-      const driftX = (Math.random() - 0.5) * 36
-      const driftY = 12 + Math.random() * 12
-      const duration = 200 + Math.random() * 300
-
-      spark.setPosition(burstX, burstY)
-      spark.setFillStyle(color)
-      spark.setAlpha(1.0)
-      spark.setScale(2.5)
-      spark.setVisible(true)
-      spark.setData('busy', true)
-
-      this.scene.time.delayedCall(50, () => {
-        spark.setScale(1.0)
-      })
-
-      this.scene.tweens.add({
-        targets: spark,
-        x: burstX + driftX,
-        y: burstY + driftY,
-        alpha: 0,
-        duration,
-        ease: 'Quad.easeOut',
-        onComplete: () => {
-          spark.setVisible(false)
-          spark.setScale(1)
-          spark.setData('busy', false)
-        },
-      })
-    }
-  }
-
-  // ---------------------------------------------------------------------------
-  // Steam wisps rising from vents
-  // ---------------------------------------------------------------------------
-
-  private initSteamWispPool(): void {
-    for (let i = 0; i < STEAM_WISP_POOL_SIZE; i++) {
-      const gfx = this.scene.add.graphics().setDepth(1).setVisible(false)
-      gfx.setData('busy', false)
-      this.steamWispPool.push(gfx)
-    }
-  }
-
-  tickSteam(camX: number, camY: number, camW: number, camH: number, zoom: number): void {
-    const now = this.scene.time.now
-    if (now - this.lastSteamSpawnAt < 1500) return
-    if (zoom < 0.3) return
-    this.lastSteamSpawnAt = now
-
-    const gfx = this.steamWispPool.find(g => !g.getData('busy'))
-    if (!gfx) return
-
-    const centerX = camX + camW * 0.5
-    const centerY = camY + camH * 0.5
-    const worldX = centerX + (Math.random() - 0.5) * 300
-    const worldY = centerY + (Math.random() * 0.3 + 0.35) * camH
-
-    gfx.clear()
-    const alpha = 0.06 + Math.random() * 0.06
-    gfx.fillStyle(0x8a96a4, alpha)
-    gfx.fillCircle(0, 0, 6 + Math.random() * 4)
-    gfx.fillCircle(4, -2.5, 5 + Math.random() * 3)
-    gfx.fillCircle(-3.5, -3.5, 4 + Math.random() * 3)
-
-    gfx.setPosition(worldX, worldY)
-    gfx.setAlpha(1)
-    gfx.setScale(1)
-    gfx.setVisible(true)
-    gfx.setData('busy', true)
-
-    const riseY = 35 + Math.random() * 20
-    const duration = 2000 + Math.random() * 1000
-
-    this.scene.tweens.add({
-      targets: gfx,
-      y: worldY - riseY,
-      alpha: 0,
-      scaleX: 2.0,
-      scaleY: 2.0,
-      duration,
-      ease: 'Sine.easeOut',
-      onComplete: () => {
-        gfx.setVisible(false)
-        gfx.setData('busy', false)
-      },
-    })
   }
 }

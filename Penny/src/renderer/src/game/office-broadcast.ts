@@ -5,7 +5,7 @@
 // ---------------------------------------------------------------------------
 
 import Phaser from 'phaser'
-import { COLOR_LED_GREEN, COLOR_LED_AMBER, COLOR_LED_GRAY } from './office-constants'
+import { ICON_FRAMES, EFFECT_ANIM_KEYS, SPRITESHEET_KEYS } from './office-asset-keys'
 import type { Room } from './office-types'
 
 export class OfficeBroadcast {
@@ -53,6 +53,9 @@ export class OfficeBroadcast {
     const accentLine = this.scene.add.rectangle(0, 0, viewW, 2, 0x00ff88, 0.7).setOrigin(0, 0)
     this.bannerContainer.add(accentLine)
 
+    // Subtle flash VFX at screen center when broadcast starts
+    this._playBroadcastFlash(viewW)
+
     // Scrolling text — starts just off the right edge, scrolls to past the left edge
     const label = '\u{1F4E2}  BROADCAST:  ' + message
     this.bannerText = this.scene.add.text(viewW + 10, BANNER_H / 2, label, {
@@ -83,14 +86,16 @@ export class OfficeBroadcast {
         const rooms = getRooms()
         for (const room of rooms.values()) {
           if (isOn) {
-            room.statusLed.setFillStyle(COLOR_LED_AMBER, 1)
-            room.statusLedGlow?.setFillStyle(COLOR_LED_AMBER, 0.4)
+            room.statusLed.setFrame(ICON_FRAMES.CIRCLE_YELLOW)
+            room.statusLedGlow?.setFrame(ICON_FRAMES.CIRCLE_YELLOW)
+            room.statusLedGlow?.setAlpha(0.4)
           } else {
-            const restoreColor =
-              room.ledMode === 'active'  ? COLOR_LED_GREEN :
-              room.ledMode === 'waiting' ? COLOR_LED_AMBER : COLOR_LED_GRAY
-            room.statusLed.setFillStyle(restoreColor, 1)
-            room.statusLedGlow?.setFillStyle(restoreColor, 0.25)
+            const restoreFrame =
+              room.ledMode === 'active'  ? ICON_FRAMES.CIRCLE_GREEN :
+              room.ledMode === 'waiting' ? ICON_FRAMES.CIRCLE_YELLOW : ICON_FRAMES.CIRCLE_GREY
+            room.statusLed.setFrame(restoreFrame)
+            room.statusLedGlow?.setFrame(restoreFrame)
+            room.statusLedGlow?.setAlpha(0.25)
           }
         }
       },
@@ -107,6 +112,34 @@ export class OfficeBroadcast {
         onComplete: () => this._destroyBanner(),
       })
     })
+  }
+
+  /**
+   * Plays a subtle flash sprite at the screen center when a broadcast begins.
+   * The flash auto-destroys after the animation completes.
+   */
+  private _playBroadcastFlash(viewW: number): void {
+    const flashKey = SPRITESHEET_KEYS.EFFECTS_FLASH
+    if (!this.scene.textures.exists(flashKey)) return
+
+    const flash = this.scene.add.sprite(viewW / 2, this.scene.scale.height / 2, flashKey)
+      .setScrollFactor(0)
+      .setDepth(10000)
+      .setScale(0.3)
+      .setAlpha(0.1)
+
+    if (this.scene.anims.exists(EFFECT_ANIM_KEYS.FLASH)) {
+      flash.play(EFFECT_ANIM_KEYS.FLASH)
+      flash.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => flash.destroy())
+    } else {
+      // No animation registered — just fade and destroy
+      this.scene.tweens.add({
+        targets: flash,
+        alpha: 0,
+        duration: 300,
+        onComplete: () => flash.destroy(),
+      })
+    }
   }
 
   private _destroyBanner(): void {

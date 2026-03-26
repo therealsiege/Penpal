@@ -1015,11 +1015,40 @@ export function CommandCenter(props: CommandCenterProps) {
   // --- Initialize Phaser game ---
   useEffect(() => {
     if (!gameContainerRef.current) return
-    const { game, scene } = createOfficeGame(gameContainerRef.current)
+    const container = gameContainerRef.current
+    const { game, scene } = createOfficeGame(container)
     gameRef.current = game
     sceneRef.current = scene
 
+    let rafId: number | null = null
+    const syncGameSizeToContainer = () => {
+      const r = container.getBoundingClientRect()
+      const width = Math.max(1, Math.floor(r.width))
+      const height = Math.max(1, Math.floor(r.height))
+      game.scale.resize(width, height)
+    }
+
+    const queueSync = () => {
+      if (rafId !== null) return
+      rafId = window.requestAnimationFrame(() => {
+        rafId = null
+        syncGameSizeToContainer()
+      })
+    }
+
+    // Keep Phaser canvas dimensions locked to the React container size.
+    const resizeObserver = new ResizeObserver(() => queueSync())
+    resizeObserver.observe(container)
+    window.addEventListener('resize', queueSync)
+    queueSync()
+
     return () => {
+      resizeObserver.disconnect()
+      window.removeEventListener('resize', queueSync)
+      if (rafId !== null) {
+        window.cancelAnimationFrame(rafId)
+        rafId = null
+      }
       EventBus.removeAll()
       game.destroy(true)
       gameRef.current = null

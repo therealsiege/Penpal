@@ -46,6 +46,12 @@ Each extracted module is a class that receives `Phaser.Scene` in its constructor
 | `events.ts` | 75 | `EventBus` singleton (pub/sub) for scene-to-React communication. Event constants: `AGENT_CLICKED`, `BROADCAST`, etc. |
 | `room-renderer.ts` | 56 | Room type detection from cwd path keywords, procedural color templates (design-studio, server-room, game-den, etc.). |
 | `OfficeGame.ts` | 40 | Bootstraps Phaser with RESIZE scale mode, transparent background, WebGL. Returns `{ game, scene }`. |
+| `quest-system.ts` | 220 | Quest auto-wrapper. Wraps agent tasks into quests with difficulty inference (trivial/normal/hard/epic/legendary), XP/credit multipliers. Singleton `questSystem`. |
+| `cosmetic-tiers.ts` | 185 | Rank-based cosmetic tier definitions (L1-L10). Maps XP rank to unlocked desk items, agent flair, office effects. Used by `workstation-creation.ts`. |
+| `leaderboard.ts` | 235 | Competitive leaderboard. Ranks agents by season XP, tracks weekly MVP, detects rivalries (within 5% XP). Singleton `leaderboardManager`. |
+| `seasons.ts` | 310 | Seasonal arc system. Monthly seasons with themes, challenges (task counts, streaks, difficulty targets), scoring, history. Singleton `seasonManager`. |
+| `season-hud.ts` | 280 | Season HUD overlay. Displays season name, progress bar, credits counter, active quest count. Toggle leaderboard (L key) and challenges (C key). |
+| `credits.ts` | 200 | Cosmetic credits economy. Earned from quests, spent on room themes, desk colors, particle effects, name colors. Shop catalog + equip system. Singleton `creditManager`. |
 
 ## Key Patterns
 
@@ -82,6 +88,24 @@ npx tsc --noEmit     # type check
 - **update() loop** — Throttled tick calls with `lastXxxAt` timestamps. Execution order matters (atmosphere before particles, camera before minimap).
 - **NavMesh rebuild** — Must be called after room layout changes; stale mesh = agents walk through walls.
 - **Host interfaces** — When adding new module callbacks, update the corresponding host interface and the OfficeScene implementation.
+
+## Game System — "Dev Studio Tycoon"
+
+Cohesive game layer on top of the office visualizer. Six interconnected systems:
+
+1. **Quest Auto-Wrapper** (`quest-system.ts`): Every agent task auto-wraps into a quest. Difficulty inferred from priority/pod status. Idle→working starts a quest; working→idle completes it. XP/credit multipliers: trivial 1x, normal 1.5x, hard 2x, epic 3x, legendary 5x.
+
+2. **Cosmetic Tiers** (`cosmetic-tiers.ts`): Desk items gated by XP rank. Interns get bare desks; higher ranks unlock keyboard, lamp, plant, phone, gold trim, RGB underglow. Agent flair (name glow, crown, aura) also rank-gated. Used in `workstation-creation.ts` via `isDeskItemUnlocked()` / `isFlairUnlocked()`.
+
+3. **Leaderboard** (`leaderboard.ts`): Agents ranked by season XP. Weekly MVP tracked. Rivalries detected when agents are within 5% XP. HUD overlay toggled with `L` key.
+
+4. **Seasons** (`seasons.ts`): 30-day seasons with themed challenges (e.g., "Complete 50 tasks", "3 agents reach Level 5"). Season templates: Neon Sprint, Deep Focus, Ship It, Blitz Mode. Auto-rotates on expiry.
+
+5. **Credits Economy** (`credits.ts`): Cosmetic-only currency. Earned from quest completions. Shop catalog: room themes, desk LED colors, particle effects, name colors. Equip per-agent.
+
+6. **Season HUD** (`season-hud.ts`): Screen-space overlay (top-right). Shows season name, progress bar, credits balance, active quest count. Toggle challenge checklist with `C` key.
+
+**Integration points**: `workstation-animation.ts` hooks working→idle and idle→working transitions to start/complete quests and track stats. `office-workstation.ts` tracks rank-ups in leaderboard/season. `workstation-creation.ts` gates desk items by rank. `orchestrator.ts` awards credits alongside XP.
 
 ## Conventions
 

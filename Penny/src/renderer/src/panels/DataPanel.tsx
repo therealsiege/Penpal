@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { PanelBackground } from '../components/PanelBackground'
 
 interface ScriptCard {
   id: string
@@ -219,7 +220,8 @@ export function DataPanel() {
   }
 
   return (
-    <div className="h-full flex flex-col bg-[#080a0e] overflow-hidden">
+    <PanelBackground>
+    <div className="h-full flex flex-col overflow-hidden">
       {/* Header */}
       <div className="shrink-0 px-6 pt-5 pb-3 border-b border-[#2a3440]">
         <h1 className="text-lg font-semibold text-slate-100">Data Pipeline</h1>
@@ -241,7 +243,7 @@ export function DataPanel() {
                 const isExpanded = expandedRun && run && expandedRun === run.runId
 
                 return (
-                  <div key={card.id} className="bg-[#0c1018] border border-[#2a3440] rounded-lg overflow-hidden">
+                  <div key={card.id} className="bg-[#0c1018]/90 border border-[#2a3440] rounded-lg overflow-hidden">
                     <div className="px-4 py-3 flex items-center gap-3">
                       {/* Status indicator */}
                       <div className="shrink-0">
@@ -323,7 +325,7 @@ export function DataPanel() {
 
                     {/* Log output */}
                     {isExpanded && run && (
-                      <div className="border-t border-[#2a3440] bg-[#060810] px-4 py-2 max-h-64 overflow-y-auto font-mono text-[11px] leading-relaxed text-[#6a7888]">
+                      <div className="border-t border-[#2a3440] bg-[#060810]/90 px-4 py-2 max-h-64 overflow-y-auto font-mono text-[11px] leading-relaxed text-[#6a7888]">
                         {run.lines.length === 0 && run.status === 'running' && (
                           <div className="text-[#3a4858] italic">Waiting for output...</div>
                         )}
@@ -348,7 +350,7 @@ export function DataPanel() {
             <span className="text-[#00ff88]">{GROUP_ICONS['Briefing']}</span>
             <h2 className="text-sm font-medium text-[#8a96a4] uppercase tracking-wider">Briefing</h2>
           </div>
-          <div className="bg-[#0c1018] border border-[#2a3440] rounded-lg px-4 py-3">
+          <div className="bg-[#0c1018]/90 border border-[#2a3440] rounded-lg px-4 py-3">
             <div className="flex items-center gap-3">
               <div className="flex-1">
                 <div className="text-sm font-medium text-slate-200">Configure Briefing Schedule</div>
@@ -392,5 +394,6 @@ export function DataPanel() {
         </div>
       </div>
     </div>
+    </PanelBackground>
   )
 }

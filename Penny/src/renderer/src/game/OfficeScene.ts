@@ -22,19 +22,24 @@ import {
   cwdToLabel, formatLabel,
 } from './office-helpers'
 
-import { SPRITESHEET_KEYS, ANIM_KEYS, SCENE_KEYS } from './office-asset-keys'
+import { SPRITESHEET_KEYS, ANIM_KEYS, SCENE_KEYS, EFFECT_ANIM_KEYS, IMAGE_KEYS } from './office-asset-keys'
 import { RoomVisibilityManager } from './room-visibility'
 import { soundEngine } from './sound-engine'
 import { achievements } from './achievements'
 import { CelebrationManager } from './celebrations'
 import { AgentMoodManager } from './agent-mood'
 import { InteractivePropsManager } from './interactive-props'
+import { SeasonHUD } from './season-hud'
+import { questSystem } from './quest-system'
+import { creditManager } from './credits'
+import { leaderboardManager } from './leaderboard'
+import { seasonManager } from './seasons'
 
 import {
   KB_ZOOM_STEP,
   CHAR_FRAME_W, CHAR_FRAME_H,
   OFFICE_TILE_SIZE, ROOM_TILE_SIZE,
-  WORKSTATION_W, WORKSTATION_H, WS_DESK_Y,
+  WORKSTATION_W, WORKSTATION_H,
   COLOR_BG, ZOOM_MAX,
   LOD_L1_MAX, LOD_L2_MAX,
   POD_REFRESH_MS,
@@ -111,7 +116,9 @@ export class OfficeScene extends Phaser.Scene {
   private celebrations!: CelebrationManager
   private moodManager!: AgentMoodManager
   private propsManager!: InteractivePropsManager
+  private seasonHud!: SeasonHUD
   private lastMoodUpdateAt = 0
+  private lastSeasonHudUpdateAt = 0
 
 
   // Screen-space UI overlays (toasts, tooltip, hover ring, help, debug, LOD label, status bar)
@@ -137,6 +144,172 @@ export class OfficeScene extends Phaser.Scene {
   // ---------------------------------------------------------------------------
 
   preload(): void {
+    // -----------------------------------------------------------------------
+    // Loading screen — dark Midgar-themed overlay with progress bar & sprite preview
+    // -----------------------------------------------------------------------
+    const { width: camW, height: camH } = this.cameras.main
+
+    // Full-screen dark backdrop
+    const loadBg = this.add.rectangle(camW / 2, camH / 2, camW, camH, 0x080a0e).setDepth(20000)
+
+    // Title text
+    const loadTitle = this.add.text(camW / 2, camH / 2 - 60, 'LOADING OFFICE', {
+      fontSize: '14px', fontFamily: 'monospace', color: '#5a7a6a', resolution: 2,
+    }).setOrigin(0.5).setDepth(20001)
+
+    // Progress bar track + fill
+    const barW = 220, barH = 6
+    const barX = camW / 2 - barW / 2
+    const barY = camH / 2 - 20
+    const trackBg = this.add.rectangle(camW / 2, barY, barW, barH, 0x141a22).setDepth(20001)
+    const barFill = this.add.rectangle(barX, barY, 0, barH, 0x00ff88).setOrigin(0, 0.5).setDepth(20002)
+
+    // Glow edge on progress bar fill
+    const barGlow = this.add.rectangle(barX, barY, 0, barH + 4, 0x00ff88).setOrigin(0, 0.5).setDepth(20001).setAlpha(0.15)
+
+    // Asset counter text: "0 / N assets"
+    const totalAssets = Object.keys(SPRITESHEET_KEYS).length + Object.keys(ANIM_KEYS).length + Object.keys(IMAGE_KEYS).length
+    let loadedCount = 0
+    const counterText = this.add.text(camW / 2, barY + 20, `0 / ${totalAssets} assets`, {
+      fontSize: '10px', fontFamily: 'monospace', color: '#3a4858', resolution: 2,
+    }).setOrigin(0.5).setDepth(20001)
+
+    // Current asset name
+    const assetText = this.add.text(camW / 2, barY + 38, '', {
+      fontSize: '10px', fontFamily: 'monospace', color: '#2a3440', resolution: 2,
+    }).setOrigin(0.5).setDepth(20001)
+
+    // Sprite preview area — show small thumbnails of loaded spritesheets
+    const previewY = barY + 70
+    const previewSlots: Phaser.GameObjects.Sprite[] = []
+    const previewLabels: Phaser.GameObjects.Text[] = []
+
+    // Animated dots on title
+    let dots = 0
+    const dotTimer = this.time.addEvent({
+      delay: 400, loop: true,
+      callback: () => { dots = (dots + 1) % 4; loadTitle.setText('LOADING OFFICE' + '.'.repeat(dots)) },
+    })
+
+    // Subtle scanning line effect
+    const scanLine = this.add.rectangle(camW / 2, 0, camW, 2, 0x00ff88).setAlpha(0.06).setDepth(20001)
+    this.tweens.add({
+      targets: scanLine, y: camH, duration: 2000, repeat: -1,
+      ease: 'Linear',
+    })
+
+    // Friendly display names for each asset key
+    const assetDisplayNames: Record<string, string> = {
+      [SPRITESHEET_KEYS.CHARACTERS]: 'Characters',
+      [SPRITESHEET_KEYS.OFFICE]: 'Office Tiles',
+      [SPRITESHEET_KEYS.ROOMS]: 'Room Tiles',
+      [SPRITESHEET_KEYS.DUDER_1]: 'Duder A',
+      [SPRITESHEET_KEYS.DUDER_2]: 'Duder B',
+      [SPRITESHEET_KEYS.GAME_ICONS]: 'Game Icons',
+      [SPRITESHEET_KEYS.GAME_ITEMS]: 'Game Items',
+      [SPRITESHEET_KEYS.EFFECTS_FLASH]: 'VFX Flash',
+      [SPRITESHEET_KEYS.EFFECTS_PUFF]: 'VFX Puff',
+      [SPRITESHEET_KEYS.EFFECTS_EXPLOSION]: 'VFX Explosion',
+      [SPRITESHEET_KEYS.EFFECTS_SMOKE]: 'VFX Smoke',
+      [SPRITESHEET_KEYS.EFFECTS_FART]: 'VFX Fart',
+      [SPRITESHEET_KEYS.LEGO_BAR]: 'XP Bars',
+      [SPRITESHEET_KEYS.DESK_PETS]: 'Desk Pets',
+      [ANIM_KEYS.WALK_1]: 'Walk Anim A',
+      [ANIM_KEYS.WALK_2]: 'Walk Anim B',
+      [ANIM_KEYS.IDLE_1]: 'Idle Anim A',
+      [ANIM_KEYS.IDLE_2]: 'Idle Anim B',
+      [ANIM_KEYS.SIT_1]: 'Sit Anim A',
+      [ANIM_KEYS.SIT_2]: 'Sit Anim B',
+      [IMAGE_KEYS.SLIDER_TRACK]: 'Slider Track',
+      [IMAGE_KEYS.SLIDER_FILL]: 'Slider Fill',
+      [IMAGE_KEYS.DIVIDER]: 'Divider',
+    }
+
+    // Spritesheets worth showing a thumbnail preview for
+    const loadedSheetKeys: string[] = []
+    const sheetPreviewKeys = new Set([
+      SPRITESHEET_KEYS.CHARACTERS, SPRITESHEET_KEYS.OFFICE, SPRITESHEET_KEYS.ROOMS,
+      SPRITESHEET_KEYS.DUDER_1, SPRITESHEET_KEYS.DUDER_2,
+      SPRITESHEET_KEYS.GAME_ICONS, SPRITESHEET_KEYS.GAME_ITEMS, SPRITESHEET_KEYS.DESK_PETS,
+    ])
+
+    // Progress handler — fill bar
+    this.load.on('progress', (value: number) => {
+      barFill.width = barW * value
+      barGlow.width = barW * value
+    })
+
+    // File complete handler — update counter, asset name, and sprite preview
+    this.load.on('filecomplete', (key: string) => {
+      loadedCount++
+      counterText.setText(`${loadedCount} / ${totalAssets} assets`)
+      const displayName = assetDisplayNames[key] || key
+      assetText.setText(displayName)
+
+      // Show sprite preview for interesting spritesheets
+      if (sheetPreviewKeys.has(key) && this.textures.exists(key)) {
+        loadedSheetKeys.push(key)
+        // Clear old previews
+        previewSlots.forEach(s => s.destroy())
+        previewLabels.forEach(l => l.destroy())
+        previewSlots.length = 0
+        previewLabels.length = 0
+
+        // Show last 5 loaded spritesheets as small thumbnails
+        const show = loadedSheetKeys.slice(-5)
+        const slotW = 40
+        const totalW = show.length * slotW
+        const startX = camW / 2 - totalW / 2 + slotW / 2
+
+        show.forEach((sheetKey, i) => {
+          const sx = startX + i * slotW
+          const sprite = this.add.sprite(sx, previewY, sheetKey, 0).setDepth(20002)
+          // Scale to fit ~32px box
+          const maxDim = Math.max(sprite.width, sprite.height)
+          sprite.setScale(32 / maxDim)
+          sprite.setAlpha(0)
+          this.tweens.add({ targets: sprite, alpha: 0.7, duration: 200 })
+          previewSlots.push(sprite)
+
+          const label = this.add.text(sx, previewY + 22, assetDisplayNames[sheetKey] || sheetKey, {
+            fontSize: '7px', fontFamily: 'monospace', color: '#2a3440', resolution: 2,
+          }).setOrigin(0.5).setDepth(20001).setAlpha(0)
+          this.tweens.add({ targets: label, alpha: 0.6, duration: 200 })
+          previewLabels.push(label)
+        })
+      }
+    })
+
+    // Complete handler — show READY! then fade out
+    this.load.on('complete', () => {
+      dotTimer.destroy()
+      scanLine.destroy()
+
+      // Show READY! text
+      loadTitle.setText('READY!')
+      loadTitle.setColor('#00ff88')
+      counterText.setText(`${totalAssets} / ${totalAssets} assets`)
+      assetText.setText('')
+
+      // Brief pause then fade out everything
+      this.time.delayedCall(400, () => {
+        const allObjects: Phaser.GameObjects.GameObject[] = [
+          loadBg, loadTitle, trackBg, barFill, barGlow, counterText, assetText,
+          ...previewSlots, ...previewLabels,
+        ]
+        this.tweens.add({
+          targets: allObjects,
+          alpha: 0,
+          duration: 350,
+          ease: 'Power2',
+          onComplete: () => { allObjects.forEach(obj => obj.destroy()) },
+        })
+      })
+    })
+
+    // -----------------------------------------------------------------------
+    // Asset loading
+    // -----------------------------------------------------------------------
     this.load.spritesheet(SPRITESHEET_KEYS.CHARACTERS, './sprites/characters.png', {
       frameWidth:  CHAR_FRAME_W,
       frameHeight: CHAR_FRAME_H,
@@ -169,6 +342,74 @@ export class OfficeScene extends Phaser.Scene {
     this.load.spritesheet(ANIM_KEYS.SIT_1,  './sprites/sit-1.png',  { frameWidth: ANIM_FW, frameHeight: ANIM_FH })
     this.load.spritesheet(ANIM_KEYS.SIT_2,  './sprites/sit-2.png',  { frameWidth: ANIM_FW, frameHeight: ANIM_FH })
     this.load.on('filecomplete-spritesheet-office', () => { this.officeTilesLoaded = true })
+
+    // Game icon spritesheet (stars, medals, checkmarks — 32×32 cells)
+    this.load.spritesheet(SPRITESHEET_KEYS.GAME_ICONS, './sprites/game-icons.png', {
+      frameWidth: 32, frameHeight: 32,
+    })
+
+    // HD game icons — 64×64 cells, frames 0-19 (double-size for LOD3 detail)
+    this.load.spritesheet(SPRITESHEET_KEYS.GAME_ICONS_HD, './sprites/game-icons-hd.png', {
+      frameWidth: 64, frameHeight: 64,
+    })
+
+    // Game items spritesheet (desk props, cafe items — 32×32 cells)
+    this.load.spritesheet(SPRITESHEET_KEYS.GAME_ITEMS, './sprites/game-items.png', {
+      frameWidth: 32, frameHeight: 32,
+    })
+
+    // VFX spritesheets (128×128 cells)
+    this.load.spritesheet(SPRITESHEET_KEYS.EFFECTS_FLASH, './sprites/game-effects-flash.png', {
+      frameWidth: 128, frameHeight: 128,
+    })
+    this.load.spritesheet(SPRITESHEET_KEYS.EFFECTS_PUFF, './sprites/game-effects-puff.png', {
+      frameWidth: 128, frameHeight: 128,
+    })
+    this.load.spritesheet(SPRITESHEET_KEYS.EFFECTS_EXPLOSION, './sprites/game-effects-explosion.png', {
+      frameWidth: 128, frameHeight: 128,
+    })
+    this.load.spritesheet(SPRITESHEET_KEYS.EFFECTS_SMOKE, './sprites/game-effects-smoke.png', {
+      frameWidth: 128, frameHeight: 128,
+    })
+    this.load.spritesheet(SPRITESHEET_KEYS.EFFECTS_FART, './sprites/game-effects-fart.png', {
+      frameWidth: 128, frameHeight: 128,
+    })
+
+    // Lego brick XP bar segments
+    this.load.spritesheet(SPRITESHEET_KEYS.LEGO_BAR, './sprites/lego-bar.png', {
+      frameWidth: 16, frameHeight: 8,
+    })
+
+    // Desk pet bodies (24x24 cells)
+    this.load.spritesheet(SPRITESHEET_KEYS.DESK_PETS, './sprites/desk-pets.png', {
+      frameWidth: 24, frameHeight: 24,
+    })
+
+    // Desk pet face parts — eyes and mouths (16x8 cells)
+    this.load.spritesheet(SPRITESHEET_KEYS.DESK_PET_FACES, './sprites/desk-pet-faces.png', {
+      frameWidth: 16, frameHeight: 8,
+    })
+
+    // Lego special items (24x24 cells) — coin, exclamation, crate, explosive, grade A
+    this.load.spritesheet(SPRITESHEET_KEYS.LEGO_SPECIALS, './sprites/lego-specials.png', {
+      frameWidth: 24, frameHeight: 24,
+    })
+
+    // Slider sprites for season HUD progress bar
+    this.load.image(IMAGE_KEYS.SLIDER_TRACK, './sprites/slider-track.png')
+    this.load.image(IMAGE_KEYS.SLIDER_FILL, './sprites/slider-fill.png')
+
+    // Vertical slider sprites for workstation energy bars
+    this.load.image(IMAGE_KEYS.VSLIDER_TRACK, './sprites/vslider-track.png')
+    this.load.image(IMAGE_KEYS.VSLIDER_FILL, './sprites/vslider-fill.png')
+
+    // Divider sprite for panel section dividers
+    this.load.image(IMAGE_KEYS.DIVIDER, './sprites/divider.png')
+
+    // UI panel sprites — thought bubble bg, monitor frame, HUD button
+    this.load.image(IMAGE_KEYS.PANEL_BG, './sprites/panel-bg.png')
+    this.load.image(IMAGE_KEYS.PANEL_OUTLINE, './sprites/panel-outline.png')
+    this.load.image(IMAGE_KEYS.BUTTON_SQUARE, './sprites/button-square.png')
   }
 
   create(): void {
@@ -223,13 +464,13 @@ export class OfficeScene extends Phaser.Scene {
     this.pods.init()
 
     // Sky gradient — deepest background layer, behind stars and clouds
-    const skyGradient = this.add.graphics().setDepth(-11)
+    const skyGradient = this.add.graphics().setDepth(-11).setScrollFactor(0)
     this.skyGradient = skyGradient
 
     // Day/night cycle overlay (must be created before atmosphere.init)
     this.dayNightOverlay = this.add
       .rectangle(0, 0, 8000, 8000, 0x000000, 0)
-      .setOrigin(0, 0)
+      .setOrigin(0.5, 0.5)
       .setDepth(9997)
       .setScrollFactor(0)
 
@@ -243,7 +484,7 @@ export class OfficeScene extends Phaser.Scene {
         if (this.particles) this.particles.setWeather(phase, this.viewWidth, this.viewHeight)
       },
       invalidateOfficeBgCache: () => { this.background.invalidateBgCache() },
-      showToast: (msg, type) => { if (this.ui) this.ui.showToast(msg, type === 'warn' ? 'warning' : type) },
+      showToast: (msg, type) => this.showToast(msg, type === 'warn' ? 'warning' : type),
       getCamera: () => this.cameras.main,
     })
     this.atmosphere.init(
@@ -341,8 +582,11 @@ export class OfficeScene extends Phaser.Scene {
     this.scale.on('resize', (gameSize: Phaser.Structs.Size) => {
       this.viewWidth  = gameSize.width
       this.viewHeight = gameSize.height
+      cam.setViewport(0, 0, gameSize.width, gameSize.height)
+      cam.setSize(gameSize.width, gameSize.height)
 
       if (this.ui) { this.ui.setViewSize(gameSize.width, gameSize.height) }
+      if (this.seasonHud) { this.seasonHud.setViewSize(gameSize.width, gameSize.height) }
 
       if (this.resizeTimer) clearTimeout(this.resizeTimer)
       this.resizeTimer = setTimeout(() => {
@@ -441,6 +685,27 @@ export class OfficeScene extends Phaser.Scene {
       this.input.keyboard.on('keydown-H', toggleHelp)
       this.input.keyboard.on('keydown-QUESTION_MARK', toggleHelp)
 
+      // L — toggle leaderboard overlay
+      this.input.keyboard.on('keydown-L', (e: KeyboardEvent) => {
+        if (shouldIgnoreKeyboardShortcuts(e)) return
+        e.preventDefault()
+        this.seasonHud.toggleLeaderboard()
+      })
+
+      // C — toggle season challenges overlay
+      this.input.keyboard.on('keydown-C', (e: KeyboardEvent) => {
+        if (shouldIgnoreKeyboardShortcuts(e)) return
+        e.preventDefault()
+        this.seasonHud.toggleChallenges()
+      })
+
+      // B — toggle shop overlay
+      this.input.keyboard.on('keydown-B', (e: KeyboardEvent) => {
+        if (shouldIgnoreKeyboardShortcuts(e)) return
+        e.preventDefault()
+        this.seasonHud.toggleShop()
+      })
+
       // Backtick — toggle debug overlay (dev only)
       this.input.keyboard.on('keydown-BACKTICK', (e: KeyboardEvent) => {
         if (shouldIgnoreKeyboardShortcuts(e)) return
@@ -476,12 +741,117 @@ export class OfficeScene extends Phaser.Scene {
     }
     EventBus.on(EVENTS.AGENT_CLICKED, this.agentClickedHandler)
 
-    // Game systems — celebrations, mood, achievements, sound, props
+    // Game systems — celebrations, mood, achievements, sound, props, season HUD
     this.celebrations = new CelebrationManager(this)
+
+    // VFX sprite animations (loaded in preload)
+    if (!this.anims.exists(EFFECT_ANIM_KEYS.FLASH)) {
+      this.anims.create({
+        key: EFFECT_ANIM_KEYS.FLASH,
+        frames: this.anims.generateFrameNumbers(SPRITESHEET_KEYS.EFFECTS_FLASH, { start: 0, end: 8 }),
+        frameRate: 24,
+        repeat: 0,
+      })
+    }
+    if (!this.anims.exists(EFFECT_ANIM_KEYS.PUFF)) {
+      this.anims.create({
+        key: EFFECT_ANIM_KEYS.PUFF,
+        frames: this.anims.generateFrameNumbers(SPRITESHEET_KEYS.EFFECTS_PUFF, { start: 0, end: 24 }),
+        frameRate: 30,
+        repeat: 0,
+      })
+    }
+    if (!this.anims.exists(EFFECT_ANIM_KEYS.EXPLOSION)) {
+      this.anims.create({
+        key: EFFECT_ANIM_KEYS.EXPLOSION,
+        frames: this.anims.generateFrameNumbers(SPRITESHEET_KEYS.EFFECTS_EXPLOSION, { start: 0, end: 8 }),
+        frameRate: 20,
+        repeat: 0,
+      })
+    }
+    if (!this.anims.exists(EFFECT_ANIM_KEYS.SMOKE)) {
+      this.anims.create({
+        key: EFFECT_ANIM_KEYS.SMOKE,
+        frames: this.anims.generateFrameNumbers(SPRITESHEET_KEYS.EFFECTS_SMOKE, { start: 0, end: 24 }),
+        frameRate: 24,
+        repeat: 0,
+      })
+    }
+    if (!this.anims.exists(EFFECT_ANIM_KEYS.FART)) {
+      this.anims.create({
+        key: EFFECT_ANIM_KEYS.FART,
+        frames: this.anims.generateFrameNumbers(SPRITESHEET_KEYS.EFFECTS_FART, { start: 0, end: 8 }),
+        frameRate: 20,
+        repeat: 0,
+      })
+    }
+
     this.moodManager = new AgentMoodManager(this)
     this.propsManager = new InteractivePropsManager(this)
+    this.seasonHud = new SeasonHUD(this)
+    this.seasonHud.init(this.viewWidth, this.viewHeight)
     soundEngine.wireEvents()
     achievements.load()
+
+    // Wire achievement unlock to visual celebration
+    EventBus.on(EVENTS.ACHIEVEMENT_UNLOCKED, (...args: unknown[]) => {
+      const [, title, iconFrame] = args as [string, string, number]
+      // Show badge at screen center (scroll-factor 0 position)
+      const cam = this.cameras.main
+      this.celebrations.achievementUnlocked(cam.width / 2, cam.height / 2, title, iconFrame)
+    })
+
+    // Wire season end to dramatic ceremony
+    EventBus.on(EVENTS.SEASON_ENDED, (...args: unknown[]) => {
+      const [, seasonName, score] = args as [string, string, number]
+      this.celebrations.seasonEnd(seasonName, score)
+    })
+
+    // Wire season start to announcement
+    EventBus.on(EVENTS.SEASON_STARTED, (...args: unknown[]) => {
+      const [, seasonName] = args as [string, string]
+      this.celebrations.seasonStart(seasonName)
+    })
+
+    // Wire challenge completion to mini-celebration
+    EventBus.on(EVENTS.CHALLENGE_COMPLETED, (...args: unknown[]) => {
+      const [, description] = args as [string, string]
+      this.celebrations.challengeCompleted(description)
+    })
+
+    // Wire quest completion to reward popup VFX
+    EventBus.on(EVENTS.QUEST_COMPLETED, (...args: unknown[]) => {
+      const [, agentId, xpReward, creditReward, difficulty] = args as [string, string, number, number, string]
+      // Find the workstation for this agent and show quest reward VFX
+      for (const room of this.rooms.values()) {
+        const ws = room.workstations.get(agentId)
+        if (ws) {
+          const wx = room.x + ws.container.x
+          const wy = room.y + ws.container.y
+          this.celebrations.questReward(
+            wx, wy,
+            difficulty as 'trivial' | 'normal' | 'hard' | 'epic' | 'legendary',
+            xpReward, creditReward,
+          )
+          break
+        }
+      }
+    })
+
+    // Wire quest failure to error VFX
+    EventBus.on(EVENTS.QUEST_FAILED, (...args: unknown[]) => {
+      const [, agentId] = args as [string, string]
+      // Find the workstation for this agent and show error VFX
+      for (const room of this.rooms.values()) {
+        const ws = room.workstations.get(agentId)
+        if (ws) {
+          const wx = room.x + ws.container.x
+          const wy = room.y + ws.container.y
+          this.celebrations.error(wx, wy)
+          break
+        }
+      }
+    })
 
     // Launch UIScene as a parallel overlay — owns all screen-space HUD elements
     this.scene.launch(SCENE_KEYS.UI_SCENE)
@@ -526,6 +896,7 @@ export class OfficeScene extends Phaser.Scene {
       this.wsManager = new OfficeWorkstations(this, {
         showToast: (t, type) => scene.showToast(t, type),
         spawnEmojiReaction: (x, y, e) => scene.particles.spawnEmojiReaction(x, y, e),
+        spawnSpriteReaction: (x, y, f) => scene.particles.spawnSpriteReaction(x, y, f),
         spawnAlertRipple: (x, y, c) => scene.particles.spawnAlertRipple(x, y, c),
         burstConfetti: (x, y) => scene.particles.burstConfetti(x, y),
         spawnSteamParticles: (ws) => scene.particles.spawnSteamParticles(ws),
@@ -575,10 +946,16 @@ export class OfficeScene extends Phaser.Scene {
       this.pods.setLastDrawAt(time)
       this.pods.clearDirty()
     }
+    // Rivalry connecting lines — electric blue dashes between rival agents (every 2.5s)
+    if (this.pods.hasRivalries() && time - this.pods.getLastRivalryDrawAt() >= 2500) {
+      this.pods.drawRivalryLines(time, this.rooms)
+    }
     if (this.background.getCorridorSegments().length > 0 && time - this.lastHallwayPulseAt >= 90) {
       this.background.drawHallwayIndicators(time)
       this.lastHallwayPulseAt = time
     }
+    // Reactor glow + ambient pulse VFX (both internally throttled)
+    this.background.tickReactorGlow(time)
     // Keep particle system informed about active agent state for corridor particles
     if (this.particles) {
       const hasActiveAgent = this.agents.some(
@@ -609,6 +986,10 @@ export class OfficeScene extends Phaser.Scene {
     this.particles.tickSteam(cam.scrollX, cam.scrollY, camWWorld, camHWorld, cam.zoom)
     this.atmosphere.tick(time, this.particles.isRainActive(), this.particles.isSnowActive())
     this.atmosphere.tickCeilingLightActivity(time, this.rooms)
+    // Room ambient haze — subtle productivity puffs in busy rooms
+    if (this.roomRenderer && this.rooms.size > 0) {
+      this.roomRenderer.tickRoomHaze(time, this.rooms)
+    }
     if (this.background.hasWhiteboardContainer() && time - this.background.getLastWhiteboardUpdateAt() >= 5000) {
       this.background.setLastWhiteboardUpdateAt(time)
       this.background.updateWhiteboardStats()
@@ -656,6 +1037,12 @@ export class OfficeScene extends Phaser.Scene {
         }
       }
       this.moodManager.update(agentMap)
+    }
+
+    // Season HUD — update every 3s
+    if (this.seasonHud && time - this.lastSeasonHudUpdateAt >= 3000) {
+      this.lastSeasonHudUpdateAt = time
+      this.seasonHud.update()
     }
   }
 
@@ -915,17 +1302,7 @@ export class OfficeScene extends Phaser.Scene {
   getNavMesh(): NavMesh { return this.navMesh }
 
   private rebuildNavMesh(): void {
-    const rooms: Array<{ x: number; y: number; width: number; height: number; doorX: number; doorY: number }> = []
-    for (const room of this.rooms.values()) {
-      rooms.push({
-        x: room.x, y: room.y,
-        width: room.width, height: room.height,
-        doorX: room.x,
-        doorY: getRoomDoorY(room),
-      })
-    }
-
-    // Build bounds from all room positions (per-team buildings, no single building rect)
+    // Build bounds from all room positions
     let bMinX = Infinity, bMinY = Infinity, bMaxX = -Infinity, bMaxY = -Infinity
     for (const room of this.rooms.values()) {
       bMinX = Math.min(bMinX, room.x - room.width / 2)
@@ -941,25 +1318,11 @@ export class OfficeScene extends Phaser.Scene {
       }
     }
 
-    const cafeBounds = this.cafe.getBounds()
-
     this.navMesh.rebuild({
       buildingBounds,
-      rooms,
       corridorSegments: this.background.getCorridorSegments(),
-      cafeBounds,
+      cafeBounds: this.cafe.getBounds(),
     })
-
-    // Block desk footprints so agents walk around furniture
-    const DESK_BLOCK_W = 64
-    const DESK_BLOCK_H = 21
-    for (const room of this.rooms.values()) {
-      for (const ws of room.workstations.values()) {
-        const deskWorldX = room.x + ws.container.x - DESK_BLOCK_W / 2
-        const deskWorldY = room.y + ws.container.y + WS_DESK_Y - DESK_BLOCK_H / 2
-        this.navMesh.blockRect(deskWorldX, deskWorldY, DESK_BLOCK_W, DESK_BLOCK_H)
-      }
-    }
   }
 
 
@@ -968,9 +1331,9 @@ export class OfficeScene extends Phaser.Scene {
   // ---------------------------------------------------------------------------
 
   private showToast(text: string, type: 'info' | 'success' | 'warning' | 'error' = 'info'): void {
-    this.ui.showToast(text, type)
-    // Also push to UIScene via EventBus so the parallel overlay scene receives it.
-    // UIScene uses 'warn' where OfficeUI uses 'warning'; map here at the source.
+    // Route all toasts to UIScene (zoom-independent camera) via EventBus.
+    // OfficeScene's office-ui.ts toasts were broken by camera zoom, so we
+    // only use the UIScene toast system now.
     const level = type === 'warning' ? 'warn' : (type === 'success' ? 'info' : type) as 'info' | 'warn' | 'error'
     EventBus.emit(EVENTS.NOTIFICATION, text, level)
   }
@@ -1112,6 +1475,7 @@ export class OfficeScene extends Phaser.Scene {
 
     // UI subsystem cleanup (helpOverlay, debugOverlay, tooltips, hover ring, notifications)
     this.ui.destroy()
+    this.seasonHud.destroy()
 
     if (this.roomRenderer) {
       for (const room of this.rooms.values()) {

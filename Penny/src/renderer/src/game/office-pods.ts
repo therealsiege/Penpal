@@ -2,6 +2,9 @@ import Phaser from 'phaser'
 import type { Room, PodLineInfo } from './office-types'
 import { COLOR_LED_AMBER } from './office-constants'
 import { hashToken } from './office-helpers'
+import { SPRITESHEET_KEYS, ICON_FRAMES, EFFECT_ANIM_KEYS } from './office-asset-keys'
+import { leaderboardManager } from './leaderboard'
+import type { Rivalry } from './leaderboard'
 
 // ---------------------------------------------------------------------------
 // Chat animation entry type
@@ -35,6 +38,11 @@ export class OfficePods {
 
   private podsDirty = true
   private lastDrawAt = 0
+
+  /** Sprite-based endpoint dots at pod line agent positions */
+  private endpointSprites: Phaser.GameObjects.Sprite[] = []
+  /** Sprite-based pulse dots traveling along active pod segments */
+  private pulseSprites: Phaser.GameObjects.Sprite[] = []
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene
@@ -85,6 +93,12 @@ export class OfficePods {
     }
     this.podGraphics.clear()
 
+    // Recycle old endpoint and pulse sprites
+    for (const s of this.endpointSprites) s.destroy()
+    this.endpointSprites = []
+    for (const s of this.pulseSprites) s.destroy()
+    this.pulseSprites = []
+
     for (const pod of this.podLines) {
       const agentIds = [pod.solverAgentId, pod.reviewerAgentId, pod.executorAgentId]
       const positions: { x: number; y: number }[] = []
@@ -99,12 +113,15 @@ export class OfficePods {
       // Color based on workflow status
       let lineColor = 0x64748b
       let lineAlpha = 0.4
+      let endpointFrame = ICON_FRAMES.CIRCLE_GREY
       if (pod.status === 'solving' || pod.status === 'reviewing' || pod.status === 'executing') {
         lineColor = 0x3b82f6
         lineAlpha = 0.6
+        endpointFrame = ICON_FRAMES.CIRCLE_BLUE
       } else if (pod.status === 'feedback') {
         lineColor = 0xfbbf24
         lineAlpha = 0.5
+        endpointFrame = ICON_FRAMES.CIRCLE_YELLOW
       }
 
       this.podGraphics.lineStyle(2, lineColor, lineAlpha)
@@ -119,16 +136,35 @@ export class OfficePods {
         )
       }
 
+      // Sprite-based endpoint dots at each agent position
+      for (const pos of positions) {
+        const ep = this.scene.add.sprite(pos.x, pos.y, SPRITESHEET_KEYS.GAME_ICONS, endpointFrame)
+          .setScale(0.10)
+          .setAlpha(lineAlpha * 0.8)
+          .setDepth(10000)
+        this.endpointSprites.push(ep)
+      }
+
       if (this.isPodAnimatedStatus(pod.status)) {
         const pulseSegments = this.getPodPulseSegments(pod.status, positions.length)
-        const pulseColor = pod.status === 'feedback' ? COLOR_LED_AMBER : 0x60a5fa
+        const pulseFrame = pod.status === 'feedback' ? ICON_FRAMES.CIRCLE_YELLOW : ICON_FRAMES.CIRCLE_BLUE
         const seed = hashToken(pod.workflowId) % 1000
         pulseSegments.forEach((seg, i) => {
           if (seg.from < 0 || seg.to < 0 || seg.from >= positions.length || seg.to >= positions.length) return
           const speed = 0.00058
           const base = (timeMs * speed + seed * 0.001 + i * 0.21) % 1
           const t = seg.from <= seg.to ? base : 1 - base
-          this.drawPodPulse(this.podGraphics!, positions[seg.from], positions[seg.to], t, pulseColor)
+          // Sprite-based pulse dot traveling along the segment
+          const px = Phaser.Math.Linear(positions[seg.from].x, positions[seg.to].x, t)
+          const py = Phaser.Math.Linear(positions[seg.from].y, positions[seg.to].y, t)
+          const pulseSprite = this.scene.add.sprite(px, py, SPRITESHEET_KEYS.GAME_ICONS, pulseFrame)
+            .setScale(0.15)
+            .setAlpha(0.75)
+            .setDepth(10001)
+          this.pulseSprites.push(pulseSprite)
+          // Keep the Graphics glow halo behind the sprite for the bloom effect
+          this.podGraphics!.fillStyle(pulseFrame === ICON_FRAMES.CIRCLE_YELLOW ? COLOR_LED_AMBER : 0x60a5fa, 0.15)
+          this.podGraphics!.fillCircle(px, py, 7)
         })
       }
     }
@@ -147,21 +183,6 @@ export class OfficePods {
     }
     if (status === 'solving') return [{ from: 0, to: 1 }]
     return []
-  }
-
-  private drawPodPulse(
-    g: Phaser.GameObjects.Graphics,
-    start: { x: number; y: number },
-    end: { x: number; y: number },
-    t: number,
-    color: number,
-  ): void {
-    const px = Phaser.Math.Linear(start.x, end.x, t)
-    const py = Phaser.Math.Linear(start.y, end.y, t)
-    g.fillStyle(color, 0.2)
-    g.fillCircle(px, py, 6.5)
-    g.fillStyle(color, 0.85)
-    g.fillCircle(px, py, 2.6)
   }
 
   private drawDashedLine(g: Phaser.GameObjects.Graphics, x1: number, y1: number, x2: number, y2: number, dashLen: number, gapLen: number): void {
@@ -326,12 +347,109 @@ export class OfficePods {
   }
 
   // ---------------------------------------------------------------------------
+  // Rivalry connecting lines — electric blue lines between rival agents
+  // ---------------------------------------------------------------------------
+
+  private rivalryGraphics: Phaser.GameObjects.Graphics | null = null
+  private lastRivalryDrawAt = 0
+  private lastRivalryClashAt = 0
+
+  /** Draw electric-blue dashed lines between rival agents who share a room.
+   *  Spawns a subtle clash VFX at the midpoint every 8-10 seconds. */
+  drawRivalryLines(timeMs: number, rooms: Map<string, Room>): void {
+    if (!this.rivalryGraphics) {
+      this.rivalryGraphics = this.scene.add.graphics().setDepth(201)
+    }
+    this.rivalryGraphics.clear()
+
+    const rivalries = leaderboardManager.getRivalries()
+    if (rivalries.length === 0) return
+
+    // Build agentId -> roomKey lookup for quick same-room detection
+    const agentRoomMap = new Map<string, string>()
+    for (const [roomKey, room] of rooms) {
+      for (const agentId of room.workstations.keys()) {
+        agentRoomMap.set(agentId, roomKey)
+      }
+    }
+
+    const CLASH_INTERVAL_MS = 9000
+    const shouldClash = timeMs - this.lastRivalryClashAt >= CLASH_INTERVAL_MS
+
+    for (const rivalry of rivalries) {
+      const room1 = agentRoomMap.get(rivalry.agent1Id)
+      const room2 = agentRoomMap.get(rivalry.agent2Id)
+      // Only draw line if both agents are in the same room
+      if (!room1 || !room2 || room1 !== room2) continue
+
+      const pos1 = this.getWorkstationWorldPos(rivalry.agent1Id, rooms)
+      const pos2 = this.getWorkstationWorldPos(rivalry.agent2Id, rooms)
+      if (!pos1 || !pos2) continue
+
+      // Electric blue dashed line between rivals
+      const g = this.rivalryGraphics!
+
+      // Outer glow line
+      g.lineStyle(3, 0x00e5ff, 0.1)
+      this.drawDashedLine(g, pos1.x, pos1.y, pos2.x, pos2.y, 5, 4)
+
+      // Core line
+      g.lineStyle(1.5, 0x00e5ff, 0.35)
+      this.drawDashedLine(g, pos1.x, pos1.y, pos2.x, pos2.y, 5, 4)
+
+      // Small glow dots at each endpoint
+      g.fillStyle(0x00e5ff, 0.15)
+      g.fillCircle(pos1.x, pos1.y, 5)
+      g.fillCircle(pos2.x, pos2.y, 5)
+
+      // Midpoint clash VFX — tiny explosion puff every ~9 seconds
+      if (shouldClash) {
+        const mx = (pos1.x + pos2.x) / 2
+        const my = (pos1.y + pos2.y) / 2
+
+        // Use the puff VFX if available, otherwise draw a simple flash
+        if (this.scene.anims.exists(EFFECT_ANIM_KEYS.PUFF)) {
+          const puff = this.scene.add.sprite(mx, my, SPRITESHEET_KEYS.EFFECTS_PUFF)
+            .setDepth(202).setScale(0.15).setAlpha(0.4).setTint(0x00e5ff)
+          puff.play(EFFECT_ANIM_KEYS.PUFF)
+          puff.once('animationcomplete', () => puff.destroy())
+        } else {
+          // Fallback: simple circle flash
+          g.fillStyle(0x00e5ff, 0.3)
+          g.fillCircle(mx, my, 6)
+        }
+      }
+    }
+
+    if (shouldClash) {
+      this.lastRivalryClashAt = timeMs
+    }
+    this.lastRivalryDrawAt = timeMs
+  }
+
+  hasRivalries(): boolean {
+    return leaderboardManager.getRivalries().length > 0
+  }
+
+  getLastRivalryDrawAt(): number {
+    return this.lastRivalryDrawAt
+  }
+
+  // ---------------------------------------------------------------------------
   // Cleanup
   // ---------------------------------------------------------------------------
 
   destroy(): void {
     this.podGraphics?.destroy()
     this.podGraphics = null
+
+    this.rivalryGraphics?.destroy()
+    this.rivalryGraphics = null
+
+    for (const s of this.endpointSprites) s.destroy()
+    this.endpointSprites = []
+    for (const s of this.pulseSprites) s.destroy()
+    this.pulseSprites = []
 
     for (const anim of this.chatAnimations) {
       try { anim.dot.destroy() } catch { /* already gone */ }

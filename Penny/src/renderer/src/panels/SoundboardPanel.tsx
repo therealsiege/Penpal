@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { SoundboardClip, SoundboardListing } from '../types'
+import { PanelBackground } from '../components/PanelBackground'
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -115,7 +116,7 @@ function ClipCard({ clip, playing, onPlay }: ClipCardProps) {
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/60',
         playing
           ? 'animate-breathe-glow bg-violet-500/90 text-white ring-1 ring-violet-400/40'
-          : 'bg-violet-700/80 hover:bg-violet-600 text-white',
+          : 'bg-violet-700/70 hover:bg-violet-600/90 text-white',
       ].join(' ')}
     >
       {/* playing indicator dot */}
@@ -333,6 +334,7 @@ export function SoundboardPanel() {
   // ── render ─────────────────────────────────────────────────────────────────
 
   return (
+    <PanelBackground>
     <div className="h-full overflow-y-auto">
       <div className="max-w-6xl mx-auto py-8 px-6 space-y-6">
 
@@ -352,7 +354,7 @@ export function SoundboardPanel() {
             <button
               onClick={() => void loadListing()}
               disabled={loading}
-              className="px-3 py-1.5 rounded bg-slate-800 hover:bg-slate-700 text-xs text-slate-200 transition-colors disabled:opacity-50"
+              className="px-3 py-1.5 rounded bg-slate-800/80 hover:bg-slate-700/80 text-xs text-slate-200 transition-colors disabled:opacity-50"
             >
               {loading ? 'Refreshing...' : 'Refresh'}
             </button>
@@ -387,7 +389,7 @@ export function SoundboardPanel() {
               placeholder="Search clips..."
               aria-label="Search sound clips"
               className={[
-                'w-full pl-9 pr-3 py-2 rounded-lg text-sm bg-slate-800/70 border border-slate-700/50',
+                'w-full pl-9 pr-3 py-2 rounded-lg text-sm bg-slate-800/60 border border-slate-700/50',
                 'text-slate-200 placeholder:text-slate-500',
                 'focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-slate-600',
                 'transition-all duration-200',
@@ -432,5 +434,6 @@ export function SoundboardPanel() {
         )}
       </div>
     </div>
+    </PanelBackground>
   )
 }

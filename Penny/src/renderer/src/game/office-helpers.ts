@@ -71,7 +71,7 @@ export function getPoseFrame(charIdx: number, agent: AgentState): number {
 /** World-space Y of the room's door opening. */
 export function getRoomDoorY(room: DoorRoom): number {
   return room.doorSide === 'top'
-    ? room.y - room.height / 2 + 20
+    ? room.y - room.height / 2
     : room.y + room.height / 2
 }
 

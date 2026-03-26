@@ -1,6 +1,8 @@
 import Phaser from 'phaser'
 import type { Room, WorkstationSprite } from './office-types'
-import { WORLD_MARGIN, LOD_L1_MAX } from './office-constants'
+import { WORLD_MARGIN, LOD_L1_MAX, LOD_L2_MAX } from './office-constants'
+import { SPRITESHEET_KEYS, EFFECT_ANIM_KEYS, ICON_FRAMES } from './office-asset-keys'
+import { soundEngine } from './sound-engine'
 
 // ---------------------------------------------------------------------------
 // OfficeAmbient — ambient office-life activity effects
@@ -75,6 +77,26 @@ export class OfficeAmbient {
   }
 
   // ---------------------------------------------------------------------------
+  // VFX helper — play a small sprite-based effect at a world position
+  // ---------------------------------------------------------------------------
+
+  private playVFX(
+    x: number, y: number,
+    animKey: string,
+    sheetKey: string,
+    scale: number = 0.12,
+    alpha: number = 0.5,
+  ): void {
+    if (!this.scene.anims.exists(animKey)) return
+    const vfx = this.scene.add.sprite(x, y, sheetKey, 0)
+      .setScale(scale).setAlpha(alpha).setDepth(55)
+    vfx.play(animKey)
+    vfx.once('animationcomplete', () => {
+      try { vfx.destroy() } catch { /* already gone */ }
+    })
+  }
+
+  // ---------------------------------------------------------------------------
   // (a) Paper airplane — tiny triangle glides in a parabolic arc between two workstations
   // ---------------------------------------------------------------------------
 
@@ -119,6 +141,8 @@ export class OfficeAmbient {
         }
       },
       onComplete: () => {
+        // Small puff when the airplane "lands"
+        this.playVFX(plane.x, plane.y, EFFECT_ANIM_KEYS.PUFF, SPRITESHEET_KEYS.EFFECTS_PUFF, 0.10, 0.35)
         try { plane.destroy() } catch { /* already gone */ }
       },
     })
@@ -131,8 +155,17 @@ export class OfficeAmbient {
   private ambientCoffeeRefill(allWorkstations: WsEntry[], pick: PickFn): void {
     const idleEntries = allWorkstations.filter(e => e.ws.lastAnimMode === 'idle' && e.ws.steamContainer)
     const pool = idleEntries.length > 0 ? idleEntries : allWorkstations
-    const { ws } = pick(pool)
+    const entry = pick(pool)
+    const { ws, room } = entry
     if (!ws.steamContainer) return
+
+    // Play coffee pour sound alongside the visual steam burst
+    soundEngine.coffeePour()
+
+    // Play a small steam puff VFX above the mug
+    const vfxX = room.x + ws.container.x + ws.steamContainer.x
+    const vfxY = room.y + ws.container.y + ws.steamContainer.y - 6
+    this.playVFX(vfxX, vfxY, EFFECT_ANIM_KEYS.PUFF, SPRITESHEET_KEYS.EFFECTS_PUFF, 0.08, 0.3)
 
     const container = ws.steamContainer
     for (let i = 0; i < 3; i++) {
@@ -160,10 +193,34 @@ export class OfficeAmbient {
   private ambientPhoneRing(allWorkstations: WsEntry[], pick: PickFn): void {
     const withPhone = allWorkstations.filter(e => e.ws.phoneLight)
     if (withPhone.length === 0) return
-    const { ws } = pick(withPhone)
+    const entry = pick(withPhone)
+    const { ws, room } = entry
     const light = ws.phoneLight!
     const origAlpha = light.alpha
     const origColor = light.fillColor
+
+    // Play notification sound alongside the visual blink
+    soundEngine.notification()
+
+    // Sprite flash overlay — CIRCLE_YELLOW pulses near the phone light (LOD 3 only)
+    if (this.scene.cameras.main.zoom > LOD_L2_MAX) {
+      // Phone light is at local (-18, WS_DESK_Y - 6) inside the ws container
+      const flashX = room.x + ws.container.x - 18
+      const flashY = room.y + ws.container.y + light.y
+      const flash = this.scene.add.sprite(flashX, flashY, SPRITESHEET_KEYS.GAME_ICONS, ICON_FRAMES.CIRCLE_YELLOW)
+        .setScale(0.08).setAlpha(0).setDepth(56)
+      // Pulse in, hold, pulse out over the blink duration
+      this.scene.tweens.add({
+        targets: flash,
+        alpha: { from: 0, to: 0.7 },
+        scale: { from: 0.06, to: 0.14 },
+        duration: 150,
+        yoyo: true,
+        repeat: 2,
+        ease: 'Sine.easeInOut',
+        onComplete: () => { try { flash.destroy() } catch { /* already gone */ } },
+      })
+    }
 
     let blinks = 0
     const doBlink = () => {
@@ -209,6 +266,9 @@ export class OfficeAmbient {
     const paper = this.scene.add.rectangle(printerX, printerY, 4, 1, 0xf8fafc)
     paper.setAlpha(0.6)
     paper.setDepth(10)
+
+    // Small smoke puff as the printer "churns"
+    this.playVFX(printerX, printerY - 4, EFFECT_ANIM_KEYS.SMOKE, SPRITESHEET_KEYS.EFFECTS_SMOKE, 0.10, 0.25)
 
     this.scene.tweens.add({
       targets: paper,
