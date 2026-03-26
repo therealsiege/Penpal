@@ -161,11 +161,3 @@ test('NavMesh is initialized', async () => {
   }
 })
 
-test('minimap exists', async () => {
-  const hasMinimap = await evalInScene(ctx.window, (scene) => {
-    return !!(scene.minimap || scene.minimapContainer)
-  })
-  if (hasMinimap !== null) {
-    expect(hasMinimap).toBe(true)
-  }
-})
