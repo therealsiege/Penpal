@@ -1,5 +1,6 @@
 import Phaser from 'phaser'
 import type { AgentState } from '../types'
+import type { AnimatedBar } from './animated-bar'
 
 // ---------------------------------------------------------------------------
 // Shared type definitions for the Office game scene
@@ -9,12 +10,14 @@ export interface WorkstationSprite {
   container: Phaser.GameObjects.Container
   sprite: Phaser.GameObjects.Sprite
   nameText: Phaser.GameObjects.Text
-  statusDot: Phaser.GameObjects.Arc
+  statusDot: Phaser.GameObjects.Sprite
   roleBadge: Phaser.GameObjects.Text | null
   deskBody: Phaser.GameObjects.Rectangle
   deskTop: Phaser.GameObjects.Rectangle
   monitorSprite: Phaser.GameObjects.Sprite | null
   chairSprite: Phaser.GameObjects.Sprite | null
+  /** Sprite-based monitor screen frame overlay (PANEL_OUTLINE) */
+  monitorFrame?: Phaser.GameObjects.Image
   monitorGlowFx?: Phaser.FX.Glow
   screenLines?: Phaser.GameObjects.Graphics
   monitorText?: Phaser.GameObjects.Text
@@ -22,9 +25,11 @@ export interface WorkstationSprite {
   thoughtBubble: Phaser.GameObjects.Container
   thoughtBubbleText: Phaser.GameObjects.Text
   thoughtBubbleBg: Phaser.GameObjects.Graphics
+  /** Sprite-based thought bubble background (replaces Graphics when loaded) */
+  thoughtBubbleBgSprite?: Phaser.GameObjects.Image
   blockedIndicator: Phaser.GameObjects.Container
   blockedIndicatorPulse: Phaser.GameObjects.Arc
-  blockedIndicatorBadge: Phaser.GameObjects.Arc
+  blockedIndicatorBadge: Phaser.GameObjects.Sprite
   blockedIndicatorStem: Phaser.GameObjects.Rectangle
   blockedIndicatorText: Phaser.GameObjects.Text
   state: AgentState | null
@@ -58,15 +63,17 @@ export interface WorkstationSprite {
   thoughtBubbleFloatTween?: Phaser.Tweens.Tween
   blurbTypingTween?: Phaser.Tweens.Tween
   moodEmoji?: Phaser.GameObjects.Text
+  moodBadge?: Phaser.GameObjects.Sprite
   moodTween?: Phaser.Tweens.Tween
+  moodBadgeTween?: Phaser.Tweens.Tween
   deskPlantTween?: Phaser.Tweens.Tween
-  xpBarBg?: Phaser.GameObjects.Rectangle
-  xpBarFill?: Phaser.GameObjects.Rectangle
+  xpBar?: AnimatedBar
   xpBarText?: Phaser.GameObjects.Text
-  xpBarTween?: Phaser.Tweens.Tween
   rippleFired?: boolean
   soundWaveGfx?: Phaser.GameObjects.Graphics
   soundWaveTween?: Phaser.Tweens.Tween
+  soundWaveSpeaker?: Phaser.GameObjects.Sprite
+  typingNoteTimer?: Phaser.Time.TimerEvent
   sparklineGfx?: Phaser.GameObjects.Graphics
   activityHistory?: number[]
   phoneLight?: Phaser.GameObjects.Arc
@@ -83,7 +90,38 @@ export interface WorkstationSprite {
   taskCountFlashTween?: Phaser.Tweens.Tween
   localTaskCount: number
   onCoffeeRun?: boolean
-  coffeeIndicator?: Phaser.GameObjects.Text
+  coffeeIndicator?: Phaser.GameObjects.Sprite
+  /** Lego brick XP progress segments — 5 tiny sprites overlaying the XP bar */
+  legoSegments?: Phaser.GameObjects.Sprite[]
+  /** Floating quest difficulty star above workstation */
+  questIcon?: Phaser.GameObjects.Sprite
+  questIconTween?: Phaser.Tweens.Tween
+  /** Gold medal sprite for weekly MVP */
+  mvpMedal?: Phaser.GameObjects.Sprite
+  mvpMedalTween?: Phaser.Tweens.Tween
+  /** Desk pet sprite — composable monster body sitting on the desk (L5+) */
+  deskPet?: Phaser.GameObjects.Sprite
+  deskPetTween?: Phaser.Tweens.Tween
+  /** Desk pet eye pair sprite — overlaid on pet body */
+  petEyes?: Phaser.GameObjects.Sprite
+  /** Desk pet mouth sprite — overlaid on pet body */
+  petMouth?: Phaser.GameObjects.Sprite
+  /** Timer for pet blink animation */
+  petBlinkTimer?: Phaser.Time.TimerEvent
+  /** Signature item sprite — unique per-agent personality item on desk */
+  signatureItem?: Phaser.GameObjects.Sprite
+  signatureItemTween?: Phaser.Tweens.Tween
+  /** Room-type themed prop sprite (wrench for server rooms, palette for design studios, etc.) */
+  roomProp?: Phaser.GameObjects.Sprite
+  /** Rivalry indicator — red star shown when agent has an active leaderboard rival */
+  rivalryIndicator?: Phaser.GameObjects.Sprite
+  rivalryGlowTween?: Phaser.Tweens.Tween
+  /** Vertical energy/stamina bar — track (grey background) */
+  energyTrack?: Phaser.GameObjects.Image
+  /** Vertical energy/stamina bar — fill (colored, cropped from bottom up) */
+  energyFill?: Phaser.GameObjects.Image
+  /** Current energy level 0.0 to 1.0 */
+  energyLevel: number
 }
 
 export interface Room {
@@ -103,8 +141,8 @@ export interface Room {
   activityBarTween: Phaser.Tweens.Tween | null
   waitingBar: Phaser.GameObjects.Rectangle
   waitingBarTween: Phaser.Tweens.Tween | null
-  statusLed: Phaser.GameObjects.Arc
-  statusLedGlow: Phaser.GameObjects.Arc
+  statusLed: Phaser.GameObjects.Sprite
+  statusLedGlow: Phaser.GameObjects.Sprite
   statusLedTween: Phaser.Tweens.Tween | null
   ledMode: 'idle' | 'active' | 'waiting'
   // Animated door
@@ -125,9 +163,19 @@ export interface Room {
   miniWhiteboard?: Phaser.GameObjects.Container
   miniWhiteboardTexts?: Phaser.GameObjects.Text[]
   doorSide: 'top' | 'bottom'
+  propsPlaced?: boolean
   // Neon signage glow on room header text
   headerGlowFx?: Phaser.FX.Glow
   headerGlowTween?: Phaser.Tweens.Tween
+  // Room-type themed icon sprite next to the room header text
+  roomHeaderIcon?: Phaser.GameObjects.Sprite
+  // Ambient haze — last time a productivity haze puff was spawned
+  lastHazeTime?: number
+  // Agent status dot sprites in the room header (visible at L1 overview zoom)
+  headerStatusDots?: Phaser.GameObjects.Sprite[]
+  headerStatusDotTweens?: Phaser.Tweens.Tween[]
+  // Lego brick sprites behind room header text
+  headerLegoBricks?: Phaser.GameObjects.Sprite[]
 }
 
 export interface TeamAreaLayout {

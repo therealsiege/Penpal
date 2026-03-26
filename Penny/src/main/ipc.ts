@@ -64,6 +64,7 @@ import {
   shutdownAgent,
   getOrchestratorStats,
   getAllAgentXP,
+  getAllAgentCredits,
   setModelProvider,
   getModelProvider,
   type AgentXP,
@@ -773,6 +774,7 @@ export function registerIpcHandlers() {
   }))
   ipcMain.handle('orchestrator:stats', wrapHandler(() => getOrchestratorStats()))
   ipcMain.handle('orchestrator:xp', wrapHandler(() => getAllAgentXP()))
+  ipcMain.handle('orchestrator:credits', wrapHandler(() => getAllAgentCredits()))
   ipcMain.handle('orchestrator:set-provider', wrapHandler((provider: unknown) => {
     if (provider !== 'claude' && provider !== 'ollama') throw new Error('provider must be "claude" or "ollama"')
     setModelProvider(provider as ModelProvider)

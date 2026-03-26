@@ -10,6 +10,7 @@ import { EventBus, EVENTS } from './events'
 import { activeTheme, lerpColor } from './office-theme'
 import type { Room, WorkstationSprite } from './office-types'
 import { KB_AUTO_PAN_INTERVAL, ZOOM_MAX } from './office-constants'
+import { SPRITESHEET_KEYS, ICON_FRAMES, EFFECT_ANIM_KEYS } from './office-asset-keys'
 
 // ---------------------------------------------------------------------------
 // Host-scene interface — the contract OfficeSelection requires from OfficeScene
@@ -73,6 +74,28 @@ export class OfficeSelection {
   private selectionRingPosTween: Phaser.Tweens.Tween | null = null
   private selectionRingCurrentPos: { x: number; y: number } | null = null
 
+  // Star sprite pointer at top of selection ring
+  private selectionStarSprite: Phaser.GameObjects.Sprite | null = null
+  private selectionStarTween: Phaser.Tweens.Tween | null = null
+
+  // -------------------------------------------------------------------------
+  // Input lock state
+  // -------------------------------------------------------------------------
+
+  private _inputLocked = false
+
+  /** Lock all keyboard-driven input (e.g. during a transition or modal). Emits INPUT_LOCKED. */
+  lockInput(): void {
+    this._inputLocked = true
+    EventBus.emit(EVENTS.INPUT_LOCKED)
+  }
+
+  /** Re-enable keyboard-driven input. Emits INPUT_UNLOCKED. */
+  unlockInput(): void {
+    this._inputLocked = false
+    EventBus.emit(EVENTS.INPUT_UNLOCKED)
+  }
+
   // -------------------------------------------------------------------------
   // Auto-pan state
   // -------------------------------------------------------------------------
@@ -90,6 +113,10 @@ export class OfficeSelection {
   private focusDimTween: Phaser.Tweens.Tween | null = null
   private focusedWorkstationPrevDepth: number | null = null
 
+  // Focus mode indicator sprite (play icon near focused agent)
+  private focusIndicatorSprite: Phaser.GameObjects.Sprite | null = null
+  private focusIndicatorTween: Phaser.Tweens.Tween | null = null
+
   // -------------------------------------------------------------------------
 
   constructor(host: SelectionHostScene) {
@@ -105,6 +132,15 @@ export class OfficeSelection {
     this.selectionRing = this.scene.add.graphics().setDepth(9999)
     // Outer ring: dashed appearance via arc segments, slowly rotates
     this.selectionRingOuter = this.scene.add.graphics().setDepth(9998)
+
+    // Star pointer sprite at top of selection ring — hidden until first selection
+    if (this.scene.textures.exists(SPRITESHEET_KEYS.GAME_ICONS)) {
+      this.selectionStarSprite = this.scene.add.sprite(0, 0, SPRITESHEET_KEYS.GAME_ICONS, ICON_FRAMES.STAR_YELLOW)
+        .setScale(0.15)
+        .setOrigin(0.5, 1)
+        .setDepth(10000)
+        .setVisible(false)
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -142,14 +178,33 @@ export class OfficeSelection {
 
   /** Cycle selection forward (+1) or backward (-1) through agents */
   cycleSelectedAgent(dir: 1 | -1): void {
+    if (this._inputLocked) return
     const ids = this.getFlatAgentIds()
     if (ids.length === 0) return
+
+    // Capture previous agent position for puff VFX
+    const prevIndex = this.selectedAgentIndex
+    const prevId = prevIndex >= 0 && prevIndex < ids.length ? ids[prevIndex] : null
+    const prevPos = prevId ? this.getWorkstationWorldPos(prevId) : null
+
     if (this.selectedAgentIndex < 0 || this.selectedAgentIndex >= ids.length) {
       this.selectedAgentIndex = dir === 1 ? 0 : ids.length - 1
     } else {
       this.selectedAgentIndex = (this.selectedAgentIndex + dir + ids.length) % ids.length
     }
     this.applySelection(ids)
+
+    // Spawn a small puff VFX at the previous agent's position on cycle
+    if (prevPos && this.scene.anims.exists(EFFECT_ANIM_KEYS.PUFF)) {
+      const puff = this.scene.add.sprite(prevPos.x, prevPos.y, SPRITESHEET_KEYS.EFFECTS_PUFF)
+        .setScale(0.25)
+        .setAlpha(0.5)
+        .setDepth(9997)
+      puff.play(EFFECT_ANIM_KEYS.PUFF)
+      puff.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => {
+        puff.destroy()
+      })
+    }
   }
 
   /** Jump directly to agent at index (0-based) */
@@ -178,6 +233,7 @@ export class OfficeSelection {
 
   /** Emit AGENT_CLICKED for the currently selected agent */
   confirmSelectedAgent(): void {
+    if (this._inputLocked) return
     const ids = this.getFlatAgentIds()
     if (this.selectedAgentIndex < 0 || this.selectedAgentIndex >= ids.length) return
     const agentId = ids[this.selectedAgentIndex]
@@ -193,6 +249,7 @@ export class OfficeSelection {
 
   /** Clear selection state */
   deselectAgent(): void {
+    if (this._inputLocked) return
     this.selectedAgentIndex = -1
     this.clearSelectionRing()
     EventBus.emit(EVENTS.AGENT_DESELECTED)
@@ -348,6 +405,28 @@ export class OfficeSelection {
       repeat: -1,
       ease: 'Sine.easeInOut',
     })
+
+    // --- Position the star pointer sprite at the top of the outer ring ---
+    if (this.selectionStarSprite) {
+      // Kill previous star tween
+      if (this.selectionStarTween) { this.selectionStarTween.destroy(); this.selectionStarTween = null }
+
+      this.selectionStarSprite.setVisible(true).setAlpha(0.85)
+      // Position at ring top: outer ring radius is 46, star origin is (0.5, 1) so
+      // bottom-center sits at the ring peak
+      this.selectionStarSprite.setPosition(wx, wy - outerRadius)
+
+      // Gentle bob animation on the star
+      this.selectionStarTween = this.scene.tweens.add({
+        targets: this.selectionStarSprite,
+        y: wy - outerRadius - 4,
+        alpha: 0.55,
+        duration: 900,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut',
+      })
+    }
   }
 
   /** Remove the selection ring and stop all its animations */
@@ -361,6 +440,10 @@ export class OfficeSelection {
     this.selectionRing?.setVisible(false)
     this.selectionRingOuter?.clear()
     this.selectionRingOuter?.setVisible(false)
+
+    // Hide the star pointer
+    if (this.selectionStarTween) { this.selectionStarTween.destroy(); this.selectionStarTween = null }
+    this.selectionStarSprite?.setVisible(false)
   }
 
   // ---------------------------------------------------------------------------
@@ -384,11 +467,13 @@ export class OfficeSelection {
 
   /** Zoom camera to fit all rooms (delegates to smooth zoomToFit) */
   zoomToFitAll(): void {
+    if (this._inputLocked) return
     this.host.zoomToFit(true)
   }
 
   /** Reset camera to the default position/zoom (uses lerp system) */
   resetCamera(): void {
+    if (this._inputLocked) return
     this.host.targetZoom = this.host.defaultCameraZoom
     this.host.followTarget = {
       x: this.host.defaultCameraX + this.host.viewWidth / (2 * this.host.defaultCameraZoom),
@@ -404,6 +489,7 @@ export class OfficeSelection {
 
   /** Toggle slow auto-pan that cycles the camera across all agents */
   toggleAutoPan(): void {
+    if (this._inputLocked) return
     if (this.autoPanEnabled) {
       this.stopAutoPan()
     } else {
@@ -483,6 +569,41 @@ export class OfficeSelection {
 
     this.host.targetZoom = 1.8
     this.host.followTarget = { x: worldPos.x, y: worldPos.y }
+
+    // Show a play icon indicator to the left of the focused agent
+    this.destroyFocusIndicator()
+    if (this.scene.textures.exists(SPRITESHEET_KEYS.GAME_ICONS)) {
+      const indicator = this.scene.add.sprite(
+        worldPos.x - 50, worldPos.y,
+        SPRITESHEET_KEYS.GAME_ICONS, ICON_FRAMES.PLAY_DARK,
+      )
+        .setScale(0.20)
+        .setAlpha(0)
+        .setDepth(101)
+        .setTint(0x3b82f6)
+      this.focusIndicatorSprite = indicator
+
+      // Fade in and pulse
+      this.focusIndicatorTween = this.scene.tweens.add({
+        targets: indicator,
+        alpha: { from: 0, to: 0.7 },
+        x: worldPos.x - 46,
+        duration: 400,
+        ease: 'Quad.easeOut',
+        onComplete: () => {
+          // Gentle horizontal bob once visible
+          this.focusIndicatorTween = this.scene.tweens.add({
+            targets: indicator,
+            x: worldPos.x - 42,
+            alpha: 0.45,
+            duration: 1200,
+            yoyo: true,
+            repeat: -1,
+            ease: 'Sine.easeInOut',
+          })
+        },
+      })
+    }
   }
 
   exitFocusMode(): void {
@@ -510,7 +631,16 @@ export class OfficeSelection {
       })
     }
 
+    // Remove focus indicator sprite
+    this.destroyFocusIndicator()
+
     this.host.zoomToFit(true)
+  }
+
+  /** Tear down the focus indicator sprite and its tween */
+  private destroyFocusIndicator(): void {
+    if (this.focusIndicatorTween) { this.focusIndicatorTween.destroy(); this.focusIndicatorTween = null }
+    if (this.focusIndicatorSprite) { this.focusIndicatorSprite.destroy(); this.focusIndicatorSprite = null }
   }
 
   /** Returns true if a focus session is currently active */
@@ -537,9 +667,14 @@ export class OfficeSelection {
     this.selectionRingOuter?.destroy()
     this.selectionRingOuter = null
 
+    // Star pointer cleanup
+    if (this.selectionStarTween) { this.selectionStarTween.destroy(); this.selectionStarTween = null }
+    if (this.selectionStarSprite) { this.selectionStarSprite.destroy(); this.selectionStarSprite = null }
+
     // Focus mode cleanup
     if (this.focusDimTween) { this.focusDimTween.destroy(); this.focusDimTween = null }
     if (this.focusDimOverlay) { this.focusDimOverlay.destroy(); this.focusDimOverlay = null }
+    this.destroyFocusIndicator()
     this.focusedAgentId = null
     this.focusedWorkstationPrevDepth = null
   }

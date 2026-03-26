@@ -1,20 +1,29 @@
 /**
  * NavMesh — Grid-based navigation for the office scene.
  *
- * Strategy: Everything is BLOCKED by default. Only these are walkable:
- *   1. Room interiors (tightly inset from walls)
- *   2. Door openings (narrow strip connecting room to corridor)
- *   3. Corridors (from corridorSegments data — the actual drawn hallways)
- *   4. Café interior
- *   5. Narrow path connecting café to corridors
+ * Strategy: Everything is BLOCKED by default. Base grid walkable areas:
+ *   1. Corridors (from corridorSegments — the actual drawn hallways)
+ *   2. Café interior + L-path to nearest corridor
  *
- * Walls, space between rooms, and the building floor itself are NOT walkable.
- * Agents MUST go through doors and corridors.
+ * Room interiors AND door openings are NOT in the base grid.
+ * Each findPath() call adds the agent's own room + door zone as
+ * temporarily walkable via ownRoomRect, which extends 32px above
+ * the room to overlap with the corridor. This prevents agents from
+ * pathing through other rooms' doors as shortcuts.
  */
+
+import { ROOM_HEADER_H } from './office-constants'
 
 export interface NavPoint {
   x: number
   y: number
+}
+
+export interface NavRect {
+  x: number
+  y: number
+  w: number
+  h: number
 }
 
 interface AStarNode {
@@ -37,10 +46,6 @@ export class NavMesh {
 
   rebuild(config: {
     buildingBounds: { x: number; y: number; w: number; h: number } | null
-    rooms: Array<{
-      x: number; y: number; width: number; height: number
-      doorX: number; doorY: number
-    }>
     corridorSegments: Array<{ x1: number; y1: number; x2: number; y2: number }>
     cafeBounds: { x: number; y: number; w: number; h: number } | null
   }): void {
@@ -64,49 +69,37 @@ export class NavMesh {
     // Everything BLOCKED
     this.grid = Array.from({ length: this.gridH }, () => new Array(this.gridW).fill(false))
 
-    const WALL_INSET = 14
-
-    // 1. Room interiors only (tight inset so walls stay blocked)
-    for (const room of config.rooms) {
-      const rx = room.x - room.width / 2 + WALL_INSET
-      const ry = room.y - room.height / 2 + WALL_INSET + 20
-      const rw = room.width - WALL_INSET * 2
-      const rh = room.height - WALL_INSET * 2 - 20
-      if (rw > 0 && rh > 0) this.markRect(rx, ry, rw, rh)
-    }
-
-    // 2. Door openings — narrow passage through the wall
-    for (const room of config.rooms) {
-      this.markRect(room.doorX - 10, room.doorY - 16, 20, 32)
-    }
-
-    // 3. Corridors — ONLY the actual drawn hallway segments
+    // 1. Corridors — mark walkable hallway segments
+    const CORR_W = 32 // walkable width for corridors (pixels)
+    const CORR_PAD = 6 // extra length past endpoints
     for (const seg of config.corridorSegments) {
-      const isH = Math.abs(seg.y1 - seg.y2) < CELL_SIZE
-      if (isH) {
-        const x1 = Math.min(seg.x1, seg.x2) - 4
-        const x2 = Math.max(seg.x1, seg.x2) + 4
-        this.markRect(x1, seg.y1 - 8, x2 - x1, 16)
+      const dx = Math.abs(seg.x1 - seg.x2)
+      const dy = Math.abs(seg.y1 - seg.y2)
+      if (dx >= dy) {
+        const x1 = Math.min(seg.x1, seg.x2) - CORR_PAD
+        const x2 = Math.max(seg.x1, seg.x2) + CORR_PAD
+        this.markRect(x1, (seg.y1 + seg.y2) / 2 - CORR_W / 2, x2 - x1, CORR_W)
       } else {
-        const y1 = Math.min(seg.y1, seg.y2) - 4
-        const y2 = Math.max(seg.y1, seg.y2) + 4
-        this.markRect(seg.x1 - 8, y1, 16, y2 - y1)
+        const y1 = Math.min(seg.y1, seg.y2) - CORR_PAD
+        const y2 = Math.max(seg.y1, seg.y2) + CORR_PAD
+        this.markRect((seg.x1 + seg.x2) / 2 - CORR_W / 2, y1, CORR_W, y2 - y1)
       }
+      // Junction blob at each endpoint for reliable connectivity
+      this.markRect(seg.x1 - CORR_W / 2, seg.y1 - CORR_W / 2, CORR_W, CORR_W)
+      this.markRect(seg.x2 - CORR_W / 2, seg.y2 - CORR_W / 2, CORR_W, CORR_W)
     }
 
-    // 4. Café interior
+    // 2. Café interior + connector to nearest corridor
     if (config.cafeBounds) {
       const cb = config.cafeBounds
       this.markRect(cb.x + 4, cb.y + 4, cb.w - 8, cb.h - 8)
 
-      // 5. Connect café to the nearest corridor segment
       const cafeCX = cb.x + cb.w / 2
       const cafeCY = cb.y + cb.h / 2
       let nearestDist = Infinity
       let nearestX = cafeCX
       let nearestY = cafeCY
       for (const seg of config.corridorSegments) {
-        // Check both endpoints and midpoint of each segment
         for (const pt of [
           { x: seg.x1, y: seg.y1 },
           { x: seg.x2, y: seg.y2 },
@@ -120,39 +113,54 @@ export class NavMesh {
           }
         }
       }
-
-      // Draw an L-shaped path from nearest corridor point to café center
       if (nearestDist < Infinity && nearestDist > 0) {
-        const pathWidth = 16
+        const pathWidth = 32
         const minY = Math.min(nearestY, cafeCY)
         const maxY = Math.max(nearestY, cafeCY)
         const minX = Math.min(nearestX, cafeCX)
         const maxX = Math.max(nearestX, cafeCX)
-        // Vertical leg
         this.markRect(nearestX - pathWidth / 2, minY - 4, pathWidth, maxY - minY + 8)
-        // Horizontal leg
         this.markRect(minX - 4, cafeCY - pathWidth / 2, maxX - minX + 8, pathWidth)
       }
     }
+
+    // Room interiors and door openings are NOT in the base grid.
+    // findPath() adds the agent's own room + door zone via ownRoomRect.
   }
 
-  findPath(start: NavPoint, end: NavPoint): NavPoint[] | null {
-    if (this.gridW === 0) return [end]
+  findPath(start: NavPoint, end: NavPoint, ownRoomRect?: NavRect): NavPoint[] | null {
+    if (this.gridW === 0) return null
+
+    // Pre-compute the agent's own room + door zone as ADDITIONAL walkable area.
+    // The base grid has corridors + cafe only. The ownRoomRect extends above
+    // the room to overlap with the corridor, bridging room → door → corridor.
+    let ownCells: Set<number> | null = null
+    const k = (x: number, y: number) => y * this.gridW + x
+    if (ownRoomRect) {
+      ownCells = new Set<number>()
+      const a = this.clamp(this.toGrid(ownRoomRect.x, ownRoomRect.y))
+      const b = this.clamp(this.toGrid(ownRoomRect.x + ownRoomRect.w, ownRoomRect.y + ownRoomRect.h))
+      for (let ey = a.gy; ey <= b.gy; ey++)
+        for (let ex = a.gx; ex <= b.gx; ex++)
+          ownCells.add(k(ex, ey))
+    }
+
+    const isWalkable = (gx: number, gy: number) =>
+      this.grid[gy]?.[gx] || (ownCells !== null && ownCells.has(k(gx, gy)))
 
     let sg = this.clamp(this.toGrid(start.x, start.y))
     let eg = this.clamp(this.toGrid(end.x, end.y))
 
-    if (!this.grid[sg.gy]?.[sg.gx]) {
-      const s = this.snapWalkable(sg.gx, sg.gy); if (!s) return [end]; sg = s
+    if (!isWalkable(sg.gx, sg.gy)) {
+      const s = this.snapWalkableWith(sg.gx, sg.gy, ownCells, k); if (!s) return null; sg = s
     }
-    if (!this.grid[eg.gy]?.[eg.gx]) {
-      const s = this.snapWalkable(eg.gx, eg.gy); if (!s) return [end]; eg = s
+    if (!isWalkable(eg.gx, eg.gy)) {
+      const s = this.snapWalkableWith(eg.gx, eg.gy, ownCells, k); if (!s) return null; eg = s
     }
 
     // A*
     const open: AStarNode[] = []
     const best = new Map<number, number>()
-    const k = (x: number, y: number) => y * this.gridW + x
     const closed = new Set<number>()
 
     const h = (ax: number, ay: number) => {
@@ -164,7 +172,7 @@ export class NavMesh {
     s.f = s.h; open.push(s); best.set(k(sg.gx, sg.gy), 0)
 
     let iters = 0
-    while (open.length > 0 && iters++ < 4000) {
+    while (open.length > 0 && iters++ < 20000) {
       let bi = 0
       for (let i = 1; i < open.length; i++) { if (open[i].f < open[bi].f) bi = i }
       const cur = open.splice(bi, 1)[0]
@@ -176,9 +184,10 @@ export class NavMesh {
       for (const [dx, dy] of [[-1,0],[1,0],[0,-1],[0,1],[-1,-1],[-1,1],[1,-1],[1,1]]) {
         const nx = cur.gx + dx, ny = cur.gy + dy, nk = k(nx, ny)
         if (nx < 0 || nx >= this.gridW || ny < 0 || ny >= this.gridH) continue
-        if (!this.grid[ny][nx] || closed.has(nk)) continue
+        if (closed.has(nk)) continue
+        if (!isWalkable(nx, ny)) continue
         // No corner-cutting through walls
-        if (dx !== 0 && dy !== 0 && (!this.grid[cur.gy][cur.gx + dx] || !this.grid[cur.gy + dy][cur.gx])) continue
+        if (dx !== 0 && dy !== 0 && (!isWalkable(cur.gx + dx, cur.gy) || !isWalkable(cur.gx, cur.gy + dy))) continue
 
         const g = cur.g + (dx !== 0 && dy !== 0 ? 1.414 : 1)
         const prev = best.get(nk)
@@ -191,7 +200,7 @@ export class NavMesh {
         open.push({ gx: nx, gy: ny, g, h: nh, f: g + nh, parent: cur })
       }
     }
-    return [end]
+    return null
   }
 
   isPointWalkable(x: number, y: number): boolean {
@@ -224,13 +233,18 @@ export class NavMesh {
   private clamp(p: { gx: number; gy: number }) {
     return { gx: Math.max(0, Math.min(this.gridW - 1, p.gx)), gy: Math.max(0, Math.min(this.gridH - 1, p.gy)) }
   }
-  private snapWalkable(gx: number, gy: number) {
+  private snapWalkableWith(
+    gx: number, gy: number,
+    ownCells: Set<number> | null,
+    k: (x: number, y: number) => number,
+  ) {
     for (let r = 1; r <= 20; r++)
       for (let dy = -r; dy <= r; dy++)
         for (let dx = -r; dx <= r; dx++) {
           if (Math.abs(dx) !== r && Math.abs(dy) !== r) continue
           const nx = gx + dx, ny = gy + dy
-          if (nx >= 0 && nx < this.gridW && ny >= 0 && ny < this.gridH && this.grid[ny][nx])
+          if (nx >= 0 && nx < this.gridW && ny >= 0 && ny < this.gridH &&
+              (this.grid[ny][nx] || (ownCells !== null && ownCells.has(k(nx, ny)))))
             return { gx: nx, gy: ny }
         }
     return null
@@ -253,5 +267,24 @@ export class NavMesh {
     }
     out.push(raw[raw.length - 1])
     return out
+  }
+}
+
+/**
+ * Build a NavRect for the agent's own room + door zone.
+ * Extends 32px above the room top so it overlaps with the corridor,
+ * bridging room interior → door → corridor without marking other
+ * rooms' doors in the shared base grid.
+ */
+export function buildOwnRoomRect(
+  room: { x: number; y: number; width: number; height: number },
+): NavRect {
+  const WALL_INSET = 14
+  const DOOR_EXTEND = 32 // extend above room to overlap corridor
+  return {
+    x: room.x - room.width / 2 + WALL_INSET,
+    y: room.y - room.height / 2 - DOOR_EXTEND,
+    w: room.width - WALL_INSET * 2,
+    h: room.height - WALL_INSET - ROOM_HEADER_H + DOOR_EXTEND,
   }
 }

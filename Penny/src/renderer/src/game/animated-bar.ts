@@ -5,12 +5,23 @@
  * Renders a background track + filled layer, tweens fill width on update.
  * Resolution-aware: pass resolution: 2 for Retina displays.
  *
+ * When `useSliderSprites` is true, the bar renders using SLIDER_TRACK and
+ * SLIDER_FILL image sprites (from IMAGE_KEYS) instead of Graphics rectangles.
+ * The sprites are scaled to match the configured width/height.
+ *
  * Usage:
  *   const bar = new AnimatedBar({ scene, x, y, width: 80, height: 6,
  *                                  fillColor: 0x3b82f6, backgroundColor: 0x141a22 })
  *   bar.setPercent(0.72)          // animated
  *   bar.setPercent(0.5, false)    // instant
+ *
+ *   // Sprite mode:
+ *   const spriteBar = new AnimatedBar({ scene, x, y, width: 96, height: 16,
+ *                                       fillColor: 0, backgroundColor: 0,
+ *                                       useSliderSprites: true })
  */
+
+import { IMAGE_KEYS } from './office-asset-keys'
 
 export interface BarConfig {
   scene: Phaser.Scene
@@ -26,13 +37,19 @@ export interface BarConfig {
   duration?: number
   /** Pass 2 for Retina / HiDPI displays. Default 1. */
   resolution?: number
+  /**
+   * When true, renders using SLIDER_TRACK / SLIDER_FILL sprites instead of
+   * Graphics rectangles. The sprites are scaled to match width/height.
+   * fillColor and backgroundColor are ignored in this mode.
+   */
+  useSliderSprites?: boolean
 }
 
 export class AnimatedBar {
   private readonly _scene: Phaser.Scene
   private readonly _cfg: Required<Omit<BarConfig, 'scene'>>
 
-  /** Graphics object that owns both layers. Add this to containers. */
+  /** Graphics object that owns both layers (used in Graphics mode). */
   private readonly _gfx: Phaser.GameObjects.Graphics
 
   /** Current fill width in logical pixels (tracks the tween target). */
@@ -43,6 +60,12 @@ export class AnimatedBar {
 
   /** Logical fill percentage [0, 1]. */
   private _percent: number
+
+  // --- Sprite mode fields ---
+  private _trackSprite: Phaser.GameObjects.Image | null = null
+  private _fillSprite: Phaser.GameObjects.Image | null = null
+  /** Container holding sprite-mode elements (null when using Graphics mode). */
+  private _spriteContainer: Phaser.GameObjects.Container | null = null
 
   constructor(config: BarConfig) {
     this._scene = config.scene
@@ -60,6 +83,7 @@ export class AnimatedBar {
       ease: config.ease ?? 'Sine.easeOut',
       duration: config.duration ?? 400,
       resolution: config.resolution ?? 1,
+      useSliderSprites: config.useSliderSprites ?? false,
     }
 
     this._percent = 0
@@ -67,7 +91,39 @@ export class AnimatedBar {
 
     this._gfx = this._scene.add.graphics()
     this._gfx.setPosition(config.x, config.y)
+
+    if (this._cfg.useSliderSprites && this._scene.textures.exists(IMAGE_KEYS.SLIDER_TRACK)) {
+      this._initSliderSprites()
+      // Hide the Graphics object — sprites handle rendering
+      this._gfx.setVisible(false)
+    }
+
     this._redraw()
+  }
+
+  /**
+   * Creates sprite-based track + fill images, scaled to match the configured
+   * width and height. The fill sprite uses cropRect for width animation.
+   */
+  private _initSliderSprites(): void {
+    const { x, y, width, height } = this._cfg
+
+    this._spriteContainer = this._scene.add.container(x, y)
+
+    // Track sprite — full width background
+    this._trackSprite = this._scene.add.image(0, 0, IMAGE_KEYS.SLIDER_TRACK)
+      .setOrigin(0, 0)
+      .setDisplaySize(width, height)
+    this._spriteContainer.add(this._trackSprite)
+
+    // Fill sprite — width controlled by crop rect
+    this._fillSprite = this._scene.add.image(0, 0, IMAGE_KEYS.SLIDER_FILL)
+      .setOrigin(0, 0)
+      .setDisplaySize(width, height)
+    this._spriteContainer.add(this._fillSprite)
+
+    // Start with zero fill
+    this._updateFillSpriteCrop()
   }
 
   // ---------------------------------------------------------------------------
@@ -82,6 +138,14 @@ export class AnimatedBar {
   /** The underlying Graphics object. Add to a Container with container.add(bar.graphics). */
   get graphics(): Phaser.GameObjects.Graphics {
     return this._gfx
+  }
+
+  /**
+   * The sprite container (available only in slider-sprite mode).
+   * Add to a parent Container with container.add(bar.spriteContainer!).
+   */
+  get spriteContainer(): Phaser.GameObjects.Container | null {
+    return this._spriteContainer
   }
 
   /**
@@ -131,10 +195,15 @@ export class AnimatedBar {
     this._cfg.x = x
     this._cfg.y = y
     this._gfx.setPosition(x, y)
+    this._spriteContainer?.setPosition(x, y)
   }
 
   setVisible(visible: boolean): void {
-    this._gfx.setVisible(visible)
+    if (this._spriteContainer) {
+      this._spriteContainer.setVisible(visible)
+    } else {
+      this._gfx.setVisible(visible)
+    }
   }
 
   /** Hot-swap fill color without changing the current percentage. */
@@ -146,6 +215,12 @@ export class AnimatedBar {
   destroy(): void {
     this._killTween()
     this._gfx.destroy()
+    if (this._spriteContainer) {
+      this._spriteContainer.destroy(true)
+      this._spriteContainer = null
+      this._trackSprite = null
+      this._fillSprite = null
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -160,11 +235,35 @@ export class AnimatedBar {
   }
 
   /**
+   * Updates the fill sprite crop rect to show only the filled portion.
+   * Uses Phaser's setCrop which works in texture-space pixels.
+   */
+  private _updateFillSpriteCrop(): void {
+    if (!this._fillSprite) return
+    const tex = this._fillSprite.texture.getSourceImage()
+    const texW = (tex as HTMLImageElement).width || 96
+    const texH = (tex as HTMLImageElement).height || 16
+    // Map logical fill width to texture-space width
+    const cropW = this._cfg.width > 0
+      ? Math.round((this._fillWidth / this._cfg.width) * texW)
+      : 0
+    this._fillSprite.setCrop(0, 0, cropW, texH)
+  }
+
+  /**
    * Clears and redraws both layers onto the single Graphics object.
    * Origin is the top-left corner of the bar (0, 0) in local space.
    * The Graphics object is positioned at (cfg.x, cfg.y) in world space.
+   *
+   * In sprite mode, updates the fill sprite crop instead.
    */
   private _redraw(): void {
+    // Sprite mode — update crop rect only
+    if (this._spriteContainer) {
+      this._updateFillSpriteCrop()
+      return
+    }
+
     const { width, height, backgroundColor, fillColor, borderColor, borderWidth } = this._cfg
     const gfx = this._gfx
     gfx.clear()

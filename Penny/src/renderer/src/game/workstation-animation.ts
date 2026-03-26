@@ -1,0 +1,1047 @@
+// ---------------------------------------------------------------------------
+// workstation-animation.ts
+// WorkstationAnimator — all animation, mood, monitor-glow, blocked-indicator,
+// and thought-bubble logic. Extracted from office-workstation.ts.
+// ---------------------------------------------------------------------------
+
+import Phaser from 'phaser'
+import type { AgentState } from '../types'
+import type { WorkstationSprite, Room } from './office-types'
+import { activeTheme } from './office-theme'
+import { EventBus, EVENTS } from './events'
+import { questSystem } from './quest-system'
+import { creditManager } from './credits'
+import { leaderboardManager } from './leaderboard'
+import { seasonManager } from './seasons'
+import {
+  CHAR_COLS,
+  POSE_IDLE,
+  POSE_INTERACT,
+  POSE_SIT,
+  POSE_WALK,
+  CHAR_SCALE,
+  WS_DESK_Y,
+  WS_SPRITE_Y,
+  IDLE_WALK_BREAK_MIN_MS,
+  IDLE_WALK_BREAK_VAR_MS,
+  COLOR_LED_AMBER,
+  LOD_L2_MAX,
+  ROOM_HEADER_H,
+} from './office-constants'
+import { ANIM_KEYS, DIFFICULTY_STAR_FRAME, ICON_FRAMES, EFFECT_ANIM_KEYS, SPRITESHEET_KEYS, PET_FACE_FRAMES } from './office-asset-keys'
+import { getAgentCharacterIndex } from './office-helpers'
+import { MOOD_CONFIGS } from './agent-mood'
+import type { Mood } from './agent-mood'
+import type { WorkstationHost } from './office-workstation'
+import type { NavMesh } from './nav-mesh'
+import { buildOwnRoomRect } from './nav-mesh'
+import { PathWalker } from './path-walker'
+
+// ---------------------------------------------------------------------------
+// WorkstationAnimator
+// ---------------------------------------------------------------------------
+
+export class WorkstationAnimator {
+  private scene: Phaser.Scene
+  private host: WorkstationHost
+
+  /** Callback to the parent OfficeWorkstations.restoreDeskStroke.
+   *  Needed because updateAnimation calls restoreDeskStroke for idle/waiting
+   *  branches, but we cannot import OfficeWorkstations here. */
+  private restoreDeskStrokeCallback: (ws: WorkstationSprite) => void
+
+  /** Callback to the parent OfficeWorkstations.refreshTaskCountDisplay.
+   *  Called from the working→idle transition inside updateAnimation. */
+  private refreshTaskCountCallback: (ws: WorkstationSprite) => void
+
+  constructor(
+    scene: Phaser.Scene,
+    host: WorkstationHost,
+    restoreDeskStrokeCallback: (ws: WorkstationSprite) => void,
+    refreshTaskCountCallback: (ws: WorkstationSprite) => void,
+  ) {
+    this.scene = scene
+    this.host = host
+    this.restoreDeskStrokeCallback = restoreDeskStrokeCallback
+    this.refreshTaskCountCallback = refreshTaskCountCallback
+  }
+
+  // ---------------------------------------------------------------------------
+  // updateAnimation — the main animation state machine
+  // ---------------------------------------------------------------------------
+
+  updateAnimation(ws: WorkstationSprite, agent: AgentState): void {
+    const isWaiting = agent.needsInteraction
+    const isWorking = (agent.sessionMode === 'working' || agent.sessionMode === 'plan') && !isWaiting
+
+    const mode: 'idle' | 'working' | 'waiting' = isWaiting ? 'waiting' : isWorking ? 'working' : 'idle'
+    if (ws.lastAnimMode === mode) return
+    const prevMode = ws.lastAnimMode
+    ws.lastAnimMode = mode
+
+    // Tear down all animation state
+    if (ws.bounceTween)      { ws.bounceTween.destroy();      ws.bounceTween      = undefined }
+    if (ws.dotPulseTween)    { ws.dotPulseTween.destroy();    ws.dotPulseTween    = undefined; ws.statusDot.setAlpha(1) }
+    if (ws.typingTween)      { ws.typingTween.destroy();      ws.typingTween      = undefined; ws.sprite.x = 0 }
+    if (ws.monitorGlowTween) { ws.monitorGlowTween.destroy(); ws.monitorGlowTween = undefined }
+    if (ws.breathTween)      { ws.breathTween.destroy();      ws.breathTween      = undefined }
+    if (ws.headTiltTween)    { ws.headTiltTween.destroy();    ws.headTiltTween    = undefined }
+    if (ws.pulseTween)       { ws.pulseTween.destroy();       ws.pulseTween       = undefined }
+    if (ws.ledPulseTween)    { ws.ledPulseTween.destroy();    ws.ledPulseTween    = undefined }
+    if (ws.walkBreakTween)   { ws.walkBreakTween.destroy();   ws.walkBreakTween   = undefined }
+    if (ws.lookAroundTimer)     { ws.lookAroundTimer.destroy();     ws.lookAroundTimer     = undefined }
+    if (ws.stretchTimer)        { ws.stretchTimer.destroy();        ws.stretchTimer        = undefined }
+    if (ws.walkBreakTimer)      { ws.walkBreakTimer.destroy();      ws.walkBreakTimer      = undefined }
+    if (ws.lookAtNeighborTimer) { ws.lookAtNeighborTimer.destroy(); ws.lookAtNeighborTimer = undefined }
+    if (ws.yawnTimer)           { ws.yawnTimer.destroy();           ws.yawnTimer           = undefined }
+    // Clear ambient sound-wave indicator on every mode transition; working branch re-draws it
+    if (ws.soundWaveTween) { ws.soundWaveTween.destroy(); ws.soundWaveTween = undefined }
+    if (ws.soundWaveGfx)   { ws.soundWaveGfx.clear(); ws.soundWaveGfx.setAlpha(1) }
+    // Clear sound wave speaker sprite
+    if (ws.soundWaveSpeaker) { ws.soundWaveSpeaker.destroy(); ws.soundWaveSpeaker = undefined }
+    // Clear typing note timer
+    if (ws.typingNoteTimer) { ws.typingNoteTimer.destroy(); ws.typingNoteTimer = undefined }
+    // Fade out progress ring when leaving working mode; working branch re-starts it
+    if (ws.progressRingTween) { ws.progressRingTween.destroy(); ws.progressRingTween = undefined }
+    if (ws.progressRing && ws.progressRing.alpha > 0) {
+      this.scene.tweens.add({ targets: ws.progressRing, alpha: 0, duration: 300, ease: 'Sine.easeOut',
+        onComplete: () => { ws.progressRing?.clear() },
+      })
+    }
+    ws.workStartTime = undefined
+    // Hide quest icon on mode transition
+    if (ws.questIconTween) { ws.questIconTween.destroy(); ws.questIconTween = undefined }
+    if (ws.questIcon && ws.questIcon.alpha > 0) {
+      this.scene.tweens.add({ targets: ws.questIcon, alpha: 0, duration: 200, ease: 'Sine.easeOut',
+        onComplete: () => { ws.questIcon?.setVisible(false) },
+      })
+    }
+    // Always stop steam when transitioning; idle branch will re-spawn it
+    this.host.clearSteamParticles(ws)
+
+    // Fade out mood emoji and badge on mode transition; updateMood will fade the new ones in
+    if (ws.moodTween) { ws.moodTween.destroy(); ws.moodTween = undefined }
+    if (ws.moodBadgeTween) { ws.moodBadgeTween.destroy(); ws.moodBadgeTween = undefined }
+    if (ws.moodEmoji) {
+      this.scene.tweens.add({ targets: ws.moodEmoji, alpha: 0, duration: 200, ease: 'Sine.easeOut' })
+    }
+    if (ws.moodBadge) {
+      this.scene.tweens.add({ targets: ws.moodBadge, alpha: 0, duration: 200, ease: 'Sine.easeOut',
+        onComplete: () => { ws.moodBadge?.setVisible(false) },
+      })
+    }
+
+    ws.sprite.y = WS_SPRITE_Y
+    ws.sprite.x = 0
+    ws.sprite.setScale(CHAR_SCALE)
+    ws.sprite.setAngle(0)
+
+    this.updateMonitorGlow(ws, isWorking, isWaiting)
+
+    const charIdx = this.host.getAgentCharacterIndex(agent)
+    const base = charIdx * CHAR_COLS
+
+    if (isWaiting) {
+      ws.sprite.setFrame(base + POSE_IDLE)
+      ws.pulseTween = this.scene.tweens.add({
+        targets: ws.sprite, scaleX: CHAR_SCALE * 1.06, scaleY: CHAR_SCALE * 1.06,
+        duration: 900, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
+      })
+      ws.typingTween = this.scene.tweens.add({
+        targets: ws.sprite, x: 1.2,
+        duration: 600, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
+      })
+      ws.dotPulseTween = this.scene.tweens.add({
+        targets: ws.statusDot, alpha: 0.3,
+        duration: 600, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
+      })
+      // LED: waiting — amber steady glow
+      if (ws.ledGlow) {
+        ws.ledGlow.clear()
+        ws.ledGlow.fillStyle(activeTheme.deskStrokeWaiting, 1)
+        ws.ledGlow.fillRoundedRect(-26, WS_DESK_Y + 4, 52, 2, 1)
+        this.scene.tweens.add({ targets: ws.ledGlow, alpha: 0.5, duration: 300, ease: 'Sine.easeOut' })
+      }
+      this.restoreDeskStrokeCallback(ws)
+    } else if (isWorking) {
+      ws.sprite.setFrame(base + POSE_INTERACT)
+      ws.typingTween = this.scene.tweens.add({
+        targets: ws.sprite, x: 0.8,
+        duration: 400, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
+      })
+      ws.bounceTween = this.scene.tweens.add({
+        targets: ws.sprite, y: WS_SPRITE_Y - 2,
+        duration: 800, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
+      })
+      ws.headTiltTween = this.scene.tweens.add({
+        targets: ws.sprite, angle: 1.5,
+        duration: 1600, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
+      })
+      ws.deskBody.setStrokeStyle(1, 0x34d399, 0.55)
+
+      // ── Game systems: auto-wrap into quest ──
+      if (prevMode !== 'working') {
+        const aid = agent.config.id
+        // Only start a quest if this agent doesn't already have one active
+        if (questSystem.getAgentActiveQuests(aid).length === 0) {
+          const blurb = agent.lastAssistantBlurb?.slice(0, 40) ?? 'Working'
+          questSystem.startQuest({
+            title: blurb,
+            agentId: aid,
+            priority: 'normal',
+          })
+        }
+        // Ensure agent is registered on the leaderboard (so they appear even before first completion)
+        const xpD = agent.xp
+        leaderboardManager.recordXP(aid, agent.config.name, 0, xpD?.level ?? 1, xpD?.rank ?? 'Intern')
+
+        // Show quest difficulty star
+        const activeQ = questSystem.getAgentActiveQuests(aid)[0]
+        if (activeQ && ws.questIcon) {
+          const frame = DIFFICULTY_STAR_FRAME[activeQ.difficulty] ?? ICON_FRAMES.STAR_GREY
+          ws.questIcon.setFrame(frame).setVisible(true).setAlpha(0)
+          if (ws.questIconTween) { ws.questIconTween.destroy(); ws.questIconTween = undefined }
+          this.scene.tweens.add({ targets: ws.questIcon, alpha: 0.9, duration: 300, ease: 'Back.easeOut' })
+          ws.questIconTween = this.scene.tweens.add({
+            targets: ws.questIcon, y: ws.questIcon.y - 2,
+            duration: 1200, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
+          })
+        }
+      }
+      // LED: working — green pulsing glow
+      if (ws.ledGlow) {
+        ws.ledGlow.clear()
+        ws.ledGlow.fillStyle(activeTheme.deskStrokeWorking, 1)
+        ws.ledGlow.fillRoundedRect(-26, WS_DESK_Y + 4, 52, 2, 1)
+        this.scene.tweens.add({ targets: ws.ledGlow, alpha: 0.6, duration: 300, ease: 'Sine.easeOut',
+          onComplete: () => {
+            if (!ws.ledGlow) return
+            ws.ledGlow.setAlpha(0.4)
+            ws.ledPulseTween = this.scene.tweens.add({
+              targets: ws.ledGlow, alpha: 0.7,
+              duration: 1000, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
+            })
+          },
+        })
+      }
+      // Ambient sound-wave indicator — three concentric quarter-circle arcs drawn
+      // to the left of the agent, suggesting keyboard/typing audio ambiance.
+      if (ws.soundWaveGfx) {
+        const gfx = ws.soundWaveGfx
+        gfx.clear()
+        gfx.lineStyle(1, 0x3a4858, 0.15)
+        gfx.beginPath()
+        gfx.arc(0, 0, 3, Phaser.Math.DegToRad(-45), Phaser.Math.DegToRad(45), false)
+        gfx.strokePath()
+        gfx.lineStyle(1, 0x3a4858, 0.10)
+        gfx.beginPath()
+        gfx.arc(0, 0, 5, Phaser.Math.DegToRad(-45), Phaser.Math.DegToRad(45), false)
+        gfx.strokePath()
+        gfx.lineStyle(1, 0x3a4858, 0.05)
+        gfx.beginPath()
+        gfx.arc(0, 0, 7, Phaser.Math.DegToRad(-45), Phaser.Math.DegToRad(45), false)
+        gfx.strokePath()
+        gfx.setAlpha(1)
+        ws.soundWaveTween = this.scene.tweens.add({
+          targets: gfx, alpha: 0,
+          duration: 1500, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
+        })
+
+        // Small PLAY_DARK "speaker" sprite at the sound wave origin
+        const speaker = this.scene.add.sprite(0, 0, SPRITESHEET_KEYS.GAME_ICONS, ICON_FRAMES.PLAY_DARK)
+          .setScale(0.06).setAlpha(0.2)
+        ws.container.add(speaker)
+        speaker.setPosition(gfx.x, gfx.y)
+        ws.soundWaveSpeaker = speaker
+        // Gentle pulse matching the sound wave fade
+        this.scene.tweens.add({
+          targets: speaker, alpha: 0.05,
+          duration: 1500, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
+        })
+      }
+
+      // Floating "typing note" sprites — tiny circles that rise like musical notes.
+      // Only spawned at LOD level 3 (full detail zoom) to avoid performance issues.
+      ws.typingNoteTimer = this.scene.time.addEvent({
+        delay: 500,
+        loop: true,
+        callback: () => {
+          // Gate on LOD 3 — skip at lower zoom levels
+          if (this.scene.cameras.main.zoom <= LOD_L2_MAX) return
+          // Spawn 1-2 tiny CIRCLE_BLUE sprites near the monitor area
+          const count = 1 + Math.floor(Math.random() * 2)
+          for (let n = 0; n < count; n++) {
+            const noteX = (Math.random() - 0.5) * 10
+            const noteY = WS_SPRITE_Y - 2
+            const note = this.scene.add.sprite(noteX, noteY, SPRITESHEET_KEYS.GAME_ICONS, ICON_FRAMES.CIRCLE_BLUE)
+              .setScale(0.06).setAlpha(0.3)
+            ws.container.add(note)
+            this.scene.tweens.add({
+              targets: note,
+              y: noteY - 15,
+              x: noteX + (Math.random() - 0.5) * 6,
+              alpha: 0,
+              duration: 800,
+              ease: 'Sine.easeOut',
+              delay: n * 100,
+              onComplete: () => { try { note.destroy() } catch { /* already gone */ } },
+            })
+          }
+        },
+      })
+      // Progress ring — circular arc that fills clockwise over 60 seconds.
+      if (ws.progressRing) {
+        ws.workStartTime = Date.now()
+        const ring = ws.progressRing
+        const RING_DURATION_MS = 60_000
+        const RING_R = 10
+        const drawRing = (progress: number) => {
+          if (!ring.active) return
+          ring.clear()
+          // Background track
+          ring.lineStyle(1.5, 0x2a3440, 0.3)
+          ring.beginPath()
+          ring.arc(0, 0, RING_R, 0, Math.PI * 2, false)
+          ring.strokePath()
+          // Filled arc from top (-90deg) clockwise
+          const fill = Math.min(progress, 1)
+          if (fill > 0) {
+            const arcColor = fill < 0.8 ? 0x34d399 : 0xfbbf24
+            ring.lineStyle(1.5, arcColor, 0.5)
+            ring.beginPath()
+            ring.arc(0, 0, RING_R,
+              Phaser.Math.DegToRad(-90),
+              Phaser.Math.DegToRad(fill * 360 - 90),
+              false,
+            )
+            ring.strokePath()
+          }
+        }
+        // Fade in, then start counter tween 0->100 over RING_DURATION_MS
+        ring.setAlpha(0)
+        drawRing(0)
+        this.scene.tweens.add({ targets: ring, alpha: 1, duration: 400, ease: 'Sine.easeOut' })
+        ws.progressRingTween = this.scene.tweens.addCounter({
+          from: 0, to: 100,
+          duration: RING_DURATION_MS,
+          ease: 'Linear',
+          onUpdate: (tw) => {
+            const pct = tw.getValue() / 100
+            drawRing(pct)
+          },
+          onComplete: () => {
+            // Ring is full — pulse alpha to signal overtime
+            drawRing(1)
+            ws.progressRingTween = this.scene.tweens.add({
+              targets: ring, alpha: 0.35,
+              duration: 800, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
+            })
+          },
+        })
+      }
+    } else {
+      ws.sprite.setFrame(base + POSE_SIT)
+      ws.breathTween = this.scene.tweens.add({
+        targets: ws.sprite, scaleY: CHAR_SCALE * 0.97,
+        duration: 2800, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
+      })
+
+      // Fart VFX when entering compressing mode
+      if (agent.sessionMode === 'compressing' && this.scene.anims.exists(EFFECT_ANIM_KEYS.FART)) {
+        const fart = this.scene.add.sprite(0, WS_SPRITE_Y - 8, SPRITESHEET_KEYS.EFFECTS_FART)
+          .setDepth(600).setScale(0.18).setAlpha(0.5)
+        ws.container.add(fart)
+        fart.play(EFFECT_ANIM_KEYS.FART)
+        fart.once('animationcomplete', () => fart.destroy())
+      }
+
+      // LED: idle — muted dim glow
+      if (ws.ledGlow) {
+        ws.ledGlow.clear()
+        ws.ledGlow.fillStyle(activeTheme.deskStrokeIdle, 1)
+        ws.ledGlow.fillRoundedRect(-26, WS_DESK_Y + 4, 52, 2, 1)
+        this.scene.tweens.add({ targets: ws.ledGlow, alpha: 0.1, duration: 600, ease: 'Sine.easeOut' })
+      }
+      this.restoreDeskStrokeCallback(ws)
+
+      // "Just finished" bounce + confetti when transitioning from working→idle
+      if (prevMode === 'working') {
+        this.scene.tweens.add({
+          targets: ws.sprite, y: WS_SPRITE_Y - 6,
+          duration: 200, yoyo: true, ease: 'Back.easeOut',
+          onComplete: () => { ws.sprite.y = WS_SPRITE_Y },
+        })
+        // Find the room that owns this workstation to compute world position
+        for (const room of this.host.getRooms().values()) {
+          if (room.workstations.has(agent.config.id)) {
+            const worldX = room.x + ws.container.x
+            const worldY = room.y + ws.container.y - 16  // slightly above the agent head
+            this.host.burstConfetti(worldX, worldY)
+            break
+          }
+        }
+
+        // Task completion tally — increment counter and refresh the desk badge
+        ws.localTaskCount++
+        this.refreshTaskCountCallback(ws)
+
+        // ── Game systems: quest complete, leaderboard, season ──
+        const agentId = agent.config.id
+        const agentName = agent.config.name
+        const xpData = agent.xp
+
+        // Complete any active quest for this agent
+        let earnedXP = 0
+        const activeQuest = questSystem.getAgentActiveQuests(agentId)[0]
+        if (activeQuest) {
+          const questDifficulty = activeQuest.difficulty
+          const reward = questSystem.completeQuest(activeQuest.id)
+          if (reward) {
+            earnedXP = reward.xp
+            creditManager.earn(reward.credits)
+            seasonManager.trackCreditsEarned(reward.credits)
+            seasonManager.trackQuestDifficulty(questDifficulty)
+            // Emit QUEST_COMPLETED so OfficeScene can trigger reward VFX
+            EventBus.emit(
+              EVENTS.QUEST_COMPLETED,
+              activeQuest.id, agentId, reward.xp, reward.credits, questDifficulty,
+            )
+          }
+        }
+
+        // Track in leaderboard — pass quest XP reward so seasonXP accumulates
+        const taskDuration = ws.workStartTime ? Date.now() - ws.workStartTime : 0
+        leaderboardManager.recordTaskComplete(agentId, agentName, taskDuration, xpData?.currentStreak ?? 0)
+        leaderboardManager.recordXP(agentId, agentName, earnedXP, xpData?.level ?? 1, xpData?.rank ?? 'Intern')
+
+        // Track in season
+        seasonManager.trackTaskCompleted(xpData?.currentStreak ?? 0)
+      }
+
+      // Stamp idleSince so later timers can detect prolonged boredom
+      ws.sprite.setData('idleSince', Date.now())
+
+      // Head tilt: tween angle -4..+4 degrees every 8-15s, hold 1s, return to 0
+      ws.lookAroundTimer = this.scene.time.addEvent({
+        delay: 8000 + Math.random() * 7000,
+        loop: true,
+        callback: () => {
+          if (ws.headTiltTween) ws.headTiltTween.destroy()
+          const angle = (Math.random() - 0.5) * 8   // -4 to +4 degrees
+          ws.headTiltTween = this.scene.tweens.add({
+            targets: ws.sprite, angle,
+            duration: 400, hold: 1000, yoyo: true, ease: 'Sine.easeInOut',
+            onComplete: () => { ws.sprite.setAngle(0); ws.headTiltTween = undefined },
+          })
+        },
+      })
+
+      // Stretch: scaleY 1→1.04 over 300ms, hold 200ms, back to 1 every 20-30s
+      ws.stretchTimer = this.scene.time.addEvent({
+        delay: 20000 + Math.random() * 10000,
+        loop: true,
+        callback: () => {
+          this.scene.tweens.add({
+            targets: ws.sprite,
+            scaleY: CHAR_SCALE * 1.04,
+            duration: 300, ease: 'Sine.easeOut',
+            onComplete: () => {
+              this.scene.time.delayedCall(200, () => {
+                this.scene.tweens.add({
+                  targets: ws.sprite,
+                  scaleY: CHAR_SCALE,
+                  duration: 300, ease: 'Sine.easeIn',
+                })
+              })
+            },
+          })
+        },
+      })
+
+      // Look at neighbor: tilt -3/+3 degrees toward a working peer every 12-18s
+      ws.lookAtNeighborTimer = this.scene.time.addEvent({
+        delay: 12000 + Math.random() * 6000,
+        loop: true,
+        callback: () => {
+          if (ws.walkBreakTween || ws.headTiltTween) return
+          let neighborContainerX: number | null = null
+          for (const room of this.host.getRooms().values()) {
+            if (!room.workstations.has(agent.config.id)) continue
+            for (const [otherId, otherWs] of room.workstations) {
+              if (otherId === agent.config.id) continue
+              const otherMode = otherWs.state?.sessionMode
+              const isOtherWorking =
+                (otherMode === 'working' || otherMode === 'plan') &&
+                !otherWs.state?.needsInteraction
+              if (isOtherWorking) {
+                neighborContainerX = otherWs.container.x
+                break
+              }
+            }
+            break
+          }
+          if (neighborContainerX === null) return
+          const tiltAngle = neighborContainerX < ws.container.x ? -3 : 3
+          if (ws.headTiltTween) ws.headTiltTween.destroy()
+          ws.headTiltTween = this.scene.tweens.add({
+            targets: ws.sprite, angle: tiltAngle,
+            duration: 350, ease: 'Sine.easeOut',
+            onComplete: () => {
+              this.scene.time.delayedCall(2000, () => {
+                this.scene.tweens.add({
+                  targets: ws.sprite, angle: 0,
+                  duration: 350, ease: 'Sine.easeIn',
+                  onComplete: () => { ws.headTiltTween = undefined },
+                })
+              })
+            },
+          })
+        },
+      })
+
+      // Yawn/bored pose: after 60s+ idle, briefly switch to POSE_INTERACT (fidget) for 1.5s
+      ws.yawnTimer = this.scene.time.addEvent({
+        delay: 65000 + Math.random() * 10000,
+        loop: true,
+        callback: () => {
+          const idleSince: number = ws.sprite.getData('idleSince') ?? Date.now()
+          if (Date.now() - idleSince < 60000) return
+          if (ws.walkBreakTween) return
+          ws.sprite.setFrame(base + POSE_INTERACT)
+          this.scene.time.delayedCall(1500, () => {
+            if (ws.lastAnimMode === 'idle') {
+              ws.sprite.setFrame(base + POSE_SIT)
+            }
+          })
+        },
+      })
+
+      ws.walkBreakTimer = this.scene.time.addEvent({
+        delay: IDLE_WALK_BREAK_MIN_MS + Math.random() * IDLE_WALK_BREAK_VAR_MS,
+        loop: true,
+        callback: () => {
+          if (!ws.state || ws.walkBreakTween || !ws.sprite.visible) return
+          const stillIdle =
+            !ws.state.needsInteraction &&
+            ws.state.sessionMode !== 'working' &&
+            ws.state.sessionMode !== 'plan' &&
+            ws.state.sessionMode !== 'compressing'
+          if (!stillIdle) return
+
+          // Find the room this workstation belongs to for world coords
+          const navMesh = this.host.getNavMesh()
+          if (!navMesh) return
+          let ownerRoom: Room | null = null
+          for (const room of this.host.getRooms().values()) {
+            if (room.workstations.has(agent.config.id)) { ownerRoom = room; break }
+          }
+          if (!ownerRoom) return
+
+          const worldX = ownerRoom.x + ws.container.x
+          const worldY = ownerRoom.y + ws.container.y + WS_SPRITE_Y
+
+          // Pick a random nearby walkable point (30-60px away), clamped to own room
+          const angle = Math.random() * Math.PI * 2
+          const dist = 30 + Math.random() * 30
+          const targetX = worldX + Math.cos(angle) * dist
+          const targetY = worldY + Math.sin(angle) * dist
+
+          // Clamp target to own room bounds so agents never aim for another room
+          const roomLeft = ownerRoom.x - ownerRoom.width / 2 + 14
+          const roomTop = ownerRoom.y - ownerRoom.height / 2 + 14
+          const roomRight = ownerRoom.x + ownerRoom.width / 2 - 14
+          const roomBottom = ownerRoom.y + ownerRoom.height / 2 - 14 - ROOM_HEADER_H
+          if (targetX < roomLeft || targetX > roomRight || targetY < roomTop || targetY > roomBottom) return
+
+          // Pass own room so agent can walk within it (base grid has corridors only)
+          const ownRoomRect = buildOwnRoomRect(ownerRoom)
+
+          const goPath = navMesh.findPath({ x: worldX, y: worldY }, { x: targetX, y: targetY }, ownRoomRect)
+          if (!goPath || goPath.length < 2) return
+
+          // Create a temporary world-space walk sprite
+          const charIdx = getAgentCharacterIndex(agent)
+          const walkSheetKey = charIdx === 1 ? ANIM_KEYS.WALK_2 : ANIM_KEYS.WALK_1
+          const walkSprite = this.scene.add.sprite(worldX, worldY, walkSheetKey, 0)
+            .setScale(CHAR_SCALE).setOrigin(0.5, 1).setDepth(9000)
+          const walkShadow = this.scene.add.ellipse(worldX, worldY + 2, 16, 5, 0x000000, 0.15).setDepth(8999)
+
+          ws.sprite.setVisible(false)
+
+          const pathWalker = new PathWalker(this.scene, walkSprite, walkShadow, walkSheetKey)
+
+          // Use a dummy tween as the walkBreakTween sentinel to prevent overlapping walks
+          ws.walkBreakTween = this.scene.tweens.addCounter({ duration: 999999 })
+
+          const returnPath = navMesh.findPath({ x: targetX, y: targetY }, { x: worldX, y: worldY }, ownRoomRect)
+            ?? [...goPath].reverse()
+
+          const finishWalk = () => {
+            pathWalker.destroy()
+            walkSprite.destroy()
+            walkShadow.destroy()
+            ws.sprite.setVisible(true)
+            if (ws.walkBreakTween) { ws.walkBreakTween.destroy(); ws.walkBreakTween = undefined }
+            ws.sprite.x = 0
+            ws.sprite.y = WS_SPRITE_Y
+            ws.sprite.setFrame(base + POSE_SIT)
+          }
+
+          pathWalker.startPath(goPath, () => {
+            // Brief pause at destination, then walk back
+            this.scene.time.delayedCall(800 + Math.random() * 600, () => {
+              if (!walkSprite.active) { finishWalk(); return }
+              pathWalker.startPath(returnPath, finishWalk)
+            })
+          })
+        },
+      })
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // updateMonitorGlow
+  // ---------------------------------------------------------------------------
+
+  updateMonitorGlow(ws: WorkstationSprite, isWorking: boolean, isWaiting: boolean): void {
+    if (!ws.monitorGlowFx) return
+    const isActive = isWorking || isWaiting
+    const baseColor = isWaiting ? 0xfbbf24 : isWorking ? 0x0ea5e9 : 0x1e2830
+    const baseStrength = isActive ? 3 : 1
+    const peakStrength = isActive ? 6 : 2
+    const duration     = isActive ? 800 : 2400
+    ws.monitorGlowFx.color = baseColor
+    ws.monitorGlowFx.outerStrength = baseStrength
+    ws.monitorGlowTween = this.scene.tweens.add({
+      targets: ws.monitorGlowFx, outerStrength: peakStrength,
+      duration, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
+    })
+  }
+
+  // ---------------------------------------------------------------------------
+  // updateBlockedIndicator
+  // ---------------------------------------------------------------------------
+
+  updateBlockedIndicator(ws: WorkstationSprite, agent: AgentState): void {
+    if (ws.blockedIndicatorTween) {
+      ws.blockedIndicatorTween.destroy()
+      ws.blockedIndicatorTween = undefined
+    }
+
+    // Phone light: stop and hide on every re-evaluation before deciding state
+    if (ws.phoneLightTween) {
+      ws.phoneLightTween.destroy()
+      ws.phoneLightTween = undefined
+    }
+    if (ws.phoneLight) {
+      ws.phoneLight.setAlpha(0)
+    }
+
+    if (!agent.needsInteraction) {
+      ws.blockedIndicator.setVisible(false)
+      ws.blockedIndicator.setAlpha(1)
+      ws.blockedIndicator.setScale(1)
+      return
+    }
+
+    let color = COLOR_LED_AMBER
+    let glyph = '!'
+    let badgeFrame = ICON_FRAMES.CIRCLE_YELLOW
+    if (agent.interactionType === 'question') {
+      color = 0x60a5fa
+      glyph = '?'
+      badgeFrame = ICON_FRAMES.CIRCLE_BLUE
+    } else if (agent.interactionType === 'accept-edits') {
+      color = 0x3b82f6
+      glyph = '~'
+      badgeFrame = ICON_FRAMES.CIRCLE_BLUE
+    } else if (agent.interactionType === 'tool-approval') {
+      color = 0xf97316
+      glyph = '!'
+      badgeFrame = ICON_FRAMES.CIRCLE_RED
+    }
+
+    ws.blockedIndicatorBadge.setFrame(badgeFrame)
+    ws.blockedIndicatorPulse.setFillStyle(color, 0.16)
+    ws.blockedIndicatorStem.setFillStyle(color, 0.55)
+    ws.blockedIndicatorText.setText(glyph)
+    ws.blockedIndicator.setVisible(true)
+
+    ws.blockedIndicatorTween = this.scene.tweens.add({
+      targets: ws.blockedIndicator,
+      scaleX: 1.08,
+      scaleY: 1.08,
+      alpha: 0.78,
+      duration: 520,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
+    })
+
+    // Phone notification light — blink the desk communicator dot in interaction-type color
+    if (ws.phoneLight) {
+      ws.phoneLight.setFillStyle(color, 1)
+      ws.phoneLight.setAlpha(0)
+      ws.phoneLightTween = this.scene.tweens.add({
+        targets: ws.phoneLight,
+        alpha: { from: 0, to: 1 },
+        duration: 500,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut',
+      })
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Mood indicator
+  // ---------------------------------------------------------------------------
+
+  getAgentMood(agent: AgentState): { emoji: string; color: string } {
+    if (agent.needsInteraction && agent.interactionType === 'tool-approval') {
+      return { emoji: '😤', color: '#f97316' }
+    }
+    if (agent.needsInteraction && agent.interactionType === 'question') {
+      return { emoji: '🤔', color: '#60a5fa' }
+    }
+    if (agent.sessionMode === 'working') {
+      return { emoji: '💻', color: '#34d399' }
+    }
+    if (agent.sessionMode === 'plan') {
+      return { emoji: '🧠', color: '#a78bfa' }
+    }
+    if (agent.sessionMode === 'compressing') {
+      return { emoji: '😵', color: '#f87171' }
+    }
+    return { emoji: '☕', color: '#5a6a7a' }
+  }
+
+  updateMood(ws: WorkstationSprite, agent: AgentState): void {
+    if (!ws.moodEmoji) return
+    const { emoji } = this.getAgentMood(agent)
+    const currentEmoji = ws.moodEmoji.getData('currentEmoji') as string | undefined
+
+    if (currentEmoji === emoji) return
+
+    // Emoji changed — stop existing float tween, fade out, then swap and bounce in
+    if (ws.moodTween) {
+      ws.moodTween.destroy()
+      ws.moodTween = undefined
+    }
+
+    const moodText = ws.moodEmoji
+    moodText.setData('currentEmoji', emoji)
+
+    // Derive the mood key so we can look up the spriteFrame for the badge
+    const moodKey = this.deriveMoodKey(agent)
+    const badgeFrame = MOOD_CONFIGS[moodKey].spriteFrame
+
+    // Fade out current emoji, then swap and bounce in
+    this.scene.tweens.add({
+      targets: moodText,
+      alpha: 0,
+      duration: 200,
+      ease: 'Sine.easeOut',
+      onComplete: () => {
+        if (!moodText.active) return
+        moodText.setText(emoji)
+        moodText.setScale(0)
+        // Bounce in: 0 → 1.2 → 1
+        this.scene.tweens.add({
+          targets: moodText,
+          scaleX: 1.2,
+          scaleY: 1.2,
+          alpha: 1,
+          duration: 180,
+          ease: 'Back.easeOut',
+          onComplete: () => {
+            if (!moodText.active) return
+            this.scene.tweens.add({
+              targets: moodText,
+              scaleX: 1,
+              scaleY: 1,
+              duration: 120,
+              ease: 'Sine.easeOut',
+              onComplete: () => {
+                if (!moodText.active) return
+                // Gentle infinite float: oscillate y ±2px
+                const baseY = moodText.y
+                ws.moodTween = this.scene.tweens.add({
+                  targets: moodText,
+                  y: baseY - 2,
+                  duration: 2000,
+                  yoyo: true,
+                  repeat: -1,
+                  ease: 'Sine.easeInOut',
+                })
+              },
+            })
+          },
+        })
+      },
+    })
+
+    // Update the sprite-based mood badge alongside the emoji
+    this.updateMoodBadge(ws, badgeFrame)
+
+    // React the desk pet mouth to the agent's mood
+    this.updatePetMouth(ws, moodKey)
+  }
+
+  /**
+   * Swap the desk pet mouth sprite to reflect the agent's current mood.
+   * frustrated -> teeth grin, happy/celebrating -> happy smile,
+   * tired -> flat line, default -> small o or happy.
+   */
+  private updatePetMouth(ws: WorkstationSprite, mood: Mood): void {
+    if (!ws.petMouth || !ws.petMouth.active) return
+
+    let mouthFrame: number
+    switch (mood) {
+      case 'frustrated':
+        mouthFrame = PET_FACE_FRAMES.MOUTH_GRIN
+        break
+      case 'happy':
+      case 'celebrating':
+      case 'caffeinated':
+        mouthFrame = PET_FACE_FRAMES.MOUTH_HAPPY
+        break
+      case 'tired':
+        mouthFrame = PET_FACE_FRAMES.MOUTH_FLAT
+        break
+      case 'focused':
+        mouthFrame = PET_FACE_FRAMES.MOUTH_O
+        break
+      default:
+        mouthFrame = PET_FACE_FRAMES.MOUTH_HAPPY
+        break
+    }
+
+    ws.petMouth.setFrame(mouthFrame)
+  }
+
+  /**
+   * Derive a Mood key from agent state — mirrors getAgentMood logic but returns
+   * the typed Mood string so we can index into MOOD_CONFIGS for the spriteFrame.
+   */
+  private deriveMoodKey(agent: AgentState): Mood {
+    if (agent.needsInteraction && agent.interactionType === 'tool-approval') return 'frustrated'
+    if (agent.needsInteraction && agent.interactionType === 'question') return 'zen'
+    if (agent.sessionMode === 'working') return 'focused'
+    if (agent.sessionMode === 'plan') return 'focused'
+    if (agent.sessionMode === 'compressing') return 'tired'
+    return 'idle'
+  }
+
+  /**
+   * Animate the mood badge sprite to show the given frame.
+   * Fades out, swaps frame, then bounces back in with a gentle float loop.
+   */
+  private updateMoodBadge(ws: WorkstationSprite, frame: number): void {
+    if (!ws.moodBadge) return
+
+    const badge = ws.moodBadge
+    const currentFrame = badge.getData('currentFrame') as number | undefined
+    if (currentFrame === frame) return
+    badge.setData('currentFrame', frame)
+
+    // Tear down existing badge tween
+    if (ws.moodBadgeTween) {
+      ws.moodBadgeTween.destroy()
+      ws.moodBadgeTween = undefined
+    }
+
+    // Fade out, swap frame, bounce in
+    this.scene.tweens.add({
+      targets: badge,
+      alpha: 0,
+      duration: 150,
+      ease: 'Sine.easeOut',
+      onComplete: () => {
+        if (!badge.active) return
+        badge.setFrame(frame).setVisible(true).setScale(0)
+        this.scene.tweens.add({
+          targets: badge,
+          scaleX: 0.28,
+          scaleY: 0.28,
+          alpha: 0.9,
+          duration: 200,
+          ease: 'Back.easeOut',
+          onComplete: () => {
+            if (!badge.active) return
+            this.scene.tweens.add({
+              targets: badge,
+              scaleX: 0.22,
+              scaleY: 0.22,
+              duration: 120,
+              ease: 'Sine.easeOut',
+              onComplete: () => {
+                if (!badge.active) return
+                // Gentle float in sync with mood emoji
+                const baseY = badge.y
+                ws.moodBadgeTween = this.scene.tweens.add({
+                  targets: badge,
+                  y: baseY - 2,
+                  duration: 2000,
+                  yoyo: true,
+                  repeat: -1,
+                  ease: 'Sine.easeInOut',
+                })
+              },
+            })
+          },
+        })
+      },
+    })
+  }
+
+  // ---------------------------------------------------------------------------
+  // Thought bubble — rich live-text with typing animation, auto-sizing, and fade
+  // ---------------------------------------------------------------------------
+
+  drawThoughtBubbleBg(ws: WorkstationSprite, accentColor: number): void {
+    const PAD_X = 8
+    const PAD_Y = 5
+    const ACCENT_W = 3
+    const CORNER = 5
+
+    const tw = ws.thoughtBubbleText.width
+    const th = ws.thoughtBubbleText.height
+    const bw = tw + PAD_X * 2 + ACCENT_W
+    const bh = th + PAD_Y * 2
+
+    ws.thoughtBubbleText.setPosition(ACCENT_W / 2 + PAD_X / 2, 0)
+
+    // Sprite-based panel background — resize to match text dimensions
+    if (ws.thoughtBubbleBgSprite) {
+      ws.thoughtBubbleBgSprite.setDisplaySize(bw, bh)
+      ws.thoughtBubbleBgSprite.setTint(0x0a0e14)
+    }
+
+    const g = ws.thoughtBubbleBg
+    g.clear()
+
+    // Only draw Graphics bg if sprite is not available
+    if (!ws.thoughtBubbleBgSprite) {
+      g.fillStyle(0x0a0e14, 0.92)
+      g.fillRoundedRect(-bw / 2, -bh / 2, bw, bh, CORNER)
+    }
+
+    // Accent left border (always drawn — overlays both sprite and graphics bg)
+    g.fillStyle(accentColor, 0.9)
+    g.fillRoundedRect(-bw / 2, -bh / 2, ACCENT_W, bh, CORNER)
+    if (ws.thoughtBubbleBgSprite) g.setVisible(true)
+
+    // Downward tail
+    const tailW = 6
+    const tailH = 6
+    const tailY = bh / 2
+    g.fillStyle(0x0a0e14, 0.92)
+    g.fillTriangle(-tailW / 2, tailY, tailW / 2, tailY, 0, tailY + tailH)
+  }
+
+  updateThoughtBubble(
+    ws: WorkstationSprite,
+    agent: AgentState,
+    shouldShow: boolean,
+    accentColor: number,
+    isWorking: boolean,
+  ): void {
+    if (!shouldShow) {
+      this.scene.tweens.killTweensOf(ws.thoughtBubble)
+      ws.thoughtBubble.setVisible(false)
+      return
+    }
+
+    const rawBlurb = (agent.lastAssistantBlurb ?? '').trim()
+    const MAX_CHARS = 60
+    let displayText: string
+
+    if (rawBlurb) {
+      displayText = rawBlurb.length > MAX_CHARS ? rawBlurb.slice(0, MAX_CHARS) + '...' : rawBlurb
+    } else if (agent.sessionMode === 'compressing') {
+      displayText = 'compressing...'
+    } else if (agent.sessionMode === 'plan') {
+      displayText = 'planning...'
+    } else if (agent.needsInteraction) {
+      displayText = 'waiting for input'
+    } else if (agent.sessionMode === 'working' || !agent.sessionMode) {
+      displayText = 'working...'
+    } else {
+      displayText = '\u2615 idle'
+    }
+
+    const blurbChanged = ws.lastShownBlurb !== displayText
+    ws.lastShownBlurb = displayText
+
+    if (ws.blurbFadeTimer) {
+      ws.blurbFadeTimer.destroy()
+      ws.blurbFadeTimer = undefined
+    }
+
+    ws.thoughtBubble.setVisible(true)
+    this.scene.tweens.killTweensOf(ws.thoughtBubble)
+    ws.thoughtBubble.setAlpha(1)
+
+    const baseY = WS_SPRITE_Y - 62
+
+    if (blurbChanged && rawBlurb) {
+      if (ws.blurbTypingTween) {
+        ws.blurbTypingTween.destroy()
+        ws.blurbTypingTween = undefined
+      }
+      ws.thoughtBubbleText.setText('')
+      ws.thoughtBubble.y = baseY
+      this.drawThoughtBubbleBg(ws, accentColor)
+
+      const counter = { val: 0 }
+      ws.blurbTypingTween = this.scene.tweens.add({
+        targets: counter,
+        val: displayText.length,
+        duration: Math.min(500, displayText.length * 18),
+        ease: 'Linear',
+        onUpdate: () => {
+          ws.thoughtBubbleText.setText(displayText.slice(0, Math.floor(counter.val)))
+          this.drawThoughtBubbleBg(ws, accentColor)
+        },
+        onComplete: () => {
+          ws.thoughtBubbleText.setText(displayText)
+          this.drawThoughtBubbleBg(ws, accentColor)
+          ws.blurbTypingTween = undefined
+        },
+      })
+    } else {
+      ws.thoughtBubbleText.setText(displayText)
+      this.drawThoughtBubbleBg(ws, accentColor)
+      ws.thoughtBubble.y = baseY
+    }
+
+    if (ws.thoughtBubbleFloatTween) {
+      ws.thoughtBubbleFloatTween.destroy()
+    }
+    ws.thoughtBubbleFloatTween = this.scene.tweens.add({
+      targets: ws.thoughtBubble,
+      y: baseY - 3,
+      duration: isWorking ? 1200 : 2000,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
+    })
+
+    if (rawBlurb) {
+      ws.blurbFadeTimer = this.scene.time.delayedCall(5000, () => {
+        if (!ws.thoughtBubble.active) return
+        this.scene.tweens.add({
+          targets: ws.thoughtBubble,
+          alpha: 0,
+          duration: 300,
+          ease: 'Sine.easeOut',
+          onComplete: () => {
+            if (ws.thoughtBubble.active) ws.thoughtBubble.setVisible(false)
+          },
+        })
+        ws.blurbFadeTimer = undefined
+      })
+    }
+  }
+}

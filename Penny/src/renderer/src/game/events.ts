@@ -85,6 +85,26 @@ export const EVENTS = {
   // --- External ---
   /** Fired when a GitHub issue card is clicked. Payload: (url: string, issueNumber: number, repo: string) */
   GITHUB_ISSUE_CLICKED: 'github:issueClicked',
+
+  // --- Game Systems ---
+  /** Fired when a quest starts. Payload: (questId: string, agentId: string, difficulty: string) */
+  QUEST_STARTED: 'quest:started',
+  /** Fired when a quest completes. Payload: (questId: string, agentId: string, xpReward: number, creditReward: number, difficulty: string) */
+  QUEST_COMPLETED: 'quest:completed',
+  /** Fired when a quest fails. Payload: (questId: string, agentId: string) */
+  QUEST_FAILED: 'quest:failed',
+  /** Fired when credits are earned. Payload: (amount: number, newBalance: number) */
+  CREDITS_EARNED: 'credits:earned',
+  /** Fired when leaderboard rankings change. No payload. */
+  LEADERBOARD_UPDATED: 'leaderboard:updated',
+  /** Fired when a season challenge completes. Payload: (challengeId: string, description: string) */
+  CHALLENGE_COMPLETED: 'challenge:completed',
+  /** Fired when a season ends. Payload: (seasonId: string, seasonName: string, score: number) */
+  SEASON_ENDED: 'season:ended',
+  /** Fired when a new season starts. Payload: (seasonId: string, seasonName: string) */
+  SEASON_STARTED: 'season:started',
+  /** Fired when an achievement is unlocked. Payload: (achievementId: string, title: string, iconFrame: number) */
+  ACHIEVEMENT_UNLOCKED: 'achievement:unlocked',
 } as const
 
 /**
@@ -154,4 +174,15 @@ export interface EventPayloadMap {
   // --- External ---
   /** (url: string, issueNumber: number, repo: string) */
   [EVENTS.GITHUB_ISSUE_CLICKED]: [url: string, issueNumber: number, repo: string]
+
+  // --- Game Systems ---
+  [EVENTS.QUEST_STARTED]: [questId: string, agentId: string, difficulty: string]
+  [EVENTS.QUEST_COMPLETED]: [questId: string, agentId: string, xpReward: number, creditReward: number, difficulty: string]
+  [EVENTS.QUEST_FAILED]: [questId: string, agentId: string]
+  [EVENTS.CREDITS_EARNED]: [amount: number, newBalance: number]
+  [EVENTS.LEADERBOARD_UPDATED]: []
+  [EVENTS.CHALLENGE_COMPLETED]: [challengeId: string, description: string]
+  [EVENTS.SEASON_ENDED]: [seasonId: string, seasonName: string, score: number]
+  [EVENTS.SEASON_STARTED]: [seasonId: string, seasonName: string]
+  [EVENTS.ACHIEVEMENT_UNLOCKED]: [achievementId: string, title: string, iconFrame: number]
 }

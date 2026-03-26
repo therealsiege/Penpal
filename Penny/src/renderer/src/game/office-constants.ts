@@ -59,17 +59,17 @@ export const OFFICE_FRAME_PRINTER      = 126
 // ---------------------------------------------------------------------------
 
 export const CHAR_SCALE      = 0.134
-export const WORKSTATION_W   = 70 // ~20% tighter office footprint
+export const WORKSTATION_W   = 90 // widened to fit all desk items without overlap
 export const WORKSTATION_H   = 77 // ~20% tighter office footprint
 export const ROOM_PADDING    = 12
 export const ROOM_TOP_EXTRA  = 30   // extra top padding so thought bubbles clear room headers
 export const ROOM_HEADER_H   = 20
-export const ROOM_GAP        = 18
+export const ROOM_GAP        = 36
 export const MAX_AGENTS_PER_ROW = 4
-export const TEAM_AREA_PAD_X = 18
-export const TEAM_AREA_PAD_Y = 18
-export const TEAM_AREA_GAP_X = 28
-export const TEAM_AREA_GAP_Y = 40
+export const TEAM_AREA_PAD_X = 24
+export const TEAM_AREA_PAD_Y = 24
+export const TEAM_AREA_GAP_X = 48
+export const TEAM_AREA_GAP_Y = 60
 export const TEAM_LABEL_H = 16
 
 export const WS_CHAIR_Y    = 6
@@ -98,7 +98,7 @@ export const COLOR_LED_GRAY    = 0x64748b
 export const WORLD_MARGIN   = 30
 
 // Camera & navigation constants
-export const ZOOM_MIN = 0.4
+export const ZOOM_MIN = 0.7
 export const ZOOM_MAX = 2.0
 export const ZOOM_FIT_MAX = 1.14
 export const ZOOM_LERP_SPEED = 0.08

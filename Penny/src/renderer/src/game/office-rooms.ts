@@ -11,10 +11,11 @@ import { getRoomType, getTemplate } from './room-renderer'
 import { activeTheme } from './office-theme'
 import {
   COLOR_HEADER_BG,
-  COLOR_LED_GRAY,
   COLOR_DOOR_FILL,
   ROOM_HEADER_H,
 } from './office-constants'
+import { SPRITESHEET_KEYS, ICON_FRAMES, ITEM_FRAMES, EFFECT_ANIM_KEYS, LEGO_FRAMES } from './office-asset-keys'
+import { ROOM_HEADER_ITEM } from './workstation-creation'
 
 // ---------------------------------------------------------------------------
 // Host-scene interface — only the properties/methods OfficeRooms needs
@@ -22,7 +23,7 @@ import {
 
 export interface RoomsHostScene {
   atmosphere: OfficeAtmosphere
-  calcRoomSize(agentCount: number): { width: number; height: number }
+  calcRoomSize(agentCount: number, cwd?: string): { width: number; height: number }
   syncWorkstations(room: Room, agents: AgentState[]): void
   updateRoomActivity(room: Room): void
   destroyWorkstation(ws: import('./office-types').WorkstationSprite): void
@@ -66,7 +67,7 @@ export class OfficeRooms {
     teamLabel: string,
     agents: AgentState[],
   ): Room {
-    const { width, height } = this.host.calcRoomSize(agents.length)
+    const { width, height } = this.host.calcRoomSize(agents.length, cwd)
     const container = this.scene.add.container(0, 0)
     const floorGraphics = this.scene.add.graphics()
     container.add(floorGraphics)
@@ -84,10 +85,16 @@ export class OfficeRooms {
     const ledWallT = 6
     const ledWallI = 2
     const ledX = -width / 2 + ledWallT + ledWallI + 10
-    const ledY = -height / 2 + ledWallT + ledWallI + ROOM_HEADER_H / 2
-    const statusLedGlow = this.scene.add.circle(ledX, ledY, 6, COLOR_LED_GRAY, 0.15)
+    const ledY = height / 2 - ledWallT - ledWallI - ROOM_HEADER_H / 2
+    const statusLedGlow = this.scene.add
+      .sprite(ledX, ledY, SPRITESHEET_KEYS.GAME_ICONS, ICON_FRAMES.CIRCLE_GREY)
+      .setScale(0.25)
+      .setAlpha(0.15)
+      .setBlendMode(Phaser.BlendModes.ADD)
     container.add(statusLedGlow)
-    const statusLed = this.scene.add.circle(ledX, ledY, 3, COLOR_LED_GRAY, 1)
+    const statusLed = this.scene.add
+      .sprite(ledX, ledY, SPRITESHEET_KEYS.GAME_ICONS, ICON_FRAMES.CIRCLE_GREY)
+      .setScale(0.19)
     container.add(statusLed)
 
     // Door graphics — separate objects so they can be animated independently.
@@ -133,7 +140,7 @@ export class OfficeRooms {
 
   updateRoom(room: Room, agents: AgentState[]): void {
     room.agents = agents
-    const { width, height } = this.host.calcRoomSize(agents.length)
+    const { width, height } = this.host.calcRoomSize(agents.length, room.cwd)
     const sizeChanged = width !== room.width || height !== room.height
     room.width  = width
     room.height = height
@@ -154,6 +161,19 @@ export class OfficeRooms {
     if (room.heatOverlay) room.heatOverlay.destroy()
     if (room.headerGlowTween) room.headerGlowTween.destroy()
     room.headerGlowFx = undefined
+    if (room.roomHeaderIcon) { room.roomHeaderIcon.destroy(); room.roomHeaderIcon = undefined }
+    if (room.headerLegoBricks) {
+      for (const b of room.headerLegoBricks) b.destroy()
+      room.headerLegoBricks = undefined
+    }
+    if (room.headerStatusDotTweens) {
+      for (const t of room.headerStatusDotTweens) t.destroy()
+      room.headerStatusDotTweens = []
+    }
+    if (room.headerStatusDots) {
+      for (const s of room.headerStatusDots) s.destroy()
+      room.headerStatusDots = []
+    }
     if (room.floorTileSprites) {
       for (const s of room.floorTileSprites) s.destroy()
       room.floorTileSprites = []
@@ -215,9 +235,9 @@ export class OfficeRooms {
     g.fillStyle(roomStyle.wallInner)
     g.fillRoundedRect(-w / 2 + WALL_T, -h / 2 + WALL_T, w - WALL_T * 2, h - WALL_T * 2, 3)
 
-    // Floor
+    // Floor — header bar is at the BOTTOM (opposite the door/north side)
     const floorX = -w / 2 + WALL_T + WALL_I
-    const floorY = -h / 2 + WALL_T + WALL_I + ROOM_HEADER_H
+    const floorY = -h / 2 + WALL_T + WALL_I
     const floorW = w - (WALL_T + WALL_I) * 2
     const floorH = h - (WALL_T + WALL_I) * 2 - ROOM_HEADER_H
 
@@ -327,7 +347,7 @@ export class OfficeRooms {
     // Drop-ceiling grid in the header zone (subtle lines before the solid header paints over)
     g.lineStyle(0.5, roomStyle.wallInner, 0.15)
     const CEIL_GRID = 16
-    const headerAreaY = -h / 2 + WALL_T + WALL_I
+    const headerAreaY = h / 2 - WALL_T - WALL_I - ROOM_HEADER_H
     const headerAreaBottom = headerAreaY + ROOM_HEADER_H
     for (let cy = headerAreaY; cy <= headerAreaBottom; cy += CEIL_GRID) {
       g.lineBetween(floorX, cy, floorX + floorW, cy)
@@ -338,13 +358,14 @@ export class OfficeRooms {
 
     // Header bar — gradient simulation via 3 overlapping rects (dark base to lighter top)
     const hBarX = -w / 2 + WALL_T + WALL_I
-    const hBarY = -h / 2 + WALL_T + WALL_I
+    const hBarY = h / 2 - WALL_T - WALL_I - ROOM_HEADER_H
     g.fillStyle(roomStyle.header, 1)
     g.fillRect(hBarX, hBarY, floorW, ROOM_HEADER_H)
     g.fillStyle(roomStyle.wallOuter, 0.12)
-    g.fillRect(hBarX, hBarY + Math.floor(ROOM_HEADER_H * 0.4), floorW, Math.ceil(ROOM_HEADER_H * 0.6))
+    g.fillStyle(roomStyle.wallOuter, 0.12)
+    g.fillRect(hBarX, hBarY, floorW, Math.ceil(ROOM_HEADER_H * 0.6))
     g.fillStyle(0xffffff, 0.06)
-    g.fillRect(hBarX, hBarY, floorW, 2)
+    g.fillRect(hBarX, hBarY + ROOM_HEADER_H - 2, floorW, 2)
 
     // Room icon — line-drawn icon left of the room label, slot driven by label hash
     const iconSlot = this.hashToken(room.teamKey || room.label) % 3
@@ -377,22 +398,22 @@ export class OfficeRooms {
     const plateW = 16
     const plateH = 10
     const plateX = -w / 2 + WALL_T + WALL_I + 4
-    const plateY = -h / 2 + WALL_T + WALL_I + (ROOM_HEADER_H - plateH) / 2
+    const plateY = hBarY + (ROOM_HEADER_H - plateH) / 2
     g.fillStyle(roomStyle.wallOuter, 0.5)
     g.fillRoundedRect(plateX, plateY, plateW, plateH, 2)
     g.lineStyle(1, roomStyle.accent, 0.4)
     g.strokeRoundedRect(plateX, plateY, plateW, plateH, 2)
 
-    // Accent line beneath the header
+    // Accent line above the header (separating floor from header at bottom)
     g.lineStyle(2, roomStyle.accent, 0.72)
     g.lineBetween(
       -w / 2 + WALL_T + WALL_I,
-      -h / 2 + WALL_T + WALL_I + ROOM_HEADER_H,
+      hBarY,
       w / 2 - WALL_T - WALL_I,
-      -h / 2 + WALL_T + WALL_I + ROOM_HEADER_H,
+      hBarY,
     )
 
-    // Status strip — separate Graphics object just below the accent line.
+    // Status strip — separate Graphics object just above the header bar.
     // Recreated here so drawRoomBackground is idempotent on resize.
     // updateRoomActivity drives tweened width and color.
     if (room.statusStrip) {
@@ -403,7 +424,7 @@ export class OfficeRooms {
     {
       const sg = this.scene.add.graphics()
       sg.fillStyle(0x64748b, 0.4)
-      sg.fillRect(hBarX, hBarY + ROOM_HEADER_H + 1, floorW, 2)
+      sg.fillRect(hBarX, hBarY - 3, floorW, 2)
       room.container.add(sg)
       room.statusStrip = sg
     }
@@ -523,10 +544,10 @@ export class OfficeRooms {
     const doorW = Math.max(24, Math.min(50, floorW * 0.28))
     const doorH = Math.max(14, Math.min(20, h * 0.08))
     const doorLeftX = -doorW / 2
-    // Bottom door: near bottom wall. Top door: near top wall (below header).
+    // Top door: near top wall. Bottom door: near bottom wall (above header).
     const doorY = room.doorSide === 'top'
-      ? -h / 2 + WALL_T + WALL_I + 16  // below header area
-      : h / 2 - WALL_T - WALL_I - doorH
+      ? -h / 2 + WALL_T + WALL_I
+      : h / 2 - WALL_T - WALL_I - ROOM_HEADER_H - doorH
 
     // Frame drawn in container space — static, does not scale with swing.
     const fg = room.doorFrameGraphics
@@ -558,6 +579,10 @@ export class OfficeRooms {
     if (!dg || !dg.active) return
     this.scene.tweens.killTweensOf(dg)
     dg.setScale(1, 1)
+
+    // Spawn a small puff VFX at the door position when it swings open
+    this.spawnDoorPuff(room)
+
     this.scene.tweens.add({
       targets: dg,
       scaleX: 0.3,
@@ -573,6 +598,62 @@ export class OfficeRooms {
         })
       },
     })
+  }
+
+  /** Spawn a puff sprite effect at the room door location. */
+  private spawnDoorPuff(room: Room): void {
+    if (!this.scene.anims.exists(EFFECT_ANIM_KEYS.PUFF)) return
+
+    const WALL_T = 3
+    const WALL_I = 1
+    const floorW = room.width - (WALL_T + WALL_I) * 2
+    const doorW = Math.max(24, Math.min(50, floorW * 0.28))
+    const doorH = Math.max(14, Math.min(20, room.height * 0.08))
+    // Door center in container-local coords
+    const doorCX = 0
+    const doorCY = room.doorSide === 'top'
+      ? -room.height / 2 + WALL_T + WALL_I + doorH / 2
+      : room.height / 2 - WALL_T - WALL_I - ROOM_HEADER_H - doorH / 2
+
+    // Convert to world coords via room container position
+    const worldX = room.container.x + doorCX
+    const worldY = room.container.y + doorCY
+
+    const puff = this.scene.add.sprite(worldX, worldY, SPRITESHEET_KEYS.EFFECTS_PUFF)
+      .setDepth(200)
+      .setScale(0.12)
+      .setAlpha(0.4)
+    puff.play(EFFECT_ANIM_KEYS.PUFF)
+    puff.once('animationcomplete', () => puff.destroy())
+
+    // Second smaller puff offset to the hinge side for a wispy feel
+    const hingeX = worldX - doorW / 2
+    const puff2 = this.scene.add.sprite(hingeX, worldY, SPRITESHEET_KEYS.EFFECTS_PUFF)
+      .setDepth(200)
+      .setScale(0.08)
+      .setAlpha(0.25)
+    puff2.play(EFFECT_ANIM_KEYS.PUFF)
+    puff2.once('animationcomplete', () => puff2.destroy())
+
+    // Door burst — 3-4 small circle sprites fanning outward from the door
+    const burstCount = 3 + Math.floor(Math.random() * 2)
+    const arcStart = room.doorSide === 'top' ? Math.PI * 0.25 : -Math.PI * 0.75
+    const arcSpan = Math.PI * 0.5
+    for (let bi = 0; bi < burstCount; bi++) {
+      const angle = arcStart + (bi / (burstCount - 1)) * arcSpan
+      const burst = this.scene.add.sprite(worldX, worldY, SPRITESHEET_KEYS.GAME_ICONS, ICON_FRAMES.CIRCLE_BLUE)
+        .setScale(0.08).setAlpha(0.5).setDepth(200)
+      this.scene.tweens.add({
+        targets: burst,
+        x: worldX + Math.cos(angle) * 20,
+        y: worldY + Math.sin(angle) * 20,
+        alpha: 0,
+        scale: 0.03,
+        duration: 400,
+        ease: 'Quad.easeOut',
+        onComplete: () => { try { burst.destroy() } catch { /* gone */ } },
+      })
+    }
   }
 
   updateDoorGlow(room: Room): void {
@@ -675,38 +756,76 @@ export class OfficeRooms {
     if (existing) existing.destroy()
     const existingBloom = room.container.getByName('headerAccentBloom') as Phaser.GameObjects.Graphics | null
     if (existingBloom) existingBloom.destroy()
+    // Clean up previous room header icon
+    if (room.roomHeaderIcon) { room.roomHeaderIcon.destroy(); room.roomHeaderIcon = undefined }
+    // Clean up previous lego brick sprites
+    if (room.headerLegoBricks) {
+      for (const b of room.headerLegoBricks) b.destroy()
+      room.headerLegoBricks = undefined
+    }
 
     const WALL_T = 8
     const WALL_I = 4
-    const headerY = -room.height / 2 + WALL_T + WALL_I + ROOM_HEADER_H / 2
+    const headerY = room.height / 2 - WALL_T - WALL_I - ROOM_HEADER_H / 2
 
     const headerText = this.scene.add.text(
       0,
       headerY,
       this.host.formatLabel(room.label),
       {
-        fontSize: '14px', color: activeTheme.headerText,
+        fontSize: '20px', color: activeTheme.headerText,
         fontFamily: 'system-ui, monospace', fontStyle: 'bold', align: 'center',
         resolution: 2,
       },
     ).setOrigin(0.5, 0.5).setName('headerText')
     room.container.add(headerText)
 
+    // Lego brick sprites behind the room label — colorful "built from bricks" decoration
+    if (this.scene.textures.exists(SPRITESHEET_KEYS.LEGO_BAR)) {
+      const brickFrames = [LEGO_FRAMES.BLUE, LEGO_FRAMES.GREEN, LEGO_FRAMES.YELLOW, LEGO_FRAMES.RED, LEGO_FRAMES.SPECIAL]
+      const labelHash = this.hashToken(room.teamKey || room.label)
+      const brickCount = 3 + (labelHash % 3) // 3-5 bricks
+      const brickScale = 0.5
+      const brickSpacing = 10
+      const totalBrickW = brickCount * brickSpacing
+      const brickStartX = -totalBrickW / 2 + brickSpacing / 2
+      const bricks: Phaser.GameObjects.Sprite[] = []
+      for (let bi = 0; bi < brickCount; bi++) {
+        const frameIdx = brickFrames[(labelHash + bi) % brickFrames.length]
+        const bx = brickStartX + bi * brickSpacing
+        // Stagger vertically for a stacked/scattered effect
+        const by = headerY + ((bi % 2 === 0) ? -1 : 1)
+        const brick = this.scene.add.sprite(bx, by, SPRITESHEET_KEYS.LEGO_BAR, frameIdx)
+          .setScale(brickScale)
+          .setAlpha(0.2)
+          .setOrigin(0.5)
+        room.container.add(brick)
+        bricks.push(brick)
+      }
+      // Move header text above the bricks so text is legible
+      room.container.bringToTop(headerText)
+      room.headerLegoBricks = bricks
+    }
+
     // Neon signage glow on header text
-    const glowFx = headerText.postFX.addGlow(0x00ff88, 2, 0, false, 0.08, 10)
-    room.headerGlowFx = glowFx
-    room.headerGlowTween = this.scene.tweens.add({
-      targets: glowFx,
-      outerStrength: { from: 2.5, to: 5.0 },
-      duration: 2500,
-      yoyo: true,
-      repeat: -1,
-      ease: 'Sine.easeInOut',
-    })
+    // Drop shadow only — no glow blur so text stays crisp
+    headerText.postFX.addShadow(1, 1, 0.03, 0.6, 0x000000, 2)
+
+    // Room-type themed icon — small sprite to the left of the header text
+    if (this.scene.textures.exists(SPRITESHEET_KEYS.GAME_ITEMS)) {
+      const roomType = getRoomType(room.cwd)
+      const iconFrame = ROOM_HEADER_ITEM[roomType] ?? ROOM_HEADER_ITEM['standard']
+      const iconX = -(headerText.width / 2) - 14
+      room.roomHeaderIcon = this.scene.add.sprite(iconX, headerY, SPRITESHEET_KEYS.GAME_ITEMS, iconFrame)
+        .setScale(0.22)
+        .setAlpha(0.6)
+        .setOrigin(0.5)
+      room.container.add(room.roomHeaderIcon)
+    }
 
     // Bloom accent line beneath the header — draw a wider, low-alpha duplicate for glow effect
     {
-      const accentLineY = -room.height / 2 + WALL_T + WALL_I + ROOM_HEADER_H
+      const accentLineY = room.height / 2 - WALL_T - WALL_I - ROOM_HEADER_H
       const template = getTemplate(getRoomType(room.cwd))
       const lineX1 = -room.width / 2 + 3 + 1  // WALL_T=3, WALL_I=1 from drawRoomBackground
       const lineX2 = room.width / 2 - 3 - 1
@@ -720,7 +839,7 @@ export class OfficeRooms {
     // Destroy existing badge, dot, and dot tween before rebuilding
     const badgeExisting = room.container.getByName('agentBadge') as Phaser.GameObjects.Text | null
     if (badgeExisting) badgeExisting.destroy()
-    const dotExisting = room.container.getByName('badgeDot') as Phaser.GameObjects.Arc | null
+    const dotExisting = room.container.getByName('badgeDot') as Phaser.GameObjects.Sprite | null
     if (dotExisting) dotExisting.destroy()
     if (room.badgeDotTween) { room.badgeDotTween.destroy(); room.badgeDotTween = null }
 
@@ -731,11 +850,18 @@ export class OfficeRooms {
     const waitingCount = room.agents.filter(a => a.needsInteraction).length
     const isActive = workingCount > 0
     const isWaiting = waitingCount > 0
-    const dotColor = isWaiting ? 0xfbbf24 : isActive ? 0x34d399 : 0x3a4858
 
-    // Small filled circle left of the count number
+    // Small filled circle left of the count number — sprite from GAME_ICONS sheet
     const badgeRightX = room.width / 2 - WALL_T - WALL_I - 8
-    const dot = this.scene.add.circle(badgeRightX - 18, headerY, 2.5, dotColor, isActive || isWaiting ? 0.9 : 0.5)
+    const dotFrame = isWaiting
+      ? ICON_FRAMES.CIRCLE_YELLOW
+      : isActive
+        ? ICON_FRAMES.CIRCLE_GREEN
+        : ICON_FRAMES.CIRCLE_GREY
+    const dot = this.scene.add
+      .sprite(badgeRightX - 18, headerY, SPRITESHEET_KEYS.GAME_ICONS, dotFrame)
+      .setScale(0.16)
+      .setAlpha(isActive || isWaiting ? 0.9 : 0.5)
     dot.setName('badgeDot')
     room.container.add(dot)
 
@@ -766,5 +892,118 @@ export class OfficeRooms {
       },
     ).setOrigin(1, 0.5).setName('agentBadge')
     room.container.add(badge)
+
+    // ── Agent status dot row (visible at L1 overview zoom) ──────────────
+    // Shows a tiny colored circle per agent below the header text, giving
+    // an at-a-glance activity summary when zoomed out too far to see
+    // individual workstations.
+    this.rebuildHeaderStatusDots(room, headerY)
+  }
+
+  // -------------------------------------------------------------------------
+  // Header status dots — per-agent colored circles below the room header
+  // -------------------------------------------------------------------------
+
+  rebuildHeaderStatusDots(room: Room, headerY?: number): void {
+    // Clean up previous dots and tweens
+    if (room.headerStatusDots) {
+      for (const s of room.headerStatusDots) s.destroy()
+    }
+    if (room.headerStatusDotTweens) {
+      for (const t of room.headerStatusDotTweens) t.destroy()
+    }
+    room.headerStatusDots = []
+    room.headerStatusDotTweens = []
+
+    if (room.agents.length === 0) return
+
+    const WALL_T = 8
+    const WALL_I = 4
+    const baseY = headerY ?? (room.height / 2 - WALL_T - WALL_I - ROOM_HEADER_H / 2)
+    const dotY = baseY + 10  // below the header text line
+    const dotSpacing = 5
+    const dotScale = 0.12
+    const maxDots = 8
+    const count = Math.min(room.agents.length, maxDots)
+
+    // Center the row horizontally
+    const totalWidth = (count - 1) * dotSpacing
+    const startX = -totalWidth / 2
+
+    for (let i = 0; i < count; i++) {
+      const agent = room.agents[i]
+      const isWorking = (agent.sessionMode === 'working' || agent.sessionMode === 'plan') && !agent.needsInteraction
+      const isWaitingAgent = agent.needsInteraction
+      const frame = isWaitingAgent
+        ? ICON_FRAMES.CIRCLE_YELLOW
+        : isWorking
+          ? ICON_FRAMES.CIRCLE_GREEN
+          : ICON_FRAMES.CIRCLE_GREY
+
+      const dotSprite = this.scene.add
+        .sprite(startX + i * dotSpacing, dotY, SPRITESHEET_KEYS.GAME_ICONS, frame)
+        .setScale(dotScale)
+        .setAlpha(isWorking || isWaitingAgent ? 0.85 : 0.45)
+        .setName('headerStatusDot')
+      room.container.add(dotSprite)
+      room.headerStatusDots.push(dotSprite)
+
+      // Gentle pulse on active/waiting dots
+      if (isWorking || isWaitingAgent) {
+        const tween = this.scene.tweens.add({
+          targets: dotSprite,
+          alpha: { from: 0.5, to: 0.95 },
+          duration: isWaitingAgent ? 600 : 2200,
+          yoyo: true,
+          repeat: -1,
+          ease: 'Sine.easeInOut',
+        })
+        room.headerStatusDotTweens!.push(tween)
+      }
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // Room ambient haze — subtle productivity haze for busy rooms
+  // -------------------------------------------------------------------------
+
+  /** Call from the update loop. Spawns a faint puff VFX in rooms with 3+
+   *  active (working) agents every 10-15 seconds, creating a subtle "busy
+   *  office" atmosphere. The puff is tinted to the room's accent color. */
+  tickRoomHaze(time: number, rooms: Map<string, Room>): void {
+    if (!this.scene.anims.exists(EFFECT_ANIM_KEYS.PUFF)) return
+
+    for (const room of rooms.values()) {
+      const workingCount = room.agents.filter(
+        a => (a.sessionMode === 'working' || a.sessionMode === 'plan') && !a.needsInteraction,
+      ).length
+      if (workingCount < 3) continue
+
+      const lastHaze = room.lastHazeTime ?? 0
+      const interval = 10000 + Math.random() * 5000 // 10-15s jitter
+      if (time - lastHaze < interval) continue
+
+      room.lastHazeTime = time
+
+      // Random position within the room floor area
+      const WALL_T = 3
+      const WALL_I = 1
+      const floorW = room.width - (WALL_T + WALL_I) * 2
+      const floorH = room.height - (WALL_T + WALL_I) * 2 - ROOM_HEADER_H
+      const rx = (Math.random() - 0.5) * floorW * 0.7
+      const ry = -room.height / 2 + WALL_T + WALL_I + Math.random() * floorH * 0.8
+
+      const worldX = room.container.x + rx
+      const worldY = room.container.y + ry
+
+      const template = getTemplate(getRoomType(room.cwd))
+      const haze = this.scene.add.sprite(worldX, worldY, SPRITESHEET_KEYS.EFFECTS_PUFF)
+        .setDepth(50)
+        .setScale(0.10)
+        .setAlpha(0.08)
+        .setTint(template.accentColor)
+      haze.play(EFFECT_ANIM_KEYS.PUFF)
+      haze.once('animationcomplete', () => { try { haze.destroy() } catch { /* gone */ } })
+    }
   }
 }
