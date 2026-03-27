@@ -17,7 +17,8 @@ protocol.registerSchemesAsPrivileged([
   { scheme: 'penny-sfx', privileges: { stream: true, supportFetchAPI: true, bypassCSP: true } },
 ])
 import { startFileWatcher, stopFileWatcher } from './file-watcher'
-import { startOrchestrator, stopOrchestrator } from './orchestrator'
+import { startOrchestrator, stopOrchestrator, orchestratorEvents } from './orchestrator'
+import { podEvents } from './pods'
 import { writeGameStateSnapshot } from './game-state-snapshot'
 import { PreferenceCollector, PreferenceStore, connectCollector } from './preferences'
 import { initAutoUpdater } from './auto-updater'
@@ -107,12 +108,7 @@ app.whenReady().then(() => {
   registerPtyHandlers()
   const dataDir = path.resolve(ELECTRON_ROOT, 'data')
   const preferenceStore = new PreferenceStore(dataDir)
-<<<<<<< Updated upstream
-  const preferenceCollector = new PreferenceCollector()
-=======
-  const preferenceCollector = new PreferenceCollector(ipcEvents, { ipcEvents, orchestratorEvents, podEvents })
-  preferenceCollector.start()
->>>>>>> Stashed changes
+  const preferenceCollector = new PreferenceCollector(ipcEvents, { orchestratorEvents, podEvents })
   connectCollector(preferenceCollector, preferenceStore)
   registerPreferenceIpc(preferenceStore)
   createWindow()
