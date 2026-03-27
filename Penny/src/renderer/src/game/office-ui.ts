@@ -445,7 +445,7 @@ export class OfficeUI {
       ['H  /  ?', 'This help'],
       ['M',       'Toggle sound'],
       ['N',       'Cycle day/night'],
-      ['T',       'Cycle theme'],
+      ['T',       'Toggle dark/light'],
       ['`',       'Debug overlay'],
     ]
 

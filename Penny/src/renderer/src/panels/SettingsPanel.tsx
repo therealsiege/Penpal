@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useState } from 'react'
-import type { VeritasServiceStatus } from '../types'
+import { useState } from 'react'
 import { useAppearanceStore, type ThemeName } from '../stores/appearance-store'
+import { PanelBackground } from '../components/PanelBackground'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -52,16 +52,6 @@ const THEME_PALETTES: Record<ThemeName, {
     dot3: '#0ea5e9',
     textColor: '#1e293b',
   },
-  neon: {
-    label: 'Neon',
-    bg: '#03001a',
-    room: '#0a0030',
-    accent: '#00ffff',
-    dot1: '#00ffff',
-    dot2: '#7f00ff',
-    dot3: '#ff00c8',
-    textColor: '#e0faff',
-  },
 }
 
 const ANIM_STORAGE_KEY = 'sidekick-animation-prefs'
@@ -96,16 +86,16 @@ function NumberStepper({ value, onChange, min, max, step = 1, label }: {
 }) {
   return (
     <div className="flex items-center justify-between">
-      <span className="text-sm text-slate-300">{label}</span>
+      <span className="text-sm text-[#c4ccd6]">{label}</span>
       <div className="flex items-center gap-2">
         <button
           onClick={() => onChange(Math.max(min, +(value - step).toFixed(1)))}
-          className="w-7 h-7 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 text-sm flex items-center justify-center transition-colors"
+          className="w-7 h-7 rounded bg-[#141a22] hover:bg-[#1a2430] text-[#c4ccd6] text-sm flex items-center justify-center transition-colors"
         >-</button>
-        <span className="text-sm text-slate-200 w-10 text-center tabular-nums">{value}</span>
+        <span className="text-sm text-[#dce4ec] w-10 text-center tabular-nums">{value}</span>
         <button
           onClick={() => onChange(Math.min(max, +(value + step).toFixed(1)))}
-          className="w-7 h-7 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 text-sm flex items-center justify-center transition-colors"
+          className="w-7 h-7 rounded bg-[#141a22] hover:bg-[#1a2430] text-[#c4ccd6] text-sm flex items-center justify-center transition-colors"
         >+</button>
       </div>
     </div>
@@ -120,11 +110,11 @@ function FontSelect({ value, onChange, options, label }: {
 }) {
   return (
     <div className="flex items-center justify-between">
-      <span className="text-sm text-slate-300">{label}</span>
+      <span className="text-sm text-[#c4ccd6]">{label}</span>
       <select
         value={value}
         onChange={e => onChange(e.target.value)}
-        className="bg-slate-800 border border-slate-700 rounded px-2 py-1.5 text-sm text-slate-200 outline-none focus:border-blue-500 max-w-[200px]"
+        className="bg-[#141a22] border border-[#2a3440] rounded px-2 py-1.5 text-sm text-[#c4ccd6] outline-none focus:border-[#00ff88]/45 max-w-[200px]"
       >
         {options.map(o => (
           <option key={o.value} value={o.value}>{o.label}</option>
@@ -148,10 +138,10 @@ function ThemeCard({ themeName, isActive, onSelect }: {
       className={[
         'stagger-item relative rounded-lg overflow-hidden cursor-pointer outline-none',
         'hover:scale-[1.02] transition-all duration-150',
-        'focus-visible:ring-2 focus-visible:ring-blue-500',
+        'focus-visible:ring-2 focus-visible:ring-[#00ff88]/50',
         isActive
-          ? 'ring-2 ring-blue-500 ring-offset-2 ring-offset-slate-900'
-          : 'ring-1 ring-slate-700 hover:ring-slate-500',
+          ? 'ring-2 ring-[#00ff88] ring-offset-2 ring-offset-[#080a0e]'
+          : 'ring-1 ring-[#2a3440] hover:ring-[#3a4858]',
       ].join(' ')}
       style={{ width: 120, height: 80, background: p.bg, flexShrink: 0 }}
     >
@@ -187,7 +177,7 @@ function ThemeCard({ themeName, isActive, onSelect }: {
             width: 16,
             height: 16,
             borderRadius: '50%',
-            background: '#2563eb',
+            background: '#00ff88',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -227,8 +217,8 @@ function ToggleSwitch({ enabled, onToggle, label, description }: {
   return (
     <div className="flex items-center justify-between">
       <div>
-        <p className="text-sm text-slate-300">{label}</p>
-        {description && <p className="text-xs text-slate-500 mt-0.5">{description}</p>}
+        <p className="text-sm text-[#c4ccd6]">{label}</p>
+        {description && <p className="text-xs text-[#5a6a7a] mt-0.5">{description}</p>}
       </div>
       <button
         role="switch"
@@ -237,8 +227,8 @@ function ToggleSwitch({ enabled, onToggle, label, description }: {
         onClick={onToggle}
         className={[
           'relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors duration-150 outline-none',
-          'focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900',
-          enabled ? 'bg-blue-600' : 'bg-slate-700',
+          'focus-visible:ring-2 focus-visible:ring-[#00ff88]/45 focus-visible:ring-offset-2 focus-visible:ring-offset-[#080a0e]',
+          enabled ? 'bg-[#00a868]' : 'bg-[#2a3440]',
         ].join(' ')}
       >
         <span
@@ -252,230 +242,6 @@ function ToggleSwitch({ enabled, onToggle, label, description }: {
   )
 }
 
-function VeritasControlPanel() {
-  const [status, setStatus] = useState<VeritasServiceStatus | null>(null)
-  const [loading, setLoading] = useState(false)
-  const [action, setAction] = useState<string | null>(null)
-  const [logs, setLogs] = useState('')
-  const [error, setError] = useState<string | null>(null)
-
-  const parseStatus = (payload: unknown): VeritasServiceStatus => {
-    if (
-      payload &&
-      typeof payload === 'object' &&
-      'configured' in payload &&
-      typeof (payload as { configured: unknown }).configured === 'boolean'
-    ) {
-      return payload as VeritasServiceStatus
-    }
-    const msg = payload && typeof payload === 'object' && 'error' in payload
-      ? String((payload as { error: unknown }).error || 'Unknown error')
-      : 'Unexpected response from Veritas service manager.'
-    throw new Error(msg)
-  }
-
-  const refreshStatus = useCallback(async () => {
-    setLoading(true)
-    setError(null)
-    try {
-      const result = await window.api.veritasStatus()
-      setStatus(parseStatus(result))
-    } catch (err) {
-      setError((err as Error).message)
-    } finally {
-      setLoading(false)
-    }
-  }, [])
-
-  const runAction = useCallback(async (
-    label: 'start' | 'stop' | 'restart',
-    fn: () => Promise<unknown>,
-  ) => {
-    setAction(label)
-    setError(null)
-    try {
-      const result = await fn()
-      setStatus(parseStatus(result))
-    } catch (err) {
-      setError((err as Error).message)
-    } finally {
-      setAction(null)
-    }
-  }, [])
-
-  const loadLogs = useCallback(async () => {
-    setAction('logs')
-    setError(null)
-    try {
-      const result = await window.api.veritasLogs(140)
-      if (result.success) {
-        setLogs(result.output || '(No logs returned)')
-      } else {
-        throw new Error(result.error || 'Unable to load Veritas logs.')
-      }
-    } catch (err) {
-      setError((err as Error).message)
-    } finally {
-      setAction(null)
-    }
-  }, [])
-
-  useEffect(() => {
-    refreshStatus()
-    const timer = setInterval(() => {
-      refreshStatus().catch(() => {})
-    }, 12_000)
-    return () => clearInterval(timer)
-  }, [refreshStatus])
-
-  const statusTone = status?.running
-    ? status.healthy && status.apiReachable ? 'text-emerald-400' : 'text-amber-400'
-    : 'text-slate-400'
-  const sourceDirInvalid = status?.sourceDirValid === false
-  const startDisabled = !!action || sourceDirInvalid
-  const startDisabledReason = sourceDirInvalid
-    ? 'Set PENNY_VERITAS_SOURCE_DIR to a valid veritas-kanban folder in Penny/docker/.env.control-plane'
-    : ''
-
-  return (
-    <section className="mb-8">
-      <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-4">Veritas Control Plane</h2>
-      <div className="space-y-4 bg-slate-900/50 rounded-lg p-4 border border-slate-800/60">
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-sm text-slate-300">Service Status</p>
-            <p className={`text-xs ${statusTone}`}>
-              {loading && !status
-                ? 'Checking...'
-                : status?.running
-                  ? `Running (${status.health || 'unknown'})`
-                  : 'Stopped'}
-            </p>
-          </div>
-          <button
-            onClick={() => refreshStatus()}
-            disabled={loading || !!action}
-            className="px-3 py-1.5 rounded bg-slate-800 hover:bg-slate-700 text-sm text-slate-200 transition-colors disabled:opacity-50"
-          >
-            Refresh
-          </button>
-        </div>
-
-        <div className="grid grid-cols-2 gap-2 text-xs">
-          <div className="rounded border border-slate-800 px-2 py-1.5">
-            <span className="text-slate-500">Docker</span>
-            <p className={status?.dockerAvailable ? 'text-emerald-400' : 'text-red-400'}>
-              {status?.dockerAvailable ? 'Available' : 'Unavailable'}
-            </p>
-          </div>
-          <div className="rounded border border-slate-800 px-2 py-1.5">
-            <span className="text-slate-500">Compose</span>
-            <p className={status?.composeAvailable ? 'text-emerald-400' : 'text-red-400'}>
-              {status?.composeAvailable ? 'Available' : 'Unavailable'}
-            </p>
-          </div>
-          <div className="rounded border border-slate-800 px-2 py-1.5">
-            <span className="text-slate-500">API URL</span>
-            <p className="text-slate-300 truncate">{status?.apiUrl || '-'}</p>
-          </div>
-          <div className="rounded border border-slate-800 px-2 py-1.5">
-            <span className="text-slate-500">Compose File</span>
-            <p className="text-slate-300 truncate">{status?.composeFile || '-'}</p>
-          </div>
-          <div className="rounded border border-slate-800 px-2 py-1.5">
-            <span className="text-slate-500">Source Dir</span>
-            <p className={status?.sourceDirValid ? 'text-emerald-400 truncate' : 'text-red-400 truncate'}>
-              {status?.sourceDir || '-'}
-            </p>
-          </div>
-          <div className="rounded border border-slate-800 px-2 py-1.5">
-            <span className="text-slate-500">Source Config</span>
-            <p className={status?.sourceDirConfigured ? 'text-emerald-400' : 'text-amber-400'}>
-              {status?.sourceDirConfigured ? 'Explicit path set' : 'Using default path'}
-            </p>
-          </div>
-        </div>
-
-        {error && (
-          <div className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded px-2 py-1.5">
-            {error}
-          </div>
-        )}
-        {!!status?.warnings?.length && (
-          <div className="text-xs text-amber-400 bg-amber-500/10 border border-amber-500/20 rounded px-2 py-1.5 space-y-1">
-            {status.warnings.map((w, idx) => (
-              <p key={`${w}-${idx}`}>- {w}</p>
-            ))}
-          </div>
-        )}
-        {status?.error && (
-          <div className="text-xs text-amber-400 bg-amber-500/10 border border-amber-500/20 rounded px-2 py-1.5">
-            {status.error}
-          </div>
-        )}
-
-        <div className="flex flex-wrap gap-2">
-          <span title={startDisabledReason} className="inline-flex">
-            <button
-              onClick={() => runAction('start', () => window.api.veritasStart())}
-              disabled={startDisabled}
-              className="px-3 py-1.5 rounded bg-emerald-700/80 hover:bg-emerald-600 text-sm text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              aria-label={sourceDirInvalid ? `Start disabled: ${startDisabledReason}` : 'Start Veritas'}
-            >
-              {action === 'start' ? 'Starting...' : 'Start'}
-            </button>
-          </span>
-          <button
-            onClick={() => runAction('stop', () => window.api.veritasStop())}
-            disabled={!!action}
-            className="px-3 py-1.5 rounded bg-red-700/80 hover:bg-red-600 text-sm text-white transition-colors disabled:opacity-50"
-          >
-            {action === 'stop' ? 'Stopping...' : 'Stop'}
-          </button>
-          <button
-            onClick={() => runAction('restart', () => window.api.veritasRestart())}
-            disabled={!!action}
-            className="px-3 py-1.5 rounded bg-blue-700/80 hover:bg-blue-600 text-sm text-white transition-colors disabled:opacity-50"
-          >
-            {action === 'restart' ? 'Restarting...' : 'Restart'}
-          </button>
-          <button
-            onClick={() => loadLogs()}
-            disabled={!!action}
-            className="px-3 py-1.5 rounded bg-slate-800 hover:bg-slate-700 text-sm text-slate-200 transition-colors disabled:opacity-50"
-          >
-            {action === 'logs' ? 'Loading Logs...' : 'Tail Logs'}
-          </button>
-          <button
-            onClick={() => {
-              setAction('open')
-              setError(null)
-              window.api.veritasOpen()
-                .then((result: unknown) => {
-                  if (result && typeof result === 'object' && 'error' in result) {
-                    throw new Error(String((result as { error: unknown }).error || 'Failed to open Veritas UI.'))
-                  }
-                })
-                .catch(err => setError((err as Error).message))
-                .finally(() => setAction(null))
-            }}
-            disabled={!!action || !status?.webUrl}
-            className="px-3 py-1.5 rounded bg-slate-800 hover:bg-slate-700 text-sm text-slate-200 transition-colors disabled:opacity-50"
-          >
-            {action === 'open' ? 'Opening...' : 'Open Veritas UI'}
-          </button>
-        </div>
-
-        {logs && (
-          <div className="rounded border border-slate-800 bg-slate-950/70 p-2">
-            <p className="text-[11px] text-slate-500 mb-1">Latest container logs</p>
-            <pre className="text-[11px] text-slate-300 max-h-52 overflow-auto whitespace-pre-wrap break-words">{logs}</pre>
-          </div>
-        )}
-      </div>
-    </section>
-  )
-}
 
 // ── Main panel ─────────────────────────────────────────────────────────────────
 
@@ -486,6 +252,8 @@ export function SettingsPanel() {
     editorFontFamily, setEditorFontFamily, editorFontSize, setEditorFontSize,
     editorLineHeight, setEditorLineHeight,
     zoom, setZoom,
+    scanlinesOverlay, setScanlinesOverlay,
+    crtVignette, setCrtVignette,
   } = useAppearanceStore()
 
   const [animPrefs, setAnimPrefs] = useState<AnimPrefs>(loadAnimPrefs)
@@ -499,20 +267,21 @@ export function SettingsPanel() {
   }
 
   return (
-    <div className="h-full overflow-y-auto">
+    <PanelBackground>
+    <div className="h-full overflow-y-auto relative z-[1]">
       <div className="max-w-xl mx-auto py-8 px-6">
-        <h1 className="text-lg font-semibold text-slate-200 mb-6">Settings</h1>
+        <h1 className="text-lg font-semibold text-[#dce4ec] mb-6">Settings</h1>
 
         {/* Appearance — Theme picker */}
         <section className="mb-8">
-          <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-4">Appearance</h2>
-          <div className="space-y-5 bg-slate-900/50 rounded-lg p-4 border border-slate-800/60">
+          <h2 className="text-xs font-semibold text-[#5a6a7a] uppercase tracking-wider mb-4">Appearance</h2>
+          <div className="space-y-5 bg-[#0c1018]/85 rounded-lg p-4 border border-[#2a3440]/90">
 
             {/* Theme preview cards */}
             <div>
-              <p className="text-sm text-slate-300 mb-3">Theme</p>
+              <p className="text-sm text-[#c4ccd6] mb-3">Theme</p>
               <div className="flex items-center gap-3 flex-wrap">
-                {(['dark', 'light', 'neon'] as ThemeName[]).map(t => (
+                {(['dark', 'light'] as ThemeName[]).map(t => (
                   <ThemeCard
                     key={t}
                     themeName={t}
@@ -524,14 +293,30 @@ export function SettingsPanel() {
             </div>
 
             <NumberStepper label="Zoom Level" value={+(zoom * 100).toFixed(0)} onChange={v => setZoom(v / 100)} min={70} max={200} step={10} />
-            <div className="text-xs text-slate-600">Tip: Use Cmd+= / Cmd+- in the Vault to zoom quickly</div>
+            <div className="text-xs text-[#4a5c6e]">Tip: Use Cmd+= / Cmd+- in the Vault to zoom quickly</div>
+
+            <div className="pt-2 border-t border-[#2a3440]/80 space-y-4">
+              <p className="text-sm text-[#c4ccd6]">Shell effects</p>
+              <ToggleSwitch
+                label="Scanline overlay"
+                description="Subtle horizontal lines across the window (retro CRT look)"
+                enabled={scanlinesOverlay}
+                onToggle={() => setScanlinesOverlay(!scanlinesOverlay)}
+              />
+              <ToggleSwitch
+                label="Edge vignette"
+                description="Soft darkening and color wash at the screen edges"
+                enabled={crtVignette}
+                onToggle={() => setCrtVignette(!crtVignette)}
+              />
+            </div>
           </div>
         </section>
 
         {/* Animation toggles */}
         <section className="mb-8">
-          <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-4">Animations</h2>
-          <div className="space-y-4 bg-slate-900/50 rounded-lg p-4 border border-slate-800/60">
+          <h2 className="text-xs font-semibold text-[#5a6a7a] uppercase tracking-wider mb-4">Animations</h2>
+          <div className="space-y-4 bg-[#0c1018]/85 rounded-lg p-4 border border-[#2a3440]/90">
             <ToggleSwitch
               label="Ambient particles"
               description="Floating particle effects in the background"
@@ -553,16 +338,14 @@ export function SettingsPanel() {
           </div>
         </section>
 
-        <VeritasControlPanel />
-
         {/* UI Font */}
         <section className="mb-8">
-          <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-4">Interface Font</h2>
-          <div className="space-y-4 bg-slate-900/50 rounded-lg p-4 border border-slate-800/60">
+          <h2 className="text-xs font-semibold text-[#5a6a7a] uppercase tracking-wider mb-4">Interface Font</h2>
+          <div className="space-y-4 bg-[#0c1018]/85 rounded-lg p-4 border border-[#2a3440]/90">
             <FontSelect label="Font Family" value={uiFontFamily} onChange={setUiFontFamily} options={FONT_OPTIONS} />
             <NumberStepper label="Font Size" value={uiFontSize} onChange={setUiFontSize} min={10} max={24} />
-            <div className="mt-3 p-3 rounded bg-slate-800/50 border border-slate-700/40">
-              <p className="text-slate-400" style={{ fontFamily: uiFontFamily, fontSize: `${uiFontSize}px` }}>
+            <div className="mt-3 p-3 rounded bg-[#141a22]/60 border border-[#2a3440]/90">
+              <p className="text-[#8a96a4]" style={{ fontFamily: uiFontFamily, fontSize: `${uiFontSize}px` }}>
                 The quick brown fox jumps over the lazy dog.
               </p>
             </div>
@@ -571,13 +354,13 @@ export function SettingsPanel() {
 
         {/* Editor Font */}
         <section className="mb-8">
-          <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-4">Editor Font</h2>
-          <div className="space-y-4 bg-slate-900/50 rounded-lg p-4 border border-slate-800/60">
+          <h2 className="text-xs font-semibold text-[#5a6a7a] uppercase tracking-wider mb-4">Editor Font</h2>
+          <div className="space-y-4 bg-[#0c1018]/85 rounded-lg p-4 border border-[#2a3440]/90">
             <FontSelect label="Font Family" value={editorFontFamily} onChange={setEditorFontFamily} options={MONO_FONT_OPTIONS} />
             <NumberStepper label="Font Size" value={editorFontSize} onChange={setEditorFontSize} min={10} max={28} />
             <NumberStepper label="Line Height" value={editorLineHeight} onChange={setEditorLineHeight} min={1.0} max={2.5} step={0.1} />
-            <div className="mt-3 p-3 rounded bg-slate-800/50 border border-slate-700/40 overflow-hidden">
-              <pre className="text-slate-400" style={{ fontFamily: editorFontFamily, fontSize: `${editorFontSize}px`, lineHeight: editorLineHeight }}>
+            <div className="mt-3 p-3 rounded bg-[#141a22]/60 border border-[#2a3440]/90 overflow-hidden">
+              <pre className="text-[#8a96a4]" style={{ fontFamily: editorFontFamily, fontSize: `${editorFontSize}px`, lineHeight: editorLineHeight }}>
 {`# Heading
 The quick brown fox jumps
 over the lazy dog.
@@ -591,9 +374,9 @@ over the lazy dog.
 
         {/* About */}
         <section className="mb-4">
-          <div className="animate-card-enter bg-slate-900/50 rounded-lg p-5 border border-slate-800/60 flex flex-col items-center gap-1.5 text-center">
+          <div className="animate-card-enter bg-[#0c1018]/85 rounded-lg p-5 border border-[#2a3440]/90 flex flex-col items-center gap-1.5 text-center">
             <div className="flex items-center gap-2">
-              <span className="text-sm font-semibold text-slate-200">Penny v0.1.0</span>
+              <span className="text-sm font-semibold text-[#dce4ec]">Penny v0.1.0</span>
               <svg
                 aria-hidden="true"
                 width="14"
@@ -608,11 +391,12 @@ over the lazy dog.
                 />
               </svg>
             </div>
-            <p className="text-xs text-slate-500">Built with Electron + Phaser + React</p>
+            <p className="text-xs text-[#5a6a7a]">Built with Electron + Phaser + React</p>
           </div>
         </section>
 
       </div>
     </div>
+    </PanelBackground>
   )
 }

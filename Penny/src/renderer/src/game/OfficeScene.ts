@@ -743,14 +743,11 @@ export class OfficeScene extends Phaser.Scene {
         this.showToast(`Phase: ${nextPhase}`, 'info')
       })
 
-      // T — cycle color theme (dark → light → neon)
+      // T — toggle color theme (dark ↔ light)
       this.input.keyboard.on('keydown-T', (e: KeyboardEvent) => {
         if (shouldIgnoreKeyboardShortcuts(e)) return
         e.preventDefault()
-        const names: ThemeName[] = ['dark', 'light', 'neon']
-        const currentName = names.find(n => THEMES[n] === activeTheme) ?? 'dark'
-        const nextIdx = (names.indexOf(currentName) + 1) % names.length
-        const nextName = names[nextIdx]
+        const nextName: ThemeName = activeTheme === THEMES.dark ? 'light' : 'dark'
         const { newBg } = setActiveTheme(nextName)
         // Redraw everything with new theme colors
         this.cameras.main.setBackgroundColor(newBg)

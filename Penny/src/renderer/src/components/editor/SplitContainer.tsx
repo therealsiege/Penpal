@@ -49,7 +49,7 @@ export function SplitContainer({ direction, left, right }: SplitContainerProps) 
         {left}
       </div>
       <div
-        className={`shrink-0 ${isHorizontal ? 'w-1 cursor-col-resize' : 'h-1 cursor-row-resize'} hover:bg-blue-600/30 transition-colors`}
+        className={`shrink-0 ${isHorizontal ? 'w-1 cursor-col-resize' : 'h-1 cursor-row-resize'} hover:bg-[#00ff88]/20 transition-colors`}
         onMouseDown={handleMouseDown}
       />
       <div className="flex-1 overflow-hidden">

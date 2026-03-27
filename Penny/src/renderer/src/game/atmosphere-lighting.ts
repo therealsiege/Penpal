@@ -14,8 +14,8 @@ export class AtmosphereLighting {
   private lastGlintAt = 0
   private glintActiveWindow = -1
   private glintStartTime = 0
-  private readonly GLINT_INTERVAL = 3000
-  private readonly GLINT_DURATION = 600
+  private glintNextInterval = 14000 // randomized per cycle: 12-20s
+  private readonly GLINT_DURATION = 400
 
   // Ceiling lights activity
   private lastLightCheckAt = 0
@@ -86,11 +86,13 @@ export class AtmosphereLighting {
   ): void {
     if (!gfx || windowPositions.length === 0) return
 
-    // Start a new glint sweep every GLINT_INTERVAL ms
-    if (this.glintActiveWindow === -1 && time - this.lastGlintAt >= this.GLINT_INTERVAL) {
+    // Start a new glint sweep every 12-20s (randomized per cycle)
+    if (this.glintActiveWindow === -1 && time - this.lastGlintAt >= this.glintNextInterval) {
       this.glintActiveWindow = Math.floor(Math.random() * windowPositions.length)
       this.glintStartTime = time
       this.lastGlintAt = time
+      // Randomize the next interval for organic feel
+      this.glintNextInterval = 12000 + Math.random() * 8000
     }
 
     gfx.clear()
@@ -106,11 +108,14 @@ export class AtmosphereLighting {
       return
     }
 
-    // Thin vertical bar sweeping left to right across the window
-    const barW = 3
+    // Thin diagonal bar sweeping left to right across the window
+    const barW = 2
     const barX = win.x + t * (win.w - barW)
-    gfx.fillStyle(0xffffff, 0.15)
-    gfx.fillRect(barX, win.y, barW, win.h)
+    // Slight diagonal offset — the bar shifts 2px down as it sweeps across
+    const diagonalOffset = t * 2
+    const alpha = 0.15 * Math.sin(t * Math.PI) // fade in and out for softness
+    gfx.fillStyle(0xffffff, alpha)
+    gfx.fillRect(barX, win.y + diagonalOffset, barW, win.h)
   }
 
   // ---------------------------------------------------------------------------

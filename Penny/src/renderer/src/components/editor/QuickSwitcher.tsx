@@ -66,9 +66,9 @@ export function QuickSwitcher({ onSelect, onClose }: QuickSwitcherProps) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center pt-[15vh]" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-start justify-center pt-[15vh] bg-black/55 backdrop-blur-[2px]" onClick={onClose}>
       <div
-        className="bg-slate-900 border border-slate-700 rounded-lg shadow-2xl w-[500px] max-h-[400px] overflow-hidden"
+        className="bg-gradient-to-b from-[#0c1018] to-[#080b10] border border-[#2a3440] rounded-xl shadow-2xl w-[500px] max-h-[400px] overflow-hidden ring-1 ring-[#00ff88]/10"
         onClick={e => e.stopPropagation()}
       >
         <input
@@ -77,9 +77,9 @@ export function QuickSwitcher({ onSelect, onClose }: QuickSwitcherProps) {
           onChange={e => setQuery(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder="Open file..."
-          className="w-full bg-transparent text-slate-200 text-sm px-4 py-3 outline-none border-b border-slate-800"
+          className="w-full bg-transparent text-[#dce4ec] text-sm px-4 py-3 outline-none border-b border-[#2a3440] placeholder-[#4a5c6e] focus:ring-2 focus:ring-inset focus:ring-[#00ff88]/25"
         />
-        <div className="overflow-y-auto max-h-[320px]">
+        <div className="overflow-y-auto max-h-[320px] scrollbar-penpal">
           {results.map((entry, i) => {
             const folder = entry.path.split('/').slice(0, -1).join('/')
             return (
@@ -87,16 +87,16 @@ export function QuickSwitcher({ onSelect, onClose }: QuickSwitcherProps) {
                 key={entry.path}
                 onClick={() => { onSelect(entry.path); onClose() }}
                 className={`flex items-center justify-between px-4 py-2 cursor-pointer text-xs ${
-                  i === selectedIdx ? 'bg-blue-600/20 text-blue-300' : 'text-slate-400 hover:bg-slate-800/60'
+                  i === selectedIdx ? 'bg-[#00ff88]/12 text-[#00e5ff]' : 'text-[#8a96a4] hover:bg-[#141a22]/60'
                 }`}
               >
                 <span className="truncate font-medium">{entry.title || entry.name}</span>
-                {folder && <span className="text-slate-600 text-[10px] truncate ml-2 shrink-0">{folder}</span>}
+                {folder && <span className="text-[#4a5c6e] text-[10px] truncate ml-2 shrink-0">{folder}</span>}
               </div>
             )
           })}
           {results.length === 0 && query && (
-            <div className="px-4 py-6 text-center text-slate-600 text-xs">No files found</div>
+            <div className="px-4 py-6 text-center text-[#4a5c6e] text-xs">No files found</div>
           )}
         </div>
       </div>

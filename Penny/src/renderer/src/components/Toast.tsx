@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useCallback, type ReactNode, type CSSProperties } from 'react'
+import { createContext, useContext, useState, useCallback, useRef, type ReactNode, type CSSProperties } from 'react'
 
 // @keyframes toast-progress is injected once into the document head so we
 // avoid a styled-components / emotion dependency while keeping the progress bar
@@ -44,6 +44,8 @@ export function useToast() {
 
 const TOAST_LIFETIME_MS = 3000
 const EXIT_DURATION_MS  = 300
+const DEDUPE_WINDOW_MS = 600
+const MAX_VISIBLE = 5
 let nextId = 0
 
 // Per-type colour classes (Tailwind, no dynamic strings)
@@ -65,6 +67,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   ensureProgressKeyframes()
 
   const [toasts, setToasts] = useState<ToastItem[]>([])
+  const lastToastRef = useRef<{ message: string; at: number } | null>(null)
 
   const dismiss = useCallback((id: number) => {
     // 1. Mark as leaving — triggers exit animation
@@ -76,8 +79,18 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const toast = useCallback((message: string, type: ToastItem['type'] = 'info') => {
+    const now = Date.now()
+    const last = lastToastRef.current
+    if (last && last.message === message && now - last.at < DEDUPE_WINDOW_MS) {
+      return
+    }
+    lastToastRef.current = { message, at: now }
+
     const id = nextId++
-    setToasts(prev => [...prev, { id, message, type, leaving: false }])
+    setToasts(prev => {
+      const next: ToastItem[] = [...prev, { id, message, type, leaving: false }]
+      return next.length > MAX_VISIBLE ? next.slice(-MAX_VISIBLE) : next
+    })
     setTimeout(() => dismiss(id), TOAST_LIFETIME_MS)
   }, [dismiss])
 
@@ -86,7 +99,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       {children}
       {toasts.length > 0 && (
         <div
-          className="fixed bottom-4 right-4 z-[100] flex flex-col gap-2 items-end pointer-events-none"
+          className="fixed bottom-4 right-4 z-[100] flex flex-col gap-2 items-end pointer-events-none max-h-[min(42vh,320px)] overflow-y-auto overflow-x-hidden scrollbar-penpal pr-0.5"
           aria-live="polite"
           aria-label="Notifications"
         >
@@ -158,7 +171,7 @@ function ToastCard({ toast: t, leaving, index }: ToastCardProps) {
       ref={refCallback}
       role="status"
       aria-live="polite"
-      className={`relative w-72 px-4 py-2.5 rounded-lg border text-sm shadow-lg backdrop-blur overflow-hidden ${colors[t.type]}`}
+      className={`relative w-72 max-w-[calc(100vw-2rem)] shrink-0 px-4 py-2.5 rounded-xl border text-sm shadow-[0_12px_40px_-8px_rgba(0,0,0,0.45)] backdrop-blur-md overflow-hidden ${colors[t.type]}`}
       style={enterStyle}
     >
       {/* Message */}
@@ -174,4 +187,3 @@ function ToastCard({ toast: t, leaving, index }: ToastCardProps) {
     </div>
   )
 }
-

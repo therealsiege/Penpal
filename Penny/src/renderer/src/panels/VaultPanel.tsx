@@ -12,6 +12,7 @@ import { DailyNote } from '../components/editor/DailyNote'
 import { useEditorStore } from '../stores/editor-store'
 import { useVaultIndex } from '../stores/vault-index'
 import { useAppearanceStore } from '../stores/appearance-store'
+import { PanelBackground } from '../components/PanelBackground'
 
 export function VaultPanel() {
   const [previewPath, setPreviewPath] = useState<string | null>(null)
@@ -170,7 +171,8 @@ export function VaultPanel() {
   }, [activeTabId, closeTab, cycleTab, zoomIn, zoomOut, zoomReset])
 
   return (
-    <div className="flex flex-col h-full vault-zoom vault-panel" style={{ zoom }}>
+    <PanelBackground>
+    <div className="flex flex-col h-full vault-zoom vault-panel relative z-[1]" style={{ zoom }}>
       {/* Quick Switcher overlay */}
       {showQuickSwitcher && (
         <QuickSwitcher
@@ -200,7 +202,7 @@ export function VaultPanel() {
         <button
           onClick={() => setShowRightSidebar(s => !s)}
           className={`text-[15px] px-2.5 py-1.5 rounded transition-colors ${
-            showRightSidebar ? 'bg-blue-600/30 text-blue-300' : 'text-[#3a4858] hover:text-[#8a96a4] bg-[#141a22]/40'
+            showRightSidebar ? 'bg-[#00ff88]/12 text-[#00e5ff]' : 'text-[#3a4858] hover:text-[#8a96a4] bg-[#141a22]/40'
           }`}
           title="Toggle Outline (Cmd+\\)"
         >
@@ -223,7 +225,7 @@ export function VaultPanel() {
                 onClick={() => setLeftSidebarMode(mode)}
                 className={`flex-1 px-2 py-1.5 text-[15px] capitalize transition-colors ${
                   leftSidebarMode === mode
-                    ? 'text-blue-300 bg-[#141a22]/40'
+                    ? 'text-[#00e5ff] bg-[#141a22]/40'
                     : 'text-[#3a4858] hover:text-[#8a96a4]'
                 }`}
               >
@@ -247,7 +249,7 @@ export function VaultPanel() {
 
         {/* Resize handle */}
         <div
-          className="w-1 hover:bg-blue-600/30 cursor-col-resize transition-colors shrink-0"
+          className="w-1 hover:bg-[#00ff88]/20 cursor-col-resize transition-colors shrink-0"
           onMouseDown={handleMouseDown}
         />
 
@@ -294,5 +296,6 @@ export function VaultPanel() {
         </div>
       </div>
     </div>
+    </PanelBackground>
   )
 }

@@ -191,6 +191,7 @@ export class ActivityFeed {
       targets: slot.container,
       alpha: 0,
       x: SLIDE_FROM_X,
+      y: `+=${ENTRY_H * 0.6}`,
       duration: FADE_OUT_MS,
       ease: 'Power2',
       onComplete: () => {

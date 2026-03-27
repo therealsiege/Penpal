@@ -45,7 +45,7 @@ function TabItem({ tab, isActive, isNew, onActivate, onClose }: TabItemProps) {
     // for the bottom active indicator.
     <div
       className={[
-        'relative shrink-0 border-r border-slate-800/40',
+        'relative shrink-0 border-r border-[#2a3440]/40',
         isNew ? 'animate-tab-enter' : '',
         isClosing ? 'animate-tab-close' : '',
       ]
@@ -64,8 +64,8 @@ function TabItem({ tab, isActive, isNew, onActivate, onClose }: TabItemProps) {
             'flex items-center gap-1.5 px-3 py-1.5 text-sm shrink-0 transition-colors',
             isGrabbing ? 'cursor-grabbing' : 'cursor-grab',
             isActive
-              ? 'bg-slate-800/50 text-slate-200'
-              : 'text-slate-500 hover:text-slate-300 hover:bg-slate-800/30',
+              ? 'bg-[#141a22]/50 text-[#dce4ec]'
+              : 'text-[#5a6a7a] hover:text-[#c4ccd6] hover:bg-[#141a22]/30',
           ]
             .filter(Boolean)
             .join(' ')}
@@ -84,7 +84,7 @@ function TabItem({ tab, isActive, isNew, onActivate, onClose }: TabItemProps) {
             role="button"
             aria-label={`Close ${fileName}`}
             onClick={handleCloseClick}
-            className="ml-1 text-slate-600 hover:text-slate-300 transition-colors opacity-0 group-hover:opacity-100 leading-none select-none"
+            className="ml-1 text-[#4a5c6e] hover:text-[#c4ccd6] transition-colors opacity-0 group-hover:opacity-100 leading-none select-none"
           >
             ×
           </span>
@@ -94,8 +94,8 @@ function TabItem({ tab, isActive, isNew, onActivate, onClose }: TabItemProps) {
         <span
           className="
             pointer-events-none absolute left-1/2 -translate-x-1/2 top-full mt-1.5 z-50
-            px-2 py-1 rounded-md bg-slate-800 text-slate-200 text-xs font-medium whitespace-nowrap
-            shadow-lg border border-slate-700/60
+            px-2 py-1 rounded-md bg-[#141a22] text-[#dce4ec] text-xs font-medium whitespace-nowrap
+            shadow-lg border border-[#2a3440]/60
             opacity-0 translate-y-1 group-hover:opacity-100 group-hover:translate-y-0
             transition-all duration-200
           "
@@ -144,7 +144,7 @@ export function EditorTabs() {
 
   return (
     <div
-      className="flex items-stretch overflow-x-auto shrink-0 border-b border-slate-800/60 bg-slate-900/60 no-drag"
+      className="flex items-stretch overflow-x-auto shrink-0 border-b border-[#2a3440]/60 bg-[#0c1018]/60 no-drag"
       role="tablist"
       aria-label="Open editor tabs"
     >
