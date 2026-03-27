@@ -16,7 +16,7 @@ import { OfficeWorkstations } from './office-workstation'
 import { OfficeBackground } from './office-background'
 import { OfficeBroadcast } from './office-broadcast'
 import { OfficeCamera } from './office-camera'
-import type { WorkstationSprite, Room, PodLineInfo, OfficeDebugSnapshot } from './office-types'
+import type { WorkstationSprite, Room, PodLineInfo, OfficeDebugSnapshot, OrchestratorTaskOfficeInfo } from './office-types'
 import {
   getPoseFrame, getRoomDoorY, getStatusColor,
   hashToken, getAgentCharacterIndex, getTeamInfo, getTeamColor,
@@ -55,6 +55,9 @@ import {
 export class OfficeScene extends Phaser.Scene {
   private pendingAgents: AgentState[] | null = null
   private isReady = false
+
+  /** Orchestrator queue tasks assigned to agents — shown on desks via OfficeWorkstations */
+  private orchestratorTasksByAgent = new Map<string, OrchestratorTaskOfficeInfo>()
 
   private rooms = new Map<string, Room>()
   private agents: AgentState[] = []
@@ -1082,6 +1085,7 @@ export class OfficeScene extends Phaser.Scene {
         celebrations: scene.celebrations,
         propsManager: scene.propsManager,
         getNavMesh: () => scene.navMesh,
+        getOrchestratorTaskForAgent: (id) => scene.orchestratorTasksByAgent.get(id),
       })
     }
   }
@@ -1377,7 +1381,8 @@ export class OfficeScene extends Phaser.Scene {
     // Mark MCP connection lines as dirty after agent state update
     if (this.mcp) this.mcp.markDirty()
 
-
+    this.ensureWsManager()
+    this.wsManager.syncOrchestratorTaskLabels()
 
     // Fit camera on first layout only — don't hijack user's pan on every poll.
     if (this.rooms.size > 0 && !this.officeCamera.hasInitialFit) {
@@ -1412,6 +1417,16 @@ export class OfficeScene extends Phaser.Scene {
     this.pods.drawPodLines(this.time.now, this.rooms)
     this.pods.setLastDrawAt(this.time.now)
     this.pods.clearDirty()
+  }
+
+  /** Active orchestrator tasks — shows `[stage] title` below each assigned agent's name */
+  setOrchestratorTasks(tasks: OrchestratorTaskOfficeInfo[]): void {
+    this.orchestratorTasksByAgent.clear()
+    for (const t of tasks) {
+      this.orchestratorTasksByAgent.set(t.agentId, t)
+    }
+    this.ensureWsManager()
+    this.wsManager.syncOrchestratorTaskLabels()
   }
 
   /** Highlight a workstation for drag-over feedback */

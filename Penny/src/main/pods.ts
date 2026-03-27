@@ -108,8 +108,8 @@ export interface PodPreset {
 const PHASE_CONFIGS: Record<string, PhaseConfig> = {
   critical: { candidates: 3, selfEvaluation: true, confidenceThreshold: 0.8, maxSelfFixes: 2 },
   high:     { candidates: 2, selfEvaluation: true, confidenceThreshold: 0.7, maxSelfFixes: 1 },
-  normal:   { candidates: 1, selfEvaluation: false, confidenceThreshold: 0.5, maxSelfFixes: 0 },
-  low:      { candidates: 1, selfEvaluation: false, confidenceThreshold: 0.5, maxSelfFixes: 0 },
+  normal:   { candidates: 1, selfEvaluation: false, confidenceThreshold: 0.5, maxSelfFixes: 1 },
+  low:      { candidates: 1, selfEvaluation: false, confidenceThreshold: 0.3, maxSelfFixes: 0 },
 }
 
 function getPhaseConfig(priority?: string): PhaseConfig {
@@ -343,6 +343,35 @@ export function parseReviewerCritique(raw: string | undefined | null): ReviewerC
   }
 }
 
+// ── Critique Feedback Formatter (exported for tests) ─────────────────────────
+
+export function formatCritiqueFeedback(critique: ReviewerCritique): string {
+  const lines: string[] = [
+    `**Reviewer Verdict**: ${critique.verdict} (confidence: ${critique.confidence})`,
+    '',
+    `**Summary**: ${critique.summary}`,
+  ]
+
+  if (critique.issues.length > 0) {
+    lines.push('', '**Issues to address**:')
+    for (const issue of critique.issues) {
+      lines.push(`- [${issue.severity.toUpperCase()}] ${issue.location}: ${issue.description}`)
+      if (issue.suggestion) {
+        lines.push(`  Suggestion: ${issue.suggestion}`)
+      }
+    }
+  }
+
+  if (critique.strengths.length > 0) {
+    lines.push('', '**Strengths** (keep these):')
+    for (const s of critique.strengths) {
+      lines.push(`- ${s}`)
+    }
+  }
+
+  return lines.join('\n')
+}
+
 // ── Message formatting ──────────────────────────────────────────────────────
 
 function formatSolverMessage(wf: PodWorkflow, feedbackFromExecutor?: string): string {
@@ -366,7 +395,7 @@ function formatSolverMessage(wf: PodWorkflow, feedbackFromExecutor?: string): st
   ].join('\n')
 }
 
-function formatReviewerMessage(wf: PodWorkflow): string {
+export function formatReviewerMessage(wf: PodWorkflow): string {
   return [
     `## Pod Workflow: ${wf.name}`,
     `### Stage: Review (Iteration ${wf.iteration}/${wf.maxIterations})`,
@@ -374,22 +403,41 @@ function formatReviewerMessage(wf: PodWorkflow): string {
     `**Project Directory**: \`${wf.cwd}\``,
     `**Original Task**: ${wf.task}`,
     '',
-    '**Your Role**: You are the independent reviewer. Design comprehensive test criteria for this task WITHOUT looking at the implementation. Focus on:',
-    '- Expected behavior from the task description',
-    '- Edge cases and error conditions',
-    '- Integration points and regressions',
-    '- Accessibility and UX considerations (if applicable)',
+    '**Your Role**: You are the independent reviewer. Evaluate this task and provide a structured critique WITHOUT looking at the implementation code. Focus on expected behavior from the task description, edge cases, integration points, and regressions.',
     '',
-    '**Output**: Write a structured test plan with numbered test cases. For each test case include:',
-    '1. Test name',
-    '2. Expected behavior',
-    '3. Steps to verify',
-    '4. Pass/fail criteria',
+    '**Output**: Respond with ONLY a single JSON block (wrapped in ```json fences) matching this exact schema:',
+    '',
+    '```json',
+    '{',
+    '  "verdict": "approve | approve-with-notes | request-changes | reject",',
+    '  "confidence": 0.85,',
+    '  "issues": [',
+    '    {',
+    '      "severity": "critical | major | minor | nitpick",',
+    '      "location": "file or area affected",',
+    '      "description": "what is wrong or missing",',
+    '      "suggestion": "how to fix it"',
+    '    }',
+    '  ],',
+    '  "strengths": ["list of things done well"],',
+    '  "summary": "one-paragraph overall assessment"',
+    '}',
+    '```',
+    '',
+    '**Verdict guidelines**:',
+    '- `approve` — task requirements are fully met, no issues found',
+    '- `approve-with-notes` — requirements met but minor/nitpick issues worth noting',
+    '- `request-changes` — major issues that must be fixed before proceeding',
+    '- `reject` — fundamental problems that indicate the wrong approach entirely',
+    '',
+    '**Confidence**: 0.0 (wild guess) to 1.0 (certain). Below 0.5 means you are unsure.',
+    '',
+    '**Issues**: Include every concern with severity, location, description, and a concrete suggestion. Use `critical` for blockers, `major` for significant problems, `minor` for small improvements, `nitpick` for style/preference.',
   ].join('\n')
 }
 
-function formatExecutorMessage(wf: PodWorkflow, solverOutput?: string, reviewerOutput?: string): string {
-  return [
+export function formatExecutorMessage(wf: PodWorkflow, solverOutput?: string, reviewerOutput?: string, critique?: ReviewerCritique): string {
+  const sections = [
     `## Pod Workflow: ${wf.name}`,
     `### Stage: Execute (Iteration ${wf.iteration}/${wf.maxIterations})`,
     '',
@@ -398,6 +446,17 @@ function formatExecutorMessage(wf: PodWorkflow, solverOutput?: string, reviewerO
     '',
     solverOutput ? `**Solver Summary**: ${solverOutput}` : '',
     reviewerOutput ? `**Test Plan from Reviewer**: ${reviewerOutput}` : '',
+  ]
+
+  if (critique && critique.verdict === 'approve-with-notes' && critique.issues.length > 0) {
+    sections.push('')
+    sections.push('**Reviewer Notes** (approved with minor issues — verify these during testing):')
+    for (const issue of critique.issues) {
+      sections.push(`- [${issue.severity}] ${issue.location}: ${issue.description} → ${issue.suggestion}`)
+    }
+  }
+
+  sections.push(
     '',
     '**Your Role**: You are the QA Executor. Your job is to:',
     '1. Read the test plan from the Reviewer',
@@ -419,7 +478,80 @@ function formatExecutorMessage(wf: PodWorkflow, solverOutput?: string, reviewerO
     '- Issue 1: ...',
     '- Issue 2: ...',
     '```',
+  )
+
+  return sections.join('\n')
+}
+
+// ── Self-Fix Helpers (exported for tests) ────────────────────────────────────
+
+export function parseTestPassed(output: string): boolean {
+  if (!output) return false
+  const upper = output.toUpperCase()
+  return upper.includes('RESULT: PASS') || (upper.includes('PASS') && !upper.includes('FAIL'))
+}
+
+export function formatSelfFixMessage(wf: PodWorkflow, testOutput: string): string {
+  return [
+    `## Pod Workflow: ${wf.name}`,
+    `### Stage: Self-Fix (Attempt ${wf.selfFixAttempts + 1}/${wf.maxSelfFixes})`,
+    '',
+    `**Project Directory**: \`${wf.cwd}\``,
+    '',
+    'Your test run failed with these errors:',
+    testOutput,
+    '',
+    'The original task was:',
+    wf.task,
+    '',
+    'Your code changes were:',
+    wf.solver.output || '(no solver output available)',
+    '',
+    'Diagnose the failure and generate a minimal fix. Only fix what\'s broken.',
+    'Do NOT rewrite the solution — make the smallest change that fixes the test.',
   ].join('\n')
+}
+
+export async function runSelfFixLoop(wf: PodWorkflow, initialTestOutput: string): Promise<{ passed: boolean }> {
+  let testOutput = initialTestOutput
+
+  while (wf.selfFixAttempts < wf.maxSelfFixes) {
+    if (wf.status === 'paused' || wf.status === 'failed') return { passed: false }
+
+    wf.selfFixAttempts += 1
+    setStatus(wf, 'self-fixing')
+
+    const selfFixPrompt = formatSelfFixMessage(wf, testOutput)
+    console.log(`[pods] Self-fix attempt ${wf.selfFixAttempts}/${wf.maxSelfFixes} for executor ${wf.executor.agentId}`)
+
+    const result = await runAgentHeadless(wf.executor.agentId, wf.cwd, selfFixPrompt, {
+      timeoutMs: EXECUTE_TIMEOUT_MS,
+    })
+
+    wf.artifacts.push({
+      stage: 'self-fix',
+      path: `self-fix-attempt-${wf.selfFixAttempts}`,
+      iteration: wf.iteration,
+      timestamp: Date.now(),
+    })
+
+    if (!result.success) {
+      console.log(`[pods] Self-fix attempt ${wf.selfFixAttempts}/${wf.maxSelfFixes} failed: ${result.error}`)
+      testOutput = result.error || 'Self-fix process failed'
+      savePods()
+      continue
+    }
+
+    wf.executor.output = result.output
+    const passed = parseTestPassed(result.output || '')
+    console.log(`[pods] Self-fix attempt ${wf.selfFixAttempts}/${wf.maxSelfFixes} — ${passed ? 'PASS' : 'FAIL'}`)
+    savePods()
+
+    if (passed) return { passed: true }
+    testOutput = result.output || 'Tests still failing after self-fix'
+  }
+
+  return { passed: false }
 }
 
 // ── Core workflow stages ─────────────────────────────────────────────────────
@@ -573,7 +705,14 @@ async function runReviewStage(wf: PodWorkflow): Promise<boolean> {
 
   wf.reviewer.status = 'complete'
   wf.reviewer.output = result.output
-  console.log(`[pods] Reviewer done (${Math.round(result.durationMs / 1000)}s)`)
+  wf.critique = parseReviewerCritique(result.output)
+  wf.artifacts.push({
+    stage: 'review',
+    path: `critique-iteration-${wf.iteration}`,
+    iteration: wf.iteration,
+    timestamp: Date.now(),
+  })
+  console.log(`[pods] Reviewer done (${Math.round(result.durationMs / 1000)}s) — verdict: ${wf.critique.verdict} (confidence: ${wf.critique.confidence})`)
   return true
 }
 
@@ -581,7 +720,7 @@ async function runExecuteStage(wf: PodWorkflow): Promise<{ passed: boolean }> {
   setStatus(wf, 'executing')
   wf.executor.status = 'active'
 
-  const prompt = formatExecutorMessage(wf, wf.solver.output, wf.reviewer.output)
+  const prompt = formatExecutorMessage(wf, wf.solver.output, wf.reviewer.output, wf.critique)
   console.log(`[pods] Running executor ${wf.executor.agentId} headless in ${wf.cwd}`)
   const result = await runAgentHeadless(wf.executor.agentId, wf.cwd, prompt, {
     timeoutMs: EXECUTE_TIMEOUT_MS,
@@ -597,8 +736,7 @@ async function runExecuteStage(wf: PodWorkflow): Promise<{ passed: boolean }> {
   wf.executor.output = result.output
   console.log(`[pods] Executor done (${Math.round(result.durationMs / 1000)}s)`)
 
-  const output = (wf.executor.output || '').toUpperCase()
-  const passed = output.includes('RESULT: PASS') || (output.includes('PASS') && !output.includes('FAIL'))
+  const passed = parseTestPassed(wf.executor.output || '')
   return { passed }
 }
 
@@ -640,17 +778,57 @@ async function runWorkflow(wf: PodWorkflow): Promise<void> {
       const solveOk = await runSolveStage(wf, feedback)
       if (!solveOk || wf.status === 'paused') return
 
-      // Stage 2: Review (only on first iteration)
-      if (i === 1) {
+      // Stage 2: Review (first iteration, or re-review after request-changes)
+      const shouldReview = i === 1 || (wf.critique?.verdict === 'request-changes')
+      if (shouldReview) {
         const reviewOk = await runReviewStage(wf)
         if (!reviewOk || wf.status === 'paused') return
       }
+
+      // Stage 2b: Route based on reviewer verdict
+      const verdict = wf.critique?.verdict || 'approve'
+
+      if (verdict === 'reject') {
+        const reason = wf.critique
+          ? `Reviewer rejected: ${wf.critique.summary}\n${wf.critique.issues.map(iss => `- [${iss.severity}] ${iss.location}: ${iss.description}`).join('\n')}`
+          : 'Reviewer rejected the implementation'
+        wf.error = reason
+        setStatus(wf, 'failed')
+        appendWorkflowSummary(wf)
+        return
+      }
+
+      if (verdict === 'request-changes') {
+        if (i < wf.maxIterations) {
+          const critiqueFeedback = wf.critique ? formatCritiqueFeedback(wf.critique) : 'Reviewer requested changes'
+          setStatus(wf, 'feedback')
+          wf.solver.status = 'waiting'
+          wf.solver.output = undefined
+          wf.executor.output = critiqueFeedback
+          continue
+        }
+        wf.error = `Reviewer requested changes but exhausted ${wf.maxIterations} iterations`
+        setStatus(wf, 'failed')
+        appendWorkflowSummary(wf)
+        return
+      }
+
+      // verdict is 'approve' or 'approve-with-notes' — proceed to executor
 
       // Stage 3: Execute
       const { passed } = await runExecuteStage(wf)
       if (wf.status === 'failed' || wf.status === 'paused') return
 
-      if (passed) {
+      // Stage 3b: Self-fix mini-loop (#15)
+      let finalPassed = passed
+      if (!finalPassed && wf.maxSelfFixes > 0) {
+        wf.selfFixAttempts = 0
+        const selfFixResult = await runSelfFixLoop(wf, wf.executor.output || '')
+        if (wf.status === 'failed' || wf.status === 'paused') return
+        finalPassed = selfFixResult.passed
+      }
+
+      if (finalPassed) {
         setStatus(wf, 'complete')
         appendWorkflowSummary(wf)
         return

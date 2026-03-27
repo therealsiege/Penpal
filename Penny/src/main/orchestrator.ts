@@ -305,8 +305,48 @@ export function getModelProvider(): ModelProvider {
 
 // ── Stage Prompt Builders ───────────────────────────────────────────────────
 
+/** Branch name Penny / github-issues put in the task description (if any). */
+function extractGithubBranchFromDescription(description: string): string | null {
+  const m = description.match(/You are on branch `([^`]+)`/)
+  return m?.[1] ?? null
+}
+
+/** Strong git + cwd instructions for GitHub-ingested tasks (plan + execute). */
+function githubWorkflowForAgent(task: Task): string {
+  if (task.source !== 'github') return ''
+  const branch = extractGithubBranchFromDescription(task.description)
+  return [
+    '--- GITHUB REPOSITORY (CRITICAL) ---',
+    `Use this directory as cwd for every shell command, read, and edit:`,
+    `  ${task.project}`,
+    '',
+    'Before editing, run and respect: `pwd`, `git rev-parse --show-toplevel`, `git branch --show-current`, `git status`.',
+    branch
+      ? `You must work on branch \`${branch}\`. If HEAD is wrong, run \`git checkout ${branch}\` first.`
+      : 'Stay on the branch Penny created for this issue (see task description).',
+    '',
+    'Make real file changes in that repo, then commit with `git add` and `git commit` (logical commits).',
+    'Do NOT `git push`, do NOT run `gh pr create`, and do NOT open a pull request yourself — Penny pushes and opens the PR after you pass validation.',
+    'If the repo path is wrong or git errors block you, say so clearly in your summary.',
+    '--- END GITHUB ---',
+    '',
+  ].join('\n')
+}
+
+function githubValidateContext(task: Task): string {
+  if (task.source !== 'github') return ''
+  return [
+    '--- CONTEXT (GitHub task) ---',
+    `Target repo path: ${task.project}`,
+    'The executor should have committed locally; Penny will push/PR — you only PASS/FAIL the work.',
+    '---',
+    '',
+  ].join('\n')
+}
+
 function buildPlanPrompt(task: Task): string {
   return [
+    githubWorkflowForAgent(task),
     'You are a planning agent. Your job is to produce a detailed, numbered plan for the following task.',
     'Do NOT implement anything. Do NOT write code. Only output the plan.',
     '',
@@ -316,11 +356,13 @@ function buildPlanPrompt(task: Task): string {
     `Priority: ${task.priority}`,
     '',
     'Output a numbered step-by-step plan. Be specific about which files to touch and what changes to make.',
+    'If this is a GitHub task, the plan must include verifying cwd/branch and using git commits in that repo.',
   ].join('\n')
 }
 
 function buildExecutePrompt(task: Task, plan: string): string {
   return [
+    githubWorkflowForAgent(task),
     'You are an execution agent. Implement the following plan exactly. Do not deviate.',
     '',
     `Task: ${task.title}`,
@@ -331,12 +373,13 @@ function buildExecutePrompt(task: Task, plan: string): string {
     plan,
     '--- END PLAN ---',
     '',
-    'Implement each step. When done, summarize what you changed.',
+    'Implement each step. When done, summarize what you changed and confirm `git status` is clean or list remaining uncommitted files.',
   ].join('\n')
 }
 
 function buildValidatePrompt(task: Task, plan: string, execOutput: string): string {
   return [
+    githubValidateContext(task),
     'You are a validation agent. Review whether the execution output satisfies the original task and plan.',
     'Do NOT make any changes. This is a read-only review.',
     '',
