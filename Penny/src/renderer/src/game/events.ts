@@ -41,6 +41,8 @@ export const EVENTS = {
   AGENT_DRAGGED_TO_ROOM: 'agent:draggedToRoom',
   /** Fired when an agent transitions to a new state. Payload: (agentId: string, newState: AgentState, prevState: AgentState) */
   AGENT_STATE_CHANGED: 'agent:stateChanged',
+  /** Fired immediately when the user approves a tool call / accepts output. Payload: (agentId: string, tty: string) */
+  AGENT_APPROVED: 'agent:approved',
   /** Fired when a new agent is added to the scene. Payload: (agentId: string, state: AgentState) */
   AGENT_ARRIVED: 'agent:arrived',
   /** Fired when an agent is removed from the scene. Payload: (agentId: string) */
@@ -130,6 +132,8 @@ export interface EventPayloadMap {
   [EVENTS.AGENT_DRAGGED_TO_ROOM]: [agentId: string, roomId: string]
   /** (agentId: string, newState: AgentState, prevState: AgentState) */
   [EVENTS.AGENT_STATE_CHANGED]: [agentId: string, newState: AgentState, prevState: AgentState]
+  /** (agentId: string, tty: string) */
+  [EVENTS.AGENT_APPROVED]: [agentId: string, tty: string]
   /** (agentId: string, state: AgentState) */
   [EVENTS.AGENT_ARRIVED]: [agentId: string, state: AgentState]
   /** (agentId: string) */

@@ -723,7 +723,14 @@ function StageDots({
         const isActive = stage === currentStage
         const isDone = result?.success === true
         const isFailed = result?.success === false
-        const isOllama = result?.provider === 'ollama'
+        const providerHint =
+          result?.provider === 'ollama'
+            ? '(o)'
+            : result?.provider === 'opencode'
+              ? '(oc)'
+              : result?.provider === 'cursor-agent'
+                ? '(c)'
+                : ''
 
         let dotClass = 'bg-[#2a3440] text-[#3a4858]'
         if (isDone) dotClass = 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40'
@@ -738,7 +745,7 @@ function StageDots({
               title={result ? `${stage}: ${result.success ? 'PASS' : 'FAIL'} (${Math.round(result.durationMs / 1000)}s, ${result.provider})` : stage}
             >
               {STAGE_LABELS[stage]}
-              {isOllama && <span className="ml-0.5 opacity-60">(o)</span>}
+              {providerHint && <span className="ml-0.5 opacity-60">{providerHint}</span>}
             </span>
           </div>
         )
@@ -758,7 +765,11 @@ function StageResultRow({ result }: { result: StageResult }) {
         <span className={`px-1 rounded text-[9px] ${
           result.provider === 'ollama'
             ? 'bg-purple-600/20 text-purple-400'
-            : 'bg-blue-600/20 text-blue-400'
+            : result.provider === 'opencode'
+              ? 'bg-amber-600/20 text-amber-400'
+              : result.provider === 'cursor-agent'
+                ? 'bg-cyan-600/20 text-cyan-400'
+                : 'bg-blue-600/20 text-blue-400'
         }`}>
           {result.provider}
         </span>

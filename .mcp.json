@@ -2,29 +2,44 @@
   "mcpServers": {
     "firecrawl": {
       "command": "npx",
-      "args": ["-y", "firecrawl-mcp"],
+      "args": [
+        "-y",
+        "firecrawl-mcp"
+      ],
       "env": {
         "FIRECRAWL_API_KEY": "fc-cb804ae3274f46a6be15532d69b066ed"
       }
     },
     "sequential-thinking": {
       "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-sequential-thinking"]
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-sequential-thinking"
+      ]
     },
     "context7": {
       "command": "npx",
-      "args": ["-y", "@upstash/context7-mcp"]
+      "args": [
+        "-y",
+        "@upstash/context7-mcp"
+      ]
     },
     "memory": {
       "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-memory"],
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-memory"
+      ],
       "env": {
         "MEMORY_FILE_PATH": "/Users/fuzeelogik/sidekick/analytics/data/memory-graph.json"
       }
     },
     "browserbase": {
       "command": "npx",
-      "args": ["-y", "@anthropic-ai/mcp-server-browserbase@latest"],
+      "args": [
+        "-y",
+        "@anthropic-ai/mcp-server-browserbase@latest"
+      ],
       "env": {
         "BROWSERBASE_API_KEY": "bb_live_Lx-Uh-p9yrX8GcNZ76hj6wQlias",
         "BROWSERBASE_PROJECT_ID": "9695e93a-91ab-4fcc-9a21-f96de490fecd"
@@ -32,22 +47,33 @@
     },
     "ddg-search": {
       "command": "uvx",
-      "args": ["duckduckgo-mcp-server"]
+      "args": [
+        "duckduckgo-mcp-server"
+      ]
     },
     "executeautomation-playwright-server": {
       "command": "npx",
-      "args": ["-y", "@executeautomation/playwright-mcp-server"]
+      "args": [
+        "-y",
+        "@executeautomation/playwright-mcp-server"
+      ]
     },
     "github": {
       "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-github"],
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-github"
+      ],
       "env": {
         "GITHUB_PERSONAL_ACCESS_TOKEN": "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"
       }
     },
     "notion": {
       "command": "npx",
-      "args": ["-y", "@notionhq/notion-mcp-server"],
+      "args": [
+        "-y",
+        "@notionhq/notion-mcp-server"
+      ],
       "env": {
         "OPENAPI_MCP_HEADERS": "{\"Authorization\":\"Bearer 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\",\"Notion-Version\":\"2022-06-28\"}"
       }
@@ -65,13 +91,29 @@
     },
     "phaser-editor": {
       "command": "npx",
-      "args": ["-y", "@phaserjs/editor-mcp-server"]
+      "args": [
+        "-y",
+        "@phaserjs/editor-mcp-server"
+      ]
     },
     "veritas-kanban": {
       "command": "node",
-      "args": ["/Users/cj/SideKick/veritas-kanban/mcp/dist/index.js"],
+      "args": [
+        "/Users/cj/SideKick/veritas-kanban/mcp/dist/index.js"
+      ],
       "env": {
         "VK_API_URL": "http://127.0.0.1:47832"
+      }
+    },
+    "penny": {
+      "command": "npx",
+      "args": [
+        "tsx",
+        "src/mcp/index.ts"
+      ],
+      "cwd": "Penny",
+      "env": {
+        "PENNY_DATA_DIR": "./data"
       }
     }
   }

@@ -7,7 +7,7 @@
     "esModuleInterop": true,
     "skipLibCheck": true,
     "lib": ["ESNext"],
-    "types": ["node"]
+    "types": ["node", "vitest/globals"]
   },
-  "include": ["./**/*.ts"]
+  "include": ["./**/*.ts", "../src/main/**/*.test.ts"]
 }

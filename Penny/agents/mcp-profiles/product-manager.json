@@ -1,5 +1,10 @@
 {
   "mcpServers": {
+    "penny": {
+      "command": "npx",
+      "args": ["tsx", "src/mcp/index.ts"],
+      "cwd": "Penny"
+    },
     "veritas-kanban": {
       "command": "node",
       "args": ["/Users/cj/SideKick/veritas-kanban/mcp/dist/index.js"],

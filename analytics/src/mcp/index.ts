@@ -16,6 +16,18 @@ import { listCommunitiesSchema, listCommunities } from "./tools/list-communities
 import { revenueOpportunitySchema, revenueOpportunity } from "./tools/revenue-opportunity.js";
 import { updateLeadSchema, updateLead } from "./tools/update-lead.js";
 import { getPipelineSchema, getPipeline } from "./tools/get-pipeline.js";
+import { vaultReadSchema, vaultRead } from "./tools/vault-read.js";
+import { vaultSearchSchema, vaultSearch } from "./tools/vault-search.js";
+import { vaultWriteSchema, vaultWrite } from "./tools/vault-write.js";
+import { searchLeadsSchema, searchLeads } from "./tools/search-leads.js";
+import { leadDetailSchema, leadDetail } from "./tools/lead-detail.js";
+import { graphStatsSchema, graphStats } from "./tools/graph-stats.js";
+import { podsListSchema, podsList } from "./tools/pods-list.js";
+import { podsStatusSchema, podsStatus } from "./tools/pods-status.js";
+import { podsCreateSchema, podsCreate } from "./tools/pods-create.js";
+import { officeAgentsSchema, officeAgents } from "./tools/office-agents.js";
+import { officeRoomsSchema, officeRooms } from "./tools/office-rooms.js";
+import { officeLeaderboardSchema, officeLeaderboard } from "./tools/office-leaderboard.js";
 
 const server = new Server(
   {
@@ -44,6 +56,18 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       revenueOpportunitySchema,
       updateLeadSchema,
       getPipelineSchema,
+      vaultReadSchema,
+      vaultSearchSchema,
+      vaultWriteSchema,
+      searchLeadsSchema,
+      leadDetailSchema,
+      graphStatsSchema,
+      podsListSchema,
+      podsStatusSchema,
+      podsCreateSchema,
+      officeAgentsSchema,
+      officeRoomsSchema,
+      officeLeaderboardSchema,
     ],
   };
 });
@@ -88,6 +112,42 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         break;
       case "get_pipeline":
         result = await getPipeline(args as Parameters<typeof getPipeline>[0]);
+        break;
+      case "vault_read":
+        result = await vaultRead(args as Parameters<typeof vaultRead>[0]);
+        break;
+      case "vault_search":
+        result = await vaultSearch(args as Parameters<typeof vaultSearch>[0]);
+        break;
+      case "vault_write":
+        result = await vaultWrite(args as Parameters<typeof vaultWrite>[0]);
+        break;
+      case "search_leads":
+        result = await searchLeads(args as Parameters<typeof searchLeads>[0]);
+        break;
+      case "lead_detail":
+        result = await leadDetail(args as Parameters<typeof leadDetail>[0]);
+        break;
+      case "graph_stats":
+        result = await graphStats();
+        break;
+      case "pods_list":
+        result = await podsList(args as Parameters<typeof podsList>[0]);
+        break;
+      case "pods_status":
+        result = await podsStatus(args as Parameters<typeof podsStatus>[0]);
+        break;
+      case "pods_create":
+        result = await podsCreate(args as Parameters<typeof podsCreate>[0]);
+        break;
+      case "office_agents":
+        result = await officeAgents();
+        break;
+      case "office_rooms":
+        result = await officeRooms();
+        break;
+      case "office_leaderboard":
+        result = await officeLeaderboard(args as Parameters<typeof officeLeaderboard>[0]);
         break;
       default:
         return {

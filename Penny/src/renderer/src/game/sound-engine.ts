@@ -5,7 +5,9 @@
 // with gain envelopes. Use the exported `soundEngine` singleton.
 // ---------------------------------------------------------------------------
 
+import type Phaser from 'phaser'
 import { EventBus, EVENTS } from './events'
+import { AUDIO_KEYS } from './office-asset-keys'
 
 // ---------------------------------------------------------------------------
 // Frequency constants (Hz) — note names for readability
@@ -46,6 +48,8 @@ export class SoundEngine {
   private _masterGain: GainNode | null = null
   private _muted = false
   private _volume = 0.3
+  /** Phaser scene reference — set once for OGG playback */
+  private _scene: Phaser.Scene | null = null
 
   // -------------------------------------------------------------------------
   // Lazy AudioContext init — must be triggered after a user gesture.
@@ -157,12 +161,41 @@ export class SoundEngine {
       { attack: 0.005, sustain: 0.02, decay: 0.27, peak: 0.4 })
   }
 
-  /** UI click (800 Hz square, 30ms, sharp cutoff). */
+  /** Bind a Phaser scene for OGG sound playback. Call once after scene create. */
+  setScene(scene: Phaser.Scene): void {
+    this._scene = scene
+  }
+
+  /** Play a loaded OGG audio key via Phaser's sound manager (if available). */
+  private _playOGG(key: string, volume = 0.5): boolean {
+    if (!this._scene || this._muted) return false
+    try {
+      if (this._scene.cache.audio.exists(key)) {
+        this._scene.sound.play(key, { volume: volume * this._volume })
+        return true
+      }
+    } catch { /* noop — fallback to procedural */ }
+    return false
+  }
+
+  /** UI click — uses OGG click if loaded, else procedural. */
   click(): void {
+    const key = Math.random() > 0.5 ? AUDIO_KEYS.CLICK_A : AUDIO_KEYS.CLICK_B
+    if (this._playOGG(key, 0.5)) return
     const ctx = this._ensureContext()
     const now = ctx.currentTime
     this._osc('square', 800, now, now + 0.035,
       { attack: 0.001, sustain: 0.01, decay: 0.02, peak: 0.18 })
+  }
+
+  /** Toggle/switch sound — uses OGG switch if loaded, else procedural. */
+  toggleSwitch(): void {
+    const key = Math.random() > 0.5 ? AUDIO_KEYS.SWITCH_A : AUDIO_KEYS.SWITCH_B
+    if (this._playOGG(key, 0.4)) return
+    const ctx = this._ensureContext()
+    const now = ctx.currentTime
+    this._osc('sine', 600, now, now + 0.05,
+      { attack: 0.002, sustain: 0.015, decay: 0.03, peak: 0.2 })
   }
 
   /** Error buzz (150 Hz sawtooth, 200ms). */
@@ -201,10 +234,12 @@ export class SoundEngine {
   }
 
   /**
-   * Typewriter keystroke: random freq click (600–1200 Hz), 15ms.
+   * Typewriter keystroke — uses OGG tap if loaded, else procedural.
    * Call once per character typed.
    */
   typewriter(): void {
+    const tapKey = Math.random() > 0.5 ? AUDIO_KEYS.TAP_A : AUDIO_KEYS.TAP_B
+    if (this._playOGG(tapKey, 0.25)) return
     const ctx = this._ensureContext()
     const now = ctx.currentTime
     const freq = 600 + Math.random() * 600

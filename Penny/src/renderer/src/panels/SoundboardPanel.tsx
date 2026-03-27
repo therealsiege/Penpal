@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { SoundboardClip, SoundboardListing } from '../types'
 import { PanelBackground } from '../components/PanelBackground'
 
+const VOLUME_STORAGE_KEY = 'penny-soundboard-volume'
+
 // ── helpers ──────────────────────────────────────────────────────────────────
 
 function getIpcError(payload: unknown): string | null {
@@ -16,19 +18,55 @@ function getIpcError(payload: unknown): string | null {
   return null
 }
 
-/** Derive a human-readable category from the clip's relative path. */
 function categoryOf(clip: SoundboardClip): string {
   const parts = clip.relativePath.split('/')
   return parts.length > 1 ? parts[0] : 'General'
 }
 
-// ── waveform bars ─────────────────────────────────────────────────────────────
+function loadStoredVolume(): number {
+  try {
+    const v = sessionStorage.getItem(VOLUME_STORAGE_KEY)
+    if (v != null) {
+      const n = parseFloat(v)
+      if (!Number.isNaN(n) && n >= 0 && n <= 1) return n
+    }
+  } catch { /* ignore */ }
+  return 0.9
+}
 
-/** Static heights (px) for the 5 waveform bars — varied to look organic. */
+/** Human label for listing source (where clips were discovered). */
+function sourceLabel(source: SoundboardListing['source'] | undefined): string {
+  switch (source) {
+    case 'configured': return 'Configured path'
+    case 'candidate': return 'Candidate scan'
+    case 'fallback-scan': return 'Fallback scan'
+    case 'default': return 'Default folder'
+    default: return 'Unknown'
+  }
+}
+
+// ── waveform ────────────────────────────────────────────────────────────────
+
 const BAR_HEIGHTS = [5, 9, 12, 7, 4]
-
-/** Keyframe animation delays per bar so they feel staggered when playing. */
 const BAR_DELAYS = ['0ms', '120ms', '60ms', '180ms', '90ms']
+
+const WAVEFORM_STYLE = `
+@keyframes soundbar {
+  from { transform: scaleY(0.22); }
+  to   { transform: scaleY(1); }
+}
+` as const
+
+function useWaveformStyle() {
+  useEffect(() => {
+    const id = 'soundboard-waveform-keyframes'
+    if (document.getElementById(id)) return
+    const el = document.createElement('style')
+    el.id = id
+    el.textContent = WAVEFORM_STYLE
+    document.head.appendChild(el)
+  }, [])
+}
 
 interface WaveformProps {
   playing: boolean
@@ -50,20 +88,17 @@ function Waveform({ playing }: WaveformProps) {
           <rect
             key={i}
             x={x}
-            y={playing ? undefined : y}
+            y={y}
             width="3"
-            height={playing ? undefined : h}
+            height={h}
             rx="1.5"
             fill="currentColor"
             style={
               playing
                 ? {
-                    // animate from bottom-center of SVG
-                    transformOrigin: `${x + 1.5}px 7px`,
-                    animation: `soundbar 0.7s ease-in-out infinite alternate`,
+                    transformOrigin: `${x + 1.5}px 14px`,
+                    animation: 'soundbar 0.7s ease-in-out infinite alternate',
                     animationDelay: BAR_DELAYS[i],
-                    // keep it centered via transform instead of y/height so we can animate
-                    transform: `scaleY(${h / 14})`,
                   }
                 : undefined
             }
@@ -74,74 +109,72 @@ function Waveform({ playing }: WaveformProps) {
   )
 }
 
-// ── inline keyframes injected once ───────────────────────────────────────────
-
-const WAVEFORM_STYLE = `
-@keyframes soundbar {
-  from { transform: scaleY(0.2); }
-  to   { transform: scaleY(1); }
-}
-` as const
-
-function useWaveformStyle() {
-  useEffect(() => {
-    const id = 'soundboard-waveform-keyframes'
-    if (document.getElementById(id)) return
-    const el = document.createElement('style')
-    el.id = id
-    el.textContent = WAVEFORM_STYLE
-    document.head.appendChild(el)
-  }, [])
-}
-
-// ── clip card ─────────────────────────────────────────────────────────────────
+// ── clip card ───────────────────────────────────────────────────────────────
 
 interface ClipCardProps {
   clip: SoundboardClip
   playing: boolean
   onPlay: (clip: SoundboardClip) => void
+  showCategory?: boolean
 }
 
-function ClipCard({ clip, playing, onPlay }: ClipCardProps) {
+function ClipCard({ clip, playing, onPlay, showCategory }: ClipCardProps) {
+  const cat = categoryOf(clip)
+
   return (
     <button
+      type="button"
       onClick={() => onPlay(clip)}
       title={clip.relativePath}
+      aria-pressed={playing}
       aria-label={`Play ${clip.name}${playing ? ' (playing)' : ''}`}
       className={[
         'stagger-item',
-        'group relative flex flex-col gap-2 px-3 py-3 rounded-lg text-sm text-left',
-        'transition-all duration-150',
+        'group relative flex flex-col gap-2 px-3.5 py-3 rounded-xl text-sm text-left min-h-[5.5rem]',
+        'border transition-all duration-200',
         'hover:scale-[1.02] hover:-translate-y-0.5 active:scale-[0.98]',
-        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/60',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00ff88]/40 focus-visible:ring-offset-2 focus-visible:ring-offset-[#080a0e]',
         playing
-          ? 'animate-breathe-glow bg-violet-500/90 text-white ring-1 ring-violet-400/40'
-          : 'bg-violet-700/70 hover:bg-violet-600/90 text-white',
+          ? [
+              'bg-[linear-gradient(145deg,rgba(0,255,136,0.14)_0%,rgba(12,18,26,0.95)_55%,rgba(8,12,18,0.98)_100%)]',
+              'border-[#00ff88]/45 text-[#e8f8f0]',
+              'shadow-[0_0_32px_-10px_rgba(0,255,136,0.45),inset_0_1px_0_0_rgba(255,255,255,0.06)]',
+            ].join(' ')
+          : [
+              'bg-[linear-gradient(165deg,rgba(12,18,26,0.92)_0%,rgba(8,11,16,0.96)_100%)]',
+              'border-[#2a3440]/90 text-[#c4ccd6]',
+              'hover:border-[#00ff88]/25 hover:shadow-[0_12px_40px_-24px_rgba(0,0,0,0.55)]',
+            ].join(' '),
       ].join(' ')}
     >
-      {/* playing indicator dot */}
       {playing && (
         <span
-          className="absolute top-2 right-2 w-2 h-2 rounded-full bg-green-400 animate-pulse"
+          className="absolute top-2.5 right-2.5 w-2 h-2 rounded-full bg-[#00ff88] shadow-[0_0_10px_rgba(0,255,136,0.7)] animate-pulse"
           aria-hidden="true"
         />
       )}
 
-      {/* clip name */}
-      <span className="truncate font-medium leading-snug pr-4">{clip.name}</span>
+      <div className="flex items-start justify-between gap-2 min-w-0 pr-5">
+        <span className="truncate font-semibold leading-snug text-[13px]">{clip.name}</span>
+      </div>
 
-      {/* waveform row */}
+      {showCategory && cat && (
+        <span className="text-[9px] uppercase tracking-[0.14em] text-[#5a6a7a] font-bold w-fit">
+          {cat}
+        </span>
+      )}
+
       <span
         className={[
-          'flex items-center gap-1.5',
-          playing ? 'text-green-300' : 'text-violet-300/60 group-hover:text-violet-200/80',
+          'mt-auto flex items-center gap-2',
+          playing ? 'text-[#00e5ff]' : 'text-[#4a5c6e] group-hover:text-[#00ff88]/70',
           'transition-colors duration-200',
         ].join(' ')}
       >
         <Waveform playing={playing} />
         {playing && (
-          <span className="text-[10px] text-green-300 font-medium tracking-wide uppercase">
-            playing
+          <span className="text-[10px] font-semibold tracking-wide uppercase text-[#00ff88]">
+            Live
           </span>
         )}
       </span>
@@ -149,7 +182,7 @@ function ClipCard({ clip, playing, onPlay }: ClipCardProps) {
   )
 }
 
-// ── category section ──────────────────────────────────────────────────────────
+// ── category section ────────────────────────────────────────────────────────
 
 interface CategorySectionProps {
   category: string
@@ -161,8 +194,12 @@ interface CategorySectionProps {
 function CategorySection({ category, clips, playingIds, onPlay }: CategorySectionProps) {
   return (
     <section aria-label={`${category} sounds`}>
-      <h2 className="animate-fade-slide-down text-[11px] font-semibold uppercase tracking-widest text-slate-400 mb-2 px-0.5">
+      <h2 className="animate-fade-slide-down flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.16em] text-[#5a6a7a] mb-2.5 px-0.5">
+        <span className="h-px w-8 shrink-0 bg-gradient-to-r from-[#00ff88]/35 to-transparent rounded-full" aria-hidden />
         {category}
+        <span className="text-[#3a4858] font-mono tabular-nums font-semibold normal-case tracking-normal">
+          {clips.length}
+        </span>
       </h2>
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3">
         {clips.map(clip => (
@@ -178,14 +215,13 @@ function CategorySection({ category, clips, playingIds, onPlay }: CategorySectio
   )
 }
 
-// ── empty state ───────────────────────────────────────────────────────────────
+// ── empty state ─────────────────────────────────────────────────────────────
 
 function EmptyState({ directory }: { directory: string }) {
   return (
-    <div className="animate-card-enter flex flex-col items-center justify-center gap-4 py-20 border border-dashed border-slate-700/60 rounded-xl text-center">
-      {/* speaker icon */}
+    <div className="animate-card-enter flex flex-col items-center justify-center gap-4 py-20 border border-dashed border-[#2a3440]/80 rounded-xl text-center bg-[#0c1018]/40 px-6">
       <svg
-        className="w-12 h-12 text-slate-600"
+        className="w-12 h-12 text-[#3a4858]"
         viewBox="0 0 24 24"
         fill="none"
         stroke="currentColor"
@@ -198,11 +234,11 @@ function EmptyState({ directory }: { directory: string }) {
         <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
         <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
       </svg>
-      <div className="space-y-1">
-        <p className="text-slate-300 font-medium">No sound effects found</p>
-        <p className="text-slate-500 text-xs">
-          Drop <code className="text-violet-400">.mp3</code> files into{' '}
-          <code className="text-slate-400">{directory || 'sound-effects/'}</code>
+      <div className="space-y-1 max-w-md">
+        <p className="text-[#c4ccd6] font-medium">No sound effects found</p>
+        <p className="text-[#5a6a7a] text-xs leading-relaxed">
+          Drop <code className="text-[#00e5ff]">.mp3</code> files into{' '}
+          <code className="text-[#8a96a4] break-all">{directory || 'sound-effects/'}</code>
         </p>
       </div>
     </div>
@@ -217,11 +253,37 @@ export function SoundboardPanel() {
   const [error, setError] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [playingIds, setPlayingIds] = useState<Set<string>>(new Set())
+  const [volume, setVolume] = useState(loadStoredVolume)
+  const [categoryFilter, setCategoryFilter] = useState<string | null>(null)
 
-  // Keep a ref map of audio elements so we can stop them
   const audioMap = useRef<Map<string, HTMLAudioElement>>(new Map())
+  const searchRef = useRef<HTMLInputElement>(null)
 
   useWaveformStyle()
+
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(VOLUME_STORAGE_KEY, String(volume))
+    } catch { /* ignore */ }
+  }, [volume])
+
+  useEffect(() => {
+    for (const audio of audioMap.current.values()) {
+      audio.volume = volume
+    }
+  }, [volume])
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== '/' || e.metaKey || e.ctrlKey || e.altKey) return
+      const t = document.activeElement
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT')) return
+      e.preventDefault()
+      searchRef.current?.focus()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
 
   const stopAll = useCallback(() => {
     for (const audio of audioMap.current.values()) {
@@ -266,58 +328,63 @@ export function SoundboardPanel() {
     }
   }, [loadListing, stopAll])
 
-  const playClip = useCallback((clip: SoundboardClip) => {
-    // If already playing, stop it (toggle)
-    const existing = audioMap.current.get(clip.id)
-    if (existing) {
-      existing.pause()
-      existing.currentTime = 0
-      audioMap.current.delete(clip.id)
-      setPlayingIds(prev => {
-        const next = new Set(prev)
-        next.delete(clip.id)
-        return next
+  const playClip = useCallback(
+    (clip: SoundboardClip) => {
+      const existing = audioMap.current.get(clip.id)
+      if (existing) {
+        existing.pause()
+        existing.currentTime = 0
+        audioMap.current.delete(clip.id)
+        setPlayingIds(prev => {
+          const next = new Set(prev)
+          next.delete(clip.id)
+          return next
+        })
+        return
+      }
+
+      const audio = new Audio(clip.url)
+      audio.volume = volume
+      audio.preload = 'auto'
+
+      const cleanup = () => {
+        audioMap.current.delete(clip.id)
+        setPlayingIds(prev => {
+          const next = new Set(prev)
+          next.delete(clip.id)
+          return next
+        })
+      }
+      audio.addEventListener('ended', cleanup, { once: true })
+      audio.addEventListener('error', cleanup, { once: true })
+
+      audioMap.current.set(clip.id, audio)
+      setPlayingIds(prev => new Set(prev).add(clip.id))
+
+      audio.play().catch(err => {
+        cleanup()
+        setError(`Failed to play "${clip.name}": ${(err as Error).message}`)
       })
-      return
-    }
-
-    const audio = new Audio(clip.url)
-    audio.volume = 0.9
-    audio.preload = 'auto'
-
-    const cleanup = () => {
-      audioMap.current.delete(clip.id)
-      setPlayingIds(prev => {
-        const next = new Set(prev)
-        next.delete(clip.id)
-        return next
-      })
-    }
-    audio.addEventListener('ended', cleanup, { once: true })
-    audio.addEventListener('error', cleanup, { once: true })
-
-    audioMap.current.set(clip.id, audio)
-    setPlayingIds(prev => new Set(prev).add(clip.id))
-
-    audio.play().catch(err => {
-      cleanup()
-      setError(`Failed to play "${clip.name}": ${(err as Error).message}`)
-    })
-  }, [])
-
-  // ── derived state ──────────────────────────────────────────────────────────
+    },
+    [volume],
+  )
 
   const allClips = listing?.clips ?? []
 
   const filteredClips = useMemo(() => {
     const q = search.trim().toLowerCase()
-    if (!q) return allClips
-    return allClips.filter(c =>
-      c.name.toLowerCase().includes(q) || c.relativePath.toLowerCase().includes(q)
-    )
-  }, [allClips, search])
+    let clips = allClips
+    if (q) {
+      clips = clips.filter(
+        c => c.name.toLowerCase().includes(q) || c.relativePath.toLowerCase().includes(q),
+      )
+    }
+    if (categoryFilter) {
+      clips = clips.filter(c => categoryOf(c) === categoryFilter)
+    }
+    return clips.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }))
+  }, [allClips, search, categoryFilter])
 
-  /** Group by category (top-level folder or "General"). */
   const grouped = useMemo(() => {
     const map = new Map<string, SoundboardClip[]>()
     for (const clip of filteredClips) {
@@ -326,114 +393,203 @@ export function SoundboardPanel() {
       arr.push(clip)
       map.set(cat, arr)
     }
+    for (const arr of map.values()) {
+      arr.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }))
+    }
     return map
   }, [filteredClips])
 
-  const isMultiCategory = grouped.size > 1
+  const categoryNames = useMemo(
+    () =>
+      Array.from(
+        new Set(allClips.map(categoryOf)),
+      ).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' })),
+    [allClips],
+  )
 
-  // ── render ─────────────────────────────────────────────────────────────────
+  const isMultiCategory = grouped.size > 1
 
   return (
     <PanelBackground>
-    <div className="h-full overflow-y-auto">
-      <div className="max-w-6xl mx-auto py-8 px-6 space-y-6">
+      <div className="relative z-[1] h-full flex flex-col overflow-hidden min-h-0">
+        {/* Header strip */}
+        <div className="office-status-hud shrink-0 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between px-5 py-3 border-b border-[#1e2838] backdrop-blur-[2px]">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h1 className="text-base font-semibold text-[#dce4ec] tracking-tight">Soundboard</h1>
+              {playingIds.size > 0 && (
+                <span className="inline-flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#00ff88] bg-[#00ff88]/10 border border-[#00ff88]/25 rounded-full px-2 py-0.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#00ff88] shadow-[0_0_8px_rgba(0,255,136,0.6)] animate-pulse" />
+                  {playingIds.size} active
+                </span>
+              )}
+            </div>
+            <p className="text-[11px] text-[#5a6a7a] mt-0.5 truncate">
+              {allClips.length} clip{allClips.length !== 1 ? 's' : ''}
+              {listing?.directory && (
+                <>
+                  {' · '}
+                  <span className="font-mono text-[#4a5c6e]" title={listing.directory}>
+                    {listing.directory.split('/').slice(-2).join('/')}
+                  </span>
+                </>
+              )}
+              {listing?.source && (
+                <span className="text-[#3a4858]"> · {sourceLabel(listing.source)}</span>
+              )}
+            </p>
+          </div>
 
-        {/* header row */}
-        <div className="flex items-center justify-between gap-3">
-          <h1 className="text-lg font-semibold text-slate-200 flex items-center gap-2">
-            Soundboard
-            {playingIds.size > 0 && (
-              <span className="inline-flex items-center gap-1 text-[11px] font-medium text-green-400 bg-green-400/10 border border-green-400/20 rounded-full px-2 py-0.5 animate-pulse">
-                <span className="w-1.5 h-1.5 rounded-full bg-green-400 inline-block" />
-                {playingIds.size} playing
-              </span>
-            )}
-          </h1>
-
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2 shrink-0">
+            <label className="flex items-center gap-2 text-[11px] text-[#6a7a8c] cursor-pointer">
+              <span className="whitespace-nowrap hidden sm:inline">Volume</span>
+              <input
+                type="range"
+                min={0}
+                max={100}
+                value={Math.round(volume * 100)}
+                onChange={e => setVolume(Number(e.target.value) / 100)}
+                className="w-24 sm:w-28 h-1 accent-[#00ff88] bg-[#141a22] rounded-full"
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-valuenow={Math.round(volume * 100)}
+                aria-label="Soundboard volume"
+              />
+              <span className="tabular-nums text-[#4a5c6e] w-8 text-right">{Math.round(volume * 100)}%</span>
+            </label>
             <button
+              type="button"
               onClick={() => void loadListing()}
               disabled={loading}
-              className="px-3 py-1.5 rounded bg-slate-800/80 hover:bg-slate-700/80 text-xs text-slate-200 transition-colors disabled:opacity-50"
+              className="px-3 py-1.5 rounded-lg text-xs font-medium text-[#8a96a4] bg-[#141a22] border border-[#2a3440] hover:border-[#00ff88]/25 hover:text-[#c4ccd6] transition-colors disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00ff88]/35"
             >
-              {loading ? 'Refreshing...' : 'Refresh'}
+              {loading ? 'Refreshing…' : 'Refresh'}
             </button>
             <button
+              type="button"
               onClick={stopAll}
               disabled={playingIds.size === 0}
-              className="px-3 py-1.5 rounded bg-red-700/80 hover:bg-red-600 text-xs text-white transition-colors disabled:opacity-40"
+              className="px-3 py-1.5 rounded-lg text-xs font-medium text-[#fca5a5] bg-red-950/40 border border-red-500/25 hover:bg-red-900/35 transition-colors disabled:opacity-35 disabled:pointer-events-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400/40"
             >
-              Stop All
+              Stop all
             </button>
           </div>
         </div>
 
-        {/* search */}
-        {allClips.length > 0 && (
-          <div className="relative">
-            <svg
-              className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-500 pointer-events-none"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              aria-hidden="true"
-            >
-              <circle cx="11" cy="11" r="8" />
-              <path d="m21 21-4.35-4.35" />
-            </svg>
-            <input
-              type="search"
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              placeholder="Search clips..."
-              aria-label="Search sound clips"
-              className={[
-                'w-full pl-9 pr-3 py-2 rounded-lg text-sm bg-slate-800/60 border border-slate-700/50',
-                'text-slate-200 placeholder:text-slate-500',
-                'focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-slate-600',
-                'transition-all duration-200',
-              ].join(' ')}
-            />
-          </div>
-        )}
+        <div className="flex-1 min-h-0 overflow-y-auto scrollbar-penpal">
+          <div className="max-w-6xl mx-auto py-5 px-5 space-y-5 pb-8">
 
-        {/* error banner */}
-        {error && (
-          <div className="text-xs text-red-300 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">
-            {error}
-          </div>
-        )}
+            {allClips.length > 0 && (
+              <div className="space-y-2">
+                <div className="relative">
+                  <svg
+                    className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#4a5c6e] pointer-events-none"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    aria-hidden="true"
+                  >
+                    <circle cx="11" cy="11" r="8" />
+                    <path d="m21 21-4.35-4.35" />
+                  </svg>
+                  <input
+                    ref={searchRef}
+                    type="search"
+                    value={search}
+                    onChange={e => setSearch(e.target.value)}
+                    placeholder="Search clips…"
+                    aria-label="Search sound clips"
+                    className={[
+                      'w-full pl-9 pr-3 py-2.5 rounded-xl text-sm',
+                      'bg-[#0a0e14]/90 border border-[#2a3440]/90',
+                      'text-[#dce4ec] placeholder:text-[#4a5c6e]',
+                      'focus:outline-none focus:ring-2 focus:ring-[#00ff88]/30 focus:border-[#00ff88]/35',
+                      'transition-all duration-200',
+                    ].join(' ')}
+                  />
+                </div>
+                <p className="text-[10px] text-[#3a4858] pl-0.5">
+                  Press <kbd className="px-1 py-0.5 rounded bg-[#141a22] border border-[#2a3440] font-mono text-[#5a6a7a]">/</kbd>
+                  {' '}to focus search
+                </p>
+              </div>
+            )}
 
-        {/* content */}
-        {filteredClips.length === 0 ? (
-          <EmptyState directory={listing?.directory ?? 'sound-effects'} />
-        ) : isMultiCategory ? (
-          <div className="space-y-6">
-            {Array.from(grouped.entries()).map(([cat, clips]) => (
-              <CategorySection
-                key={cat}
-                category={cat}
-                clips={clips}
-                playingIds={playingIds}
-                onPlay={playClip}
-              />
-            ))}
+            {categoryNames.length > 1 && allClips.length > 0 && (
+              <div className="flex flex-wrap gap-2" role="tablist" aria-label="Filter by folder">
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={categoryFilter === null}
+                  onClick={() => setCategoryFilter(null)}
+                  className={[
+                    'text-[11px] font-semibold uppercase tracking-wide px-2.5 py-1 rounded-lg border transition-colors',
+                    categoryFilter === null
+                      ? 'bg-[#00ff88]/12 text-[#00e5ff] border-[#00ff88]/35'
+                      : 'bg-[#141a22]/80 text-[#6a7a8c] border-[#2a3440] hover:border-[#00ff88]/20',
+                  ].join(' ')}
+                >
+                  All
+                </button>
+                {categoryNames.map(cat => (
+                  <button
+                    key={cat}
+                    type="button"
+                    role="tab"
+                    aria-selected={categoryFilter === cat}
+                    onClick={() => setCategoryFilter(categoryFilter === cat ? null : cat)}
+                    className={[
+                      'text-[11px] font-semibold px-2.5 py-1 rounded-lg border transition-colors',
+                      categoryFilter === cat
+                        ? 'bg-[#00ff88]/12 text-[#00e5ff] border-[#00ff88]/35'
+                        : 'bg-[#141a22]/80 text-[#8a96a4] border-[#2a3440] hover:border-[#00ff88]/20',
+                    ].join(' ')}
+                  >
+                    {cat}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {error && (
+              <div className="text-xs text-red-300/95 bg-red-950/40 border border-red-500/25 rounded-xl px-3 py-2.5">
+                {error}
+              </div>
+            )}
+
+            {filteredClips.length === 0 ? (
+              <EmptyState directory={listing?.directory ?? 'sound-effects'} />
+            ) : isMultiCategory ? (
+              <div className="space-y-8">
+                {Array.from(grouped.entries())
+                  .sort(([a], [b]) => a.localeCompare(b, undefined, { sensitivity: 'base' }))
+                  .map(([cat, clips]) => (
+                    <CategorySection
+                      key={cat}
+                      category={cat}
+                      clips={clips}
+                      playingIds={playingIds}
+                      onPlay={playClip}
+                    />
+                  ))}
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3">
+                {filteredClips.map(clip => (
+                  <ClipCard
+                    key={clip.id}
+                    clip={clip}
+                    playing={playingIds.has(clip.id)}
+                    onPlay={playClip}
+                    showCategory
+                  />
+                ))}
+              </div>
+            )}
           </div>
-        ) : (
-          <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3">
-            {filteredClips.map(clip => (
-              <ClipCard
-                key={clip.id}
-                clip={clip}
-                playing={playingIds.has(clip.id)}
-                onPlay={playClip}
-              />
-            ))}
-          </div>
-        )}
+        </div>
       </div>
-    </div>
     </PanelBackground>
   )
 }

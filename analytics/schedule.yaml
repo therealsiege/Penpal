@@ -37,3 +37,9 @@ jobs:
     cron: "*/15 * * * *"
     timeout: 60
     enabled: true
+  weekly-digest:
+    description: Generate weekly eval digest report
+    command: cd ../Penny && npx electron . --run-digest
+    cron: "0 8 * * 1"
+    timeout: 120
+    enabled: false

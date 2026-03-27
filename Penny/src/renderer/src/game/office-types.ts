@@ -103,15 +103,17 @@ export interface WorkstationSprite {
   /** Gold medal sprite for weekly MVP */
   mvpMedal?: Phaser.GameObjects.Sprite
   mvpMedalTween?: Phaser.Tweens.Tween
-  /** Desk pet sprite — composable monster body sitting on the desk (L5+) */
+  /** Desk pet sprite — animated animal pet sitting on the desk (L5+) */
   deskPet?: Phaser.GameObjects.Sprite
   deskPetTween?: Phaser.Tweens.Tween
-  /** Desk pet eye pair sprite — overlaid on pet body */
+  /** Desk pet eye pair sprite — overlaid on pet body (monster mode) */
   petEyes?: Phaser.GameObjects.Sprite
-  /** Desk pet mouth sprite — overlaid on pet body */
+  /** Desk pet mouth sprite — overlaid on pet body (monster mode) */
   petMouth?: Phaser.GameObjects.Sprite
   /** Timer for pet blink animation */
   petBlinkTimer?: Phaser.Time.TimerEvent
+  /** Animal species assigned to this agent's desk pet */
+  animalSpecies?: string
   /** Signature item sprite — unique per-agent personality item on desk */
   signatureItem?: Phaser.GameObjects.Sprite
   signatureItemTween?: Phaser.Tweens.Tween
@@ -149,6 +151,40 @@ export interface WorkstationSprite {
   /** Lego exclamation sprite — shown when agent needs interaction */
   exclamationSprite?: Phaser.GameObjects.Sprite
   exclamationTween?: Phaser.Tweens.Tween
+  /** OpenClaw/NemoClaw supervision shield badge */
+  openclawBadge?: Phaser.GameObjects.Sprite
+  openclawBadgeTween?: Phaser.Tweens.Tween
+  /** Parse error warning badge */
+  errorBadge?: Phaser.GameObjects.Sprite
+  errorBadgeTween?: Phaser.Tweens.Tween
+  /** Quality streak flame container — visible at LOD3 when streak >= 5 */
+  flameContainer?: Phaser.GameObjects.Container
+  /** Active flame particle tweens for cleanup */
+  flameTweens?: Phaser.Tweens.Tween[]
+  /** Recurring flame spawn timer */
+  flameTimer?: Phaser.Time.TimerEvent
+  /** Last streak value the flame was configured for */
+  lastFlameStreak?: number
+  /** Best-of-N thinking dots container */
+  thinkingDotsContainer?: Phaser.GameObjects.Container
+  /** Individual thinking dot arcs */
+  thinkingDots?: Phaser.GameObjects.Arc[]
+  /** Repeating appear/fade tween for thinking dots */
+  thinkingDotsTween?: Phaser.Tweens.Tween
+  /** Merge tween when candidate is selected */
+  thinkingMergeTween?: Phaser.Tweens.Tween
+  /** Number of thinking candidates currently shown */
+  thinkingCandidateCount?: number
+  /** Eval glow arc rendered behind the desk — color reflects recent success rate */
+  evalGlow?: Phaser.GameObjects.Arc
+  evalGlowTween?: Phaser.Tweens.Tween
+  /** Cached eval success rate (0–1), undefined = no data */
+  evalSuccessRate?: number
+  /** Context utilization meter — small bar below XP bar */
+  contextMeter?: AnimatedBar
+  contextMeterPulseTween?: Phaser.Tweens.Tween
+  contextRotShakeTween?: Phaser.Tweens.Tween
+  lastContextRotState?: boolean
 }
 
 export interface Room {
@@ -226,6 +262,18 @@ export interface PodLineInfo {
   reviewerAgentId: string
   executorAgentId: string
   status: string
+  /** Number of best-of-N solver candidates (>1 triggers thinking animation) */
+  candidates?: number
+  /** True when solver has selected a candidate from best-of-N */
+  candidateSelected?: boolean
+}
+
+// MCP connection visualization info
+export interface McpConnectionInfo {
+  agentId: string
+  serverName: string    // e.g. 'serena', 'github'
+  color: number         // hex color from MCP_SERVER_COLORS
+  active: boolean       // true when agent is actively calling this MCP tool
 }
 
 export interface OfficeDebugSnapshot {

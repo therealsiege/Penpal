@@ -69,10 +69,14 @@ export function Terminal({ ptyId, onClose, title }: TerminalProps) {
       if (id === ptyId) term.write(data)
     })
 
-    const removeExit = window.pty.onExit((id, _exitCode) => {
+    const removeExit = window.pty.onExit((id, exitCode) => {
       if (id === ptyId) {
         setExited(true)
-        term.write('\r\n\x1b[90m[Process exited]\x1b[0m\r\n')
+        const isCrash = exitCode !== 0 && exitCode !== -1
+        const msg = isCrash
+          ? `\r\n\x1b[31m[Process crashed with exit code ${exitCode}]\x1b[0m\r\n`
+          : '\r\n\x1b[90m[Process exited]\x1b[0m\r\n'
+        term.write(msg)
       }
     })
 

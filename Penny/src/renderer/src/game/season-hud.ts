@@ -9,7 +9,7 @@ import { questSystem } from './quest-system'
 import { creditManager, type CosmeticItem } from './credits'
 import { leaderboardManager } from './leaderboard'
 import { seasonManager, type SeasonChallenge } from './seasons'
-import { SPRITESHEET_KEYS, ICON_FRAMES, IMAGE_KEYS } from './office-asset-keys'
+import { SPRITESHEET_KEYS, ICON_FRAMES, IMAGE_KEYS, MEDAL_HD_FRAMES } from './office-asset-keys'
 import { activeTheme } from './office-theme'
 
 // ---------------------------------------------------------------------------
@@ -326,16 +326,27 @@ export class SeasonHUD {
 
       // Medal sprite for top 3, text number for the rest
       if (entry.rank >= 1 && entry.rank <= 3) {
-        const medalFrame = entry.rank === 1 ? ICON_FRAMES.MEDAL_GOLD
-          : entry.rank === 2 ? ICON_FRAMES.MEDAL_SILVER : ICON_FRAMES.MEDAL_BRONZE
-        const medalSprite = this.scene.add.sprite(16, rowY + 6, SPRITESHEET_KEYS.GAME_ICONS, medalFrame)
-          .setScale(0.32).setOrigin(0.5)
+        const hasHDMedals = this.scene.textures.exists(SPRITESHEET_KEYS.MEDALS_HD)
+        let medalSprite: Phaser.GameObjects.Sprite
+        if (hasHDMedals) {
+          const hdFrame = entry.rank === 1 ? MEDAL_HD_FRAMES.GOLD_STAR
+            : entry.rank === 2 ? MEDAL_HD_FRAMES.SILVER_FLORAL : MEDAL_HD_FRAMES.BRONZE_FLORAL
+          medalSprite = this.scene.add.sprite(16, rowY + 6, SPRITESHEET_KEYS.MEDALS_HD, hdFrame)
+            .setScale(0.18).setOrigin(0.5)
+        } else {
+          const medalFrame = entry.rank === 1 ? ICON_FRAMES.MEDAL_GOLD
+            : entry.rank === 2 ? ICON_FRAMES.MEDAL_SILVER : ICON_FRAMES.MEDAL_BRONZE
+          medalSprite = this.scene.add.sprite(16, rowY + 6, SPRITESHEET_KEYS.GAME_ICONS, medalFrame)
+            .setScale(0.32).setOrigin(0.5)
+        }
         this.leaderboardContainer!.add(medalSprite)
 
         // Medal pulse animation — staggered by rank
+        const baseScale = hasHDMedals ? 0.18 : 0.32
+        const pulseScale = hasHDMedals ? 0.24 : 0.42
         this.scene.tweens.add({
           targets: medalSprite,
-          scaleX: 0.42, scaleY: 0.42,
+          scaleX: pulseScale, scaleY: pulseScale,
           duration: 300,
           yoyo: true,
           delay: entry.rank * 100,
@@ -359,8 +370,10 @@ export class SeasonHUD {
 
       // MVP crown icon — subtle bobbing animation
       if (isMVP) {
-        const mvpIcon = this.scene.add.sprite(panelW - 20, rowY + 6, SPRITESHEET_KEYS.GAME_ICONS, ICON_FRAMES.MEDAL_GOLD)
-          .setScale(0.28)
+        const hasHD = this.scene.textures.exists(SPRITESHEET_KEYS.MEDALS_HD)
+        const mvpIcon = hasHD
+          ? this.scene.add.sprite(panelW - 20, rowY + 6, SPRITESHEET_KEYS.MEDALS_HD, MEDAL_HD_FRAMES.GOLD_STAR).setScale(0.16)
+          : this.scene.add.sprite(panelW - 20, rowY + 6, SPRITESHEET_KEYS.GAME_ICONS, ICON_FRAMES.MEDAL_GOLD).setScale(0.28)
         this.leaderboardContainer!.add(mvpIcon)
         this.scene.tweens.add({
           targets: mvpIcon,

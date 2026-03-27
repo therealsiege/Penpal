@@ -58,6 +58,7 @@ export function PodLauncherModal({
   const [customSolver, setCustomSolver] = useState('')
   const [customReviewer, setCustomReviewer] = useState('')
   const [customExecutor, setCustomExecutor] = useState('')
+  const [solverCandidates, setSolverCandidates] = useState(1)
   const [cwd, setCwd] = useState('')
   const [customCwd, setCustomCwd] = useState('')
 
@@ -82,6 +83,7 @@ export function PodLauncherModal({
       cwd: effectiveCwd,
       presetId: selectedPreset || undefined,
       maxIterations,
+      solverCandidates: solverCandidates > 1 ? solverCandidates : undefined,
       solverAgent: customSolver || undefined,
       reviewerAgent: customReviewer || undefined,
       executorAgent: customExecutor || undefined,
@@ -241,6 +243,29 @@ export function PodLauncherModal({
               </button>
             ))}
           </div>
+        </div>
+
+        {/* Solver candidates (best-of-N) */}
+        <div className="mb-4 flex items-center gap-3">
+          <p className="text-[11px] text-[#3a4858] uppercase tracking-wider">Solver Candidates</p>
+          <div className="flex gap-1">
+            {[1, 2, 3, 4, 5].map(n => (
+              <button
+                key={n}
+                onClick={() => setSolverCandidates(n)}
+                className={`w-8 h-8 text-[12px] rounded border transition-colors ${
+                  solverCandidates === n
+                    ? 'bg-purple-600/20 border-purple-500/40 text-purple-400 font-bold'
+                    : 'bg-[#141a22] border-[#2a3440] text-[#3a4858] hover:text-[#8a96a4]'
+                }`}
+              >
+                {n}
+              </button>
+            ))}
+          </div>
+          {solverCandidates > 1 && (
+            <span className="text-[10px] text-[#3a4858]">Best-of-{solverCandidates}</span>
+          )}
         </div>
 
         {/* Actions */}

@@ -3,7 +3,7 @@ import { usePolling } from '../hooks/usePolling'
 import { AgentAvatar } from '../components/AgentAvatar'
 import { useToast } from '../components/Toast'
 import { Terminal } from '../components/Terminal'
-import type { AgentConfig, AgentState, HealthResult, HotLead, JobStatus, PodWorkflow, PodPreset, ProjectLeaderboardEntry, OpencodeSession, AgentXP, getRankForXP } from '../types'
+import type { AgentConfig, AgentState, HealthResult, HotLead, JobStatus, PodWorkflow, PodPreset, ProjectLeaderboardEntry, OpencodeSession, AgentXP, OpenClawInfo, ConfigSnapshot, McpServerEntry, AgentToolSummary, getRankForXP } from '../types'
 import { PodLauncherModal, PodStatusModal, PodListModal } from '../components/PodModal'
 import { createOfficeGame } from '../game/OfficeGame'
 import { OfficeScene } from '../game/OfficeScene'
@@ -105,6 +105,15 @@ function AgentActionPopup({
                   {state.config.podRole === 'solver' ? '\u{1F527}' : state.config.podRole === 'reviewer' ? '\u{1F50D}' : '\u{25B6}'} {state.config.podRole}
                 </span>
               )}
+              {state.openclaw?.supervised && (
+                <span className={`text-[10px] px-1.5 py-0.5 rounded border font-medium ${
+                  state.openclaw.runtime === 'nemoclaw'
+                    ? 'text-green-400 bg-green-500/10 border-green-500/20'
+                    : 'text-cyan-400 bg-cyan-500/10 border-cyan-500/20'
+                }`}>
+                  {state.openclaw.runtime === 'nemoclaw' ? 'NemoClaw' : 'OpenClaw'}
+                </span>
+              )}
             </div>
           </div>
           <button
@@ -137,6 +146,50 @@ function AgentActionPopup({
             <p className="text-[13px] text-indigo-400">
               Sub-agent of: <span className="font-semibold">{state.parentAgentId}</span>
             </p>
+          </div>
+        )}
+
+        {/* OpenClaw / NemoClaw supervision details */}
+        {state.openclaw?.supervised && (
+          <div className={`rounded-lg px-3 py-2 mb-3 border ${
+            state.openclaw.runtime === 'nemoclaw'
+              ? 'bg-green-900/20 border-green-700/30'
+              : 'bg-cyan-900/20 border-cyan-700/30'
+          }`}>
+            <p className={`text-[10px] uppercase tracking-wider mb-1 ${
+              state.openclaw.runtime === 'nemoclaw' ? 'text-green-500/70' : 'text-cyan-500/70'
+            }`}>
+              {state.openclaw.runtime === 'nemoclaw' ? 'NemoClaw Sandbox' : 'ACP Supervision'}
+            </p>
+            <div className="flex flex-col gap-0.5">
+              <p className={`text-[11px] ${
+                state.openclaw.runtime === 'nemoclaw' ? 'text-green-400' : 'text-cyan-400'
+              }`}>
+                {state.openclaw.runtime === 'nemoclaw'
+                  ? 'Running in secure sandbox environment'
+                  : 'Supervised by OpenClaw via ACP protocol'}
+              </p>
+              {state.openclaw.sandboxed && (
+                <p className="text-[10px] text-green-400/60">Sandbox isolation active</p>
+              )}
+              {state.openclaw.agentId && (
+                <p className="text-[10px] text-[#5a6a7a] font-mono">
+                  Agent: {state.openclaw.agentId}
+                </p>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Parse error warning */}
+        {(state.parseErrors ?? 0) > 0 && (
+          <div className="bg-red-900/20 rounded-lg px-3 py-1.5 mb-2 border border-red-700/30">
+            <p className="text-[11px] text-red-400">
+              {state.parseErrors} parse error{state.parseErrors !== 1 ? 's' : ''} in session log
+            </p>
+            {state.lastError && (
+              <p className="text-[10px] text-red-400/60 font-mono mt-0.5 truncate">{state.lastError}</p>
+            )}
           </div>
         )}
 
@@ -638,6 +691,351 @@ function IconDownload() {
 }
 
 // ---------------------------------------------------------------------------
+// ConfigModal — Editable MCP servers, Claude settings, agent tools
+// ---------------------------------------------------------------------------
+
+function ConfigModal({ config, onClose, onRefresh }: {
+  config: ConfigSnapshot
+  onClose: () => void
+  onRefresh: () => void
+}) {
+  const [tab, setTab] = useState<'mcp' | 'claude' | 'agents'>('mcp')
+  const [saving, setSaving] = useState(false)
+  const [addingMcp, setAddingMcp] = useState<{ target: 'project' | string } | null>(null)
+  const [editingAgent, setEditingAgent] = useState<string | null>(null)
+  const [newTool, setNewTool] = useState('')
+
+  const doRemoveProjectMcp = async (name: string) => {
+    if (!confirm(`Remove MCP server "${name}" from .mcp.json?`)) return
+    setSaving(true)
+    await window.api.removeProjectMcpServer(name)
+    onRefresh()
+    setSaving(false)
+  }
+
+  const doRemoveProfileMcp = async (profile: string, name: string) => {
+    if (!confirm(`Remove "${name}" from profile "${profile}"?`)) return
+    setSaving(true)
+    await window.api.removeProfileMcpServer(profile, name)
+    onRefresh()
+    setSaving(false)
+  }
+
+  const doRemoveAgentTool = async (agentId: string, tool: string, currentTools: string[]) => {
+    setSaving(true)
+    await window.api.updateAgentTools(agentId, currentTools.filter(t => t !== tool))
+    onRefresh()
+    setSaving(false)
+  }
+
+  const doAddAgentTool = async (agentId: string, tool: string, currentTools: string[]) => {
+    if (!tool.trim() || currentTools.includes(tool.trim())) return
+    setSaving(true)
+    await window.api.updateAgentTools(agentId, [...currentTools, tool.trim()])
+    onRefresh()
+    setSaving(false)
+    setNewTool('')
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 backdrop-blur-[2px] animate-backdrop-fade-in" onClick={onClose}>
+      <div className="bg-gradient-to-b from-[#0c1018] to-[#080b10] border border-[#2a3440] rounded-xl p-5 w-[680px] shadow-2xl max-h-[80vh] overflow-y-auto animate-modal-scale-in ring-1 ring-[#00ff88]/10" onClick={e => e.stopPropagation()}>
+
+        {/* Header */}
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-3">
+            <h3 className="text-[15px] font-bold text-[#dce4ec]">Config</h3>
+            <div className="flex rounded-lg bg-[#141a22] p-0.5">
+              {(['mcp', 'claude', 'agents'] as const).map(t => (
+                <button key={t} onClick={() => setTab(t)}
+                  className={`px-2.5 py-0.5 text-[10px] rounded capitalize ${tab === t ? 'bg-[#2a3440] text-white' : 'text-[#5a6a7a]'}`}
+                >{t === 'mcp' ? `MCP (${config.mcp.totalUniqueServers})` : t === 'claude' ? 'Claude' : `Agents (${config.agents.length})`}</button>
+              ))}
+            </div>
+            {saving && <span className="text-[10px] text-amber-400 animate-pulse">Saving...</span>}
+          </div>
+          <button onClick={onClose} className="text-[#5a6a7a] hover:text-[#c4ccd6] text-lg">x</button>
+        </div>
+
+        {/* ── MCP Tab ─────────────────────────────────────────────────── */}
+        {tab === 'mcp' && (
+          <div className="flex flex-col gap-3">
+            {/* Project .mcp.json */}
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-[10px] text-[#5a6a7a] uppercase tracking-wider">
+                  Project MCP Servers ({config.mcp.projectServers.length})
+                  <span className="text-[#3a4858] ml-2 normal-case">.mcp.json</span>
+                </p>
+                <button onClick={() => setAddingMcp({ target: 'project' })}
+                  className="text-[10px] px-2 py-0.5 rounded bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/30 text-emerald-400 transition-colors"
+                >+ Add Server</button>
+              </div>
+              <div className="grid grid-cols-2 gap-1.5">
+                {config.mcp.projectServers.map(s => (
+                  <McpServerCard key={s.name} server={s} onRemove={() => doRemoveProjectMcp(s.name)} />
+                ))}
+              </div>
+            </div>
+
+            {/* Profile servers */}
+            {Object.entries(config.mcp.profileServers).map(([profile, servers]) => (
+              <div key={profile}>
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-[10px] text-[#5a6a7a] uppercase tracking-wider">
+                    Profile: <span className="text-cyan-400/70">{profile}</span>
+                    <span className="text-[#3a4858] ml-2 normal-case">({servers.length} servers)</span>
+                  </p>
+                  <button onClick={() => setAddingMcp({ target: profile })}
+                    className="text-[10px] px-2 py-0.5 rounded bg-cyan-600/20 hover:bg-cyan-600/30 border border-cyan-500/30 text-cyan-400 transition-colors"
+                  >+ Add</button>
+                </div>
+                <div className="grid grid-cols-2 gap-1.5">
+                  {servers.map(s => (
+                    <McpServerCard key={`${profile}-${s.name}`} server={s}
+                      onRemove={() => doRemoveProfileMcp(profile, s.name)} />
+                  ))}
+                </div>
+              </div>
+            ))}
+
+            {/* Add MCP form */}
+            {addingMcp && (
+              <AddMcpForm
+                target={addingMcp.target}
+                onAdd={async (server) => {
+                  setSaving(true)
+                  if (addingMcp.target === 'project') {
+                    await window.api.addProjectMcpServer(server)
+                  } else {
+                    await window.api.addProfileMcpServer(addingMcp.target, server)
+                  }
+                  setAddingMcp(null)
+                  onRefresh()
+                  setSaving(false)
+                }}
+                onCancel={() => setAddingMcp(null)}
+              />
+            )}
+          </div>
+        )}
+
+        {/* ── Claude Tab ──────────────────────────────────────────────── */}
+        {tab === 'claude' && (
+          <div className="flex flex-col gap-3">
+            <div className="bg-[#141a22]/50 rounded-lg px-3 py-2 border border-[#2a3440]/50">
+              <p className="text-[10px] text-[#5a6a7a] uppercase tracking-wider mb-1.5">Global Settings</p>
+              <div className="flex flex-wrap gap-1.5 mb-2">
+                {config.claude.globalSettings.alwaysThinking && (
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-500/10 border border-purple-500/20 text-purple-400">Always Thinking</span>
+                )}
+                {config.claude.globalSettings.enabledPlugins.map(p => (
+                  <span key={p} className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/10 border border-blue-500/20 text-blue-400">{p}</span>
+                ))}
+              </div>
+              {config.claude.globalSettings.envVars.length > 0 && (
+                <div className="mb-1.5">
+                  <p className="text-[9px] text-[#4a5c6e] mb-1">Environment Variables</p>
+                  <div className="flex flex-wrap gap-1">
+                    {config.claude.globalSettings.envVars.map(k => (
+                      <span key={k} className="text-[10px] px-1.5 py-0.5 rounded bg-[#0a0e14] text-[#6a7a8c] font-mono">{k}</span>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {config.claude.globalSettings.permissions.allow.length > 0 && (
+                <div>
+                  <p className="text-[9px] text-[#4a5c6e] mb-1">Allowed Permissions</p>
+                  <div className="flex flex-wrap gap-1">
+                    {config.claude.globalSettings.permissions.allow.map(p => (
+                      <span key={p} className="text-[10px] px-1.5 py-0.5 rounded bg-green-500/10 border border-green-500/20 text-green-400 font-mono">{p}</span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+            <div className="bg-[#141a22]/50 rounded-lg px-3 py-2 border border-[#2a3440]/50">
+              <p className="text-[10px] text-[#5a6a7a] uppercase tracking-wider mb-1.5">Project Settings</p>
+              <p className="text-[11px] text-[#6a7a8c] font-mono">{config.claude.projectSettings.path}</p>
+              <p className={`text-[10px] mt-0.5 ${config.claude.projectSettings.exists ? 'text-green-400' : 'text-[#4a5c6e]'}`}>
+                {config.claude.projectSettings.exists ? 'Active' : 'Not configured'}
+              </p>
+            </div>
+            <div className="bg-[#141a22]/50 rounded-lg px-3 py-2 border border-[#2a3440]/50">
+              <p className="text-[10px] text-[#5a6a7a] uppercase tracking-wider mb-1.5">CLAUDE.md Files ({config.claude.claudeMdFiles.length})</p>
+              {config.claude.claudeMdFiles.map(f => (
+                <div key={f.path} className="flex items-center gap-2 py-1 border-b border-[#2a3440]/30 last:border-0">
+                  <span className="text-[11px] text-cyan-400/80 font-mono flex-1 truncate">{f.path}</span>
+                  <span className="text-[10px] text-[#4a5c6e] shrink-0">{(f.sizeBytes / 1024).toFixed(1)}KB</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ── Agents Tab (editable tools) ─────────────────────────────── */}
+        {tab === 'agents' && (
+          <div className="flex flex-col gap-2">
+            {config.agents.map(a => {
+              const isEditing = editingAgent === a.agentId
+              return (
+                <div key={a.agentId} className={`bg-[#141a22]/50 rounded-lg px-3 py-2 border transition-colors ${isEditing ? 'border-cyan-500/40' : 'border-[#2a3440]/50'}`}>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[12px] font-semibold text-[#dce4ec]">{a.agentName}</span>
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-cyan-500/10 border border-cyan-500/20 text-cyan-400">{a.mcpProfile}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] text-[#4a5c6e] font-mono">{a.agentId}</span>
+                      <button
+                        onClick={() => setEditingAgent(isEditing ? null : a.agentId)}
+                        className={`text-[10px] px-1.5 py-0.5 rounded border transition-colors ${
+                          isEditing
+                            ? 'bg-cyan-500/20 border-cyan-500/30 text-cyan-400'
+                            : 'bg-[#0a0e14] border-[#2a3440] text-[#5a6a7a] hover:text-[#8a96a4]'
+                        }`}
+                      >{isEditing ? 'Done' : 'Edit'}</button>
+                    </div>
+                  </div>
+
+                  {/* MCP servers */}
+                  {a.mcpServers.length > 0 && (
+                    <div className="flex items-center gap-1 mb-1 flex-wrap">
+                      <span className="text-[9px] text-[#4a5c6e] mr-1">MCP:</span>
+                      {a.mcpServers.map(s => (
+                        <span key={s} className="text-[10px] px-1.5 py-0.5 rounded bg-indigo-500/10 border border-indigo-500/20 text-indigo-400">{s}</span>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Tools — editable when selected */}
+                  <div className="flex items-center gap-1 flex-wrap">
+                    <span className="text-[9px] text-[#4a5c6e] mr-1">Tools:</span>
+                    {a.allowedTools.map(t => (
+                      <span key={t} className="text-[10px] px-1 py-0.5 rounded bg-[#0a0e14] text-[#6a7a8c] font-mono inline-flex items-center gap-0.5 group">
+                        {t.length > 25 ? t.slice(0, 23) + '..' : t}
+                        {isEditing && (
+                          <button
+                            onClick={() => doRemoveAgentTool(a.agentId, t, a.allowedTools)}
+                            className="text-red-400/50 hover:text-red-400 ml-0.5 leading-none"
+                            title={`Remove ${t}`}
+                          >x</button>
+                        )}
+                      </span>
+                    ))}
+                  </div>
+
+                  {/* Add tool input — visible when editing */}
+                  {isEditing && (
+                    <div className="flex gap-1.5 mt-2">
+                      <input
+                        type="text"
+                        value={newTool}
+                        onChange={e => setNewTool(e.target.value)}
+                        onKeyDown={e => { if (e.key === 'Enter') doAddAgentTool(a.agentId, newTool, a.allowedTools) }}
+                        placeholder="mcp__server__* or Bash(cmd:*)"
+                        className="flex-1 bg-[#06080c] border border-[#2a3440] rounded px-2 py-1 text-[11px] text-[#dce4ec] placeholder-[#3a4858] font-mono focus:outline-none focus:border-cyan-500/40"
+                      />
+                      <button
+                        onClick={() => doAddAgentTool(a.agentId, newTool, a.allowedTools)}
+                        disabled={!newTool.trim()}
+                        className="px-2 py-1 text-[10px] bg-emerald-600/30 hover:bg-emerald-600/40 border border-emerald-500/30 rounded text-emerald-400 transition-colors disabled:opacity-30"
+                      >Add</button>
+                    </div>
+                  )}
+
+                  {/* Skills */}
+                  {a.skills.length > 0 && (
+                    <div className="flex items-center gap-1 mt-1 flex-wrap">
+                      <span className="text-[9px] text-[#4a5c6e] mr-1">Skills:</span>
+                      {a.skills.map(s => (
+                        <span key={s} className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/10 border border-amber-500/20 text-amber-400">{s}</span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// Inline form to add a new MCP server
+function AddMcpForm({ target, onAdd, onCancel }: {
+  target: string
+  onAdd: (server: { name: string; command: string; args: string[] }) => void
+  onCancel: () => void
+}) {
+  const [name, setName] = useState('')
+  const [command, setCommand] = useState('npx')
+  const [argsStr, setArgsStr] = useState('')
+
+  return (
+    <div className="bg-[#0a0e14] rounded-lg px-3 py-3 border border-cyan-500/30">
+      <p className="text-[10px] text-cyan-400 uppercase tracking-wider mb-2">
+        Add MCP Server to {target === 'project' ? '.mcp.json' : `profile: ${target}`}
+      </p>
+      <div className="flex flex-col gap-2">
+        <div className="flex gap-2">
+          <input type="text" value={name} onChange={e => setName(e.target.value)} placeholder="Server name"
+            className="flex-1 bg-[#06080c] border border-[#2a3440] rounded px-2 py-1.5 text-[11px] text-[#dce4ec] placeholder-[#3a4858] font-mono focus:outline-none focus:border-cyan-500/40" />
+          <select value={command} onChange={e => setCommand(e.target.value)}
+            className="bg-[#06080c] border border-[#2a3440] rounded px-2 py-1.5 text-[11px] text-[#dce4ec] font-mono focus:outline-none focus:border-cyan-500/40">
+            <option value="npx">npx</option>
+            <option value="uvx">uvx</option>
+            <option value="node">node</option>
+          </select>
+        </div>
+        <input type="text" value={argsStr} onChange={e => setArgsStr(e.target.value)}
+          placeholder="Args (space-separated, e.g. -y @pkg/name)"
+          className="bg-[#06080c] border border-[#2a3440] rounded px-2 py-1.5 text-[11px] text-[#dce4ec] placeholder-[#3a4858] font-mono focus:outline-none focus:border-cyan-500/40" />
+        <div className="flex gap-2 justify-end">
+          <button onClick={onCancel}
+            className="px-2.5 py-1 text-[10px] bg-[#141a22] hover:bg-[#1a2430] border border-[#2a3440] rounded text-[#8a96a4] transition-colors"
+          >Cancel</button>
+          <button onClick={() => { if (name.trim()) onAdd({ name: name.trim(), command, args: argsStr.split(/\s+/).filter(Boolean) }) }}
+            disabled={!name.trim()}
+            className="px-2.5 py-1 text-[10px] bg-emerald-600/30 hover:bg-emerald-600/40 border border-emerald-500/30 rounded text-emerald-400 transition-colors disabled:opacity-30"
+          >Add Server</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function McpServerCard({ server, onRemove }: { server: McpServerEntry; onRemove?: () => void }) {
+  const cmdShort = server.command === 'npx' || server.command === 'uvx'
+    ? server.args.filter(a => !a.startsWith('-')).pop() || server.command
+    : server.command
+  const envCount = Object.keys(server.env).length
+  return (
+    <div className="bg-[#141a22]/60 rounded-lg px-2.5 py-2 border border-[#2a3440]/40 group relative">
+      <div className="flex items-center justify-between mb-0.5">
+        <span className="text-[11px] font-semibold text-[#dce4ec]">{server.name}</span>
+        <div className="flex items-center gap-1">
+          <span className={`text-[9px] px-1 py-0.5 rounded ${
+            server.source === 'project' ? 'bg-blue-500/10 text-blue-400' : 'bg-purple-500/10 text-purple-400'
+          }`}>{server.source}</span>
+          {onRemove && (
+            <button onClick={onRemove}
+              className="text-[10px] text-red-400/0 group-hover:text-red-400/60 hover:!text-red-400 transition-colors leading-none"
+              title="Remove server"
+            >x</button>
+          )}
+        </div>
+      </div>
+      <p className="text-[10px] text-[#5a6a7a] font-mono truncate">{cmdShort}</p>
+      {envCount > 0 && (
+        <p className="text-[9px] text-[#3a4858] mt-0.5">{envCount} env var{envCount !== 1 ? 's' : ''}</p>
+      )}
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
 // SharePickerModal
 // ---------------------------------------------------------------------------
 
@@ -939,7 +1337,7 @@ export function CommandCenter(props: CommandCenterProps) {
   const { toast } = useToast()
 
   // --- Polling ---
-  const { data: agentStatuses } = usePolling<AgentState[]>(
+  const { data: agentStatuses, errorCount: agentPollErrors } = usePolling<AgentState[]>(
     () => window.api.getAgentStatuses(),
     5000,
   )
@@ -992,6 +1390,8 @@ export function CommandCenter(props: CommandCenterProps) {
   const [viewingPod, setViewingPod] = useState<PodWorkflow | null>(null)
   const [podPresets, setPodPresets] = useState<PodPreset[]>([])
   const [smokeCheckRunning, setSmokeCheckRunning] = useState(false)
+  const [showConfig, setShowConfig] = useState(false)
+  const [configData, setConfigData] = useState<ConfigSnapshot | null>(null)
 
   // Load pod presets once
   useEffect(() => {
@@ -1111,6 +1511,8 @@ export function CommandCenter(props: CommandCenterProps) {
           reviewerAgentId: wf.reviewer.agentId,
           executorAgentId: wf.executor.agentId,
           status: wf.status,
+          candidates: wf.solverCandidateCount > 1 ? wf.solverCandidateCount : undefined,
+          candidateSelected: !!wf.selfEvaluation,
         }))
       sceneRef.current.setPodWorkflows(activeWorkflows)
     }
@@ -1190,6 +1592,7 @@ export function CommandCenter(props: CommandCenterProps) {
           toast(`Approve failed: ${result.error}`, 'error')
           return
         }
+        EventBus.emit(EVENTS.AGENT_APPROVED, state.config.id, state.tty)
         toast(`Approved for ${state.config.name}`, 'success')
         setActionAgent(null)
       } catch {
@@ -1440,8 +1843,32 @@ export function CommandCenter(props: CommandCenterProps) {
             <IconDownload />
             Downloads
           </button>
+
+          <button
+            type="button"
+            onClick={async () => {
+              const snap = await window.api.getConfigSnapshot().catch(() => null)
+              if (snap) {
+                setConfigData(snap)
+                setShowConfig(true)
+              }
+            }}
+            className="flex items-center gap-1 px-2.5 py-1 bg-[#141a22] hover:bg-[#1a2430] border border-[#2a3440] rounded-lg text-[#8a96a4] text-[13px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00ff88]/30 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0c1018]"
+          >
+            Config
+          </button>
         </div>
       </div>
+
+      {/* Connection issues banner */}
+      {agentPollErrors >= 3 && (
+        <div className="flex-none mx-2.5 mt-1 px-3 py-1.5 rounded-lg bg-amber-900/20 border border-amber-700/30 flex items-center gap-2">
+          <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+          <span className="text-[11px] text-amber-400">
+            Connection issues — polling interval increased ({agentPollErrors} consecutive errors)
+          </span>
+        </div>
+      )}
 
       {/* ------------------------------------------------------------------ */}
       {/* Main Content: Phaser Office + Agent Cards                           */}
@@ -1524,6 +1951,17 @@ export function CommandCenter(props: CommandCenterProps) {
           agents={agentStatuses ?? []}
           xpData={xpData}
           onClose={() => setShowLeaderboard(false)}
+        />
+      )}
+
+      {showConfig && configData && (
+        <ConfigModal
+          config={configData}
+          onClose={() => setShowConfig(false)}
+          onRefresh={async () => {
+            const snap = await window.api.getConfigSnapshot().catch(() => null)
+            if (snap) setConfigData(snap)
+          }}
         />
       )}
 

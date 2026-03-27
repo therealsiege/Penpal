@@ -46,6 +46,24 @@ export const SPRITESHEET_KEYS = Object.freeze({
   LEGO_SPECIALS: 'lego-specials',
   /** Desk pet face parts — 8 frames at 16x8 (4 eye pairs + 4 mouths) */
   DESK_PET_FACES: 'desk-pet-faces',
+  /** Animated animal pets — 5 rows (Chicken, Teddy, Penguin, Ducky, Polar) x 12 idle frames, 64x64 */
+  ANIMAL_PETS: 'animal-pets',
+  /** Animal pet blink animation — same layout as ANIMAL_PETS */
+  ANIMAL_PETS_BLINK: 'animal-pets-blink',
+  /** Animal pet hurt frame — 5 rows x 1 frame, 64x64 */
+  ANIMAL_PETS_HURT: 'animal-pets-hurt',
+  /** Modern Office furniture tiles — 48x48 grid, 20 cols */
+  OFFICE_FURNITURE: 'office-furniture',
+  /** Kenney UI elements (Blue theme) — 32x32 cells, single row */
+  KENNEY_UI: 'kenney-ui',
+  /** Composable monster bodies — 6 frames at 32x32 */
+  MONSTER_BODIES: 'monster-bodies',
+  /** Composable monster eyes — 6 frames at 16x8 */
+  MONSTER_EYES: 'monster-eyes',
+  /** Composable monster mouths — 6 frames at 16x8 */
+  MONSTER_MOUTHS: 'monster-mouths',
+  /** HD medals spritesheet — full medals.png sliced into individual frames */
+  MEDALS_HD: 'medals-hd',
 } as const)
 
 // ---------------------------------------------------------------------------
@@ -202,6 +220,82 @@ export const LEGO_SPECIAL_FRAMES = Object.freeze({
   GRADE_A: 4,
 } as const)
 
+// ---------------------------------------------------------------------------
+// Animal pet constants
+// ---------------------------------------------------------------------------
+
+/** Animal species in the ANIMAL_PETS sheet — row order. */
+export const ANIMAL_SPECIES = ['chicken', 'teddy', 'penguin', 'ducky', 'polar'] as const
+export type AnimalSpecies = typeof ANIMAL_SPECIES[number]
+
+/** Number of idle frames per animal in the ANIMAL_PETS sheet. */
+export const ANIMAL_IDLE_FRAMES = 12
+
+/** Total animal species count. */
+export const ANIMAL_COUNT = ANIMAL_SPECIES.length
+
+// ---------------------------------------------------------------------------
+// Kenney UI frame indices (32x32 cells in KENNEY_UI spritesheet)
+// ---------------------------------------------------------------------------
+
+export const KENNEY_UI_FRAMES = Object.freeze({
+  BTN_RECT_DEPTH: 0,
+  BTN_RECT_FLAT: 1,
+  BTN_ROUND_DEPTH: 2,
+  BTN_ROUND_FLAT: 3,
+  BTN_SQUARE_DEPTH: 4,
+  BTN_SQUARE_FLAT: 5,
+  ARROW_E: 6,
+  ARROW_N: 7,
+  ARROW_S: 8,
+  ARROW_W: 9,
+  ARROW_DECO_E: 10,
+  ARROW_DECO_N: 11,
+  ARROW_DECO_S: 12,
+  ARROW_DECO_W: 13,
+  CHECK_SQUARE: 14,
+  ICON_CHECK: 15,
+  ICON_CIRCLE: 16,
+  ICON_CROSS: 17,
+  ICON_SQUARE_OUTLINE: 18,
+  STAR: 19,
+  STAR_OUTLINE: 20,
+  SLIDER_H_COLOR: 21,
+  SLIDER_H_GREY: 22,
+  SLIDER_V_COLOR: 23,
+  SLIDER_V_GREY: 24,
+} as const)
+
+// ---------------------------------------------------------------------------
+// HD medal frame indices (from medals-hd spritesheet — medals.png sliced)
+// ---------------------------------------------------------------------------
+
+export const MEDAL_HD_FRAMES = Object.freeze({
+  GOLD_STAR: 0,
+  SILVER_FLORAL: 1,
+  BRONZE_FLORAL: 2,
+  SILVER_ROUND: 3,
+  BRONZE_ROUND: 4,
+  GOLD_BLUE: 5,
+  GOLD_PURPLE: 6,
+  GOLD_WHITE: 7,
+  SILVER_WHITE: 8,
+  BRONZE_WHITE: 9,
+} as const)
+
+// ---------------------------------------------------------------------------
+// Audio keys — OGG sound effects
+// ---------------------------------------------------------------------------
+
+export const AUDIO_KEYS = Object.freeze({
+  CLICK_A: 'sfx-click-a',
+  CLICK_B: 'sfx-click-b',
+  SWITCH_A: 'sfx-switch-a',
+  SWITCH_B: 'sfx-switch-b',
+  TAP_A: 'sfx-tap-a',
+  TAP_B: 'sfx-tap-b',
+} as const)
+
 /** Map quest difficulty to the corresponding star frame index. */
 export const DIFFICULTY_STAR_FRAME: Record<string, number> = {
   trivial:   ICON_FRAMES.STAR_GREY,
@@ -277,3 +371,5 @@ export type SceneKey        = typeof SCENE_KEYS[keyof typeof SCENE_KEYS]
 export type IconFrame       = typeof ICON_FRAMES[keyof typeof ICON_FRAMES]
 export type EffectAnimKey   = typeof EFFECT_ANIM_KEYS[keyof typeof EFFECT_ANIM_KEYS]
 export type ItemFrame       = typeof ITEM_FRAMES[keyof typeof ITEM_FRAMES]
+export type AudioKey        = typeof AUDIO_KEYS[keyof typeof AUDIO_KEYS]
+export type MedalHDFrame    = typeof MEDAL_HD_FRAMES[keyof typeof MEDAL_HD_FRAMES]

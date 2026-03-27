@@ -18,8 +18,26 @@ import type {
   LeadDetail,
   AgentConfig,
   AgentState,
+  AgentHealthStatus,
   OpencodeSession,
+  PodWorkflow,
+  VaultFileContent,
+  VaultSearchResult,
+  Task,
+  ContextHealth,
+  EvalAgentReport,
+  EvalStats,
+  PreferenceStats,
+  PreferenceEvent,
 } from './types'
+
+interface ContextEngineeredResponse<T> {
+  data: T
+  summary: string
+  suggestions: string[]
+  related_tools: string[]
+  context?: Record<string, unknown>
+}
 
 declare global {
   interface Window {
@@ -148,6 +166,47 @@ declare global {
       onScriptDone: (callback: (data: { id: string; exitCode: number; durationMs: number; error?: string }) => void) => () => void
       getBriefingSchedule: () => Promise<{ cron: string; enabled: boolean }>
       setBriefingSchedule: (cron: string, enabled: boolean) => Promise<void>
+      // Eval Dashboard
+      evalsReportAll: () => Promise<EvalAgentReport[]>
+      evalsReportAgent: (agentId: string) => Promise<EvalAgentReport | null>
+      evalsStats: () => Promise<EvalStats>
+      evalsWeeklyDigest: (weekOverride?: string) => Promise<{ markdown: string; filePath: string }>
+      // Preference APIs
+      preferencesStats: () => Promise<PreferenceStats>
+      preferencesCount: () => Promise<number>
+      preferencesQuery: (filter?: { agentId?: string; signal?: string; since?: string }) => Promise<PreferenceEvent[]>
+      preferencesGeneratePairs: () => Promise<{ count: number; path: string }>
+      // Spot-Check Queue
+      evalsSpotCheckQueue: () => Promise<import('./types').SpotCheck[]>
+      evalsSpotCheckSample: (count: number) => Promise<import('./types').SpotCheck[]>
+      evalsSpotCheckReview: (id: string, verdict: string, notes?: string) => Promise<void>
+      evalsSpotCheckAgreement: () => Promise<import('./types').SpotCheckAgreement>
+      // Pod Quality Metrics
+      evalsPodQuality: (since?: string) => Promise<{
+        period: { from: string; to: string }
+        totalPods: number
+        completionRate: number
+        avgIterations: number
+        reviewerFirstPassRate: number
+        executorPassRate: number
+        selfFixRate: number
+        avgCompletionTime_ms: number
+        byPreset: Record<string, { total: number; completed: number; avgIterations: number }>
+      }>
+      // Context Health
+      contextHealth: () => Promise<ContextHealth[]>
+      contextHealthAgent: (agentId: string) => Promise<ContextHealth>
+      // Context-Engineered Rich APIs (full ContextEngineeredResponse shape)
+      getAgentStatusesRich: () => Promise<ContextEngineeredResponse<AgentState[]>>
+      getClaudeSessionsRich: () => Promise<ContextEngineeredResponse<ClaudeSession[]>>
+      searchLeadsRich: (query: string) => Promise<ContextEngineeredResponse<LeadSearchResult[]>>
+      getLeadDetailRich: (name: string) => Promise<ContextEngineeredResponse<LeadDetail | null>>
+      listPodsRich: () => Promise<ContextEngineeredResponse<PodWorkflow[]>>
+      getPodStatusRich: (workflowId: string) => Promise<ContextEngineeredResponse<PodWorkflow | null>>
+      vaultReadRich: (relativePath: string) => Promise<ContextEngineeredResponse<VaultFileContent | null>>
+      vaultSearchRich: (query: string, glob?: string, limit?: number) => Promise<ContextEngineeredResponse<VaultSearchResult[]>>
+      orchestratorQueueRich: () => Promise<ContextEngineeredResponse<Task[]>>
+      orchestratorAgentHealthRich: () => Promise<ContextEngineeredResponse<AgentHealthStatus[]>>
     }
   }
 }

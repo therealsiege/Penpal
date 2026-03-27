@@ -13,6 +13,7 @@ import { CommandCenter } from './panels/CommandCenter'
 import { VaultPanel } from './panels/VaultPanel'
 import { SettingsPanel } from './panels/SettingsPanel'
 import { SoundboardPanel } from './panels/SoundboardPanel'
+import { EvalsPanel } from './panels/EvalsPanel'
 import { DataPanel } from './panels/DataPanel'
 import type { SystemPaths } from './types'
 import { getPathPresets } from './utils/path-presets'
@@ -254,6 +255,7 @@ function AppContent() {
       category: 'Agents',
       action: async () => {
         const r = await window.api.approveAllSessions('1')
+        if (r.sent > 0) EventBus.emit(EVENTS.AGENT_APPROVED, '__all__', '')
         toast(`Approved ${r.sent} sessions`, 'success')
       },
     },
@@ -264,6 +266,7 @@ function AppContent() {
       category: 'Agents',
       action: async () => {
         const r = await window.api.approveAllSessions('2')
+        if (r.sent > 0) EventBus.emit(EVENTS.AGENT_APPROVED, '__all__', '')
         toast(`Approved ${r.sent} sessions for their sessions`, 'success')
       },
     },
@@ -340,6 +343,7 @@ function AppContent() {
         {activePanel === 'tasks' && <TasksPanel />}
         {activePanel === 'data' && <DataPanel />}
         {activePanel === 'vault' && <VaultPanel />}
+        {activePanel === 'evals' && <EvalsPanel />}
         {activePanel === 'soundboard' && <SoundboardPanel />}
         {activePanel === 'settings' && <SettingsPanel />}
       </Layout>

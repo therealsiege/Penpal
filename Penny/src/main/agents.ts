@@ -31,7 +31,7 @@ export interface AgentConfig {
 
 export type AgentStatus = 'sleeping' | 'idle' | 'active'
 
-export type SessionMode = 'working' | 'plan' | 'accept-edits' | 'waiting' | 'idle' | 'compressing'
+export type SessionMode = 'working' | 'plan' | 'accept-edits' | 'waiting' | 'idle' | 'compressing' | 'error' | 'disconnected' | 'crashed'
 
 export type InteractionType =
   | 'tool-approval'
@@ -44,6 +44,14 @@ export interface SubAgentInvocation {
   description: string
   timestamp: number
   status: 'active' | 'completed'
+}
+
+export interface OpenClawInfo {
+  supervised: boolean
+  runtime?: 'openclaw' | 'nemoclaw'
+  sessionId?: string
+  agentId?: string
+  sandboxed?: boolean
 }
 
 export interface AgentState {
@@ -65,6 +73,12 @@ export interface AgentState {
   isSubAgent?: boolean
   subAgents?: AgentState[]
   subAgentInvocations?: SubAgentInvocation[]
+  openclaw?: OpenClawInfo
+  parseErrors?: number
+  lastError?: string | null
+  // Context window utilization (0.0–1.0) and rot detection
+  contextUtilization?: number
+  contextRotDetected?: boolean
 }
 
 // ── YAML Loader ─────────────────────────────────────────────────────────────
@@ -187,11 +201,11 @@ export interface BuildCliOpts {
   permissionMode?: string
 }
 
-export function buildAgentCliArgs(agentId: string, cwd: string, opts: BuildCliOpts = {}): string[] {
+/** System prompt + agent tag (same text Claude Code receives via --append-system-prompt). */
+export function buildAgentTaggedSystemPrompt(agentId: string, opts: BuildCliOpts = {}): string {
   const agent = getAgentConfig(agentId)
   if (!agent) throw new Error(`Unknown agent: ${agentId}`)
 
-  const mcpPath = getMcpProfilePath(agent.mcpProfile)
   const isDispatch = opts.dispatch || agent.autonomy === 'dispatch'
 
   const sharedMemoryPath = path.join(AGENTS_DIR, 'CLAUDE.md')
@@ -215,7 +229,90 @@ export function buildAgentCliArgs(agentId: string, cwd: string, opts: BuildCliOp
     : `${agent.systemPrompt}${personaContext}${sharedMemoryNote}`
 
   const agentTag = isDispatch ? `dispatch:${agentId}` : `agent:${agentId}`
-  const taggedPrompt = `[AGENT_ID:${agentTag}]\n\n${systemPrompt}`
+  return `[AGENT_ID:${agentTag}]\n\n${systemPrompt}`
+}
+
+export type TaskRunnerKind = 'claude' | 'opencode' | 'cursor-agent'
+
+/** Headless orchestrator/pods execution. Default: Cursor Agent CLI. Override with `PENNY_TASK_RUNNER=claude` or `opencode`. */
+export function getTaskRunnerKind(): TaskRunnerKind {
+  const fromEnv = (process.env.PENNY_TASK_RUNNER || '').trim().toLowerCase()
+  if (fromEnv === 'opencode' || fromEnv === 'open-code') return 'opencode'
+  if (fromEnv === 'cursor' || fromEnv === 'cursor-agent') return 'cursor-agent'
+  if (fromEnv === 'claude' || fromEnv === 'claude-code') return 'claude'
+  return 'cursor-agent'
+}
+
+/** Map YAML `model` shorthand to OpenCode `provider/model` (override any model with `PENNY_OPENCODE_MODEL`). */
+export function mapModelToOpenCodeModel(model: string): string {
+  const override = process.env.PENNY_OPENCODE_MODEL?.trim()
+  if (override) return override
+
+  if (model.includes('/')) return model
+
+  const m = model.toLowerCase()
+  if (m === 'opus' || m === 'claude-opus') return 'anthropic/claude-opus-4-5-20251001'
+  if (m.includes('sonnet')) return 'anthropic/claude-sonnet-4-5-20250929'
+  if (m.includes('haiku')) return 'anthropic/claude-3-5-haiku-20241022'
+  if (m === 'cursor-agent') return 'anthropic/claude-sonnet-4-5-20250929'
+  return 'anthropic/claude-sonnet-4-5-20250929'
+}
+
+export interface HeadlessInvocation {
+  command: string
+  args: string[]
+  cwd: string
+}
+
+export function buildAgentHeadlessInvocation(
+  agentId: string,
+  cwd: string,
+  userPrompt: string,
+  opts: BuildCliOpts & { permissionMode?: string } = {},
+): HeadlessInvocation {
+  const resolvedCwd = resolveUserPath(cwd)
+  const runner = getTaskRunnerKind()
+
+  if (runner === 'claude') {
+    const cliArgs = buildAgentCliArgs(agentId, resolvedCwd, {
+      headless: true,
+      permissionMode: opts.permissionMode,
+      dispatch: opts.dispatch,
+    })
+    return { command: 'claude', args: [...cliArgs, '--', userPrompt], cwd: resolvedCwd }
+  }
+
+  const taggedSystem = buildAgentTaggedSystemPrompt(agentId, { ...opts, headless: true })
+  const fullPrompt = `${taggedSystem}\n\n--- USER TASK ---\n\n${userPrompt}`
+
+  if (runner === 'opencode') {
+    const agent = getAgentConfig(agentId)
+    if (!agent) throw new Error(`Unknown agent: ${agentId}`)
+    const model = mapModelToOpenCodeModel(agent.model)
+    const args: string[] = ['run', '-m', model]
+    const attach = process.env.PENNY_OPENCODE_ATTACH?.trim() || process.env.OPENCODE_RUN_ATTACH?.trim()
+    if (attach) {
+      args.push('--attach', attach)
+    }
+    args.push(fullPrompt)
+    return { command: 'opencode', args, cwd: resolvedCwd }
+  }
+
+  const agentBin = process.env.PENNY_CURSOR_AGENT_BIN?.trim() || 'agent'
+  return {
+    command: agentBin,
+    args: ['-p', '--force', '--output-format', 'text', fullPrompt],
+    cwd: resolvedCwd,
+  }
+}
+
+export function buildAgentCliArgs(agentId: string, cwd: string, opts: BuildCliOpts = {}): string[] {
+  const agent = getAgentConfig(agentId)
+  if (!agent) throw new Error(`Unknown agent: ${agentId}`)
+
+  const mcpPath = getMcpProfilePath(agent.mcpProfile)
+  const isDispatch = opts.dispatch || agent.autonomy === 'dispatch'
+  const taggedPrompt = buildAgentTaggedSystemPrompt(agentId, opts)
 
   const args: string[] = []
 

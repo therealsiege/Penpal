@@ -25,12 +25,14 @@ import {
   WS_NAME_Y,
   WORKSTATION_W,
   WS_DESK_Y,
+  CTX_GREEN,
+  CTX_AMBER,
+  CTX_RED,
+  CTX_THRESHOLD_AMBER,
+  CTX_THRESHOLD_RED,
 } from './office-constants'
 import { WorkstationFactory } from './workstation-creation'
 import { WorkstationAnimator } from './workstation-animation'
-
-// Re-export so callers that import WorkstationHost from this file continue to work.
-export type { WorkstationHost }
 
 // ---------------------------------------------------------------------------
 // Host interface — callbacks into OfficeScene for cross-module calls
@@ -46,6 +48,7 @@ export interface WorkstationHost {
   burstConfetti(x: number, y: number): void
   spawnSteamParticles(ws: WorkstationSprite): void
   clearSteamParticles(ws: WorkstationSprite): void
+  spawnFlameParticle(x: number, y: number, streak: number): void
   // Agent helpers (kept on OfficeScene as they relate to broader scene state)
   getAgentCharacterIndex(agent: AgentState): number
   getPoseFrame(charIdx: number, agent: AgentState): number
@@ -83,6 +86,7 @@ export class OfficeWorkstations {
   private host: WorkstationHost
   private factory: WorkstationFactory
   private animator: WorkstationAnimator
+  private _onApproved: (...args: unknown[]) => void
 
   constructor(scene: Phaser.Scene, host: WorkstationHost) {
     this.scene = scene
@@ -101,6 +105,42 @@ export class OfficeWorkstations {
       (ws, agent) => this.updateWorkstation(ws, agent),
       (ws) => this.restoreDeskStroke(ws),
     )
+
+    // Listen for approve events and trigger sparkle on the agent's workstation
+    this._onApproved = (agentId: unknown) => {
+      if (typeof agentId !== 'string') return
+      // Skip if LOD is overview level (workstation not visible)
+      if (this.host.getLastLodLevel() <= 1) return
+      const rooms = this.host.getRooms()
+      if (agentId === '__all__') {
+        // Bulk approve — sparkle all workstations that are currently waiting
+        for (const room of rooms.values()) {
+          for (const ws of room.workstations.values()) {
+            if (ws.state?.needsInteraction) {
+              const wx = room.x + ws.container.x
+              const wy = room.y + ws.container.y
+              this.host.celebrations.approveSparkle(wx, wy)
+            }
+          }
+        }
+      } else {
+        // Single agent approve
+        for (const room of rooms.values()) {
+          const ws = room.workstations.get(agentId)
+          if (ws) {
+            const wx = room.x + ws.container.x
+            const wy = room.y + ws.container.y
+            this.host.celebrations.approveSparkle(wx, wy)
+            break
+          }
+        }
+      }
+    }
+    EventBus.on(EVENTS.AGENT_APPROVED, this._onApproved)
+  }
+
+  destroy(): void {
+    EventBus.off(EVENTS.AGENT_APPROVED, this._onApproved)
   }
 
   // ---------------------------------------------------------------------------
@@ -112,7 +152,17 @@ export class OfficeWorkstations {
 
     for (const [id, ws] of room.workstations) {
       if (!currentIds.has(id)) {
-        this.destroyWorkstation(ws)
+        // Flash red before destroying (crash/departure visibility)
+        const name = ws.state?.config?.name?.split(' ')[0] || id
+        this.host.showToast(`${name} session ended`, 'warning')
+        flash(ws.sprite, this.scene, { tint: 0xff4444, duration: 150, repeat: 2 })
+        // Red flash on the desk (Rectangle cast — setTint exists at runtime)
+        flash(ws.deskBody as unknown as Parameters<typeof flash>[0], this.scene, { tint: 0xff4444, duration: 150, repeat: 1 })
+        // Delay destruction by 500ms so the flash is visible
+        const wsRef = ws
+        this.scene.time.delayedCall(500, () => {
+          this.destroyWorkstation(wsRef)
+        })
         room.workstations.delete(id)
         EventBus.emit(EVENTS.AGENT_DEPARTED, id)
       }
@@ -226,7 +276,8 @@ export class OfficeWorkstations {
 
     // Skip redundant updates — fingerprint the fields that affect visuals
     const blurbSnippet = agent.lastAssistantBlurb?.slice(0, 20) ?? ''
-    const fp = `${agent.status}|${agent.sessionMode}|${agent.needsInteraction}|${agent.interactionType}|${agent.config.name}|${blurbSnippet}|${agent.uptime ?? ''}`
+    const ctxRound = agent.contextUtilization != null ? (agent.contextUtilization * 100 | 0) : ''
+    const fp = `${agent.status}|${agent.sessionMode}|${agent.needsInteraction}|${agent.interactionType}|${agent.config.name}|${blurbSnippet}|${agent.uptime ?? ''}|${ctxRound}|${agent.contextRotDetected ?? ''}`
     if (ws.lastStateFingerprint === fp) {
       ws.state = agent
       return
@@ -426,6 +477,22 @@ export class OfficeWorkstations {
       }
     }
 
+    // ── Thinking dots — best-of-N solver animation ────────────────────────
+    {
+      const podLines = this.host.getPodLines()
+      const agentId = agent.config.id
+      const solverPod = podLines.find(
+        t => t.solverAgentId === agentId && t.status === 'solving' && (t.candidates ?? 0) > 1,
+      )
+      if (solverPod && isWorking && !ws.thinkingDotsContainer) {
+        this.animator.showThinkingDots(ws, solverPod.candidates!)
+      } else if (solverPod?.candidateSelected && ws.thinkingDotsContainer && !ws.thinkingMergeTween) {
+        this.animator.playThinkingMerge(ws)
+      } else if (!solverPod && ws.thinkingDotsContainer) {
+        this.animator.hideThinkingDots(ws)
+      }
+    }
+
     // ── MVP medal indicator ──────────────────────────────────────────────────
     if (ws.mvpMedal) {
       const isMVP = leaderboardManager.isMVP(agent.config.id)
@@ -472,6 +539,63 @@ export class OfficeWorkstations {
         this.scene.tweens.add({
           targets: ws.rivalryIndicator, alpha: 0, duration: 200, ease: 'Sine.easeOut',
           onComplete: () => { ws.rivalryIndicator?.setVisible(false) },
+        })
+      }
+    }
+
+    // ── OpenClaw/NemoClaw supervision badge ──────────────────────────────────
+    if (ws.openclawBadge) {
+      const oc = agent.openclaw
+      if (oc?.supervised) {
+        // Set color: cyan tint for OpenClaw, green tint for NemoClaw
+        const tint = oc.runtime === 'nemoclaw' ? 0x22c55e : 0x06b6d4
+        ws.openclawBadge.setTint(tint)
+        if (!ws.openclawBadge.visible) {
+          ws.openclawBadge.setVisible(true).setAlpha(0)
+          this.scene.tweens.add({ targets: ws.openclawBadge, alpha: 0.85, duration: 300, ease: 'Back.easeOut' })
+          // Gentle pulse
+          if (!ws.openclawBadgeTween) {
+            ws.openclawBadgeTween = this.scene.tweens.add({
+              targets: ws.openclawBadge,
+              scaleX: { from: 0.26, to: 0.30 },
+              scaleY: { from: 0.26, to: 0.30 },
+              duration: 2000,
+              yoyo: true,
+              repeat: -1,
+              ease: 'Sine.easeInOut',
+            })
+          }
+        }
+      } else if (ws.openclawBadge.visible) {
+        ws.openclawBadgeTween?.destroy(); ws.openclawBadgeTween = undefined
+        this.scene.tweens.add({
+          targets: ws.openclawBadge, alpha: 0, duration: 200, ease: 'Sine.easeOut',
+          onComplete: () => { ws.openclawBadge?.setVisible(false) },
+        })
+      }
+    }
+
+    // ── Parse error warning badge ──────────────────────────────────────────
+    if (ws.errorBadge) {
+      const hasErrors = (agent.parseErrors ?? 0) > 0
+      if (hasErrors && !ws.errorBadge.visible) {
+        ws.errorBadge.setVisible(true).setAlpha(0)
+        this.scene.tweens.add({ targets: ws.errorBadge, alpha: 0.8, duration: 250, ease: 'Power2' })
+        if (!ws.errorBadgeTween) {
+          ws.errorBadgeTween = this.scene.tweens.add({
+            targets: ws.errorBadge,
+            alpha: { from: 0.8, to: 0.3 },
+            duration: 800,
+            yoyo: true,
+            repeat: -1,
+            ease: 'Sine.easeInOut',
+          })
+        }
+      } else if (!hasErrors && ws.errorBadge.visible) {
+        ws.errorBadgeTween?.destroy(); ws.errorBadgeTween = undefined
+        this.scene.tweens.add({
+          targets: ws.errorBadge, alpha: 0, duration: 200, ease: 'Sine.easeOut',
+          onComplete: () => { ws.errorBadge?.setVisible(false) },
         })
       }
     }
@@ -572,6 +696,12 @@ export class OfficeWorkstations {
 
     this.updateAnimation(ws, agent)
     this.updateMood(ws, agent)
+
+    // Streak flame — check on every sync so external streak resets are caught
+    this.animator.updateStreakFlame(ws, agent)
+
+    // Eval glow — update color from cached eval data (refreshes every 30s)
+    this.animator.updateEvalGlow(ws)
 
     // XP progress bar — update fill percentage and rank label
     if (ws.xpBar && ws.xpBarText && agent.xp) {
@@ -674,8 +804,9 @@ export class OfficeWorkstations {
 
             // Instant cosmetic refresh — destroy and re-create workstation
             // so newly unlocked rank-gated items appear immediately
+            const capturedRoom = room
             this.scene.time.delayedCall(600, () => {
-              const refreshRoom = this.host.getRooms().get(roomKey)
+              const refreshRoom = capturedRoom
               if (refreshRoom && refreshRoom.workstations.has(agent.config.id)) {
                 this.destroyWorkstation(ws)
                 const newWs = this.createWorkstation(refreshRoom, agent)
@@ -838,6 +969,66 @@ export class OfficeWorkstations {
           duration: 400,
           onComplete: () => { try { sparkle.destroy() } catch { /* gone */ } },
         })
+      }
+    }
+
+    // ── Context utilization meter ────────────────────────────────────────────
+    if (ws.contextMeter) {
+      const utilization = agent.contextUtilization
+      if (utilization == null) {
+        ws.contextMeter.setVisible(false)
+      } else {
+        ws.contextMeter.setVisible(true)
+        ws.contextMeter.setPercent(utilization, true)
+
+        // Color threshold: green → amber → red
+        const fillColor = utilization >= CTX_THRESHOLD_RED
+          ? CTX_RED
+          : utilization >= CTX_THRESHOLD_AMBER
+            ? CTX_AMBER
+            : CTX_GREEN
+        ws.contextMeter.setFillColor(fillColor)
+        ws.contextMeter.graphics.setAlpha(0.6)
+
+        const rotDetected = agent.contextRotDetected === true
+        const prevRot = ws.lastContextRotState ?? false
+
+        if (rotDetected) {
+          // Pulsing red on the meter
+          if (!ws.contextMeterPulseTween || !ws.contextMeterPulseTween.isPlaying()) {
+            ws.contextMeterPulseTween?.destroy()
+            ws.contextMeterPulseTween = this.scene.tweens.add({
+              targets: ws.contextMeter.graphics,
+              alpha: { from: 0.4, to: 1.0 },
+              duration: 600,
+              yoyo: true,
+              repeat: -1,
+              ease: 'Sine.easeInOut',
+            })
+          }
+          // Subtle monitor shake — only on transition false→true
+          if (!prevRot && ws.monitorSprite) {
+            ws.contextRotShakeTween?.destroy()
+            const origX = ws.monitorSprite.x
+            ws.contextRotShakeTween = this.scene.tweens.add({
+              targets: ws.monitorSprite,
+              x: { from: origX - 1, to: origX + 1 },
+              duration: 80,
+              yoyo: true,
+              repeat: 3,
+              ease: 'Sine.easeInOut',
+              onComplete: () => { if (ws.monitorSprite?.active) ws.monitorSprite.setX(origX) },
+            })
+          }
+        } else {
+          // Rot cleared — kill pulse, restore alpha
+          if (ws.contextMeterPulseTween) {
+            ws.contextMeterPulseTween.destroy()
+            ws.contextMeterPulseTween = undefined
+            ws.contextMeter.graphics.setAlpha(0.6)
+          }
+        }
+        ws.lastContextRotState = rotDetected
       }
     }
   }

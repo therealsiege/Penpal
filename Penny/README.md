@@ -308,6 +308,46 @@ All IPC calls go through `window.api.*`. Each handler uses `wrapHandler` which c
 
 </details>
 
+## MCP Server
+
+Penny exposes an MCP (Model Context Protocol) server so Claude sessions can programmatically discover and invoke Penny's capabilities.
+
+### Available Tools
+
+- **`meta:list-tools`** — Returns all registered tools with names, descriptions, and input schemas
+- **`meta:describe-tool`** — Returns the full schema for a specific tool by name
+
+### Start the Server
+
+```bash
+npm run mcp:start
+```
+
+The server uses stdio transport — stdout is reserved for the MCP protocol, logs go to stderr.
+
+### Connect Claude Sessions
+
+Add this to your `.mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "penny-mcp": {
+      "command": "npm",
+      "args": ["run", "--prefix", "Penny", "mcp:start"]
+    }
+  }
+}
+```
+
+### Future Tool Groups
+
+- **orchestrator** — task queue, dispatch, agent health
+- **pods** — solver/reviewer/executor workflows
+- **office** — game state, workstations, cosmetics
+- **vault** — file operations, search, graph queries
+- **graph** — Memgraph/Qdrant knowledge graph queries
+
 ## macOS Notes
 
 - `titleBarStyle: hiddenInset` with custom traffic light offset
