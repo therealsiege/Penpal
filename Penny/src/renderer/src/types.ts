@@ -359,10 +359,14 @@ export interface PodWorkflow {
   selfEvaluation?: SelfEvalResult
   solverCandidateCount: number
   critique?: ReviewerCritique
+  pendingReviewerFeedback?: string
   selfFixAttempts: number
   maxSelfFixes: number
   priority?: string
   phaseConfig?: { candidates: number; selfEvaluation: boolean; confidenceThreshold: number; maxSelfFixes: number }
+  presetId?: string
+  lastExecutorPassed?: boolean
+  qualityRecorded?: boolean
   createdAt: number
   updatedAt: number
   error?: string
