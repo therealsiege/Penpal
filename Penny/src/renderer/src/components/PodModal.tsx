@@ -89,7 +89,7 @@ export function PodLauncherModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 animate-backdrop-fade-in" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 backdrop-blur-[2px] animate-backdrop-fade-in" onClick={onClose}>
       <div className="bg-[#0c1018] border border-[#2a3440] rounded-xl p-5 w-[560px] shadow-2xl max-h-[85vh] overflow-y-auto animate-modal-scale-in" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-4">
           <div>
@@ -289,7 +289,7 @@ export function PodStatusModal({
   const isActive = !['complete', 'failed'].includes(wf.status)
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 animate-backdrop-fade-in" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 backdrop-blur-[2px] animate-backdrop-fade-in" onClick={onClose}>
       <div className="bg-[#0c1018] border border-[#2a3440] rounded-xl p-5 w-[680px] shadow-2xl max-h-[85vh] overflow-y-auto animate-modal-scale-in" onClick={e => e.stopPropagation()}>
         {/* Header */}
         <div className="flex items-center justify-between mb-4">
@@ -482,7 +482,7 @@ export function PodListModal({
   const list = workflows ?? []
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 animate-backdrop-fade-in" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 backdrop-blur-[2px] animate-backdrop-fade-in" onClick={onClose}>
       <div className="bg-[#0c1018] border border-[#2a3440] rounded-xl p-5 w-[520px] shadow-2xl max-h-[70vh] overflow-y-auto animate-modal-scale-in" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-[15px] font-bold text-white">Pod Workflows</h3>

@@ -1,16 +1,17 @@
 /**
  * OfficeScene Color Theme System
  *
- * Three themes: Dark (current slate), Light (bright office), Neon (cyberpunk)
+ * Two themes: Dark (FF7 Midgar industrial) and Light (bright office).
+ * Press T in-game to toggle.
  *
  * Usage:
  *   import { activeTheme, THEMES, setActiveTheme, lerpColor, ThemeName } from './office-theme'
  *
- *   // In OfficeScene, replace hardcoded colors like COLOR_BG with activeTheme.bg
- *   // Call setActiveTheme('neon') then redraw everything
+ *   // All rendering code references activeTheme.x — no hardcoded hex values.
+ *   // Call setActiveTheme('light') then trigger redraw.
  */
 
-export type ThemeName = 'dark' | 'light' | 'neon'
+export type ThemeName = 'dark' | 'light'
 
 export interface OfficeTheme {
   // Scene background
@@ -173,54 +174,6 @@ export const THEMES: Record<ThemeName, OfficeTheme> = {
     shadowDark: 0xe2e8f0,
   },
 
-  // ---- NEON (cyberpunk) ----
-  neon: {
-    bg: 0x0a0a1a,
-    roomFloor: 0x1a1a3e,
-    roomFloor2: 0x15152e,
-    wall: 0x2d1b69,
-    wallInner: 0x3b1f8e,
-    deskBody: 0x1a1a3e,
-    deskTop: 0x2d2d5e,
-    headerBg: 0x0d0d24,
-    doorFrame: 0xff00ff,
-    officeFloor: 0x08081a,
-    officeGrid: 0x1a0a3a,
-    rugFill: 0x1a0040,
-    rugStroke: 0xff00ff,
-    headerText: '#e0b0ff',
-    badgeText: '#a78bfa',
-    badgeBg: '#1a0a3a',
-    nameText: '#e0b0ff',
-    nameBg: '#0a0a1acc',
-    tooltipBg: 0x0d0d24,
-    tooltipStroke: 0xff00ff,
-    tooltipText: '#e0b0ff',
-    panelBg: 0x0d0d24,
-    panelStroke: 0xff00ff,
-    separator: 0x2d1b69,
-    accentText: '#a78bfa',
-    subtleText: '#8b7abf',
-    monitorGlowActive: 0x00ffff,
-    monitorGlowIdle: 0xff00ff,
-    thoughtDefault: 0x6b21a8,
-    thoughtWorking: 0x00ff88,
-    thoughtPlan: 0xff00ff,
-    thoughtAcceptEdits: 0x00ffff,
-    deskStrokeIdle: 0x6b21a8,
-    deskStrokeWorking: 0x00ff88,
-    deskStrokeWaiting: 0xff6600,
-    deskStrokeHover: 0x00ffff,
-    particleColors: [0x00ffff, 0xff00ff, 0x00ff88],
-    screenLineColors: [0x00ffff, 0xff00ff],
-    lampMetal: 0x6b21a8,
-    lampShade: 0xff00ff,
-    mugBody: 0x00ffff,
-    mugHandle: 0x0088aa,
-    fogColor: 0x15152e,
-    ventFill: 0x1a0a3a,
-    shadowDark: 0x0a0a1a,
-  },
 }
 
 /** The currently active theme — mutated by setActiveTheme() */

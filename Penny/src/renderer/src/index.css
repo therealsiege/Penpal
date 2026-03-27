@@ -18,6 +18,13 @@
   --editor-font-family: ui-monospace, 'SF Mono', 'Cascadia Code', 'Fira Code', Menlo, monospace;
   --editor-font-size: 16px;
   --editor-line-height: 1.6;
+  /* PenPal shell — sidebar + chrome (use for one-off inline styles when needed) */
+  --penpal-bg-deep: #080a0e;
+  --penpal-bg-panel: #0c1018;
+  --penpal-accent: #00ff88;
+  --penpal-accent-soft: rgba(0, 255, 136, 0.14);
+  --penpal-border: #1e2838;
+  --penpal-muted: #5a6a7a;
 }
 
 html, body {
@@ -55,13 +62,18 @@ body::after {
   inset: 0;
   pointer-events: none;
   z-index: 9999;
+  /* Slightly lighter than before — less GPU cost on low-end machines */
   background: repeating-linear-gradient(
     to bottom,
     transparent 0px,
     transparent 6px,
-    rgba(0, 0, 0, 0.02) 6px,
-    rgba(0, 0, 0, 0.02) 7px
+    rgba(0, 0, 0, 0.012) 6px,
+    rgba(0, 0, 0, 0.012) 7px
   );
+}
+
+html.penpal-no-scanlines body::after {
+  display: none;
 }
 
 /* ── CRT vignette ──────────────────────────────────────────────────────────── */
@@ -72,11 +84,14 @@ body::before {
   inset: 0;
   pointer-events: none;
   z-index: 9998;
-  background: radial-gradient(
-    ellipse at center,
-    transparent 70%,
-    rgba(0, 0, 0, 0.12) 100%
-  );
+  background:
+    radial-gradient(ellipse at center, transparent 68%, rgba(0, 0, 0, 0.13) 100%),
+    radial-gradient(ellipse 100% 90% at 0% 40%, rgba(0, 255, 136, 0.028), transparent 42%),
+    radial-gradient(ellipse 80% 70% at 100% 85%, rgba(0, 229, 255, 0.022), transparent 48%);
+}
+
+html.penpal-no-vignette body::before {
+  display: none;
 }
 
 /* ── Scrollbars — dark pixel style ────────────────────────────────────────── */
@@ -91,12 +106,12 @@ body::before {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #1e3a5f;
+  background: linear-gradient(180deg, rgba(30, 58, 74, 0.95), rgba(12, 20, 32, 0.98));
   border-radius: 0;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #2563eb;
+  background: linear-gradient(180deg, rgba(0, 255, 136, 0.35), rgba(30, 58, 74, 0.95));
 }
 
 /* ── Line clamp ────────────────────────────────────────────────────────────── */
@@ -445,7 +460,7 @@ body::before {
 }
 
 @keyframes cp-border-pulse {
-  0%, 100% { border-left-color: #3b82f6; }
+  0%, 100% { border-left-color: #00ff88; }
   50%       { border-left-color: #00e5ff; }
 }
 
@@ -463,8 +478,101 @@ body::before {
 }
 
 .cp-border-pulse {
-  border-left: 2px solid #3b82f6;
+  border-left: 2px solid #00ff88;
   animation: cp-border-pulse 1.4s ease-in-out infinite;
+}
+
+/* Command palette — outer glow + edge definition */
+.cp-shell {
+  box-shadow:
+    0 0 0 1px rgba(42, 52, 64, 0.55),
+    0 32px 96px -28px rgba(0, 0, 0, 0.72),
+    0 0 72px -36px rgba(0, 255, 136, 0.14);
+}
+
+/* Main content: depth + top light so Phaser / panels feel like a viewport */
+.app-main-chrome {
+  box-shadow:
+    inset 0 0 0 1px rgba(55, 65, 81, 0.38),
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.055),
+    inset 0 -1px 0 0 rgba(0, 0, 0, 0.25),
+    0 28px 56px -32px rgba(0, 0, 0, 0.72),
+    0 0 0 1px rgba(0, 0, 0, 0.42);
+  background:
+    radial-gradient(ellipse 95% 48% at 50% -18%, rgba(0, 255, 136, 0.085), transparent 58%),
+    radial-gradient(ellipse 55% 35% at 100% 100%, rgba(0, 229, 255, 0.045), transparent 52%),
+    linear-gradient(168deg, #04070c 0%, #080b10 36%, #05070b 100%);
+}
+
+/* Office panel status strip — HUD-style bar */
+.office-status-hud {
+  background:
+    linear-gradient(90deg, rgba(0, 255, 136, 0.04) 0%, transparent 38%, rgba(0, 229, 255, 0.03) 100%),
+    linear-gradient(180deg, #0c1118 0%, #0a0e14 55%, #090d12 100%);
+  border-bottom: 1px solid rgba(30, 40, 56, 0.95);
+  box-shadow:
+    inset 0 -1px 0 0 rgba(0, 255, 136, 0.09),
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.035);
+}
+
+/* Sidebar: ambient light (no extra DOM) */
+.shell-sidebar {
+  position: relative;
+  isolation: isolate;
+}
+.shell-sidebar::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background:
+    radial-gradient(ellipse 100% 55% at 50% -25%, rgba(0, 255, 136, 0.11), transparent 52%),
+    radial-gradient(ellipse 70% 50% at 100% 100%, rgba(232, 184, 75, 0.06), transparent 45%),
+    linear-gradient(165deg, rgba(12, 16, 24, 0.4) 0%, transparent 45%);
+}
+
+/* Main column: hairline glow where it meets the rail */
+.shell-main {
+  position: relative;
+  isolation: isolate;
+}
+.shell-main::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  pointer-events: none;
+  z-index: 2;
+  background: linear-gradient(
+    180deg,
+    transparent 0%,
+    rgba(0, 255, 136, 0.14) 35%,
+    rgba(0, 229, 255, 0.08) 65%,
+    transparent 100%
+  );
+  opacity: 0.85;
+}
+
+/* Refined scrollbars in nav rails */
+.scrollbar-penpal {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(42, 52, 64, 0.9) transparent;
+}
+.scrollbar-penpal::-webkit-scrollbar {
+  width: 5px;
+}
+.scrollbar-penpal::-webkit-scrollbar-track {
+  background: transparent;
+}
+.scrollbar-penpal::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, rgba(0, 255, 136, 0.15), rgba(42, 52, 64, 0.8));
+  border-radius: 100px;
+}
+.scrollbar-penpal::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, rgba(0, 255, 136, 0.35), rgba(55, 65, 81, 0.9));
 }
 
 /* ── Vault Panel — 130% base font ──────────────────────────────────────── */

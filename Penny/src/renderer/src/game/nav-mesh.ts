@@ -70,7 +70,7 @@ export class NavMesh {
     this.grid = Array.from({ length: this.gridH }, () => new Array(this.gridW).fill(false))
 
     // 1. Corridors — mark walkable hallway segments
-    const CORR_W = 32 // walkable width for corridors (pixels)
+    const CORR_W = 48 // walkable width for corridors (matches sidewalk visual: HALL_H*3=36 + margin)
     const CORR_PAD = 6 // extra length past endpoints
     for (const seg of config.corridorSegments) {
       const dx = Math.abs(seg.x1 - seg.x2)
@@ -114,7 +114,7 @@ export class NavMesh {
         }
       }
       if (nearestDist < Infinity && nearestDist > 0) {
-        const pathWidth = 32
+        const pathWidth = 48
         const minY = Math.min(nearestY, cafeCY)
         const maxY = Math.max(nearestY, cafeCY)
         const minX = Math.min(nearestX, cafeCX)

@@ -16,7 +16,7 @@ export function ActivityModal({ onClose }: ActivityModalProps) {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm animate-backdrop-fade-in"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 backdrop-blur-[2px] animate-backdrop-fade-in"
       onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
     >
       <div className="bg-[#0c1018] border border-[#2a3440] rounded-xl shadow-2xl w-[820px] max-h-[85vh] overflow-hidden flex flex-col animate-modal-scale-in">

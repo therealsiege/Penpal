@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 
-export type ThemeName = 'dark' | 'light' | 'neon'
+export type ThemeName = 'dark' | 'light'
 
 export interface AppearanceState {
   theme: ThemeName
@@ -10,6 +10,10 @@ export interface AppearanceState {
   editorFontSize: number
   editorLineHeight: number
   zoom: number
+  /** Subtle horizontal scanline overlay (body::after). */
+  scanlinesOverlay: boolean
+  /** CRT-style edge darkening + color wash (body::before). */
+  crtVignette: boolean
 
   setTheme: (theme: ThemeName) => void
   toggleTheme: () => void
@@ -22,6 +26,8 @@ export interface AppearanceState {
   zoomIn: () => void
   zoomOut: () => void
   zoomReset: () => void
+  setScanlinesOverlay: (v: boolean) => void
+  setCrtVignette: (v: boolean) => void
 }
 
 const STORAGE_KEY = 'sidekick-appearance'
@@ -44,6 +50,8 @@ function persist(state: AppearanceState) {
       editorFontSize: state.editorFontSize,
       editorLineHeight: state.editorLineHeight,
       zoom: state.zoom,
+      scanlinesOverlay: state.scanlinesOverlay,
+      crtVignette: state.crtVignette,
     }))
   } catch { /* ignore */ }
 }
@@ -51,7 +59,8 @@ function persist(state: AppearanceState) {
 function applyToDOM(state: AppearanceState) {
   const root = document.documentElement
   root.classList.toggle('light-theme', state.theme === 'light')
-  root.classList.toggle('neon-theme', state.theme === 'neon')
+  root.classList.toggle('penpal-no-scanlines', !state.scanlinesOverlay)
+  root.classList.toggle('penpal-no-vignette', !state.crtVignette)
   root.style.setProperty('--ui-font-family', state.uiFontFamily)
   root.style.setProperty('--ui-font-size', `${state.uiFontSize}px`)
   root.style.setProperty('--editor-font-family', state.editorFontFamily)
@@ -63,13 +72,19 @@ function applyToDOM(state: AppearanceState) {
 const saved = loadPersisted()
 
 const defaults = {
-  theme: (['dark', 'light', 'neon'].includes(saved.theme as string) ? saved.theme as ThemeName : 'dark'),
+  theme: (['dark', 'light'].includes(saved.theme as string) ? saved.theme as ThemeName : 'dark'),
   uiFontFamily: saved.uiFontFamily || "-apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif",
   uiFontSize: saved.uiFontSize || 15,
   editorFontFamily: saved.editorFontFamily || "ui-monospace, 'SF Mono', 'Cascadia Code', 'Fira Code', Menlo, monospace",
   editorFontSize: saved.editorFontSize || 15,
   editorLineHeight: saved.editorLineHeight || 1.6,
   zoom: saved.zoom || 1.0,
+  scanlinesOverlay: typeof (saved as { scanlinesOverlay?: boolean }).scanlinesOverlay === 'boolean'
+    ? (saved as { scanlinesOverlay: boolean }).scanlinesOverlay
+    : true,
+  crtVignette: typeof (saved as { crtVignette?: boolean }).crtVignette === 'boolean'
+    ? (saved as { crtVignette: boolean }).crtVignette
+    : true,
 }
 
 const ZOOM_STEP = 0.1
@@ -106,5 +121,7 @@ export const useAppearanceStore = create<AppearanceState>((set, get) => {
       update({ zoom: next })
     },
     zoomReset: () => update({ zoom: 1.0 }),
+    setScanlinesOverlay: (scanlinesOverlay) => update({ scanlinesOverlay }),
+    setCrtVignette: (crtVignette) => update({ crtVignette }),
   }
 })

@@ -79,10 +79,10 @@ export function EditorPane() {
 
   if (tabs.length === 0) {
     return (
-      <div className="flex items-center justify-center h-full text-slate-600">
+      <div className="flex items-center justify-center h-full text-[#4a5c6e]">
         <div className="text-center">
           <div className="text-2xl mb-2">Select a file</div>
-          <div className="text-sm text-slate-700">Click to preview, double-click to edit</div>
+          <div className="text-sm text-[#5a6a7a]">Click to preview, double-click to edit</div>
         </div>
       </div>
     )
@@ -95,8 +95,8 @@ export function EditorPane() {
       <EditorTabs />
 
       {activeTab && (
-        <div className="shrink-0 flex items-center justify-between px-3 py-1.5 border-b border-slate-800/60 bg-slate-900/40">
-          <div className="text-sm text-slate-500 truncate mr-4">{activeTab.path}</div>
+        <div className="shrink-0 flex items-center justify-between px-3 py-1.5 border-b border-[#2a3440]/60 bg-[#0c1018]/40">
+          <div className="text-sm text-[#5a6a7a] truncate mr-4">{activeTab.path}</div>
           <div className="flex items-center gap-2 shrink-0">
             <TemplateInserter onInsert={(content) => { if (activeTabId && activeTab?.content != null) setDirty(activeTabId, true, activeTab.content + '\n' + content) }} />
             <div className="flex items-center gap-1">
@@ -106,8 +106,8 @@ export function EditorPane() {
                 onClick={() => setViewMode(mode)}
                 className={`px-2 py-0.5 text-xs rounded transition-colors ${
                   viewMode === mode
-                    ? 'bg-blue-600/30 text-blue-300'
-                    : 'text-slate-500 hover:text-slate-300'
+                    ? 'bg-[#00ff88]/12 text-[#00e5ff]'
+                    : 'text-[#5a6a7a] hover:text-[#c4ccd6]'
                 }`}
               >
                 {mode === 'source' ? 'Edit' : 'Preview'}
@@ -139,7 +139,7 @@ export function EditorPane() {
                 </ReactMarkdown>
               </div>
             ) : (
-              <pre className="text-xs text-slate-300 font-mono whitespace-pre-wrap break-words">
+              <pre className="text-xs text-[#c4ccd6] font-mono whitespace-pre-wrap break-words">
                 {activeTab.content}
               </pre>
             )}
