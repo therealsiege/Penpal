@@ -125,7 +125,7 @@ export class AtmosphereLighting {
   tickCeilingLightActivity(
     time: number,
     ceilingLights: Phaser.GameObjects.Container[],
-    rooms: Map<string, { workstations: Map<string, { state: { sessionMode: string; needsInteraction: boolean } | null }> }>,
+    rooms: Map<string, { workstations: Map<string, { state: { sessionMode?: string; needsInteraction?: boolean } | null }> }>,
   ): void {
     if (ceilingLights.length === 0 || time - this.lastLightCheckAt < 5000) return
     this.lastLightCheckAt = time

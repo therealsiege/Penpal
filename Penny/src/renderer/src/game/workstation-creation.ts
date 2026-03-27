@@ -5,7 +5,7 @@
 // ---------------------------------------------------------------------------
 
 import Phaser from 'phaser'
-import { SPRITESHEET_KEYS, ICON_FRAMES, ITEM_FRAMES, STATUS_DOT_FRAMES, LEGO_FRAMES, PET_COUNT, PET_FACE_FRAMES, EFFECT_ANIM_KEYS, IMAGE_KEYS } from './office-asset-keys'
+import { SPRITESHEET_KEYS, ICON_FRAMES, ITEM_FRAMES, STATUS_DOT_FRAMES, LEGO_FRAMES, PET_COUNT, PET_FACE_FRAMES, EFFECT_ANIM_KEYS, IMAGE_KEYS, ANIMAL_SPECIES, ANIMAL_COUNT, ANIMAL_IDLE_FRAMES, MEDAL_HD_FRAMES } from './office-asset-keys'
 import { fadeInUp, fadeOutDown, pulse } from './juice-utils'
 import { EventBus, EVENTS } from './events'
 import type { AgentState } from '../types'
@@ -27,6 +27,14 @@ import {
   WS_DOT_GAP,
   COLOR_DESK_BODY,
   COLOR_DESK_TOP,
+  EVAL_GLOW_GREY,
+  EVAL_GLOW_RADIUS,
+  EVAL_GLOW_ALPHA_MIN,
+  EVAL_GLOW_ALPHA_MAX,
+  EVAL_GLOW_PULSE_DURATION,
+  CTX_METER_W,
+  CTX_METER_H,
+  CTX_GREEN,
 } from './office-constants'
 import type { WorkstationHost } from './office-workstation'
 import { isDeskItemUnlocked, isFlairUnlocked, getRankColor } from './cosmetic-tiers'
@@ -144,6 +152,10 @@ export class WorkstationFactory {
       wsContainer.add(this.scene.add.rectangle(0, WS_CHAIR_Y, 18, 13, activeTheme.deskBody).setStrokeStyle(1, activeTheme.deskTop, 0.6))
     }
 
+    // Eval glow arc — rendered behind desk via painter's order
+    const evalGlow = this.scene.add.arc(0, WS_DESK_Y, EVAL_GLOW_RADIUS, 0, 360, false, EVAL_GLOW_GREY, 0.15)
+    wsContainer.add(evalGlow)
+
     const deskBody = this.scene.add.rectangle(0, WS_DESK_Y, 80, 21, COLOR_DESK_BODY).setStrokeStyle(1, activeTheme.deskStrokeIdle, 0.5)
     wsContainer.add(deskBody)
 
@@ -173,7 +185,7 @@ export class WorkstationFactory {
         onUpdate: (tw) => {
           if (!screenLines?.active) return
           screenLines.clear()
-          const v = tw.getValue()
+          const v = tw.getValue() ?? 0
           const mode = screenState.mode
 
           if (mode === 'plan') {
@@ -305,7 +317,7 @@ export class WorkstationFactory {
     }
 
     // Desk plant (unlocks at Lead / L6)
-    let deskPlantLeaf: Phaser.GameObjects.Arc | null = null
+    let deskPlantLeaf: Phaser.GameObjects.Sprite | Phaser.GameObjects.Arc | null = null
     if (isDeskItemUnlocked(agentLevel, 'plant')) {
       const plX = nameHash % 2 === 0 ? -16 : 16
       const pot = this.scene.add.rectangle(plX, WS_DESK_Y - 2, 5, 4, activeTheme.deskTop, 0.7)
@@ -316,37 +328,57 @@ export class WorkstationFactory {
       deskPlantLeaf = leaf
     }
 
-    // Desk pet (unlocks at Senior / L5) — composable monster body sprite
+    // Desk pet (unlocks at Senior / L5) — animated animal pet or composable monster fallback
     let deskPet: Phaser.GameObjects.Sprite | null = null
     let petEyes: Phaser.GameObjects.Sprite | null = null
     let petMouth: Phaser.GameObjects.Sprite | null = null
+    let animalSpecies: string | undefined
     if (isDeskItemUnlocked(agentLevel, 'pet')) {
-      const petFrame = nameHash % PET_COUNT
       const petX = 28
-      deskPet = this.scene.add.sprite(petX, WS_DESK_Y - 6, SPRITESHEET_KEYS.DESK_PETS, petFrame)
-        .setScale(0.42)
-        .setAlpha(0.9)
-      wsContainer.add(deskPet)
-      extraDecos.push(deskPet)
+      const hasAnimalPets = this.scene.textures.exists(SPRITESHEET_KEYS.ANIMAL_PETS)
 
-      // Pet face — eyes and mouth overlaid on the body
-      if (this.scene.textures.exists(SPRITESHEET_KEYS.DESK_PET_FACES)) {
-        const eyeVariants = [PET_FACE_FRAMES.EYES_CUTE, PET_FACE_FRAMES.EYES_WIDE, PET_FACE_FRAMES.EYES_CUTE, PET_FACE_FRAMES.EYES_SLEEPY]
-        const mouthVariants = [PET_FACE_FRAMES.MOUTH_HAPPY, PET_FACE_FRAMES.MOUTH_O, PET_FACE_FRAMES.MOUTH_HAPPY, PET_FACE_FRAMES.MOUTH_GRIN]
-        const eyeFrame = eyeVariants[nameHash % eyeVariants.length]
-        const mouthFrame = mouthVariants[(nameHash >> 2) % mouthVariants.length]
+      if (hasAnimalPets) {
+        // Animated animal pet — deterministic species from name hash
+        const speciesIdx = nameHash % ANIMAL_COUNT
+        animalSpecies = ANIMAL_SPECIES[speciesIdx]
+        const animKey = `animal-idle-${animalSpecies}`
+        const startFrame = speciesIdx * ANIMAL_IDLE_FRAMES
+        deskPet = this.scene.add.sprite(petX, WS_DESK_Y - 8, SPRITESHEET_KEYS.ANIMAL_PETS, startFrame)
+          .setScale(0.22)
+          .setAlpha(0.9)
+        if (this.scene.anims.exists(animKey)) {
+          deskPet.play(animKey)
+        }
+        wsContainer.add(deskPet)
+        extraDecos.push(deskPet)
+      } else {
+        // Fallback: composable monster body sprite
+        const petFrame = nameHash % PET_COUNT
+        deskPet = this.scene.add.sprite(petX, WS_DESK_Y - 6, SPRITESHEET_KEYS.DESK_PETS, petFrame)
+          .setScale(0.42)
+          .setAlpha(0.9)
+        wsContainer.add(deskPet)
+        extraDecos.push(deskPet)
 
-        petEyes = this.scene.add.sprite(petX, WS_DESK_Y - 8, SPRITESHEET_KEYS.DESK_PET_FACES, eyeFrame)
-          .setScale(0.65)
-          .setAlpha(0.95)
-        wsContainer.add(petEyes)
-        extraDecos.push(petEyes)
+        // Pet face — eyes and mouth overlaid on the body
+        if (this.scene.textures.exists(SPRITESHEET_KEYS.DESK_PET_FACES)) {
+          const eyeVariants = [PET_FACE_FRAMES.EYES_CUTE, PET_FACE_FRAMES.EYES_WIDE, PET_FACE_FRAMES.EYES_CUTE, PET_FACE_FRAMES.EYES_SLEEPY]
+          const mouthVariants = [PET_FACE_FRAMES.MOUTH_HAPPY, PET_FACE_FRAMES.MOUTH_O, PET_FACE_FRAMES.MOUTH_HAPPY, PET_FACE_FRAMES.MOUTH_GRIN]
+          const eyeFrame = eyeVariants[nameHash % eyeVariants.length]
+          const mouthFrame = mouthVariants[(nameHash >> 2) % mouthVariants.length]
 
-        petMouth = this.scene.add.sprite(petX, WS_DESK_Y - 5, SPRITESHEET_KEYS.DESK_PET_FACES, mouthFrame)
-          .setScale(0.65)
-          .setAlpha(0.95)
-        wsContainer.add(petMouth)
-        extraDecos.push(petMouth)
+          petEyes = this.scene.add.sprite(petX, WS_DESK_Y - 8, SPRITESHEET_KEYS.DESK_PET_FACES, eyeFrame)
+            .setScale(0.65)
+            .setAlpha(0.95)
+          wsContainer.add(petEyes)
+          extraDecos.push(petEyes)
+
+          petMouth = this.scene.add.sprite(petX, WS_DESK_Y - 5, SPRITESHEET_KEYS.DESK_PET_FACES, mouthFrame)
+            .setScale(0.65)
+            .setAlpha(0.95)
+          wsContainer.add(petMouth)
+          extraDecos.push(petMouth)
+        }
       }
     }
 
@@ -408,7 +440,7 @@ export class WorkstationFactory {
     // LOD level 2+: shown at room-level zoom (sprite, desk body/top, monitor, chair are always visible at L2+;
     // these extras add context at the room-view scale without requiring full detail)
     const lodLevel2Objects: Phaser.GameObjects.GameObject[] = [
-      keyboard, kbLines, sticky,
+      keyboard, kbLines, sticky, evalGlow,
     ]
     // LOD level 3 only: micro-accessories only visible at full detail zoom
     const lodLevel3Objects: Phaser.GameObjects.GameObject[] = [
@@ -476,7 +508,7 @@ export class WorkstationFactory {
 
     // Show persona name (e.g. "Marcus Chen") instead of title
     const nameText = this.scene.add.text(0, WS_NAME_Y, '', {
-      fontSize: '13px', color: activeTheme.nameText, fontFamily: 'system-ui, sans-serif',
+      fontSize: '13px', color: activeTheme.nameText, fontFamily: "'Monogram', system-ui, monospace",
       backgroundColor: activeTheme.nameBg, padding: { x: 5, y: 2 }, align: 'center',
       resolution: 2,
     }).setOrigin(0.5).setVisible(false)
@@ -489,13 +521,20 @@ export class WorkstationFactory {
     }
 
     // Crown accessory (unlocks at Expert / L7) — gold medal sprite
-    // Use HD sheet (2x pixels at half scale) when available for crisper LOD3 rendering
+    // Prefer HD medals sheet > HD icons > standard icons
+    const hdMedalsAvailable = this.scene.textures.exists(SPRITESHEET_KEYS.MEDALS_HD)
     const hdAvailable = this.scene.textures.exists(SPRITESHEET_KEYS.GAME_ICONS_HD)
     if (isFlairUnlocked(agentLevel, 'crown')) {
-      const crownSheet = hdAvailable ? SPRITESHEET_KEYS.GAME_ICONS_HD : SPRITESHEET_KEYS.GAME_ICONS
-      const crownScale = hdAvailable ? 0.16 : 0.32
-      const crown = this.scene.add.sprite(0, WS_SPRITE_Y - 28, crownSheet, ICON_FRAMES.MEDAL_GOLD)
-        .setScale(crownScale).setOrigin(0.5).setAlpha(0.9)
+      let crown: Phaser.GameObjects.Sprite
+      if (hdMedalsAvailable) {
+        crown = this.scene.add.sprite(0, WS_SPRITE_Y - 28, SPRITESHEET_KEYS.MEDALS_HD, MEDAL_HD_FRAMES.GOLD_STAR)
+          .setScale(0.12).setOrigin(0.5).setAlpha(0.9)
+      } else {
+        const crownSheet = hdAvailable ? SPRITESHEET_KEYS.GAME_ICONS_HD : SPRITESHEET_KEYS.GAME_ICONS
+        const crownScale = hdAvailable ? 0.16 : 0.32
+        crown = this.scene.add.sprite(0, WS_SPRITE_Y - 28, crownSheet, ICON_FRAMES.MEDAL_GOLD)
+          .setScale(crownScale).setOrigin(0.5).setAlpha(0.9)
+      }
       wsContainer.add(crown)
       lodLevel3Objects.push(crown)
     }
@@ -510,11 +549,17 @@ export class WorkstationFactory {
     lodLevel2Objects.push(questIcon)
 
     // MVP medal — gold medal shown for weekly MVP agent
-    // Use HD sheet (2x pixels at half scale) for crisper rendering when available
-    const mvpSheet = hdAvailable ? SPRITESHEET_KEYS.GAME_ICONS_HD : SPRITESHEET_KEYS.GAME_ICONS
-    const mvpScale = hdAvailable ? 0.19 : 0.38
-    const mvpMedal = this.scene.add.sprite(14, WS_SPRITE_Y - 30, mvpSheet, ICON_FRAMES.MEDAL_GOLD)
-      .setScale(mvpScale).setOrigin(0.5).setAlpha(0).setVisible(false)
+    // Prefer HD medals sheet > HD icons > standard icons
+    let mvpMedal: Phaser.GameObjects.Sprite
+    if (hdMedalsAvailable) {
+      mvpMedal = this.scene.add.sprite(14, WS_SPRITE_Y - 30, SPRITESHEET_KEYS.MEDALS_HD, MEDAL_HD_FRAMES.GOLD_STAR)
+        .setScale(0.14).setOrigin(0.5).setAlpha(0).setVisible(false)
+    } else {
+      const mvpSheet = hdAvailable ? SPRITESHEET_KEYS.GAME_ICONS_HD : SPRITESHEET_KEYS.GAME_ICONS
+      const mvpScale = hdAvailable ? 0.19 : 0.38
+      mvpMedal = this.scene.add.sprite(14, WS_SPRITE_Y - 30, mvpSheet, ICON_FRAMES.MEDAL_GOLD)
+        .setScale(mvpScale).setOrigin(0.5).setAlpha(0).setVisible(false)
+    }
     wsContainer.add(mvpMedal)
     lodLevel2Objects.push(mvpMedal)
 
@@ -523,6 +568,19 @@ export class WorkstationFactory {
       .setScale(0.32).setOrigin(0.5).setAlpha(0).setVisible(false)
     wsContainer.add(rivalryIndicator)
     lodLevel2Objects.push(rivalryIndicator)
+
+    // OpenClaw/NemoClaw supervision shield badge — top-left of workstation
+    // Cyan = OpenClaw supervised, Green = NemoClaw sandboxed
+    const openclawBadge = this.scene.add.sprite(-20, WS_SPRITE_Y - 30, SPRITESHEET_KEYS.GAME_ICONS, ICON_FRAMES.MEDAL_GOLD_BLUE)
+      .setScale(0.28).setOrigin(0.5).setAlpha(0).setVisible(false)
+    wsContainer.add(openclawBadge)
+    lodLevel2Objects.push(openclawBadge)
+
+    // Parse error warning badge — shown when JSONL has errors
+    const errorBadge = this.scene.add.sprite(-14, WS_SPRITE_Y - 22, SPRITESHEET_KEYS.GAME_ICONS, ICON_FRAMES.CIRCLE_RED)
+      .setScale(0.18).setOrigin(0.5).setAlpha(0).setVisible(false)
+    wsContainer.add(errorBadge)
+    lodLevel2Objects.push(errorBadge)
 
     const dotColor  = this.host.getStatusColor(agent)
     const dotFrame  = STATUS_DOT_FRAMES[dotColor] ?? ICON_FRAMES.CIRCLE_GREY
@@ -569,7 +627,7 @@ export class WorkstationFactory {
 
     const XP_TEXT_Y = XP_BAR_Y + 6
     const xpBarText = this.scene.add.text(0, XP_TEXT_Y, '', {
-      fontSize: '5px', color: '#5a6a7a', fontFamily: 'system-ui, sans-serif',
+      fontSize: '5px', color: '#5a6a7a', fontFamily: "'Monogram', monospace",
       resolution: 2, align: 'center',
     }).setOrigin(0.5).setVisible(false)
     wsContainer.add(xpBarText)
@@ -590,6 +648,21 @@ export class WorkstationFactory {
     }
 
     lodLevel3Objects.push(xpBar.graphics, xpBarText, ...legoSegments)
+
+    // Context utilization meter — small bar below XP bar text
+    const CTX_BAR_Y = XP_TEXT_Y + 8
+    const contextMeter = new AnimatedBar({
+      scene: this.scene,
+      x: -CTX_METER_W / 2,
+      y: CTX_BAR_Y - CTX_METER_H / 2,
+      width: CTX_METER_W,
+      height: CTX_METER_H,
+      fillColor: CTX_GREEN,
+      backgroundColor: activeTheme.roomFloor,
+    })
+    contextMeter.graphics.setAlpha(0.6).setVisible(false)
+    wsContainer.add(contextMeter.graphics)
+    lodLevel3Objects.push(contextMeter.graphics)
 
     // Vertical energy/stamina bar — right side of desk, shows energy drain/recovery
     const ENERGY_BAR_H = 25
@@ -612,6 +685,12 @@ export class WorkstationFactory {
       wsContainer.add(energyFill)
       lodLevel3Objects.push(energyFill)
     }
+
+    // Quality streak flame container — visible at LOD3 only, particles spawned by animation module
+    const flameContainer = this.scene.add.container(0, WS_DESK_Y - 4)
+    flameContainer.setVisible(false)
+    wsContainer.add(flameContainer)
+    lodLevel3Objects.push(flameContainer)
 
     // "Blocked" clarity marker for needsInteraction agents.
     const blockedIndicatorPulse = this.scene.add.circle(0, 0, 10, 0xfbbf24, 0.16)
@@ -662,7 +741,7 @@ export class WorkstationFactory {
       monitorText,
       blockedIndicator, blockedIndicatorPulse, blockedIndicatorBadge, blockedIndicatorStem, blockedIndicatorText,
       thoughtBubble, thoughtBubbleText, thoughtBubbleBg, thoughtBubbleBgSprite, state: agent,
-      steamTweens: [] as Phaser.Tweens.Tween[], steamContainer: null as Phaser.GameObjects.Container | null,
+      steamTweens: [] as Phaser.Tweens.Tween[], steamContainer: undefined as Phaser.GameObjects.Container | undefined,
       keyboard,
       ledGlow,
       moodEmoji,
@@ -687,23 +766,42 @@ export class WorkstationFactory {
       deskPet: deskPet ?? undefined,
       petEyes: petEyes ?? undefined,
       petMouth: petMouth ?? undefined,
+      animalSpecies,
       signatureItem: signatureItemSprite ?? undefined,
       roomProp: roomPropSprite ?? undefined,
       rivalryIndicator,
+      openclawBadge,
+      errorBadge,
       energyTrack,
       energyFill,
       energyLevel: 1.0,
       lampLight: lampVisible ? lampLight : undefined,
+      flameContainer,
+      flameTweens: [],
+      evalGlow,
+      contextMeter,
     }
+
+    // Eval glow breathing pulse tween
+    ws.evalGlowTween = this.scene.tweens.add({
+      targets: evalGlow,
+      alpha: { from: EVAL_GLOW_ALPHA_MIN, to: EVAL_GLOW_ALPHA_MAX },
+      duration: EVAL_GLOW_PULSE_DURATION,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
+    })
 
     // Desk pet idle bounce — gentle y-oscillation with face sprites in sync
     if (deskPet) {
       const petBaseY = deskPet.y
       const _eyeBaseY = petEyes?.y ?? 0
       const _mouthBaseY = petMouth?.y ?? 0
+      // Animal pets already have animation; use a very subtle bounce only
+      const bounceRange = animalSpecies ? 0.5 : 1.5
       ws.deskPetTween = this.scene.tweens.add({
         targets: deskPet,
-        y: { from: petBaseY - 1.5, to: petBaseY + 0.5 },
+        y: { from: petBaseY - bounceRange, to: petBaseY + bounceRange * 0.33 },
         duration: 2200,
         yoyo: true,
         repeat: -1,
@@ -716,8 +814,27 @@ export class WorkstationFactory {
         },
       })
     }
-    // Desk pet blink — swap eyes to sleepy frame for 150ms every 3-6s
-    if (petEyes) {
+    // Desk pet blink — animal pets swap to blink animation; monster pets swap eye frame
+    if (animalSpecies && deskPet) {
+      const blinkAnimKey = `animal-blink-${animalSpecies}`
+      const idleAnimKey = `animal-idle-${animalSpecies}`
+      const hasBlinkAnim = this.scene.anims.exists(blinkAnimKey)
+      ws.petBlinkTimer = this.scene.time.addEvent({
+        delay: 4000 + Math.random() * 2000,
+        loop: true,
+        callback: () => {
+          if (!ws.deskPet || !ws.deskPet.visible || !ws.deskPet.active) return
+          if (hasBlinkAnim) {
+            ws.deskPet.play(blinkAnimKey)
+            ws.deskPet.once('animationcomplete', () => {
+              if (ws.deskPet?.active && this.scene.anims.exists(idleAnimKey)) {
+                ws.deskPet.play(idleAnimKey)
+              }
+            })
+          }
+        },
+      })
+    } else if (petEyes) {
       const _defaultEyeFrame = petEyes.frame.name
       petEyes.setData('normalEyeFrame', _defaultEyeFrame)
       ws.petBlinkTimer = this.scene.time.addEvent({
@@ -933,11 +1050,31 @@ export class WorkstationFactory {
     if (ws.rivalryIndicator)     ws.rivalryIndicator.destroy()
     if (ws.exclamationTween)     ws.exclamationTween.destroy()
     if (ws.exclamationSprite)    ws.exclamationSprite.destroy()
+    if (ws.openclawBadgeTween)   ws.openclawBadgeTween.destroy()
+    if (ws.openclawBadge)        ws.openclawBadge.destroy()
+    if (ws.errorBadgeTween)      ws.errorBadgeTween.destroy()
+    if (ws.errorBadge)           ws.errorBadge.destroy()
     if (ws.energyPulseTween)     ws.energyPulseTween.destroy()
     if (ws.energyTrack)          ws.energyTrack.destroy()
     if (ws.energyFill)           ws.energyFill.destroy()
     if (ws.lampLightTween)       ws.lampLightTween.destroy()
     if (ws.lampFlickerTimer)     ws.lampFlickerTimer.destroy()
+    if (ws.flameTimer)           ws.flameTimer.destroy()
+    if (ws.flameTweens) {
+      for (const t of ws.flameTweens) { if (t.isPlaying()) t.stop(); t.destroy() }
+      ws.flameTweens = []
+    }
+    if (ws.flameContainer) { ws.flameContainer.removeAll(true); ws.flameContainer.destroy() }
+    if (ws.evalGlowTween)        ws.evalGlowTween.destroy()
+    if (ws.evalGlow)             ws.evalGlow.destroy()
+    if (ws.contextMeterPulseTween) ws.contextMeterPulseTween.destroy()
+    if (ws.contextRotShakeTween)   ws.contextRotShakeTween.destroy()
+    if (ws.contextMeter)           ws.contextMeter.destroy()
+    if (ws.thinkingDotsTween)    ws.thinkingDotsTween.destroy()
+    if (ws.thinkingMergeTween)   ws.thinkingMergeTween.destroy()
+    if (ws.thinkingDotsContainer) ws.thinkingDotsContainer.destroy()
+    ws.thinkingDots = undefined
+    ws.thinkingCandidateCount = undefined
     ws.activityHistory = []
 
     // Exit animation: shrink + fade, then destroy.

@@ -450,7 +450,7 @@ export class OfficeAtmosphere {
 
   tickCeilingLightActivity(
     time: number,
-    rooms: Map<string, { workstations: Map<string, { state: { sessionMode: string; needsInteraction: boolean } | null }> }>,
+    rooms: Map<string, { workstations: Map<string, { state: { sessionMode?: string; needsInteraction?: boolean } | null }> }>,
   ): void {
     this.lighting.tickCeilingLightActivity(time, this.ceilingLights, rooms)
   }

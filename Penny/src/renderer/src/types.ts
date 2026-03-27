@@ -225,6 +225,9 @@ export interface AgentState {
   // Parse/connection error tracking
   parseErrors?: number
   lastError?: string | null
+  // Context window utilization (0.0–1.0) and rot detection
+  contextUtilization?: number
+  contextRotDetected?: boolean
 }
 
 export interface AgentXP {
@@ -298,6 +301,7 @@ export type PodStatus =
   | 'solving'
   | 'reviewing'
   | 'executing'
+  | 'self-fixing'
   | 'feedback'
   | 'complete'
   | 'failed'
@@ -311,6 +315,34 @@ export interface PodRole {
   output?: string
 }
 
+export interface SolverCandidate {
+  index: number
+  output: string
+  agentId: string
+  durationMs: number
+}
+
+export interface SelfEvalResult {
+  selected: number
+  confidence: number
+  reasoning: string
+}
+
+export interface ReviewIssue {
+  severity: 'critical' | 'major' | 'minor' | 'nitpick'
+  location: string
+  description: string
+  suggestion: string
+}
+
+export interface ReviewerCritique {
+  verdict: 'approve' | 'approve-with-notes' | 'request-changes' | 'reject'
+  confidence: number
+  issues: ReviewIssue[]
+  strengths: string[]
+  summary: string
+}
+
 export interface PodWorkflow {
   id: string
   name: string
@@ -322,7 +354,15 @@ export interface PodWorkflow {
   executor: PodRole
   iteration: number
   maxIterations: number
-  artifacts: { stage: string; path: string; iteration: number; timestamp: number }[]
+  artifacts: { stage: string; path: string; iteration: number; timestamp: number; candidateIndex?: number; selected?: boolean }[]
+  solverCandidates?: SolverCandidate[]
+  selfEvaluation?: SelfEvalResult
+  solverCandidateCount: number
+  critique?: ReviewerCritique
+  selfFixAttempts: number
+  maxSelfFixes: number
+  priority?: string
+  phaseConfig?: { candidates: number; selfEvaluation: boolean; confidenceThreshold: number; maxSelfFixes: number }
   createdAt: number
   updatedAt: number
   error?: string
@@ -386,12 +426,15 @@ export type TaskSource = 'slack' | 'dashboard' | 'api'
 export type TaskStage = 'queued' | 'planning' | 'executing' | 'validating' | 'done'
 export type ModelProvider = 'claude' | 'ollama'
 
+/** Shown on orchestrator stage rows when headless runs use OpenCode or Cursor Agent CLI. */
+export type StageResultProvider = ModelProvider | 'opencode' | 'cursor-agent'
+
 export interface StageResult {
   stage: TaskStage
   success: boolean
   output: string
   durationMs: number
-  provider: ModelProvider
+  provider: StageResultProvider
   startedAt: number
   completedAt: number
 }
@@ -504,6 +547,39 @@ export interface VeritasTaskSummary {
   blockedBy?: string[]
 }
 
+// ── Context Health Types ──────────────────────────────────────────────────
+
+export interface ContextHealth {
+  agentId: string
+  sessionId: string
+  tokenCount: number
+  contextWindowSize: number
+  utilizationPct: number
+  rotScore: number
+  recommendation: 'healthy' | 'warning' | 'compress' | 'restart'
+}
+
+// ── Eval Dashboard Types ──────────────────────────────────────────────────
+
+export interface EvalAgentReport {
+  agentId: string
+  agentName: string
+  totalTasks: number
+  successCount: number
+  successRate: number
+  avgDurationMs: number
+  streak: number
+  recentOutcomes: boolean[]
+  trend: 'up' | 'down' | 'flat'
+}
+
+export interface EvalStats {
+  totalTasks: number
+  overallSuccessRate: number
+  experimentVelocity: number
+  weekStart: string
+}
+
 export interface VeritasTaskCounts {
   backlog: number
   todo: number
@@ -511,4 +587,97 @@ export interface VeritasTaskCounts {
   blocked: number
   done: number
   archived: number
+}
+
+// ── Spot-Check Types ─────────────────────────────────────────────────────────
+
+export interface SpotCheck {
+  id: string
+  taskId: string
+  agentId: string
+  taskDescription: string
+  agentOutput: string
+  automatedScore?: number
+  humanVerdict?: 'pass' | 'fail' | 'partial'
+  humanNotes?: string
+  reviewedAt?: string
+  sampledAt: string
+}
+
+export interface SpotCheckAgreement {
+  total: number
+  agreed: number
+  rate: number
+}
+
+// ── Preference Types ────────────────────────────────────────────────────────
+
+export type PreferenceSignal = 'approve' | 'reject' | 'edit' | 'complete' | 'fail'
+
+export interface PreferenceEvent {
+  id: string
+  timestamp: string
+  agentId: string
+  sessionId?: string
+  signal: PreferenceSignal
+  strength: 'strong' | 'weak'
+  context: Record<string, unknown>
+  userAction?: string
+}
+
+export interface PreferenceStats {
+  total: number
+  bySignal: Record<string, number>
+  byAgent: Record<string, number>
+}
+
+// ── Config Snapshot Types ────────────────────────────────────────────────────
+
+export interface McpServerEntry {
+  name: string
+  command: string
+  args: string[]
+  env: Record<string, string>
+  cwd?: string
+  source: 'project' | 'profile' | 'global'
+}
+
+export interface McpConfigSummary {
+  projectServers: McpServerEntry[]
+  profileServers: Record<string, McpServerEntry[]>
+  totalUniqueServers: number
+}
+
+export interface ClaudeSettingsSummary {
+  globalSettings: {
+    envVars: string[]
+    permissions: { allow: string[]; deny: string[] }
+    alwaysThinking: boolean
+    enabledPlugins: string[]
+  }
+  projectSettings: {
+    exists: boolean
+    path: string
+  }
+  claudeMdFiles: {
+    path: string
+    sizeBytes: number
+    firstLine: string
+  }[]
+}
+
+export interface AgentToolSummary {
+  agentId: string
+  agentName: string
+  mcpProfile: string
+  allowedTools: string[]
+  mcpServers: string[]
+  skills: string[]
+}
+
+export interface ConfigSnapshot {
+  mcp: McpConfigSummary
+  claude: ClaudeSettingsSummary
+  agents: AgentToolSummary[]
+  timestamp: number
 }

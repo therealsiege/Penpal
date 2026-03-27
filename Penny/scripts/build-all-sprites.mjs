@@ -25,6 +25,12 @@ const SCRIPTS = [
   'build-lego-specials.mjs',
   'build-icons-hd.mjs',
   'build-ui-panels.mjs',
+  // Wave 7 — asset upgrade scripts
+  'build-animal-pets.mjs',
+  'build-office-furniture.mjs',
+  'build-kenney-ui.mjs',
+  'build-monster-parts.mjs',
+  'build-medals-hd.mjs',
 ]
 
 let passed = 0

@@ -2,10 +2,10 @@ import { app, BrowserWindow, nativeImage, shell } from 'electron'
 import fs from 'fs'
 import path from 'path'
 import dotenv from 'dotenv'
-import { registerIpcHandlers } from './ipc'
+import { registerIpcHandlers, registerPreferenceIpc } from './ipc'
 import { closeGraph } from './graph'
 import { loadAgentConfigs } from './agents'
-import { registerPtyHandlers, destroyAllPtys } from './pty'
+import { registerPtyHandlers, destroyAllPtys, stopPtySweep } from './pty'
 import { startSlackBridge, stopSlackBridge } from './slack-bridge'
 import { protocol } from 'electron'
 import { registerVaultProtocol } from './vault'
@@ -18,6 +18,8 @@ protocol.registerSchemesAsPrivileged([
 ])
 import { startFileWatcher, stopFileWatcher } from './file-watcher'
 import { startOrchestrator, stopOrchestrator } from './orchestrator'
+import { writeGameStateSnapshot } from './game-state-snapshot'
+import { PreferenceCollector, PreferenceStore, connectCollector } from './preferences'
 import { initAutoUpdater } from './auto-updater'
 import { infraUp, infraDown } from './data-scripts'
 
@@ -102,12 +104,22 @@ app.whenReady().then(() => {
   loadAgentConfigs()
   registerIpcHandlers()
   registerPtyHandlers()
+  const dataDir = path.resolve(ELECTRON_ROOT, 'data')
+  const preferenceStore = new PreferenceStore(dataDir)
+  const preferenceCollector = new PreferenceCollector()
+  connectCollector(preferenceCollector, preferenceStore)
+  registerPreferenceIpc(preferenceStore)
   createWindow()
   startSlackBridge()
   startFileWatcher()
   startOrchestrator()
   initAutoUpdater()
   infraUp()
+
+  // Write game state snapshot for MCP tools (every 5s)
+  writeGameStateSnapshot()
+  const snapshotTimer = setInterval(() => { writeGameStateSnapshot().catch(console.error) }, 5000)
+  app.on('before-quit', () => clearInterval(snapshotTimer))
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
@@ -121,6 +133,7 @@ app.on('window-all-closed', () => {
 app.on('before-quit', async () => {
   stopFileWatcher()
   stopOrchestrator()
+  stopPtySweep()
   destroyAllPtys()
   await stopSlackBridge()
   await closeGraph()

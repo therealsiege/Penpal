@@ -819,7 +819,7 @@ export class OfficeRooms {
       this.host.formatLabel(room.label),
       {
         fontSize: '20px', color: activeTheme.headerText,
-        fontFamily: 'system-ui, monospace', fontStyle: 'bold', align: 'center',
+        fontFamily: "'Monogram', system-ui, monospace", fontStyle: 'bold', align: 'center',
         resolution: 2,
       },
     ).setOrigin(0.5, 0.5).setName('headerText')
@@ -867,7 +867,7 @@ export class OfficeRooms {
         ease: 'Sine.easeInOut',
         onUpdate: (tw) => {
           if (room.headerGlowFx) {
-            room.headerGlowFx.outerStrength = tw.getValue()
+            room.headerGlowFx.outerStrength = tw.getValue() ?? 0
           }
         },
       })

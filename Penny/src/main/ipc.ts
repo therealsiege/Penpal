@@ -1,4 +1,5 @@
 import { ipcMain, shell, dialog, BrowserWindow } from 'electron'
+import { EventEmitter } from 'events'
 import fs from 'fs'
 import path from 'path'
 import os from 'os'
@@ -15,6 +16,8 @@ import {
   createNewSession,
   createAgentSession,
   broadcastToSessions,
+  getOpenClawInfo,
+  getITermStatus,
 } from './sessions'
 import {
   getCursorAgentSessions,
@@ -79,6 +82,7 @@ import {
   addWatchedRepo,
   removeWatchedRepo,
   getWatchedRepos,
+  consolidateTrackedIssues,
 } from './github-issues'
 import {
   getVeritasStatus,
@@ -87,6 +91,13 @@ import {
   restartVeritasService,
   getVeritasLogs,
 } from './veritas-service'
+import { getEvalReportAll, getEvalReportAgent, getEvalStats } from './evals'
+import { taskOutcomeCollector } from './evals/collectors/task-outcomes'
+import { podQualityCollector } from './evals/collectors/pod-quality'
+import { evalHarness } from './evals/harness'
+import { generateWeeklyDigest } from './evals/reports/weekly-digest'
+import { contextMonitor } from './evals/collectors/context-usage'
+import { spotCheckQueue } from './evals/judges/human-judge'
 import { listSoundboardClips } from './soundboard'
 import {
   listVeritasTasks,
@@ -97,6 +108,18 @@ import {
 } from './veritas-api'
 import { DOCS_ROOT, getSystemPaths } from './paths'
 import { registerDataScriptHandlers } from './data-scripts'
+import {
+  getConfigSnapshot,
+  addProjectMcpServer,
+  removeProjectMcpServer,
+  addProfileMcpServer,
+  removeProfileMcpServer,
+  updateAgentTools,
+} from './config-reader'
+import type { PreferenceStore } from './preferences'
+import { contextResponse } from './context-response'
+
+export const ipcEvents = new EventEmitter()
 
 const VAULT_ROOT = DOCS_ROOT
 const BRIEFINGS_DIR = path.join(VAULT_ROOT, '1Putt', 'Daily Briefings')
@@ -203,7 +226,24 @@ export function registerIpcHandlers() {
       getCursorAgentSessions().catch(() => []),
     ])
     const tagged = claudeSessions.map(s => ({ ...s, source: 'claude' as const }))
-    return [...tagged, ...cursorSessions]
+    const merged = [...tagged, ...cursorSessions]
+
+    const claudeCount = tagged.length
+    const cursorCount = cursorSessions.length
+    const activeCount = merged.filter(s => parseFloat((s as { cpu?: string }).cpu || '0') >= 1).length
+    const idleCount = merged.length - activeCount
+    const waitingForInput = merged.filter(s => (s as { waitingForInput?: boolean }).waitingForInput).map(s => (s as { tty?: string }).tty).filter(Boolean)
+
+    const summary = `${merged.length} sessions: ${claudeCount} claude, ${cursorCount} cursor. ${activeCount} active, ${idleCount} idle.`
+    const suggestions: string[] = []
+    if (waitingForInput.length > 0) suggestions.push(`${waitingForInput.length} session(s) waiting for input — approve via sessions:approve.`)
+    if (idleCount > 0) suggestions.push(`${idleCount} idle session(s) — assign work via orchestrator:enqueue.`)
+    if (merged.length === 0) suggestions.push('No active sessions — launch agents via agents:launch.')
+
+    return contextResponse(merged, summary, suggestions,
+      ['sessions:send', 'sessions:approve', 'agents:statuses', 'orchestrator:queue'],
+      { bySource: { claude: claudeCount, cursor: cursorCount }, byActivity: { active: activeCount, idle: idleCount }, waitingForInput },
+    )
   }))
   ipcMain.handle('sessions:conversation', wrapHandler((sessionId: unknown, source?: unknown) => {
     if (typeof sessionId !== 'string') throw new Error('sessionId must be a string')
@@ -212,7 +252,9 @@ export function registerIpcHandlers() {
   }))
   ipcMain.handle('sessions:send', wrapHandler((tty: unknown, message: unknown) => {
     if (typeof tty !== 'string' || typeof message !== 'string') throw new Error('tty and message must be strings')
-    return sendToSession(tty, message)
+    const result = sendToSession(tty, message)
+    ipcEvents.emit('send', { tty, message })
+    return result
   }))
   ipcMain.handle('sessions:focus', wrapHandler((tty: unknown) => {
     if (typeof tty !== 'string') throw new Error('tty must be a string')
@@ -230,14 +272,83 @@ export function registerIpcHandlers() {
     if (typeof message !== 'string') throw new Error('message must be a string')
     return broadcastToSessions(message)
   }))
-  ipcMain.handle('graph:stats', wrapHandler(() => getGraphStats()))
-  ipcMain.handle('leads:search', wrapHandler((query: unknown) => {
-    if (typeof query !== 'string') throw new Error('query must be a string')
-    return searchLeads(query)
+  ipcMain.handle('graph:stats', wrapHandler(async () => {
+    const stats = await getGraphStats()
+    const totalNodes = stats?.totalNodes ?? 0
+    const totalRels = stats?.totalRelationships ?? 0
+    const leadCount = stats?.nodesByLabel?.['Lead'] ?? 0
+
+    const summary = `Graph: ${totalNodes} nodes, ${totalRels} relationships.${leadCount > 0 ? ` ${leadCount} leads indexed.` : ''}`
+
+    const suggestions: string[] = []
+    if (totalNodes === 0) suggestions.push('Graph is empty — run ETL to populate data.')
+    if (leadCount > 0) suggestions.push(`${leadCount} leads available — search via leads:search.`)
+    if (totalNodes > 0 && leadCount === 0) suggestions.push('No lead nodes — run sales ingestion pipeline.')
+
+    return contextResponse(stats, summary, suggestions,
+      ['leads:search', 'leads:detail', 'pipeline:summary'],
+      { totalNodes, totalRels, leadCount },
+    )
   }))
-  ipcMain.handle('leads:detail', wrapHandler((name: unknown) => {
+  ipcMain.handle('leads:search', wrapHandler(async (query: unknown) => {
+    if (typeof query !== 'string') throw new Error('query must be a string')
+    const results = await searchLeads(query)
+
+    const scores = results.map(r => r.score)
+    const avgScore = scores.length > 0 ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : 0
+    const stageDistribution: Record<string, number> = {}
+    const armDistribution: Record<string, number> = {}
+    for (const r of results) {
+      stageDistribution[r.stage] = (stageDistribution[r.stage] || 0) + 1
+      armDistribution[r.businessArm] = (armDistribution[r.businessArm] || 0) + 1
+    }
+    const topLead = results.length > 0 ? results.reduce((best, r) => r.score > best.score ? r : best) : null
+
+    const stageStr = Object.entries(stageDistribution).map(([s, n]) => `${n} ${s}`).join(', ')
+    const summary = `Found ${results.length} leads matching '${query}': avg score ${avgScore}${stageStr ? `, ${stageStr}` : ''}.`
+
+    const suggestions: string[] = []
+    if (topLead) suggestions.push(`Top lead: ${topLead.name} (score ${topLead.score}) — view details via leads:detail.`)
+    const prospecting = stageDistribution['prospecting'] || 0
+    if (prospecting > 0) suggestions.push(`${prospecting} leads in prospecting — consider advancing via lead update.`)
+    if (results.length === 0) suggestions.push('No results — try a broader query or check graph:stats for indexed data.')
+
+    return contextResponse(results, summary, suggestions,
+      ['leads:detail', 'vault:search', 'orchestrator:enqueue'],
+      { avgScore, stageDistribution, businessArmDistribution: armDistribution, topLead: topLead?.name ?? null },
+    )
+  }))
+  ipcMain.handle('leads:detail', wrapHandler(async (name: unknown) => {
     if (typeof name !== 'string') throw new Error('name must be a string')
-    return getLeadDetail(name)
+    const detail = await getLeadDetail(name)
+
+    if (!detail) {
+      return contextResponse(null, 'Lead not found.', ['Search via leads:search to find available leads.'],
+        ['leads:search', 'vault:search'])
+    }
+
+    const stageSuggestions: Record<string, string[]> = {
+      prospecting: ['Schedule a discovery call.', 'Research practice via vault:search.'],
+      qualified: ['Send a demo invite.', 'Check competitor EHR via leads:search.'],
+      demo: ['Follow up on demo feedback.', 'Prepare pricing proposal.'],
+      negotiation: ['Review contract terms.', 'Check similar deals via leads:search.'],
+      'closed-won': ['Log final outcome.', 'Update pipeline via vault:write.'],
+      'closed-lost': ['Log loss reason.', 'Update pipeline via vault:write.'],
+    }
+    const suggestions = stageSuggestions[detail.stage] || ['Review lead details and determine next step.']
+
+    const lastEvent = detail.events.length > 0 ? detail.events[detail.events.length - 1] : null
+    const daysSinceLastEvent = lastEvent ? Math.floor((Date.now() - new Date(lastEvent.date).getTime()) / 86400000) : null
+    if (daysSinceLastEvent !== null && daysSinceLastEvent > 14) {
+      suggestions.push(`No activity in ${daysSinceLastEvent} days — consider follow-up.`)
+    }
+
+    const summary = `${detail.name} at ${detail.company} — score ${detail.score}, stage: ${detail.stage}, EHR: ${detail.ehr || 'unknown'}.`
+
+    return contextResponse(detail, summary, suggestions,
+      ['leads:search', 'vault:search', 'vault:read', 'orchestrator:enqueue'],
+      { eventCount: detail.events.length, documentCount: detail.documents.length, stageHistory: detail.stageHistory, daysSinceLastEvent },
+    )
   }))
   ipcMain.handle('briefing:latest', wrapHandler(() => getLatestBriefing()))
   ipcMain.handle('briefing:list', wrapHandler(() => listBriefings()))
@@ -290,6 +401,13 @@ export function registerIpcHandlers() {
     const matchedPids = new Set<number>()
     const agentStates: AgentState[] = []
 
+    // Batch OpenClaw detection for all sessions
+    const openclawInfos = await Promise.all(
+      sessions.map(s => getOpenClawInfo(s.pid)),
+    )
+    const openclawByPid = new Map<number, typeof openclawInfos[0]>()
+    sessions.forEach((s, i) => openclawByPid.set(s.pid, openclawInfos[i]))
+
     // Match predefined agents to running sessions — only include if matched
     for (const config of configs) {
       const matched = sessions.find(s => {
@@ -311,6 +429,7 @@ export function registerIpcHandlers() {
         const iType = matched.interactionType ?? 'none'
         const needsInteraction = cpuVal < 1 &&
           (iType === 'tool-approval' || iType === 'question' || iType === 'accept-edits')
+        const oc = openclawByPid.get(matched.pid)
         agentStates.push({
           config,
           status: (cpuVal >= 1 ? 'active' : 'idle') as AgentState['status'],
@@ -327,6 +446,11 @@ export function registerIpcHandlers() {
           lastAssistantBlurb: matched.lastAssistantBlurb,
           cwd: matched.cwd,
           subAgentInvocations: matched.subAgentInvocations,
+          openclaw: oc?.supervised ? oc : undefined,
+          parseErrors: matched.parseErrors,
+          lastError: matched.lastError,
+          contextUtilization: matched.contextUtilization,
+          contextRotDetected: matched.contextRotDetected,
         })
       }
     }
@@ -338,6 +462,7 @@ export function registerIpcHandlers() {
       const projectName = session.project || session.cwd.split('/').pop() || 'unknown'
       const cpuVal = parseFloat(session.cpu || '0')
       const iType = session.interactionType ?? 'none'
+      const oc = openclawByPid.get(session.pid)
       const freelancerConfig: AgentConfig = {
         id: `session-${session.pid}`,
         name: session.terminalName || projectName,
@@ -370,6 +495,11 @@ export function registerIpcHandlers() {
         lastAssistantBlurb: session.lastAssistantBlurb,
         cwd: session.cwd,
         subAgentInvocations: session.subAgentInvocations,
+        openclaw: oc?.supervised ? oc : undefined,
+        parseErrors: session.parseErrors,
+        lastError: session.lastError,
+        contextUtilization: session.contextUtilization,
+        contextRotDetected: session.contextRotDetected,
       })
     }
 
@@ -469,7 +599,24 @@ export function registerIpcHandlers() {
     // No sub-agents to remove from top-level (they are synthetic, not real sessions)
     const topLevel = agentStates
 
-    return topLevel
+    // Context-engineer the response
+    const activeCount = topLevel.filter(a => a.status === 'active').length
+    const idleCount = topLevel.filter(a => a.status === 'idle').length
+    const blockedIds = topLevel.filter(a => a.needsInteraction).map(a => a.config.id)
+    const idleIds = topLevel.filter(a => a.status === 'idle').map(a => a.config.id)
+    const totalMemoryMB = topLevel.reduce((sum, a) => sum + (a.memoryMB ?? 0), 0)
+
+    const summary = `${topLevel.length} agents: ${activeCount} active, ${idleCount} idle, ${blockedIds.length} blocked.`
+
+    const suggestions: string[] = []
+    if (blockedIds.length > 0) suggestions.push(`${blockedIds.length} agent(s) need approval — use sessions:approve to unblock.`)
+    if (idleCount > 0) suggestions.push(`${idleCount} idle agent(s) available — assign tasks via orchestrator:enqueue.`)
+    if (activeCount === topLevel.length && topLevel.length > 0) suggestions.push('All agents busy — monitor via orchestrator:agent-health.')
+
+    return contextResponse(topLevel, summary, suggestions,
+      ['orchestrator:queue', 'orchestrator:agent-health', 'pod:list', 'sessions:approve'],
+      { idle: idleIds, blocked: blockedIds, activeCount, totalMemoryMB },
+    )
   }))
 
   ipcMain.handle('agents:launch', wrapHandler((agentId: unknown, cwd: unknown) => {
@@ -483,7 +630,9 @@ export function registerIpcHandlers() {
     if (typeof choice !== 'string') throw new Error('choice must be a string')
     const allowed = ['1', '2', '3', 'y', 'n', 'yes', 'no']
     if (!allowed.includes(choice.toLowerCase())) throw new Error('Invalid approval choice')
-    return sendToSession(tty, choice)
+    const result = sendToSession(tty, choice)
+    ipcEvents.emit('approve', { tty, choice: choice.toLowerCase() })
+    return result
   }))
 
   ipcMain.handle('sessions:approve-all', wrapHandler(async (choice: unknown) => {
@@ -563,11 +712,69 @@ export function registerIpcHandlers() {
     return createPod(task, (opts as Record<string, unknown>) || {})
   }))
 
-  ipcMain.handle('pod:list', wrapHandler(() => listPods()))
+  ipcMain.handle('pod:list', wrapHandler(async () => {
+    const pods = await listPods()
 
-  ipcMain.handle('pod:status', wrapHandler((workflowId: unknown) => {
+    const byPhase: Record<string, number> = {}
+    for (const p of pods) {
+      byPhase[p.status] = (byPhase[p.status] || 0) + 1
+    }
+    const phaseStr = Object.entries(byPhase).map(([s, n]) => `${n} ${s}`).join(', ')
+    const summary = `${pods.length} pod(s)${phaseStr ? `: ${phaseStr}` : ''}.`
+
+    const suggestions: string[] = []
+    const feedbackPods = pods.filter(p => p.status === 'feedback')
+    if (feedbackPods.length > 0) suggestions.push(`${feedbackPods.length} pod(s) in feedback loop — check iteration progress via pod:status.`)
+    const failedPods = pods.filter(p => p.status === 'failed')
+    if (failedPods.length > 0) suggestions.push(`${failedPods.length} failed pod(s) — retry or cancel.`)
+    if (pods.length === 0) suggestions.push('No active pods — create one via pod:create.')
+    const activePods = pods.filter(p => ['solving', 'reviewing', 'executing', 'self-fixing'].includes(p.status))
+    if (activePods.length > 0) suggestions.push('Monitor active pods via pod:status for detailed progress.')
+
+    const avgIterations = pods.length > 0 ? +(pods.reduce((sum, p) => sum + p.iteration, 0) / pods.length).toFixed(1) : 0
+
+    return contextResponse(pods, summary, suggestions,
+      ['pod:create', 'pod:status', 'pod:cancel', 'agents:statuses'],
+      { byPhase, avgIterations, totalPods: pods.length },
+    )
+  }))
+
+  ipcMain.handle('pod:status', wrapHandler(async (workflowId: unknown) => {
     if (typeof workflowId !== 'string') throw new Error('workflowId must be a string')
-    return getPodStatus(workflowId)
+    const pod = await getPodStatus(workflowId)
+
+    if (!pod) {
+      return contextResponse(null, 'Pod not found.', ['Check pod:list for active pods.'],
+        ['pod:list', 'pod:create'])
+    }
+
+    const elapsedTotal = Date.now() - pod.createdAt
+    const currentStageEntry = pod.stageHistory.length > 0 ? pod.stageHistory[pod.stageHistory.length - 1] : null
+    const timeInPhase = currentStageEntry ? Date.now() - currentStageEntry.enteredAt : 0
+    const timeInPhaseMin = Math.round(timeInPhase / 60000)
+    const elapsedMin = Math.round(elapsedTotal / 60000)
+
+    const critiqueInfo = pod.critique
+      ? ` — ${pod.critique.verdict} (${pod.critique.issues.length} issue${pod.critique.issues.length !== 1 ? 's' : ''}, confidence ${(pod.critique.confidence * 100).toFixed(0)}%)`
+      : ''
+    const summary = `Pod '${pod.name}': ${pod.status} (iteration ${pod.iteration}/${pod.maxIterations}), in phase for ${timeInPhaseMin}m, total ${elapsedMin}m.${critiqueInfo}`
+
+    const suggestions: string[] = []
+    if (pod.status === 'solving') suggestions.push('Solver working — check back or view artifacts.')
+    if (pod.status === 'reviewing') suggestions.push('Reviewer evaluating — expect structured critique soon.')
+    if (pod.status === 'executing') suggestions.push('Tests running — results expected shortly.')
+    if (pod.status === 'feedback') {
+      const verdictHint = pod.critique?.verdict === 'request-changes' ? ' (reviewer requested changes)' : ''
+      suggestions.push(`Iteration ${pod.iteration}/${pod.maxIterations} — solver addressing reviewer feedback${verdictHint}.`)
+    }
+    if (pod.status === 'paused') suggestions.push('Pod is paused — resume via pod:resume.')
+    if (pod.status === 'complete') suggestions.push('Pod complete — review artifacts and results.')
+    if (pod.status === 'failed') suggestions.push(`Pod failed${pod.error ? `: ${pod.error}` : ''} — retry or cancel.`)
+
+    return contextResponse(pod, summary, suggestions,
+      ['pod:pause', 'pod:resume', 'pod:cancel', 'pod:list', 'agents:statuses'],
+      { timeInPhaseMs: timeInPhase, elapsedTotalMs: elapsedTotal, iteration: pod.iteration, maxIterations: pod.maxIterations },
+    )
   }))
 
   ipcMain.handle('pod:pause', wrapHandler((workflowId: unknown) => {
@@ -592,9 +799,39 @@ export function registerIpcHandlers() {
     return listVaultDir(typeof relativePath === 'string' ? relativePath : '')
   }))
 
-  ipcMain.handle('vault:read', wrapHandler((relativePath: unknown) => {
+  ipcMain.handle('vault:read', wrapHandler(async (relativePath: unknown) => {
     if (typeof relativePath !== 'string') throw new Error('relativePath must be a string')
-    return readVaultFile(relativePath)
+    const [fileContent, backlinks] = await Promise.all([
+      readVaultFile(relativePath),
+      getBacklinks(relativePath).catch(() => []),
+    ])
+
+    if (!fileContent) {
+      return contextResponse(null, 'File not found.', ['Check path and try vault:list to browse available files.'],
+        ['vault:list', 'vault:search'])
+    }
+
+    const folder = relativePath.includes('/') ? relativePath.split('/').slice(0, -1).join('/') : ''
+    const fileName = relativePath.split('/').pop() || relativePath
+    const sizeKB = (Buffer.byteLength(fileContent.content, 'utf-8') / 1024).toFixed(1)
+
+    // Extract inline tags
+    const tagMatches = fileContent.content.match(/#[a-zA-Z][\w/-]*/g) || []
+    const tags = [...new Set(tagMatches)]
+
+    // Count wikilinks
+    const wikilinkMatches = fileContent.content.match(/\[\[[^\]]+\]\]/g) || []
+
+    const summary = `Read '${fileName}' (${sizeKB}KB), ${backlinks.length} backlink(s).`
+    const suggestions: string[] = []
+    if (backlinks.length > 0) suggestions.push(`${backlinks.length} file(s) link here — explore via vault:backlinks.`)
+    if (folder) suggestions.push(`File is in ${folder} — list siblings via vault:list.`)
+    if (wikilinkMatches.length > 0) suggestions.push(`Contains ${wikilinkMatches.length} wikilink(s) — follow references for related content.`)
+
+    return contextResponse(fileContent, summary, suggestions,
+      ['vault:backlinks', 'vault:list', 'vault:search', 'vault:write'],
+      { backlinks: backlinks.map(b => b.title), tags, folder, fileSizeBytes: Buffer.byteLength(fileContent.content, 'utf-8'), mtime: fileContent.mtime },
+    )
   }))
 
   ipcMain.handle('vault:write', wrapHandler((relativePath: unknown, content: unknown) => {
@@ -603,12 +840,26 @@ export function registerIpcHandlers() {
     return writeVaultFile(relativePath, content)
   }))
 
-  ipcMain.handle('vault:search', wrapHandler((query: unknown, glob?: unknown, limit?: unknown) => {
+  ipcMain.handle('vault:search', wrapHandler(async (query: unknown, glob?: unknown, limit?: unknown) => {
     if (typeof query !== 'string') throw new Error('query must be a string')
-    return searchVault(
+    const results = await searchVault(
       query,
       typeof glob === 'string' ? glob : undefined,
       typeof limit === 'number' ? limit : undefined,
+    )
+
+    const folders = [...new Set(results.map(r => r.path.includes('/') ? r.path.split('/').slice(0, -1).join('/') : '(root)'))]
+    const fileCount = new Set(results.map(r => r.path)).size
+
+    const summary = `Found ${results.length} result(s) for '${query}' across ${fileCount} file(s) in ${folders.length} folder(s).`
+    const suggestions: string[] = []
+    if (folders.length > 1) suggestions.push(`Results span ${folders.slice(0, 3).join(', ')}${folders.length > 3 ? ` and ${folders.length - 3} more` : ''} — narrow with glob parameter.`)
+    if (results.length >= (typeof limit === 'number' ? limit : 20)) suggestions.push('Result limit reached — use vault:search with higher limit or glob filter.')
+    suggestions.push('Read specific files via vault:read for full content.')
+
+    return contextResponse(results, summary, suggestions,
+      ['vault:read', 'vault:backlinks', 'vault:tags', 'vault:files-by-tag'],
+      { folders, matchCount: results.length, fileCount, query },
     )
   }))
 
@@ -737,13 +988,47 @@ export function registerIpcHandlers() {
     return updateVeritasTaskStatus(taskId.trim(), status as VeritasTaskStatus)
   }))
 
+  // ── iTerm2 / Session Health ──────────────────────────────────────────────
+  ipcMain.handle('sessions:iterm-status', wrapHandler(() => getITermStatus()))
+
   // ── Opencode Sessions ──────────────────────────────────────────────────────
   ipcMain.handle('opencode:sessions', wrapHandler(async () => {
     const sessions = await getOpencodeSessions()
     if (sessions.length > 0) console.log('[opencode] sessions:', sessions.map(s => ({ runtime: s.runtime, project: s.project, pid: s.pid, tty: s.tty })))
     return sessions
   }))
-  ipcMain.handle('orchestrator:queue', wrapHandler(() => getTaskQueue()))
+  ipcMain.handle('orchestrator:queue', wrapHandler(async () => {
+    const [tasks, healthStatuses] = await Promise.all([
+      getTaskQueue(),
+      getAgentHealthStatuses().catch(() => []),
+    ])
+
+    const byPriority: Record<string, number> = { critical: 0, high: 0, normal: 0, low: 0 }
+    const byStatus: Record<string, number> = {}
+    for (const t of tasks) {
+      byPriority[t.priority] = (byPriority[t.priority] || 0) + 1
+      byStatus[t.status] = (byStatus[t.status] || 0) + 1
+    }
+    const idleAgents = healthStatuses.filter(h => h.activeTasks === 0 && h.alive).length
+    const failedCount = byStatus['failed'] || 0
+
+    const priorityStr = Object.entries(byPriority).filter(([, n]) => n > 0).map(([p, n]) => `${n} ${p}`).join(', ')
+    const summary = `${tasks.length} task(s)${priorityStr ? `: ${priorityStr}` : ''}. ${idleAgents} agent(s) idle.`
+
+    const suggestions: string[] = []
+    if ((byPriority['critical'] || 0) > 0 && idleAgents > 0) suggestions.push('Critical tasks queued with idle agents — assign via pod:create.')
+    if (failedCount > 0) suggestions.push(`${failedCount} failed task(s) — retry via orchestrator:retry-task.`)
+    if (tasks.length === 0) suggestions.push('Queue clear — enqueue new work via orchestrator:enqueue.')
+    if (idleAgents === 0 && tasks.length > 0) suggestions.push('No idle agents — monitor via orchestrator:agent-health.')
+
+    const oldestQueued = tasks.filter(t => t.status === 'queued').sort((a, b) => a.createdAt - b.createdAt)[0]
+    const oldestQueuedAge = oldestQueued ? Date.now() - oldestQueued.createdAt : null
+
+    return contextResponse(tasks, summary, suggestions,
+      ['orchestrator:enqueue', 'orchestrator:retry-task', 'agents:statuses', 'pod:create'],
+      { byPriority, byStatus, idleAgents, oldestQueuedAgeMs: oldestQueuedAge },
+    )
+  }))
   ipcMain.handle('orchestrator:enqueue', wrapHandler((
     title: unknown, description: unknown, project: unknown, priority: unknown, provider?: unknown,
   ) => {
@@ -767,7 +1052,31 @@ export function registerIpcHandlers() {
     if (typeof taskId !== 'string') throw new Error('taskId must be a string')
     return retryTask(taskId)
   }))
-  ipcMain.handle('orchestrator:agent-health', wrapHandler(() => getAgentHealthStatuses()))
+  ipcMain.handle('orchestrator:agent-health', wrapHandler(async () => {
+    const statuses = await getAgentHealthStatuses()
+
+    const healthy = statuses.filter(s => s.status === 'healthy').map(s => s.agentId)
+    const warnings = statuses.filter(s => s.status === 'warning').map(s => ({ agentId: s.agentId, reasons: s.warnings }))
+    const dead = statuses.filter(s => s.status === 'dead').map(s => s.agentId)
+
+    const summary = `${statuses.length} agent(s): ${healthy.length} healthy, ${warnings.length} warning, ${dead.length} dead.`
+
+    const suggestions: string[] = []
+    for (const d of dead.slice(0, 3)) {
+      const name = statuses.find(s => s.agentId === d)?.name || d
+      suggestions.push(`${name} is dead — restart via orchestrator:shutdown-agent then agents:launch.`)
+    }
+    for (const w of warnings.slice(0, 3)) {
+      const name = statuses.find(s => s.agentId === w.agentId)?.name || w.agentId
+      suggestions.push(`${name} has warnings: ${w.reasons.join(', ')} — consider restarting.`)
+    }
+    if (dead.length === 0 && warnings.length === 0) suggestions.push('All agents healthy — no action needed.')
+
+    return contextResponse(statuses, summary, suggestions,
+      ['orchestrator:shutdown-agent', 'agents:launch', 'agents:statuses', 'orchestrator:queue'],
+      { healthy, warnings, dead },
+    )
+  }))
   ipcMain.handle('orchestrator:shutdown-agent', wrapHandler((agentId: unknown) => {
     if (typeof agentId !== 'string') throw new Error('agentId must be a string')
     return shutdownAgent(agentId)
@@ -784,11 +1093,74 @@ export function registerIpcHandlers() {
     return { provider: getModelProvider(), ollamaAvailable: await checkOllamaAvailable() }
   }))
 
+  // ── Eval Dashboard ──────────────────────────────────────────────────────
+  ipcMain.handle('evals:report-all', wrapHandler(() => getEvalReportAll()))
+  ipcMain.handle('evals:report-agent', wrapHandler((agentId: unknown) => {
+    if (typeof agentId !== 'string') throw new Error('agentId must be a string')
+    return getEvalReportAgent(agentId)
+  }))
+  ipcMain.handle('evals:stats', wrapHandler(() => {
+    const stats = getEvalStats()
+    const summary = `${stats.totalTasks} total tasks, ${(stats.overallSuccessRate * 100).toFixed(0)}% success rate, ${stats.experimentVelocity} this week.`
+
+    const suggestions: string[] = []
+    if (stats.overallSuccessRate < 0.7 && stats.totalTasks >= 5) {
+      suggestions.push('Success rate below 70% — consider spot-checking recent outputs via evals:spot-check-queue.')
+    }
+    if (stats.experimentVelocity === 0) suggestions.push('No tasks this week — assign work via orchestrator:enqueue.')
+    if (stats.totalTasks === 0) suggestions.push('No eval data yet — task outcomes will be recorded automatically.')
+
+    return contextResponse(stats, summary, suggestions,
+      ['evals:report-all', 'evals:spot-check-queue', 'evals:harness-report-all'],
+    )
+  }))
+
+  // ── Eval Harness (JSONL-backed) ────────────────────────────────────────
+  taskOutcomeCollector.start()
+  ipcMain.handle('evals:harness-report-agent', wrapHandler((agentId: unknown, since?: unknown) => {
+    if (typeof agentId !== 'string') throw new Error('agentId must be a string')
+    return evalHarness.reportByAgent(agentId, since ? new Date(since as string) : undefined)
+  }))
+  ipcMain.handle('evals:harness-report-all', wrapHandler((since?: unknown) =>
+    evalHarness.reportAll(since ? new Date(since as string) : undefined),
+  ))
+  ipcMain.handle('evals:weekly-digest', wrapHandler((weekOverride?: unknown) =>
+    generateWeeklyDigest({ weekOf: weekOverride ? new Date(weekOverride as string) : undefined }),
+  ))
+
+  // ── Pod Quality Metrics ────────────────────────────────────────────────
+  ipcMain.handle('evals:pod-quality', wrapHandler((since?: unknown) =>
+    podQualityCollector.report(since ? new Date(since as string) : undefined),
+  ))
+
+  // ── Context Health ──────────────────────────────────────────────────────
+  ipcMain.handle('evals:context-health', wrapHandler(() => contextMonitor.checkAll()))
+  ipcMain.handle('evals:context-health-agent', wrapHandler((agentId: unknown) => {
+    if (typeof agentId !== 'string') throw new Error('agentId must be a string')
+    return contextMonitor.check(agentId)
+  }))
+
+  // ── Spot-Check Queue (Human Judge) ────────────────────────────────────────
+  ipcMain.handle('evals:spot-check-queue', wrapHandler(() => spotCheckQueue.getPending()))
+  ipcMain.handle('evals:spot-check-sample', wrapHandler((count: unknown) => {
+    if (typeof count !== 'number') throw new Error('count must be a number')
+    return spotCheckQueue.sample(count)
+  }))
+  ipcMain.handle('evals:spot-check-review', wrapHandler((id: unknown, verdict: unknown, notes?: unknown) => {
+    if (typeof id !== 'string') throw new Error('id must be a string')
+    if (verdict !== 'pass' && verdict !== 'fail' && verdict !== 'partial') {
+      throw new Error('verdict must be pass, fail, or partial')
+    }
+    return spotCheckQueue.review(id, verdict, typeof notes === 'string' ? notes : undefined)
+  }))
+  ipcMain.handle('evals:spot-check-agreement', wrapHandler(() => spotCheckQueue.agreement()))
+
   // ── GitHub issue poller ──────────────────────────────────────────────────
   ipcMain.handle('github:status', wrapHandler(() => getGithubIssuePollerStatus()))
   ipcMain.handle('github:poll-now', wrapHandler(() => pollGithubIssuesNow()))
   ipcMain.handle('github:seen', wrapHandler(() => getSeenIssues()))
   ipcMain.handle('github:cards', wrapHandler(() => getGithubIssueCards()))
+  ipcMain.handle('github:consolidate', wrapHandler(() => consolidateTrackedIssues()))
   ipcMain.handle('github:add-repo', wrapHandler((owner: unknown, repo: unknown, localPath: unknown) => {
     if (typeof owner !== 'string' || typeof repo !== 'string' || typeof localPath !== 'string') {
       throw new Error('owner, repo, and localPath must be strings')
@@ -805,6 +1177,64 @@ export function registerIpcHandlers() {
   }))
   ipcMain.handle('github:list-repos', wrapHandler(() => getWatchedRepos()))
 
+  // ── Config Snapshot + Editing ───────────────────────────────────────
+  ipcMain.handle('config:snapshot', wrapHandler(() => getConfigSnapshot()))
+
+  ipcMain.handle('config:add-project-mcp', wrapHandler((server: unknown) => {
+    const s = server as { name: string; command: string; args: string[]; env?: Record<string, string>; cwd?: string }
+    if (!s?.name || !s?.command) throw new Error('name and command are required')
+    return addProjectMcpServer(s)
+  }))
+
+  ipcMain.handle('config:remove-project-mcp', wrapHandler((name: unknown) => {
+    if (typeof name !== 'string') throw new Error('name must be a string')
+    return removeProjectMcpServer(name)
+  }))
+
+  ipcMain.handle('config:add-profile-mcp', wrapHandler((profile: unknown, server: unknown) => {
+    if (typeof profile !== 'string') throw new Error('profile must be a string')
+    const s = server as { name: string; command: string; args: string[]; env?: Record<string, string>; cwd?: string }
+    if (!s?.name || !s?.command) throw new Error('name and command are required')
+    return addProfileMcpServer(profile, s)
+  }))
+
+  ipcMain.handle('config:remove-profile-mcp', wrapHandler((profile: unknown, serverName: unknown) => {
+    if (typeof profile !== 'string' || typeof serverName !== 'string') throw new Error('profile and serverName must be strings')
+    return removeProfileMcpServer(profile, serverName)
+  }))
+
+  ipcMain.handle('config:update-agent-tools', wrapHandler((agentId: unknown, tools: unknown) => {
+    if (typeof agentId !== 'string') throw new Error('agentId must be a string')
+    if (!Array.isArray(tools)) throw new Error('tools must be an array')
+    return updateAgentTools(agentId, tools as string[])
+  }))
+
   // ── Data Scripts ──────────────────────────────────────────────────────
   registerDataScriptHandlers()
+}
+
+export function registerPreferenceIpc(store: PreferenceStore) {
+  ipcMain.handle('preferences:stats', wrapHandler(() => store.stats()))
+  ipcMain.handle('preferences:count', wrapHandler(() => store.count()))
+  ipcMain.handle('preferences:query', wrapHandler(async (filter?: unknown) => {
+    const f = (filter ?? {}) as { agentId?: string; signal?: string; since?: string }
+    const events: import('./preferences/types').PreferenceEvent[] = []
+    for await (const event of store.query({
+      agentId: f.agentId,
+      signal: f.signal,
+      since: f.since ? new Date(f.since) : undefined,
+    })) {
+      events.push(event)
+      if (events.length >= 500) break // safety cap
+    }
+    return events
+  }))
+  ipcMain.handle('preferences:generate-pairs', wrapHandler(async () => {
+    const { PairGenerator } = await import('./preferences/pairs')
+    const generator = new PairGenerator(store)
+    const dataDir = path.resolve(__dirname, '..', 'data')
+    const outPath = path.join(dataDir, 'dpo-pairs.jsonl')
+    const count = await generator.export(outPath, 'jsonl')
+    return { count, path: outPath }
+  }))
 }

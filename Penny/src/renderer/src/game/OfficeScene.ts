@@ -9,6 +9,7 @@ import { OfficeAtmosphere } from './office-atmosphere'
 import { OfficeUI } from './office-ui'
 import { OfficeAmbient } from './office-ambient'
 import { OfficePods } from './office-pods'
+import { OfficeMcp } from './office-mcp'
 import { OfficeSelection } from './office-selection'
 import { OfficeRooms } from './office-rooms'
 import { OfficeWorkstations } from './office-workstation'
@@ -22,7 +23,7 @@ import {
   cwdToLabel, formatLabel,
 } from './office-helpers'
 
-import { SPRITESHEET_KEYS, ANIM_KEYS, SCENE_KEYS, EFFECT_ANIM_KEYS, IMAGE_KEYS } from './office-asset-keys'
+import { SPRITESHEET_KEYS, ANIM_KEYS, SCENE_KEYS, EFFECT_ANIM_KEYS, IMAGE_KEYS, AUDIO_KEYS, ANIMAL_IDLE_FRAMES, ANIMAL_SPECIES } from './office-asset-keys'
 import { RoomVisibilityManager } from './room-visibility'
 import { soundEngine } from './sound-engine'
 import { achievements } from './achievements'
@@ -43,6 +44,7 @@ import {
   COLOR_BG, ZOOM_MAX,
   LOD_L1_MAX, LOD_L2_MAX,
   POD_REFRESH_MS,
+  MCP_REFRESH_MS,
 } from './office-constants'
 
 
@@ -67,6 +69,8 @@ export class OfficeScene extends Phaser.Scene {
 
   // Pod connecting lines and chat animations (extracted to OfficePods)
   private pods!: OfficePods
+  // MCP server connection lines (workstation → tool icon clusters)
+  private mcp!: OfficeMcp
 
   // Office background — extracted to OfficeBackground
   private background!: OfficeBackground
@@ -228,14 +232,25 @@ export class OfficeScene extends Phaser.Scene {
       [IMAGE_KEYS.SLIDER_TRACK]: 'Slider Track',
       [IMAGE_KEYS.SLIDER_FILL]: 'Slider Fill',
       [IMAGE_KEYS.DIVIDER]: 'Divider',
+      // Wave 7 assets
+      [SPRITESHEET_KEYS.ANIMAL_PETS]: 'Animal Pets',
+      [SPRITESHEET_KEYS.ANIMAL_PETS_BLINK]: 'Pet Blink',
+      [SPRITESHEET_KEYS.ANIMAL_PETS_HURT]: 'Pet Hurt',
+      [SPRITESHEET_KEYS.OFFICE_FURNITURE]: 'Furniture',
+      [SPRITESHEET_KEYS.KENNEY_UI]: 'Kenney UI',
+      [SPRITESHEET_KEYS.MONSTER_BODIES]: 'Monster Bodies',
+      [SPRITESHEET_KEYS.MEDALS_HD]: 'HD Medals',
+      [AUDIO_KEYS.CLICK_A]: 'SFX Click',
+      [AUDIO_KEYS.TAP_A]: 'SFX Tap',
     }
 
     // Spritesheets worth showing a thumbnail preview for
     const loadedSheetKeys: string[] = []
-    const sheetPreviewKeys = new Set([
+    const sheetPreviewKeys = new Set<string>([
       SPRITESHEET_KEYS.CHARACTERS, SPRITESHEET_KEYS.OFFICE, SPRITESHEET_KEYS.ROOMS,
       SPRITESHEET_KEYS.DUDER_1, SPRITESHEET_KEYS.DUDER_2,
       SPRITESHEET_KEYS.GAME_ICONS, SPRITESHEET_KEYS.GAME_ITEMS, SPRITESHEET_KEYS.DESK_PETS,
+      SPRITESHEET_KEYS.ANIMAL_PETS, SPRITESHEET_KEYS.OFFICE_FURNITURE, SPRITESHEET_KEYS.MEDALS_HD,
     ])
 
     // Progress handler — fill bar
@@ -422,6 +437,53 @@ export class OfficeScene extends Phaser.Scene {
     this.load.image(IMAGE_KEYS.TERRAIN_STONE, './sprites/terrain-stone.png')
     this.load.image(IMAGE_KEYS.TERRAIN_DIRT, './sprites/terrain-dirt.png')
     this.load.image(IMAGE_KEYS.TERRAIN_BOX_COIN, './sprites/terrain-box-coin.png')
+
+    // --- Wave 7: Asset Upgrade ---
+
+    // Animated animal desk pets — 5 species x 12 idle frames, 64x64 cells
+    this.load.spritesheet(SPRITESHEET_KEYS.ANIMAL_PETS, './sprites/animal-pets.png', {
+      frameWidth: 64, frameHeight: 64,
+    })
+    this.load.spritesheet(SPRITESHEET_KEYS.ANIMAL_PETS_BLINK, './sprites/animal-pets-blink.png', {
+      frameWidth: 64, frameHeight: 64,
+    })
+    this.load.spritesheet(SPRITESHEET_KEYS.ANIMAL_PETS_HURT, './sprites/animal-pets-hurt.png', {
+      frameWidth: 64, frameHeight: 64,
+    })
+
+    // Modern Office furniture tiles — 48x48 cells, 20 columns
+    this.load.spritesheet(SPRITESHEET_KEYS.OFFICE_FURNITURE, './sprites/office-furniture.png', {
+      frameWidth: 48, frameHeight: 48,
+    })
+
+    // Kenney UI elements (Blue theme) — 32x32 cells
+    this.load.spritesheet(SPRITESHEET_KEYS.KENNEY_UI, './sprites/kenney-ui.png', {
+      frameWidth: 32, frameHeight: 32,
+    })
+
+    // Composable monster parts
+    this.load.spritesheet(SPRITESHEET_KEYS.MONSTER_BODIES, './sprites/monster-bodies.png', {
+      frameWidth: 32, frameHeight: 32,
+    })
+    this.load.spritesheet(SPRITESHEET_KEYS.MONSTER_EYES, './sprites/monster-eyes.png', {
+      frameWidth: 16, frameHeight: 8,
+    })
+    this.load.spritesheet(SPRITESHEET_KEYS.MONSTER_MOUTHS, './sprites/monster-mouths.png', {
+      frameWidth: 16, frameHeight: 8,
+    })
+
+    // HD medals spritesheet — individual medal sprites at 43x82 cells
+    this.load.spritesheet(SPRITESHEET_KEYS.MEDALS_HD, './sprites/medals-hd.png', {
+      frameWidth: 43, frameHeight: 82,
+    })
+
+    // Kenney UI sound effects (OGG)
+    this.load.audio(AUDIO_KEYS.CLICK_A, './sounds/click-a.ogg')
+    this.load.audio(AUDIO_KEYS.CLICK_B, './sounds/click-b.ogg')
+    this.load.audio(AUDIO_KEYS.SWITCH_A, './sounds/switch-a.ogg')
+    this.load.audio(AUDIO_KEYS.SWITCH_B, './sounds/switch-b.ogg')
+    this.load.audio(AUDIO_KEYS.TAP_A, './sounds/tap-a.ogg')
+    this.load.audio(AUDIO_KEYS.TAP_B, './sounds/tap-b.ogg')
   }
 
   create(): void {
@@ -475,6 +537,10 @@ export class OfficeScene extends Phaser.Scene {
     // Pod connecting lines and chat animations
     this.pods = new OfficePods(this)
     this.pods.init()
+
+    // MCP server connection lines
+    this.mcp = new OfficeMcp(this)
+    this.mcp.init()
 
     // Ground plane — semi-transparent so the HTML background image bleeds through.
     this.add.rectangle(0, 0, 16000, 16000, COLOR_BG, 0.92)
@@ -616,7 +682,7 @@ export class OfficeScene extends Phaser.Scene {
     })
 
     // OfficeSelection: manages keyboard selection, selection ring, auto-pan, focus mode
-    this.selection = new OfficeSelection(this)
+    this.selection = new OfficeSelection(this as unknown as import('./office-selection').SelectionHostScene)
     this.selection.initGraphics()
 
     // -----------------------------------------------------------------------
@@ -790,11 +856,12 @@ export class OfficeScene extends Phaser.Scene {
     EventBus.on(EVENTS.BROADCAST, this.broadcastHandler)
 
     // Desk click recall — if agent is at cafe, cancel their coffee run so they walk back
-    this.agentClickedHandler = (agentId: string) => {
+    this.agentClickedHandler = ((...args: unknown[]) => {
+      const agentId = args[0] as string
       if (this.cafe.isOnCoffeeRun(agentId)) {
         this.cafe.cancelCoffeeRun(agentId)
       }
-    }
+    }) as (msg: unknown) => void
     EventBus.on(EVENTS.AGENT_CLICKED, this.agentClickedHandler)
 
     // Game systems — celebrations, mood, achievements, sound, props, season HUD
@@ -842,10 +909,43 @@ export class OfficeScene extends Phaser.Scene {
       })
     }
 
+    // Animal pet idle animations — one per species
+    if (this.textures.exists(SPRITESHEET_KEYS.ANIMAL_PETS)) {
+      const species = [...ANIMAL_SPECIES]
+      for (let row = 0; row < species.length; row++) {
+        const key = `animal-idle-${species[row]}`
+        if (!this.anims.exists(key)) {
+          this.anims.create({
+            key,
+            frames: this.anims.generateFrameNumbers(SPRITESHEET_KEYS.ANIMAL_PETS, {
+              start: row * ANIMAL_IDLE_FRAMES,
+              end: row * ANIMAL_IDLE_FRAMES + ANIMAL_IDLE_FRAMES - 1,
+            }),
+            frameRate: 8,
+            repeat: -1,
+          })
+        }
+        // Blink animation
+        const blinkKey = `animal-blink-${species[row]}`
+        if (this.textures.exists(SPRITESHEET_KEYS.ANIMAL_PETS_BLINK) && !this.anims.exists(blinkKey)) {
+          this.anims.create({
+            key: blinkKey,
+            frames: this.anims.generateFrameNumbers(SPRITESHEET_KEYS.ANIMAL_PETS_BLINK, {
+              start: row * ANIMAL_IDLE_FRAMES,
+              end: row * ANIMAL_IDLE_FRAMES + ANIMAL_IDLE_FRAMES - 1,
+            }),
+            frameRate: 12,
+            repeat: 0,
+          })
+        }
+      }
+    }
+
     this.moodManager = new AgentMoodManager(this)
     this.propsManager = new InteractivePropsManager(this)
     this.seasonHud = new SeasonHUD(this)
     this.seasonHud.init(this.viewWidth, this.viewHeight)
+    soundEngine.setScene(this)
     soundEngine.wireEvents()
     achievements.load()
 
@@ -963,6 +1063,7 @@ export class OfficeScene extends Phaser.Scene {
         burstConfetti: (x, y) => scene.particles.burstConfetti(x, y),
         spawnSteamParticles: (ws) => scene.particles.spawnSteamParticles(ws),
         clearSteamParticles: (ws) => scene.particles.clearSteamParticles(ws),
+        spawnFlameParticle: (x, y, streak) => scene.particles.spawnFlameParticle(x, y, streak),
         getAgentCharacterIndex: (agent) => getAgentCharacterIndex(agent),
         getPoseFrame: (idx, agent) => getPoseFrame(idx, agent),
         getStatusColor: (agent) => getStatusColor(agent),
@@ -1008,6 +1109,15 @@ export class OfficeScene extends Phaser.Scene {
       this.pods.setLastDrawAt(time)
       this.pods.clearDirty()
     }
+    // MCP server connection lines — dashed lines from workstations to tool icon clusters
+    if (lodLevel >= 2 && (this.mcp.isDirty() || this.mcp.hasActiveConnections(this.rooms)) && time - this.mcp.getLastDrawAt() >= MCP_REFRESH_MS) {
+      this.mcp.drawMcpLines(time, this.rooms)
+      this.mcp.setLastDrawAt(time)
+      this.mcp.clearDirty()
+    }
+    // Hide MCP lines at L1 overview zoom
+    if (lodLevel < 2 && this.mcp) this.mcp.setVisible(false)
+    else if (lodLevel >= 2 && this.mcp) this.mcp.setVisible(true)
     // Rivalry connecting lines — electric blue dashes between rival agents (every 2.5s)
     if (this.pods.hasRivalries() && time - this.pods.getLastRivalryDrawAt() >= 2500) {
       this.pods.drawRivalryLines(time, this.rooms)
@@ -1170,7 +1280,7 @@ export class OfficeScene extends Phaser.Scene {
           cpu: session.cpu,
           memoryMB: session.memoryMB,
           uptime: session.uptime,
-          sessionMode: (cpuVal >= 1 ? 'working' : 'idle') as const,
+          sessionMode: (cpuVal >= 1 ? 'working' : 'idle') as 'working' | 'idle',
           needsInteraction: false,
         })
       }
@@ -1263,6 +1373,9 @@ export class OfficeScene extends Phaser.Scene {
 
     // Achievement tracking
     achievements.trackAgentCount(allAgents.length)
+
+    // Mark MCP connection lines as dirty after agent state update
+    if (this.mcp) this.mcp.markDirty()
 
 
 
@@ -1391,6 +1504,7 @@ export class OfficeScene extends Phaser.Scene {
     this.pods.drawPodLines(this.time.now, this.rooms)
     this.pods.setLastDrawAt(this.time.now)
     this.pods.clearDirty()
+    this.mcp.markDirty()
   }
 
 
@@ -1505,7 +1619,7 @@ export class OfficeScene extends Phaser.Scene {
 
     const fadeIn = (obj: Phaser.GameObjects.GameObject, targetAlpha = 1) => {
       const v = obj as unknown as AlphaObj
-      this.tweens.killTweensOf(obj, 'alpha')
+      this.tweens.killTweensOf(obj)
       v.setVisible(true)
       if (v.alpha > 0 && v.alpha < targetAlpha) {
         this.tweens.add({ targets: obj, alpha: targetAlpha, duration: 200, ease: 'Power2' })
@@ -1518,7 +1632,7 @@ export class OfficeScene extends Phaser.Scene {
     const fadeOut = (obj: Phaser.GameObjects.GameObject) => {
       const v = obj as unknown as AlphaObj
       if (!v.visible) return
-      this.tweens.killTweensOf(obj, 'alpha')
+      this.tweens.killTweensOf(obj)
       this.tweens.add({
         targets: obj, alpha: 0, duration: 150, ease: 'Power2',
         onComplete: () => { (obj as unknown as AlphaObj).setVisible(false) },

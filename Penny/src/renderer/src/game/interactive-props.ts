@@ -550,7 +550,7 @@ class InteractiveProp {
       callback: () => {
         this.container.setAlpha(step % 2 === 0 ? 0.6 : 1)
         this.container.list.forEach((child) => {
-          if (child instanceof Phaser.GameObjects.Graphics) {
+          if (child instanceof Phaser.GameObjects.Sprite) {
             child.setTint(flashColors[step % flashColors.length])
           }
         })
@@ -558,7 +558,7 @@ class InteractiveProp {
         if (step >= 8) {
           this.container.setAlpha(1)
           this.container.list.forEach((child) => {
-            if (child instanceof Phaser.GameObjects.Graphics) child.clearTint()
+            if (child instanceof Phaser.GameObjects.Sprite) child.clearTint()
           })
           flashTimer.destroy()
           this.done()
@@ -680,16 +680,18 @@ class InteractiveProp {
     const flashTimer = this.scene.time.addEvent({
       delay: 60, repeat: 9,
       callback: () => {
-        // Tint cyan
+        // Tint cyan — Sprites support tint, Graphics use alpha flash
         this.container.list.forEach((child) => {
-          if (child instanceof Phaser.GameObjects.Graphics) {
+          if (child instanceof Phaser.GameObjects.Sprite) {
             child.setTint(step % 2 === 0 ? 0x00e5ff : 0xffffff)
           }
         })
+        this.container.setAlpha(step % 2 === 0 ? 0.7 : 1)
         step++
         if (step >= 10) {
+          this.container.setAlpha(1)
           this.container.list.forEach((child) => {
-            if (child instanceof Phaser.GameObjects.Graphics) child.clearTint()
+            if (child instanceof Phaser.GameObjects.Sprite) child.clearTint()
           })
           flashTimer.destroy()
           this.done()

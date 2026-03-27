@@ -38,6 +38,16 @@ When working in a pod (Solver/Reviewer/Executor):
 - Pod workflows are orchestrated by a state machine in `src/main/pods.ts`
 - Use `sendToSession()` for inter-agent communication via iTerm TTY
 
+## Penny MCP Tools
+
+You have access to Penny tools via MCP. Available tools:
+- `meta:list-tools` — List all available Penny tools
+- `meta:describe-tool` — Get full schema for a specific tool
+- `orchestrator:enqueue` — Add a task to the queue
+- `orchestrator:queue` — View current task queue (filterable by status)
+- `orchestrator:agent-health` — Check health of all agents
+Always call `meta:list-tools` first to discover the current tool set.
+
 ## Updates
 
 _This file is automatically updated after completed pod workflows._

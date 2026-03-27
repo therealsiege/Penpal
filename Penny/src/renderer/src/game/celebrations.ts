@@ -847,6 +847,36 @@ export class CelebrationManager {
   }
 
   /**
+   * Brief gold sparkle burst on a workstation when the user approves a tool call.
+   * 8-12 particles radiate outward with upward drift, shrink and fade over 500ms.
+   */
+  approveSparkle(x: number, y: number): void {
+    soundEngine.click()
+    const count = 8 + Math.floor(Math.random() * 5) // 8-12
+    for (let i = 0; i < count; i++) {
+      const p = this._sparklePool.find(c => !c.getData('busy'))
+      if (!p) continue
+      const angle = (i / count) * Math.PI * 2 + (Math.random() - 0.5) * 0.5
+      const dist = 12 + Math.random() * 16
+      p.setPosition(x, y - 14)
+      p.setFillStyle(0xfbbf24) // gold/yellow
+      p.setRadius(1.2 + Math.random() * 1.2)
+      p.setAlpha(0.9).setScale(1).setVisible(true).setData('busy', true)
+      this._scene.tweens.add({
+        targets: p,
+        x: x + Math.cos(angle) * dist,
+        y: (y - 14) + Math.sin(angle) * dist - 8, // slight upward drift
+        alpha: 0,
+        scaleX: 0,
+        scaleY: 0,
+        duration: 400 + Math.random() * 150,
+        ease: 'Power2',
+        onComplete: () => { p.setVisible(false).setData('busy', false) },
+      })
+    }
+  }
+
+  /**
    * Simple XP gain floating number with a Grade A sprite accent.
    * Shows a small GRADE_A sprite at the origin and a rising "+{amount}" text.
    * Subtle upward drift over 1.2 seconds, fading out.
@@ -1091,7 +1121,7 @@ export class CelebrationManager {
       duration: 520,
       ease: 'Power2',
       onUpdate: (tween) => {
-        progress = tween.getValue()
+        progress = tween.getValue() ?? 0
         const currentRadius = 6 + progress * 52
         const alpha = (1 - progress) * 0.85
         gfx.clear()

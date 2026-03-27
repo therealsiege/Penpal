@@ -781,7 +781,7 @@ export class OfficeUI {
     const fadeIn = (obj: Phaser.GameObjects.GameObject, targetAlpha = 1) => {
       const v = obj as unknown as AlphaObj
       // Kill any existing LOD fade tween on this object to prevent conflicts
-      this.scene.tweens.killTweensOf(obj, 'alpha')
+      this.scene.tweens.killTweensOf(obj)
       v.setVisible(true)
       // Respect objects that manage their own alpha (e.g. quest icons at alpha 0)
       if (v.alpha > 0 && v.alpha < targetAlpha) {
@@ -797,7 +797,7 @@ export class OfficeUI {
       const v = obj as unknown as AlphaObj
       if (!v.visible) return // already hidden
       // Kill any existing LOD fade tween on this object
-      this.scene.tweens.killTweensOf(obj, 'alpha')
+      this.scene.tweens.killTweensOf(obj)
       this.scene.tweens.add({
         targets: obj, alpha: 0, duration: 150, ease: 'Power2',
         onComplete: () => { (obj as unknown as AlphaObj).setVisible(false) },

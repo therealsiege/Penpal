@@ -114,3 +114,58 @@ export const AMBIENT_MOTE_POOL_SIZE = 26
 export const MAKO_MOTE_POOL_SIZE = 15
 export const SPARK_POOL_SIZE = 12
 export const STEAM_WISP_POOL_SIZE = 8
+
+// Eval glow — success-rate indicator behind workstation desk
+export const EVAL_GLOW_GREEN   = 0x22c55e
+export const EVAL_GLOW_AMBER   = 0xf59e0b
+export const EVAL_GLOW_RED     = 0xef4444
+export const EVAL_GLOW_GREY    = 0x6b7280
+export const EVAL_GLOW_RADIUS  = 30
+export const EVAL_GLOW_ALPHA_MIN      = 0.1
+export const EVAL_GLOW_ALPHA_MAX      = 0.2
+export const EVAL_GLOW_PULSE_DURATION = 2000
+export const EVAL_GLOW_REFRESH_MS     = 30_000
+
+// Context utilization meter
+export const CTX_METER_W = 30
+export const CTX_METER_H = 4
+export const CTX_GREEN = 0x22c55e
+export const CTX_AMBER = 0xf59e0b
+export const CTX_RED = 0xef4444
+export const CTX_THRESHOLD_AMBER = 0.6
+export const CTX_THRESHOLD_RED = 0.8
+
+// Thinking dots (best-of-N reasoning animation)
+export const THINKING_DOT_RADIUS = 3
+export const THINKING_DOT_SPACING = 10
+export const THINKING_DOT_Y = -55
+export const THINKING_DOT_FADE_MS = 300
+export const THINKING_DOT_HOLD_MS = 500
+
+// ---------------------------------------------------------------------------
+// MCP connection line constants
+// ---------------------------------------------------------------------------
+
+/** Color per MCP server name — used for dashed connection lines in the game view */
+export const MCP_SERVER_COLORS: Record<string, number> = {
+  serena:    0x8b5cf6, // violet
+  context7:  0x22d3ee, // cyan
+  github:    0xc4ccd6, // grey-white
+  Neon:      0x4ade80, // green
+  magic:     0xf472b6, // pink
+  linear:    0x818cf8, // indigo
+  firecrawl: 0xfb923c, // orange
+  memory:    0xfbbf24, // amber
+  notion:    0xf87171, // red
+  'phaser-editor': 0x60a5fa, // blue
+  'ddg-search':    0x38bdf8, // sky
+  'sequential-thinking': 0xa78bfa, // purple
+}
+export const MCP_SERVER_COLOR_DEFAULT = 0x64748b // slate fallback
+
+/** Redraw cadence for MCP connection lines (ms) — same as pod lines */
+export const MCP_REFRESH_MS = 90
+
+/** Offset from room right edge for the MCP icon cluster */
+export const MCP_ICON_CLUSTER_OFFSET_X = 70
+export const MCP_ICON_CLUSTER_SPACING_Y = 14

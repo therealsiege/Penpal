@@ -98,7 +98,8 @@ export class RoomVisibilityManager {
   private _enableRoom(id: string, room: ManagedRoom): void {
     for (const obj of room.objects) {
       if (!obj.active) {
-        obj.setActive(true).setVisible(true)
+        obj.setActive(true)
+        ;(obj as unknown as { setVisible(v: boolean): void }).setVisible(true)
         const body = (obj as Phaser.Types.Physics.Arcade.GameObjectWithBody).body
         if (body) {
           (body as Phaser.Physics.Arcade.Body).enable = true
@@ -113,7 +114,8 @@ export class RoomVisibilityManager {
   private _disableRoom(id: string, room: ManagedRoom): void {
     for (const obj of room.objects) {
       if (obj.active) {
-        obj.setActive(false).setVisible(false)
+        obj.setActive(false)
+        ;(obj as unknown as { setVisible(v: boolean): void }).setVisible(false)
         const body = (obj as Phaser.Types.Physics.Arcade.GameObjectWithBody).body
         if (body) {
           (body as Phaser.Physics.Arcade.Body).enable = false

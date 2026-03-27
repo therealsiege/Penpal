@@ -10,10 +10,16 @@ interface PtySession {
   agentId?: string
 }
 
+// ── Constants ───────────────────────────────────────────────────────────────
+
+const MAX_CONCURRENT_PTYS = 10
+const SWEEP_INTERVAL_MS = 60_000
+
 // ── State ───────────────────────────────────────────────────────────────────
 
 const sessions = new Map<string, PtySession>()
 let nextId = 1
+let sweepTimer: ReturnType<typeof setInterval> | null = null
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -26,6 +32,29 @@ function getWindow(): BrowserWindow | null {
   return wins.length > 0 ? wins[0] : null
 }
 
+function isPtyAlive(proc: pty.IPty): boolean {
+  try {
+    process.kill(proc.pid, 0)
+    return true
+  } catch {
+    return false
+  }
+}
+
+/** Periodic sweep: check if PTY processes are still alive, clean up dead ones */
+function sweepDeadPtys(): void {
+  for (const [id, session] of sessions) {
+    if (!isPtyAlive(session.proc)) {
+      console.warn(`[pty] Sweeping dead PTY: ${id} (pid=${session.proc.pid})`)
+      const win = getWindow()
+      if (win && !win.isDestroyed()) {
+        win.webContents.send('pty:exit', id, -1)
+      }
+      sessions.delete(id)
+    }
+  }
+}
+
 // ── Public API ──────────────────────────────────────────────────────────────
 
 export function createPty(
@@ -34,6 +63,11 @@ export function createPty(
   args?: string[],
   env?: Record<string, string>,
 ): string {
+  // Cap max concurrent PTY sessions
+  if (sessions.size >= MAX_CONCURRENT_PTYS) {
+    throw new Error(`Maximum concurrent PTY sessions (${MAX_CONCURRENT_PTYS}) reached. Close some terminals first.`)
+  }
+
   const id = `pty-${nextId++}`
   const shell = command || getShell()
   const shellArgs = args || []
@@ -78,9 +112,28 @@ export function destroyPty(id: string): void {
 
 export function destroyAllPtys(): void {
   for (const session of sessions.values()) {
-    session.proc.kill()
+    try { session.proc.kill() } catch { /* already dead */ }
   }
   sessions.clear()
+}
+
+/** Start the periodic dead-PTY sweep */
+export function startPtySweep(): void {
+  if (sweepTimer) return
+  sweepTimer = setInterval(sweepDeadPtys, SWEEP_INTERVAL_MS)
+}
+
+/** Stop the periodic sweep (call on app quit) */
+export function stopPtySweep(): void {
+  if (sweepTimer) {
+    clearInterval(sweepTimer)
+    sweepTimer = null
+  }
+}
+
+/** Get current PTY session count */
+export function getPtyCount(): number {
+  return sessions.size
 }
 
 // ── IPC Registration ────────────────────────────────────────────────────────
@@ -103,4 +156,7 @@ export function registerPtyHandlers(): void {
   ipcMain.handle('pty:destroy', (_event, id: string) => {
     destroyPty(id)
   })
+
+  // Start the periodic sweep
+  startPtySweep()
 }

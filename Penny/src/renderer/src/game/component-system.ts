@@ -188,7 +188,7 @@ export class StatusComponent extends Component {
   /** Resolved animation mode for the current state. */
   get animMode(): WorkstationAnimMode {
     if (!this._state) return 'idle'
-    return resolveAnimMode(this._state.status, this._state.session?.mode)
+    return resolveAnimMode(this._state.status, this._state.sessionMode)
   }
 
   update(_dt: number): void {
@@ -207,7 +207,7 @@ export class StatusComponent extends Component {
   /** Stable fingerprint for change detection — matches existing logic in
    *  office-workstation.ts so future migration stays drop-in compatible. */
   static fingerprint(s: AgentState): string {
-    return `${s.status}|${s.session?.mode ?? ''}|${s.session?.isThinking ?? false}`
+    return `${s.status}|${s.sessionMode ?? ''}|${s.needsInteraction ?? false}`
   }
 }
 

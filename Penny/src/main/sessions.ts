@@ -3,7 +3,12 @@ import path from 'path'
 import { exec, spawn } from 'child_process'
 import { promisify } from 'util'
 import os from 'os'
-import { buildAgentCliArgs, saveAgentSession, type BuildCliOpts } from './agents'
+import {
+  buildAgentCliArgs,
+  buildAgentHeadlessInvocation,
+  saveAgentSession,
+  type BuildCliOpts,
+} from './agents'
 
 const execAsync = promisify(exec)
 
@@ -67,6 +72,8 @@ export interface ClaudeSession {
   subAgentInvocations: SubAgentInvocation[]
   parseErrors: number
   lastError: string | null
+  contextUtilization: number | undefined
+  contextRotDetected: boolean
 }
 
 export interface ConversationMessage {
@@ -211,6 +218,8 @@ interface SessionData {
   analysis: SessionAnalysis
   parseErrors: number
   lastError: string | null
+  contextUtilization: number | undefined
+  contextRotDetected: boolean
 }
 
 function readSessionData(sessionId: string): SessionData {
@@ -222,6 +231,8 @@ function readSessionData(sessionId: string): SessionData {
       analysis: { waitingForInput: false, mode: 'idle', interactionType: 'none', subAgentInvocations: [] },
       parseErrors: 0,
       lastError: null,
+      contextUtilization: undefined,
+      contextRotDetected: false,
     }
   }
 
@@ -257,6 +268,8 @@ function readSessionData(sessionId: string): SessionData {
       analysis: { waitingForInput: false, mode: 'error', interactionType: 'none', subAgentInvocations: [] },
       parseErrors: 1,
       lastError: (e as Error).message,
+      contextUtilization: undefined,
+      contextRotDetected: false,
     }
   }
 
@@ -266,12 +279,25 @@ function readSessionData(sessionId: string): SessionData {
     analysis.mode = 'error'
   }
 
+  // Estimate context utilization from total character count in JSONL lines.
+  // Claude's context window is ~200K tokens; rough heuristic: 4 chars ~ 1 token.
+  const CONTEXT_WINDOW_TOKENS = 200_000
+  let totalChars = 0
+  for (const line of lines) totalChars += line.length
+  const estimatedTokens = totalChars / 4
+  const contextUtilization = Math.min(1, estimatedTokens / CONTEXT_WINDOW_TOKENS)
+  // Compressing mode is a strong signal of very high utilization
+  const isCompressing = analysis.mode === 'compressing'
+  const contextRotDetected = isCompressing || contextUtilization >= 0.85
+
   return {
     lastUserMessage: extractLastUserMessage(lines),
     lastAssistantBlurb: extractLastAssistantBlurb(lines),
     analysis,
     parseErrors,
     lastError,
+    contextUtilization: isCompressing ? 0.95 : contextUtilization,
+    contextRotDetected,
   }
 }
 
@@ -694,6 +720,8 @@ export async function getClaudeSessions(): Promise<ClaudeSession[]> {
       subAgentInvocations: sessionData.analysis.subAgentInvocations,
       parseErrors: sessionData.parseErrors,
       lastError: sessionData.lastError,
+      contextUtilization: sessionData.contextUtilization,
+      contextRotDetected: sessionData.contextRotDetected,
     })
   }
 
@@ -1091,12 +1119,11 @@ export async function runAgentHeadless(
   prompt: string,
   opts: { permissionMode?: string; timeoutMs?: number } = {},
 ): Promise<HeadlessResult> {
-  const resolvedCwd = resolveUserPath(cwd)
   const timeoutMs = opts.timeoutMs ?? 600_000
 
-  let cliArgs: string[]
+  let invocation: { command: string; args: string[]; cwd: string }
   try {
-    cliArgs = buildAgentCliArgs(agentId, resolvedCwd, {
+    invocation = buildAgentHeadlessInvocation(agentId, cwd, prompt, {
       headless: true,
       permissionMode: opts.permissionMode,
     })
@@ -1104,15 +1131,11 @@ export async function runAgentHeadless(
     return { success: false, output: '', error: (err as Error).message, durationMs: 0 }
   }
 
-  // `--add-dir`/other variadic options can consume trailing tokens.
-  // Use `--` to terminate option parsing so the prompt is always positional.
-  cliArgs.push('--', prompt)
-
   const start = Date.now()
 
   return new Promise<HeadlessResult>((resolve) => {
-    const child = spawn('claude', cliArgs, {
-      cwd: resolvedCwd,
+    const child = spawn(invocation.command, invocation.args, {
+      cwd: invocation.cwd,
       stdio: ['ignore', 'pipe', 'pipe'],
       env: { ...process.env },
     })

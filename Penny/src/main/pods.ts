@@ -11,6 +11,7 @@ export type PodStatus =
   | 'solving'
   | 'reviewing'
   | 'executing'
+  | 'self-fixing'
   | 'feedback'
   | 'complete'
   | 'failed'
@@ -25,10 +26,47 @@ export interface PodRole {
 }
 
 export interface WorkflowArtifact {
-  stage: 'solve' | 'review' | 'execute'
+  stage: 'solve' | 'review' | 'execute' | 'self-fix'
   path: string
   iteration: number
   timestamp: number
+  candidateIndex?: number
+  selected?: boolean
+}
+
+export interface SolverCandidate {
+  index: number
+  output: string
+  agentId: string
+  durationMs: number
+}
+
+export interface SelfEvalResult {
+  selected: number
+  confidence: number
+  reasoning: string
+}
+
+export interface ReviewIssue {
+  severity: 'critical' | 'major' | 'minor' | 'nitpick'
+  location: string
+  description: string
+  suggestion: string
+}
+
+export interface ReviewerCritique {
+  verdict: 'approve' | 'approve-with-notes' | 'request-changes' | 'reject'
+  confidence: number
+  issues: ReviewIssue[]
+  strengths: string[]
+  summary: string
+}
+
+export interface PhaseConfig {
+  candidates: number
+  selfEvaluation: boolean
+  confidenceThreshold: number
+  maxSelfFixes: number
 }
 
 export interface PodWorkflow {
@@ -43,6 +81,14 @@ export interface PodWorkflow {
   iteration: number
   maxIterations: number
   artifacts: WorkflowArtifact[]
+  solverCandidates?: SolverCandidate[]
+  selfEvaluation?: SelfEvalResult
+  solverCandidateCount: number
+  critique?: ReviewerCritique
+  selfFixAttempts: number
+  maxSelfFixes: number
+  priority?: string
+  phaseConfig?: PhaseConfig
   createdAt: number
   updatedAt: number
   error?: string
@@ -57,22 +103,32 @@ export interface PodPreset {
   description: string
 }
 
+// ── Phase Config ────────────────────────────────────────────────────────────
+
+const PHASE_CONFIGS: Record<string, PhaseConfig> = {
+  critical: { candidates: 3, selfEvaluation: true, confidenceThreshold: 0.8, maxSelfFixes: 2 },
+  high:     { candidates: 2, selfEvaluation: true, confidenceThreshold: 0.7, maxSelfFixes: 1 },
+  normal:   { candidates: 1, selfEvaluation: false, confidenceThreshold: 0.5, maxSelfFixes: 0 },
+  low:      { candidates: 1, selfEvaluation: false, confidenceThreshold: 0.5, maxSelfFixes: 0 },
+}
+
+function getPhaseConfig(priority?: string): PhaseConfig {
+  return PHASE_CONFIGS[priority || 'normal'] || PHASE_CONFIGS.normal
+}
+
 // ── Presets ──────────────────────────────────────────────────────────────────
 
-// Load presets from YAML (Fix 14), falling back to hardcoded defaults
 let _cachedPresets: PodPreset[] | null = null
 
 function getPresets(): PodPreset[] {
   if (_cachedPresets) return _cachedPresets
 
-  // Try loading from YAML first
   const yamlPresets = loadPodPresets()
   if (yamlPresets.length > 0) {
     _cachedPresets = yamlPresets
     return _cachedPresets
   }
 
-  // Fallback to hardcoded defaults
   _cachedPresets = [
     {
       id: 'frontend-feature',
@@ -85,7 +141,7 @@ function getPresets(): PodPreset[] {
       id: 'backend-feature',
       solver: 'fullstack-dev',
       reviewer: 'backend-arch',
-      executor: 'electron-dev', // Fix 2: was fullstack-dev (collision with solver)
+      executor: 'electron-dev',
       description: 'Build, review, and test backend logic',
     },
     {
@@ -106,7 +162,7 @@ function getPresets(): PodPreset[] {
   return _cachedPresets
 }
 
-// ── Persistence (Fix 4) ─────────────────────────────────────────────────────
+// ── Persistence ─────────────────────────────────────────────────────────────
 
 const PERSIST_PATH = path.resolve(__dirname, '..', '..', 'data', 'pod-workflows.json')
 
@@ -141,11 +197,10 @@ function loadPods(): void {
 
 let workflowCounter = 0
 const workflows = new Map<string, PodWorkflow>()
-const activeWorkflowPromises = new Map<string, Promise<void>>() // Fix 3: track running workflows
+const activeWorkflowPromises = new Map<string, Promise<void>>()
 
 export const podEvents = new EventEmitter()
 
-// Load persisted workflows on module init (Fix 4)
 loadPods()
 
 function generateId(): string {
@@ -158,13 +213,135 @@ function setStatus(wf: PodWorkflow, status: PodStatus): void {
   wf.updatedAt = Date.now()
   wf.stageHistory.push({ stage: status, enteredAt: Date.now() })
   podEvents.emit('status-change', wf)
-  savePods() // Persist after every state transition (Fix 4)
+  savePods()
 }
 
 // ── Headless execution helpers ──────────────────────────────────────────────
 
-const PLAN_TIMEOUT_MS = 600_000   // 10 min for planning
-const EXECUTE_TIMEOUT_MS = 1_800_000  // 30 min for execution
+const PLAN_TIMEOUT_MS = 600_000
+const EXECUTE_TIMEOUT_MS = 1_800_000
+
+// ── Self-Eval Helpers (exported for tests) ──────────────────────────────────
+
+export function formatSelfEvalMessage(task: string, candidates: SolverCandidate[]): string {
+  const candidateBlocks = candidates.map((c) => {
+    const summary = c.output.length > 2000 ? c.output.slice(0, 2000) + '\n... [truncated]' : c.output
+    return `### Candidate ${c.index}\n${summary}`
+  })
+
+  return [
+    `You generated ${candidates.length} candidate solutions for this task:`,
+    '',
+    `**Task**: ${task}`,
+    '',
+    ...candidateBlocks,
+    '',
+    'Evaluate each candidate against these criteria:',
+    '1. **Correctness** — does it solve the stated problem?',
+    '2. **Completeness** — does it handle edge cases?',
+    '3. **Simplicity** — is it the simplest correct solution?',
+    '',
+    'Select the best candidate and explain why.',
+    'Output ONLY valid JSON in this exact format:',
+    '```json',
+    '{ "selected": 1, "confidence": 0.85, "reasoning": "Candidate 1 is the most correct and complete..." }',
+    '```',
+    '',
+    'Where "selected" is the candidate number (1-indexed), "confidence" is 0.0-1.0, and "reasoning" explains your choice.',
+  ].join('\n')
+}
+
+export function parseSelfEvalResult(output: string, numCandidates: number): SelfEvalResult | null {
+  try {
+    const jsonMatch = output.match(/\{[^{}]*"selected"\s*:\s*\d+[^{}]*"confidence"\s*:\s*[\d.]+[^{}]*\}/s)
+      ?? output.match(/\{[^{}]*"confidence"\s*:\s*[\d.]+[^{}]*"selected"\s*:\s*\d+[^{}]*\}/s)
+    if (!jsonMatch) return null
+
+    const parsed = JSON.parse(jsonMatch[0])
+    const selected = Number(parsed.selected)
+    const confidence = Number(parsed.confidence)
+    const reasoning = String(parsed.reasoning || '')
+
+    if (!Number.isInteger(selected) || selected < 1 || selected > numCandidates) return null
+    if (isNaN(confidence) || confidence < 0 || confidence > 1) return null
+
+    return { selected, confidence, reasoning }
+  } catch {
+    return null
+  }
+}
+
+// ── Reviewer Critique Parser (exported for tests) ───────────────────────────
+
+const VALID_VERDICTS = ['approve', 'approve-with-notes', 'request-changes', 'reject'] as const
+const VALID_SEVERITIES = ['critical', 'major', 'minor', 'nitpick'] as const
+
+function makeFallbackCritique(reason: string): ReviewerCritique {
+  return {
+    verdict: 'approve',
+    confidence: 0.5,
+    issues: [],
+    strengths: [],
+    summary: `Could not parse reviewer output — falling back to auto-approve. ${reason}`,
+  }
+}
+
+export function parseReviewerCritique(raw: string | undefined | null): ReviewerCritique {
+  if (!raw) {
+    console.warn('[pods] No reviewer output to parse — falling back')
+    return makeFallbackCritique('No output.')
+  }
+
+  try {
+    // Try to extract JSON from markdown fenced block first
+    let jsonStr = raw
+    const fenced = raw.match(/```(?:json)?\s*\n?([\s\S]*?)```/)
+    if (fenced) {
+      jsonStr = fenced[1].trim()
+    } else {
+      const jsonMatch = raw.match(/\{[\s\S]*"verdict"[\s\S]*\}/)
+      if (jsonMatch) {
+        jsonStr = jsonMatch[0]
+      }
+    }
+
+    const parsed = JSON.parse(jsonStr)
+
+    if (!parsed.verdict || !parsed.summary) {
+      console.warn('[pods] Missing required fields in reviewer critique — falling back')
+      return makeFallbackCritique('Missing required fields.')
+    }
+
+    if (!VALID_VERDICTS.includes(parsed.verdict)) {
+      console.warn(`[pods] Invalid verdict "${parsed.verdict}" — falling back`)
+      return makeFallbackCritique(`Invalid verdict: ${parsed.verdict}`)
+    }
+
+    let confidence = Number(parsed.confidence)
+    if (isNaN(confidence)) confidence = 0.5
+    confidence = Math.max(0, Math.min(1, confidence))
+
+    const issues: ReviewIssue[] = (parsed.issues || [])
+      .filter((i: Record<string, unknown>) => VALID_SEVERITIES.includes(i.severity as typeof VALID_SEVERITIES[number]))
+      .map((i: Record<string, unknown>) => ({
+        severity: i.severity as ReviewIssue['severity'],
+        location: String(i.location || ''),
+        description: String(i.description || ''),
+        suggestion: String(i.suggestion || ''),
+      }))
+
+    return {
+      verdict: parsed.verdict,
+      confidence,
+      issues,
+      strengths: Array.isArray(parsed.strengths) ? parsed.strengths.map(String) : [],
+      summary: String(parsed.summary),
+    }
+  } catch {
+    console.warn('[pods] Failed to parse reviewer critique JSON — falling back')
+    return makeFallbackCritique('JSON parse error.')
+  }
+}
 
 // ── Message formatting ──────────────────────────────────────────────────────
 
@@ -245,7 +422,7 @@ function formatExecutorMessage(wf: PodWorkflow, solverOutput?: string, reviewerO
   ].join('\n')
 }
 
-// ── Core workflow loop (headless) ────────────────────────────────────────────
+// ── Core workflow stages ─────────────────────────────────────────────────────
 
 async function runSolveStage(wf: PodWorkflow, feedback?: string): Promise<boolean> {
   setStatus(wf, 'solving')
@@ -253,21 +430,127 @@ async function runSolveStage(wf: PodWorkflow, feedback?: string): Promise<boolea
   wf.reviewer.status = 'waiting'
   wf.executor.status = 'waiting'
 
-  const prompt = formatSolverMessage(wf, feedback)
-  console.log(`[pods] Running solver ${wf.solver.agentId} headless in ${wf.cwd}`)
-  const result = await runAgentHeadless(wf.solver.agentId, wf.cwd, prompt, {
-    timeoutMs: EXECUTE_TIMEOUT_MS,
-  })
+  const candidateCount = wf.solverCandidateCount
 
-  if (!result.success) {
-    wf.error = `Solver failed: ${result.error}`
+  if (candidateCount <= 1) {
+    // ── Single candidate path (original behavior) ──
+    const prompt = formatSolverMessage(wf, feedback)
+    console.log(`[pods] Running solver ${wf.solver.agentId} headless in ${wf.cwd}`)
+    const startMs = Date.now()
+    const result = await runAgentHeadless(wf.solver.agentId, wf.cwd, prompt, {
+      timeoutMs: EXECUTE_TIMEOUT_MS,
+    })
+
+    if (!result.success) {
+      wf.error = `Solver failed: ${result.error}`
+      setStatus(wf, 'failed')
+      return false
+    }
+
+    wf.solver.status = 'complete'
+    wf.solver.output = result.output
+    wf.solverCandidates = [{
+      index: 1,
+      output: result.output || '',
+      agentId: wf.solver.agentId,
+      durationMs: result.durationMs ?? (Date.now() - startMs),
+    }]
+    console.log(`[pods] Solver done (${Math.round((result.durationMs ?? 0) / 1000)}s)`)
+    return true
+  }
+
+  // ── Multi-candidate path (best-of-N) ──
+  console.log(`[pods] Running ${candidateCount} solver candidates in parallel`)
+  const prompt = formatSolverMessage(wf, feedback)
+  const startMs = Date.now()
+
+  const promises = Array.from({ length: candidateCount }, (_, i) =>
+    runAgentHeadless(wf.solver.agentId, wf.cwd, prompt, {
+      timeoutMs: EXECUTE_TIMEOUT_MS,
+    }).then(result => ({
+      index: i + 1,
+      result,
+      durationMs: Date.now() - startMs,
+    })),
+  )
+
+  const settled = await Promise.allSettled(promises)
+  const candidates: SolverCandidate[] = []
+
+  for (const entry of settled) {
+    if (entry.status === 'fulfilled' && entry.value.result.success) {
+      candidates.push({
+        index: entry.value.index,
+        output: entry.value.result.output || '',
+        agentId: wf.solver.agentId,
+        durationMs: entry.value.durationMs,
+      })
+    }
+  }
+
+  if (candidates.length === 0) {
+    wf.error = 'All solver candidates failed'
     setStatus(wf, 'failed')
     return false
   }
 
-  wf.solver.status = 'complete'
-  wf.solver.output = result.output
-  console.log(`[pods] Solver done (${Math.round(result.durationMs / 1000)}s)`)
+  wf.solverCandidates = candidates
+
+  // Store artifacts for each candidate
+  for (const c of candidates) {
+    wf.artifacts.push({
+      stage: 'solve',
+      path: `candidate-${c.index}`,
+      iteration: wf.iteration,
+      timestamp: Date.now(),
+      candidateIndex: c.index,
+      selected: false,
+    })
+  }
+
+  // ── Self-evaluation ──
+  if (candidates.length > 1 && wf.phaseConfig?.selfEvaluation) {
+    console.log(`[pods] Running self-evaluation on ${candidates.length} candidates`)
+    const evalPrompt = formatSelfEvalMessage(wf.task, candidates)
+
+    const evalResult = await runAgentHeadless(wf.solver.agentId, wf.cwd, evalPrompt, {
+      permissionMode: 'plan',
+      timeoutMs: PLAN_TIMEOUT_MS,
+    })
+
+    let selection: SelfEvalResult | null = null
+    if (evalResult.success && evalResult.output) {
+      selection = parseSelfEvalResult(evalResult.output, candidates.length)
+    }
+
+    if (selection) {
+      wf.selfEvaluation = selection
+      const selected = candidates.find(c => c.index === selection!.selected) || candidates[0]
+      wf.solver.output = selected.output
+      wf.solver.status = 'complete'
+
+      // Mark selected artifact
+      for (const a of wf.artifacts) {
+        if (a.stage === 'solve' && a.iteration === wf.iteration && a.candidateIndex === selected.index) {
+          a.selected = true
+        }
+      }
+
+      console.log(`[pods] Self-eval selected candidate ${selection.selected} (confidence: ${selection.confidence})`)
+    } else {
+      // Fallback: pick the first candidate
+      console.log('[pods] Self-eval failed to parse — selecting first candidate')
+      wf.solver.output = candidates[0].output
+      wf.solver.status = 'complete'
+      wf.selfEvaluation = { selected: 1, confidence: 0, reasoning: 'Self-eval parse failed — defaulting to first candidate' }
+    }
+  } else {
+    // Single candidate survived or self-eval disabled
+    wf.solver.output = candidates[0].output
+    wf.solver.status = 'complete'
+  }
+
+  console.log(`[pods] Solver done with ${candidates.length}/${candidateCount} candidates`)
   return true
 }
 
@@ -319,7 +602,7 @@ async function runExecuteStage(wf: PodWorkflow): Promise<{ passed: boolean }> {
   return { passed }
 }
 
-// ── CLAUDE.md auto-update (Fix 8) ──────────────────────────────────────────
+// ── CLAUDE.md auto-update ───────────────────────────────────────────────────
 
 function appendWorkflowSummary(wf: PodWorkflow): void {
   const sharedMemoryPath = path.resolve(__dirname, '..', '..', 'agents', 'CLAUDE.md')
@@ -350,15 +633,14 @@ async function runWorkflow(wf: PodWorkflow): Promise<void> {
     for (let i = wf.iteration; i <= wf.maxIterations; i++) {
       wf.iteration = i
 
-      // Check if paused
       if (wf.status === 'paused') return
 
-      // Stage 1: Solve
+      // Stage 1: Solve (with best-of-N when configured)
       const feedback = i > 1 ? wf.executor.output : undefined
       const solveOk = await runSolveStage(wf, feedback)
       if (!solveOk || wf.status === 'paused') return
 
-      // Stage 2: Review (only on first iteration — reviewer designs test plan once)
+      // Stage 2: Review (only on first iteration)
       if (i === 1) {
         const reviewOk = await runReviewStage(wf)
         if (!reviewOk || wf.status === 'paused') return
@@ -370,7 +652,6 @@ async function runWorkflow(wf: PodWorkflow): Promise<void> {
 
       if (passed) {
         setStatus(wf, 'complete')
-        // Fix 8: Auto-update CLAUDE.md
         appendWorkflowSummary(wf)
         return
       }
@@ -378,24 +659,20 @@ async function runWorkflow(wf: PodWorkflow): Promise<void> {
       // Tests failed — feedback loop
       if (i < wf.maxIterations) {
         setStatus(wf, 'feedback')
-        // Reset solver status for next iteration
         wf.solver.status = 'waiting'
         wf.solver.output = undefined
       }
     }
 
-    // Exhausted max iterations
     if (wf.status !== 'complete') {
       wf.error = `Exhausted ${wf.maxIterations} iterations without passing tests`
       setStatus(wf, 'failed')
-      // Fix 8: Still record the summary on failure
       appendWorkflowSummary(wf)
     }
   } catch (err) {
     wf.error = (err as Error).message
     setStatus(wf, 'failed')
   } finally {
-    // Fix 3: Remove from active promises when done
     activeWorkflowPromises.delete(wf.id)
   }
 }
@@ -410,6 +687,9 @@ export interface CreatePodOpts {
   solverAgent?: string
   reviewerAgent?: string
   executorAgent?: string
+  priority?: string
+  solverCandidates?: number
+  maxSelfFixes?: number
 }
 
 export function createPod(task: string, opts: CreatePodOpts = {}): PodWorkflow {
@@ -431,19 +711,21 @@ export function createPod(task: string, opts: CreatePodOpts = {}): PodWorkflow {
     executor = opts.executorAgent || 'electron-dev'
   }
 
-  // Fix 2: Validate that all three roles use different agentIds
   if (solver === reviewer || solver === executor || reviewer === executor) {
     throw new Error(
       `All three pod roles must use different agents. Got solver=${solver}, reviewer=${reviewer}, executor=${executor}`,
     )
   }
 
-  // Resolve cwd: explicit > solver's default repo > home dir
   let cwd = opts.cwd
   if (!cwd) {
     const solverCfg = getAgentConfig(solver)
     cwd = solverCfg?.defaultRepos[0] || process.env.HOME || '/tmp'
   }
+
+  const phaseConfig = getPhaseConfig(opts.priority)
+  const candidateCount = opts.solverCandidates ?? phaseConfig.candidates
+  const maxSelfFixes = opts.maxSelfFixes ?? phaseConfig.maxSelfFixes
 
   const wf: PodWorkflow = {
     id: generateId(),
@@ -457,15 +739,19 @@ export function createPod(task: string, opts: CreatePodOpts = {}): PodWorkflow {
     iteration: 1,
     maxIterations: opts.maxIterations ?? 3,
     artifacts: [],
+    solverCandidateCount: candidateCount,
+    selfFixAttempts: 0,
+    maxSelfFixes,
+    priority: opts.priority,
+    phaseConfig,
     createdAt: Date.now(),
     updatedAt: Date.now(),
     stageHistory: [{ stage: 'pending', enteredAt: Date.now() }],
   }
 
   workflows.set(wf.id, wf)
-  savePods() // Fix 4: persist immediately
+  savePods()
 
-  // Start workflow asynchronously, track the promise (Fix 3)
   const promise = runWorkflow(wf)
   activeWorkflowPromises.set(wf.id, promise)
 
@@ -491,13 +777,11 @@ export function resumePod(workflowId: string): boolean {
   const wf = workflows.get(workflowId)
   if (!wf || wf.status !== 'paused') return false
 
-  // Fix 3: Check if a workflow promise is already running
   if (activeWorkflowPromises.has(workflowId)) {
     console.warn(`[pods] Workflow ${workflowId} already has an active promise, skipping resume`)
     return false
   }
 
-  // Resume from where we left off
   const promise = runWorkflow(wf)
   activeWorkflowPromises.set(workflowId, promise)
   return true
@@ -508,7 +792,6 @@ export function cancelPod(workflowId: string): boolean {
   if (!wf) return false
   wf.error = 'Cancelled by user'
   setStatus(wf, 'failed')
-  // Fix 6: removed dead pollingIntervals cleanup
   return true
 }
 

@@ -21,8 +21,8 @@ export interface SteamHost {
 
 export interface ParticleWorkstation {
   state: {
-    sessionMode: string
-    needsInteraction: boolean
+    sessionMode?: string
+    needsInteraction?: boolean
   } | null
   container: { x: number; y: number }
 }
@@ -83,6 +83,9 @@ export class OfficeParticles {
   // Chime ripple pool
   private chimeRipplePool: Phaser.GameObjects.Arc[] = []
 
+  // Streak flame particle pool
+  private streakFlamePool: Phaser.GameObjects.Arc[] = []
+
   constructor(scene: Phaser.Scene) {
     this.scene = scene
     this.weather = new WeatherParticles(scene)
@@ -126,12 +129,13 @@ export class OfficeParticles {
     })
     this.initAlertRipplePool()
     this.initChimeRipplePool()
+    this.initStreakFlamePool()
     this.initEmojiReactionPool()
     this.initSpriteReactionPool()
     this.initMouseTrailPool()
 
     // Confetti burst emitter
-    const confettiGfx = this.scene.make.graphics({ x: 0, y: 0, add: false })
+    const confettiGfx = this.scene.make.graphics({ x: 0, y: 0, add: false } as Phaser.Types.GameObjects.Graphics.Options)
     confettiGfx.fillStyle(0xffffff)
     confettiGfx.fillRect(0, 0, 4, 4)
     confettiGfx.generateTexture('confetti_particle', 4, 4)
@@ -173,6 +177,9 @@ export class OfficeParticles {
 
     for (const c of this.chimeRipplePool) { this.scene.tweens.killTweensOf(c); c.destroy() }
     this.chimeRipplePool = []
+
+    for (const c of this.streakFlamePool) { this.scene.tweens.killTweensOf(c); c.destroy() }
+    this.streakFlamePool = []
 
     for (const t of this.emojiReactionPool) { this.scene.tweens.killTweensOf(t); t.destroy() }
     this.emojiReactionPool = []
@@ -610,6 +617,63 @@ export class OfficeParticles {
       circle.setData('busy', false)
       this.mouseTrailPool.push(circle)
     }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Streak flame particle pool
+  // ---------------------------------------------------------------------------
+
+  private initStreakFlamePool(): void {
+    for (let i = 0; i < 30; i++) {
+      const p = this.scene.add.circle(0, 0, 1.5, 0xf97316, 0)
+        .setDepth(599).setVisible(false).setBlendMode(Phaser.BlendModes.ADD)
+      p.setData('busy', false)
+      this.streakFlamePool.push(p)
+    }
+  }
+
+  /**
+   * Spawn a single flame particle drifting upward from (worldX, worldY).
+   * Color shifts based on streak intensity: orange < 10, yellow < 15, white 15+.
+   */
+  spawnFlameParticle(worldX: number, worldY: number, streak: number): void {
+    if (this._reducedMode && Math.random() > 0.3) return
+    const p = this.streakFlamePool.find(c => !c.getData('busy'))
+    if (!p) return
+
+    const colors = streak >= 15
+      ? [0xfefce8, 0xfef3c7, 0xfbbf24]
+      : streak >= 10
+        ? [0xfbbf24, 0xfde68a, 0xfb923c]
+        : [0xf97316, 0xfb923c, 0xea580c]
+
+    const color = colors[Math.floor(Math.random() * colors.length)]
+    const radius = 0.8 + Math.random() * 1.4
+    const xOff = (Math.random() - 0.5) * 12
+    const startX = worldX + xOff
+
+    p.setPosition(startX, worldY)
+    p.setFillStyle(color)
+    p.setRadius(radius)
+    p.setAlpha(0.8).setVisible(true).setData('busy', true)
+
+    const driftY = -10 - Math.random() * 12
+    const swayAmp = 2 + Math.random()
+    const duration = 300 + Math.random() * 300
+    const startXPos = startX
+
+    this.scene.tweens.add({
+      targets: p,
+      y: worldY + driftY,
+      alpha: 0,
+      duration,
+      ease: 'Quad.easeOut',
+      onUpdate: (tw: Phaser.Tweens.Tween) => {
+        const progress = tw.progress
+        p.x = startXPos + Math.sin(progress * Math.PI * 2) * swayAmp
+      },
+      onComplete: () => { p.setVisible(false).setData('busy', false) },
+    })
   }
 
   // ---------------------------------------------------------------------------

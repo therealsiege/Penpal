@@ -19,6 +19,7 @@ import {
 import {
   getAgentConfigs,
   getAgentConfig,
+  getTaskRunnerKind,
   loadAgentSessionMap,
   removeAgentSession,
   type AgentConfig,
@@ -33,12 +34,14 @@ export type TaskSource = 'slack' | 'dashboard' | 'api' | 'github'
 export type TaskStage = 'queued' | 'planning' | 'executing' | 'validating' | 'done'
 export type ModelProvider = 'claude' | 'ollama'
 
+export type StageResultProvider = ModelProvider | 'opencode' | 'cursor-agent'
+
 export interface StageResult {
   stage: TaskStage
   success: boolean
   output: string
   durationMs: number
-  provider: ModelProvider
+  provider: StageResultProvider
   startedAt: number
   completedAt: number
 }
@@ -359,21 +362,23 @@ async function runStage(
   agentId: string,
   stage: TaskStage,
   prompt: string,
-): Promise<{ success: boolean; output: string; durationMs: number; provider: ModelProvider }> {
+): Promise<{ success: boolean; output: string; durationMs: number; provider: StageResultProvider }> {
   const provider = task.provider ?? currentProvider
 
-  // Ollama handles plan & validate only; execute always uses Claude
+  // Ollama handles plan & validate only; execution uses PENNY_TASK_RUNNER (claude / opencode / cursor-agent)
   if (provider === 'ollama' && (stage === 'planning' || stage === 'validating')) {
     const result = await runOllama(prompt, { timeoutMs: 300_000 })
     return { success: result.success, output: result.output, durationMs: result.durationMs, provider: 'ollama' }
   }
 
-  // Claude (or execute stage always)
   const result = await runAgentHeadless(agentId, task.project, prompt, {
     permissionMode: stage === 'validating' ? 'plan' : undefined,
     timeoutMs: 1_800_000,
   })
-  return { success: result.success, output: result.output, durationMs: result.durationMs, provider: 'claude' }
+  const runner = getTaskRunnerKind()
+  const headlessProvider: StageResultProvider =
+    runner === 'opencode' ? 'opencode' : runner === 'cursor-agent' ? 'cursor-agent' : 'claude'
+  return { success: result.success, output: result.output, durationMs: result.durationMs, provider: headlessProvider }
 }
 
 // ── Init ────────────────────────────────────────────────────────────────────
@@ -647,7 +652,7 @@ async function dispatchTask(task: Task, agent: ScoredAgent): Promise<void> {
   // Check for cancellation between stages
   if (task.status === 'cancelled') return
 
-  // ── Stage 2: Executing (always Claude) ──
+  // ── Stage 2: Executing (headless runner from PENNY_TASK_RUNNER) ──
   task.currentStage = 'executing'
   saveTasks()
   orchestratorEvents.emit('task-updated', task)

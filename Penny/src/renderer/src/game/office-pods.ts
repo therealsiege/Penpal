@@ -1,7 +1,7 @@
 import Phaser from 'phaser'
 import type { Room, PodLineInfo } from './office-types'
 import { COLOR_LED_AMBER } from './office-constants'
-import { hashToken } from './office-helpers'
+import { hashToken, drawDashedLine } from './office-helpers'
 import { SPRITESHEET_KEYS, ICON_FRAMES, EFFECT_ANIM_KEYS } from './office-asset-keys'
 import { leaderboardManager } from './leaderboard'
 import type { Rivalry } from './leaderboard'
@@ -113,11 +113,15 @@ export class OfficePods {
       // Color based on workflow status
       let lineColor = 0x64748b
       let lineAlpha = 0.4
-      let endpointFrame = ICON_FRAMES.CIRCLE_GREY
-      if (pod.status === 'solving' || pod.status === 'reviewing' || pod.status === 'executing') {
+      let endpointFrame: number = ICON_FRAMES.CIRCLE_GREY
+      if (pod.status === 'solving' || pod.status === 'reviewing' || pod.status === 'executing' || pod.status === 'self-fixing') {
         lineColor = 0x3b82f6
         lineAlpha = 0.6
         endpointFrame = ICON_FRAMES.CIRCLE_BLUE
+      } else if (pod.status === 'self-fixing') {
+        lineColor = 0xf97316
+        lineAlpha = 0.6
+        endpointFrame = ICON_FRAMES.CIRCLE_YELLOW
       } else if (pod.status === 'feedback') {
         lineColor = 0xfbbf24
         lineAlpha = 0.5
@@ -128,7 +132,7 @@ export class OfficePods {
 
       // Draw dashed lines between each pair
       for (let i = 0; i < positions.length - 1; i++) {
-        this.drawDashedLine(
+        drawDashedLine(
           this.podGraphics,
           positions[i].x, positions[i].y,
           positions[i + 1].x, positions[i + 1].y,
@@ -171,41 +175,18 @@ export class OfficePods {
   }
 
   private isPodAnimatedStatus(status: string): boolean {
-    return status === 'solving' || status === 'reviewing' || status === 'executing' || status === 'feedback'
+    return status === 'solving' || status === 'reviewing' || status === 'executing' || status === 'self-fixing' || status === 'feedback'
   }
 
   private getPodPulseSegments(status: string, pointCount: number): Array<{ from: number; to: number }> {
     if (pointCount < 2) return []
     if (status === 'feedback') return [{ from: Math.min(1, pointCount - 1), to: 0 }]
-    if (status === 'reviewing' || status === 'executing') {
+    if (status === 'reviewing' || status === 'executing' || status === 'self-fixing') {
       if (pointCount >= 3) return [{ from: 1, to: 2 }]
       return [{ from: 0, to: 1 }]
     }
     if (status === 'solving') return [{ from: 0, to: 1 }]
     return []
-  }
-
-  private drawDashedLine(g: Phaser.GameObjects.Graphics, x1: number, y1: number, x2: number, y2: number, dashLen: number, gapLen: number): void {
-    const dx = x2 - x1
-    const dy = y2 - y1
-    const len = Math.sqrt(dx * dx + dy * dy)
-    if (len < 0.001) return
-    const ux = dx / len
-    const uy = dy / len
-    let d = 0
-    let drawing = true
-    g.beginPath()
-    g.moveTo(x1, y1)
-    while (d < len) {
-      const step = drawing ? dashLen : gapLen
-      d = Math.min(d + step, len)
-      const px = x1 + ux * d
-      const py = y1 + uy * d
-      if (drawing) g.lineTo(px, py)
-      else g.moveTo(px, py)
-      drawing = !drawing
-    }
-    g.strokePath()
   }
 
   getWorkstationWorldPos(agentId: string, rooms: Map<string, Room>): { x: number; y: number } | null {
@@ -392,11 +373,11 @@ export class OfficePods {
 
       // Outer glow line
       g.lineStyle(3, 0x00e5ff, 0.1)
-      this.drawDashedLine(g, pos1.x, pos1.y, pos2.x, pos2.y, 5, 4)
+      drawDashedLine(g, pos1.x, pos1.y, pos2.x, pos2.y, 5, 4)
 
       // Core line
       g.lineStyle(1.5, 0x00e5ff, 0.35)
-      this.drawDashedLine(g, pos1.x, pos1.y, pos2.x, pos2.y, 5, 4)
+      drawDashedLine(g, pos1.x, pos1.y, pos2.x, pos2.y, 5, 4)
 
       // Small glow dots at each endpoint
       g.fillStyle(0x00e5ff, 0.15)

@@ -27,6 +27,16 @@ import {
   COLOR_LED_AMBER,
   LOD_L2_MAX,
   ROOM_HEADER_H,
+  THINKING_DOT_RADIUS,
+  THINKING_DOT_SPACING,
+  THINKING_DOT_Y,
+  THINKING_DOT_FADE_MS,
+  THINKING_DOT_HOLD_MS,
+  EVAL_GLOW_GREEN,
+  EVAL_GLOW_AMBER,
+  EVAL_GLOW_RED,
+  EVAL_GLOW_GREY,
+  EVAL_GLOW_REFRESH_MS,
 } from './office-constants'
 import { ANIM_KEYS, DIFFICULTY_STAR_FRAME, ICON_FRAMES, EFFECT_ANIM_KEYS, SPRITESHEET_KEYS, PET_FACE_FRAMES } from './office-asset-keys'
 import { getAgentCharacterIndex } from './office-helpers'
@@ -36,6 +46,17 @@ import type { WorkstationHost } from './office-workstation'
 import type { NavMesh } from './nav-mesh'
 import { buildOwnRoomRect } from './nav-mesh'
 import { PathWalker } from './path-walker'
+
+// ---------------------------------------------------------------------------
+// Eval glow color helper
+// ---------------------------------------------------------------------------
+
+function evalGlowColor(rate: number | null | undefined): number {
+  if (rate == null) return EVAL_GLOW_GREY
+  if (rate > 0.8) return EVAL_GLOW_GREEN
+  if (rate >= 0.6) return EVAL_GLOW_AMBER
+  return EVAL_GLOW_RED
+}
 
 // ---------------------------------------------------------------------------
 // WorkstationAnimator
@@ -54,6 +75,13 @@ export class WorkstationAnimator {
    *  Called from the working→idle transition inside updateAnimation. */
   private refreshTaskCountCallback: (ws: WorkstationSprite) => void
 
+  /** Cached eval success rates: agentId → successRate (null = no data) */
+  private evalCache = new Map<string, number | null>()
+  /** Timestamp of last eval data fetch */
+  private lastEvalFetchAt = 0
+  /** Guard against duplicate in-flight eval fetches */
+  private evalFetchPromise: Promise<void> | null = null
+
   constructor(
     scene: Phaser.Scene,
     host: WorkstationHost,
@@ -67,11 +95,44 @@ export class WorkstationAnimator {
   }
 
   // ---------------------------------------------------------------------------
+  // Eval glow data fetching
+  // ---------------------------------------------------------------------------
+
+  /** Refresh eval data from main process (throttled to EVAL_GLOW_REFRESH_MS). */
+  private refreshEvalData(): void {
+    const now = Date.now()
+    if (now - this.lastEvalFetchAt < EVAL_GLOW_REFRESH_MS) return
+    if (this.evalFetchPromise) return
+    this.lastEvalFetchAt = now
+    this.evalFetchPromise = window.api.evalsReportAll()
+      .then((reports) => {
+        this.evalCache.clear()
+        for (const r of reports) {
+          this.evalCache.set(r.agentId, r.totalTasks > 0 ? r.successRate : null)
+        }
+      })
+      .catch(() => { /* silently ignore — grey glow on failure */ })
+      .finally(() => { this.evalFetchPromise = null })
+  }
+
+  /** Apply eval glow color to a workstation based on cached data. */
+  updateEvalGlow(ws: WorkstationSprite): void {
+    this.refreshEvalData()
+    if (!ws.evalGlow) return
+    const agentId = ws.state?.config.id
+    if (!agentId) return
+    const cached = this.evalCache.has(agentId) ? this.evalCache.get(agentId)! : undefined
+    if (cached === ws.evalSuccessRate) return
+    ws.evalSuccessRate = cached
+    ws.evalGlow.setFillStyle(evalGlowColor(cached))
+  }
+
+  // ---------------------------------------------------------------------------
   // updateAnimation — the main animation state machine
   // ---------------------------------------------------------------------------
 
   updateAnimation(ws: WorkstationSprite, agent: AgentState): void {
-    const isWaiting = agent.needsInteraction
+    const isWaiting = agent.needsInteraction ?? false
     const isWorking = (agent.sessionMode === 'working' || agent.sessionMode === 'plan') && !isWaiting
 
     const mode: 'idle' | 'working' | 'waiting' = isWaiting ? 'waiting' : isWorking ? 'working' : 'idle'
@@ -128,6 +189,10 @@ export class WorkstationAnimator {
     }
     // Always stop steam when transitioning; idle branch will re-spawn it
     this.host.clearSteamParticles(ws)
+    // Clean up thinking dots when leaving working mode
+    if (mode !== 'working' && ws.thinkingDotsContainer) {
+      this.hideThinkingDots(ws)
+    }
 
     // Fade out mood emoji and badge on mode transition; updateMood will fade the new ones in
     if (ws.moodTween) { ws.moodTween.destroy(); ws.moodTween = undefined }
@@ -511,6 +576,9 @@ export class WorkstationAnimator {
 
         // Track in season
         seasonManager.trackTaskCompleted(xpData?.currentStreak ?? 0)
+
+        // Update streak flame effect
+        this.updateStreakFlame(ws, agent)
       }
 
       // Stamp idleSince so later timers can detect prolonged boredom
@@ -798,7 +866,7 @@ export class WorkstationAnimator {
 
     let color = COLOR_LED_AMBER
     let glyph = '!'
-    let badgeFrame = ICON_FRAMES.CIRCLE_YELLOW
+    let badgeFrame: number = ICON_FRAMES.CIRCLE_YELLOW
     if (agent.interactionType === 'question') {
       color = 0x60a5fa
       glyph = '?'
@@ -941,11 +1009,36 @@ export class WorkstationAnimator {
   }
 
   /**
-   * Swap the desk pet mouth sprite to reflect the agent's current mood.
-   * frustrated -> teeth grin, happy/celebrating -> happy smile,
-   * tired -> flat line, default -> small o or happy.
+   * React desk pet to the agent's current mood.
+   * For animal pets: play hurt animation on frustrated, then resume idle.
+   * For monster pets: swap mouth sprite frame.
    */
   private updatePetMouth(ws: WorkstationSprite, mood: Mood): void {
+    // Animal pet hurt reaction
+    if (ws.animalSpecies && ws.deskPet?.active) {
+      if (mood === 'frustrated') {
+        const idleKey = `animal-idle-${ws.animalSpecies}`
+        // Brief shake + tint red to show distress, then resume idle
+        const baseX = ws.deskPet.x
+        this.scene.tweens.add({
+          targets: ws.deskPet,
+          x: baseX + 2, duration: 50, yoyo: true, repeat: 3,
+          onComplete: () => {
+            if (ws.deskPet?.active) {
+              ws.deskPet.x = baseX
+              if (this.scene.anims.exists(idleKey)) ws.deskPet.play(idleKey)
+            }
+          },
+        })
+        ws.deskPet.setTint(0xff6666)
+        this.scene.time.delayedCall(400, () => {
+          if (ws.deskPet?.active) ws.deskPet.clearTint()
+        })
+      }
+      return
+    }
+
+    // Monster pet mouth swap
     if (!ws.petMouth || !ws.petMouth.active) return
 
     let mouthFrame: number
@@ -1303,6 +1396,237 @@ export class WorkstationAnimator {
         })
         ws.blurbFadeTimer = undefined
       })
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Thinking dots — best-of-N reasoning animation
+  // ---------------------------------------------------------------------------
+
+  showThinkingDots(ws: WorkstationSprite, candidateCount: number): void {
+    if (ws.thinkingDotsContainer) return // already showing
+    if (candidateCount < 2) return // no animation for single candidate
+
+    const container = this.scene.add.container(0, THINKING_DOT_Y)
+    const dots: Phaser.GameObjects.Arc[] = []
+
+    const totalWidth = (candidateCount - 1) * THINKING_DOT_SPACING
+    const startX = -totalWidth / 2
+
+    for (let i = 0; i < candidateCount; i++) {
+      const dot = this.scene.add.circle(
+        startX + i * THINKING_DOT_SPACING, 0,
+        THINKING_DOT_RADIUS, activeTheme.accent, 0,
+      )
+      dot.setAlpha(0)
+      container.add(dot)
+      dots.push(dot)
+    }
+
+    ws.container.add(container)
+    ws.thinkingDotsContainer = container
+    ws.thinkingDots = dots
+    ws.thinkingCandidateCount = candidateCount
+
+    // Push to lodLevel3Objects so it hides at L1/L2
+    ws.lodLevel3Objects.push(container)
+
+    // Build repeating timeline: dots appear one by one, hold, fade, repeat
+    this.startThinkingTimeline(ws)
+  }
+
+  private startThinkingTimeline(ws: WorkstationSprite): void {
+    const dots = ws.thinkingDots
+    if (!dots || dots.length === 0) return
+
+    const stepMs = THINKING_DOT_FADE_MS
+    const holdMs = THINKING_DOT_HOLD_MS
+    const totalAppear = dots.length * stepMs
+    const cycleDuration = totalAppear + holdMs + THINKING_DOT_FADE_MS
+
+    // Use a single repeating tween on a proxy object to drive the timeline
+    const proxy = { progress: 0 }
+    ws.thinkingDotsTween = this.scene.tweens.add({
+      targets: proxy,
+      progress: 1,
+      duration: cycleDuration,
+      repeat: -1,
+      onUpdate: () => {
+        const elapsed = proxy.progress * cycleDuration
+        for (let i = 0; i < dots.length; i++) {
+          const dotStart = i * stepMs
+          if (elapsed < dotStart) {
+            dots[i].setAlpha(0)
+          } else if (elapsed < dotStart + stepMs) {
+            // Fading in
+            dots[i].setAlpha((elapsed - dotStart) / stepMs)
+            dots[i].setFillStyle(activeTheme.accent, dots[i].alpha)
+          } else if (elapsed < totalAppear + holdMs) {
+            // Hold phase
+            dots[i].setAlpha(1)
+            dots[i].setFillStyle(activeTheme.accent, 1)
+          } else {
+            // Fade out
+            const fadeElapsed = elapsed - (totalAppear + holdMs)
+            const alpha = Math.max(0, 1 - fadeElapsed / THINKING_DOT_FADE_MS)
+            dots[i].setAlpha(alpha)
+            dots[i].setFillStyle(activeTheme.accent, alpha)
+          }
+        }
+      },
+    })
+  }
+
+  playThinkingMerge(ws: WorkstationSprite): void {
+    const dots = ws.thinkingDots
+    if (!dots || dots.length === 0) {
+      this.hideThinkingDots(ws)
+      return
+    }
+
+    // Stop the looping timeline
+    if (ws.thinkingDotsTween) {
+      ws.thinkingDotsTween.destroy()
+      ws.thinkingDotsTween = undefined
+    }
+
+    // Make all dots fully visible for merge
+    for (const dot of dots) {
+      dot.setAlpha(1)
+      dot.setFillStyle(activeTheme.accent, 1)
+    }
+
+    // Tween all dots to center (x=0) simultaneously
+    const mergeTargets = dots.map(d => ({ x: d.x, ref: d }))
+    let completedCount = 0
+    for (const mt of mergeTargets) {
+      this.scene.tweens.add({
+        targets: mt.ref,
+        x: 0,
+        duration: 200,
+        ease: 'Power2',
+        onComplete: () => {
+          completedCount++
+          if (completedCount === mergeTargets.length) {
+            // All merged — scale pulse on center dot
+            const centerDot = dots[0]
+            centerDot.setFillStyle(0xffffff, 1)
+            ws.thinkingMergeTween = this.scene.tweens.add({
+              targets: centerDot,
+              scaleX: { from: 1, to: 1.8 },
+              scaleY: { from: 1, to: 1.8 },
+              duration: 300,
+              yoyo: true,
+              ease: 'Back.easeOut',
+              onComplete: () => {
+                // Fade out after pulse
+                this.scene.tweens.add({
+                  targets: centerDot,
+                  alpha: 0,
+                  duration: 300,
+                  ease: 'Sine.easeOut',
+                  onComplete: () => this.hideThinkingDots(ws),
+                })
+              },
+            })
+          }
+        },
+      })
+    }
+  }
+
+  hideThinkingDots(ws: WorkstationSprite): void {
+    if (ws.thinkingDotsTween) {
+      ws.thinkingDotsTween.destroy()
+      ws.thinkingDotsTween = undefined
+    }
+    if (ws.thinkingMergeTween) {
+      ws.thinkingMergeTween.destroy()
+      ws.thinkingMergeTween = undefined
+    }
+    if (ws.thinkingDotsContainer) {
+      // Remove from lodLevel3Objects
+      const idx = ws.lodLevel3Objects.indexOf(ws.thinkingDotsContainer)
+      if (idx >= 0) ws.lodLevel3Objects.splice(idx, 1)
+      ws.thinkingDotsContainer.destroy()
+      ws.thinkingDotsContainer = undefined
+    }
+    ws.thinkingDots = undefined
+    ws.thinkingCandidateCount = undefined
+  }
+
+  // ---------------------------------------------------------------------------
+  // Quality streak flame effect
+  // ---------------------------------------------------------------------------
+
+  startStreakFlame(ws: WorkstationSprite, streak: number, room: Room): void {
+    if (ws.lastFlameStreak === streak && ws.flameTimer) return
+    this.stopStreakFlame(ws, false)
+
+    ws.lastFlameStreak = streak
+    if (!ws.flameContainer) return
+    ws.flameContainer.setVisible(true)
+
+    const spawnPerTick = Math.max(1, Math.floor(streak / 5))
+    const spawnChance = 0.3
+
+    ws.flameTimer = this.scene.time.addEvent({
+      delay: 180,
+      loop: true,
+      callback: () => {
+        if (!ws.flameContainer?.visible) return
+        const worldX = room.x + ws.container.x
+        const worldY = room.y + ws.container.y + WS_DESK_Y - 4
+        for (let i = 0; i < spawnPerTick; i++) {
+          if (Math.random() < spawnChance) {
+            this.host.spawnFlameParticle(worldX, worldY, streak)
+          }
+        }
+      },
+    })
+  }
+
+  stopStreakFlame(ws: WorkstationSprite, withSmoke: boolean): void {
+    if (ws.flameTimer) { ws.flameTimer.destroy(); ws.flameTimer = undefined }
+    if (ws.flameTweens) {
+      for (const t of ws.flameTweens) { if (t.isPlaying()) t.stop(); t.destroy() }
+      ws.flameTweens = []
+    }
+    if (ws.flameContainer) {
+      ws.flameContainer.removeAll(true)
+      ws.flameContainer.setVisible(false)
+    }
+
+    if (withSmoke && ws.container?.active) {
+      if (this.scene.anims.exists(EFFECT_ANIM_KEYS.SMOKE)) {
+        const smoke = this.scene.add.sprite(0, WS_DESK_Y - 8, SPRITESHEET_KEYS.EFFECTS_SMOKE)
+          .setDepth(600).setScale(0.14).setAlpha(0.5)
+        ws.container.add(smoke)
+        smoke.play(EFFECT_ANIM_KEYS.SMOKE)
+        smoke.once('animationcomplete', () => smoke.destroy())
+      }
+    }
+
+    ws.lastFlameStreak = undefined
+  }
+
+  updateStreakFlame(ws: WorkstationSprite, agent: AgentState): void {
+    const streak = agent.xp?.currentStreak ?? 0
+    const prevStreak = ws.lastFlameStreak ?? 0
+
+    let ownerRoom: Room | undefined
+    for (const room of this.host.getRooms().values()) {
+      if (room.workstations.has(agent.config.id)) {
+        ownerRoom = room
+        break
+      }
+    }
+    if (!ownerRoom) return
+
+    if (streak >= 5) {
+      this.startStreakFlame(ws, streak, ownerRoom)
+    } else if (prevStreak >= 5 && streak < 5) {
+      this.stopStreakFlame(ws, true)
     }
   }
 }

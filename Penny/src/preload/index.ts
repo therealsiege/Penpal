@@ -1,5 +1,9 @@
 import { contextBridge, ipcRenderer } from 'electron'
 
+// Unwrap context-engineered responses for backward compat — renderer gets raw data
+const unwrap = <T>(result: T): T =>
+  (result && typeof result === 'object' && 'data' in result && 'summary' in result) ? (result as { data: T }).data : result
+
 contextBridge.exposeInMainWorld('pty', {
   create: (cwd: string, command?: string, args?: string[], env?: Record<string, string>) =>
     ipcRenderer.invoke('pty:create', cwd, command, args, env),
@@ -27,7 +31,7 @@ contextBridge.exposeInMainWorld('api', {
   getHotLeads: () => ipcRenderer.invoke('pipeline:hot-leads'),
   getTerritories: () => ipcRenderer.invoke('pipeline:territories'),
   getNewLeads: () => ipcRenderer.invoke('pipeline:new-leads'),
-  getClaudeSessions: () => ipcRenderer.invoke('sessions:list'),
+  getClaudeSessions: () => ipcRenderer.invoke('sessions:list').then(unwrap),
   getSessionConversation: (sessionId: string, source?: string) => ipcRenderer.invoke('sessions:conversation', sessionId, source),
   sendToSession: (tty: string, message: string) => ipcRenderer.invoke('sessions:send', tty, message),
   focusSession: (tty: string) => ipcRenderer.invoke('sessions:focus', tty),
@@ -35,8 +39,8 @@ contextBridge.exposeInMainWorld('api', {
   createNewSession: (cwd: string) => ipcRenderer.invoke('sessions:create', cwd),
   broadcastToSessions: (message: string) => ipcRenderer.invoke('sessions:broadcast', message),
   getGraphStats: () => ipcRenderer.invoke('graph:stats'),
-  searchLeads: (query: string) => ipcRenderer.invoke('leads:search', query),
-  getLeadDetail: (name: string) => ipcRenderer.invoke('leads:detail', name),
+  searchLeads: (query: string) => ipcRenderer.invoke('leads:search', query).then(unwrap),
+  getLeadDetail: (name: string) => ipcRenderer.invoke('leads:detail', name).then(unwrap),
   getLatestBriefing: () => ipcRenderer.invoke('briefing:latest'),
   listBriefings: () => ipcRenderer.invoke('briefing:list'),
   getBriefing: (date: string) => ipcRenderer.invoke('briefing:get', date),
@@ -54,22 +58,22 @@ contextBridge.exposeInMainWorld('api', {
   soundboardList: () => ipcRenderer.invoke('soundboard:list'),
   // Agent APIs
   getAgents: () => ipcRenderer.invoke('agents:list'),
-  getAgentStatuses: () => ipcRenderer.invoke('agents:statuses'),
+  getAgentStatuses: () => ipcRenderer.invoke('agents:statuses').then(unwrap),
   launchAgent: (agentId: string, cwd: string) => ipcRenderer.invoke('agents:launch', agentId, cwd),
   focusAgent: (agentId: string) => ipcRenderer.invoke('agents:focus', agentId),
   // Pod Workflow APIs
   createPod: (task: string, opts?: Record<string, unknown>) => ipcRenderer.invoke('pod:create', task, opts),
-  listPods: () => ipcRenderer.invoke('pod:list'),
-  getPodStatus: (workflowId: string) => ipcRenderer.invoke('pod:status', workflowId),
+  listPods: () => ipcRenderer.invoke('pod:list').then(unwrap),
+  getPodStatus: (workflowId: string) => ipcRenderer.invoke('pod:status', workflowId).then(unwrap),
   pausePod: (workflowId: string) => ipcRenderer.invoke('pod:pause', workflowId),
   resumePod: (workflowId: string) => ipcRenderer.invoke('pod:resume', workflowId),
   cancelPod: (workflowId: string) => ipcRenderer.invoke('pod:cancel', workflowId),
   getPodPresets: () => ipcRenderer.invoke('pod:presets'),
   // Vault File Manager
   vaultList: (relativePath: string) => ipcRenderer.invoke('vault:list', relativePath),
-  vaultRead: (relativePath: string) => ipcRenderer.invoke('vault:read', relativePath),
+  vaultRead: (relativePath: string) => ipcRenderer.invoke('vault:read', relativePath).then(unwrap),
   vaultWrite: (relativePath: string, content: string) => ipcRenderer.invoke('vault:write', relativePath, content),
-  vaultSearch: (query: string, glob?: string, limit?: number) => ipcRenderer.invoke('vault:search', query, glob, limit),
+  vaultSearch: (query: string, glob?: string, limit?: number) => ipcRenderer.invoke('vault:search', query, glob, limit).then(unwrap),
   vaultTags: () => ipcRenderer.invoke('vault:tags'),
   vaultFilesByTag: (tag: string) => ipcRenderer.invoke('vault:files-by-tag', tag),
   vaultBacklinks: (relativePath: string) => ipcRenderer.invoke('vault:backlinks', relativePath),
@@ -106,12 +110,12 @@ contextBridge.exposeInMainWorld('api', {
   veritasUpdateTaskStatus: (taskId: string, status: string) =>
     ipcRenderer.invoke('veritas:update-task-status', taskId, status),
   // Orchestrator
-  orchestratorQueue: () => ipcRenderer.invoke('orchestrator:queue'),
+  orchestratorQueue: () => ipcRenderer.invoke('orchestrator:queue').then(unwrap),
   orchestratorEnqueue: (title: string, description: string, project: string, priority: string) =>
     ipcRenderer.invoke('orchestrator:enqueue', title, description, project, priority),
   orchestratorCancelTask: (taskId: string) => ipcRenderer.invoke('orchestrator:cancel-task', taskId),
   orchestratorRetryTask: (taskId: string) => ipcRenderer.invoke('orchestrator:retry-task', taskId),
-  orchestratorAgentHealth: () => ipcRenderer.invoke('orchestrator:agent-health'),
+  orchestratorAgentHealth: () => ipcRenderer.invoke('orchestrator:agent-health').then(unwrap),
   orchestratorShutdownAgent: (agentId: string) => ipcRenderer.invoke('orchestrator:shutdown-agent', agentId),
   orchestratorStats: () => ipcRenderer.invoke('orchestrator:stats'),
   orchestratorXP: () => ipcRenderer.invoke('orchestrator:xp'),
@@ -127,6 +131,29 @@ contextBridge.exposeInMainWorld('api', {
   githubRemoveRepo: (owner: string, repo: string) =>
     ipcRenderer.invoke('github:remove-repo', owner, repo),
   githubListRepos: () => ipcRenderer.invoke('github:list-repos'),
+  // Eval Dashboard
+  evalsReportAll: () => ipcRenderer.invoke('evals:report-all').then(unwrap),
+  evalsReportAgent: (agentId: string) => ipcRenderer.invoke('evals:report-agent', agentId),
+  evalsStats: () => ipcRenderer.invoke('evals:stats').then(unwrap),
+  // Preference APIs
+  preferencesStats: () => ipcRenderer.invoke('preferences:stats'),
+  preferencesCount: () => ipcRenderer.invoke('preferences:count'),
+  preferencesQuery: (filter?: { agentId?: string; signal?: string; since?: string }) =>
+    ipcRenderer.invoke('preferences:query', filter),
+  preferencesGeneratePairs: () => ipcRenderer.invoke('preferences:generate-pairs'),
+  // Config Snapshot + Editing
+  getConfigSnapshot: () => ipcRenderer.invoke('config:snapshot'),
+  addProjectMcpServer: (server: { name: string; command: string; args: string[]; env?: Record<string, string>; cwd?: string }) =>
+    ipcRenderer.invoke('config:add-project-mcp', server),
+  removeProjectMcpServer: (name: string) => ipcRenderer.invoke('config:remove-project-mcp', name),
+  addProfileMcpServer: (profile: string, server: { name: string; command: string; args: string[]; env?: Record<string, string>; cwd?: string }) =>
+    ipcRenderer.invoke('config:add-profile-mcp', profile, server),
+  removeProfileMcpServer: (profile: string, serverName: string) =>
+    ipcRenderer.invoke('config:remove-profile-mcp', profile, serverName),
+  updateAgentTools: (agentId: string, tools: string[]) =>
+    ipcRenderer.invoke('config:update-agent-tools', agentId, tools),
+  // Session Health
+  getITermStatus: () => ipcRenderer.invoke('sessions:iterm-status'),
   // Opencode Sessions
   getOpencodeSessions: () => ipcRenderer.invoke('opencode:sessions'),
   // Data Scripts
@@ -145,4 +172,29 @@ contextBridge.exposeInMainWorld('api', {
   },
   getBriefingSchedule: () => ipcRenderer.invoke('data:get-briefing-schedule') as Promise<{ cron: string; enabled: boolean }>,
   setBriefingSchedule: (cron: string, enabled: boolean) => ipcRenderer.invoke('data:set-briefing-schedule', cron, enabled),
+  // Eval Harness
+  evalReportAgent: (agentId: string, since?: string) => ipcRenderer.invoke('evals:harness-report-agent', agentId, since),
+  evalReportAll: (since?: string) => ipcRenderer.invoke('evals:harness-report-all', since),
+  evalsWeeklyDigest: (weekOverride?: string) => ipcRenderer.invoke('evals:weekly-digest', weekOverride),
+  // Pod Quality Metrics
+  evalsPodQuality: (since?: string) => ipcRenderer.invoke('evals:pod-quality', since),
+  // Spot-Check Queue
+  evalsSpotCheckQueue: () => ipcRenderer.invoke('evals:spot-check-queue'),
+  evalsSpotCheckSample: (count: number) => ipcRenderer.invoke('evals:spot-check-sample', count),
+  evalsSpotCheckReview: (id: string, verdict: string, notes?: string) => ipcRenderer.invoke('evals:spot-check-review', id, verdict, notes),
+  evalsSpotCheckAgreement: () => ipcRenderer.invoke('evals:spot-check-agreement'),
+  // Context Health
+  contextHealth: () => ipcRenderer.invoke('evals:context-health'),
+  contextHealthAgent: (agentId: string) => ipcRenderer.invoke('evals:context-health-agent', agentId),
+  // Context-Engineered Rich APIs (full ContextEngineeredResponse shape)
+  getAgentStatusesRich: () => ipcRenderer.invoke('agents:statuses'),
+  getClaudeSessionsRich: () => ipcRenderer.invoke('sessions:list'),
+  searchLeadsRich: (query: string) => ipcRenderer.invoke('leads:search', query),
+  getLeadDetailRich: (name: string) => ipcRenderer.invoke('leads:detail', name),
+  listPodsRich: () => ipcRenderer.invoke('pod:list'),
+  getPodStatusRich: (workflowId: string) => ipcRenderer.invoke('pod:status', workflowId),
+  vaultReadRich: (relativePath: string) => ipcRenderer.invoke('vault:read', relativePath),
+  vaultSearchRich: (query: string, glob?: string, limit?: number) => ipcRenderer.invoke('vault:search', query, glob, limit),
+  orchestratorQueueRich: () => ipcRenderer.invoke('orchestrator:queue'),
+  orchestratorAgentHealthRich: () => ipcRenderer.invoke('orchestrator:agent-health'),
 })

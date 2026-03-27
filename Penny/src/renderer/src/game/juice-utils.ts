@@ -160,7 +160,7 @@ export function shake(
     duration,
     ease: 'Linear',
     onUpdate: (tween) => {
-      const progress = tween.getValue()
+      const progress = tween.getValue() ?? 0
       const decay = 1 - progress / steps
       const dx = (Math.random() * 2 - 1) * intensity * decay
       const dy = (Math.random() * 2 - 1) * intensity * decay
@@ -294,7 +294,7 @@ export function typewriter(
     duration: text.length * speed,
     ease: 'Linear',
     onUpdate: (tween) => {
-      const next = Math.floor(tween.getValue())
+      const next = Math.floor(tween.getValue() ?? 0)
       if (next > shown) {
         shown = next
         textObject.setText(text.slice(0, shown))

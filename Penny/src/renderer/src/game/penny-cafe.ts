@@ -28,6 +28,7 @@ const STOOL_START_X = (CAFE_W - TOTAL_STOOLS_W) / 2
 export interface CafeHostScene extends Phaser.Scene {
   rooms: Map<string, CafeRoom>
   spawnEmojiReaction(worldX: number, worldY: number, emoji: string): void
+  getNavMesh(): import('./nav-mesh').NavMesh
 }
 
 export interface CafeRoom {

@@ -76,7 +76,7 @@ function convertTemplateColors(raw: Record<string, unknown>): RoomTemplateConfig
 function convertSharedColors(raw: Record<string, unknown>): SharedColors {
   const result = {} as SharedColors
   for (const key of Object.keys(raw)) {
-    ;(result as Record<string, number>)[key] = hexToNumber(raw[key] as string)
+    ;(result as unknown as Record<string, number>)[key] = hexToNumber(raw[key] as string)
   }
   return result
 }

@@ -56,6 +56,7 @@ interface TrackedIssue {
   ingestedAt: number
   updatedAt: number
   labelSynced: boolean // true once final label (pr-ready/agent-failed) has been applied
+  branch?: string     // git branch created for this issue
 }
 
 let trackedIssues: TrackedIssue[] = []
@@ -103,6 +104,112 @@ function saveTracked(): void {
   } catch (err) {
     console.error('[github-issues] Failed to save tracked issues:', err)
   }
+}
+
+// ── Label definitions ─────────────────────────────────────────────────────
+
+const REQUIRED_LABELS = [
+  { name: 'agent-ready',   color: '8e3e85', description: 'Issue ready for agent pickup' },
+  { name: 'agent-working', color: '3130c0', description: 'Agent is actively working on this' },
+  { name: 'agent-done',    color: '0beb24', description: 'Agent completed the work' },
+  { name: 'agent-failed',  color: '3c303e', description: 'Agent failed to complete the work' },
+  { name: 'pr-ready',      color: '0beb24', description: 'PR has been created for review' },
+]
+
+/** Ensure all required labels exist in a repo. Silently skips existing ones. */
+function ensureLabels(owner: string, repo: string): void {
+  for (const label of REQUIRED_LABELS) {
+    try {
+      execSync(
+        `gh label create "${label.name}" --color "${label.color}" ` +
+        `--description "${label.description}" --repo ${owner}/${repo}`,
+        { encoding: 'utf-8', timeout: 15_000, stdio: 'pipe' },
+      )
+      console.log(`[github-issues] Created label "${label.name}" in ${owner}/${repo}`)
+    } catch {
+      // Label already exists — expected, ignore
+    }
+  }
+}
+
+// ── Git branch helpers ────────────────────────────────────────────────────
+
+function createIssueBranch(localPath: string, issueNumber: number, slug: string): string | null {
+  const branch = `issue-${issueNumber}-${slug}`
+  try {
+    // Fetch latest main, create branch from it
+    execSync('git fetch origin main 2>/dev/null || git fetch origin master 2>/dev/null || true', {
+      cwd: localPath, encoding: 'utf-8', timeout: 30_000, stdio: 'pipe',
+    })
+    // Detect default branch
+    let baseBranch = 'main'
+    try {
+      baseBranch = execSync('git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null || echo refs/remotes/origin/main', {
+        cwd: localPath, encoding: 'utf-8', timeout: 10_000, stdio: 'pipe',
+      }).trim().replace('refs/remotes/origin/', '')
+    } catch { /* default to main */ }
+
+    execSync(`git checkout -b "${branch}" "origin/${baseBranch}"`, {
+      cwd: localPath, encoding: 'utf-8', timeout: 15_000, stdio: 'pipe',
+    })
+    console.log(`[github-issues] Created branch ${branch} in ${localPath}`)
+    return branch
+  } catch (err) {
+    console.error(`[github-issues] Failed to create branch ${branch}:`, err)
+    return null
+  }
+}
+
+function pushBranchAndCreatePR(
+  config: RepoConfig,
+  localPath: string,
+  branch: string,
+  issueNumber: number,
+  title: string,
+): boolean {
+  try {
+    // Stage all changes, commit, push
+    execSync('git add -A', { cwd: localPath, encoding: 'utf-8', timeout: 15_000, stdio: 'pipe' })
+
+    // Check if there are changes to commit
+    const status = execSync('git status --porcelain', { cwd: localPath, encoding: 'utf-8', timeout: 10_000, stdio: 'pipe' }).trim()
+    if (!status) {
+      console.log(`[github-issues] No changes to commit on branch ${branch}`)
+      return false
+    }
+
+    execSync(
+      `git commit -m "$(cat <<'COMMITEOF'\n${title}\n\nCloses #${issueNumber}\n\nCo-Authored-By: Penny Orchestrator <noreply@penny.dev>\nCOMMITEOF\n)"`,
+      { cwd: localPath, encoding: 'utf-8', timeout: 15_000, stdio: 'pipe', shell: '/bin/bash' },
+    )
+
+    execSync(`git push -u origin "${branch}"`, {
+      cwd: localPath, encoding: 'utf-8', timeout: 60_000, stdio: 'pipe',
+    })
+
+    // Create PR
+    execSync(
+      `gh pr create --repo ${config.owner}/${config.repo} ` +
+      `--head "${branch}" --title "${title.replace(/"/g, '\\"')}" ` +
+      `--body "$(cat <<'PREOF'\nCloses #${issueNumber}\n\nAutomated implementation by Penny orchestrator.\nPREOF\n)"`,
+      { cwd: localPath, encoding: 'utf-8', timeout: 30_000, stdio: 'pipe', shell: '/bin/bash' },
+    )
+
+    console.log(`[github-issues] Created PR for branch ${branch}`)
+    return true
+  } catch (err) {
+    console.error(`[github-issues] Failed to push/PR for ${branch}:`, err)
+    return false
+  }
+}
+
+function cleanupBranch(localPath: string): void {
+  try {
+    // Go back to main/master so we don't leave the repo on a stale branch
+    execSync('git checkout main 2>/dev/null || git checkout master 2>/dev/null || true', {
+      cwd: localPath, encoding: 'utf-8', timeout: 15_000, stdio: 'pipe',
+    })
+  } catch { /* best effort */ }
 }
 
 // ── GitHub CLI helpers ──────────────────────────────────────────────────────
@@ -203,13 +310,30 @@ async function pollOnce(): Promise<number> {
     }
 
     for (const issue of issues) {
-      // Already tracked?
-      if (trackedIssues.some(t => t.repo === repoKey && t.number === issue.number)) continue
+      // Already tracked? Allow re-queue if previous attempt is terminal (done/failed)
+      const existing = trackedIssues.find(t => t.repo === repoKey && t.number === issue.number)
+      if (existing) {
+        if (existing.stage !== 'done' && existing.stage !== 'failed') continue
+        // Remove stale entry so we can re-enqueue fresh
+        trackedIssues = trackedIssues.filter(t => !(t.repo === repoKey && t.number === issue.number))
+        console.log(`[github-issues] Re-queuing #${issue.number} (previous: ${existing.stage})`)
+      }
 
-      // Build task description
+      // Create isolated branch for this issue
+      const slug = issue.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 40).replace(/-$/, '')
+      const branch = config.localPath
+        ? createIssueBranch(config.localPath, issue.number, slug)
+        : null
+
+      // Build task description with branch context
+      const branchNote = branch
+        ? `\n\n**IMPORTANT**: You are on branch \`${branch}\`. Commit your work to this branch. Do NOT push or create PRs — that will be handled automatically.`
+        : ''
+
       const description = [
         `GitHub Issue: ${repoKey}#${issue.number}`,
         `URL: https://github.com/${repoKey}/issues/${issue.number}`,
+        branchNote,
         '',
         issue.body || '(no description)',
       ].join('\n')
@@ -233,6 +357,7 @@ async function pollOnce(): Promise<number> {
         ingestedAt: Date.now(),
         updatedAt: Date.now(),
         labelSynced: false,
+        branch: branch ?? undefined,
       })
       saveTracked()
 
@@ -240,12 +365,13 @@ async function pollOnce(): Promise<number> {
       swapLabel(config, issue.number)
 
       // Comment on the issue
+      const branchMsg = branch ? `\nBranch: \`${branch}\`` : ''
       addComment(config, issue.number,
-        `🤖 **Picked up by Penny orchestrator**\n\nTask ID: \`${task.id}\`\nPriority: ${task.priority}\nSkills: ${task.requiredSkills.join(', ')}\n\nA local claude-code session will be spooled up to work on this.`,
+        `🤖 **Picked up by Penny orchestrator**\n\nTask ID: \`${task.id}\`\nPriority: ${task.priority}\nSkills: ${task.requiredSkills.join(', ')}${branchMsg}\n\nA local claude-code session will be spooled up to work on this.`,
       )
 
       enqueued++
-      console.log(`[github-issues] Enqueued #${issue.number}: "${issue.title}" as ${task.id}`)
+      console.log(`[github-issues] Enqueued #${issue.number}: "${issue.title}" as ${task.id} (branch: ${branch || 'none'})`)
     }
   }
 
@@ -283,12 +409,27 @@ function syncTaskStatuses(): void {
 
       // Sync terminal labels back to GitHub
       if (newStage === 'done') {
-        setLabel(config, tracked.number, ['agent-working'], 'pr-ready')
+        // Push branch and create PR if we have a branch
+        let prCreated = false
+        if (tracked.branch && config.localPath) {
+          prCreated = pushBranchAndCreatePR(
+            config, config.localPath, tracked.branch, tracked.number,
+            `[${config.repo}#${tracked.number}] ${tracked.title}`,
+          )
+          cleanupBranch(config.localPath)
+        }
+
+        const doneLabel = prCreated ? 'pr-ready' : 'agent-done'
+        setLabel(config, tracked.number, ['agent-working'], doneLabel)
+        const prNote = prCreated ? '\nA pull request has been created for review.' : ''
         addComment(config, tracked.number,
-          `✅ **Task completed**\n\nThe agent finished working on this issue.\nTask ID: \`${tracked.taskId}\``,
+          `✅ **Task completed**\n\nThe agent finished working on this issue.\nTask ID: \`${tracked.taskId}\`${prNote}`,
         )
         tracked.labelSynced = true
       } else if (newStage === 'failed') {
+        // Cleanup branch on failure
+        if (config.localPath) cleanupBranch(config.localPath)
+
         setLabel(config, tracked.number, ['agent-working'], 'agent-failed')
         addComment(config, tracked.number,
           `❌ **Task failed**\n\nThe agent encountered an error.\nTask ID: \`${tracked.taskId}\`\n\nTo retry, remove \`agent-failed\` and add \`agent-ready\` again.`,
@@ -309,7 +450,14 @@ let syncTimer: ReturnType<typeof setInterval> | null = null
 export function startGithubIssuePoller(): void {
   if (pollTimer) return
   loadTracked()
+  // Self-heal: consolidate any duplicate entries from re-queued issues
+  consolidateTrackedIssues()
   console.log(`[github-issues] Starting poller (${POLL_INTERVAL / 1000}s) for ${REPOS.map(r => `${r.owner}/${r.repo}`).join(', ')}`)
+
+  // Ensure labels exist in all watched repos (async, best-effort)
+  for (const config of REPOS) {
+    ensureLabels(config.owner, config.repo)
+  }
 
   // Initial poll on startup (delayed 5s)
   setTimeout(() => { pollOnce().catch(console.error) }, 5_000)
@@ -329,6 +477,35 @@ export function stopGithubIssuePoller(): void {
 /** Force a poll right now (used from dashboard). */
 export async function pollGithubIssuesNow(): Promise<{ enqueued: number }> {
   return { enqueued: await pollOnce() }
+}
+
+/** Consolidate tracked issues — remove duplicates, keep most recent entry per issue. */
+export function consolidateTrackedIssues(): { removed: number } {
+  const seen = new Map<string, TrackedIssue>()
+  let removed = 0
+
+  // Walk in order, keeping the latest entry per repo+number
+  for (const t of trackedIssues) {
+    const key = `${t.repo}#${t.number}`
+    const existing = seen.get(key)
+    if (existing) {
+      // Keep whichever is more recent
+      if (t.updatedAt > existing.updatedAt) {
+        seen.set(key, t)
+      }
+      removed++
+    } else {
+      seen.set(key, t)
+    }
+  }
+
+  if (removed > 0) {
+    trackedIssues = Array.from(seen.values())
+    saveTracked()
+    console.log(`[github-issues] Consolidated: removed ${removed} duplicate entries`)
+  }
+
+  return { removed }
 }
 
 /** Get status for the dashboard. */
@@ -435,7 +612,7 @@ function savePersistedRepos(): void {
 // Load persisted repos on module init
 loadPersistedRepos()
 
-/** Add a repo to watch. Persisted to disk. */
+/** Add a repo to watch. Persisted to disk. Ensures labels exist. */
 export function addWatchedRepo(owner: string, repo: string, localPath: string): void {
   const existing = REPOS.find(r => r.owner === owner && r.repo === repo)
   if (existing) return
@@ -448,6 +625,8 @@ export function addWatchedRepo(owner: string, repo: string, localPath: string): 
     project: repo,
   })
   savePersistedRepos()
+  // Create labels if they don't exist
+  ensureLabels(owner, repo)
   console.log(`[github-issues] Now watching ${owner}/${repo}`)
 }
 
