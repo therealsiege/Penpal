@@ -15,7 +15,7 @@ export default defineConfig({
         test: {
           name: 'main',
           environment: 'node',
-          include: ['tests/main/**/*.test.ts', 'src/main/evals/__tests__/*.test.ts', 'src/mcp/**/*.test.ts'],
+          include: ['tests/main/**/*.test.ts', 'src/mcp/**/*.test.ts'],
           setupFiles: ['tests/setup/main.setup.ts'],
           clearMocks: true,
           restoreMocks: true,

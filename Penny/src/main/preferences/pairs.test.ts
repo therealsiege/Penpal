@@ -91,7 +91,7 @@ describe('PairGenerator', () => {
     expect(pairs).toHaveLength(0)
   })
 
-  it('complete + fail on same task type produces outcome pair', async () => {
+  it('complete + fail on different task types produces no outcome pair', async () => {
     await store.append(
       makeEvent({
         signal: 'complete',

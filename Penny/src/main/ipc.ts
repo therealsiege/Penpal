@@ -1088,7 +1088,7 @@ export function registerIpcHandlers() {
     const failedCount = byStatus['failed'] || 0
 
     const priorityStr = Object.entries(byPriority).filter(([, n]) => n > 0).map(([p, n]) => `${n} ${p}`).join(', ')
-    const summary = `${tasks.length} task(s)${priorityStr ? `: ${priorityStr}` : ''}. ${idleAgents} agent(s) idle.`
+    const summary = `${tasks.length} task(s)${priorityStr ? ` (${priorityStr})` : ''} with ${idleAgents} idle agent(s) available.`
 
     const suggestions: string[] = []
     if ((byPriority['critical'] || 0) > 0 && idleAgents > 0) suggestions.push('Critical tasks queued with idle agents — assign via pod:create.')

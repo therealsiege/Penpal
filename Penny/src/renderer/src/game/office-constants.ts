@@ -134,6 +134,13 @@ export const CTX_AMBER = 0xf59e0b
 export const CTX_RED = 0xef4444
 export const CTX_THRESHOLD_AMBER = 0.6
 export const CTX_THRESHOLD_RED = 0.8
+export const CTX_METER_BASE_ALPHA = 0.6
+export const CTX_METER_PULSE_ALPHA_MIN = 0.4
+export const CTX_METER_PULSE_ALPHA_MAX = 1.0
+export const CTX_METER_PULSE_MS = 600
+export const CTX_ROT_SHAKE_PX = 1
+export const CTX_ROT_SHAKE_MS = 80
+export const CTX_ROT_SHAKE_REPEATS = 3
 
 // Thinking dots (best-of-N reasoning animation)
 export const THINKING_DOT_RADIUS = 3

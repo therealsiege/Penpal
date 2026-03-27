@@ -4,29 +4,37 @@ type MockFile = { content: string; mtime: number }
 const files = new Map<string, MockFile>()
 const backlinks = [{ title: 'Ref', path: 'Refs/ref.md', snippet: '[[note]] ref' }]
 
+function normalizePath(input: string): string {
+  const normalized = input.replace(/\\/g, '/')
+  const marker = '/sidekick/'
+  const idx = normalized.indexOf(marker)
+  if (idx >= 0) return normalized.slice(idx + marker.length)
+  return normalized.replace(/^\/+/, '')
+}
+
 vi.mock('../../main/vault.js', () => ({
-  readVaultFile: vi.fn((relativePath: string) => files.get(relativePath) ?? null),
+  readVaultFile: vi.fn((relativePath: string) => files.get(normalizePath(relativePath)) ?? null),
   searchVault: vi.fn(async (query: string, _glob: string | undefined, limit: number) => {
     return Array.from(files.entries())
       .filter(([, file]) => file.content.toLowerCase().includes(query.toLowerCase()))
       .slice(0, limit)
-      .map(([path, file]) => ({
-        path,
+      .map(([filePath, file]) => ({
+        path: filePath,
         line: 1,
         text: file.content.split('\n')[0] ?? '',
         snippet: file.content.split('\n')[0] ?? '',
         occurrences: 2,
-        filename: path.split('/').pop() ?? path,
+        filename: filePath.split('/').pop() ?? filePath,
       }))
   }),
   createVaultFile: vi.fn((relativePath: string, content = '') => {
     const mtime = Date.now()
-    files.set(relativePath, { content, mtime })
+    files.set(normalizePath(relativePath), { content, mtime })
     return { success: true, mtime }
   }),
   writeVaultFile: vi.fn((relativePath: string, content: string) => {
     const mtime = Date.now()
-    files.set(relativePath, { content, mtime })
+    files.set(normalizePath(relativePath), { content, mtime })
     return { success: true, mtime }
   }),
   parseMarkdownFrontmatter: vi.fn((content: string) => {
