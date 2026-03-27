@@ -728,7 +728,7 @@ export class OfficeTerrain {
       const zx = x0 + col * ZONE_SIZE + ZONE_SIZE / 2
       const zy = y0 + row * ZONE_SIZE + ZONE_SIZE / 2
       // Zones overlapping buildings → empty (skip)
-      if (isOverlapping(zx, zy, ZONE_SIZE / 2 - 20)) return 'open'
+      if (isOverlapping(zx, zy, ZONE_SIZE / 2 - 50)) return 'open'
       // Deterministic hash → zone type
       const hash = ((col * 7 + row * 13 + 37) * 2654435761) >>> 0
       return zoneTypes[hash % zoneTypes.length]
@@ -1044,6 +1044,29 @@ export class OfficeTerrain {
           }).setOrigin(0.5).setAlpha(0.3).setDepth(-9)
           this.terrainDecos.push(lotLabel)
         }
+      }
+    }
+
+    // ── Zone connecting roads — thin road grid between zones ──
+    g.lineStyle(1, 0x3a4a5a, 0.25)
+    // Horizontal roads along zone row centers
+    for (let row = 0; row < zoneRows; row++) {
+      const roadY = y0 + row * ZONE_SIZE + ZONE_SIZE / 2
+      g.lineBetween(x0 + 20, roadY, x0 + w - 20, roadY)
+    }
+    // Vertical roads along zone column centers
+    for (let col = 0; col < zoneCols; col++) {
+      const roadX = x0 + col * ZONE_SIZE + ZONE_SIZE / 2
+      g.lineBetween(roadX, y0 + 20, roadX, y0 + h - 20)
+    }
+    // Intersection dots at grid crossings
+    for (let col = 0; col < zoneCols; col++) {
+      for (let row = 0; row < zoneRows; row++) {
+        const ix = x0 + col * ZONE_SIZE + ZONE_SIZE / 2
+        const iy = y0 + row * ZONE_SIZE + ZONE_SIZE / 2
+        if (isOverlapping(ix, iy, 30)) continue
+        g.fillStyle(0x3a4a5a, 0.2)
+        g.fillCircle(ix, iy, 3)
       }
     }
 
