@@ -220,7 +220,7 @@ export class OfficeAtmosphere {
     const overlay = this.dayNightOverlay
     if (!overlay) return
 
-    this.callbacks.getCamera().setBackgroundColor(bgColor)
+    // Don't set camera bg — canvas transparent for HTML bg bleed-through
 
     if (animate) {
       this.scene.tweens.killTweensOf(overlay)

@@ -12,7 +12,6 @@ import { DailyNote } from '../components/editor/DailyNote'
 import { useEditorStore } from '../stores/editor-store'
 import { useVaultIndex } from '../stores/vault-index'
 import { useAppearanceStore } from '../stores/appearance-store'
-import { PanelBackground } from '../components/PanelBackground'
 
 export function VaultPanel() {
   const [previewPath, setPreviewPath] = useState<string | null>(null)
@@ -171,8 +170,10 @@ export function VaultPanel() {
   }, [activeTabId, closeTab, cycleTab, zoomIn, zoomOut, zoomReset])
 
   return (
-    <PanelBackground>
-    <div className="flex flex-col h-full vault-zoom vault-panel relative z-[1]" style={{ zoom }}>
+    <div className="relative h-full overflow-hidden">
+      <div className="absolute inset-0 bg-cover bg-center bg-no-repeat" style={{ backgroundImage: 'url(vault-bg.jpg)' }} />
+      <div className="absolute inset-0 bg-[#080a0e]/[0.94]" />
+    <div className="relative flex flex-col h-full vault-zoom vault-panel z-[1]" style={{ zoom }}>
       {/* Quick Switcher overlay */}
       {showQuickSwitcher && (
         <QuickSwitcher
@@ -296,6 +297,6 @@ export function VaultPanel() {
         </div>
       </div>
     </div>
-    </PanelBackground>
+    </div>
   )
 }

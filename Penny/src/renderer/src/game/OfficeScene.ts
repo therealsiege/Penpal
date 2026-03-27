@@ -421,7 +421,8 @@ export class OfficeScene extends Phaser.Scene {
     this.cafe = new PennyCafe(this as unknown as CafeHostScene)
 
     const cam = this.cameras.main
-    cam.setBackgroundColor(COLOR_BG)
+    // Don't set a camera background color — the canvas is transparent (config)
+    // so the HTML background image behind it bleeds through the ground plane.
 
     this.viewWidth  = this.scale.width
     this.viewHeight = this.scale.height
@@ -468,9 +469,8 @@ export class OfficeScene extends Phaser.Scene {
     this.pods = new OfficePods(this)
     this.pods.init()
 
-    // Ground plane — solid color fill that covers the entire viewport at any
-    // zoom/scroll, so no transparent gaps are ever visible behind the scene.
-    this.add.rectangle(0, 0, 16000, 16000, COLOR_BG, 1)
+    // Ground plane — semi-transparent so the HTML background image bleeds through.
+    this.add.rectangle(0, 0, 16000, 16000, COLOR_BG, 0.92)
       .setOrigin(0.5, 0.5).setDepth(-12).setScrollFactor(0)
 
     // Sky gradient — deepest visible layer, behind stars and clouds
@@ -750,7 +750,7 @@ export class OfficeScene extends Phaser.Scene {
         const nextName: ThemeName = activeTheme === THEMES.dark ? 'light' : 'dark'
         const { newBg } = setActiveTheme(nextName)
         // Redraw everything with new theme colors
-        this.cameras.main.setBackgroundColor(newBg)
+        // Ground plane handles visual bg — don't set camera bg (keeps canvas transparent)
         this.background.invalidateBgCache()
         this.background.layoutRooms()
         this.officeCamera.updateCameraBounds()
@@ -1322,11 +1322,9 @@ export class OfficeScene extends Phaser.Scene {
     if (oldBg === newBg) return
     if (this.bgTransitionTween) { this.bgTransitionTween.destroy(); this.bgTransitionTween = null }
     const cam = this.cameras.main
-    this.bgTransitionTween = this.tweens.addCounter({
-      from: 0, to: 100, duration: 500, ease: 'Sine.easeInOut',
-      onUpdate: (tw) => { if (tw) cam?.setBackgroundColor(lerpColor(oldBg, newBg, (tw.getValue() ?? 0) / 100)) },
-      onComplete: () => { cam.setBackgroundColor(newBg) },
-    })
+    // No camera bg color — canvas stays transparent for HTML bg image bleed-through.
+    // The ground plane rectangle at depth -12 handles the visual background.
+    this.bgTransitionTween = null
     this._applyThemeToAll()
   }
 
