@@ -1521,8 +1521,12 @@ export function CommandCenter(props: CommandCenterProps) {
           executorAgentId: wf.executor.agentId,
           status: wf.status,
           candidates: wf.solverCandidateCount > 1 ? wf.solverCandidateCount : undefined,
-          // Self-eval path sets selfEvaluation; multi-candidate without self-eval picks first when solver completes (still in solving)
-          candidateSelected: !!wf.selfEvaluation,
+          candidateSelected:
+            !!wf.selfEvaluation ||
+            (wf.solverCandidateCount > 1 &&
+              wf.solver.status === 'complete' &&
+              wf.status === 'solving' &&
+              wf.phaseConfig?.selfEvaluation === false),
         }))
       sceneRef.current.setPodWorkflows(activeWorkflows)
     }

@@ -10,6 +10,7 @@ import path from 'path'
 import os from 'os'
 import { generateWeeklyDigest, type DigestOptions } from '../weekly-digest'
 import type { TaskOutcome } from '../../harness'
+import type { PodQualityEvent } from '../../collectors/pod-quality'
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -65,6 +66,12 @@ function writePods(filePath: string, pods: PodRecord[]): void {
   fs.writeFileSync(filePath, JSON.stringify(pods), 'utf-8')
 }
 
+function writePodQuality(filePath: string, events: PodQualityEvent[]): void {
+  fs.mkdirSync(path.dirname(filePath), { recursive: true })
+  const lines = events.map(e => JSON.stringify(e)).join('\n') + (events.length ? '\n' : '')
+  fs.writeFileSync(filePath, lines, 'utf-8')
+}
+
 // Monday March 23, 2026 is the start of W13
 const WEEK_OF = new Date('2026-03-25T12:00:00Z') // Wednesday of W13
 const THIS_WEEK_START = new Date('2026-03-23T00:00:00Z') // Monday
@@ -82,6 +89,7 @@ describe('Weekly Eval Digest', () => {
       outcomesPath: path.join(tmpDir, 'eval-outcomes.jsonl'),
       preferencesDir: path.join(tmpDir, 'prefs'),
       podsPath: path.join(tmpDir, 'pod-workflows.json'),
+      podQualityPath: path.join(tmpDir, 'eval-pod-quality.jsonl'),
       outputDir: path.join(tmpDir, 'output'),
       weekOf: WEEK_OF,
     }
@@ -117,6 +125,31 @@ describe('Weekly Eval Digest', () => {
       { id: 'pod-2', status: 'complete', iteration: 3, createdAt: new Date('2026-03-25T09:00:00Z').getTime() },
     ])
 
+    writePodQuality(opts.podQualityPath!, [
+      {
+        podId: 'eval-1',
+        presetId: 'frontend-feature',
+        status: 'complete',
+        iterations: 1,
+        firstPassAccepted: true,
+        executorPassed: true,
+        selfFixed: false,
+        completionTime_ms: 5000,
+        timestamp: new Date('2026-03-24T08:00:00Z').getTime(),
+      },
+      {
+        podId: 'eval-2',
+        presetId: 'frontend-feature',
+        status: 'failed',
+        iterations: 3,
+        firstPassAccepted: false,
+        executorPassed: false,
+        selfFixed: false,
+        completionTime_ms: 9000,
+        timestamp: new Date('2026-03-25T08:00:00Z').getTime(),
+      },
+    ])
+
     const result = await generateWeeklyDigest(opts)
 
     expect(result.markdown).toContain('# Penny Weekly Eval Digest — 2026-W13')
@@ -130,6 +163,8 @@ describe('Weekly Eval Digest', () => {
     expect(result.markdown).toContain('2 approvals')
     expect(result.markdown).toContain('1 rejections')
     expect(result.markdown).toContain('2 pod workflows')
+    expect(result.markdown).toContain('Eval JSONL (2 terminal pods)')
+    expect(result.markdown).toContain('reviewer first-pass')
     expect(result.markdown).toContain('marcus')
     expect(result.markdown).toContain('lena')
     expect(fs.existsSync(result.filePath)).toBe(true)
@@ -176,6 +211,7 @@ describe('Weekly Eval Digest', () => {
     expect(result.markdown).toContain('0% success rate')
     expect(result.markdown).toContain('0 preference signals')
     expect(result.markdown).toContain('0 pod workflows this week')
+    expect(result.markdown).toContain('No pod quality eval events in this week window')
     expect(result.markdown).toContain('No agent activity this week.')
     expect(fs.existsSync(result.filePath)).toBe(true)
   })

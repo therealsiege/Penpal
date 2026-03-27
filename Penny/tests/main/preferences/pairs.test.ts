@@ -2,10 +2,10 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import fsp from 'fs/promises'
 import os from 'os'
 import path from 'path'
-import { PreferenceStore } from './store'
-import { PairGenerator } from './pairs'
-import type { DPOPair } from './pairs'
-import type { PreferenceEvent } from './types'
+import { PreferenceStore } from '../../../src/main/preferences/store'
+import { PairGenerator } from '../../../src/main/preferences/pairs'
+import type { DPOPair } from '../../../src/main/preferences/pairs'
+import type { PreferenceEvent } from '../../../src/main/preferences/types'
 
 function makeEvent(overrides: Partial<PreferenceEvent>): PreferenceEvent {
   return {
@@ -91,12 +91,12 @@ describe('PairGenerator', () => {
     expect(pairs).toHaveLength(0)
   })
 
-  it('complete + fail on different task types produces no outcome pair', async () => {
+  it('complete + fail on different orchestrator task ids produces no outcome pair', async () => {
     await store.append(
       makeEvent({
         signal: 'complete',
         agentId: 'agent-1',
-        context: { toolCall: 'orchestrator:task-completed', toolResult: 'task-42 succeeded' },
+        context: { toolCall: 'orchestrator:task-completed', toolResult: 'task-42' },
         timestamp: '2026-03-02T00:00:00.000Z',
       }),
     )
@@ -104,7 +104,7 @@ describe('PairGenerator', () => {
       makeEvent({
         signal: 'fail',
         agentId: 'agent-1',
-        context: { toolCall: 'orchestrator:task-failed', toolResult: 'task-43 failed' },
+        context: { toolCall: 'orchestrator:task-failed', toolResult: 'task-43' },
         timestamp: '2026-03-02T00:00:01.000Z',
       }),
     )
@@ -170,6 +170,28 @@ describe('PairGenerator', () => {
     expect(pairs[0].source).toBe('edit_corrective')
     expect(pairs[0].chosen).toBe('function foo(): string { return "bar" }')
     expect(pairs[0].rejected).toBe('function foo() {}')
+  })
+
+  it('edit uses last recentMessages entry when toolResult is absent', async () => {
+    await store.append(
+      makeEvent({
+        signal: 'edit',
+        agentId: 'agent-1',
+        context: {
+          toolCall: 'sessions:send',
+          recentMessages: ['older', 'assistant draft line'],
+        },
+        userAction: 'user final line',
+      }),
+    )
+
+    const pairs = await collectPairs(generator.generate())
+    expect(pairs).toHaveLength(1)
+    expect(pairs[0].source).toBe('edit_corrective')
+    expect(pairs[0].chosen).toBe('user final line')
+    expect(pairs[0].rejected).toBe('assistant draft line')
+    expect(pairs[0].prompt).toContain('sessions:send')
+    expect(pairs[0].prompt).toContain('Context:')
   })
 
   it('edit without before/after yields no pairs', async () => {
@@ -254,17 +276,107 @@ describe('PairGenerator', () => {
     expect(lines).toHaveLength(1)
 
     const record = JSON.parse(lines[0])
-    // TRL DPOTrainer requires prompt, chosen, rejected as strings
     expect(typeof record.prompt).toBe('string')
     expect(typeof record.chosen).toBe('string')
     expect(typeof record.rejected).toBe('string')
     expect(record.prompt).toBe('run-tests')
     expect(record.chosen).toBe('ok')
     expect(record.rejected).toBe('bad')
-    // Metadata fields
     expect(record.source).toBe('approve_reject')
     expect(record.agentId).toBe('agent-1')
     expect(typeof record.timestamp).toBe('string')
+  })
+
+  it('export with trlCoreFieldsOnly writes only prompt, chosen, rejected', async () => {
+    await store.append(
+      makeEvent({
+        signal: 'approve',
+        agentId: 'agent-1',
+        context: { toolCall: 't', toolResult: 'yes' },
+      }),
+    )
+    await store.append(
+      makeEvent({
+        signal: 'reject',
+        agentId: 'agent-1',
+        context: { toolCall: 't', toolResult: 'no' },
+      }),
+    )
+
+    const outPath = path.join(tmpDir, 'trl-only.jsonl')
+    await generator.export(outPath, 'jsonl', { trlCoreFieldsOnly: true })
+    const record = JSON.parse((await fsp.readFile(outPath, 'utf-8')).trim())
+    expect(Object.keys(record).sort()).toEqual(['chosen', 'prompt', 'rejected'])
+  })
+
+  it('export with since omits pairs from older events', async () => {
+    await store.append(
+      makeEvent({
+        signal: 'approve',
+        agentId: 'agent-1',
+        sessionId: 's',
+        timestamp: '2019-01-01T00:00:00.000Z',
+        context: { toolCall: 'old', toolResult: 'a' },
+      }),
+    )
+    await store.append(
+      makeEvent({
+        signal: 'reject',
+        agentId: 'agent-1',
+        sessionId: 's',
+        timestamp: '2019-01-01T00:00:01.000Z',
+        context: { toolCall: 'old', toolResult: 'b' },
+      }),
+    )
+    await store.append(
+      makeEvent({
+        signal: 'approve',
+        agentId: 'agent-1',
+        sessionId: 's2',
+        timestamp: '2026-03-27T12:00:00.000Z',
+        context: { toolCall: 'new', toolResult: 'c' },
+      }),
+    )
+    await store.append(
+      makeEvent({
+        signal: 'reject',
+        agentId: 'agent-1',
+        sessionId: 's2',
+        timestamp: '2026-03-27T12:00:01.000Z',
+        context: { toolCall: 'new', toolResult: 'd' },
+      }),
+    )
+
+    const outPath = path.join(tmpDir, 'since.jsonl')
+    const count = await generator.export(outPath, 'jsonl', { since: new Date('2026-01-01T00:00:00.000Z') })
+    expect(count).toBe(1)
+    const line = (await fsp.readFile(outPath, 'utf-8')).trim()
+    expect(JSON.parse(line).prompt).toBe('new')
+  })
+
+  it('stats with since counts only pairs in range', async () => {
+    await store.append(
+      makeEvent({
+        signal: 'edit',
+        agentId: 'agent-1',
+        timestamp: '2018-01-01T00:00:00.000Z',
+        context: { toolCall: 'e', toolResult: 'before' },
+        userAction: 'after',
+      }),
+    )
+    await store.append(
+      makeEvent({
+        signal: 'edit',
+        agentId: 'agent-1',
+        timestamp: '2026-03-27T00:00:00.000Z',
+        context: { toolCall: 'e2', toolResult: 'x' },
+        userAction: 'y',
+      }),
+    )
+
+    const stats = await generator.stats(new Date('2026-01-01T00:00:00.000Z'))
+    expect(stats.totalPairs).toBe(1)
+    expect(stats.bySource.edit_corrective).toBe(1)
   })
 
   it('export returns correct pair count', async () => {

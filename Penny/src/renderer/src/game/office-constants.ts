@@ -115,12 +115,14 @@ export const MAKO_MOTE_POOL_SIZE = 15
 export const SPARK_POOL_SIZE = 12
 export const STEAM_WISP_POOL_SIZE = 8
 
-// Eval glow — success-rate indicator behind workstation desk
+// Eval glow — success-rate indicator behind workstation desk (sidekick#18)
+// Thresholds (successRate 0–1): green if >80%, amber if 60–80% inclusive, red if <60%, grey if no data.
 export const EVAL_GLOW_GREEN   = 0x22c55e
 export const EVAL_GLOW_AMBER   = 0xf59e0b
 export const EVAL_GLOW_RED     = 0xef4444
 export const EVAL_GLOW_GREY    = 0x6b7280
-export const EVAL_GLOW_RADIUS  = 30
+export const EVAL_GLOW_RADIUS  = 18
+/** Object alpha pulse (issue: ~0.15 effective mid; tween 0.1 ↔ 0.2) */
 export const EVAL_GLOW_ALPHA_MIN      = 0.1
 export const EVAL_GLOW_ALPHA_MAX      = 0.2
 export const EVAL_GLOW_PULSE_DURATION = 2000
@@ -145,8 +147,13 @@ export const CTX_ROT_SHAKE_REPEATS = 3
 // Thinking dots (best-of-N reasoning animation)
 export const THINKING_DOT_RADIUS = 3
 export const THINKING_DOT_SPACING = 10
+/** Above agent head, between speech bubble band (~-40) and thought bubble (~-62) */
 export const THINKING_DOT_Y = -55
+/** Per-dot appear duration (issue #19: 0.3s each) */
+export const THINKING_DOT_APPEAR_MS = 300
+/** Shared fade-out duration after hold */
 export const THINKING_DOT_FADE_MS = 300
+/** Hold with all dots visible before fade (issue #19: 0.5s) */
 export const THINKING_DOT_HOLD_MS = 500
 
 // ---------------------------------------------------------------------------

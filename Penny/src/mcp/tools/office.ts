@@ -141,7 +141,7 @@ export async function handleOfficeAgents(): Promise<ContextEngineeredResponse<un
     suggestions.push(`Blocked agents: ${blocked.map(a => a.name).join(', ')} — approve via sessions:approve.`)
   }
   if (idle.length > 0 && snapshot.orchestrator.queueDepth > 0) {
-    suggestions.push(`${idle.length} idle agent(s) with ${snapshot.orchestrator.queueDepth} queued tasks — assign via pod:create.`)
+    suggestions.push(`${idle.length} idle agent(s) with ${snapshot.orchestrator.queueDepth} queued tasks — assign via pods:create.`)
   }
 
   return wrapResponse({ agents, snapshotAge: snapshotAge(snapshot) }, summary, suggestions, [

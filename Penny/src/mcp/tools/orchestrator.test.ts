@@ -40,8 +40,9 @@ vi.mock('../../main/orchestrator', () => {
   }
 })
 
-// Import after mocks are set up
+// Import after mocks are set up (registers tools on toolRegistry as a side effect)
 import { handleEnqueue, handleQueue, handleAgentHealth } from './orchestrator'
+import { toolRegistry } from '../tools'
 import { enqueueTask, getTaskQueue, getAgentHealthStatuses, getOrchestratorStats } from '../../main/orchestrator'
 
 const mockEnqueueTask = vi.mocked(enqueueTask)
@@ -78,7 +79,7 @@ describe('orchestrator:enqueue', () => {
     expect(result.summary).toContain('high')
     expect(result.suggestions.length).toBeGreaterThan(0)
     expect(result.related_tools).toContain('orchestrator:queue')
-    expect(result.related_tools).toContain('pod:create')
+    expect(result.related_tools).toContain('pods:create')
   })
 
   it('defaults project to ~/sidekick when not provided', async () => {
@@ -94,7 +95,7 @@ describe('orchestrator:enqueue', () => {
     expect(result.data.priority).toBe('normal')
   })
 
-  it('suggests pod:create when idle agents are available', async () => {
+  it('suggests pods:create when idle agents are available', async () => {
     mockGetTaskQueue.mockReturnValue([])
     mockGetAgentHealthStatuses.mockResolvedValue([
       { agentId: 'marcus', name: 'Marcus Chen', alive: true, activeTasks: 0, status: 'healthy', warnings: [] },
@@ -106,7 +107,7 @@ describe('orchestrator:enqueue', () => {
       priority: 'critical',
     })
 
-    const hasPodSuggestion = result.suggestions.some(s => s.includes('pod:create'))
+    const hasPodSuggestion = result.suggestions.some(s => s.includes('pods:create'))
     expect(hasPodSuggestion).toBe(true)
   })
 })
@@ -144,9 +145,25 @@ describe('orchestrator:queue', () => {
     expect(result.data.tasks).toHaveLength(1)
     expect(result.data.tasks[0].status).toBe('queued')
     expect(result.summary).toContain('queued')
+    expect(result.summary).toContain('total')
   })
 
-  it('suggests pod:create when critical tasks + idle agents', async () => {
+  it('ignores invalid status and returns full queue', async () => {
+    const mockTasks: Task[] = [
+      { id: 't-1', title: 'A', description: '', project: '~/sidekick', priority: 'normal', status: 'queued', requiredSkills: [], source: 'api', createdAt: Date.now(), retryCount: 0, maxRetries: 1 },
+      { id: 't-2', title: 'B', description: '', project: '~/sidekick', priority: 'high', status: 'active', requiredSkills: [], source: 'api', createdAt: Date.now(), retryCount: 0, maxRetries: 1 },
+    ] as Task[]
+    mockGetTaskQueue.mockReturnValue(mockTasks)
+    mockGetOrchestratorStats.mockReturnValue({ queueDepth: 1, activeTasks: 1, completedToday: 0, failedToday: 0, totalProcessed: 0 })
+    mockGetAgentHealthStatuses.mockResolvedValue([])
+
+    const result = await handleQueue({ status: 'not-a-status' as unknown as string })
+
+    expect(result.data.tasks).toHaveLength(2)
+    expect(result._meta.filteredBy).toBeNull()
+  })
+
+  it('suggests pods:create when critical tasks + idle agents', async () => {
     const mockTasks: Task[] = [
       { id: 't-1', title: 'Critical bug', description: '', project: '~/sidekick', priority: 'critical', status: 'queued', requiredSkills: [], source: 'api', createdAt: Date.now(), retryCount: 0, maxRetries: 1 },
     ] as Task[]
@@ -158,7 +175,7 @@ describe('orchestrator:queue', () => {
 
     const result = await handleQueue({})
 
-    const hasCriticalSuggestion = result.suggestions.some(s => s.includes('critical') && s.includes('pod:create'))
+    const hasCriticalSuggestion = result.suggestions.some(s => s.includes('critical') && s.includes('pods:create'))
     expect(hasCriticalSuggestion).toBe(true)
   })
 })
@@ -192,8 +209,15 @@ describe('orchestrator:agent-health', () => {
 
     const result = await handleAgentHealth()
 
-    const hasRestartSuggestion = result.suggestions.some(s => s.includes('dead') && s.includes('Ravi Patel'))
+    const hasRestartSuggestion = result.suggestions.some(
+      s => s.includes('Ravi Patel') && s.includes('orchestrator:shutdown-agent'),
+    )
     expect(hasRestartSuggestion).toBe(true)
+    expect(result._meta.recommendations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ agentId: 'ravi', action: 'restart', priority: 'high' }),
+      ]),
+    )
   })
 
   it('suggests checking warning agents', async () => {
@@ -204,7 +228,9 @@ describe('orchestrator:agent-health', () => {
 
     const result = await handleAgentHealth()
 
-    const hasWarningSuggestion = result.suggestions.some(s => s.includes('Kai Tanaka') && s.includes('High memory'))
+    const hasWarningSuggestion = result.suggestions.some(
+      s => s.includes('Kai Tanaka') && s.includes('High memory') && s.includes('consider restarting'),
+    )
     expect(hasWarningSuggestion).toBe(true)
   })
 
@@ -228,6 +254,62 @@ describe('orchestrator:agent-health', () => {
 
     const result = await handleAgentHealth()
 
-    expect(result.suggestions).toContain('All agents healthy, no action needed')
+    expect(result.suggestions).toContain('All agents healthy — no action needed.')
+  })
+})
+
+describe('orchestrator tools via toolRegistry.call', () => {
+  it('orchestrator:enqueue', async () => {
+    mockGetTaskQueue.mockReturnValue([])
+    mockGetAgentHealthStatuses.mockResolvedValue([])
+
+    const result = (await toolRegistry.call('orchestrator:enqueue', {
+      title: 'Via registry',
+      description: 'Registry path',
+    })) as ContextEngineeredResponse<Task>
+
+    expect(result.data.title).toBe('Via registry')
+    expect(result.summary).toBeTruthy()
+    expect(result.related_tools.length).toBeGreaterThan(0)
+  })
+
+  it('orchestrator:queue', async () => {
+    mockGetTaskQueue.mockReturnValue([])
+    mockGetOrchestratorStats.mockReturnValue({
+      queueDepth: 0,
+      activeTasks: 0,
+      completedToday: 0,
+      failedToday: 0,
+      totalProcessed: 0,
+    })
+    mockGetAgentHealthStatuses.mockResolvedValue([])
+
+    const result = (await toolRegistry.call('orchestrator:queue', {})) as ContextEngineeredResponse<{
+      tasks: Task[]
+      stats: OrchestratorStats
+    }>
+
+    expect(result.data.tasks).toEqual([])
+    expect(result).toHaveProperty('suggestions')
+  })
+
+  it('orchestrator:agent-health', async () => {
+    mockGetAgentHealthStatuses.mockResolvedValue([
+      { agentId: 'a1', name: 'Agent One', alive: true, activeTasks: 0, status: 'healthy', warnings: [] },
+    ] as AgentHealthStatus[])
+    mockGetOrchestratorStats.mockReturnValue({
+      queueDepth: 0,
+      activeTasks: 0,
+      completedToday: 0,
+      failedToday: 0,
+      totalProcessed: 0,
+    })
+
+    const result = (await toolRegistry.call('orchestrator:agent-health', {})) as ContextEngineeredResponse<{
+      agents: AgentHealthStatus[]
+    }>
+
+    expect(result.data.agents).toHaveLength(1)
+    expect(result.summary).toContain('1 agent(s)')
   })
 })

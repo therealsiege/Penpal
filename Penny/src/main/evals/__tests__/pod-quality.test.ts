@@ -166,6 +166,25 @@ describe('PodQualityCollector', () => {
     fs.rmSync(path.dirname(tmpPath), { recursive: true, force: true })
   })
 
+  it('self-fix rate includes iteration-1 pods that self-fixed without solver retry', () => {
+    const tmpPath = makeTmpPath()
+    const collector = new PodQualityCollector(tmpPath)
+
+    collector.record(makeEvent({
+      status: 'complete',
+      iterations: 1,
+      firstPassAccepted: true,
+      executorPassed: true,
+      selfFixed: true,
+      timestamp: Date.now(),
+    }))
+
+    const report = collector.report()
+    assert.equal(report.totalPods, 1)
+    assert.equal(report.selfFixRate, 1.0)
+    fs.rmSync(path.dirname(tmpPath), { recursive: true, force: true })
+  })
+
   it('persists as JSONL (one JSON object per line)', () => {
     const tmpPath = makeTmpPath()
     const collector = new PodQualityCollector(tmpPath)
@@ -203,6 +222,26 @@ describe('PodQualityCollector', () => {
 
     const filteredReport = collector.report(new Date('2026-01-01'))
     assert.equal(filteredReport.totalPods, 1)
+
+    fs.rmSync(path.dirname(tmpPath), { recursive: true, force: true })
+  })
+
+  it('filters by since and until (inclusive window)', () => {
+    const tmpPath = makeTmpPath()
+    const collector = new PodQualityCollector(tmpPath)
+
+    const t0 = new Date('2026-03-23T00:00:00.000Z').getTime()
+    const t1 = new Date('2026-03-24T12:00:00.000Z').getTime()
+    const t2 = new Date('2026-03-30T00:00:00.000Z').getTime()
+
+    collector.record(makeEvent({ timestamp: t0, podId: 'a' }))
+    collector.record(makeEvent({ timestamp: t1, podId: 'b' }))
+    collector.record(makeEvent({ timestamp: t2, podId: 'c' }))
+
+    const weekStart = new Date('2026-03-23T00:00:00.000Z')
+    const weekEnd = new Date('2026-03-29T23:59:59.999Z')
+    const windowed = collector.report(weekStart, weekEnd)
+    assert.equal(windowed.totalPods, 2)
 
     fs.rmSync(path.dirname(tmpPath), { recursive: true, force: true })
   })

@@ -80,6 +80,12 @@ export function getRoomDoorY(room: DoorRoom): number {
 // ---------------------------------------------------------------------------
 
 export function getStatusColor(agent: AgentState): number {
+  // Orchestrator headless tasks — stage-colored
+  if (agent.isOrchestratorTask) {
+    if (agent.taskStage === 'planning')    return 0xa78bfa  // Purple
+    if (agent.taskStage === 'validating')  return 0x06b6d4  // Cyan
+    return 0xf97316  // Orange for executing (default)
+  }
   if (agent.needsInteraction) {
     if (agent.interactionType === 'tool-approval') return 0xf87171  // Red for approval needed
     return 0xfbbf24  // Yellow for other interactions
@@ -106,6 +112,10 @@ export function isOpencodeAgent(agent: AgentState): boolean {
     agent.config.id.startsWith('nemoclaw-')
 }
 
+export function isOrchestratorTask(agent: AgentState): boolean {
+  return agent.config.model === 'orchestrator-task'
+}
+
 // ---------------------------------------------------------------------------
 // Hash / character helpers
 // ---------------------------------------------------------------------------
@@ -126,6 +136,7 @@ export function getCharacterIndex(name: string): number {
 export function getAgentCharacterIndex(agent: AgentState): number {
   if (isCursorAgent(agent)) return 1
   if (isOpencodeAgent(agent)) return 2  // Tinted character sprite
+  if (isOrchestratorTask(agent)) return 0  // Character 0, tinted warm orange
   return getCharacterIndex(agent.config.name)
 }
 

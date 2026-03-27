@@ -30,6 +30,7 @@ export const FEED_ICONS: Record<string, number> = {
 // Constants
 // ---------------------------------------------------------------------------
 
+const FLUSH_INTERVAL = 300
 const MAX_VISIBLE = 5
 const ENTRY_H     = 20
 const ENTRY_GAP   = 2
@@ -62,6 +63,7 @@ export class ActivityFeed {
   private root: Phaser.GameObjects.Container
   private slots: FeedSlot[] = []
   private queue: { kind: string; text: string }[] = []
+  private flushTimer: Phaser.Time.TimerEvent | null = null
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene
@@ -102,6 +104,10 @@ export class ActivityFeed {
    * @param text - Short description text
    */
   push(kind: string, text: string): void {
+    // Coalesce consecutive duplicates
+    const last = this.queue[this.queue.length - 1]
+    if (last && last.kind === kind && last.text === text) return
+
     this.queue.push({ kind, text })
     this._flush()
   }
@@ -115,6 +121,10 @@ export class ActivityFeed {
 
   /** Clean up all slots and the root container. */
   destroy(): void {
+    if (this.flushTimer) {
+      this.flushTimer.destroy()
+      this.flushTimer = null
+    }
     for (const slot of this.slots) {
       if (slot.timer) slot.timer.destroy()
     }
@@ -128,9 +138,19 @@ export class ActivityFeed {
   // -------------------------------------------------------------------------
 
   private _flush(): void {
-    while (this.queue.length > 0) {
-      const entry = this.queue.shift()!
-      this._addEntry(entry.kind, entry.text)
+    // If a scheduled flush is already pending, let it fire naturally
+    if (this.flushTimer) return
+
+    if (this.queue.length === 0) return
+
+    const entry = this.queue.shift()!
+    this._addEntry(entry.kind, entry.text)
+
+    if (this.queue.length > 0) {
+      this.flushTimer = this.scene.time.delayedCall(FLUSH_INTERVAL, () => {
+        this.flushTimer = null
+        this._flush()
+      })
     }
   }
 

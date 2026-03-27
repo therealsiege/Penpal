@@ -22,6 +22,7 @@ export class OfficeUI {
   // Notification toasts (screen-space)
   private toastContainer: Phaser.GameObjects.Container | null = null
   private activeToasts: { container: Phaser.GameObjects.Container; createdAt: number }[] = []
+  private recentToasts: Map<string, number> = new Map()
 
   // Rich hover tooltip (screen-space, animated)
   private tooltipContainer: Phaser.GameObjects.Container | null = null
@@ -116,10 +117,20 @@ export class OfficeUI {
   showToast(text: string, type: 'info' | 'success' | 'warning' | 'error' = 'info'): void {
     if (!this.toastContainer) return
 
+    // De-duplicate: drop identical messages shown within the last 2 seconds
+    const now = Date.now()
+    const lastShown = this.recentToasts.get(text)
+    if (lastShown !== undefined && now - lastShown < 2000) return
+    // Purge stale entries to prevent unbounded growth
+    for (const [key, ts] of this.recentToasts) {
+      if (now - ts >= 2000) this.recentToasts.delete(key)
+    }
+    this.recentToasts.set(text, now)
+
     const TOAST_W = 220
     const TOAST_H = 28
     const TOAST_MARGIN = 8
-    const MAX_TOASTS = 4
+    const MAX_TOASTS = 3
     const SLIDE_OFFSET = 200
 
     // Background and icon colors keyed by toast type
@@ -758,25 +769,40 @@ export class OfficeUI {
     const wasRoom = prevLevel >= 2
     const wasFull = prevLevel >= 3
 
+    type AlphaObj = Phaser.GameObjects.Components.Visible &
+      Phaser.GameObjects.Components.AlphaSingle
+
+    const hideLodLevel2And3 = () => {
+      for (const obj of ws.lodLevel2Objects) {
+        if (!obj || !('setVisible' in obj)) continue
+        this.scene.tweens.killTweensOf(obj)
+        ;(obj as unknown as AlphaObj).setVisible(false)
+      }
+      for (const obj of ws.lodLevel3Objects) {
+        if (!obj || !('setVisible' in obj)) continue
+        this.scene.tweens.killTweensOf(obj)
+        ;(obj as unknown as AlphaObj).setVisible(false)
+      }
+    }
+
     // Container visibility — fade the whole container when entering/leaving L2
     if (showRoom && !wasRoom) {
       // Entering L2 from L1: fade in container
       ws.container.setVisible(true).setAlpha(0)
       this.scene.tweens.add({ targets: ws.container, alpha: 1, duration: 200, ease: 'Power2' })
     } else if (!showRoom && wasRoom) {
-      // Leaving L2 to L1: fade out then hide
+      // Leaving L2 to L1: hide LOD2+ desk extras immediately, then fade out container
+      hideLodLevel2And3()
       this.scene.tweens.add({
         targets: ws.container, alpha: 0, duration: 150, ease: 'Power2',
         onComplete: () => { ws.container.setVisible(false) },
       })
       return // container fading out — skip child visibility
     } else if (!showRoom) {
+      hideLodLevel2And3()
       ws.container.setVisible(false)
       return
     }
-
-    type AlphaObj = Phaser.GameObjects.Components.Visible &
-      Phaser.GameObjects.Components.AlphaSingle
 
     const fadeIn = (obj: Phaser.GameObjects.GameObject, targetAlpha = 1) => {
       const v = obj as unknown as AlphaObj

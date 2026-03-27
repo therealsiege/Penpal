@@ -14,10 +14,12 @@ import './tools/vault.js'
 import './tools/graph.js'
 import './tools/office.js'
 
-const server = new Server(
-  { name: 'penny-mcp', version: '1.0.0' },
-  { capabilities: { tools: {}, resources: {} } },
-)
+/**
+ * Bridge: this process runs as a standalone Node child (tsx) with stdio MCP transport.
+ * Tool implementations import Penny main modules directly (e.g. orchestrator state), same
+ * as the Electron app — not a live IPC bridge to a running Electron main. Use IPC only if
+ * tools must mutate a single in-memory runtime that cannot be shared across processes.
+ */
 
 export function buildToolCatalog() {
   return toolRegistry.list().map((t) => ({
@@ -27,28 +29,42 @@ export function buildToolCatalog() {
   }))
 }
 
-server.setRequestHandler(ListToolsRequestSchema, async () => ({
-  tools: buildToolCatalog(),
-}))
+function registerPennyMcpHandlers(target: Server): void {
+  target.setRequestHandler(ListToolsRequestSchema, async () => ({
+    tools: buildToolCatalog(),
+  }))
 
-server.setRequestHandler(CallToolRequestSchema, async (request) => {
-  const { name, arguments: args } = request.params
-  try {
-    const result = await toolRegistry.call(name, args ?? {})
-    return {
-      content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
-    }
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
-    const isToolNotFound = error instanceof ToolNotFoundError
-    process.stderr.write(`penny-mcp call failed for ${name}: ${message}\n`)
+  target.setRequestHandler(CallToolRequestSchema, async (request) => {
+    const { name, arguments: args } = request.params
+    try {
+      const result = await toolRegistry.call(name, args ?? {})
+      return {
+        content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      const isToolNotFound = error instanceof ToolNotFoundError
+      process.stderr.write(`penny-mcp call failed for ${name}: ${message}\n`)
 
-    return {
-      content: [{ type: 'text', text: JSON.stringify({ error: message }) }],
-      isError: isToolNotFound,
+      return {
+        content: [{ type: 'text', text: JSON.stringify({ error: message }) }],
+        isError: isToolNotFound,
+      }
     }
-  }
-})
+  })
+}
+
+/** Fresh server instance (e.g. in-memory transport tests). Stdio uses `server`. */
+export function createPennyMcpServer(): Server {
+  const instance = new Server(
+    { name: 'penny-mcp', version: '1.0.0' },
+    { capabilities: { tools: {}, resources: {} } },
+  )
+  registerPennyMcpHandlers(instance)
+  return instance
+}
+
+export const server = createPennyMcpServer()
 
 export async function startMcpServer(): Promise<void> {
   const transport = new StdioServerTransport()
