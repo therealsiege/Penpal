@@ -179,7 +179,8 @@ describe('context engineered IPC handlers', () => {
       const response = payload as Record<string, unknown>
       expect(response.data).toBeDefined()
       expect(typeof response.summary).toBe('string')
-      expect((response.summary as string).split('.').filter(Boolean).length).toBe(1)
+      const sentenceTerminators = (response.summary as string).match(/(?<!\d)[.!?](?!\d)(?:\s|$)/g) || []
+      expect(sentenceTerminators.length, `${channel} summary: ${String(response.summary)}`).toBe(1)
       expect(Array.isArray(response.suggestions)).toBe(true)
       expect(Array.isArray(response.related_tools)).toBe(true)
     }

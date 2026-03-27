@@ -238,6 +238,21 @@ Optional Penny infra vars can be set in `Penny/docker/.env.control-plane`:
 
 All IPC calls go through `window.api.*`. Each handler uses `wrapHandler` which catches errors and returns `{ error: string }`.
 
+### Context-Engineered Handler Contract
+
+The most frequently called orchestration handlers return a context-engineered envelope:
+
+- `data` (original payload for backward compatibility)
+- `summary` (single sentence)
+- `suggestions` (state-aware next actions)
+- `related_tools` (adjacent tools likely needed next)
+- optional `context` (supporting state for better decisions)
+
+For lead channels, `leads:*` remains canonical in renderer APIs and `graph:*` aliases are now registered for tooling parity:
+
+- `graph:search-leads` -> `leads:search`
+- `graph:lead-detail` -> `leads:detail`
+
 <details>
 <summary>Full API list</summary>
 
