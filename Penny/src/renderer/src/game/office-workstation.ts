@@ -510,19 +510,12 @@ export class OfficeWorkstations {
     }
 
     // ── Thinking dots — best-of-N solver animation ────────────────────────
-    {
-      const podLines = this.host.getPodLines()
-      const agentId = agent.config.id
-      const solverPod = podLines.find(
-        t => t.solverAgentId === agentId && t.status === 'solving' && (t.candidates ?? 0) > 1,
-      )
-      if (solverPod && isWorking && !ws.thinkingDotsContainer) {
-        this.animator.showThinkingDots(ws, solverPod.candidates!)
-      } else if (solverPod?.candidateSelected && ws.thinkingDotsContainer && !ws.thinkingMergeTween) {
-        this.animator.playThinkingMerge(ws)
-      } else if (!solverPod && ws.thinkingDotsContainer) {
-        this.animator.hideThinkingDots(ws)
-      }
+    if (solverBestOfNActive && !ws.thinkingDotsContainer) {
+      this.animator.showThinkingDots(ws, solverPod?.candidates ?? 2)
+    } else if (solverCandidateSelected && ws.thinkingDotsContainer && !ws.thinkingMergeInProgress) {
+      this.animator.playThinkingMerge(ws)
+    } else if (!solverBestOfNActive && ws.thinkingDotsContainer) {
+      this.animator.hideThinkingDots(ws)
     }
 
     // ── MVP medal indicator ──────────────────────────────────────────────────

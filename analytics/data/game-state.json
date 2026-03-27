@@ -1,5 +1,5 @@
 {
-  "timestamp": 1774623882250,
+  "timestamp": 1774623901045,
   "weekStart": 1774242000000,
   "agents": [
     {
@@ -9,14 +9,14 @@
       "status": "idle",
       "room": "sidekick",
       "roomPath": "/Users/fuzeelogik/sidekick",
-      "currentTask": "[sidekick#15] Implement Executor self-fix mini-loop",
-      "xp": 575,
+      "currentTask": "[sidekick#5] Create MCP server package scaffold with stdio transport",
+      "xp": 650,
       "level": 2,
       "rankTitle": "Junior",
       "credits": 0,
       "tasksCompleted": 6,
-      "tasksFailed": 4,
-      "currentStreak": 0,
+      "tasksFailed": 1,
+      "currentStreak": 6,
       "sessionMode": "waiting",
       "uptime": "33m"
     },
@@ -27,14 +27,14 @@
       "status": "sleeping",
       "room": "1putthealth.com",
       "roomPath": "/Users/fuzeelogik/ComSci/Workspace/1putthealth/1putthealth.com",
-      "currentTask": "[sidekick#19] Add thinking animation for best-of-N reasoning",
-      "xp": 700,
+      "currentTask": "[sidekick#13] Implement best-of-N sampling for Solver phase",
+      "xp": 600,
       "level": 2,
       "rankTitle": "Junior",
-      "credits": 300,
-      "tasksCompleted": 7,
+      "credits": 250,
+      "tasksCompleted": 6,
       "tasksFailed": 2,
-      "currentStreak": 7,
+      "currentStreak": 6,
       "sessionMode": null,
       "uptime": null
     },
@@ -63,7 +63,7 @@
       "status": "sleeping",
       "room": "analytics",
       "roomPath": "/Users/fuzeelogik/sidekick/analytics",
-      "currentTask": "[sidekick#27] Add spot-check queue for manual eval review",
+      "currentTask": "[sidekick#19] Add thinking animation for best-of-N reasoning",
       "xp": 900,
       "level": 2,
       "rankTitle": "Junior",
@@ -99,14 +99,14 @@
       "status": "sleeping",
       "room": "unassigned",
       "roomPath": "",
-      "currentTask": null,
-      "xp": 475,
-      "level": 1,
-      "rankTitle": "Intern",
+      "currentTask": "[sidekick#1] Create preference event collector hook",
+      "xp": 500,
+      "level": 2,
+      "rankTitle": "Junior",
       "credits": 250,
       "tasksCompleted": 5,
-      "tasksFailed": 1,
-      "currentStreak": 0,
+      "tasksFailed": 0,
+      "currentStreak": 5,
       "sessionMode": null,
       "uptime": null
     },
@@ -117,7 +117,7 @@
       "status": "sleeping",
       "room": "unassigned",
       "roomPath": "",
-      "currentTask": "[sidekick#24] Add pod eval metrics: reviewer acceptance rate, executor test pass rate",
+      "currentTask": "[sidekick#8] Add MCP tools: vault (read, search, write)",
       "xp": 400,
       "level": 1,
       "rankTitle": "Intern",
@@ -135,7 +135,7 @@
       "status": "sleeping",
       "room": "1putthealth.com",
       "roomPath": "/Users/fuzeelogik/ComSci/Workspace/1putthealth/1putthealth.com",
-      "currentTask": null,
+      "currentTask": "[sidekick#15] Implement Executor self-fix mini-loop",
       "xp": 500,
       "level": 2,
       "rankTitle": "Junior",
@@ -153,14 +153,14 @@
       "status": "idle",
       "room": "sidekick",
       "roomPath": "/Users/fuzeelogik/sidekick",
-      "currentTask": "[sidekick#28] Set up Vitest test infrastructure for Penny",
-      "xp": 450,
+      "currentTask": "[sidekick#7] Add MCP tools: pods (create, list, status)",
+      "xp": 300,
       "level": 1,
       "rankTitle": "Intern",
-      "credits": 100,
-      "tasksCompleted": 5,
-      "tasksFailed": 2,
-      "currentStreak": 2,
+      "credits": 0,
+      "tasksCompleted": 3,
+      "tasksFailed": 0,
+      "currentStreak": 3,
       "sessionMode": "waiting",
       "uptime": "33m"
     },
@@ -189,13 +189,13 @@
       "status": "idle",
       "room": "sidekick",
       "roomPath": "/Users/fuzeelogik/sidekick",
-      "currentTask": "[sidekick#9] Add MCP tools: graph (search-leads, lead-detail, stats)",
+      "currentTask": "[sidekick#4] Create eval dashboard IPC handlers and React panel",
       "xp": 0,
       "level": 1,
       "rankTitle": "Intern",
       "credits": 0,
       "tasksCompleted": 0,
-      "tasksFailed": 3,
+      "tasksFailed": 0,
       "currentStreak": 0,
       "sessionMode": "waiting",
       "uptime": "33m"
@@ -279,19 +279,7 @@
         "currentStreak": 9
       },
       {
-        "rank": 4,
-        "agentId": "nextjs-frontend",
-        "agentName": "Lena Park",
-        "totalXP": 700,
-        "seasonXP": 700,
-        "weeklyXP": 100,
-        "level": 2,
-        "rankTitle": "Junior",
-        "tasksCompleted": 7,
-        "currentStreak": 7
-      },
-      {
-        "rank": 7,
+        "rank": 5,
         "agentId": "electron-dev",
         "agentName": "Kai Tanaka",
         "totalXP": 700,
@@ -303,19 +291,31 @@
         "currentStreak": 7
       },
       {
-        "rank": 8,
+        "rank": 6,
         "agentId": "fullstack-dev",
         "agentName": "Marcus Chen",
-        "totalXP": 575,
-        "seasonXP": 575,
+        "totalXP": 650,
+        "seasonXP": 650,
         "weeklyXP": 0,
         "level": 2,
         "rankTitle": "Junior",
         "tasksCompleted": 6,
-        "currentStreak": 0
+        "currentStreak": 6
       },
       {
-        "rank": 9,
+        "rank": 7,
+        "agentId": "nextjs-frontend",
+        "agentName": "Lena Park",
+        "totalXP": 600,
+        "seasonXP": 600,
+        "weeklyXP": 0,
+        "level": 2,
+        "rankTitle": "Junior",
+        "tasksCompleted": 6,
+        "currentStreak": 6
+      },
+      {
+        "rank": 8,
         "agentId": "expo-mobile",
         "agentName": "Sofia Ruiz",
         "totalXP": 500,
@@ -327,7 +327,19 @@
         "currentStreak": 5
       },
       {
-        "rank": 5,
+        "rank": 2,
+        "agentId": "embedded-dev",
+        "agentName": "Oleg Volkov",
+        "totalXP": 500,
+        "seasonXP": 500,
+        "weeklyXP": 200,
+        "level": 2,
+        "rankTitle": "Junior",
+        "tasksCompleted": 5,
+        "currentStreak": 5
+      },
+      {
+        "rank": 3,
         "agentId": "ui-designer",
         "agentName": "Ava Reyes",
         "totalXP": 500,
@@ -339,31 +351,7 @@
         "currentStreak": 5
       },
       {
-        "rank": 2,
-        "agentId": "embedded-dev",
-        "agentName": "Oleg Volkov",
-        "totalXP": 475,
-        "seasonXP": 475,
-        "weeklyXP": 200,
-        "level": 1,
-        "rankTitle": "Intern",
-        "tasksCompleted": 5,
-        "currentStreak": 0
-      },
-      {
-        "rank": 3,
-        "agentId": "product-mgr",
-        "agentName": "Jordan Miles",
-        "totalXP": 450,
-        "seasonXP": 450,
-        "weeklyXP": 200,
-        "level": 1,
-        "rankTitle": "Intern",
-        "tasksCompleted": 5,
-        "currentStreak": 2
-      },
-      {
-        "rank": 10,
+        "rank": 9,
         "agentId": "videogame-dev",
         "agentName": "Zara Kim",
         "totalXP": 400,
@@ -375,7 +363,19 @@
         "currentStreak": 4
       },
       {
-        "rank": 6,
+        "rank": 10,
+        "agentId": "product-mgr",
+        "agentName": "Jordan Miles",
+        "totalXP": 300,
+        "seasonXP": 300,
+        "weeklyXP": 0,
+        "level": 1,
+        "rankTitle": "Intern",
+        "tasksCompleted": 3,
+        "currentStreak": 3
+      },
+      {
+        "rank": 4,
         "agentId": "product-marketer",
         "agentName": "Dana Webb",
         "totalXP": 275,
@@ -413,19 +413,7 @@
         "currentStreak": 9
       },
       {
-        "rank": 4,
-        "agentId": "nextjs-frontend",
-        "agentName": "Lena Park",
-        "totalXP": 700,
-        "seasonXP": 700,
-        "weeklyXP": 100,
-        "level": 2,
-        "rankTitle": "Junior",
-        "tasksCompleted": 7,
-        "currentStreak": 7
-      },
-      {
-        "rank": 7,
+        "rank": 5,
         "agentId": "electron-dev",
         "agentName": "Kai Tanaka",
         "totalXP": 700,
@@ -437,19 +425,31 @@
         "currentStreak": 7
       },
       {
-        "rank": 8,
+        "rank": 6,
         "agentId": "fullstack-dev",
         "agentName": "Marcus Chen",
-        "totalXP": 575,
-        "seasonXP": 575,
+        "totalXP": 650,
+        "seasonXP": 650,
         "weeklyXP": 0,
         "level": 2,
         "rankTitle": "Junior",
         "tasksCompleted": 6,
-        "currentStreak": 0
+        "currentStreak": 6
       },
       {
-        "rank": 9,
+        "rank": 7,
+        "agentId": "nextjs-frontend",
+        "agentName": "Lena Park",
+        "totalXP": 600,
+        "seasonXP": 600,
+        "weeklyXP": 0,
+        "level": 2,
+        "rankTitle": "Junior",
+        "tasksCompleted": 6,
+        "currentStreak": 6
+      },
+      {
+        "rank": 8,
         "agentId": "expo-mobile",
         "agentName": "Sofia Ruiz",
         "totalXP": 500,
@@ -461,7 +461,19 @@
         "currentStreak": 5
       },
       {
-        "rank": 5,
+        "rank": 2,
+        "agentId": "embedded-dev",
+        "agentName": "Oleg Volkov",
+        "totalXP": 500,
+        "seasonXP": 500,
+        "weeklyXP": 200,
+        "level": 2,
+        "rankTitle": "Junior",
+        "tasksCompleted": 5,
+        "currentStreak": 5
+      },
+      {
+        "rank": 3,
         "agentId": "ui-designer",
         "agentName": "Ava Reyes",
         "totalXP": 500,
@@ -473,31 +485,7 @@
         "currentStreak": 5
       },
       {
-        "rank": 2,
-        "agentId": "embedded-dev",
-        "agentName": "Oleg Volkov",
-        "totalXP": 475,
-        "seasonXP": 475,
-        "weeklyXP": 200,
-        "level": 1,
-        "rankTitle": "Intern",
-        "tasksCompleted": 5,
-        "currentStreak": 0
-      },
-      {
-        "rank": 3,
-        "agentId": "product-mgr",
-        "agentName": "Jordan Miles",
-        "totalXP": 450,
-        "seasonXP": 450,
-        "weeklyXP": 200,
-        "level": 1,
-        "rankTitle": "Intern",
-        "tasksCompleted": 5,
-        "currentStreak": 2
-      },
-      {
-        "rank": 10,
+        "rank": 9,
         "agentId": "videogame-dev",
         "agentName": "Zara Kim",
         "totalXP": 400,
@@ -509,7 +497,19 @@
         "currentStreak": 4
       },
       {
-        "rank": 6,
+        "rank": 10,
+        "agentId": "product-mgr",
+        "agentName": "Jordan Miles",
+        "totalXP": 300,
+        "seasonXP": 300,
+        "weeklyXP": 0,
+        "level": 1,
+        "rankTitle": "Intern",
+        "tasksCompleted": 3,
+        "currentStreak": 3
+      },
+      {
+        "rank": 4,
         "agentId": "product-marketer",
         "agentName": "Dana Webb",
         "totalXP": 275,
@@ -550,40 +550,16 @@
         "rank": 2,
         "agentId": "embedded-dev",
         "agentName": "Oleg Volkov",
-        "totalXP": 475,
-        "seasonXP": 475,
+        "totalXP": 500,
+        "seasonXP": 500,
         "weeklyXP": 200,
-        "level": 1,
-        "rankTitle": "Intern",
+        "level": 2,
+        "rankTitle": "Junior",
         "tasksCompleted": 5,
-        "currentStreak": 0
+        "currentStreak": 5
       },
       {
         "rank": 3,
-        "agentId": "product-mgr",
-        "agentName": "Jordan Miles",
-        "totalXP": 450,
-        "seasonXP": 450,
-        "weeklyXP": 200,
-        "level": 1,
-        "rankTitle": "Intern",
-        "tasksCompleted": 5,
-        "currentStreak": 2
-      },
-      {
-        "rank": 4,
-        "agentId": "nextjs-frontend",
-        "agentName": "Lena Park",
-        "totalXP": 700,
-        "seasonXP": 700,
-        "weeklyXP": 100,
-        "level": 2,
-        "rankTitle": "Junior",
-        "tasksCompleted": 7,
-        "currentStreak": 7
-      },
-      {
-        "rank": 5,
         "agentId": "ui-designer",
         "agentName": "Ava Reyes",
         "totalXP": 500,
@@ -595,7 +571,7 @@
         "currentStreak": 5
       },
       {
-        "rank": 6,
+        "rank": 4,
         "agentId": "product-marketer",
         "agentName": "Dana Webb",
         "totalXP": 275,
@@ -607,7 +583,7 @@
         "currentStreak": 1
       },
       {
-        "rank": 7,
+        "rank": 5,
         "agentId": "electron-dev",
         "agentName": "Kai Tanaka",
         "totalXP": 700,
@@ -619,19 +595,31 @@
         "currentStreak": 7
       },
       {
-        "rank": 8,
+        "rank": 6,
         "agentId": "fullstack-dev",
         "agentName": "Marcus Chen",
-        "totalXP": 575,
-        "seasonXP": 575,
+        "totalXP": 650,
+        "seasonXP": 650,
         "weeklyXP": 0,
         "level": 2,
         "rankTitle": "Junior",
         "tasksCompleted": 6,
-        "currentStreak": 0
+        "currentStreak": 6
       },
       {
-        "rank": 9,
+        "rank": 7,
+        "agentId": "nextjs-frontend",
+        "agentName": "Lena Park",
+        "totalXP": 600,
+        "seasonXP": 600,
+        "weeklyXP": 0,
+        "level": 2,
+        "rankTitle": "Junior",
+        "tasksCompleted": 6,
+        "currentStreak": 6
+      },
+      {
+        "rank": 8,
         "agentId": "expo-mobile",
         "agentName": "Sofia Ruiz",
         "totalXP": 500,
@@ -643,7 +631,7 @@
         "currentStreak": 5
       },
       {
-        "rank": 10,
+        "rank": 9,
         "agentId": "videogame-dev",
         "agentName": "Zara Kim",
         "totalXP": 400,
@@ -653,6 +641,18 @@
         "rankTitle": "Intern",
         "tasksCompleted": 4,
         "currentStreak": 4
+      },
+      {
+        "rank": 10,
+        "agentId": "product-mgr",
+        "agentName": "Jordan Miles",
+        "totalXP": 300,
+        "seasonXP": 300,
+        "weeklyXP": 0,
+        "level": 1,
+        "rankTitle": "Intern",
+        "tasksCompleted": 3,
+        "currentStreak": 3
       },
       {
         "rank": 11,
@@ -674,8 +674,8 @@
     },
     "rivalries": [
       {
-        "agent1": "Lena Park",
-        "agent2": "Kai Tanaka",
+        "agent1": "Sofia Ruiz",
+        "agent2": "Oleg Volkov",
         "xpDiff": 0,
         "percentDiff": 0
       },
@@ -686,24 +686,18 @@
         "percentDiff": 0
       },
       {
-        "agent1": "Sofia Ruiz",
-        "agent2": "Oleg Volkov",
-        "xpDiff": 25,
-        "percentDiff": 5
-      },
-      {
-        "agent1": "Ava Reyes",
-        "agent2": "Oleg Volkov",
-        "xpDiff": 25,
-        "percentDiff": 5
+        "agent1": "Oleg Volkov",
+        "agent2": "Ava Reyes",
+        "xpDiff": 0,
+        "percentDiff": 0
       }
     ]
   },
   "orchestrator": {
     "queueDepth": 0,
-    "activeTasks": 12,
-    "completedToday": 27,
-    "failedToday": 8,
-    "totalProcessed": 58
+    "activeTasks": 23,
+    "completedToday": 24,
+    "failedToday": 0,
+    "totalProcessed": 47
   }
 }

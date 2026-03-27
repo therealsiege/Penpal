@@ -9,7 +9,7 @@
 import fs from 'fs'
 import path from 'path'
 import crypto from 'crypto'
-import { getTaskQueue } from '../../orchestrator'
+import { getTaskQueue, type Task } from '../../orchestrator'
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
@@ -32,16 +32,24 @@ export interface SpotCheckAgreement {
   rate: number
 }
 
+type HumanVerdict = SpotCheck['humanVerdict']
+type SpotCheckRow = SpotCheck & { sampledAt: string }
+
+const RECENT_WINDOW_MS = 7 * 24 * 60 * 60 * 1000
+const AUTOMATED_PASS_THRESHOLD = 0.5
+
 // ── SpotCheckQueue ──────────────────────────────────────────────────────────
 
 export class SpotCheckQueue {
   private filePath: string
+  private readonly taskProvider: () => Task[]
 
-  constructor(filePath?: string) {
+  constructor(filePath?: string, taskProvider: () => Task[] = getTaskQueue) {
     const dataDir = filePath
       ? path.dirname(filePath)
       : path.resolve(__dirname, '..', '..', '..', 'data')
     this.filePath = filePath ?? path.join(dataDir, 'spot-checks.json')
+    this.taskProvider = taskProvider
 
     const dir = path.dirname(this.filePath)
     if (!fs.existsSync(dir)) {
@@ -49,28 +57,74 @@ export class SpotCheckQueue {
     }
   }
 
-  private load(): SpotCheck[] {
+  private load(): SpotCheckRow[] {
     try {
       if (!fs.existsSync(this.filePath)) return []
       const raw = fs.readFileSync(this.filePath, 'utf-8')
-      return JSON.parse(raw) as SpotCheck[]
+      const parsed = JSON.parse(raw)
+      if (!Array.isArray(parsed)) return []
+      return parsed.flatMap((row) => this.parseRow(row))
     } catch {
       return []
     }
   }
 
-  private save(checks: SpotCheck[]): void {
-    fs.writeFileSync(this.filePath, JSON.stringify(checks, null, 2), 'utf-8')
+  private parseRow(row: unknown): SpotCheckRow[] {
+    if (!row || typeof row !== 'object') return []
+    const candidate = row as Record<string, unknown>
+    if (
+      typeof candidate.id !== 'string' ||
+      typeof candidate.taskId !== 'string' ||
+      typeof candidate.agentId !== 'string' ||
+      typeof candidate.taskDescription !== 'string' ||
+      typeof candidate.agentOutput !== 'string'
+    ) {
+      return []
+    }
+
+    const automatedScore =
+      typeof candidate.automatedScore === 'number' ? candidate.automatedScore : undefined
+    const humanVerdict = this.parseVerdict(candidate.humanVerdict)
+    const humanNotes = typeof candidate.humanNotes === 'string' ? candidate.humanNotes : undefined
+    const reviewedAt = typeof candidate.reviewedAt === 'string' ? candidate.reviewedAt : undefined
+    const sampledAt =
+      typeof candidate.sampledAt === 'string' ? candidate.sampledAt : new Date(0).toISOString()
+
+    return [{
+      id: candidate.id,
+      taskId: candidate.taskId,
+      agentId: candidate.agentId,
+      taskDescription: candidate.taskDescription,
+      agentOutput: candidate.agentOutput,
+      automatedScore,
+      humanVerdict,
+      humanNotes,
+      reviewedAt,
+      sampledAt,
+    }]
+  }
+
+  private parseVerdict(value: unknown): HumanVerdict {
+    if (value === 'pass' || value === 'fail' || value === 'partial') return value
+    return undefined
+  }
+
+  private save(checks: SpotCheckRow[]): void {
+    const tmpPath = `${this.filePath}.tmp`
+    fs.writeFileSync(tmpPath, JSON.stringify(checks, null, 2), 'utf-8')
+    fs.renameSync(tmpPath, this.filePath)
   }
 
   async sample(count: number): Promise<SpotCheck[]> {
+    if (!Number.isFinite(count) || count <= 0) return []
+
     const existing = this.load()
     const existingTaskIds = new Set(existing.map(sc => sc.taskId))
 
-    const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000
-    const tasks = getTaskQueue().filter(t => {
+    const recentCutoff = Date.now() - RECENT_WINDOW_MS
+    const tasks = this.taskProvider().filter(t => {
       if (t.status !== 'completed' && t.status !== 'failed') return false
-      if (!t.completedAt || t.completedAt < sevenDaysAgo) return false
+      if (!t.completedAt || t.completedAt < recentCutoff) return false
       if (existingTaskIds.has(t.id)) return false
       return true
     })
@@ -81,15 +135,16 @@ export class SpotCheckQueue {
       ;[tasks[i], tasks[j]] = [tasks[j], tasks[i]]
     }
 
-    const selected = tasks.slice(0, count)
-    const newChecks: SpotCheck[] = selected.map(t => ({
+    const selected = tasks.slice(0, Math.floor(count))
+    const sampledAt = new Date().toISOString()
+    const newChecks: SpotCheckRow[] = selected.map(t => ({
       id: crypto.randomUUID(),
       taskId: t.id,
       agentId: t.assignedAgent ?? 'unknown',
       taskDescription: t.description || t.title,
       agentOutput: t.result ?? '',
       automatedScore: t.status === 'completed' ? 1.0 : 0.0,
-      sampledAt: new Date().toISOString(),
+      sampledAt,
     }))
 
     existing.push(...newChecks)
@@ -98,11 +153,19 @@ export class SpotCheckQueue {
   }
 
   async review(id: string, verdict: 'pass' | 'fail' | 'partial', notes?: string): Promise<void> {
+    if (typeof id !== 'string' || id.trim().length === 0) {
+      throw new Error('spot check id must be a non-empty string')
+    }
+    const normalizedVerdict = this.parseVerdict(verdict)
+    if (!normalizedVerdict) {
+      throw new Error('verdict must be pass, fail, or partial')
+    }
+
     const checks = this.load()
     const check = checks.find(sc => sc.id === id)
     if (!check) throw new Error(`Spot check ${id} not found`)
-    check.humanVerdict = verdict
-    check.humanNotes = notes
+    check.humanVerdict = normalizedVerdict
+    check.humanNotes = typeof notes === 'string' && notes.trim().length > 0 ? notes.trim() : undefined
     check.reviewedAt = new Date().toISOString()
     this.save(checks)
   }
@@ -116,8 +179,11 @@ export class SpotCheckQueue {
     if (reviewed.length === 0) return { total: 0, agreed: 0, rate: 0 }
 
     let agreed = 0
+    // Agreement policy is intentionally binary and deterministic:
+    // - Automated pass if score >= AUTOMATED_PASS_THRESHOLD
+    // - Human pass if verdict is pass or partial (fail is non-pass)
     for (const sc of reviewed) {
-      const automatedPass = (sc.automatedScore ?? 0) >= 0.5
+      const automatedPass = (sc.automatedScore ?? 0) >= AUTOMATED_PASS_THRESHOLD
       const humanPass = sc.humanVerdict === 'pass' || sc.humanVerdict === 'partial'
       if (automatedPass === humanPass) agreed++
     }
