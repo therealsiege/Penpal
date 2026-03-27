@@ -509,6 +509,39 @@ export async function getFilesByTag(tag: string): Promise<string[]> {
   return results.sort()
 }
 
+export async function getVaultFileContext(relativePath: string): Promise<VaultFileContext> {
+  const file = readVaultFile(relativePath)
+  const frontmatter = file ? parseMarkdownFrontmatter(file.content) : null
+  const tags = file ? extractTagsFromMarkdown(file.content, frontmatter) : []
+  const [backlinks, tagRelated] = await Promise.all([
+    getBacklinks(relativePath).catch(() => []),
+    (async () => {
+      const related = new Set<string>()
+      for (const tag of tags.slice(0, 2)) {
+        const files = await getFilesByTag(tag).catch(() => [])
+        for (const filePath of files) {
+          if (filePath !== relativePath) related.add(filePath)
+          if (related.size >= 10) break
+        }
+        if (related.size >= 10) break
+      }
+      return Array.from(related)
+    })(),
+  ])
+
+  const siblingFiles = getSiblingFiles(relativePath, 8)
+  const dedupedRelated = Array.from(
+    new Set([...backlinks.map((link) => link.path), ...siblingFiles, ...tagRelated]),
+  ).slice(0, 20)
+
+  return {
+    backlinks: backlinks.slice(0, 20),
+    relatedFiles: dedupedRelated,
+    folderContext: getFolderHierarchy(relativePath),
+    tagContext: tags,
+  }
+}
+
 // ── Backlinks (filesystem wikilink scan) ──────────────────────────────────
 
 export async function getBacklinks(relativePath: string): Promise<VaultBacklink[]> {

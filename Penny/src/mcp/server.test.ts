@@ -3,6 +3,7 @@ import { toolRegistry } from './tools'
 
 // Side-effect: registers meta tools
 import './tools/meta'
+import './tools/pods'
 
 describe('MCP Tool Registry', () => {
   it('has meta tools registered', () => {
@@ -10,6 +11,9 @@ describe('MCP Tool Registry', () => {
     const names = tools.map((t) => t.name)
     expect(names).toContain('meta:list-tools')
     expect(names).toContain('meta:describe-tool')
+    expect(names).toContain('pods:create')
+    expect(names).toContain('pods:list')
+    expect(names).toContain('pods:status')
     expect(tools.length).toBeGreaterThanOrEqual(2)
   })
 

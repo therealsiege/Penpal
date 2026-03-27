@@ -9,7 +9,7 @@
 import fs from 'fs'
 import path from 'path'
 import crypto from 'crypto'
-import { getTaskQueue } from '../../orchestrator'
+import { getTaskQueue, type Task } from '../../orchestrator'
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
@@ -32,16 +32,36 @@ export interface SpotCheckAgreement {
   rate: number
 }
 
+type ReviewVerdict = 'pass' | 'fail' | 'partial'
+
+interface SpotCheckQueueOptions {
+  filePath?: string
+  recentWindowMs?: number
+  automatedPassThreshold?: number
+  taskProvider?: () => Task[]
+  now?: () => number
+}
+
 // ── SpotCheckQueue ──────────────────────────────────────────────────────────
 
 export class SpotCheckQueue {
   private filePath: string
+  private readonly recentWindowMs: number
+  private readonly automatedPassThreshold: number
+  private readonly taskProvider: () => Task[]
+  private readonly now: () => number
 
-  constructor(filePath?: string) {
+  constructor(opts?: string | SpotCheckQueueOptions) {
+    const options: SpotCheckQueueOptions = typeof opts === 'string' ? { filePath: opts } : (opts ?? {})
+    const filePath = options.filePath
     const dataDir = filePath
       ? path.dirname(filePath)
       : path.resolve(__dirname, '..', '..', '..', 'data')
     this.filePath = filePath ?? path.join(dataDir, 'spot-checks.json')
+    this.recentWindowMs = options.recentWindowMs ?? 7 * 24 * 60 * 60 * 1000
+    this.automatedPassThreshold = options.automatedPassThreshold ?? 0.5
+    this.taskProvider = options.taskProvider ?? getTaskQueue
+    this.now = options.now ?? Date.now
 
     const dir = path.dirname(this.filePath)
     if (!fs.existsSync(dir)) {
