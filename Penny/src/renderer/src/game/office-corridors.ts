@@ -40,6 +40,12 @@ export class OfficeCorridors {
   /** Sprite pool for animated hallway indicator dots (data-flow traffic) */
   private hallwayDotPool: Phaser.GameObjects.Sprite[] = []
   private hallwayDotGlowPool: Phaser.GameObjects.Sprite[] = []
+  /** Per-dot speed multiplier for organic variation (±15%) */
+  private hallwayDotSpeedMul: number[] = []
+  /** Graphics layer for trailing particle effects behind flow dots */
+  private trailGraphics: Phaser.GameObjects.Graphics | null = null
+  /** Static arrow sprites placed at corridor segment endpoints */
+  private endpointArrows: Phaser.GameObjects.Sprite[] = []
 
   lastFloorArrowAt = 0
 
@@ -60,6 +66,8 @@ export class OfficeCorridors {
     this.corridorGraphics = corridorGraphics
     this.hallwayIndicatorGraphics = hallwayIndicatorGraphics
     this.floorArrowGfx = floorArrowGfx
+    // Trail graphics layer sits just behind the flow dots
+    this.trailGraphics = this.scene.add.graphics().setDepth(-0.45)
   }
 
   // ---------------------------------------------------------------------------
@@ -121,6 +129,25 @@ export class OfficeCorridors {
       const JUNC_W = 8
       const CHEVRON_GAP = 40
 
+      // ── Sidewalk strip (wider paved area BEHIND the pipe) ──
+      const sidewalkW = HALL_H * 3
+      const swX = minX - LEG_W / 2
+      const swY = hallY - sidewalkW / 2
+      const swW = hallWidth + LEG_W
+      // Pavement fill
+      g.fillStyle(0x1e2836, 0.5)
+      g.fillRect(swX, swY, swW, sidewalkW)
+      // Curb edges along both long sides of sidewalk
+      g.lineStyle(1, 0x3a4a5a, 0.4)
+      g.beginPath()
+      g.moveTo(swX, swY)
+      g.lineTo(swX + swW, swY)
+      g.strokePath()
+      g.beginPath()
+      g.moveTo(swX, swY + sidewalkW)
+      g.lineTo(swX + swW, swY + sidewalkW)
+      g.strokePath()
+
       g.fillStyle(HALL_FLOOR, 0.72)
       g.fillRect(minX - LEG_W / 2, hallY - HALL_H / 2, hallWidth + LEG_W, HALL_H)
 
@@ -142,10 +169,10 @@ export class OfficeCorridors {
       // ── Rivets/bolts along main corridor runs (sprite-based) ──
       for (let rx = minX; rx <= maxX; rx += 50) {
         const rivetTop = this.scene.add.sprite(rx, hallY - HALL_H / 2 + 3, SPRITESHEET_KEYS.GAME_ICONS, ICON_FRAMES.CIRCLE_GREY)
-          .setScale(0.10).setAlpha(0.3).setDepth(-0.5).setTint(0x4a5a6a)
+          .setScale(0.16).setAlpha(0.3).setDepth(-0.5).setTint(0x4a5a6a)
         this.junctionSprites.push(rivetTop)
         const rivetBot = this.scene.add.sprite(rx, hallY + HALL_H / 2 - 3, SPRITESHEET_KEYS.GAME_ICONS, ICON_FRAMES.CIRCLE_GREY)
-          .setScale(0.10).setAlpha(0.3).setDepth(-0.5).setTint(0x4a5a6a)
+          .setScale(0.16).setAlpha(0.3).setDepth(-0.5).setTint(0x4a5a6a)
         this.junctionSprites.push(rivetBot)
       }
 
@@ -176,6 +203,21 @@ export class OfficeCorridors {
         const legBot = Math.max(doorY, hallY + HALL_H / 2)
 
         if (legBot > legTop) {
+          // ── Vertical leg walkway strip ──
+          const vLegW = LEG_W * 3
+          g.fillStyle(0x1e2836, 0.5)
+          g.fillRect(room.x - vLegW / 2, legTop, vLegW, legBot - legTop)
+          // Curb edges
+          g.lineStyle(1, 0x3a4a5a, 0.4)
+          g.beginPath()
+          g.moveTo(room.x - vLegW / 2, legTop)
+          g.lineTo(room.x - vLegW / 2, legBot)
+          g.strokePath()
+          g.beginPath()
+          g.moveTo(room.x + vLegW / 2, legTop)
+          g.lineTo(room.x + vLegW / 2, legBot)
+          g.strokePath()
+
           g.fillStyle(HALL_FLOOR, 0.72)
           g.fillRect(room.x - LEG_W / 2, legTop, LEG_W, legBot - legTop)
           g.fillStyle(HALL_EDGE, 0.9)
@@ -189,12 +231,30 @@ export class OfficeCorridors {
           // Rivets along vertical legs (sprite-based)
           for (let ry = legTop; ry <= legBot; ry += 50) {
             const rivetL = this.scene.add.sprite(room.x - LEG_W / 2 + 3, ry, SPRITESHEET_KEYS.GAME_ICONS, ICON_FRAMES.CIRCLE_GREY)
-              .setScale(0.10).setAlpha(0.3).setDepth(-0.5).setTint(0x4a5a6a)
+              .setScale(0.16).setAlpha(0.3).setDepth(-0.5).setTint(0x4a5a6a)
             this.junctionSprites.push(rivetL)
             const rivetR = this.scene.add.sprite(room.x + LEG_W / 2 - 3, ry, SPRITESHEET_KEYS.GAME_ICONS, ICON_FRAMES.CIRCLE_GREY)
-              .setScale(0.10).setAlpha(0.3).setDepth(-0.5).setTint(0x4a5a6a)
+              .setScale(0.16).setAlpha(0.3).setDepth(-0.5).setTint(0x4a5a6a)
             this.junctionSprites.push(rivetR)
           }
+        }
+
+        // ── Junction pad — brighter rectangle at intersection ──
+        g.fillStyle(0x2a3444, 0.35)
+        g.fillRect(room.x - 8, hallY - 8, 16, 16)
+
+        // ── Directional floor chevrons pointing from corridor toward room door ──
+        const chevDir = doorSide === 'top' ? -1 : 1
+        const chevBaseY = doorSide === 'top' ? hallY - HALL_H / 2 : hallY + HALL_H / 2
+        g.lineStyle(1, lineColor, 0.15)
+        for (let ci = 0; ci < 3; ci++) {
+          const cy = chevBaseY + chevDir * (4 + ci * 8)
+          const cSize = 3
+          g.beginPath()
+          g.moveTo(room.x - cSize, cy - chevDir * cSize)
+          g.lineTo(room.x, cy)
+          g.lineTo(room.x + cSize, cy - chevDir * cSize)
+          g.strokePath()
         }
 
         g.fillStyle(HALL_FLOOR, 0.88)
@@ -209,7 +269,7 @@ export class OfficeCorridors {
 
         // Junction status dot — sprite-based green circle instead of Graphics fillCircle
         const juncDot = this.scene.add.sprite(room.x, hallY, SPRITESHEET_KEYS.GAME_ICONS, ICON_FRAMES.CIRCLE_GREEN)
-          .setScale(0.10)
+          .setScale(0.22)
           .setAlpha(0.25)
           .setDepth(-0.5)
         this.junctionSprites.push(juncDot)
@@ -220,7 +280,7 @@ export class OfficeCorridors {
           : hallY + HALL_H / 2 + 6
         const arrowAngle = doorSide === 'top' ? -90 : 90
         const arrowSprite = this.scene.add.sprite(room.x, arrowY, SPRITESHEET_KEYS.GAME_ICONS, ICON_FRAMES.ARROW_EAST)
-          .setScale(0.12)
+          .setScale(0.28)
           .setAlpha(0.18)
           .setAngle(arrowAngle)
           .setDepth(-0.5)
@@ -282,11 +342,26 @@ export class OfficeCorridors {
           )
           if (!alreadyConnected) {
             this.corridorSegments.push({ x1: fromX, y1: hallY, x2: toX, y2: hallY, color: 0x2a3440 })
-            // Draw the connector visually
+            const interW = toX - fromX
+            // ── Inter-team sidewalk strip ──
+            const interSWH = 8 * 3
+            g.fillStyle(0x1e2836, 0.5)
+            g.fillRect(fromX, hallY - interSWH / 2, interW, interSWH)
+            // Curb edges
+            g.lineStyle(1, 0x3a4a5a, 0.4)
+            g.beginPath()
+            g.moveTo(fromX, hallY - interSWH / 2)
+            g.lineTo(toX, hallY - interSWH / 2)
+            g.strokePath()
+            g.beginPath()
+            g.moveTo(fromX, hallY + interSWH / 2)
+            g.lineTo(toX, hallY + interSWH / 2)
+            g.strokePath()
+            // Draw the connector visually (pipe on top)
             g.fillStyle(0x0f1520, 0.5)
-            g.fillRect(fromX, hallY - 4, toX - fromX, 8)
+            g.fillRect(fromX, hallY - 4, interW, 8)
             g.fillStyle(0x1a2535, 0.6)
-            g.fillRect(fromX, hallY - 1, toX - fromX, 2)
+            g.fillRect(fromX, hallY - 1, interW, 2)
           }
         }
         rowCenters.push({
@@ -305,32 +380,116 @@ export class OfficeCorridors {
       }
     }
 
+    // Shared constants for connector walkway rendering (same as intra-team values)
+    const C_HALL_H = 12
+    const C_HALL_FLOOR = 0x0f1520
+    const C_HALL_EDGE = 0x1e2830
+    const C_LEG_W = 6
+
     // Connect rows vertically (stairwell between row 1 and row 2)
     rowCenters.sort((a, b) => a.y - b.y)
     for (let i = 0; i < rowCenters.length - 1; i++) {
       const upper = rowCenters[i]
       const lower = rowCenters[i + 1]
-      // Vertical connector at the leftmost team X
       const connX = Math.min(upper.minX, lower.minX)
       this.corridorSegments.push({ x1: connX, y1: upper.y, x2: connX, y2: lower.y, color: 0x2a3440 })
-      g.fillStyle(0x0f1520, 0.5)
-      g.fillRect(connX - 4, upper.y, 8, lower.y - upper.y)
-      g.fillStyle(0x1a2535, 0.6)
-      g.fillRect(connX - 1, upper.y, 2, lower.y - upper.y)
+      const connLen = lower.y - upper.y
+      // Sidewalk strip
+      const VERT_WALK_W = 36
+      g.fillStyle(0x1e2836, 0.7)
+      g.fillRect(connX - VERT_WALK_W / 2, upper.y, VERT_WALK_W, connLen)
+      // Curb edges
+      g.lineStyle(2, 0x3a4a5a, 0.6)
+      g.lineBetween(connX - VERT_WALK_W / 2, upper.y, connX - VERT_WALK_W / 2, lower.y)
+      g.lineBetween(connX + VERT_WALK_W / 2, upper.y, connX + VERT_WALK_W / 2, lower.y)
+      // Pipe on top
+      g.fillStyle(C_HALL_FLOOR, 0.5)
+      g.fillRect(connX - C_LEG_W / 2, upper.y, C_LEG_W, connLen)
+      g.fillStyle(C_HALL_EDGE, 0.9)
+      g.fillRect(connX - C_LEG_W / 2, upper.y, 1, connLen)
+      g.fillRect(connX + C_LEG_W / 2 - 1, upper.y, 1, connLen)
     }
 
-    // Connect service row down to the first agent office row
+    // Connect service row (cafe) down to the first agent office row
     const cafeBounds = this.host.getCafe().getBounds()
     if (cafeBounds && rowCenters.length > 0) {
       const nearestRow = rowCenters[0]
       const serviceBottomY = cafeBounds.y + cafeBounds.h
       const connX = cafeBounds.x + cafeBounds.w / 2
-      // Vertical corridor from service row bottom to agent row corridor
+
+      // Vertical corridor from cafe to agent row
       this.corridorSegments.push({ x1: connX, y1: serviceBottomY, x2: connX, y2: nearestRow.y, color: 0x2a3440 })
+      const cafeConnLen = nearestRow.y - serviceBottomY
+      if (cafeConnLen > 0) {
+        // Sidewalk strip
+        const CAFE_WALK_W = 48
+        g.fillStyle(0x1e2836, 0.75)
+        g.fillRect(connX - CAFE_WALK_W / 2, serviceBottomY, CAFE_WALK_W, cafeConnLen)
+        // Curb edges
+        g.lineStyle(2, 0x3a4a5a, 0.6)
+        g.lineBetween(connX - CAFE_WALK_W / 2, serviceBottomY, connX - CAFE_WALK_W / 2, nearestRow.y)
+        g.lineBetween(connX + CAFE_WALK_W / 2, serviceBottomY, connX + CAFE_WALK_W / 2, nearestRow.y)
+        // Pipe on top
+        g.fillStyle(C_HALL_FLOOR, 0.5)
+        g.fillRect(connX - C_LEG_W / 2, serviceBottomY, C_LEG_W, cafeConnLen)
+        g.fillStyle(C_HALL_EDGE, 0.9)
+        g.fillRect(connX - C_LEG_W / 2, serviceBottomY, 1, cafeConnLen)
+        g.fillRect(connX + C_LEG_W / 2 - 1, serviceBottomY, 1, cafeConnLen)
+        // Directional arrows pointing from cafe toward offices
+        g.lineStyle(2, 0x00ff88, 0.25)
+        for (let ay = serviceBottomY + 20; ay < nearestRow.y - 10; ay += 28) {
+          g.lineBetween(connX - 4, ay, connX, ay + 6)
+          g.lineBetween(connX + 4, ay, connX, ay + 6)
+        }
+        // "TO CAFE" label midway along the connector
+        const labelY = serviceBottomY + cafeConnLen / 2
+        const cafeLabel = this.scene.add.text(connX, labelY, '☕ CAFE', {
+          fontSize: '7px', fontFamily: 'monospace', color: '#00ff88', resolution: 2,
+        }).setOrigin(0.5).setAlpha(0.3).setDepth(-0.5)
+        this.corridorSignTexts.push(cafeLabel)
+      }
+
       // Horizontal leg to connect to the nearest team
       if (Math.abs(connX - nearestRow.minX) > 10) {
         this.corridorSegments.push({ x1: connX, y1: nearestRow.y, x2: nearestRow.minX, y2: nearestRow.y, color: 0x2a3440 })
+        const hx1 = Math.min(connX, nearestRow.minX)
+        const hx2 = Math.max(connX, nearestRow.minX)
+        const hLen = hx2 - hx1
+        const HLEG_WALK_W = 36
+        // Sidewalk
+        g.fillStyle(0x1e2836, 0.65)
+        g.fillRect(hx1, nearestRow.y - HLEG_WALK_W / 2, hLen, HLEG_WALK_W)
+        // Curb edges
+        g.lineStyle(1, 0x3a4a5a, 0.4)
+        g.lineBetween(hx1, nearestRow.y - HLEG_WALK_W / 2, hx2, nearestRow.y - HLEG_WALK_W / 2)
+        g.lineBetween(hx1, nearestRow.y + HLEG_WALK_W / 2, hx2, nearestRow.y + HLEG_WALK_W / 2)
+        // Pipe on top
+        g.fillStyle(C_HALL_FLOOR, 0.5)
+        g.fillRect(hx1, nearestRow.y - C_HALL_H / 2, hLen, C_HALL_H)
+        g.fillStyle(C_HALL_EDGE, 0.9)
+        g.fillRect(hx1, nearestRow.y - C_HALL_H / 2, hLen, 1)
+        g.fillRect(hx1, nearestRow.y + C_HALL_H / 2 - 1, hLen, 1)
       }
+    }
+
+    // ── Direction arrows at corridor segment endpoints ──
+    // Destroy previous arrows
+    for (const a of this.endpointArrows) a.destroy()
+    this.endpointArrows = []
+    for (const seg of this.corridorSegments) {
+      const segLen = Math.hypot(seg.x2 - seg.x1, seg.y2 - seg.y1)
+      if (segLen < 30) continue // skip very short segments
+      // Compute angle from start to end (Phaser angles are in degrees, 0 = right)
+      const angleDeg = Phaser.Math.RadToDeg(Math.atan2(seg.y2 - seg.y1, seg.x2 - seg.x1))
+      // Arrow at the end of the segment, slightly inset
+      const inset = 6
+      const dx = (seg.x2 - seg.x1) / segLen
+      const dy = (seg.y2 - seg.y1) / segLen
+      const ax = seg.x2 - dx * inset
+      const ay = seg.y2 - dy * inset
+      const arrow = this.scene.add.sprite(ax, ay, SPRITESHEET_KEYS.GAME_ICONS, ICON_FRAMES.ARROW_EAST)
+        .setScale(0.22).setAlpha(0.15).setAngle(angleDeg).setDepth(-0.5).setTint(seg.color)
+      this.endpointArrows.push(arrow)
     }
 
     // Sync updated corridor segments to the particle system
@@ -344,6 +503,8 @@ export class OfficeCorridors {
   drawHallwayIndicators(timeMs: number): void {
     // Clear legacy Graphics layer (sprites handle rendering now)
     this.hallwayIndicatorGraphics?.clear()
+    // Clear trail graphics each frame — redrawn below
+    this.trailGraphics?.clear()
 
     if (this.corridorSegments.length === 0) {
       // Hide all pooled sprites when no segments
@@ -358,25 +519,46 @@ export class OfficeCorridors {
       if (Math.hypot(seg.x2 - seg.x1, seg.y2 - seg.y1) >= 1) needed++
     }
 
-    // Grow pools if needed
+    // Grow pools if needed (including per-dot speed multiplier)
     while (this.hallwayDotPool.length < needed) {
       const glow = this.scene.add.sprite(0, 0, SPRITESHEET_KEYS.GAME_ICONS, ICON_FRAMES.CIRCLE_BLUE)
-        .setScale(0.14).setAlpha(0.2).setDepth(-0.4).setVisible(false)
+        .setScale(0.30).setAlpha(0.2).setDepth(-0.4).setVisible(false)
       this.hallwayDotGlowPool.push(glow)
       const core = this.scene.add.sprite(0, 0, SPRITESHEET_KEYS.GAME_ICONS, ICON_FRAMES.CIRCLE_BLUE)
-        .setScale(0.08).setAlpha(0.6).setDepth(-0.3).setVisible(false).setTint(0xcbd5e1)
+        .setScale(0.18).setAlpha(0.6).setDepth(-0.3).setVisible(false).setTint(0xcbd5e1)
       this.hallwayDotPool.push(core)
+      // Random speed multiplier: 0.85 to 1.15 (±15%)
+      this.hallwayDotSpeedMul.push(0.85 + Math.random() * 0.3)
     }
+
+    const tg = this.trailGraphics
+    const BASE_SPEED = 0.00042
 
     let idx = 0
     for (let i = 0; i < this.corridorSegments.length; i++) {
       const seg = this.corridorSegments[i]
       const len = Math.hypot(seg.x2 - seg.x1, seg.y2 - seg.y1)
       if (len < 1) continue
-      const speed = 0.00042
+
+      const speedMul = this.hallwayDotSpeedMul[idx] ?? 1
+      const speed = BASE_SPEED * speedMul
       const t = (timeMs * speed + i * 0.173) % 1
       const px = Phaser.Math.Linear(seg.x1, seg.x2, t)
       const py = Phaser.Math.Linear(seg.y1, seg.y2, t)
+
+      // ── Trailing particle effect (fading circles behind the dot) ──
+      if (tg) {
+        // Direction vector along the segment (normalized)
+        const dx = (seg.x2 - seg.x1) / len
+        const dy = (seg.y2 - seg.y1) / len
+        // Draw 3 trailing circles with decreasing alpha and size
+        for (let trail = 1; trail <= 3; trail++) {
+          const trailX = px - dx * trail * 3
+          const trailY = py - dy * trail * 3
+          tg.fillStyle(seg.color, 0.1 / trail)
+          tg.fillCircle(trailX, trailY, 2 - trail * 0.3)
+        }
+      }
 
       // Outer glow — tinted to segment color
       const glow = this.hallwayDotGlowPool[idx]
@@ -487,6 +669,10 @@ export class OfficeCorridors {
     this.hallwayDotPool = []
     for (const s of this.hallwayDotGlowPool) s.destroy()
     this.hallwayDotGlowPool = []
+    this.hallwayDotSpeedMul = []
+    this.trailGraphics?.clear()
+    for (const a of this.endpointArrows) a.destroy()
+    this.endpointArrows = []
   }
 
   // ---------------------------------------------------------------------------
@@ -500,6 +686,8 @@ export class OfficeCorridors {
     this.hallwayIndicatorGraphics = null
     this.floorArrowGfx?.destroy()
     this.floorArrowGfx = null
+    this.trailGraphics?.destroy()
+    this.trailGraphics = null
     this.corridorSegments = []
     for (const t of this.corridorSignTexts) t.destroy()
     this.corridorSignTexts = []
@@ -509,5 +697,8 @@ export class OfficeCorridors {
     this.hallwayDotPool = []
     for (const s of this.hallwayDotGlowPool) s.destroy()
     this.hallwayDotGlowPool = []
+    this.hallwayDotSpeedMul = []
+    for (const a of this.endpointArrows) a.destroy()
+    this.endpointArrows = []
   }
 }

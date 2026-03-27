@@ -69,7 +69,7 @@ Each extracted module is a class that receives `Phaser.Scene` in its constructor
 | `office-camera.ts` | ~400 | Camera management, zoom-to-fit, follow target, drag handling, bounds. |
 | `nav-mesh.ts` | ~250 | `NavMesh` class. A* grid pathfinding on 12px cells. |
 | `path-walker.ts` | ~175 | Reusable walk utility with directional animation frames, shadow tracking, footstep dust puffs. |
-| `office-theme.ts` | ~220 | 3 color themes (`dark` / `light` / `neon`). |
+| `office-theme.ts` | ~220 | Color theme definitions. Only `dark` is functional — light/neon defined but 100+ hardcoded hex values prevent switching. |
 | `office-types.ts` | ~170 | Shared type definitions: `WorkstationSprite`, `Room`, `PodLineInfo`, etc. |
 | `office-helpers.ts` | ~165 | Pure stateless utility functions. |
 | `office-constants.ts` | ~150 | All numeric/string constants. `UPPER_SNAKE_CASE`. |
@@ -105,7 +105,7 @@ Each extracted module is a class that receives `Phaser.Scene` in its constructor
 
 **Spritesheets** — Compact format: 17 frames per row (4 idle rotations + 12 walk rotations + 1 sit). Loaded as animation strips, 256x512 per frame.
 
-**Theme Colors** — Always use `activeTheme.propertyName`, never hardcoded hex. Theme switch via `setActiveTheme(name)` then caller redraws.
+**Theme Colors** — `office-theme.ts` defines dark/light/neon palettes but only dark is functional. ~100 hardcoded hex values (0x0a0e14, 0x0c1018, 0x2a3440, etc.) across 16 files prevent theme switching. To make themes work: replace all hardcoded colors with `activeTheme.x` references, then wire a keyboard shortcut for `setActiveTheme()`.
 
 **Particle Pools** — Pre-allocated circles recycled with `.getData('busy')` flag. Tweens set `busy=true` on use, `busy=false` on complete.
 
@@ -182,3 +182,4 @@ Cohesive game layer on top of the office visualizer. Six interconnected systems:
 - Camera pan is manual drag; `followTarget` for programmatic follow; zoom lerps in `update()`.
 - Prefer sprites from GAME_ICONS/GAME_ITEMS sheets over `add.circle()` for visual elements.
 - All particle/VFX tweens should be <=300ms duration with low alpha changes for subtlety.
+- Only dark theme is functional. Do not reference light/neon themes as working features.

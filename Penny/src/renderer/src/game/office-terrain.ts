@@ -157,98 +157,54 @@ export class OfficeTerrain {
       }
     }
 
-    // Extra floor grime — subtle noise layer for visual density
-    for (let gx = x0; gx < x0 + w; gx += PLATE / 2) {
-      for (let gy = y0; gy < y0 + h; gy += PLATE / 2) {
-        const r = rand()
-        if (r < 0.08) {
-          g.fillStyle(0x0a0e14, 0.15)
-          g.fillCircle(gx + rand() * 40, gy + rand() * 40, 6 + rand() * 10)
-        } else if (r < 0.15) {
-          g.fillStyle(0x2a3444, 0.08)
-          g.fillRect(gx + rand() * 60, gy + rand() * 60, 20 + rand() * 30, 2)
-        }
-      }
-    }
-
     // ── 2. Mako energy seams — glowing green/cyan lines in the floor ──
     const MAKO_GREEN = 0x00ff88
     const MAKO_CYAN = 0x00e5ff
 
-    // Horizontal mako seam
+    // Horizontal mako seam — thin line, no glow halo
     const seamY = WORLD_MARGIN - 40
-    g.lineStyle(8, MAKO_GREEN, 0.4)
+    g.lineStyle(3, MAKO_GREEN, 0.2)
     g.lineBetween(x0, seamY, x0 + w, seamY)
-    // Glow around seam
-    g.fillStyle(MAKO_GREEN, 0.02)
-    g.fillRect(x0, seamY - 32, w, 64)
-    g.fillStyle(MAKO_GREEN, 0.015)
-    g.fillRect(x0, seamY - 64, w, 128)
 
-    // Vertical mako seams
+    // Vertical mako seams — thin lines, no glow halo
     const vertSeamX1 = WORLD_MARGIN + 60
     const vertSeamX2 = worldW - WORLD_MARGIN - 60
     if (worldH > 300) {
       for (const sx of [vertSeamX1, vertSeamX2]) {
-        g.lineStyle(6, MAKO_CYAN, 0.3)
+        g.lineStyle(2, MAKO_CYAN, 0.15)
         g.lineBetween(sx, seamY, sx, worldH + PAD)
-        g.fillStyle(MAKO_CYAN, 0.02)
-        g.fillRect(sx - 32, seamY, 64, worldH + PAD - seamY)
-        // Seam junction indicator — glowing cyan dot sprite at intersection
-        const junctionDot = this.scene.add.sprite(sx, seamY, SPRITESHEET_KEYS.GAME_ICONS, ICON_FRAMES.CIRCLE_BLUE)
-          .setScale(0.22).setAlpha(0.2).setTint(MAKO_CYAN)
-          .setBlendMode(Phaser.BlendModes.ADD).setDepth(-10)
-        this.terrainDecos.push(junctionDot)
       }
     }
 
-    // Mako pool / reactor vent — lower-right area
+    // Mako reactor vent — compact, understated
     const poolCX = worldW - WORLD_MARGIN - 180
     const poolCY = worldH - WORLD_MARGIN - 130
-    const poolRX = 160 + rand() * 50
-    const poolRY = 100 + rand() * 30
-    if (!isOverlapping(poolCX, poolCY, Math.max(poolRX, poolRY) + 30)) {
+    const poolRX = 60 + rand() * 20
+    const poolRY = 40 + rand() * 15
+    if (!isOverlapping(poolCX, poolCY, Math.max(poolRX, poolRY) + 20)) {
       // Outer rim — dark metal
-      g.fillStyle(0x2a3040, 0.5)
-      g.fillEllipse(poolCX, poolCY, poolRX + 22, poolRY + 16)
+      g.fillStyle(0x2a3040, 0.45)
+      g.fillEllipse(poolCX, poolCY, poolRX + 12, poolRY + 8)
       // Grating ring
-      g.lineStyle(3, 0x3a4a5a, 0.4)
-      g.strokeEllipse(poolCX, poolCY, poolRX + 12, poolRY + 8)
-      // Mako pool
-      g.fillStyle(MAKO_GREEN, 0.06)
-      g.fillEllipse(poolCX, poolCY, poolRX, poolRY)
-      // Brighter center
+      g.lineStyle(2, 0x3a4a5a, 0.35)
+      g.strokeEllipse(poolCX, poolCY, poolRX + 6, poolRY + 4)
+      // Reactor pool — very subtle green
       g.fillStyle(MAKO_GREEN, 0.03)
-      g.fillEllipse(poolCX, poolCY, poolRX * 0.6, poolRY * 0.6)
-      g.fillStyle(0xaaffcc, 0.04)
-      g.fillEllipse(poolCX, poolCY, poolRX * 0.3, poolRY * 0.3)
-      // Ripple rings
-      g.lineStyle(1, MAKO_GREEN, 0.12)
-      g.strokeEllipse(poolCX - 18, poolCY - 8, 50, 28)
-      g.strokeEllipse(poolCX + 22, poolCY + 6, 36, 22)
-      // Warning stripes around pool
-      const stripeCount = 20
+      g.fillEllipse(poolCX, poolCY, poolRX, poolRY)
+      // Subtle center
+      g.fillStyle(MAKO_GREEN, 0.02)
+      g.fillEllipse(poolCX, poolCY, poolRX * 0.5, poolRY * 0.5)
+      // Warning stripes (fewer, smaller)
+      const stripeCount = 10
       for (let si = 0; si < stripeCount; si++) {
         const angle = (si / stripeCount) * Math.PI * 2
-        const sx1 = poolCX + Math.cos(angle) * (poolRX + 35)
-        const sy1 = poolCY + Math.sin(angle) * (poolRY + 26)
-        const sx2 = poolCX + Math.cos(angle) * (poolRX + 55)
-        const sy2 = poolCY + Math.sin(angle) * (poolRY + 42)
-        g.lineStyle(4, 0x00e5ff, 0.2)
+        const sx1 = poolCX + Math.cos(angle) * (poolRX + 15)
+        const sy1 = poolCY + Math.sin(angle) * (poolRY + 10)
+        const sx2 = poolCX + Math.cos(angle) * (poolRX + 25)
+        const sy2 = poolCY + Math.sin(angle) * (poolRY + 18)
+        g.lineStyle(2, 0xd4a017, 0.15)
         g.lineBetween(sx1, sy1, sx2, sy2)
       }
-      // Warning indicator lights at cardinal points around the reactor
-      const warningAngles = [0, Math.PI / 2, Math.PI, Math.PI * 1.5]
-      for (const wa of warningAngles) {
-        const wx = poolCX + Math.cos(wa) * (poolRX + 44)
-        const wy = poolCY + Math.sin(wa) * (poolRY + 34)
-        const warningFrame = wa < Math.PI ? ICON_FRAMES.CIRCLE_RED : ICON_FRAMES.CIRCLE_YELLOW
-        const warningLight = this.scene.add.sprite(wx, wy, SPRITESHEET_KEYS.GAME_ICONS, warningFrame)
-          .setScale(0.28).setAlpha(0.3).setDepth(-10)
-          .setBlendMode(Phaser.BlendModes.ADD)
-        this.terrainDecos.push(warningLight)
-      }
-      // Save reactor center for animated glow layer
       this.reactorCenter = { x: poolCX, y: poolCY, rx: poolRX, ry: poolRY }
     } else {
       this.reactorCenter = null
@@ -256,7 +212,7 @@ export class OfficeTerrain {
 
     // ── 3. Pipes — horizontal and vertical runs ──
     const pipePositions: { x1: number; y1: number; x2: number; y2: number; r: number }[] = []
-    for (let attempt = 0; attempt < 30; attempt++) {
+    for (let attempt = 0; attempt < 15; attempt++) {
       const isVert = rand() > 0.5
       const pr = 14 + rand() * 10
       let px1: number, py1: number, px2: number, py2: number
@@ -311,20 +267,18 @@ export class OfficeTerrain {
           g.fillRect(jx - 3, jy - pipe.r - 3, 7, pipe.r * 2 + 6)
         }
       }
-      // Pipe endpoint indicator lights — small colored dot sprites
+      // Pipe endpoint indicator lights — small colored dot sprites (no glow)
       const indicatorColor = rand() > 0.5 ? ICON_FRAMES.CIRCLE_GREEN : ICON_FRAMES.CIRCLE_RED
       const endOffset = isVert ? { dx: pipe.r + 4, dy: 0 } : { dx: 0, dy: pipe.r + 4 }
       const startLight = this.scene.add.sprite(
         pipe.x1 + endOffset.dx, pipe.y1 + endOffset.dy,
         SPRITESHEET_KEYS.GAME_ICONS, indicatorColor,
-      ).setScale(0.22).setAlpha(0.5).setDepth(-10)
-        .setBlendMode(Phaser.BlendModes.ADD)
+      ).setScale(0.14).setAlpha(0.35).setDepth(-10)
       this.terrainDecos.push(startLight)
       const endLight = this.scene.add.sprite(
         pipe.x2 + endOffset.dx, pipe.y2 + endOffset.dy,
         SPRITESHEET_KEYS.GAME_ICONS, indicatorColor,
-      ).setScale(0.22).setAlpha(0.5).setDepth(-10)
-        .setBlendMode(Phaser.BlendModes.ADD)
+      ).setScale(0.14).setAlpha(0.35).setDepth(-10)
       this.terrainDecos.push(endLight)
     }
 
@@ -365,46 +319,38 @@ export class OfficeTerrain {
 
     // ── 4. Floor detail — rust patches, oil stains, scorch marks ──
     // Rust stains — orange-brown splotches
-    for (let i = 0; i < 30; i++) {
+    for (let i = 0; i < 15; i++) {
       const rx = x0 + rand() * w
       const ry = y0 + rand() * h
       if (isOverlapping(rx, ry, 10)) continue
-      const rr = 27 + rand() * 45
-      g.fillStyle(0x8a4a1a, 0.1 + rand() * 0.06)
+      const rr = 15 + rand() * 20
+      g.fillStyle(0x8a4a1a, 0.06 + rand() * 0.03)
       g.fillEllipse(rx, ry, rr, rr * (0.6 + rand() * 0.4))
-      // Darker center
-      g.fillStyle(0x6a3a0a, 0.07)
-      g.fillEllipse(rx + 2, ry + 2, rr * 0.5, rr * 0.4)
     }
 
     // Oil stains — dark iridescent puddles
-    for (let i = 0; i < 24; i++) {
+    for (let i = 0; i < 12; i++) {
       const ox = x0 + rand() * w
       const oy = y0 + rand() * h
       if (isOverlapping(ox, oy, 8)) continue
-      const or_ = 21.6 + rand() * 36
-      g.fillStyle(0x0a0a1a, 0.18 + rand() * 0.08)
+      const or_ = 12 + rand() * 18
+      g.fillStyle(0x0a0a1a, 0.1 + rand() * 0.05)
       g.fillEllipse(ox, oy, or_, or_ * (0.5 + rand() * 0.3))
-      // Iridescent shimmer highlight
-      g.fillStyle(0x4a3a6a, 0.04)
-      g.fillEllipse(ox - 3, oy - 2, or_ * 0.6, or_ * 0.3)
     }
 
     // Scorch marks — dark radial burns
-    for (let i = 0; i < 14; i++) {
+    for (let i = 0; i < 7; i++) {
       const sx = x0 + rand() * w
       const sy = y0 + rand() * h
       if (isOverlapping(sx, sy, 10)) continue
-      const sr = 18 + rand() * 32.4
-      g.fillStyle(0x0a0a0a, 0.14 + rand() * 0.06)
+      const sr = 10 + rand() * 16
+      g.fillStyle(0x0a0a0a, 0.08 + rand() * 0.04)
       g.fillCircle(sx, sy, sr)
-      g.fillStyle(0x1a1a1a, 0.05)
-      g.fillCircle(sx, sy, sr * 0.5)
     }
 
     // Scratch marks — thin diagonal lines on plates
     g.lineStyle(1, 0x3a4a5a, 0.12)
-    for (let i = 0; i < 20; i++) {
+    for (let i = 0; i < 10; i++) {
       const sx = x0 + rand() * w
       const sy = y0 + rand() * h
       const sLen = 15 + rand() * 30
@@ -413,11 +359,11 @@ export class OfficeTerrain {
     }
 
     // ── 5. Manhole covers — subtle circular floor hatches ──
-    for (let i = 0; i < 14; i++) {
+    for (let i = 0; i < 8; i++) {
       const mx = WORLD_MARGIN + 60 + rand() * (worldW - WORLD_MARGIN * 2 - 120)
       const my = WORLD_MARGIN + 60 + rand() * (worldH - WORLD_MARGIN * 2 - 120)
       if (isOverlapping(mx, my, 12)) continue
-      const mr = 30 + rand() * 12
+      const mr = 16 + rand() * 6
       g.fillStyle(0x2a3040, 0.5)
       g.fillCircle(mx, my, mr + 4)
       g.fillStyle(0x222a38, 0.55)
@@ -431,33 +377,24 @@ export class OfficeTerrain {
 
     // ── 6. Caution tape near buildings ──
     for (const rect of buildingRects) {
-      if (rand() > 0.35) continue
+      if (rand() > 0.25) continue
       const sy = rect.y + rect.h
       const sx = rect.x + 14
       const sw = rect.w - 28
       for (let stripe = 0; stripe < sw; stripe += 56) {
-        g.fillStyle(0xd4a017, 0.2)
-        g.fillRect(sx + stripe, sy + 3, 30, 16)
-        g.fillStyle(0x1a1e2a, 0.22)
-        g.fillRect(sx + stripe + 30, sy + 3, 26, 16)
+        g.fillStyle(0xd4a017, 0.12)
+        g.fillRect(sx + stripe, sy + 3, 30, 10)
+        g.fillStyle(0x1a1e2a, 0.14)
+        g.fillRect(sx + stripe + 30, sy + 3, 26, 10)
       }
     }
 
-    // ── 7. Mako glow pools — subtle floor glows scattered around ──
-    for (let i = 0; i < 8; i++) {
+    // ── 7. Floor vent grates — small structural detail, no glow ──
+    for (let i = 0; i < 4; i++) {
       const gx = x0 + 100 + rand() * (w - 200)
       const gy = y0 + 100 + rand() * (h - 200)
       if (isOverlapping(gx, gy, 15)) continue
-      const gr = 16 + rand() * 10
-      // Outer glow halo (Graphics — small area fill)
-      g.fillStyle(MAKO_GREEN, 0.015)
-      g.fillCircle(gx, gy, gr)
-      // Inner glow core — sprite with ADD blend for reactor glow effect
-      const glowCore = this.scene.add.sprite(gx, gy, SPRITESHEET_KEYS.GAME_ICONS, ICON_FRAMES.CIRCLE_GREEN)
-        .setScale(0.14).setAlpha(0.06).setTint(MAKO_GREEN)
-        .setBlendMode(Phaser.BlendModes.ADD).setDepth(-10)
-      this.terrainDecos.push(glowCore)
-      // Tiny vent grating at center (structural — keep as Graphics)
+      // Vent grating only — no glow
       g.fillStyle(0x2a3040, 0.3)
       g.fillRoundedRect(gx - 12, gy - 7, 24, 14, 2)
       g.lineStyle(2, 0x1a2030, 0.3)
@@ -546,13 +483,9 @@ export class OfficeTerrain {
         // Lamp housing
         g.fillStyle(0x3a4858, 0.6)
         g.fillRect(lx + 7, lampY - 41, 14, 6)
-        // Mako glow pool on ground
-        g.fillStyle(MAKO_GREEN, 0.03)
-        g.fillEllipse(lx + 14, lampY + 2, 40, 22)
-        // Lamp bulb sprite
-        const bulb = this.scene.add.sprite(lx + 14, lampY - 38, SPRITESHEET_KEYS.GAME_ICONS, ICON_FRAMES.CIRCLE_GREEN)
-          .setScale(0.18).setAlpha(0.3).setTint(MAKO_GREEN)
-          .setBlendMode(Phaser.BlendModes.ADD).setDepth(-9)
+        // Lamp bulb sprite — no ground glow, no ADD blend
+        const bulb = this.scene.add.sprite(lx + 14, lampY - 38, SPRITESHEET_KEYS.GAME_ICONS, ICON_FRAMES.CIRCLE_YELLOW)
+          .setScale(0.14).setAlpha(0.25).setTint(0xd4a017).setDepth(-9)
         this.terrainDecos.push(bulb)
       }
     }
@@ -633,37 +566,27 @@ export class OfficeTerrain {
       }
     }
 
-    // ── 13. Mako trees — glowing reactor-mutated foliage ──
+    // ── 13. Mako trees — reactor-mutated foliage (reduced count, smaller canopy) ──
     const treePositions: { x: number; y: number }[] = []
-    for (let attempt = 0; attempt < 40; attempt++) {
+    for (let attempt = 0; attempt < 20; attempt++) {
       const tx = x0 + 60 + rand() * (w - 120)
       const ty = y0 + 60 + rand() * (h - 120)
       if (isOverlapping(tx, ty, 12)) continue
-      // Keep trees away from streets
       if (streetY < y0 + h - 60 && Math.abs(ty - streetY) < STREET_W + SIDEWALK_W + 10) continue
       if (vStreetX < x0 + w - 60 && Math.abs(tx - vStreetX) < STREET_W + SIDEWALK_W + 10) continue
       treePositions.push({ x: tx, y: ty })
-      if (treePositions.length >= 20) break
+      if (treePositions.length >= 10) break
     }
     for (const tree of treePositions) {
-      // Trunk
       g.fillStyle(0x3a2a1a, 0.4)
-      g.fillRect(tree.x - 3.5, tree.y - 4, 7, 20)
-      // Shadow
-      g.fillStyle(0x000000, 0.08)
-      g.fillEllipse(tree.x, tree.y + 10, 16, 6)
-      // Canopy — layered circles with mako-green tint
-      const canopyColor = rand() > 0.3 ? MAKO_GREEN : MAKO_CYAN
+      g.fillRect(tree.x - 3, tree.y - 3, 6, 16)
+      g.fillStyle(0x000000, 0.06)
+      g.fillEllipse(tree.x, tree.y + 8, 12, 5)
+      const canopyColor = rand() > 0.3 ? 0x2a6a4a : 0x2a5a5a
+      g.fillStyle(canopyColor, 0.12)
+      g.fillCircle(tree.x, tree.y - 6, 14 + rand() * 4)
       g.fillStyle(canopyColor, 0.08)
-      g.fillCircle(tree.x, tree.y - 8, 21.6 + rand() * 7.2)
-      g.fillStyle(canopyColor, 0.05)
-      g.fillCircle(tree.x - 4, tree.y - 6, 14.4 + rand() * 5.4)
-      g.fillCircle(tree.x + 5, tree.y - 10, 12.6 + rand() * 5.4)
-      // Glow core sprite in canopy
-      const treeGlow = this.scene.add.sprite(tree.x, tree.y - 8, SPRITESHEET_KEYS.GAME_ICONS, ICON_FRAMES.CIRCLE_GREEN)
-        .setScale(0.12).setAlpha(0.04).setTint(canopyColor)
-        .setBlendMode(Phaser.BlendModes.ADD).setDepth(-9)
-      this.terrainDecos.push(treeGlow)
+      g.fillCircle(tree.x - 3, tree.y - 5, 10 + rand() * 3)
     }
 
     // ── 14. Benches and rest areas — along sidewalks ──
@@ -735,8 +658,7 @@ export class OfficeTerrain {
         const plx = padCX + Math.cos(pa) * (padR - 4)
         const ply = padCY + Math.sin(pa) * (padR - 4)
         const padLight = this.scene.add.sprite(plx, ply, SPRITESHEET_KEYS.GAME_ICONS, ICON_FRAMES.CIRCLE_BLUE)
-          .setScale(0.16).setAlpha(0.5).setTint(MAKO_CYAN)
-          .setBlendMode(Phaser.BlendModes.ADD).setDepth(-9)
+          .setScale(0.12).setAlpha(0.3).setTint(0x5a8aaa).setDepth(-9)
         this.terrainDecos.push(padLight)
       }
       // Pad label
@@ -792,248 +714,191 @@ export class OfficeTerrain {
       }
     }
 
-    // ── 19. Data Center buildings — large steel structures with antennae ──
-    const dataCenterPositions: { x: number; y: number }[] = []
-    const dcW = 180, dcH = 100
-    for (let attempt = 0; attempt < 10; attempt++) {
-      const dcx = x0 + 120 + rand() * (w - 240 - dcW)
-      const dcy = y0 + 120 + rand() * (h - 240 - dcH)
-      if (isOverlapping(dcx + dcW / 2, dcy + dcH / 2, Math.max(dcW, dcH) / 2 + 20)) continue
-      // Keep away from streets
-      if (streetY < y0 + h - 60 && Math.abs(dcy + dcH / 2 - streetY) < STREET_W + SIDEWALK_W + dcH / 2 + 10) continue
-      if (vStreetX < x0 + w - 60 && Math.abs(dcx + dcW / 2 - vStreetX) < STREET_W + SIDEWALK_W + dcW / 2 + 10) continue
-      dataCenterPositions.push({ x: dcx, y: dcy })
-      if (dataCenterPositions.length >= 3) break
-    }
-    for (const dc of dataCenterPositions) {
-      // Building shadow
-      g.fillStyle(0x000000, 0.1)
-      g.fillRect(dc.x + 6, dc.y + 6, dcW, dcH)
-      // Building exterior — dark steel
-      g.fillStyle(0x1a2030, 0.9)
-      g.fillRect(dc.x, dc.y, dcW, dcH)
-      // Outline
-      g.lineStyle(1, 0x2a3a4a, 0.7)
-      g.strokeRect(dc.x, dc.y, dcW, dcH)
-      // Roof accent strip
-      g.fillStyle(0x2a3848, 0.8)
-      g.fillRect(dc.x, dc.y, dcW, 8)
-      // Ventilation units on roof (small rectangles)
-      for (let vi = 0; vi < 4; vi++) {
-        const vx = dc.x + 20 + vi * 40
-        g.fillStyle(0x3a4a5a, 0.6)
-        g.fillRect(vx, dc.y + 10, 16, 10)
-        g.lineStyle(0.5, 0x4a5a6a, 0.45)
-        g.strokeRect(vx, dc.y + 10, 16, 10)
-      }
-      // Rooftop antenna arrays — vertical lines
-      const antennaCount = 3 + Math.floor(rand() * 2)
-      for (let ai = 0; ai < antennaCount; ai++) {
-        const ax = dc.x + 30 + ai * 35 + rand() * 10
-        g.lineStyle(1.5, 0x5a6a7a, 0.6)
-        g.lineBetween(ax, dc.y, ax, dc.y - 20 - rand() * 15)
-        // Cross arm on antenna
-        g.lineStyle(1, 0x4a5a6a, 0.45)
-        g.lineBetween(ax - 6, dc.y - 14, ax + 6, dc.y - 14)
-      }
-      // Blinking status lights — red and green indicators on facade
-      for (let li = 0; li < 3; li++) {
-        const lx = dc.x + 20 + li * 60
-        const ly = dc.y + dcH - 14
-        const lightFrame = rand() > 0.5 ? ICON_FRAMES.CIRCLE_GREEN : ICON_FRAMES.CIRCLE_RED
-        const statusLight = this.scene.add.sprite(lx, ly, SPRITESHEET_KEYS.GAME_ICONS, lightFrame)
-          .setScale(0.16).setAlpha(0.68).setDepth(-9)
-          .setBlendMode(Phaser.BlendModes.ADD)
-        this.terrainDecos.push(statusLight)
-      }
-      // Label text
-      const dcLabel = this.scene.add.text(dc.x + dcW / 2, dc.y + 3, 'DATA-CTR', {
-        fontSize: '5px', fontFamily: 'monospace', color: '#5a6a7a', resolution: 2,
-      }).setOrigin(0.5, 0).setDepth(-9).setAlpha(0.75)
-      this.terrainDecos.push(dcLabel)
+    // ── 19. Zone-based city grid — structured industrial layout ──
+    // Divide terrain into zones and render deterministic structures per zone type.
+    const ZONE_SIZE = 200
+    const zoneCols = Math.ceil(w / ZONE_SIZE)
+    const zoneRows = Math.ceil(h / ZONE_SIZE)
+
+    // Deterministic zone type assignment based on grid position
+    const zoneTypes = ['industrial', 'storage', 'utility', 'green', 'parking', 'open'] as const
+    type ZoneType = typeof zoneTypes[number]
+    const getZoneType = (col: number, row: number): ZoneType => {
+      const zx = x0 + col * ZONE_SIZE + ZONE_SIZE / 2
+      const zy = y0 + row * ZONE_SIZE + ZONE_SIZE / 2
+      // Zones overlapping buildings → empty (skip)
+      if (isOverlapping(zx, zy, ZONE_SIZE / 2 - 20)) return 'open'
+      // Deterministic hash → zone type
+      const hash = ((col * 7 + row * 13 + 37) * 2654435761) >>> 0
+      return zoneTypes[hash % zoneTypes.length]
     }
 
-    // ── 20. Cooling towers — cylindrical structures with steam vents ──
-    const coolingTowerPositions: { x: number; y: number }[] = []
-    for (let attempt = 0; attempt < 10; attempt++) {
-      const ctx = x0 + 100 + rand() * (w - 200)
-      const cty = y0 + 100 + rand() * (h - 200)
-      if (isOverlapping(ctx, cty, 55)) continue
-      // Keep away from streets
-      if (streetY < y0 + h - 60 && Math.abs(cty - streetY) < STREET_W + SIDEWALK_W + 55) continue
-      if (vStreetX < x0 + w - 60 && Math.abs(ctx - vStreetX) < STREET_W + SIDEWALK_W + 55) continue
-      coolingTowerPositions.push({ x: ctx, y: cty })
-      if (coolingTowerPositions.length >= 2) break
-    }
-    for (const ct of coolingTowerPositions) {
-      const outerR = 42 + rand() * 6
-      // Shadow
-      g.fillStyle(0x000000, 0.08)
-      g.fillCircle(ct.x + 4, ct.y + 4, outerR)
-      // Outer ring — concrete base
-      g.fillStyle(0x2a3040, 0.75)
-      g.fillCircle(ct.x, ct.y, outerR)
-      g.lineStyle(2, 0x3a4a5a, 0.6)
-      g.strokeCircle(ct.x, ct.y, outerR)
-      // Mid ring — metal structure
-      g.fillStyle(0x1e2836, 0.8)
-      g.fillCircle(ct.x, ct.y, outerR * 0.7)
-      g.lineStyle(1, 0x3a4a5a, 0.45)
-      g.strokeCircle(ct.x, ct.y, outerR * 0.7)
-      // Inner opening — dark interior
-      g.fillStyle(0x0a0e14, 0.75)
-      g.fillCircle(ct.x, ct.y, outerR * 0.4)
-      // Metal grating base — cross pattern
-      g.lineStyle(1, 0x4a5a6a, 0.4)
-      g.lineBetween(ct.x - outerR * 0.35, ct.y, ct.x + outerR * 0.35, ct.y)
-      g.lineBetween(ct.x, ct.y - outerR * 0.35, ct.x, ct.y + outerR * 0.35)
-      g.lineBetween(ct.x - outerR * 0.25, ct.y - outerR * 0.25, ct.x + outerR * 0.25, ct.y + outerR * 0.25)
-      g.lineBetween(ct.x + outerR * 0.25, ct.y - outerR * 0.25, ct.x - outerR * 0.25, ct.y + outerR * 0.25)
-      // Warning stripes around base
-      const ctStripes = 12
-      for (let si = 0; si < ctStripes; si++) {
-        const angle = (si / ctStripes) * Math.PI * 2
-        const sx1 = ct.x + Math.cos(angle) * (outerR + 2)
-        const sy1 = ct.y + Math.sin(angle) * (outerR + 2)
-        const sx2 = ct.x + Math.cos(angle) * (outerR + 10)
-        const sy2 = ct.y + Math.sin(angle) * (outerR + 10)
-        g.lineStyle(3, 0xd4a017, 0.2)
-        g.lineBetween(sx1, sy1, sx2, sy2)
-      }
-      // Steam vent indicator — blue glow sprite on top
-      const steamGlow = this.scene.add.sprite(ct.x, ct.y, SPRITESHEET_KEYS.GAME_ICONS, ICON_FRAMES.CIRCLE_BLUE)
-        .setScale(0.35).setAlpha(0.12).setTint(0x88ccff)
-        .setBlendMode(Phaser.BlendModes.ADD).setDepth(-9)
-      this.terrainDecos.push(steamGlow)
-    }
+    for (let col = 0; col < zoneCols; col++) {
+      for (let row = 0; row < zoneRows; row++) {
+        const zType = getZoneType(col, row)
+        if (zType === 'open') continue
 
-    // ── 21. Parking structure — large lot with spot markings ──
-    const parkX = x0 + 60 + rand() * 80
-    const parkY = y0 + 60 + rand() * 60
-    const parkW = 200, parkH = 120
-    if (!isOverlapping(parkX + parkW / 2, parkY + parkH / 2, Math.max(parkW, parkH) / 2 + 20)
-      && parkX + parkW < x0 + w - 30 && parkY + parkH < y0 + h - 30) {
-      // Asphalt surface
-      g.fillStyle(0x1a1e28, 0.8)
-      g.fillRect(parkX, parkY, parkW, parkH)
-      // Perimeter curb lines
-      g.lineStyle(2, 0x3a4a5a, 0.6)
-      g.strokeRect(parkX, parkY, parkW, parkH)
-      // Inner curb — double line
-      g.lineStyle(1, 0x2a3440, 0.45)
-      g.strokeRect(parkX + 4, parkY + 4, parkW - 8, parkH - 8)
-      // Parking spot markings — rows of small rects
-      const spotW = 18, spotH = 8, spotGap = 4
-      const rows = 3
-      const spotsPerRow = Math.floor((parkW - 40) / (spotW + spotGap))
-      for (let row = 0; row < rows; row++) {
-        const rowY = parkY + 24 + row * (spotH + 20)
-        for (let col = 0; col < spotsPerRow; col++) {
-          const spotX = parkX + 20 + col * (spotW + spotGap)
-          g.lineStyle(0.8, 0x4a5a6a, 0.45)
-          g.strokeRect(spotX, rowY, spotW, spotH)
+        const zx = x0 + col * ZONE_SIZE
+        const zy = y0 + row * ZONE_SIZE
+        const cx = zx + ZONE_SIZE / 2
+        const cy = zy + ZONE_SIZE / 2
+
+        if (zType === 'industrial') {
+          // Industrial building — steel structure with ventilation
+          const bw = 120 + (col % 3) * 20, bh = 70 + (row % 2) * 15
+          const bx_ = cx - bw / 2, by_ = cy - bh / 2
+          g.fillStyle(0x000000, 0.08)
+          g.fillRect(bx_ + 5, by_ + 5, bw, bh)
+          g.fillStyle(0x1a2030, 0.85)
+          g.fillRect(bx_, by_, bw, bh)
+          g.lineStyle(1, 0x2a3a4a, 0.6)
+          g.strokeRect(bx_, by_, bw, bh)
+          g.fillStyle(0x2a3848, 0.7)
+          g.fillRect(bx_, by_, bw, 6)
+          // Ventilation units
+          for (let vi = 0; vi < 3; vi++) {
+            g.fillStyle(0x3a4a5a, 0.5)
+            g.fillRect(bx_ + 15 + vi * 35, by_ + 10, 14, 8)
+          }
+          // Status light
+          const lightFrame = (col + row) % 2 === 0 ? ICON_FRAMES.CIRCLE_GREEN : ICON_FRAMES.CIRCLE_RED
+          const light = this.scene.add.sprite(bx_ + bw - 12, by_ + bh - 10, SPRITESHEET_KEYS.GAME_ICONS, lightFrame)
+            .setScale(0.14).setAlpha(0.55).setDepth(-9)
+          this.terrainDecos.push(light)
+          // Label
+          const label = this.scene.add.text(cx, by_ + 2, `BLD-${col}${row}`, {
+            fontSize: '4px', fontFamily: 'monospace', color: '#4a5a6a', resolution: 2,
+          }).setOrigin(0.5, 0).setDepth(-9).setAlpha(0.6)
+          this.terrainDecos.push(label)
+
+        } else if (zType === 'storage') {
+          // Cargo containers — orderly row of 3
+          const containerColors = [0x2a4a3a, 0x4a2a2a, 0x2a2a4a]
+          const cw = 40, ch = 16
+          for (let ci = 0; ci < 3; ci++) {
+            const ccx = cx - 65 + ci * 45
+            const ccy = cy - ch / 2
+            const cColor = containerColors[ci % containerColors.length]
+            g.fillStyle(cColor, 0.55)
+            g.fillRect(ccx, ccy, cw, ch)
+            g.lineStyle(0.8, 0x4a5a6a, 0.4)
+            g.strokeRect(ccx, ccy, cw, ch)
+            // Corrugation
+            g.lineStyle(0.5, 0x5a6a7a, 0.2)
+            for (let ri = 4; ri < cw; ri += 6) {
+              g.lineBetween(ccx + ri, ccy + 1, ccx + ri, ccy + ch - 1)
+            }
+          }
+          // Zone label
+          const sLabel = this.scene.add.text(cx, cy + 16, 'STORAGE', {
+            fontSize: '4px', fontFamily: 'monospace', color: '#3a4a5a', resolution: 2,
+          }).setOrigin(0.5).setDepth(-9).setAlpha(0.5)
+          this.terrainDecos.push(sLabel)
+
+        } else if (zType === 'utility') {
+          // Transformer box + generator unit
+          const tw = 24, th = 24
+          g.fillStyle(0x2a3444, 0.7)
+          g.fillRect(cx - tw / 2, cy - th / 2, tw, th)
+          g.lineStyle(1, 0x4a5a6a, 0.4)
+          g.strokeRect(cx - tw / 2, cy - th / 2, tw, th)
+          // Warning diamond
+          g.fillStyle(0xd4a017, 0.25)
+          g.beginPath()
+          g.moveTo(cx, cy - 5)
+          g.lineTo(cx + 5, cy)
+          g.lineTo(cx, cy + 5)
+          g.lineTo(cx - 5, cy)
+          g.closePath()
+          g.fillPath()
+          // Generator nearby
+          const gx_ = cx + 30, gy_ = cy - 10
+          g.fillStyle(0x1e2836, 0.7)
+          g.fillRect(gx_, gy_, 40, 28)
+          g.lineStyle(1, 0x3a4a5a, 0.5)
+          g.strokeRect(gx_, gy_, 40, 28)
+          // Vent slats
+          for (let sl = 0; sl < 2; sl++) {
+            g.fillStyle(0x0a0e14, 0.35)
+            g.fillRect(gx_ + 5, gy_ + 5 + sl * 10, 30, 3)
+          }
+
+        } else if (zType === 'green') {
+          // Small park area — trees and bench
+          g.fillStyle(0x1a2a1a, 0.12)
+          g.fillCircle(cx, cy, 50)
+          // Two trees
+          for (const off of [-20, 20]) {
+            g.fillStyle(0x3a2a1a, 0.35)
+            g.fillRect(cx + off - 2, cy - 2, 4, 14)
+            g.fillStyle(0x2a5a3a, 0.15)
+            g.fillCircle(cx + off, cy - 8, 12)
+          }
+          // Bench
+          g.fillStyle(0x4a3a2a, 0.4)
+          g.fillRect(cx - 14, cy + 20, 28, 4)
+          g.fillStyle(0x3a4a5a, 0.35)
+          g.fillRect(cx - 12, cy + 24, 2, 3)
+          g.fillRect(cx + 10, cy + 24, 2, 3)
+
+        } else if (zType === 'parking') {
+          // Parking lot with spot markings
+          const pw = 140, ph = 80
+          g.fillStyle(0x1a1e28, 0.7)
+          g.fillRect(cx - pw / 2, cy - ph / 2, pw, ph)
+          g.lineStyle(1.5, 0x3a4a5a, 0.5)
+          g.strokeRect(cx - pw / 2, cy - ph / 2, pw, ph)
+          // Spot markings
+          const spotW = 16, spotH = 7
+          const spotsPerRow = Math.floor((pw - 30) / 20)
+          for (let r = 0; r < 2; r++) {
+            for (let c = 0; c < spotsPerRow; c++) {
+              g.lineStyle(0.7, 0x4a5a6a, 0.35)
+              g.strokeRect(cx - pw / 2 + 15 + c * 20, cy - ph / 2 + 18 + r * 28, spotW, spotH)
+            }
+          }
+          // "P" label
+          const pLabel = this.scene.add.text(cx, cy - ph / 2 + 6, 'P', {
+            fontSize: '8px', fontFamily: 'monospace', fontStyle: 'bold', color: '#3a5a7a', resolution: 2,
+          }).setOrigin(0.5).setAlpha(0.45).setDepth(-9)
+          this.terrainDecos.push(pLabel)
         }
       }
-      // Entrance ramp marking — arrow-like lines at bottom-center
-      const rampX = parkX + parkW / 2
-      const rampY = parkY + parkH
-      g.fillStyle(0x2a3444, 0.7)
-      g.fillRect(rampX - 14, rampY - 6, 28, 6)
-      g.lineStyle(1, 0xd4a017, 0.25)
-      g.lineBetween(rampX - 4, rampY - 5, rampX, rampY - 1)
-      g.lineBetween(rampX + 4, rampY - 5, rampX, rampY - 1)
-      // "P" label
-      const parkLabel = this.scene.add.text(parkX + parkW / 2, parkY + 8, 'P', {
-        fontSize: '10px', fontFamily: 'monospace', fontStyle: 'bold', color: '#4a6a8a', resolution: 2,
-      }).setOrigin(0.5).setAlpha(0.53).setDepth(-9)
-      this.terrainDecos.push(parkLabel)
     }
 
-    // ── 22. Antenna/radio towers — tall lattice structures ──
-    for (let ti = 0; ti < 2; ti++) {
-      const towerBaseX = x0 + 200 + rand() * (w - 400)
-      const towerBaseY = y0 + 200 + rand() * (h - 400)
-      if (isOverlapping(towerBaseX, towerBaseY, 30)) continue
-      // Keep away from streets
-      if (streetY < y0 + h - 60 && Math.abs(towerBaseY - streetY) < STREET_W + SIDEWALK_W + 30) continue
-      if (vStreetX < x0 + w - 60 && Math.abs(towerBaseX - vStreetX) < STREET_W + SIDEWALK_W + 30) continue
-      const towerW = 36 + rand() * 8
-      const towerH = 70 + rand() * 20
-      const topX = towerBaseX
-      const topY = towerBaseY - towerH
-      // Triangular lattice outline
-      g.lineStyle(1.5, 0x4a5a6a, 0.6)
-      g.lineBetween(towerBaseX - towerW / 2, towerBaseY, topX, topY) // left edge
-      g.lineBetween(towerBaseX + towerW / 2, towerBaseY, topX, topY) // right edge
-      g.lineBetween(towerBaseX - towerW / 2, towerBaseY, towerBaseX + towerW / 2, towerBaseY) // base
-      // Internal cross bracing
-      const braceCount = 4
-      for (let bi = 1; bi < braceCount; bi++) {
-        const t = bi / braceCount
-        const leftX = towerBaseX - towerW / 2 * (1 - t)
-        const rightX = towerBaseX + towerW / 2 * (1 - t)
-        const braceY = towerBaseY - towerH * t
-        // Horizontal brace
-        g.lineStyle(0.8, 0x3a4a5a, 0.45)
-        g.lineBetween(leftX, braceY, rightX, braceY)
-        // X-brace
-        if (bi < braceCount - 1) {
-          const nextT = (bi + 1) / braceCount
-          const nextLeftX = towerBaseX - towerW / 2 * (1 - nextT)
-          const nextRightX = towerBaseX + towerW / 2 * (1 - nextT)
-          const nextY = towerBaseY - towerH * nextT
-          g.lineStyle(0.5, 0x3a4a5a, 0.3)
-          g.lineBetween(leftX, braceY, nextRightX, nextY)
-          g.lineBetween(rightX, braceY, nextLeftX, nextY)
-        }
-      }
-      // Guy wire lines extending outward
-      g.lineStyle(0.5, 0x3a4a5a, 0.15)
-      g.lineBetween(topX, topY + towerH * 0.3, towerBaseX - towerW * 1.5, towerBaseY + 10)
-      g.lineBetween(topX, topY + towerH * 0.3, towerBaseX + towerW * 1.5, towerBaseY + 10)
-      // Red warning light at top
-      const towerLight = this.scene.add.sprite(topX, topY, SPRITESHEET_KEYS.GAME_ICONS, ICON_FRAMES.CIRCLE_RED)
-        .setScale(0.2).setAlpha(0.75).setDepth(-9)
-        .setBlendMode(Phaser.BlendModes.ADD)
-      this.terrainDecos.push(towerLight)
-      // Base foundation
-      g.fillStyle(0x2a3040, 0.6)
-      g.fillRect(towerBaseX - towerW / 2 - 4, towerBaseY, towerW + 8, 6)
-    }
-
-    // ── 23. Perimeter wall — dashed border around campus ──
+    // ── 20. Perimeter wall — dashed border around campus ──
     const perimX1 = x0 + 20
     const perimY1 = y0 + 20
     const perimX2 = x0 + w - 20
     const perimY2 = y0 + h - 20
     const perimColor = 0x2a3a4a
-    const dashLen = 12
-    const gapLen = 8
+    const perimDash = 12
+    const perimGap = 8
     // Top edge
-    for (let dx = perimX1; dx < perimX2; dx += dashLen + gapLen) {
-      const endX = Math.min(dx + dashLen, perimX2)
+    for (let dx = perimX1; dx < perimX2; dx += perimDash + perimGap) {
+      const endX = Math.min(dx + perimDash, perimX2)
       g.lineStyle(1.5, perimColor, 0.5)
       g.lineBetween(dx, perimY1, endX, perimY1)
     }
     // Bottom edge
-    for (let dx = perimX1; dx < perimX2; dx += dashLen + gapLen) {
-      const endX = Math.min(dx + dashLen, perimX2)
+    for (let dx = perimX1; dx < perimX2; dx += perimDash + perimGap) {
+      const endX = Math.min(dx + perimDash, perimX2)
       g.lineStyle(1.5, perimColor, 0.5)
       g.lineBetween(dx, perimY2, endX, perimY2)
     }
     // Left edge
-    for (let dy = perimY1; dy < perimY2; dy += dashLen + gapLen) {
-      const endY = Math.min(dy + dashLen, perimY2)
+    for (let dy = perimY1; dy < perimY2; dy += perimDash + perimGap) {
+      const endY = Math.min(dy + perimDash, perimY2)
       g.lineStyle(1.5, perimColor, 0.5)
       g.lineBetween(perimX1, dy, perimX1, endY)
     }
     // Right edge
-    for (let dy = perimY1; dy < perimY2; dy += dashLen + gapLen) {
-      const endY = Math.min(dy + dashLen, perimY2)
+    for (let dy = perimY1; dy < perimY2; dy += perimDash + perimGap) {
+      const endY = Math.min(dy + perimDash, perimY2)
       g.lineStyle(1.5, perimColor, 0.5)
       g.lineBetween(perimX2, dy, perimX2, endY)
     }
-    // Corner watchtower markers — filled squares with yellow indicator lights
+    // Corner watchtower markers
     const cornerPositions = [
       { x: perimX1, y: perimY1 },
       { x: perimX2, y: perimY1 },
@@ -1046,180 +911,8 @@ export class OfficeTerrain {
       g.lineStyle(1, 0x3a4a5a, 0.6)
       g.strokeRect(corner.x - 6, corner.y - 6, 12, 12)
       const cornerLight = this.scene.add.sprite(corner.x, corner.y, SPRITESHEET_KEYS.GAME_ICONS, ICON_FRAMES.CIRCLE_YELLOW)
-        .setScale(0.16).setAlpha(0.6).setDepth(-9)
-        .setBlendMode(Phaser.BlendModes.ADD)
+        .setScale(0.12).setAlpha(0.4).setDepth(-9)
       this.terrainDecos.push(cornerLight)
-    }
-
-    // ── 24. Cargo containers — shipping containers near streets ──
-    const containerColors = [0x2a4a3a, 0x4a2a2a, 0x2a2a4a, 0x3a3a2a, 0x2a3a3a]
-    const contW = 40, contH = 16
-    const containerCluster: { x: number; y: number; color: number; stacked: boolean }[] = []
-    // Place containers near the horizontal street
-    const containerBaseY = streetY < y0 + h - 60 ? streetY + STREET_W / 2 + SIDEWALK_W + 20 : y0 + h - 100
-    const containerBaseX = WORLD_MARGIN + 200 + rand() * 100
-    for (let ci = 0; ci < 5; ci++) {
-      const cx = containerBaseX + ci * (contW + 6 + rand() * 8)
-      if (cx + contW > x0 + w - 40) break
-      const cy = containerBaseY + (rand() > 0.5 ? 0 : contH + 4)
-      if (isOverlapping(cx + contW / 2, cy + contH / 2, 24)) continue
-      const stacked = ci > 0 && rand() > 0.6
-      containerCluster.push({
-        x: cx,
-        y: stacked ? cy - 14 : cy,
-        color: containerColors[ci % containerColors.length],
-        stacked,
-      })
-      // Also push the base container if stacking
-      if (stacked) {
-        containerCluster.push({
-          x: cx,
-          y: cy,
-          color: containerColors[(ci + 2) % containerColors.length],
-          stacked: false,
-        })
-      }
-    }
-    // Draw base (non-stacked) containers first, then stacked ones on top
-    const sortedContainers = containerCluster.sort((a, b) => (a.stacked ? 1 : 0) - (b.stacked ? 1 : 0))
-    for (const cont of sortedContainers) {
-      // Container body
-      g.fillStyle(cont.color, 0.6)
-      g.fillRect(cont.x, cont.y, contW, contH)
-      // Container outline
-      g.lineStyle(0.8, 0x4a5a6a, 0.45)
-      g.strokeRect(cont.x, cont.y, contW, contH)
-      // Container ridges — vertical corrugation lines
-      g.lineStyle(0.5, 0x5a6a7a, 0.25)
-      for (let ri = 4; ri < contW; ri += 6) {
-        g.lineBetween(cont.x + ri, cont.y + 1, cont.x + ri, cont.y + contH - 1)
-      }
-      // Door end marking — two small rects on right side
-      g.fillStyle(0x3a4a5a, 0.4)
-      g.fillRect(cont.x + contW - 6, cont.y + 2, 2, contH - 4)
-      g.fillRect(cont.x + contW - 3, cont.y + 2, 2, contH - 4)
-    }
-
-    // ── 25. Infill structures — fill empty gaps between and around buildings ──
-
-    // Generator units — small 50x35 industrial boxes scattered near buildings
-    for (let i = 0; i < 8; i++) {
-      const gx = x0 + 80 + rand() * (w - 160)
-      const gy = y0 + 80 + rand() * (h - 160)
-      if (isOverlapping(gx, gy, 30)) continue
-      const gw = 45 + rand() * 15, gh = 30 + rand() * 10
-      // Box body
-      g.fillStyle(0x1e2836, 0.8)
-      g.fillRect(gx - gw/2, gy - gh/2, gw, gh)
-      g.lineStyle(1, 0x3a4a5a, 0.6)
-      g.strokeRect(gx - gw/2, gy - gh/2, gw, gh)
-      // Ventilation slats
-      for (let sl = 0; sl < 3; sl++) {
-        g.fillStyle(0x0a0e14, 0.45)
-        g.fillRect(gx - gw/2 + 6, gy - gh/2 + 6 + sl * 8, gw - 12, 3)
-      }
-      // Status light
-      const genFrame = rand() > 0.5 ? ICON_FRAMES.CIRCLE_GREEN : ICON_FRAMES.CIRCLE_RED
-      const genLight = this.scene.add.sprite(gx + gw/2 - 8, gy - gh/2 + 6, SPRITESHEET_KEYS.GAME_ICONS, genFrame)
-        .setScale(0.14).setAlpha(0.6).setDepth(-9)
-      this.terrainDecos.push(genLight)
-      // Label
-      const genLabel = this.scene.add.text(gx, gy + gh/2 + 4, `GEN-${Math.floor(rand() * 90 + 10)}`, {
-        fontSize: '4px', fontFamily: 'monospace', color: '#3a4a5a', resolution: 2,
-      }).setOrigin(0.5).setAlpha(0.6).setDepth(-9)
-      this.terrainDecos.push(genLabel)
-    }
-
-    // Transformer boxes — small electrical units
-    for (let i = 0; i < 6; i++) {
-      const tx = x0 + 60 + rand() * (w - 120)
-      const ty = y0 + 60 + rand() * (h - 120)
-      if (isOverlapping(tx, ty, 20)) continue
-      const tw = 20 + rand() * 10, th = 20 + rand() * 10
-      g.fillStyle(0x2a3444, 0.75)
-      g.fillRect(tx - tw/2, ty - th/2, tw, th)
-      g.lineStyle(1, 0x4a5a6a, 0.45)
-      g.strokeRect(tx - tw/2, ty - th/2, tw, th)
-      // Warning diamond
-      g.fillStyle(0xd4a017, 0.3)
-      const dSize = 5
-      g.fillPoints([
-        {x: tx, y: ty - dSize},
-        {x: tx + dSize, y: ty},
-        {x: tx, y: ty + dSize},
-        {x: tx - dSize, y: ty},
-      ], true)
-    }
-
-    // Dumpsters — near building edges
-    for (const rect of buildingRects) {
-      if (rand() > 0.5) continue
-      const side = Math.floor(rand() * 4)
-      let dx: number, dy: number
-      if (side === 0) { dx = rect.x + rand() * rect.w; dy = rect.y - 25 }
-      else if (side === 1) { dx = rect.x + rect.w + 15; dy = rect.y + rand() * rect.h }
-      else if (side === 2) { dx = rect.x + rand() * rect.w; dy = rect.y + rect.h + 15 }
-      else { dx = rect.x - 25; dy = rect.y + rand() * rect.h }
-      if (dx < x0 + 10 || dx > x0 + w - 10 || dy < y0 + 10 || dy > y0 + h - 10) continue
-      g.fillStyle(0x2a4a3a, 0.6)
-      g.fillRect(dx - 12, dy - 8, 24, 16)
-      g.lineStyle(1, 0x3a5a4a, 0.45)
-      g.strokeRect(dx - 12, dy - 8, 24, 16)
-      g.fillStyle(0x1a3a2a, 0.45)
-      g.fillRect(dx - 12, dy - 8, 24, 4) // lid
-    }
-
-    // Utility poles with wires — vertical posts with horizontal wire runs
-    for (let i = 0; i < 5; i++) {
-      const px = x0 + 100 + rand() * (w - 200)
-      const py = y0 + 100 + rand() * (h - 200)
-      if (isOverlapping(px, py, 15)) continue
-      // Pole
-      g.fillStyle(0x4a5a6a, 0.6)
-      g.fillRect(px - 2, py - 30, 4, 30)
-      // Cross arm
-      g.fillStyle(0x4a5a6a, 0.55)
-      g.fillRect(px - 14, py - 28, 28, 3)
-      // Insulators — small dots at wire attachment points
-      const insL = this.scene.add.sprite(px - 12, py - 28, SPRITESHEET_KEYS.GAME_ICONS, ICON_FRAMES.CIRCLE_GREY)
-        .setScale(0.08).setAlpha(0.6).setDepth(-9)
-      this.terrainDecos.push(insL)
-      const insR = this.scene.add.sprite(px + 12, py - 28, SPRITESHEET_KEYS.GAME_ICONS, ICON_FRAMES.CIRCLE_GREY)
-        .setScale(0.08).setAlpha(0.6).setDepth(-9)
-      this.terrainDecos.push(insR)
-    }
-
-    // Floor vents — rectangular grilles scattered on the ground
-    for (let i = 0; i < 15; i++) {
-      const vx = x0 + 40 + rand() * (w - 80)
-      const vy = y0 + 40 + rand() * (h - 80)
-      if (isOverlapping(vx, vy, 10)) continue
-      const vw = 16 + rand() * 12, vh = 10 + rand() * 6
-      g.fillStyle(0x1a2030, 0.6)
-      g.fillRect(vx - vw/2, vy - vh/2, vw, vh)
-      // Grate lines
-      g.lineStyle(0.8, 0x2a3444, 0.4)
-      for (let gl = -vw/2 + 3; gl < vw/2; gl += 4) {
-        g.lineBetween(vx + gl, vy - vh/2 + 1, vx + gl, vy + vh/2 - 1)
-      }
-      // Subtle green glow from below
-      if (rand() > 0.6) {
-        g.fillStyle(0x00ff88, 0.02)
-        g.fillEllipse(vx, vy, vw + 8, vh + 6)
-      }
-    }
-
-    // Chain-link fence segments — near perimeter
-    const fenceY = y0 + 30
-    g.lineStyle(0.5, 0x4a5a6a, 0.35)
-    for (let fx = x0 + 40; fx < x0 + w - 40; fx += 6) {
-      g.lineBetween(fx, fenceY, fx + 3, fenceY + 6)
-      g.lineBetween(fx + 3, fenceY, fx, fenceY + 6)
-    }
-    // Fence posts
-    for (let fx = x0 + 40; fx < x0 + w - 40; fx += 60) {
-      g.fillStyle(0x4a5a6a, 0.5)
-      g.fillRect(fx - 1.5, fenceY - 2, 3, 10)
     }
 
     // ── Seasonal decorations ──
@@ -1366,10 +1059,9 @@ export class OfficeTerrain {
     if (this.scene.anims.exists(EFFECT_ANIM_KEYS.FLASH)) {
       const flash = this.scene.add.sprite(x, y, SPRITESHEET_KEYS.EFFECTS_FLASH)
         .setDepth(-9)
-        .setScale(0.28 + Math.random() * 0.14)
-        .setAlpha(0.1)
+        .setScale(0.15 + Math.random() * 0.08)
+        .setAlpha(0.05)
         .setTint(0x00ff88)
-        .setBlendMode(Phaser.BlendModes.ADD)
       flash.play(EFFECT_ANIM_KEYS.FLASH)
       flash.once('animationcomplete', () => flash.destroy())
     }

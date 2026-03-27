@@ -3,12 +3,11 @@ import { SPRITESHEET_KEYS, ICON_FRAMES } from './office-asset-keys'
 import type { Room } from './office-types'
 import { lerpColor } from './office-theme'
 import {
-  OFFICE_FRAME_PLANT, OFFICE_FRAME_PLANT_SM, OFFICE_FRAME_PICTURE,
-  OFFICE_FRAME_PICTURE2, OFFICE_FRAME_PICTURE3, OFFICE_FRAME_BOOKSHELF,
+  OFFICE_FRAME_PLANT, OFFICE_FRAME_BOOKSHELF,
   OFFICE_FRAME_PLANT_TALL, OFFICE_FRAME_CACTUS, OFFICE_FRAME_HANGING_PLANT,
   OFFICE_FRAME_FERN, OFFICE_FRAME_MONSTERA, OFFICE_FRAME_CLOCK,
   OFFICE_FRAME_WATER_COOLER, OFFICE_FRAME_WHITEBOARD,
-  OFFICE_FRAME_MONITOR, OFFICE_FRAME_SOFA, OFFICE_FRAME_PRINTER,
+  OFFICE_FRAME_MONITOR, OFFICE_FRAME_PRINTER,
   OFFICE_FRAME_TRASH, OFFICE_FRAME_STORAGE, OFFICE_FRAME_FILE_CABINET,
   WORLD_MARGIN, ROOM_HEADER_H,
 } from './office-constants'
@@ -154,10 +153,16 @@ export class OfficeInterior {
     if (atmosphere.wallClockContainer) { atmosphere.wallClockContainer.destroy(); (atmosphere as { wallClockContainer: Phaser.GameObjects.Container | null }).wallClockContainer = null }
     if (this.whiteboardContainer) { this.whiteboardContainer.destroy(); this.whiteboardContainer = null; this.whiteboardTexts = [] }
     if (atmosphere.exteriorLights) { atmosphere.exteriorLights.destroy(); (atmosphere as { exteriorLights: Phaser.GameObjects.Container | null }).exteriorLights = null }
-    if (false as boolean) {
-      // Dead code kept for reference — everything below is skipped
-      const DECO_SCALE = 0.65; const decos: Phaser.GameObjects.Sprite[] = []; void DECO_SCALE; void decos
+    // ── Midgar-themed exterior decorations ──
+    // Industrial props placed around the perimeter of the office complex.
+    // Tinted dark/mako-green to match the reactor/steel-plate aesthetic.
+    {
+      const DECO_SCALE = 0.65
+      const decos: Phaser.GameObjects.Sprite[] = []
+      const MAKO_TINT = 0x00cc88 // subtle mako-green tint for plants
+      const STEEL_TINT = 0x5a6a7a // metallic tint for furniture
 
+      // Industrial wall clock
       if (fw > 300) {
         const clockX = fx + fw / 2
         const clockY = by + 12
@@ -176,7 +181,7 @@ export class OfficeInterior {
           const ang = Phaser.Math.DegToRad(t * 30 - 90)
           clockFace.lineBetween(Math.cos(ang) * 10, Math.sin(ang) * 10, Math.cos(ang) * 12, Math.sin(ang) * 12)
         }
-        clockFace.fillStyle(0xffffff, 1)
+        clockFace.fillStyle(0x00ff88, 1) // mako-green center dot
         clockFace.fillCircle(0, 0, 1)
         const hourHand = this.scene.add.graphics()
         const minuteHand = this.scene.add.graphics()
@@ -184,78 +189,59 @@ export class OfficeInterior {
         const wc = this.scene.add.container(clockX, clockY, [clockFace, hourHand, minuteHand, secondHand])
         wc.setDepth(-0.5)
         wc.setAlpha(0.88)
-        void hourHand; void minuteHand; void secondHand; void wc
+        ;(atm2 as { wallClockContainer: Phaser.GameObjects.Container | null }).wallClockContainer = wc
       }
 
-      const picFrames = [OFFICE_FRAME_PICTURE, OFFICE_FRAME_PICTURE2, OFFICE_FRAME_PICTURE3]
-      const picCount = Math.min(6, Math.floor(fw / 80))
-      const picSpacing = fw / (picCount + 1)
-      for (let i = 0; i < picCount; i++) {
-        decos.push(this.scene.add.sprite(fx + picSpacing * (i + 1), by + 8, SPRITESHEET_KEYS.OFFICE, picFrames[i % picFrames.length])
-          .setScale(DECO_SCALE * 0.85).setAlpha(0.65).setDepth(-1))
-      }
-
+      // Data archive shelves — industrial storage along walls
       if (fh > 140) {
-        decos.push(this.scene.add.sprite(fx + 14, fy + 50, SPRITESHEET_KEYS.OFFICE, OFFICE_FRAME_BOOKSHELF).setScale(DECO_SCALE).setAlpha(0.65).setDepth(-1))
+        decos.push(this.scene.add.sprite(fx + 14, fy + 50, SPRITESHEET_KEYS.OFFICE, OFFICE_FRAME_BOOKSHELF)
+          .setScale(DECO_SCALE).setAlpha(0.55).setTint(STEEL_TINT).setDepth(-1))
       }
+      // Filing cabinets — Shinra-style document storage
       if (fh > 160 && fw > 250) {
-        decos.push(this.scene.add.sprite(fx + fw - 20, fy + fh - 50, SPRITESHEET_KEYS.OFFICE, OFFICE_FRAME_FILE_CABINET).setScale(DECO_SCALE * 0.9).setAlpha(0.7).setDepth(-1))
+        decos.push(this.scene.add.sprite(fx + fw - 20, fy + fh - 50, SPRITESHEET_KEYS.OFFICE, OFFICE_FRAME_FILE_CABINET)
+          .setScale(DECO_SCALE * 0.9).setAlpha(0.6).setTint(STEEL_TINT).setDepth(-1))
       }
+      // Mako coolant dispenser (water cooler re-themed)
       if (fw > 350) {
-        decos.push(this.scene.add.sprite(fx + fw / 2 - 60, fy + fh - 30, SPRITESHEET_KEYS.OFFICE, OFFICE_FRAME_WATER_COOLER).setScale(DECO_SCALE * 0.85).setAlpha(0.6).setDepth(-1))
+        decos.push(this.scene.add.sprite(fx + fw / 2 - 60, fy + fh - 30, SPRITESHEET_KEYS.OFFICE, OFFICE_FRAME_WATER_COOLER)
+          .setScale(DECO_SCALE * 0.85).setAlpha(0.55).setTint(0x00e5ff).setDepth(-1))
       }
+      // Mako-infused plant specimens — reactor-mutated greenery
       if (fw > 200) {
-        decos.push(this.scene.add.sprite(fx + 30, fy + 5, SPRITESHEET_KEYS.OFFICE, OFFICE_FRAME_HANGING_PLANT).setScale(DECO_SCALE * 0.8).setAlpha(0.55).setDepth(-1))
+        decos.push(this.scene.add.sprite(fx + 30, fy + 5, SPRITESHEET_KEYS.OFFICE, OFFICE_FRAME_CACTUS)
+          .setScale(DECO_SCALE * 0.8).setAlpha(0.45).setTint(MAKO_TINT).setDepth(-1))
       }
       if (fh > 180) {
-        decos.push(this.scene.add.sprite(fx + 40, fy + fh - 25, SPRITESHEET_KEYS.OFFICE, OFFICE_FRAME_MONSTERA).setScale(DECO_SCALE * 0.9).setAlpha(0.7).setDepth(-1))
+        decos.push(this.scene.add.sprite(fx + 40, fy + fh - 25, SPRITESHEET_KEYS.OFFICE, OFFICE_FRAME_FERN)
+          .setScale(DECO_SCALE * 0.9).setAlpha(0.5).setTint(MAKO_TINT).setDepth(-1))
       }
-      if (fw > 300 && fh > 160) {
-        decos.push(this.scene.add.sprite(fx + 80, fy + fh - 50, SPRITESHEET_KEYS.OFFICE, OFFICE_FRAME_SOFA).setScale(0.35).setAlpha(0.7).setDepth(-1))
-      }
+      // Industrial terminal (printer re-themed as console)
       if (fw > 280 && fh > 140) {
-        decos.push(this.scene.add.sprite(fx + fw - 22, fy + fh / 2, SPRITESHEET_KEYS.OFFICE, OFFICE_FRAME_PRINTER).setScale(DECO_SCALE * 0.9).setAlpha(0.65).setDepth(-1))
+        decos.push(this.scene.add.sprite(fx + fw - 22, fy + fh / 2, SPRITESHEET_KEYS.OFFICE, OFFICE_FRAME_PRINTER)
+          .setScale(DECO_SCALE * 0.9).setAlpha(0.55).setTint(STEEL_TINT).setDepth(-1))
       }
-      decos.push(this.scene.add.sprite(fx + 8, fy + 14, SPRITESHEET_KEYS.OFFICE, OFFICE_FRAME_TRASH).setScale(DECO_SCALE * 0.9).setAlpha(0.6).setDepth(-1))
+      // Waste bins — industrial refuse
+      decos.push(this.scene.add.sprite(fx + 8, fy + 14, SPRITESHEET_KEYS.OFFICE, OFFICE_FRAME_TRASH)
+        .setScale(DECO_SCALE * 0.9).setAlpha(0.5).setTint(STEEL_TINT).setDepth(-1))
       if (fw > 200) {
-        decos.push(this.scene.add.sprite(fx + fw - 10, fy + 14, SPRITESHEET_KEYS.OFFICE, OFFICE_FRAME_TRASH).setScale(DECO_SCALE * 0.9).setAlpha(0.6).setDepth(-1))
+        decos.push(this.scene.add.sprite(fx + fw - 10, fy + 14, SPRITESHEET_KEYS.OFFICE, OFFICE_FRAME_TRASH)
+          .setScale(DECO_SCALE * 0.9).setAlpha(0.5).setTint(STEEL_TINT).setDepth(-1))
       }
+      // Secondary data archive
       if (fh > 180 && fw > 200) {
-        decos.push(this.scene.add.sprite(fx + fw - 16, fy + 50, SPRITESHEET_KEYS.OFFICE, OFFICE_FRAME_BOOKSHELF).setScale(DECO_SCALE).setAlpha(0.62).setDepth(-1))
+        decos.push(this.scene.add.sprite(fx + fw - 16, fy + 50, SPRITESHEET_KEYS.OFFICE, OFFICE_FRAME_BOOKSHELF)
+          .setScale(DECO_SCALE).setAlpha(0.52).setTint(STEEL_TINT).setDepth(-1))
       }
+      // Supply crate (storage re-themed)
       if (fw > 320 && fh > 150) {
-        decos.push(this.scene.add.sprite(fx + fw * 0.65, fy + fh - 28, SPRITESHEET_KEYS.OFFICE, OFFICE_FRAME_STORAGE).setScale(DECO_SCALE * 0.9).setAlpha(0.65).setDepth(-1))
+        decos.push(this.scene.add.sprite(fx + fw * 0.65, fy + fh - 28, SPRITESHEET_KEYS.OFFICE, OFFICE_FRAME_STORAGE)
+          .setScale(DECO_SCALE * 0.9).setAlpha(0.55).setTint(STEEL_TINT).setDepth(-1))
       }
-      if (fw > 400) {
-        const bottomPlantFrames = [OFFICE_FRAME_FERN, OFFICE_FRAME_PLANT_SM, OFFICE_FRAME_MONSTERA, OFFICE_FRAME_FERN]
-        const bottomPlantCount = Math.min(4, Math.floor((fw - 120) / 90))
-        const bottomPlantSpacing = (fw - 120) / (bottomPlantCount + 1)
-        for (let i = 0; i < bottomPlantCount; i++) {
-          decos.push(
-            this.scene.add
-              .sprite(fx + 60 + bottomPlantSpacing * (i + 1), fy + fh - 16, SPRITESHEET_KEYS.OFFICE, bottomPlantFrames[i % bottomPlantFrames.length])
-              .setScale(DECO_SCALE * 0.8)
-              .setAlpha(0.42)
-              .setDepth(-1)
-          )
-        }
-      }
-      if (fh > 200) {
-        const sidePicFrames = [OFFICE_FRAME_PICTURE2, OFFICE_FRAME_PICTURE3, OFFICE_FRAME_PICTURE]
-        const sidePicCount = Math.min(3, Math.floor((fh - 80) / 65))
-        const sidePicSpacing = (fh - 80) / (sidePicCount + 1)
-        for (let i = 0; i < sidePicCount; i++) {
-          decos.push(
-            this.scene.add
-              .sprite(fx + 8, fy + 40 + sidePicSpacing * (i + 1), SPRITESHEET_KEYS.OFFICE, sidePicFrames[i % sidePicFrames.length])
-              .setScale(DECO_SCALE * 0.8)
-              .setAlpha(0.38)
-              .setDepth(-1)
-          )
-        }
-      }
+      // Reactor-zone monitoring equipment
       if (fw > 350 && fh > 160) {
-        decos.push(this.scene.add.sprite(fx + fw - 55, fy + 35, SPRITESHEET_KEYS.OFFICE, OFFICE_FRAME_MONITOR).setScale(DECO_SCALE * 0.85).setAlpha(0.68).setDepth(-1))
+        decos.push(this.scene.add.sprite(fx + fw - 55, fy + 35, SPRITESHEET_KEYS.OFFICE, OFFICE_FRAME_MONITOR)
+          .setScale(DECO_SCALE * 0.85).setAlpha(0.58).setTint(0x00e5ff).setDepth(-1))
       }
 
       this.officeDecoSprites = decos
@@ -332,11 +318,11 @@ export class OfficeInterior {
         lightChildren.push(pool)
 
         const halo = this.scene.add.sprite(flx, floodY - 2, SPRITESHEET_KEYS.GAME_ICONS, ICON_FRAMES.CIRCLE_YELLOW)
-          .setScale(0.35).setTint(0xd4a017).setAlpha(initAlpha * 0.25)
+          .setScale(0.55).setTint(0xd4a017).setAlpha(initAlpha * 0.25)
         lightChildren.push(halo)
 
         const bulb = this.scene.add.sprite(flx, floodY - 2, SPRITESHEET_KEYS.GAME_ICONS, ICON_FRAMES.CIRCLE_YELLOW)
-          .setScale(0.12).setTint(0xd4a017).setAlpha(initAlpha)
+          .setScale(0.25).setTint(0xd4a017).setAlpha(initAlpha)
         lightChildren.push(bulb)
       }
 
@@ -353,13 +339,69 @@ export class OfficeInterior {
         lightChildren.push(wallPool)
 
         const sconce = this.scene.add.sprite(wallX, sconceY, SPRITESHEET_KEYS.GAME_ICONS, ICON_FRAMES.CIRCLE_YELLOW)
-          .setScale(0.12).setTint(0xd4a017).setAlpha(initAlpha)
+          .setScale(0.25).setTint(0xd4a017).setAlpha(initAlpha)
         lightChildren.push(sconce)
       }
 
       const extLights = this.scene.add.container(0, 0, lightChildren)
       extLights.setDepth(-3.8)
       ;(atmosphere as { exteriorLights: Phaser.GameObjects.Container | null }).exteriorLights = extLights
+    }
+
+    // ── Floor zone numbering — subtle sector labels ──
+    {
+      let zoneIdx = 1
+      for (let zx = fx + 50; zx < fx + fw - 50; zx += 400) {
+        for (let zy = fy + 45; zy < fy + fh - 45; zy += 400) {
+          const label = `Z-${String(zoneIdx).padStart(2, '0')}`
+          const zoneText = this.scene.add.text(zx, zy, label, {
+            fontSize: '6px',
+            fontFamily: 'monospace',
+            color: '#2a3a4a',
+            resolution: 2,
+          }).setAlpha(0.3).setDepth(-8)
+          this.seasonalDecos.push(zoneText)
+          zoneIdx++
+        }
+      }
+    }
+
+    // ── Hazard markings — yellow/black chevron warning stripes at floor edges ──
+    {
+      const chevronW = 12
+      const chevronH = 6
+      const yellow = 0xd4a017
+      const black = 0x0a0e14
+      const hazardAlpha = 0.22
+
+      // Top edge
+      for (let hx = fx + 10; hx < fx + fw - 10; hx += chevronW * 2) {
+        g.fillStyle(yellow, hazardAlpha)
+        g.fillRect(hx, fy + 2, chevronW, chevronH)
+        g.fillStyle(black, hazardAlpha)
+        g.fillRect(hx + chevronW, fy + 2, chevronW, chevronH)
+      }
+      // Bottom edge
+      for (let hx = fx + 10; hx < fx + fw - 10; hx += chevronW * 2) {
+        g.fillStyle(yellow, hazardAlpha)
+        g.fillRect(hx, fy + fh - chevronH - 2, chevronW, chevronH)
+        g.fillStyle(black, hazardAlpha)
+        g.fillRect(hx + chevronW, fy + fh - chevronH - 2, chevronW, chevronH)
+      }
+      // Left edge
+      for (let hy = fy + 20; hy < fy + fh - 20; hy += chevronW * 2) {
+        g.fillStyle(yellow, hazardAlpha)
+        g.fillRect(fx + 2, hy, chevronH, chevronW)
+        g.fillStyle(black, hazardAlpha)
+        g.fillRect(fx + 2, hy + chevronW, chevronH, chevronW)
+      }
+      // Right edge
+      for (let hy = fy + 20; hy < fy + fh - 20; hy += chevronW * 2) {
+        g.fillStyle(yellow, hazardAlpha)
+        g.fillRect(fx + fw - chevronH - 2, hy, chevronH, chevronW)
+        g.fillStyle(black, hazardAlpha)
+        g.fillRect(fx + fw - chevronH - 2, hy + chevronW, chevronH, chevronW)
+      }
     }
 
     // Seasonal decorations
@@ -507,7 +549,7 @@ export class OfficeInterior {
           const bubbleX = cooler.x + (Math.random() * 6 - 3)
           const bubbleY = cooler.y - (cooler.displayHeight * 0.35) - Math.random() * 2
           const bubble = this.scene.add.sprite(bubbleX, bubbleY, SPRITESHEET_KEYS.GAME_ICONS, ICON_FRAMES.CIRCLE_BLUE)
-            .setScale(0.06).setTint(0x7dd3fc).setAlpha(0.3).setDepth(-0.8)
+            .setScale(0.14).setTint(0x7dd3fc).setAlpha(0.3).setDepth(-0.8)
           this.scene.tweens.add({
             targets: bubble,
             y: bubbleY - 8,
@@ -587,8 +629,8 @@ export class OfficeInterior {
     room.waitingBar.setPosition(-room.width / 2, room.height / 2 - 1)
     if (room.activityBarTween) room.activityBarTween.destroy()
     if (room.waitingBarTween) room.waitingBarTween.destroy()
-    room.activityBarTween = this.scene.tweens.add({ targets: room.activityBar, width: activeWidth, duration: 280, ease: 'Power2' })
-    room.waitingBarTween = this.scene.tweens.add({ targets: room.waitingBar, width: waitingWidth, duration: 280, ease: 'Power2' })
+    room.activityBarTween = this.scene.tweens.add({ targets: room.activityBar, width: activeWidth, duration: 400, ease: 'Power2' })
+    room.waitingBarTween = this.scene.tweens.add({ targets: room.waitingBar, width: waitingWidth, duration: 400, ease: 'Power2' })
     room.waitingBar.setAlpha(waitingCount > 0 ? 0.95 : 0.15)
 
     const ledMode: Room['ledMode'] = hasWaiting ? 'waiting' : activeCount > 0 ? 'active' : 'idle'
@@ -636,6 +678,7 @@ export class OfficeInterior {
       const hBarY = room.height / 2 - WALL_T - WALL_I - ROOM_HEADER_H
       const stripY = hBarY - 3
       if (room.statusStripTween) { room.statusStripTween.destroy(); room.statusStripTween = null }
+      if (room.statusStripPulseTween) { room.statusStripPulseTween.destroy(); room.statusStripPulseTween = undefined }
       const stripProxy = { w: 0 }
       const sg = room.statusStrip
       room.statusStripTween = this.scene.tweens.add({
@@ -649,13 +692,26 @@ export class OfficeInterior {
           sg.fillStyle(stripColor, stripAlpha)
           sg.fillRect(hBarX, stripY, stripProxy.w, 2)
         },
+        onComplete: () => {
+          // Subtle alpha pulse on the status strip when agents are active
+          if (sg && sg.active && activeCount > 0) {
+            room.statusStripPulseTween = this.scene.tweens.add({
+              targets: sg,
+              alpha: { from: 0.85, to: 1 },
+              duration: 2500,
+              yoyo: true,
+              repeat: -1,
+              ease: 'Sine.easeInOut',
+            })
+          }
+        },
       })
     }
 
     // Heat overlay
     if (room.heatOverlay) {
       const heat = agents.length > 0 ? activeCount / agents.length : 0
-      const targetAlpha = heat * 0.06
+      const baseAlpha = heat * 0.06
 
       const heatColor = heat > 0.5
         ? lerpColor(0xfbbf24, 0xef4444, (heat - 0.5) * 2)
@@ -666,11 +722,29 @@ export class OfficeInterior {
         room.heatTween.destroy()
         room.heatTween = undefined
       }
+      // Kill any previous breathing tween so we can restart with the new base alpha
+      if (room.heatBreathTween) {
+        room.heatBreathTween.destroy()
+        room.heatBreathTween = undefined
+      }
       room.heatTween = this.scene.tweens.add({
         targets: room.heatOverlay,
-        fillAlpha: targetAlpha,
+        fillAlpha: baseAlpha,
         duration: 500,
         ease: 'Sine.easeInOut',
+        onComplete: () => {
+          // Start a gentle breathing pulse once we've reached the base alpha
+          if (room.heatOverlay && baseAlpha > 0.005 && !room.heatBreathTween) {
+            room.heatBreathTween = this.scene.tweens.add({
+              targets: room.heatOverlay,
+              fillAlpha: { from: baseAlpha - 0.015, to: baseAlpha + 0.015 },
+              duration: 3000,
+              yoyo: true,
+              repeat: -1,
+              ease: 'Sine.easeInOut',
+            })
+          }
+        },
       })
     }
   }
@@ -704,21 +778,19 @@ export class OfficeInterior {
     const { x, y, rx, ry } = this.reactorCenter
     const gfx = this.scene.add.graphics().setDepth(-9.5)
 
-    // Draw 3 concentric ellipses radiating outward
-    gfx.fillStyle(0x00ff88, 0.12)
-    gfx.fillEllipse(x, y, rx * 2, ry * 2)       // 1x — inner
-    gfx.fillStyle(0x00ff88, 0.08)
-    gfx.fillEllipse(x, y, rx * 3.6, ry * 3.6)   // 1.8x — mid
+    // Compact reactor glow — 2 rings, subtle
     gfx.fillStyle(0x00ff88, 0.04)
-    gfx.fillEllipse(x, y, rx * 6, ry * 6)       // 3x — outer
+    gfx.fillEllipse(x, y, rx * 2, ry * 2)       // 1x — inner
+    gfx.fillStyle(0x00ff88, 0.02)
+    gfx.fillEllipse(x, y, rx * 3, ry * 3)       // 1.5x — outer
 
     this.reactorGlowGfx = gfx
 
-    // Pulsing tween — oscillates alpha between 0.5 and 1.0
+    // Pulsing tween — subtle alpha oscillation
     this.reactorPulseTween = this.scene.tweens.add({
       targets: gfx,
-      alpha: { from: 0.6, to: 1.0 },
-      duration: 3000,
+      alpha: { from: 0.5, to: 0.8 },
+      duration: 4000,
       yoyo: true,
       repeat: -1,
       ease: 'Sine.easeInOut',
@@ -737,19 +809,16 @@ export class OfficeInterior {
     const { x, y, rx, ry } = this.reactorCenter
     const gfx = this.reactorGlowGfx
 
-    // Modulate inner ring alpha based on sine for churning mako effect
+    // Subtle churning modulation
     const churn = Math.sin(time * 0.001)
-    const innerAlpha = 0.12 + churn * 0.04   // oscillates 0.08 – 0.16
-    const midAlpha = 0.08 + churn * 0.02     // oscillates 0.06 – 0.10
-    const outerAlpha = 0.04 + churn * 0.012  // oscillates 0.028 – 0.052
+    const innerAlpha = 0.04 + churn * 0.015
+    const outerAlpha = 0.02 + churn * 0.008
 
     gfx.clear()
     gfx.fillStyle(0x00ff88, innerAlpha)
     gfx.fillEllipse(x, y, rx * 2, ry * 2)
-    gfx.fillStyle(0x00ff88, midAlpha)
-    gfx.fillEllipse(x, y, rx * 3.6, ry * 3.6)
     gfx.fillStyle(0x00ff88, outerAlpha)
-    gfx.fillEllipse(x, y, rx * 6, ry * 6)
+    gfx.fillEllipse(x, y, rx * 3, ry * 3)
   }
 
   // ---------------------------------------------------------------------------
