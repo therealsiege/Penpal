@@ -57,7 +57,7 @@ export function TasksPanel() {
         style={{ backgroundImage: 'url(tasks-bg.jpeg)' }}
       />
       {/* Dark overlay for readability */}
-      <div className="absolute inset-0 bg-[#080a0e]/[0.88]" />
+      <div className="absolute inset-0 bg-[#080a0e]/[0.94]" />
     <div className="relative h-full flex flex-col text-[#c4ccd6]">
       {/* Header */}
       <div className="shrink-0 px-6 pt-6 pb-4 border-b border-[#2a3440]/60">

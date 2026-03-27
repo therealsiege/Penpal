@@ -221,7 +221,7 @@ export function DataPanel() {
   return (
     <div className="relative h-full overflow-hidden">
       <div className="absolute inset-0 bg-cover bg-center bg-no-repeat" style={{ backgroundImage: 'url(data-bg.jpg)' }} />
-      <div className="absolute inset-0 bg-[#080a0e]/[0.88]" />
+      <div className="absolute inset-0 bg-[#080a0e]/[0.94]" />
     <div className="relative h-full flex flex-col overflow-hidden">
       {/* Header */}
       <div className="shrink-0 px-6 pt-5 pb-3 border-b border-[#2a3440]">

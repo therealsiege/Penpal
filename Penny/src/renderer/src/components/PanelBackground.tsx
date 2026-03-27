@@ -9,7 +9,7 @@ export function PanelBackground({ children }: { children: React.ReactNode }) {
         style={{ backgroundImage: 'url(midgar-bg.jpg)' }}
       />
       {/* Dark overlay */}
-      <div className="absolute inset-0 bg-[#080a0e]/[0.92]" />
+      <div className="absolute inset-0 bg-[#080a0e]/[0.94]" />
       {/* Content */}
       <div className="relative h-full">{children}</div>
     </div>
