@@ -12,6 +12,9 @@ const DEFAULT_WALK_SPEED = 55 // px/sec
 const WALK_CYCLE_MS = 200
 const DUST_STEP_INTERVAL = 3 // spawn dust every N walk cycles
 const TRAIL_STEP_INTERVAL = 2 // spawn breadcrumb dot every N walk cycles
+const BOUNCE_AMPLITUDE = 1.5 // px vertical bounce during walk
+const BOUNCE_DURATION = 100 // ms per bounce half-cycle
+const DIRECTION_TWEEN_MS = 80 // ms for angle reset on direction change
 
 export class PathWalker {
   private scene: Phaser.Scene
@@ -25,11 +28,15 @@ export class PathWalker {
   private walkCycleTimer: Phaser.Time.TimerEvent | null = null
   private moveTween: Phaser.Tweens.Tween | null = null
   private shadowTween: Phaser.Tweens.Tween | null = null
+  private bounceTween: Phaser.Tweens.Tween | null = null
+  private directionTween: Phaser.Tweens.Tween | null = null
   private onCompleteCb: (() => void) | null = null
   private destroyed = false
   private walking = false
   private dustStepCounter = 0
   private trailDots: Phaser.GameObjects.Sprite[] = []
+  private lastDirection = -1 // last startFrame direction used
+  private lastStartFrame = -1 // previous waypoint's startFrame for direction change detection
 
   constructor(
     scene: Phaser.Scene,
@@ -52,6 +59,8 @@ export class PathWalker {
     this.pointIdx = 0
     this.onCompleteCb = onComplete
     this.walking = true
+    this.lastDirection = -1
+    this.lastStartFrame = -1
     this.stepNext()
   }
 
@@ -61,6 +70,8 @@ export class PathWalker {
     if (this.walkCycleTimer) { this.walkCycleTimer.destroy(); this.walkCycleTimer = null }
     if (this.moveTween) { this.moveTween.destroy(); this.moveTween = null }
     if (this.shadowTween) { this.shadowTween.destroy(); this.shadowTween = null }
+    this.cancelBounce()
+    if (this.directionTween) { this.directionTween.destroy(); this.directionTween = null }
     this.onCompleteCb = null
     this.waypoints = []
     // Clean up trail dots
@@ -83,13 +94,32 @@ export class PathWalker {
 
   // ── Internal ──────────────────────────────────────────────────────────────
 
+  /** Cancel the vertical bounce tween. The move tween corrects sprite.y on next frame. */
+  private cancelBounce(): void {
+    if (this.bounceTween) {
+      this.bounceTween.destroy()
+      this.bounceTween = null
+    }
+  }
+
   private stepNext(): void {
     if (this.destroyed || !this.sprite.active) {
       this.walking = false
       return
     }
     if (this.pointIdx >= this.waypoints.length) {
+      // ── Walk-to-idle transition ──
       this.walking = false
+      this.cancelBounce()
+
+      // Reset wobble angle to 0
+      this.sprite.setAngle(0)
+
+      // Set idle frame (frame 0 of last direction)
+      if (this.lastDirection >= 0) {
+        this.sprite.setTexture(this.sheetKey, this.lastDirection)
+      }
+
       const cb = this.onCompleteCb
       this.onCompleteCb = null
       if (cb) cb()
@@ -104,10 +134,43 @@ export class PathWalker {
 
     // Pick direction frame: 0=down, 3=right, 6=up, 9=left
     const startFrame = PathWalker.directionFrame(dx, dy)
+    const previousFrame = this.lastStartFrame
+    this.lastStartFrame = startFrame
+    this.lastDirection = startFrame
+
+    // ── Smoother direction changes ──
+    // If direction changed, tween angle back to 0 before setting the new direction frame
+    if (previousFrame >= 0 && previousFrame !== startFrame) {
+      if (this.directionTween) { this.directionTween.destroy(); this.directionTween = null }
+      this.directionTween = this.scene.tweens.add({
+        targets: this.sprite,
+        angle: 0,
+        duration: DIRECTION_TWEEN_MS,
+        ease: 'Sine.easeOut',
+        onComplete: () => {
+          this.directionTween = null
+        },
+      })
+    }
+
     this.sprite.setTexture(this.sheetKey, startFrame)
     this.sprite.setFlipX(false)
 
+    // Cancel previous bounce before starting a new segment
+    this.cancelBounce()
+
     const dur = Math.max(200, (dist / this.speed) * 1000)
+
+    // ── Arrival deceleration / departure acceleration ──
+    let moveEase: string = 'Linear'
+    const isFirstWaypoint = this.pointIdx === 1
+    const isLastWaypoint = this.pointIdx >= this.waypoints.length
+    if (isLastWaypoint) {
+      moveEase = 'Sine.easeOut'
+    } else if (isFirstWaypoint) {
+      moveEase = 'Sine.easeIn'
+    }
+
     let cycleIdx = 0
     this.walkCycleTimer = this.scene.time.addEvent({
       delay: WALK_CYCLE_MS, loop: true,
@@ -116,6 +179,24 @@ export class PathWalker {
         cycleIdx = cycleIdx === 0 ? 1 : 0
         this.sprite.setFrame(startFrame + 1 + cycleIdx)
         this.sprite.setAngle(cycleIdx === 0 ? -3 : 3)
+
+        // ── Vertical bounce ──
+        // Apply a subtle y-offset bounce on each walk cycle tick
+        if (this.bounceTween) { this.bounceTween.destroy(); this.bounceTween = null }
+        const bounceDir = cycleIdx === 0 ? -BOUNCE_AMPLITUDE : BOUNCE_AMPLITUDE
+        const baseY = this.sprite.y
+        this.bounceTween = this.scene.tweens.add({
+          targets: this.sprite,
+          y: baseY + bounceDir,
+          duration: BOUNCE_DURATION,
+          ease: 'Sine.easeInOut',
+          onComplete: () => {
+            // Snap back to where the move tween expects us
+            // The move tween continuously updates y, so we just let it take over
+            this.bounceTween = null
+          },
+        })
+
         // Footstep dust puffs every few steps
         this.dustStepCounter++
         if (this.dustStepCounter % DUST_STEP_INTERVAL === 0) {
@@ -131,9 +212,12 @@ export class PathWalker {
     this.moveTween = this.scene.tweens.add({
       targets: this.sprite,
       x: target.x, y: target.y,
-      duration: dur, ease: 'Linear',
+      duration: dur, ease: moveEase,
       onComplete: () => {
         if (this.walkCycleTimer) { this.walkCycleTimer.destroy(); this.walkCycleTimer = null }
+        this.cancelBounce()
+        // Snap sprite to exact target position (prevent bounce drift)
+        this.sprite.setPosition(target.x, target.y)
         this.moveTween = null
         this.stepNext()
       },
@@ -143,7 +227,7 @@ export class PathWalker {
       this.shadowTween = this.scene.tweens.add({
         targets: this.shadow,
         x: target.x, y: target.y + 2,
-        duration: dur, ease: 'Linear',
+        duration: dur, ease: moveEase,
       })
     }
   }

@@ -395,7 +395,7 @@ export class OfficeCorridors {
       this.corridorSegments.push({ x1: connX, y1: upper.y, x2: connX, y2: lower.y, color: activeTheme.wall })
       const connLen = lower.y - upper.y
       // Sidewalk strip
-      const VERT_WALK_W = 36
+      const VERT_WALK_W = 24
       g.fillStyle(0x1e2836, 0.7)
       g.fillRect(connX - VERT_WALK_W / 2, upper.y, VERT_WALK_W, connLen)
       // Curb edges
@@ -422,7 +422,7 @@ export class OfficeCorridors {
       const cafeConnLen = nearestRow.y - serviceBottomY
       if (cafeConnLen > 0) {
         // Sidewalk strip
-        const CAFE_WALK_W = 48
+        const CAFE_WALK_W = 32
         g.fillStyle(0x1e2836, 0.75)
         g.fillRect(connX - CAFE_WALK_W / 2, serviceBottomY, CAFE_WALK_W, cafeConnLen)
         // Curb edges
@@ -455,7 +455,7 @@ export class OfficeCorridors {
         const hx1 = Math.min(connX, nearestRow.minX)
         const hx2 = Math.max(connX, nearestRow.minX)
         const hLen = hx2 - hx1
-        const HLEG_WALK_W = 36
+        const HLEG_WALK_W = 24
         // Sidewalk
         g.fillStyle(0x1e2836, 0.65)
         g.fillRect(hx1, nearestRow.y - HLEG_WALK_W / 2, hLen, HLEG_WALK_W)

@@ -37,6 +37,55 @@ interface AStarNode {
 
 const CELL_SIZE = 12
 
+/** Min-heap ordered by AStarNode.f — supports push/pop in O(log n). */
+class MinHeap {
+  private data: AStarNode[] = []
+
+  get size(): number { return this.data.length }
+
+  push(node: AStarNode): void {
+    this.data.push(node)
+    this.bubbleUp(this.data.length - 1)
+  }
+
+  pop(): AStarNode | undefined {
+    const d = this.data
+    if (d.length === 0) return undefined
+    const top = d[0]
+    const last = d.pop()!
+    if (d.length > 0) {
+      d[0] = last
+      this.sinkDown(0)
+    }
+    return top
+  }
+
+  private bubbleUp(i: number): void {
+    const d = this.data
+    while (i > 0) {
+      const parent = (i - 1) >> 1
+      if (d[i].f >= d[parent].f) break
+      const tmp = d[i]; d[i] = d[parent]; d[parent] = tmp
+      i = parent
+    }
+  }
+
+  private sinkDown(i: number): void {
+    const d = this.data
+    const len = d.length
+    while (true) {
+      let smallest = i
+      const l = 2 * i + 1
+      const r = 2 * i + 2
+      if (l < len && d[l].f < d[smallest].f) smallest = l
+      if (r < len && d[r].f < d[smallest].f) smallest = r
+      if (smallest === i) break
+      const tmp = d[i]; d[i] = d[smallest]; d[smallest] = tmp
+      i = smallest
+    }
+  }
+}
+
 export class NavMesh {
   private grid: boolean[][] = []
   private gridW = 0
@@ -158,10 +207,9 @@ export class NavMesh {
       const s = this.snapWalkableWith(eg.gx, eg.gy, ownCells, k); if (!s) return null; eg = s
     }
 
-    // A*
-    const open: AStarNode[] = []
+    // A* with binary min-heap
+    const open = new MinHeap()
     const best = new Map<number, number>()
-    const closed = new Set<number>()
 
     const h = (ax: number, ay: number) => {
       const dx = Math.abs(ax - eg.gx), dy = Math.abs(ay - eg.gy)
@@ -172,19 +220,21 @@ export class NavMesh {
     s.f = s.h; open.push(s); best.set(k(sg.gx, sg.gy), 0)
 
     let iters = 0
-    while (open.length > 0 && iters++ < 20000) {
-      let bi = 0
-      for (let i = 1; i < open.length; i++) { if (open[i].f < open[bi].f) bi = i }
-      const cur = open.splice(bi, 1)[0]
+    while (open.size > 0 && iters++ < 20000) {
+      const cur = open.pop()!
       const ck = k(cur.gx, cur.gy)
 
-      if (cur.gx === eg.gx && cur.gy === eg.gy) return this.buildPath(cur, start, end)
-      closed.add(ck)
+      // Skip stale entries — a better path was already found for this cell
+      const bestG = best.get(ck)
+      if (bestG !== undefined && cur.g > bestG) continue
+
+      if (cur.gx === eg.gx && cur.gy === eg.gy) {
+        return this.smoothPath(this.buildPath(cur, start, end), isWalkable)
+      }
 
       for (const [dx, dy] of [[-1,0],[1,0],[0,-1],[0,1],[-1,-1],[-1,1],[1,-1],[1,1]]) {
         const nx = cur.gx + dx, ny = cur.gy + dy, nk = k(nx, ny)
         if (nx < 0 || nx >= this.gridW || ny < 0 || ny >= this.gridH) continue
-        if (closed.has(nk)) continue
         if (!isWalkable(nx, ny)) continue
         // No corner-cutting through walls
         if (dx !== 0 && dy !== 0 && (!isWalkable(cur.gx + dx, cur.gy) || !isWalkable(cur.gx, cur.gy + dy))) continue
@@ -194,8 +244,6 @@ export class NavMesh {
         if (prev !== undefined && g >= prev) continue
         best.set(nk, g)
 
-        const ei = open.findIndex(n => n.gx === nx && n.gy === ny)
-        if (ei >= 0) open.splice(ei, 1)
         const nh = h(nx, ny)
         open.push({ gx: nx, gy: ny, g, h: nh, f: g + nh, parent: cur })
       }
@@ -267,6 +315,61 @@ export class NavMesh {
     }
     out.push(raw[raw.length - 1])
     return out
+  }
+
+  /**
+   * Greedy line-of-sight smoothing — skip intermediate waypoints when
+   * a straight line between two points crosses only walkable cells.
+   */
+  private smoothPath(
+    path: NavPoint[],
+    isWalkable: (gx: number, gy: number) => boolean,
+  ): NavPoint[] {
+    if (path.length <= 2) return path
+
+    const result: NavPoint[] = [path[0]]
+    let anchor = 0
+
+    while (anchor < path.length - 1) {
+      let farthest = anchor + 1
+      for (let probe = anchor + 2; probe < path.length; probe++) {
+        if (this.hasLineOfSight(path[anchor], path[probe], isWalkable)) {
+          farthest = probe
+        }
+      }
+      result.push(path[farthest])
+      anchor = farthest
+    }
+
+    return result
+  }
+
+  /**
+   * Check if a straight world-space line between two points crosses
+   * only walkable grid cells.  Samples at CELL_SIZE intervals.
+   */
+  private hasLineOfSight(
+    a: NavPoint,
+    b: NavPoint,
+    isWalkable: (gx: number, gy: number) => boolean,
+  ): boolean {
+    const dx = b.x - a.x
+    const dy = b.y - a.y
+    const dist = Math.sqrt(dx * dx + dy * dy)
+    if (dist < CELL_SIZE) return true
+
+    const steps = Math.ceil(dist / CELL_SIZE)
+    const sx = dx / steps
+    const sy = dy / steps
+
+    for (let i = 1; i < steps; i++) {
+      const wx = a.x + sx * i
+      const wy = a.y + sy * i
+      const g = this.toGrid(wx, wy)
+      if (g.gx < 0 || g.gx >= this.gridW || g.gy < 0 || g.gy >= this.gridH) return false
+      if (!isWalkable(g.gx, g.gy)) return false
+    }
+    return true
   }
 }
 
