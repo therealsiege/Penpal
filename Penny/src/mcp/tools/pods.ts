@@ -33,6 +33,12 @@ interface PodWorkflowRecord {
   error?: string
   stageHistory: { stage: string; enteredAt: number }[]
   presetId?: string
+  critique?: {
+    verdict: string
+    confidence: number
+    summary: string
+    issues: { severity: string; location: string; description: string; suggestion: string }[]
+  }
 }
 
 function loadWorkflows(): PodWorkflowRecord[] {
