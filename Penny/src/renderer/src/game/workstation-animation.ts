@@ -1404,16 +1404,18 @@ export class WorkstationAnimator {
   // ---------------------------------------------------------------------------
 
   showThinkingDots(ws: WorkstationSprite, candidateCount: number): void {
-    if (ws.thinkingDotsContainer) return // already showing
-    if (candidateCount < 2) return // no animation for single candidate
+    if (candidateCount < 2) return // gated by best-of-N only
+    if (ws.thinkingDotsContainer && !ws.thinkingMergeInProgress) return // already showing
+    if (ws.thinkingMergeInProgress) this.hideThinkingDots(ws)
 
     const container = this.scene.add.container(0, THINKING_DOT_Y)
     const dots: Phaser.GameObjects.Arc[] = []
+    const visualDotCount = 3
 
-    const totalWidth = (candidateCount - 1) * THINKING_DOT_SPACING
+    const totalWidth = (visualDotCount - 1) * THINKING_DOT_SPACING
     const startX = -totalWidth / 2
 
-    for (let i = 0; i < candidateCount; i++) {
+    for (let i = 0; i < visualDotCount; i++) {
       const dot = this.scene.add.circle(
         startX + i * THINKING_DOT_SPACING, 0,
         THINKING_DOT_RADIUS, activeTheme.accent, 0,
@@ -1427,6 +1429,7 @@ export class WorkstationAnimator {
     ws.thinkingDotsContainer = container
     ws.thinkingDots = dots
     ws.thinkingCandidateCount = candidateCount
+    ws.thinkingMergeInProgress = false
 
     // Push to lodLevel3Objects so it hides at L1/L2
     ws.lodLevel3Objects.push(container)
@@ -1483,6 +1486,8 @@ export class WorkstationAnimator {
       this.hideThinkingDots(ws)
       return
     }
+    if (ws.thinkingMergeInProgress) return
+    ws.thinkingMergeInProgress = true
 
     // Stop the looping timeline
     if (ws.thinkingDotsTween) {
@@ -1511,6 +1516,7 @@ export class WorkstationAnimator {
             // All merged — scale pulse on center dot
             const centerDot = dots[0]
             centerDot.setFillStyle(0xffffff, 1)
+            for (let i = 1; i < dots.length; i++) dots[i].setVisible(false)
             ws.thinkingMergeTween = this.scene.tweens.add({
               targets: centerDot,
               scaleX: { from: 1, to: 1.8 },
@@ -1553,6 +1559,7 @@ export class WorkstationAnimator {
     }
     ws.thinkingDots = undefined
     ws.thinkingCandidateCount = undefined
+    ws.thinkingMergeInProgress = undefined
   }
 
   // ---------------------------------------------------------------------------

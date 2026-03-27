@@ -34,6 +34,24 @@ import {
 import { WorkstationFactory } from './workstation-creation'
 import { WorkstationAnimator } from './workstation-animation'
 
+<<<<<<< issue-3-create-basic-eval-harness-with-task-pass
+=======
+export function normalizeContextUtilization(utilization: number | null | undefined): number | null {
+  if (typeof utilization !== 'number' || !Number.isFinite(utilization)) return null
+  return Math.min(1, Math.max(0, utilization))
+}
+
+export function getContextMeterColor(utilization: number): number {
+  if (utilization >= CTX_THRESHOLD_RED) return CTX_RED
+  if (utilization >= CTX_THRESHOLD_AMBER) return CTX_AMBER
+  return CTX_GREEN
+}
+
+export function isContextRotTransition(prevRot: boolean | undefined, currentRot: boolean): boolean {
+  return !prevRot && currentRot
+}
+
+>>>>>>> local
 // ---------------------------------------------------------------------------
 // Host interface — callbacks into OfficeScene for cross-module calls
 // ---------------------------------------------------------------------------
@@ -88,6 +106,10 @@ export class OfficeWorkstations {
   private animator: WorkstationAnimator
   private _onApproved: (...args: unknown[]) => void
 
+  private isWorkstationSparkleVisible(ws: WorkstationSprite): boolean {
+    return ws.container.visible && ws.container.alpha > 0.05
+  }
+
   constructor(scene: Phaser.Scene, host: WorkstationHost) {
     this.scene = scene
     this.host = host
@@ -116,7 +138,7 @@ export class OfficeWorkstations {
         // Bulk approve — sparkle all workstations that are currently waiting
         for (const room of rooms.values()) {
           for (const ws of room.workstations.values()) {
-            if (ws.state?.needsInteraction) {
+            if (ws.state?.needsInteraction && this.isWorkstationSparkleVisible(ws)) {
               const wx = room.x + ws.container.x
               const wy = room.y + ws.container.y
               this.host.celebrations.approveSparkle(wx, wy)
@@ -127,7 +149,7 @@ export class OfficeWorkstations {
         // Single agent approve
         for (const room of rooms.values()) {
           const ws = room.workstations.get(agentId)
-          if (ws) {
+          if (ws && this.isWorkstationSparkleVisible(ws)) {
             const wx = room.x + ws.container.x
             const wy = room.y + ws.container.y
             this.host.celebrations.approveSparkle(wx, wy)
@@ -1007,7 +1029,7 @@ export class OfficeWorkstations {
             })
           }
           // Subtle monitor shake — only on transition false→true
-          if (!prevRot && ws.monitorSprite) {
+          if (isContextRotTransition(prevRot, rotDetected) && ws.monitorSprite) {
             ws.contextRotShakeTween?.destroy()
             const origX = ws.monitorSprite.x
             ws.contextRotShakeTween = this.scene.tweens.add({

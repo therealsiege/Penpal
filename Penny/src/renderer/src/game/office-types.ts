@@ -173,6 +173,8 @@ export interface WorkstationSprite {
   thinkingDotsTween?: Phaser.Tweens.Tween
   /** Merge tween when candidate is selected */
   thinkingMergeTween?: Phaser.Tweens.Tween
+  /** True while merge animation is in progress */
+  thinkingMergeInProgress?: boolean
   /** Number of thinking candidates currently shown */
   thinkingCandidateCount?: number
   /** Eval glow arc rendered behind the desk — color reflects recent success rate */
