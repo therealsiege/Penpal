@@ -1,15 +1,18 @@
-import { describe, it, expect, beforeAll } from 'vitest'
+import { describe, it, expect } from 'vitest'
 import { toolRegistry } from './tools'
+import { buildToolCatalog } from './server'
 
 // Side-effect: registers meta tools
 import './tools/meta'
 
-describe('MCP Tool Registry', () => {
-  it('has meta tools registered', () => {
-    const tools = toolRegistry.list()
+describe('MCP Server Meta Discovery', () => {
+  it('tools/list catalog includes meta tools with schemas', () => {
+    const tools = buildToolCatalog()
     const names = tools.map((t) => t.name)
     expect(names).toContain('meta:list-tools')
     expect(names).toContain('meta:describe-tool')
+    expect(tools.every((t) => typeof t.description === 'string')).toBe(true)
+    expect(tools.every((t) => t.inputSchema.type === 'object')).toBe(true)
     expect(tools.length).toBeGreaterThanOrEqual(2)
   })
 
@@ -41,6 +44,7 @@ describe('MCP Tool Registry', () => {
     expect(result.description).toBeTruthy()
     expect(result.inputSchema).toBeDefined()
     expect(result.inputSchema.type).toBe('object')
+    expect(result.inputSchema.additionalProperties).toBe(false)
     expect(result._meta).toBeDefined()
   })
 
@@ -49,6 +53,18 @@ describe('MCP Tool Registry', () => {
       name: 'nonexistent',
     })) as { error: string; _meta: unknown }
     expect(result.error).toContain('nonexistent')
+    expect(result._meta).toBeDefined()
+  })
+
+  it('meta:describe-tool validates required input', async () => {
+    const result = (await toolRegistry.call('meta:describe-tool', {})) as {
+      error: string
+      inputSchema: Record<string, unknown>
+      _meta: unknown
+    }
+    expect(result.error).toContain('Invalid input')
+    expect(result.inputSchema.type).toBe('object')
+    expect(result.inputSchema.required).toEqual(['name'])
     expect(result._meta).toBeDefined()
   })
 })

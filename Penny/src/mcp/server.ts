@@ -4,7 +4,7 @@ import {
   ListToolsRequestSchema,
   CallToolRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js'
-import { toolRegistry } from './tools.js'
+import { toolRegistry, ToolNotFoundError } from './tools.js'
 
 // Side-effect: registers tools via toolRegistry
 import './tools/meta.js'
@@ -16,22 +16,37 @@ import './tools/office.js'
 
 const server = new Server(
   { name: 'penny-mcp', version: '1.0.0' },
-  { capabilities: { tools: {} } },
+  { capabilities: { tools: {}, resources: {} } },
 )
 
-server.setRequestHandler(ListToolsRequestSchema, async () => ({
-  tools: toolRegistry.list().map((t) => ({
+export function buildToolCatalog() {
+  return toolRegistry.list().map((t) => ({
     name: t.name,
     description: t.description,
     inputSchema: t.inputSchema,
-  })),
+  }))
+}
+
+server.setRequestHandler(ListToolsRequestSchema, async () => ({
+  tools: buildToolCatalog(),
 }))
 
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args } = request.params
-  const result = await toolRegistry.call(name, args ?? {})
-  return {
-    content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+  try {
+    const result = await toolRegistry.call(name, args ?? {})
+    return {
+      content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    const isToolNotFound = error instanceof ToolNotFoundError
+    process.stderr.write(`penny-mcp call failed for ${name}: ${message}\n`)
+
+    return {
+      content: [{ type: 'text', text: JSON.stringify({ error: message }) }],
+      isError: isToolNotFound,
+    }
   }
 })
 

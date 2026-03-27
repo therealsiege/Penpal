@@ -51,3 +51,120 @@ Always call `meta:list-tools` first to discover the current tool set.
 ## Updates
 
 _This file is automatically updated after completed pod workflows._
+<<<<<<< Updated upstream
+=======
+
+### Workflow: first-pass metrics (2026-03-27)
+- Task: first-pass metrics
+- Team: nextjs-frontend / ui-designer / electron-dev
+- Result: PASS (1/1 iterations)
+- Key output: RESULT: PASS
+
+### Workflow: failing metrics (2026-03-27)
+- Task: failing metrics
+- Team: fullstack-dev / backend-arch / electron-dev
+- Result: FAIL (1/1 iterations)
+- Key output: RESULT: FAIL
+
+### Workflow: single candidate task (2026-03-27)
+- Task: single candidate task
+- Team: solver-a / reviewer-b / executor-c
+- Result: PASS (1/1 iterations)
+- Key output: RESULT: PASS
+
+### Workflow: multi candidate task (2026-03-27)
+- Task: multi candidate task
+- Team: solver-a / reviewer-b / executor-c
+- Result: PASS (1/1 iterations)
+- Key output: RESULT: PASS
+
+### Workflow: invalid self eval task (2026-03-27)
+- Task: invalid self eval task
+- Team: solver-a / reviewer-b / executor-c
+- Result: PASS (1/1 iterations)
+- Key output: RESULT: PASS
+
+### Workflow: single candidate task (2026-03-27)
+- Task: single candidate task
+- Team: solver-a / reviewer-b / executor-c
+- Result: PASS (1/1 iterations)
+- Key output: RESULT: PASS
+
+### Workflow: multi candidate task (2026-03-27)
+- Task: multi candidate task
+- Team: solver-a / reviewer-b / executor-c
+- Result: PASS (1/1 iterations)
+- Key output: RESULT: PASS
+
+### Workflow: invalid self eval task (2026-03-27)
+- Task: invalid self eval task
+- Team: solver-a / reviewer-b / executor-c
+- Result: PASS (1/1 iterations)
+- Key output: RESULT: PASS
+>>>>>>> Stashed changes
+
+### Workflow: single candidate task (2026-03-27)
+- Task: single candidate task
+- Team: solver-a / reviewer-b / executor-c
+- Result: PASS (1/1 iterations)
+- Key output: RESULT: PASS
+
+### Workflow: multi candidate task (2026-03-27)
+- Task: multi candidate task
+- Team: solver-a / reviewer-b / executor-c
+- Result: PASS (1/1 iterations)
+- Key output: RESULT: PASS
+
+### Workflow: invalid self eval task (2026-03-27)
+- Task: invalid self eval task
+- Team: solver-a / reviewer-b / executor-c
+- Result: PASS (1/1 iterations)
+- Key output: RESULT: PASS
+
+### Workflow: single candidate task (2026-03-27)
+- Task: single candidate task
+- Team: solver-a / reviewer-b / executor-c
+- Result: PASS (1/1 iterations)
+- Key output: RESULT: PASS
+
+### Workflow: multi candidate task (2026-03-27)
+- Task: multi candidate task
+- Team: solver-a / reviewer-b / executor-c
+- Result: PASS (1/1 iterations)
+- Key output: RESULT: PASS
+
+### Workflow: invalid self eval task (2026-03-27)
+- Task: invalid self eval task
+- Team: solver-a / reviewer-b / executor-c
+- Result: PASS (1/1 iterations)
+- Key output: RESULT: PASS
+
+### Workflow: pod quality pass (2026-03-27)
+- Task: pod quality pass
+- Team: nextjs-frontend / ui-designer / electron-dev
+- Result: PASS (1/1 iterations)
+- Key output: RESULT: PASS
+
+### Workflow: pod quality pass (2026-03-27)
+- Task: pod quality pass
+- Team: nextjs-frontend / ui-designer / electron-dev
+- Result: PASS (1/1 iterations)
+- Key output: RESULT: PASS
+
+### Workflow: single candidate task (2026-03-27)
+- Task: single candidate task
+- Team: solver-a / reviewer-b / executor-c
+- Result: PASS (1/1 iterations)
+- Key output: RESULT: PASS
+
+### Workflow: multi candidate task (2026-03-27)
+- Task: multi candidate task
+- Team: solver-a / reviewer-b / executor-c
+- Result: PASS (1/1 iterations)
+- Key output: RESULT: PASS
+
+### Workflow: invalid self eval task (2026-03-27)
+- Task: invalid self eval task
+- Team: solver-a / reviewer-b / executor-c
+- Result: PASS (1/1 iterations)
+- Key output: RESULT: PASS

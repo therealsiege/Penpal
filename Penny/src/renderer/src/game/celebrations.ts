@@ -851,7 +851,7 @@ export class CelebrationManager {
    * 8-12 particles radiate outward with upward drift, shrink and fade over 500ms.
    */
   approveSparkle(x: number, y: number): void {
-    soundEngine.click()
+    soundEngine.ding()
     const count = 8 + Math.floor(Math.random() * 5) // 8-12
     for (let i = 0; i < count; i++) {
       const p = this._sparklePool.find(c => !c.getData('busy'))
@@ -869,9 +869,14 @@ export class CelebrationManager {
         alpha: 0,
         scaleX: 0,
         scaleY: 0,
-        duration: 400 + Math.random() * 150,
+        duration: 360 + Math.random() * 140,
         ease: 'Power2',
-        onComplete: () => { p.setVisible(false).setData('busy', false) },
+        onComplete: () => {
+          p.setVisible(false)
+          p.setAlpha(0)
+          p.setScale(1)
+          p.setData('busy', false)
+        },
       })
     }
   }

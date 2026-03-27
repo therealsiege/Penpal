@@ -40,7 +40,7 @@ export class EvalHarness {
   constructor(outcomesPath?: string) {
     const dataDir = outcomesPath
       ? path.dirname(outcomesPath)
-      : path.resolve(__dirname, '..', '..', 'data')
+      : path.resolve(__dirname, '..', '..', '..', 'data')
     this.outcomesPath = outcomesPath ?? path.join(dataDir, 'eval-outcomes.jsonl')
 
     // Ensure data directory exists
@@ -83,8 +83,12 @@ export class EvalHarness {
       return this.buildReport(id, agentOutcomes)
     })
 
-    // Sort by success rate descending
-    return reports.sort((a, b) => b.successRate - a.successRate)
+    // Sort by success rate desc, then volume desc, then agent id asc for stable output.
+    return reports.sort((a, b) => {
+      if (b.successRate !== a.successRate) return b.successRate - a.successRate
+      if (b.totalTasks !== a.totalTasks) return b.totalTasks - a.totalTasks
+      return a.agentId.localeCompare(b.agentId)
+    })
   }
 
   async experimentVelocity(_since?: Date): Promise<number> {
@@ -101,7 +105,14 @@ export class EvalHarness {
       return raw
         .split('\n')
         .filter(line => line.trim().length > 0)
-        .map(line => JSON.parse(line) as TaskOutcome)
+        .flatMap((line) => {
+          try {
+            return [JSON.parse(line) as TaskOutcome]
+          } catch {
+            // Ignore malformed rows so one bad line doesn't block reporting.
+            return []
+          }
+        })
     } catch {
       return []
     }

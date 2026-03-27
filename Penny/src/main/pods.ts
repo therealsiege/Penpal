@@ -3,6 +3,7 @@ import fs from 'fs'
 import path from 'path'
 import { runAgentHeadless } from './sessions'
 import { getAgentConfig, loadPodPresets } from './agents'
+import { getPhaseConfig, type PhaseConfig } from './pods/phase-config'
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
@@ -62,13 +63,6 @@ export interface ReviewerCritique {
   summary: string
 }
 
-export interface PhaseConfig {
-  candidates: number
-  selfEvaluation: boolean
-  confidenceThreshold: number
-  maxSelfFixes: number
-}
-
 export interface PodWorkflow {
   id: string
   name: string
@@ -101,19 +95,6 @@ export interface PodPreset {
   reviewer: string
   executor: string
   description: string
-}
-
-// ── Phase Config ────────────────────────────────────────────────────────────
-
-const PHASE_CONFIGS: Record<string, PhaseConfig> = {
-  critical: { candidates: 3, selfEvaluation: true, confidenceThreshold: 0.8, maxSelfFixes: 2 },
-  high:     { candidates: 2, selfEvaluation: true, confidenceThreshold: 0.7, maxSelfFixes: 1 },
-  normal:   { candidates: 1, selfEvaluation: false, confidenceThreshold: 0.5, maxSelfFixes: 0 },
-  low:      { candidates: 1, selfEvaluation: false, confidenceThreshold: 0.5, maxSelfFixes: 0 },
-}
-
-function getPhaseConfig(priority?: string): PhaseConfig {
-  return PHASE_CONFIGS[priority || 'normal'] || PHASE_CONFIGS.normal
 }
 
 // ── Presets ──────────────────────────────────────────────────────────────────
@@ -422,6 +403,36 @@ function formatExecutorMessage(wf: PodWorkflow, solverOutput?: string, reviewerO
   ].join('\n')
 }
 
+export function formatSelfFixMessage(wf: PodWorkflow, testOutput: string): string {
+  const attemptNumber = wf.selfFixAttempts + 1
+  const codeChanges = wf.solver.output || 'No solver output available.'
+
+  return [
+    `## Pod Workflow: ${wf.name}`,
+    `### Stage: Self-Fix (Attempt ${attemptNumber}/${wf.maxSelfFixes}, Iteration ${wf.iteration}/${wf.maxIterations})`,
+    '',
+    'Your test run failed with these errors:',
+    testOutput || 'No test output captured.',
+    '',
+    'The original task was:',
+    wf.task,
+    '',
+    'Your code changes were:',
+    codeChanges,
+    '',
+    'Diagnose the failure and generate a minimal fix. Only fix what\'s broken.',
+    'Do NOT rewrite the solution — make the smallest change that fixes the test.',
+  ].join('\n')
+}
+
+export function parseTestPassed(output: string): boolean {
+  const normalized = (output || '').toUpperCase()
+  if (!normalized.trim()) return false
+  if (normalized.includes('RESULT: PASS')) return true
+  if (normalized.includes('RESULT: FAIL')) return false
+  return normalized.includes('PASS') && !normalized.includes('FAIL')
+}
+
 // ── Core workflow stages ─────────────────────────────────────────────────────
 
 async function runSolveStage(wf: PodWorkflow, feedback?: string): Promise<boolean> {
@@ -433,7 +444,6 @@ async function runSolveStage(wf: PodWorkflow, feedback?: string): Promise<boolea
   const candidateCount = wf.solverCandidateCount
 
   if (candidateCount <= 1) {
-    // ── Single candidate path (original behavior) ──
     const prompt = formatSolverMessage(wf, feedback)
     console.log(`[pods] Running solver ${wf.solver.agentId} headless in ${wf.cwd}`)
     const startMs = Date.now()
@@ -455,99 +465,113 @@ async function runSolveStage(wf: PodWorkflow, feedback?: string): Promise<boolea
       agentId: wf.solver.agentId,
       durationMs: result.durationMs ?? (Date.now() - startMs),
     }]
+    wf.artifacts.push({
+      stage: 'solve',
+      path: 'candidate-1',
+      iteration: wf.iteration,
+      timestamp: Date.now(),
+      candidateIndex: 1,
+      selected: true,
+    })
     console.log(`[pods] Solver done (${Math.round((result.durationMs ?? 0) / 1000)}s)`)
     return true
   }
 
-  // ── Multi-candidate path (best-of-N) ──
   console.log(`[pods] Running ${candidateCount} solver candidates in parallel`)
   const prompt = formatSolverMessage(wf, feedback)
-  const startMs = Date.now()
 
-  const promises = Array.from({ length: candidateCount }, (_, i) =>
-    runAgentHeadless(wf.solver.agentId, wf.cwd, prompt, {
-      timeoutMs: EXECUTE_TIMEOUT_MS,
-    }).then(result => ({
-      index: i + 1,
-      result,
-      durationMs: Date.now() - startMs,
-    })),
-  )
-
-  const settled = await Promise.allSettled(promises)
-  const candidates: SolverCandidate[] = []
-
-  for (const entry of settled) {
-    if (entry.status === 'fulfilled' && entry.value.result.success) {
-      candidates.push({
-        index: entry.value.index,
-        output: entry.value.result.output || '',
-        agentId: wf.solver.agentId,
-        durationMs: entry.value.durationMs,
+  const runCandidate = async (index: number): Promise<SolverCandidate & { success: boolean }> => {
+    const startMs = Date.now()
+    try {
+      const result = await runAgentHeadless(wf.solver.agentId, wf.cwd, prompt, {
+        timeoutMs: EXECUTE_TIMEOUT_MS,
       })
+      return {
+        index,
+        output: result.output || '',
+        agentId: wf.solver.agentId,
+        durationMs: result.durationMs ?? (Date.now() - startMs),
+        success: result.success,
+      }
+    } catch {
+      return {
+        index,
+        output: '',
+        agentId: wf.solver.agentId,
+        durationMs: Date.now() - startMs,
+        success: false,
+      }
     }
   }
 
+  let attempts = await Promise.all(Array.from({ length: candidateCount }, (_, i) => runCandidate(i + 1)))
+  if (!attempts.some((attempt) => attempt.success)) {
+    console.warn('[pods] Parallel candidate runs produced no success; retrying sequentially')
+    const retries: Array<SolverCandidate & { success: boolean }> = []
+    for (let i = 1; i <= candidateCount; i += 1) {
+      retries.push(await runCandidate(i))
+    }
+    attempts = retries
+  }
+
+  for (const attempt of attempts) {
+    wf.artifacts.push({
+      stage: 'solve',
+      path: `candidate-${attempt.index}`,
+      iteration: wf.iteration,
+      timestamp: Date.now(),
+      candidateIndex: attempt.index,
+      selected: false,
+    })
+  }
+
+  const candidates = attempts.filter((attempt) => attempt.success)
   if (candidates.length === 0) {
     wf.error = 'All solver candidates failed'
     setStatus(wf, 'failed')
     return false
   }
 
-  wf.solverCandidates = candidates
+  wf.solverCandidates = candidates.map(({ success: _success, ...candidate }) => candidate)
 
-  // Store artifacts for each candidate
-  for (const c of candidates) {
-    wf.artifacts.push({
-      stage: 'solve',
-      path: `candidate-${c.index}`,
-      iteration: wf.iteration,
-      timestamp: Date.now(),
-      candidateIndex: c.index,
-      selected: false,
-    })
-  }
-
-  // ── Self-evaluation ──
+  let selected = [...candidates].sort((a, b) => a.index - b.index)[0]
   if (candidates.length > 1 && wf.phaseConfig?.selfEvaluation) {
     console.log(`[pods] Running self-evaluation on ${candidates.length} candidates`)
-    const evalPrompt = formatSelfEvalMessage(wf.task, candidates)
-
+    const evalPrompt = formatSelfEvalMessage(wf.task, wf.solverCandidates)
     const evalResult = await runAgentHeadless(wf.solver.agentId, wf.cwd, evalPrompt, {
       permissionMode: 'plan',
       timeoutMs: PLAN_TIMEOUT_MS,
     })
-
-    let selection: SelfEvalResult | null = null
-    if (evalResult.success && evalResult.output) {
-      selection = parseSelfEvalResult(evalResult.output, candidates.length)
-    }
+    const selection = evalResult.success && evalResult.output
+      ? parseSelfEvalResult(evalResult.output, wf.solverCandidates.length)
+      : null
 
     if (selection) {
       wf.selfEvaluation = selection
-      const selected = candidates.find(c => c.index === selection!.selected) || candidates[0]
-      wf.solver.output = selected.output
-      wf.solver.status = 'complete'
-
-      // Mark selected artifact
-      for (const a of wf.artifacts) {
-        if (a.stage === 'solve' && a.iteration === wf.iteration && a.candidateIndex === selected.index) {
-          a.selected = true
-        }
-      }
-
+      selected = candidates.find((candidate) => candidate.index === selection.selected) || selected
       console.log(`[pods] Self-eval selected candidate ${selection.selected} (confidence: ${selection.confidence})`)
     } else {
-      // Fallback: pick the first candidate
+      wf.selfEvaluation = {
+        selected: selected.index,
+        confidence: 0,
+        reasoning: 'Self-eval failed or returned invalid JSON — defaulting to first successful candidate',
+      }
       console.log('[pods] Self-eval failed to parse — selecting first candidate')
-      wf.solver.output = candidates[0].output
-      wf.solver.status = 'complete'
-      wf.selfEvaluation = { selected: 1, confidence: 0, reasoning: 'Self-eval parse failed — defaulting to first candidate' }
     }
-  } else {
-    // Single candidate survived or self-eval disabled
-    wf.solver.output = candidates[0].output
-    wf.solver.status = 'complete'
+  } else if (candidates.length === 1) {
+    wf.selfEvaluation = {
+      selected: selected.index,
+      confidence: 1,
+      reasoning: 'Only one candidate succeeded.',
+    }
+  }
+
+  wf.solver.output = selected.output
+  wf.solver.status = 'complete'
+  for (const artifact of wf.artifacts) {
+    if (artifact.stage === 'solve' && artifact.iteration === wf.iteration) {
+      artifact.selected = artifact.candidateIndex === selected.index
+    }
   }
 
   console.log(`[pods] Solver done with ${candidates.length}/${candidateCount} candidates`)
@@ -573,6 +597,13 @@ async function runReviewStage(wf: PodWorkflow): Promise<boolean> {
 
   wf.reviewer.status = 'complete'
   wf.reviewer.output = result.output
+  const critique = parseReviewerCritique(result.output)
+  podEvents.emit('reviewer-decision', {
+    workflowId: wf.id,
+    agentId: wf.solver.agentId,
+    verdict: critique.verdict,
+    reason: critique.summary,
+  })
   console.log(`[pods] Reviewer done (${Math.round(result.durationMs / 1000)}s)`)
   return true
 }
@@ -597,8 +628,7 @@ async function runExecuteStage(wf: PodWorkflow): Promise<{ passed: boolean }> {
   wf.executor.output = result.output
   console.log(`[pods] Executor done (${Math.round(result.durationMs / 1000)}s)`)
 
-  const output = (wf.executor.output || '').toUpperCase()
-  const passed = output.includes('RESULT: PASS') || (output.includes('PASS') && !output.includes('FAIL'))
+  const passed = parseTestPassed(wf.executor.output || '')
   return { passed }
 }
 
@@ -656,6 +686,51 @@ async function runWorkflow(wf: PodWorkflow): Promise<void> {
         return
       }
 
+      let latestFailureOutput = wf.executor.output || ''
+      while (wf.selfFixAttempts < wf.maxSelfFixes) {
+        const attemptNumber = wf.selfFixAttempts + 1
+        setStatus(wf, 'self-fixing')
+        wf.executor.status = 'active'
+        wf.selfFixAttempts = attemptNumber
+
+        const selfFixPrompt = formatSelfFixMessage(wf, latestFailureOutput)
+        const selfFixResult = await runAgentHeadless(wf.executor.agentId, wf.cwd, selfFixPrompt, {
+          timeoutMs: EXECUTE_TIMEOUT_MS,
+        })
+
+        if (!selfFixResult.success) {
+          latestFailureOutput = `Self-fix attempt failed: ${selfFixResult.error || 'Unknown executor error'}`
+          wf.executor.output = latestFailureOutput
+          wf.executor.status = 'failed'
+          wf.artifacts.push({
+            stage: 'self-fix',
+            path: `self-fix-attempt-${attemptNumber}-fail`,
+            iteration: wf.iteration,
+            timestamp: Date.now(),
+          })
+          savePods()
+          continue
+        }
+
+        wf.executor.status = 'complete'
+        wf.executor.output = selfFixResult.output
+        latestFailureOutput = selfFixResult.output || ''
+        const selfFixPassed = parseTestPassed(latestFailureOutput)
+        wf.artifacts.push({
+          stage: 'self-fix',
+          path: `self-fix-attempt-${attemptNumber}-${selfFixPassed ? 'pass' : 'fail'}`,
+          iteration: wf.iteration,
+          timestamp: Date.now(),
+        })
+        savePods()
+
+        if (selfFixPassed) {
+          setStatus(wf, 'complete')
+          appendWorkflowSummary(wf)
+          return
+        }
+      }
+
       // Tests failed — feedback loop
       if (i < wf.maxIterations) {
         setStatus(wf, 'feedback')
@@ -696,12 +771,14 @@ export function createPod(task: string, opts: CreatePodOpts = {}): PodWorkflow {
   let solver: string
   let reviewer: string
   let executor: string
+  let presetId = 'custom'
 
   const presets = getPresets()
 
   if (opts.presetId) {
     const preset = presets.find(p => p.id === opts.presetId)
     if (!preset) throw new Error(`Unknown preset: ${opts.presetId}`)
+    presetId = preset.id
     solver = opts.solverAgent || preset.solver
     reviewer = opts.reviewerAgent || preset.reviewer
     executor = opts.executorAgent || preset.executor
@@ -730,6 +807,7 @@ export function createPod(task: string, opts: CreatePodOpts = {}): PodWorkflow {
   const wf: PodWorkflow = {
     id: generateId(),
     name: opts.name || task.slice(0, 60),
+    presetId,
     status: 'pending',
     task,
     cwd,

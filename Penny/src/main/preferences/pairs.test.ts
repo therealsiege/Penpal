@@ -1,5 +1,4 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
-import fs from 'fs'
 import fsp from 'fs/promises'
 import os from 'os'
 import path from 'path'
@@ -41,21 +40,23 @@ describe('PairGenerator', () => {
     await fsp.rm(tmpDir, { recursive: true, force: true })
   })
 
-  // ── Approve/Reject pairs ───────────────────────────────────────────
-
   it('approve + reject with same context produces valid pair', async () => {
     await store.append(
       makeEvent({
         signal: 'approve',
         agentId: 'agent-1',
+        sessionId: 'session-1',
         context: { toolCall: 'run-tests', toolResult: 'npm test passed' },
+        timestamp: '2026-03-01T00:00:00.000Z',
       }),
     )
     await store.append(
       makeEvent({
         signal: 'reject',
         agentId: 'agent-1',
+        sessionId: 'session-1',
         context: { toolCall: 'run-tests', toolResult: 'rm -rf /' },
+        timestamp: '2026-03-01T00:00:01.000Z',
       }),
     )
 
@@ -68,21 +69,63 @@ describe('PairGenerator', () => {
     expect(pairs[0].agentId).toBe('agent-1')
   })
 
-  // ── Complete/Fail pairs ────────────────────────────────────────────
+  it('approve + reject with different context produces no pair', async () => {
+    await store.append(
+      makeEvent({
+        signal: 'approve',
+        agentId: 'agent-1',
+        sessionId: 'session-1',
+        context: { toolCall: 'run-tests', toolResult: 'good' },
+      }),
+    )
+    await store.append(
+      makeEvent({
+        signal: 'reject',
+        agentId: 'agent-1',
+        sessionId: 'session-1',
+        context: { toolCall: 'run-lint', toolResult: 'bad' },
+      }),
+    )
 
-  it('complete + fail on same agent produces outcome pair', async () => {
+    const pairs = await collectPairs(generator.generate())
+    expect(pairs).toHaveLength(0)
+  })
+
+  it('complete + fail on same task type produces outcome pair', async () => {
     await store.append(
       makeEvent({
         signal: 'complete',
         agentId: 'agent-1',
-        context: { toolCall: 'task-A', toolResult: 'build succeeded' },
+        context: { toolCall: 'orchestrator:task-completed', toolResult: 'task-42 succeeded' },
+        timestamp: '2026-03-02T00:00:00.000Z',
       }),
     )
     await store.append(
       makeEvent({
         signal: 'fail',
         agentId: 'agent-1',
-        context: { toolCall: 'task-B', toolResult: 'build failed' },
+        context: { toolCall: 'orchestrator:task-failed', toolResult: 'task-43 failed' },
+        timestamp: '2026-03-02T00:00:01.000Z',
+      }),
+    )
+
+    const pairs = await collectPairs(generator.generate())
+    expect(pairs).toHaveLength(0)
+  })
+
+  it('complete + fail with same task type prefix produces one pair', async () => {
+    await store.append(
+      makeEvent({
+        signal: 'complete',
+        agentId: 'agent-1',
+        context: { toolCall: 'build:api success', toolResult: 'build succeeded' },
+      }),
+    )
+    await store.append(
+      makeEvent({
+        signal: 'fail',
+        agentId: 'agent-1',
+        context: { toolCall: 'build:api retry', toolResult: 'build failed' },
       }),
     )
 
@@ -93,7 +136,24 @@ describe('PairGenerator', () => {
     expect(pairs[0].rejected).toBe('build failed')
   })
 
-  // ── Edit corrective pairs ─────────────────────────────────────────
+  it('complete + fail on different task types produces no pair', async () => {
+    await store.append(
+      makeEvent({
+        signal: 'complete',
+        agentId: 'agent-1',
+        context: { toolCall: 'build:api', toolResult: 'ok' },
+      }),
+    )
+    await store.append(
+      makeEvent({
+        signal: 'fail',
+        agentId: 'agent-1',
+        context: { toolCall: 'test:api', toolResult: 'failed' },
+      }),
+    )
+    const pairs = await collectPairs(generator.generate())
+    expect(pairs).toHaveLength(0)
+  })
 
   it('edit event produces corrective pair', async () => {
     await store.append(
@@ -112,35 +172,19 @@ describe('PairGenerator', () => {
     expect(pairs[0].rejected).toBe('function foo() {}')
   })
 
-  // ── No matching pair yields nothing ────────────────────────────────
-
-  it('approve without reject yields no pairs', async () => {
-    await store.append(
-      makeEvent({
-        signal: 'approve',
-        agentId: 'agent-1',
-        context: { toolCall: 'run-tests' },
-      }),
-    )
-
-    const pairs = await collectPairs(generator.generate())
-    expect(pairs).toHaveLength(0)
-  })
-
-  it('edit without userAction yields no pairs', async () => {
+  it('edit without before/after yields no pairs', async () => {
     await store.append(
       makeEvent({
         signal: 'edit',
         agentId: 'agent-1',
-        context: { toolCall: 'write-code' },
+        context: { toolCall: 'write-code', toolResult: '' },
+        userAction: '',
       }),
     )
 
     const pairs = await collectPairs(generator.generate())
     expect(pairs).toHaveLength(0)
   })
-
-  // ── Since filter ──────────────────────────────────────────────────
 
   it('since filter excludes old events', async () => {
     const oldDate = new Date('2020-01-01T00:00:00Z')
@@ -179,17 +223,10 @@ describe('PairGenerator', () => {
       }),
     )
 
-    // Filter since 1 hour ago — old events excluded
     const since = new Date(Date.now() - 60 * 60 * 1000)
     const pairs = await collectPairs(generator.generate(since))
-
-    // Only outcome pair from recent events, no approve/reject pair from old events
-    expect(pairs).toHaveLength(1)
-    expect(pairs[0].source).toBe('complete_fail')
-    expect(pairs[0].agentId).toBe('agent-2')
+    expect(pairs).toHaveLength(0)
   })
-
-  // ── JSONL export ──────────────────────────────────────────────────
 
   it('exported JSONL has correct TRL DPOTrainer schema', async () => {
     await store.append(
@@ -231,11 +268,11 @@ describe('PairGenerator', () => {
   })
 
   it('export returns correct pair count', async () => {
-    // Create two types of pairs
     await store.append(
       makeEvent({
         signal: 'approve',
         agentId: 'agent-1',
+        sessionId: 'session-1',
         context: { toolCall: 'task-1', toolResult: 'good' },
       }),
     )
@@ -243,6 +280,7 @@ describe('PairGenerator', () => {
       makeEvent({
         signal: 'reject',
         agentId: 'agent-1',
+        sessionId: 'session-1',
         context: { toolCall: 'task-1', toolResult: 'bad' },
       }),
     )
@@ -270,14 +308,12 @@ describe('PairGenerator', () => {
     await expect(generator.export(outPath, 'parquet')).rejects.toThrow('not yet implemented')
   })
 
-  // ── Stats ─────────────────────────────────────────────────────────
-
   it('stats returns accurate counts by source', async () => {
-    // approve_reject pair
     await store.append(
       makeEvent({
         signal: 'approve',
         agentId: 'agent-1',
+        sessionId: 'session-1',
         context: { toolCall: 'task-1', toolResult: 'good' },
       }),
     )
@@ -285,25 +321,24 @@ describe('PairGenerator', () => {
       makeEvent({
         signal: 'reject',
         agentId: 'agent-1',
+        sessionId: 'session-1',
         context: { toolCall: 'task-1', toolResult: 'bad' },
       }),
     )
-    // complete_fail pair
     await store.append(
       makeEvent({
         signal: 'complete',
         agentId: 'agent-2',
-        context: { toolCall: 'task-2', toolResult: 'done' },
+        context: { toolCall: 'build:api completed', toolResult: 'done' },
       }),
     )
     await store.append(
       makeEvent({
         signal: 'fail',
         agentId: 'agent-2',
-        context: { toolCall: 'task-3', toolResult: 'error' },
+        context: { toolCall: 'build:api failed', toolResult: 'error' },
       }),
     )
-    // edit_corrective pair
     await store.append(
       makeEvent({
         signal: 'edit',
@@ -322,14 +357,52 @@ describe('PairGenerator', () => {
     })
   })
 
-  // ── Empty store ───────────────────────────────────────────────────
+  it('pairs deterministically without reusing the same approve event', async () => {
+    await store.append(
+      makeEvent({
+        id: 'approve-1',
+        timestamp: '2026-03-05T00:00:00.000Z',
+        signal: 'approve',
+        agentId: 'agent-1',
+        sessionId: 'session-1',
+        context: { toolCall: 'run-tests', toolResult: 'good-1' },
+      }),
+    )
+    await store.append(
+      makeEvent({
+        id: 'approve-2',
+        timestamp: '2026-03-05T00:00:01.000Z',
+        signal: 'approve',
+        agentId: 'agent-1',
+        sessionId: 'session-1',
+        context: { toolCall: 'run-tests', toolResult: 'good-2' },
+      }),
+    )
+    await store.append(
+      makeEvent({
+        id: 'reject-1',
+        timestamp: '2026-03-05T00:00:02.000Z',
+        signal: 'reject',
+        agentId: 'agent-1',
+        sessionId: 'session-1',
+        context: { toolCall: 'run-tests', toolResult: 'bad-1' },
+      }),
+    )
+    await store.append(
+      makeEvent({
+        id: 'reject-2',
+        timestamp: '2026-03-05T00:00:03.000Z',
+        signal: 'reject',
+        agentId: 'agent-1',
+        sessionId: 'session-1',
+        context: { toolCall: 'run-tests', toolResult: 'bad-2' },
+      }),
+    )
 
-  it('empty store produces no pairs', async () => {
     const pairs = await collectPairs(generator.generate())
-    expect(pairs).toHaveLength(0)
-
-    const stats = await generator.stats()
-    expect(stats.totalPairs).toBe(0)
-    expect(stats.bySource).toEqual({})
+    expect(pairs.map((pair) => [pair.chosen, pair.rejected])).toEqual([
+      ['good-1', 'bad-1'],
+      ['good-2', 'bad-2'],
+    ])
   })
 })

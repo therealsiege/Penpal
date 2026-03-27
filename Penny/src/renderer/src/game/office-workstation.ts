@@ -30,9 +30,27 @@ import {
   CTX_RED,
   CTX_THRESHOLD_AMBER,
   CTX_THRESHOLD_RED,
+  CTX_METER_BASE_ALPHA,
+  CTX_METER_PULSE_ALPHA_MIN,
+  CTX_METER_PULSE_ALPHA_MAX,
+  CTX_METER_PULSE_MS,
+  CTX_ROT_SHAKE_PX,
+  CTX_ROT_SHAKE_MS,
+  CTX_ROT_SHAKE_REPEATS,
 } from './office-constants'
 import { WorkstationFactory } from './workstation-creation'
 import { WorkstationAnimator } from './workstation-animation'
+
+export function normalizeContextUtilization(utilization: number | null | undefined): number | null {
+  if (typeof utilization !== 'number' || !Number.isFinite(utilization)) return null
+  return Math.min(1, Math.max(0, utilization))
+}
+
+export function getContextMeterColor(utilization: number): number {
+  if (utilization >= CTX_THRESHOLD_RED) return CTX_RED
+  if (utilization >= CTX_THRESHOLD_AMBER) return CTX_AMBER
+  return CTX_GREEN
+}
 
 // ---------------------------------------------------------------------------
 // Host interface — callbacks into OfficeScene for cross-module calls
@@ -277,7 +295,8 @@ export class OfficeWorkstations {
     // Skip redundant updates — fingerprint the fields that affect visuals
     const blurbSnippet = agent.lastAssistantBlurb?.slice(0, 20) ?? ''
     const ctxRound = agent.contextUtilization != null ? (agent.contextUtilization * 100 | 0) : ''
-    const fp = `${agent.status}|${agent.sessionMode}|${agent.needsInteraction}|${agent.interactionType}|${agent.config.name}|${blurbSnippet}|${agent.uptime ?? ''}|${ctxRound}|${agent.contextRotDetected ?? ''}`
+    const streak = agent.xp?.currentStreak ?? 0
+    const fp = `${agent.status}|${agent.sessionMode}|${agent.needsInteraction}|${agent.interactionType}|${agent.config.name}|${blurbSnippet}|${agent.uptime ?? ''}|${ctxRound}|${agent.contextRotDetected ?? ''}|${streak}`
     if (ws.lastStateFingerprint === fp) {
       ws.state = agent
       return
@@ -974,33 +993,31 @@ export class OfficeWorkstations {
 
     // ── Context utilization meter ────────────────────────────────────────────
     if (ws.contextMeter) {
-      const utilization = agent.contextUtilization
+      const utilization = normalizeContextUtilization(agent.contextUtilization)
       if (utilization == null) {
+        ws.contextMeterPulseTween?.destroy()
+        ws.contextMeterPulseTween = undefined
+        ws.contextRotShakeTween?.destroy()
+        ws.contextRotShakeTween = undefined
+        if (ws.monitorSprite?.active) ws.monitorSprite.setX(ws.contextRotMonitorBaseX ?? 0)
+        ws.lastContextRotState = false
         ws.contextMeter.setVisible(false)
       } else {
         ws.contextMeter.setVisible(true)
         ws.contextMeter.setPercent(utilization, true)
 
-        // Color threshold: green → amber → red
-        const fillColor = utilization >= CTX_THRESHOLD_RED
-          ? CTX_RED
-          : utilization >= CTX_THRESHOLD_AMBER
-            ? CTX_AMBER
-            : CTX_GREEN
-        ws.contextMeter.setFillColor(fillColor)
-        ws.contextMeter.graphics.setAlpha(0.6)
-
         const rotDetected = agent.contextRotDetected === true
         const prevRot = ws.lastContextRotState ?? false
 
         if (rotDetected) {
+          ws.contextMeter.setFillColor(CTX_RED)
           // Pulsing red on the meter
           if (!ws.contextMeterPulseTween || !ws.contextMeterPulseTween.isPlaying()) {
             ws.contextMeterPulseTween?.destroy()
             ws.contextMeterPulseTween = this.scene.tweens.add({
               targets: ws.contextMeter.graphics,
-              alpha: { from: 0.4, to: 1.0 },
-              duration: 600,
+              alpha: { from: CTX_METER_PULSE_ALPHA_MIN, to: CTX_METER_PULSE_ALPHA_MAX },
+              duration: CTX_METER_PULSE_MS,
               yoyo: true,
               repeat: -1,
               ease: 'Sine.easeInOut',
@@ -1009,23 +1026,30 @@ export class OfficeWorkstations {
           // Subtle monitor shake — only on transition false→true
           if (!prevRot && ws.monitorSprite) {
             ws.contextRotShakeTween?.destroy()
-            const origX = ws.monitorSprite.x
+            const origX = ws.contextRotMonitorBaseX ?? ws.monitorSprite.x
+            ws.contextRotMonitorBaseX = origX
             ws.contextRotShakeTween = this.scene.tweens.add({
               targets: ws.monitorSprite,
-              x: { from: origX - 1, to: origX + 1 },
-              duration: 80,
+              x: { from: origX - CTX_ROT_SHAKE_PX, to: origX + CTX_ROT_SHAKE_PX },
+              duration: CTX_ROT_SHAKE_MS,
               yoyo: true,
-              repeat: 3,
+              repeat: CTX_ROT_SHAKE_REPEATS,
               ease: 'Sine.easeInOut',
               onComplete: () => { if (ws.monitorSprite?.active) ws.monitorSprite.setX(origX) },
             })
           }
         } else {
+          ws.contextMeter.setFillColor(getContextMeterColor(utilization))
+          ws.contextMeter.graphics.setAlpha(CTX_METER_BASE_ALPHA)
           // Rot cleared — kill pulse, restore alpha
           if (ws.contextMeterPulseTween) {
             ws.contextMeterPulseTween.destroy()
             ws.contextMeterPulseTween = undefined
-            ws.contextMeter.graphics.setAlpha(0.6)
+          }
+          if (ws.contextRotShakeTween) {
+            ws.contextRotShakeTween.destroy()
+            ws.contextRotShakeTween = undefined
+            if (ws.monitorSprite?.active) ws.monitorSprite.setX(ws.contextRotMonitorBaseX ?? 0)
           }
         }
         ws.lastContextRotState = rotDetected

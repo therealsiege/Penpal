@@ -16,22 +16,21 @@ export interface PairStats {
   bySource: Record<string, number>
 }
 
-type GroupedEvents = Map<string, PreferenceEvent[]>
+type PairSource = 'approve_reject' | 'complete_fail' | 'edit_corrective'
 
 export class PairGenerator {
   constructor(private readonly store: PreferenceStore) {}
 
   async *generate(since?: Date): AsyncIterable<DPOPair> {
-    const events: PreferenceEvent[] = []
-    const sinceMs = since?.getTime()
-    for await (const event of this.store.query()) {
-      if (sinceMs !== undefined && new Date(event.timestamp).getTime() < sinceMs) continue
-      events.push(event)
+    const events = await this.loadEvents(since)
+    const pairs = [
+      ...this.generateApproveRejectPairs(events),
+      ...this.generateOutcomePairs(events),
+      ...this.generateEditPairs(events),
+    ].sort(this.comparePair)
+    for (const pair of pairs) {
+      yield pair
     }
-
-    yield* this.generateApproveRejectPairs(events)
-    yield* this.generateOutcomePairs(events)
-    yield* this.generateEditPairs(events)
   }
 
   async export(path: string, format: 'jsonl' | 'parquet'): Promise<number> {
@@ -58,96 +57,175 @@ export class PairGenerator {
     return result
   }
 
-  // ── Approve/Reject pairs ─────────────────────────────────────────────
-  // Match approve + reject events with the same agentId and toolCall context
-  private *generateApproveRejectPairs(events: PreferenceEvent[]): Iterable<DPOPair> {
-    const grouped = this.groupByKey(events, (e) => {
-      if (e.signal !== 'approve' && e.signal !== 'reject') return null
-      if (!e.context.toolCall) return null
-      return `${e.agentId}::${e.context.toolCall}`
-    })
-
-    for (const [, group] of grouped) {
-      const approves = group.filter((e) => e.signal === 'approve')
-      const rejects = group.filter((e) => e.signal === 'reject')
-      if (approves.length === 0 || rejects.length === 0) continue
-
-      // Pair the first approve with the first reject in each context group
-      const approve = approves[0]
-      const reject = rejects[0]
-      yield {
-        prompt: approve.context.toolCall!,
-        chosen: approve.context.toolResult ?? approve.context.toolCall!,
-        rejected: reject.context.toolResult ?? reject.context.toolCall!,
-        source: 'approve_reject',
-        agentId: approve.agentId,
-        timestamp: approve.timestamp,
-      }
+  private async loadEvents(since?: Date): Promise<PreferenceEvent[]> {
+    const events: PreferenceEvent[] = []
+    const sinceMs = since?.getTime()
+    for await (const event of this.store.query()) {
+      const ts = this.parseTimestamp(event.timestamp)
+      if (ts === null) continue
+      if (sinceMs !== undefined && ts < sinceMs) continue
+      events.push(event)
     }
+    return events.sort(this.compareEvent)
   }
 
-  // ── Complete/Fail pairs ──────────────────────────────────────────────
-  // Match complete + fail events with the same agentId
-  private *generateOutcomePairs(events: PreferenceEvent[]): Iterable<DPOPair> {
-    const grouped = this.groupByKey(events, (e) => {
-      if (e.signal !== 'complete' && e.signal !== 'fail') return null
-      return e.agentId
-    })
+  private generateApproveRejectPairs(events: PreferenceEvent[]): DPOPair[] {
+    const pendingApproves = new Map<string, PreferenceEvent[]>()
+    const pairs: DPOPair[] = []
 
-    for (const [, group] of grouped) {
-      const completes = group.filter((e) => e.signal === 'complete')
-      const fails = group.filter((e) => e.signal === 'fail')
-      if (completes.length === 0 || fails.length === 0) continue
+    for (const event of events) {
+      if (event.signal !== 'approve' && event.signal !== 'reject') continue
+      const key = this.contextKey(event)
+      if (!key) continue
 
-      const complete = completes[0]
-      const fail = fails[0]
-      yield {
-        prompt: complete.context.toolCall ?? complete.agentId,
-        chosen: complete.context.toolResult ?? complete.context.toolCall ?? 'completed',
-        rejected: fail.context.toolResult ?? fail.context.toolCall ?? 'failed',
-        source: 'complete_fail',
-        agentId: complete.agentId,
-        timestamp: complete.timestamp,
+      if (event.signal === 'approve') {
+        const queue = pendingApproves.get(key)
+        if (queue) queue.push(event)
+        else pendingApproves.set(key, [event])
+        continue
       }
+
+      const queue = pendingApproves.get(key)
+      const approve = queue?.shift()
+      if (!approve) continue
+
+      const pair = this.buildPair(approve, event, 'approve_reject', approve.context.toolCall)
+      if (pair) pairs.push(pair)
     }
+
+    return pairs.sort(this.comparePair)
   }
 
-  // ── Edit (corrective) pairs ──────────────────────────────────────────
-  // Each edit event is a self-contained pair: user correction vs original output
-  private *generateEditPairs(events: PreferenceEvent[]): Iterable<DPOPair> {
+  private generateOutcomePairs(events: PreferenceEvent[]): DPOPair[] {
+    const pendingCompletes = new Map<string, PreferenceEvent[]>()
+    const pairs: DPOPair[] = []
+
+    for (const event of events) {
+      if (event.signal !== 'complete' && event.signal !== 'fail') continue
+      const taskType = this.taskTypeKey(event)
+      if (!taskType) continue
+      const key = `${event.agentId}::${taskType}`
+
+      if (event.signal === 'complete') {
+        const queue = pendingCompletes.get(key)
+        if (queue) queue.push(event)
+        else pendingCompletes.set(key, [event])
+        continue
+      }
+
+      const queue = pendingCompletes.get(key)
+      const complete = queue?.shift()
+      if (!complete) continue
+
+      const prompt = complete.context.toolCall ?? event.context.toolCall ?? taskType
+      const pair = this.buildPair(complete, event, 'complete_fail', prompt)
+      if (pair) pairs.push(pair)
+    }
+
+    return pairs.sort(this.comparePair)
+  }
+
+  private generateEditPairs(events: PreferenceEvent[]): DPOPair[] {
+    const pairs: DPOPair[] = []
     for (const event of events) {
       if (event.signal !== 'edit') continue
-      if (!event.userAction) continue
-
-      const original = event.context.toolResult ?? event.context.toolCall ?? ''
-      if (!original) continue
-
-      yield {
-        prompt: event.context.toolCall ?? event.agentId,
-        chosen: event.userAction,
-        rejected: original,
+      const prompt = event.context.toolCall ?? event.agentId
+      const chosen = this.cleanText(event.userAction)
+      const rejected = this.cleanText(event.context.toolResult)
+      const pair = this.makePair({
+        prompt,
+        chosen,
+        rejected,
         source: 'edit_corrective',
         agentId: event.agentId,
         timestamp: event.timestamp,
-      }
+      })
+      if (pair) pairs.push(pair)
+    }
+    return pairs.sort(this.comparePair)
+  }
+
+  private buildPair(
+    chosenEvent: PreferenceEvent,
+    rejectedEvent: PreferenceEvent,
+    source: PairSource,
+    promptCandidate?: string,
+  ): DPOPair | null {
+    const prompt = this.cleanText(promptCandidate ?? chosenEvent.context.toolCall ?? rejectedEvent.context.toolCall)
+    const chosen = this.cleanText(chosenEvent.context.toolResult ?? chosenEvent.context.toolCall)
+    const rejected = this.cleanText(rejectedEvent.context.toolResult ?? rejectedEvent.context.toolCall)
+
+    return this.makePair({
+      prompt,
+      chosen,
+      rejected,
+      source,
+      agentId: chosenEvent.agentId,
+      timestamp: chosenEvent.timestamp,
+    })
+  }
+
+  private makePair(input: DPOPair): DPOPair | null {
+    const ts = this.parseTimestamp(input.timestamp)
+    if (ts === null) return null
+    if (!input.prompt || !input.chosen || !input.rejected) return null
+    if (input.chosen === input.rejected) return null
+
+    return {
+      prompt: input.prompt,
+      chosen: input.chosen,
+      rejected: input.rejected,
+      source: input.source,
+      agentId: input.agentId,
+      timestamp: new Date(ts).toISOString(),
     }
   }
 
-  private groupByKey(
-    events: PreferenceEvent[],
-    keyFn: (e: PreferenceEvent) => string | null,
-  ): GroupedEvents {
-    const map: GroupedEvents = new Map()
-    for (const event of events) {
-      const key = keyFn(event)
-      if (key === null) continue
-      const group = map.get(key)
-      if (group) {
-        group.push(event)
-      } else {
-        map.set(key, [event])
-      }
-    }
-    return map
+  private contextKey(event: PreferenceEvent): string | null {
+    const toolCall = this.normalizeToken(event.context.toolCall)
+    if (!toolCall) return null
+    const session = this.normalizeToken(event.sessionId) ?? 'nosession'
+    return `${event.agentId}::${session}::${toolCall}`
+  }
+
+  private taskTypeKey(event: PreferenceEvent): string | null {
+    const toolCall = this.normalizeToken(event.context.toolCall)
+    if (!toolCall) return null
+    const first = toolCall.split(/\s+/)[0]
+    const cleaned = first.split(/[?:]/)[0]
+    return cleaned || null
+  }
+
+  private parseTimestamp(value: string): number | null {
+    const ms = new Date(value).getTime()
+    if (!Number.isFinite(ms)) return null
+    return ms
+  }
+
+  private cleanText(value: string | undefined): string {
+    return typeof value === 'string' ? value.trim() : ''
+  }
+
+  private normalizeToken(value: string | undefined): string | null {
+    const cleaned = this.cleanText(value).toLowerCase()
+    return cleaned.length > 0 ? cleaned : null
+  }
+
+  private compareEvent = (a: PreferenceEvent, b: PreferenceEvent): number => {
+    const aTs = this.parseTimestamp(a.timestamp) ?? 0
+    const bTs = this.parseTimestamp(b.timestamp) ?? 0
+    if (aTs !== bTs) return aTs - bTs
+    return a.id.localeCompare(b.id)
+  }
+
+  private comparePair = (a: DPOPair, b: DPOPair): number => {
+    const aTs = this.parseTimestamp(a.timestamp) ?? 0
+    const bTs = this.parseTimestamp(b.timestamp) ?? 0
+    if (aTs !== bTs) return aTs - bTs
+    if (a.source !== b.source) return a.source.localeCompare(b.source)
+    if (a.agentId !== b.agentId) return a.agentId.localeCompare(b.agentId)
+    if (a.prompt !== b.prompt) return a.prompt.localeCompare(b.prompt)
+    if (a.chosen !== b.chosen) return a.chosen.localeCompare(b.chosen)
+    return a.rejected.localeCompare(b.rejected)
   }
 }
