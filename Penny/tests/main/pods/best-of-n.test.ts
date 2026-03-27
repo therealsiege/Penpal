@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const runAgentHeadlessMock = vi.fn()
+const { runAgentHeadlessMock } = vi.hoisted(() => ({
+  runAgentHeadlessMock: vi.fn(),
+}))
 
 vi.mock('../../../src/main/sessions', () => ({
   runAgentHeadless: runAgentHeadlessMock,

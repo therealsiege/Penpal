@@ -3,6 +3,7 @@ import fs from 'fs'
 import path from 'path'
 import { runAgentHeadless } from './sessions'
 import { getAgentConfig, loadPodPresets } from './agents'
+import { getPhaseConfig, type PhaseConfig } from './pods/phase-config'
 import { podQualityCollector } from './evals/collectors/pod-quality'
 
 // ── Types ───────────────────────────────────────────────────────────────────
@@ -63,16 +64,10 @@ export interface ReviewerCritique {
   summary: string
 }
 
-export interface PhaseConfig {
-  candidates: number
-  selfEvaluation: boolean
-  confidenceThreshold: number
-  maxSelfFixes: number
-}
-
 export interface PodWorkflow {
   id: string
   name: string
+  presetId: string
   status: PodStatus
   task: string
   cwd: string
@@ -92,6 +87,8 @@ export interface PodWorkflow {
   phaseConfig?: PhaseConfig
   createdAt: number
   updatedAt: number
+  lastExecutorPassed?: boolean
+  podQualityRecordedAt?: number
   error?: string
   stageHistory: { stage: PodStatus; enteredAt: number }[]
 }
@@ -102,19 +99,6 @@ export interface PodPreset {
   reviewer: string
   executor: string
   description: string
-}
-
-// ── Phase Config ────────────────────────────────────────────────────────────
-
-const PHASE_CONFIGS: Record<string, PhaseConfig> = {
-  critical: { candidates: 3, selfEvaluation: true, confidenceThreshold: 0.8, maxSelfFixes: 2 },
-  high:     { candidates: 2, selfEvaluation: true, confidenceThreshold: 0.7, maxSelfFixes: 1 },
-  normal:   { candidates: 1, selfEvaluation: false, confidenceThreshold: 0.5, maxSelfFixes: 0 },
-  low:      { candidates: 1, selfEvaluation: false, confidenceThreshold: 0.5, maxSelfFixes: 0 },
-}
-
-function getPhaseConfig(priority?: string): PhaseConfig {
-  return PHASE_CONFIGS[priority || 'normal'] || PHASE_CONFIGS.normal
 }
 
 // ── Presets ──────────────────────────────────────────────────────────────────
@@ -183,6 +167,7 @@ function loadPods(): void {
     if (!fs.existsSync(PERSIST_PATH)) return
     const data = JSON.parse(fs.readFileSync(PERSIST_PATH, 'utf-8')) as PodWorkflow[]
     for (const wf of data) {
+      if (!wf.presetId) wf.presetId = 'custom'
       workflows.set(wf.id, wf)
       if (wf.id.startsWith('pod-')) {
         const num = parseInt(wf.id.split('-')[1] || '0', 10)
@@ -213,8 +198,31 @@ function setStatus(wf: PodWorkflow, status: PodStatus): void {
   wf.status = status
   wf.updatedAt = Date.now()
   wf.stageHistory.push({ stage: status, enteredAt: Date.now() })
+  maybeRecordPodQualityTerminalEvent(wf)
   podEvents.emit('status-change', wf)
   savePods()
+}
+
+function maybeRecordPodQualityTerminalEvent(wf: PodWorkflow): void {
+  if (wf.status !== 'complete' && wf.status !== 'failed') return
+  if (wf.podQualityRecordedAt) return
+
+  const completionTime_ms = Math.max(0, wf.updatedAt - wf.createdAt)
+  const iterations = Math.max(1, wf.iteration)
+  const completed = wf.status === 'complete'
+
+  podQualityCollector.record({
+    podId: wf.id,
+    presetId: wf.presetId || 'custom',
+    status: completed ? 'complete' : 'failed',
+    iterations,
+    firstPassAccepted: completed && iterations === 1,
+    executorPassed: completed && Boolean(wf.lastExecutorPassed),
+    selfFixed: completed && iterations > 1,
+    completionTime_ms,
+    timestamp: wf.updatedAt,
+  })
+  wf.podQualityRecordedAt = Date.now()
 }
 
 // ── Headless execution helpers ──────────────────────────────────────────────
@@ -630,6 +638,7 @@ async function runExecuteStage(wf: PodWorkflow): Promise<{ passed: boolean }> {
   console.log(`[pods] Executor done (${Math.round(result.durationMs / 1000)}s)`)
 
   const passed = parseTestPassed(wf.executor.output || '')
+  wf.lastExecutorPassed = passed
   return { passed }
 }
 

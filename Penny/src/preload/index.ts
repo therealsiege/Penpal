@@ -133,7 +133,7 @@ contextBridge.exposeInMainWorld('api', {
   githubListRepos: () => ipcRenderer.invoke('github:list-repos'),
   // Eval Dashboard
   evalsReportAll: () => ipcRenderer.invoke('evals:report-all').then(unwrap),
-  evalsReportAgent: (agentId: string) => ipcRenderer.invoke('evals:report-agent', agentId),
+  evalsReportAgent: (agentId: string) => ipcRenderer.invoke('evals:report-agent', agentId).then(unwrap),
   evalsStats: () => ipcRenderer.invoke('evals:stats').then(unwrap),
   // Preference APIs
   preferencesStats: () => ipcRenderer.invoke('preferences:stats'),
