@@ -1,6 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type { Task, AgentHealthStatus, OrchestratorStats, TaskPriority } from '../../main/orchestrator'
-import type { ContextEngineeredResponse } from '../response'
 
 // Mock the orchestrator module before importing handlers
 vi.mock('../../main/orchestrator', () => {
@@ -68,6 +67,7 @@ describe('orchestrator:enqueue', () => {
     expect(result).toHaveProperty('summary')
     expect(result).toHaveProperty('suggestions')
     expect(result).toHaveProperty('related_tools')
+    expect(result).toHaveProperty('_meta')
 
     expect(result.data.title).toBe('Fix login bug')
     expect(result.data.priority).toBe('high')
@@ -79,6 +79,8 @@ describe('orchestrator:enqueue', () => {
     expect(result.suggestions.length).toBeGreaterThan(0)
     expect(result.related_tools).toContain('orchestrator:queue')
     expect(result.related_tools).toContain('pod:create')
+    expect(result._meta.suggestions).toEqual(result.suggestions)
+    expect(result._meta.related_tools).toEqual(result.related_tools)
   })
 
   it('defaults project to ~/sidekick when not provided', async () => {
@@ -92,6 +94,21 @@ describe('orchestrator:enqueue', () => {
 
     expect(result.data.project).toBe('~/sidekick')
     expect(result.data.priority).toBe('normal')
+    expect(result._meta.suggestions).toEqual(result.suggestions)
+  })
+
+  it('falls back to normal priority when invalid priority is provided', async () => {
+    mockGetTaskQueue.mockReturnValue([])
+    mockGetAgentHealthStatuses.mockResolvedValue([])
+
+    const result = await handleEnqueue({
+      title: 'Invalid priority task',
+      description: 'Priority should fallback',
+      priority: 'urgent',
+    })
+
+    expect(result.data.priority).toBe('normal')
+    expect(result._meta.related_tools).toContain('orchestrator:queue')
   })
 
   it('suggests pod:create when idle agents are available', async () => {
@@ -126,8 +143,10 @@ describe('orchestrator:queue', () => {
 
     expect(result.data.tasks).toHaveLength(3)
     expect(result.data.stats).toBeDefined()
+    expect(result.data.idle_agents).toEqual([])
     expect(result.summary).toContain('3 task(s)')
     expect(result.related_tools).toContain('orchestrator:enqueue')
+    expect(result._meta.suggestions).toEqual(result.suggestions)
   })
 
   it('filters by status when provided', async () => {
@@ -144,6 +163,22 @@ describe('orchestrator:queue', () => {
     expect(result.data.tasks).toHaveLength(1)
     expect(result.data.tasks[0].status).toBe('queued')
     expect(result.summary).toContain('queued')
+    expect(result._meta.related_tools).toContain('orchestrator:agent-health')
+  })
+
+  it('returns empty tasks with sane summary when filter has no matches', async () => {
+    const mockTasks: Task[] = [
+      { id: 't-1', title: 'A', description: '', project: '~/sidekick', priority: 'normal', status: 'queued', requiredSkills: [], source: 'api', createdAt: Date.now(), retryCount: 0, maxRetries: 1 },
+    ] as Task[]
+    mockGetTaskQueue.mockReturnValue(mockTasks)
+    mockGetOrchestratorStats.mockReturnValue({ queueDepth: 1, activeTasks: 0, completedToday: 0, failedToday: 0, totalProcessed: 0 })
+    mockGetAgentHealthStatuses.mockResolvedValue([])
+
+    const result = await handleQueue({ status: 'failed' })
+
+    expect(result.data.tasks).toHaveLength(0)
+    expect(result.summary).toContain('0 failed task(s)')
+    expect(result._meta.suggestions).toEqual(result.suggestions)
   })
 
   it('suggests pod:create when critical tasks + idle agents', async () => {
@@ -160,6 +195,7 @@ describe('orchestrator:queue', () => {
 
     const hasCriticalSuggestion = result.suggestions.some(s => s.includes('critical') && s.includes('pod:create'))
     expect(hasCriticalSuggestion).toBe(true)
+    expect(result._meta.related_tools).toContain('pod:create')
   })
 })
 
@@ -182,6 +218,7 @@ describe('orchestrator:agent-health', () => {
     expect(result.summary).toContain('1 dead')
     expect(result.summary).toContain('2 idle')
     expect(result.related_tools).toContain('orchestrator:queue')
+    expect(result._meta.related_tools).toEqual(result.related_tools)
   })
 
   it('suggests restarting dead agents', async () => {
@@ -194,6 +231,7 @@ describe('orchestrator:agent-health', () => {
 
     const hasRestartSuggestion = result.suggestions.some(s => s.includes('dead') && s.includes('Ravi Patel'))
     expect(hasRestartSuggestion).toBe(true)
+    expect(result._meta.suggestions).toEqual(result.suggestions)
   })
 
   it('suggests checking warning agents', async () => {
@@ -206,6 +244,7 @@ describe('orchestrator:agent-health', () => {
 
     const hasWarningSuggestion = result.suggestions.some(s => s.includes('Kai Tanaka') && s.includes('High memory'))
     expect(hasWarningSuggestion).toBe(true)
+    expect(result._meta.related_tools).toContain('orchestrator:enqueue')
   })
 
   it('suggests assigning tasks when idle agents + queued tasks', async () => {
@@ -218,6 +257,7 @@ describe('orchestrator:agent-health', () => {
 
     const hasAssignSuggestion = result.suggestions.some(s => s.includes('idle') && s.includes('queued'))
     expect(hasAssignSuggestion).toBe(true)
+    expect(result._meta.related_tools).toContain('pod:create')
   })
 
   it('returns benign suggestion when all healthy and no tasks', async () => {
@@ -229,5 +269,6 @@ describe('orchestrator:agent-health', () => {
     const result = await handleAgentHealth()
 
     expect(result.suggestions).toContain('All agents healthy, no action needed')
+    expect(result._meta.suggestions).toEqual(result.suggestions)
   })
 })

@@ -9,6 +9,10 @@ export interface ContextEngineeredResponse<T> {
   summary: string
   suggestions: string[]
   related_tools: string[]
+  _meta: {
+    suggestions: string[]
+    related_tools: string[]
+  } & Record<string, unknown>
 }
 
 export function wrapResponse<T>(
@@ -16,6 +20,13 @@ export function wrapResponse<T>(
   summary: string,
   suggestions: string[],
   related_tools: string[],
+  meta: Record<string, unknown> = {},
 ): ContextEngineeredResponse<T> {
-  return { data, summary, suggestions, related_tools }
+  return {
+    data,
+    summary,
+    suggestions,
+    related_tools,
+    _meta: { suggestions, related_tools, ...meta },
+  }
 }

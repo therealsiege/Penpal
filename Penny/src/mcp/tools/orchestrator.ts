@@ -69,15 +69,27 @@ export async function handleEnqueue(params: {
 
 export async function handleQueue(params: {
   status?: string
-}): Promise<ContextEngineeredResponse<{ tasks: Task[]; stats: OrchestratorStats }>> {
+}): Promise<ContextEngineeredResponse<{
+  tasks: Task[]
+  stats: OrchestratorStats
+  idle_agents: Array<Pick<AgentHealthStatus, 'agentId' | 'name' | 'status' | 'activeTasks'>>
+}>> {
+  const validStatuses = ['queued', 'assigned', 'active', 'completed', 'failed', 'cancelled']
   let tasks = getTaskQueue()
-  if (params.status) {
-    tasks = tasks.filter(t => t.status === params.status)
+  const statusFilter = validStatuses.includes(params.status ?? '') ? params.status : undefined
+  if (statusFilter) {
+    tasks = tasks.filter(t => t.status === statusFilter)
   }
 
   const stats = getOrchestratorStats()
   const healthStatuses = await getAgentHealthStatuses()
   const idleAgents = healthStatuses.filter(a => a.alive && a.activeTasks === 0)
+  const idleAgentContext = idleAgents.map(a => ({
+    agentId: a.agentId,
+    name: a.name,
+    status: a.status,
+    activeTasks: a.activeTasks,
+  }))
   const criticalQueued = tasks.filter(t => t.status === 'queued' && t.priority === 'critical')
 
   const suggestions: string[] = []
@@ -94,15 +106,18 @@ export async function handleQueue(params: {
   }
 
   const parts: string[] = []
-  if (params.status) {
-    parts.push(`${tasks.length} ${params.status} task(s)`)
+  if (statusFilter) {
+    parts.push(`${tasks.length} ${statusFilter} task(s)`)
+  } else if (params.status) {
+    parts.push(`${tasks.length} task(s)`)
+    suggestions.push(`Ignored unsupported status "${params.status}" — use orchestrator:queue without filter or a valid status`)
   } else {
     parts.push(`${tasks.length} task(s): ${stats.queueDepth} queued, ${stats.activeTasks} active`)
   }
   parts.push(`${idleAgents.length} agent(s) idle`)
 
   return wrapResponse(
-    { tasks, stats },
+    { tasks, stats, idle_agents: idleAgentContext },
     parts.join('. ') + '.',
     suggestions,
     ['orchestrator:enqueue', 'orchestrator:agent-health', 'pod:create'],
@@ -191,6 +206,7 @@ toolRegistry.register({
     properties: {
       status: {
         type: 'string',
+        enum: ['queued', 'assigned', 'active', 'completed', 'failed', 'cancelled'],
         description: 'Filter by status: queued, assigned, active, completed, failed, cancelled',
       },
     },
