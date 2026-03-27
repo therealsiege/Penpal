@@ -121,10 +121,11 @@ export class WorkstationAnimator {
     if (!ws.evalGlow) return
     const agentId = ws.state?.config.id
     if (!agentId) return
-    const cached = this.evalCache.has(agentId) ? this.evalCache.get(agentId)! : undefined
-    if (cached === ws.evalSuccessRate) return
-    ws.evalSuccessRate = cached
-    ws.evalGlow.setFillStyle(evalGlowColor(cached))
+    const cached = this.evalCache.has(agentId) ? this.evalCache.get(agentId) : undefined
+    const nextSuccessRate = typeof cached === 'number' ? cached : undefined
+    if (nextSuccessRate === ws.evalSuccessRate) return
+    ws.evalSuccessRate = nextSuccessRate
+    ws.evalGlow.setFillStyle(evalGlowColor(nextSuccessRate))
   }
 
   // ---------------------------------------------------------------------------
