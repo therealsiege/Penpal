@@ -10,6 +10,7 @@ import { creditManager, type CosmeticItem } from './credits'
 import { leaderboardManager } from './leaderboard'
 import { seasonManager, type SeasonChallenge } from './seasons'
 import { SPRITESHEET_KEYS, ICON_FRAMES, IMAGE_KEYS } from './office-asset-keys'
+import { activeTheme } from './office-theme'
 
 // ---------------------------------------------------------------------------
 // SeasonHUD
@@ -31,6 +32,9 @@ export class SeasonHUD {
   // Leaderboard overlay (toggle with L key)
   private leaderboardContainer: Phaser.GameObjects.Container | null = null
   leaderboardVisible = false
+
+  // Track previous leaderboard agent IDs for new-entry highlight detection
+  private _prevLeaderboardAgentIds: Set<string> = new Set()
 
   // Challenge checklist overlay
   private challengeContainer: Phaser.GameObjects.Container | null = null
@@ -100,7 +104,7 @@ export class SeasonHUD {
       } else {
         this.progressBar.clear()
         // Track
-        this.progressBar.fillStyle(0x141a22, 0.8)
+        this.progressBar.fillStyle(activeTheme.roomFloor, 0.8)
         this.progressBar.fillRoundedRect(0, 0, 80, 6, 3)
         // Fill
         if (pct > 0) {
@@ -249,9 +253,9 @@ export class SeasonHUD {
 
     // Background — sized dynamically
     const bg = this.scene.add.graphics()
-    bg.fillStyle(0x0a0e14, 0.92)
+    bg.fillStyle(activeTheme.bg, 0.92)
     bg.fillRoundedRect(0, 0, panelW, panelH, 6)
-    bg.lineStyle(1, 0x2a3440, 0.8)
+    bg.lineStyle(1, activeTheme.panelStroke, 0.8)
     bg.strokeRoundedRect(0, 0, panelW, panelH, 6)
     this.leaderboardContainer.add(bg)
 
@@ -269,7 +273,7 @@ export class SeasonHUD {
       this.leaderboardContainer.add(div)
     } else {
       const divGfx = this.scene.add.graphics()
-      divGfx.lineStyle(1, 0x2a3440, 0.6)
+      divGfx.lineStyle(1, activeTheme.panelStroke, 0.6)
       divGfx.lineBetween(10, 24, panelW - 10, 24)
       this.leaderboardContainer.add(divGfx)
     }
@@ -295,11 +299,30 @@ export class SeasonHUD {
     const rankings = leaderboardManager.getRankings().slice(0, 10)
     const mvp = leaderboardManager.getWeeklyMVP()
     const rowH = 26
+    const panelW = 210
+
+    // Build current agent ID set for new-entry detection
+    const currentAgentIds = new Set(rankings.map(e => e.agentId))
 
     rankings.forEach((entry, i) => {
       const isMVP = mvp?.agentId === entry.agentId
       const color = entry.rank <= 3 ? '#fbbf24' : '#8a96a4'
       const rowY = 28 + i * rowH
+
+      // New entry highlight — gold flash for agents not in previous snapshot
+      const isNewEntry = this._prevLeaderboardAgentIds.size > 0 &&
+        !this._prevLeaderboardAgentIds.has(entry.agentId)
+      if (isNewEntry) {
+        const rowBg = this.scene.add.rectangle(panelW / 2, rowY + 8, panelW - 8, rowH - 2, 0xfbbf24, 0)
+        this.leaderboardContainer!.add(rowBg)
+        this.scene.tweens.add({
+          targets: rowBg,
+          alpha: { from: 0.15, to: 0 },
+          duration: 800,
+          ease: 'Power2',
+          onComplete: () => rowBg.destroy(),
+        })
+      }
 
       // Medal sprite for top 3, text number for the rest
       if (entry.rank >= 1 && entry.rank <= 3) {
@@ -308,6 +331,16 @@ export class SeasonHUD {
         const medalSprite = this.scene.add.sprite(16, rowY + 6, SPRITESHEET_KEYS.GAME_ICONS, medalFrame)
           .setScale(0.32).setOrigin(0.5)
         this.leaderboardContainer!.add(medalSprite)
+
+        // Medal pulse animation — staggered by rank
+        this.scene.tweens.add({
+          targets: medalSprite,
+          scaleX: 0.42, scaleY: 0.42,
+          duration: 300,
+          yoyo: true,
+          delay: entry.rank * 100,
+          ease: 'Sine.easeInOut',
+        })
       } else {
         const rankNum = this.scene.add.text(8, rowY, `${entry.rank}.`, {
           fontSize: '7px', fontFamily: 'system-ui, monospace', color: '#5a6a7a',
@@ -323,6 +356,21 @@ export class SeasonHUD {
         resolution: 2,
       })
       this.leaderboardContainer!.add(nameLabel)
+
+      // MVP crown icon — subtle bobbing animation
+      if (isMVP) {
+        const mvpIcon = this.scene.add.sprite(panelW - 20, rowY + 6, SPRITESHEET_KEYS.GAME_ICONS, ICON_FRAMES.MEDAL_GOLD)
+          .setScale(0.28)
+        this.leaderboardContainer!.add(mvpIcon)
+        this.scene.tweens.add({
+          targets: mvpIcon,
+          y: rowY + 4,
+          duration: 1500,
+          yoyo: true,
+          repeat: -1,
+          ease: 'Sine.easeInOut',
+        })
+      }
 
       // Stats line: XP | tasks | rank title
       const statsColor = entry.rank <= 3 ? '#7a8494' : '#4a5464'
@@ -342,6 +390,9 @@ export class SeasonHUD {
       }).setOrigin(0.5, 0)
       this.leaderboardContainer!.add(empty)
     }
+
+    // Update previous snapshot for next refresh cycle
+    this._prevLeaderboardAgentIds = currentAgentIds
   }
 
   private _hideLeaderboard(): void {
@@ -376,9 +427,9 @@ export class SeasonHUD {
       .setAlpha(0)
 
     const bg = this.scene.add.graphics()
-    bg.fillStyle(0x0a0e14, 0.92)
+    bg.fillStyle(activeTheme.bg, 0.92)
     bg.fillRoundedRect(0, 0, 210, panelH, 6)
-    bg.lineStyle(1, 0x2a3440, 0.8)
+    bg.lineStyle(1, activeTheme.panelStroke, 0.8)
     bg.strokeRoundedRect(0, 0, 210, panelH, 6)
     this.challengeContainer.add(bg)
 
@@ -395,7 +446,7 @@ export class SeasonHUD {
       this.challengeContainer.add(div)
     } else {
       const divGfx = this.scene.add.graphics()
-      divGfx.lineStyle(1, 0x2a3440, 0.6)
+      divGfx.lineStyle(1, activeTheme.panelStroke, 0.6)
       divGfx.lineBetween(10, 22, 200, 22)
       this.challengeContainer.add(divGfx)
     }
@@ -410,6 +461,18 @@ export class SeasonHUD {
       const icon = this.scene.add.sprite(18, rowY + 5, SPRITESHEET_KEYS.GAME_ICONS, iconFrame)
         .setScale(0.30).setOrigin(0.5)
       this.challengeContainer!.add(icon)
+
+      // Scale-pop animation for completed challenge checkmarks
+      if (ch.completed) {
+        this.scene.tweens.add({
+          targets: icon,
+          scaleX: 0.5, scaleY: 0.5,
+          duration: 200,
+          yoyo: true,
+          delay: i * 50,
+          ease: 'Back.easeOut',
+        })
+      }
 
       const row = this.scene.add.text(28, rowY, `${ch.description}${progress}`, {
         fontSize: '7px', fontFamily: 'system-ui, monospace', color,
@@ -458,9 +521,9 @@ export class SeasonHUD {
 
     // Background
     const bg = this.scene.add.graphics()
-    bg.fillStyle(0x0a0e14, 0.92)
+    bg.fillStyle(activeTheme.bg, 0.92)
     bg.fillRoundedRect(0, 0, panelW, panelH, 6)
-    bg.lineStyle(1, 0x2a3440, 0.8)
+    bg.lineStyle(1, activeTheme.panelStroke, 0.8)
     bg.strokeRoundedRect(0, 0, panelW, panelH, 6)
     this.shopContainer.add(bg)
 
@@ -479,7 +542,7 @@ export class SeasonHUD {
       this.shopContainer.add(div)
     } else {
       const divGfx = this.scene.add.graphics()
-      divGfx.lineStyle(1, 0x2a3440, 0.6)
+      divGfx.lineStyle(1, activeTheme.panelStroke, 0.6)
       divGfx.lineBetween(10, 24, panelW - 10, 24)
       this.shopContainer.add(divGfx)
     }

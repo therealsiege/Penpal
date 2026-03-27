@@ -2,6 +2,7 @@ import Phaser from 'phaser'
 import type { Room } from './office-types'
 import { WORLD_MARGIN } from './office-constants'
 import { SPRITESHEET_KEYS, EFFECT_ANIM_KEYS, ITEM_FRAMES, ICON_FRAMES } from './office-asset-keys'
+import { activeTheme } from './office-theme'
 
 // ---------------------------------------------------------------------------
 // Host interface — what OfficeTerrain needs from OfficeScene
@@ -481,7 +482,7 @@ export class OfficeTerrain {
         g.fillStyle(0x4a5a6a, 0.6)
         g.fillRect(lx - 1, lampY - 38, 16, 2)
         // Lamp housing
-        g.fillStyle(0x3a4858, 0.6)
+        g.fillStyle(activeTheme.wallInner, 0.6)
         g.fillRect(lx + 7, lampY - 41, 14, 6)
         // Lamp bulb sprite — no ground glow, no ADD blend
         const bulb = this.scene.add.sprite(lx + 14, lampY - 38, SPRITESHEET_KEYS.GAME_ICONS, ICON_FRAMES.CIRCLE_YELLOW)
@@ -509,7 +510,7 @@ export class OfficeTerrain {
       for (let si = 0; si < 3; si++) {
         g.fillStyle(0xd4a017, 0.15)
         g.fillRect(subX - sbW / 2 + 4 + si * 20, subY + sbH / 2 - 8, 10, 6)
-        g.fillStyle(0x0a0e14, 0.15)
+        g.fillStyle(activeTheme.bg, 0.15)
         g.fillRect(subX - sbW / 2 + 14 + si * 20, subY + sbH / 2 - 8, 6, 6)
       }
       // Power indicator lights
@@ -554,7 +555,7 @@ export class OfficeTerrain {
         const sx = shedX + si * 50
         const sy = shedY + (si % 2) * 20
         const shW = 72, shH = 48
-        g.fillStyle(0x1a2230, 0.85)
+        g.fillStyle(activeTheme.ventFill, 0.85)
         g.fillRect(sx - shW / 2, sy - shH / 2, shW, shH)
         g.lineStyle(1, 0x2a3a4a, 0.4)
         g.strokeRect(sx - shW / 2, sy - shH / 2, shW, shH)
@@ -623,12 +624,12 @@ export class OfficeTerrain {
       g.fillStyle(0x4a5a6a, 0.4)
       g.fillRect(signX - 1, signY - 26, 2, 26)
       // Sign board
-      g.fillStyle(0x0a0e14, 0.85)
+      g.fillStyle(activeTheme.bg, 0.85)
       g.fillRoundedRect(signX - 30, signY - 42, 60, 16, 2)
       g.lineStyle(1, MAKO_CYAN, 0.2)
       g.strokeRoundedRect(signX - 30, signY - 42, 60, 16, 2)
       const signText = this.scene.add.text(signX, signY - 34, sectorNames[sectorIdx], {
-        fontSize: '5px', fontFamily: 'monospace', color: '#00e5ff', resolution: 2,
+        fontSize: '5px', fontFamily: 'monospace', color: activeTheme.accentText, resolution: 2,
       }).setOrigin(0.5).setAlpha(0.75).setDepth(-9)
       this.terrainDecos.push(signText)
       sectorIdx++
@@ -704,10 +705,10 @@ export class OfficeTerrain {
       for (let dx = WORLD_MARGIN; dx < worldW; dx += 60 + rand() * 40) {
         const drainX = dx
         const drainY = streetY + STREET_W / 2 + 2
-        g.fillStyle(0x0a0e14, 0.4)
+        g.fillStyle(activeTheme.bg, 0.4)
         g.fillRect(drainX - 14, drainY, 28, 6)
         // Grate lines
-        g.lineStyle(0.5, 0x2a3440, 0.3)
+        g.lineStyle(0.5, activeTheme.wall, 0.3)
         for (let gl = -10; gl <= 10; gl += 5) {
           g.lineBetween(drainX + gl, drainY, drainX + gl, drainY + 6)
         }
@@ -760,6 +761,35 @@ export class OfficeTerrain {
             g.fillStyle(0x3a4a5a, 0.5)
             g.fillRect(bx_ + 15 + vi * 35, by_ + 10, 14, 8)
           }
+          // AC unit boxes on roof
+          for (const acOff of [bx_ + bw - 50, bx_ + bw - 25]) {
+            g.fillStyle(0x1a2530, 0.6)
+            g.fillRect(acOff, by_ + 8, 16, 10)
+            g.lineStyle(0.5, 0x3a4a5a, 0.35)
+            g.strokeRect(acOff, by_ + 8, 16, 10)
+            // Fan circle inside
+            g.lineStyle(0.5, 0x4a5a6a, 0.4)
+            g.strokeCircle(acOff + 8, by_ + 13, 3)
+          }
+          // Antenna stubs on roof edge
+          g.lineStyle(0.8, 0x4a5a6a, 0.35)
+          g.lineBetween(bx_ + 8, by_, bx_ + 8, by_ - 10)
+          g.lineBetween(bx_ + 18, by_, bx_ + 18, by_ - 8)
+          g.lineBetween(bx_ + 26, by_, bx_ + 26, by_ - 12)
+          // Loading bay door markings on front face
+          for (let di = 0; di < 2; di++) {
+            const dx = bx_ + 20 + di * 50
+            const dy = by_ + bh - 18
+            g.fillStyle(0x0e1620, 0.5)
+            g.fillRect(dx, dy, 28, 16)
+            g.lineStyle(0.6, 0x2a3a4a, 0.4)
+            g.strokeRect(dx, dy, 28, 16)
+          }
+          // Exhaust pipe on right side
+          g.fillStyle(0x2a3444, 0.5)
+          g.fillRect(bx_ + bw - 8, by_ - 14, 5, 16)
+          g.lineStyle(0.5, 0x3a4a5a, 0.3)
+          g.strokeRect(bx_ + bw - 8, by_ - 14, 5, 16)
           // Status light
           const lightFrame = (col + row) % 2 === 0 ? ICON_FRAMES.CIRCLE_GREEN : ICON_FRAMES.CIRCLE_RED
           const light = this.scene.add.sprite(bx_ + bw - 12, by_ + bh - 10, SPRITESHEET_KEYS.GAME_ICONS, lightFrame)
@@ -772,6 +802,13 @@ export class OfficeTerrain {
           this.terrainDecos.push(label)
 
         } else if (zType === 'storage') {
+          // Loading dock platform — wide dark slab behind containers
+          g.fillStyle(activeTheme.ventFill, 0.5)
+          g.fillRect(cx - 50, cy + 14, 100, 8)
+          // Yellow dock edge marking
+          g.lineStyle(1, 0xd4a017, 0.35)
+          g.lineBetween(cx - 50, cy + 14, cx + 50, cy + 14)
+
           // Cargo containers — orderly row of 3
           const containerColors = [0x2a4a3a, 0x4a2a2a, 0x2a2a4a]
           const cw = 40, ch = 16
@@ -789,8 +826,29 @@ export class OfficeTerrain {
               g.lineBetween(ccx + ri, ccy + 1, ccx + ri, ccy + ch - 1)
             }
           }
+
+          // Pallet markings on the ground near containers
+          g.lineStyle(0.5, 0x3a4a5a, 0.25)
+          g.strokeRect(cx - 60, cy + 10, 16, 10)
+          g.strokeRect(cx - 10, cy + 12, 16, 10)
+          g.strokeRect(cx + 35, cy + 9, 16, 10)
+
+          // Forklift silhouette — simple geometric shape
+          const fkx = cx + 58, fky = cy - 2
+          // Body
+          g.fillStyle(0x3a4a5a, 0.3)
+          g.fillRect(fkx, fky, 12, 8)
+          // Wheels
+          g.fillStyle(activeTheme.wall, 0.35)
+          g.fillCircle(fkx + 2, fky + 10, 2)
+          g.fillCircle(fkx + 10, fky + 10, 2)
+          // Fork prongs extending forward
+          g.fillStyle(0x4a5a6a, 0.25)
+          g.fillRect(fkx - 8, fky + 5, 8, 1.5)
+          g.fillRect(fkx - 8, fky + 7, 8, 1.5)
+
           // Zone label
-          const sLabel = this.scene.add.text(cx, cy + 16, 'STORAGE', {
+          const sLabel = this.scene.add.text(cx, cy + 26, 'STORAGE', {
             fontSize: '4px', fontFamily: 'monospace', color: '#3a4a5a', resolution: 2,
           }).setOrigin(0.5).setDepth(-9).setAlpha(0.5)
           this.terrainDecos.push(sLabel)
@@ -819,27 +877,115 @@ export class OfficeTerrain {
           g.strokeRect(gx_, gy_, 40, 28)
           // Vent slats
           for (let sl = 0; sl < 2; sl++) {
-            g.fillStyle(0x0a0e14, 0.35)
+            g.fillStyle(activeTheme.bg, 0.35)
             g.fillRect(gx_ + 5, gy_ + 5 + sl * 10, 30, 3)
           }
 
-        } else if (zType === 'green') {
-          // Small park area — trees and bench
-          g.fillStyle(0x1a2a1a, 0.12)
-          g.fillCircle(cx, cy, 50)
-          // Two trees
-          for (const off of [-20, 20]) {
-            g.fillStyle(0x3a2a1a, 0.35)
-            g.fillRect(cx + off - 2, cy - 2, 4, 14)
-            g.fillStyle(0x2a5a3a, 0.15)
-            g.fillCircle(cx + off, cy - 8, 12)
+          // ── Power line poles ──
+          const pole1X = cx + 14, pole1Y = cy - 4
+          const pole2X = gx_ + 10, pole2Y = gy_ - 2
+          const poleW = 3, poleH = 20, crossW = 12
+          // Pole 1 (near transformer)
+          g.fillStyle(0x3a4a5a, 0.45)
+          g.fillRect(pole1X - poleW / 2, pole1Y - poleH, poleW, poleH)
+          g.fillRect(pole1X - crossW / 2, pole1Y - poleH + 3, crossW, 2)
+          // Pole 2 (near generator)
+          g.fillStyle(0x3a4a5a, 0.45)
+          g.fillRect(pole2X - poleW / 2, pole2Y - poleH, poleW, poleH)
+          g.fillRect(pole2X - crossW / 2, pole2Y - poleH + 3, crossW, 2)
+
+          // ── Wire connecting poles (slight sag) ──
+          const wireY1 = pole1Y - poleH + 4
+          const wireY2 = pole2Y - poleH + 4
+          const wireMidX = (pole1X + pole2X) / 2
+          const wireMidY = (wireY1 + wireY2) / 2 + 4 // sag
+          g.lineStyle(0.6, 0x5a6a7a, 0.3)
+          g.lineBetween(pole1X, wireY1, wireMidX, wireMidY)
+          g.lineBetween(wireMidX, wireMidY, pole2X, wireY2)
+
+          // ── Insulator dots on crossarms ──
+          for (const ix of [pole1X - 4, pole1X + 4, pole2X - 4, pole2X + 4]) {
+            const iy = ix <= pole1X + 4 ? pole1Y - poleH + 3 : pole2Y - poleH + 3
+            const ins = this.scene.add.sprite(ix, iy, SPRITESHEET_KEYS.GAME_ICONS, ICON_FRAMES.CIRCLE_GREY)
+              .setScale(0.08).setAlpha(0.5).setDepth(-9)
+            this.terrainDecos.push(ins)
           }
-          // Bench
-          g.fillStyle(0x4a3a2a, 0.4)
-          g.fillRect(cx - 14, cy + 20, 28, 4)
-          g.fillStyle(0x3a4a5a, 0.35)
-          g.fillRect(cx - 12, cy + 24, 2, 3)
-          g.fillRect(cx + 10, cy + 24, 2, 3)
+
+          // ── Ground cable tray ──
+          const trayY = cy + th / 2 + 2
+          const trayX1 = cx
+          const trayX2 = gx_ + 20
+          const trayLen = trayX2 - trayX1
+          g.fillStyle(0x2a3444, 0.35)
+          g.fillRect(trayX1, trayY, trayLen, 4)
+          // Tick marks along tray
+          g.lineStyle(0.5, 0x4a5a6a, 0.3)
+          for (let ti = 0; ti < 3; ti++) {
+            const tx = trayX1 + 10 + ti * (trayLen - 20) / 2
+            g.lineBetween(tx, trayY - 1, tx, trayY + 5)
+          }
+
+          // ── DANGER HIGH VOLTAGE sign ──
+          g.fillStyle(0xd4a017, 0.3)
+          g.fillRect(cx - tw / 2 - 2, cy + th / 2 + 8, 30, 8)
+          g.lineStyle(0.5, 0x8a7a2a, 0.35)
+          g.strokeRect(cx - tw / 2 - 2, cy + th / 2 + 8, 30, 8)
+          const dangerLabel = this.scene.add.text(cx - tw / 2 + 13, cy + th / 2 + 12, 'DANGER HIGH VOLTAGE', {
+            fontSize: '2.5px', fontFamily: 'monospace', color: '#8a6a1a', resolution: 2,
+          }).setOrigin(0.5).setDepth(-9).setAlpha(0.4)
+          this.terrainDecos.push(dangerLabel)
+
+        } else if (zType === 'green') {
+          // Small park area — organic green space with trees, bushes, benches, path, flowers
+          // Irregular ground: two overlapping ellipses
+          g.fillStyle(0x1a2a1a, 0.10)
+          g.fillEllipse(cx - 6, cy + 4, 108, 88)
+          g.fillStyle(0x1a2a1a, 0.09)
+          g.fillEllipse(cx + 8, cy - 5, 96, 100)
+          // Walkway path cutting through
+          g.fillStyle(0x2a3a3a, 0.12)
+          g.fillRect(cx - 2, cy - 20, 4, 40)
+          // Tree 1 (small, left)
+          g.fillStyle(0x3a2a1a, 0.30)
+          g.fillRect(cx - 28, cy + 2, 2, 10)
+          g.fillStyle(0x2a6a4a, 0.14)
+          g.fillCircle(cx - 27, cy - 4, 8)
+          // Tree 2 (large, center-right)
+          g.fillStyle(0x3a2a1a, 0.35)
+          g.fillRect(cx + 16, cy - 6, 4, 18)
+          g.fillStyle(0x2a5a3a, 0.16)
+          g.fillCircle(cx + 18, cy - 16, 16)
+          // Tree 3 (medium, far right)
+          g.fillStyle(0x3a2a1a, 0.32)
+          g.fillRect(cx + 36, cy + 4, 3, 14)
+          g.fillStyle(0x1a4a3a, 0.13)
+          g.fillCircle(cx + 37, cy - 4, 11)
+          // Bushes/shrubs near trees
+          g.fillStyle(0x1a3a2a, 0.18)
+          g.fillCircle(cx - 20, cy + 8, 5)
+          g.fillStyle(0x1a3a2a, 0.15)
+          g.fillCircle(cx + 26, cy + 6, 6)
+          g.fillStyle(0x1a3a2a, 0.16)
+          g.fillCircle(cx + 42, cy + 12, 4)
+          // Bench 1 (left side)
+          g.fillStyle(0x4a3a2a, 0.35)
+          g.fillRect(cx - 18, cy + 22, 28, 4)
+          g.fillStyle(0x3a4a5a, 0.30)
+          g.fillRect(cx - 16, cy + 26, 2, 3)
+          g.fillRect(cx + 6, cy + 26, 2, 3)
+          // Bench 2 (right side)
+          g.fillStyle(0x4a3a2a, 0.30)
+          g.fillRect(cx + 20, cy + 24, 24, 4)
+          g.fillStyle(0x3a4a5a, 0.25)
+          g.fillRect(cx + 22, cy + 28, 2, 3)
+          g.fillRect(cx + 40, cy + 28, 2, 3)
+          // Flower dots scattered on the ground
+          g.fillStyle(0xd4a017, 0.20)
+          g.fillCircle(cx - 10, cy + 14, 1.5)
+          g.fillStyle(0xfda4af, 0.18)
+          g.fillCircle(cx + 8, cy + 10, 1.5)
+          g.fillStyle(0xd4a017, 0.16)
+          g.fillCircle(cx + 30, cy + 18, 2)
 
         } else if (zType === 'parking') {
           // Parking lot with spot markings
@@ -857,11 +1003,46 @@ export class OfficeTerrain {
               g.strokeRect(cx - pw / 2 + 15 + c * 20, cy - ph / 2 + 18 + r * 28, spotW, spotH)
             }
           }
+          // Vehicle silhouettes parked in spots
+          const vehicleColors = [0x1a2030, 0x222a38, 0x1e2530]
+          const vehicleSpots = [
+            { r: 0, c: 1 },
+            { r: 0, c: 4 },
+            { r: 1, c: 2 },
+          ]
+          for (let vi = 0; vi < vehicleSpots.length; vi++) {
+            const vs = vehicleSpots[vi]
+            const vx = cx - pw / 2 + 15 + vs.c * 20 + (spotW - 14) / 2
+            const vy = cy - ph / 2 + 18 + vs.r * 28 + (spotH - 6) / 2
+            g.fillStyle(vehicleColors[vi], 0.4)
+            g.fillRoundedRect(vx, vy, 14, 6, 1)
+          }
+          // Dashed yellow center lane divider between the two rows
+          const laneY = cy - ph / 2 + 18 + spotH + (28 - spotH) / 2
+          const laneX1 = cx - pw / 2 + 10
+          const laneX2 = cx + pw / 2 - 10
+          for (let dx = laneX1; dx < laneX2; dx += 8) {
+            const endX = Math.min(dx + 4, laneX2)
+            g.lineStyle(0.6, 0xaaaa44, 0.25)
+            g.lineBetween(dx, laneY, endX, laneY)
+          }
+          // Directional arrow in center aisle pointing right toward entrance
+          const arrowCx = cx
+          const arrowCy = laneY
+          g.lineStyle(1, 0x4a5a6a, 0.35)
+          g.lineBetween(arrowCx - 10, arrowCy, arrowCx + 6, arrowCy)
+          g.lineBetween(arrowCx + 2, arrowCy - 3, arrowCx + 6, arrowCy)
+          g.lineBetween(arrowCx + 2, arrowCy + 3, arrowCx + 6, arrowCy)
           // "P" label
           const pLabel = this.scene.add.text(cx, cy - ph / 2 + 6, 'P', {
             fontSize: '8px', fontFamily: 'monospace', fontStyle: 'bold', color: '#3a5a7a', resolution: 2,
           }).setOrigin(0.5).setAlpha(0.45).setDepth(-9)
           this.terrainDecos.push(pLabel)
+          // "LOT" number label
+          const lotLabel = this.scene.add.text(cx, cy - ph / 2 + 14, `LOT-${col}${row}`, {
+            fontSize: '5px', fontFamily: 'monospace', color: '#3a4a5a', resolution: 2,
+          }).setOrigin(0.5).setAlpha(0.3).setDepth(-9)
+          this.terrainDecos.push(lotLabel)
         }
       }
     }

@@ -199,7 +199,13 @@ export class OfficeBackground {
       cafe.build(cafeX, cafeTopY)
       const serviceMaxX = WORLD_MARGIN + cafe.width + WORLD_MARGIN
       const serviceMaxY = WORLD_MARGIN + cafe.height + WORLD_MARGIN
-      this.host.setWorldSize(Math.max(serviceMaxX, 800), Math.max(serviceMaxY, 600))
+      const cam = this.scene.cameras.main
+      const vpW0 = cam.width / Math.max(cam.zoom, 0.7)
+      const vpH0 = cam.height / Math.max(cam.zoom, 0.7)
+      this.host.setWorldSize(
+        Math.max(serviceMaxX, vpW0 + WORLD_MARGIN * 2, 800),
+        Math.max(serviceMaxY, vpH0 + WORLD_MARGIN * 2, 600),
+      )
       this.host.updateCameraBounds()
       this.host.rebuildNavMesh()
       return
@@ -385,19 +391,28 @@ export class OfficeBackground {
     const cafeTopY = WORLD_MARGIN + (serviceRowH - cafe.height) / 2
     const cafeBottomY = cafeTopY + cafe.height
 
-    // Background cleanup + decoration positioning
-    const bgW = Math.max(roomMaxX, maxX) + WORLD_MARGIN
-    const bgH = Math.max(roomMaxY, maxY) + WORLD_MARGIN
+    // Viewport size at current zoom — ensures terrain/bg always fill the screen
+    const cam = this.scene.cameras.main
+    const vpW = cam.width / Math.max(cam.zoom, 0.7)
+    const vpH = cam.height / Math.max(cam.zoom, 0.7)
+
+    // Background cleanup + decoration positioning — use viewport-aware size
+    const bgW = Math.max(Math.max(roomMaxX, maxX) + WORLD_MARGIN, vpW + WORLD_MARGIN * 2)
+    const bgH = Math.max(Math.max(roomMaxY, maxY) + WORLD_MARGIN, vpH + WORLD_MARGIN * 2)
     this.interior.drawOfficeBackground(bgW, bgH, () => this.terrain.getSeasonalConfig())
 
-    // World size: include all team areas + service buildings
+    // World size: include all team areas + service buildings.
+    // Ensure the world is at least as large as the viewport (at current zoom)
+    // so the terrain always fills the visible area.
     const serviceMaxX = WORLD_MARGIN + cafe.width
     const totalMaxX = Math.max(maxX, serviceMaxX)
     const totalMaxY = Math.max(maxY, cafeBottomY)
-    this.host.setWorldSize(totalMaxX + WORLD_MARGIN, totalMaxY + WORLD_MARGIN)
+    const worldW = Math.max(totalMaxX + WORLD_MARGIN, vpW + WORLD_MARGIN * 2)
+    const worldH = Math.max(totalMaxY + WORLD_MARGIN, vpH + WORLD_MARGIN * 2)
+    this.host.setWorldSize(worldW, worldH)
 
     // Draw outdoor terrain (grass, trees, paths) around buildings
-    this.terrain.drawOutdoorTerrain(totalMaxX + WORLD_MARGIN, totalMaxY + WORLD_MARGIN)
+    this.terrain.drawOutdoorTerrain(worldW, worldH)
     // Init reactor glow in interior using the reactor center computed by terrain
     this.interior.initReactorGlow(this.terrain.reactorCenter)
     this.host.markPodsDirty()
@@ -444,7 +459,7 @@ export class OfficeBackground {
       const BWALL = 4
       g.fillStyle(COLOR_WALL)
       g.fillRoundedRect(x - 6, y - 6, width + 12, height + 12, 6)
-      g.fillStyle(0x0a0e14)
+      g.fillStyle(activeTheme.bg)
       g.fillRoundedRect(x - 6 + BWALL, y - 6 + BWALL, width + 12 - BWALL * 2, height + 12 - BWALL * 2, 3)
 
       // Windows along the top wall of each team building (for atmosphere glint effect)
@@ -590,7 +605,7 @@ export class OfficeBackground {
       const badgePadY = 3
       const badgeTextObj = this.scene.add.text(0, 0, badgeLabel, {
         fontSize: '10px',
-        color: '#00e5ff',
+        color: activeTheme.accentText,
         fontFamily: 'system-ui, monospace',
         resolution: 2,
       })
@@ -695,7 +710,7 @@ export class OfficeBackground {
     g.fillPoints(points, true)
 
     // Simpler: draw the floor as the union of two inset rects
-    g.fillStyle(0x0a0e14)
+    g.fillStyle(activeTheme.bg)
     // Row 1 floor
     g.fillRect(left + WALL_T, top + WALL_T, right - left - WALL_T * 2, rects[0].bottom - top - WALL_T)
     // Corridor connector + Row 2 floor

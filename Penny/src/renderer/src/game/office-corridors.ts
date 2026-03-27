@@ -124,7 +124,7 @@ export class OfficeCorridors {
       const HALL_H = 12
       const HALL_FLOOR = 0x0f1520
       const HALL_STRIPE = 0x1a2535
-      const HALL_EDGE = 0x1e2830
+      const HALL_EDGE = activeTheme.separator
       const LEG_W = 6
       const JUNC_W = 8
       const CHEVRON_GAP = 40
@@ -163,7 +163,7 @@ export class OfficeCorridors {
       g.fillStyle(0x5a6a7a, 0.25)
       g.fillRect(minX - LEG_W / 2, hallY - HALL_H / 2 + 1, hallWidth + LEG_W, 3)
       // Darker bottom edge
-      g.fillStyle(0x0a0e14, 0.3)
+      g.fillStyle(activeTheme.bg, 0.3)
       g.fillRect(minX - LEG_W / 2, hallY + HALL_H / 2 - 4, hallWidth + LEG_W, 3)
 
       // ── Rivets/bolts along main corridor runs (sprite-based) ──
@@ -226,7 +226,7 @@ export class OfficeCorridors {
           // ── Vertical leg pipe shading ──
           g.fillStyle(0x5a6a7a, 0.25)
           g.fillRect(room.x - LEG_W / 2 + 1, legTop, 3, legBot - legTop)
-          g.fillStyle(0x0a0e14, 0.3)
+          g.fillStyle(activeTheme.bg, 0.3)
           g.fillRect(room.x + LEG_W / 2 - 4, legTop, 3, legBot - legTop)
           // Rivets along vertical legs (sprite-based)
           for (let ry = legTop; ry <= legBot; ry += 50) {
@@ -296,7 +296,7 @@ export class OfficeCorridors {
         const signX = room.x - signW / 2
         const signY = hallY - HALL_H / 2 - signH - 2
 
-        g.fillStyle(0x0a0e14, 0.82)
+        g.fillStyle(activeTheme.bg, 0.82)
         g.fillRect(signX, signY, signW, signH)
         g.lineStyle(1, lineColor, 0.28)
         g.strokeRect(signX, signY, signW, signH)
@@ -341,7 +341,7 @@ export class OfficeCorridors {
             Math.abs(s.y1 - hallY) < 20 && s.x1 <= fromX && s.x2 >= toX
           )
           if (!alreadyConnected) {
-            this.corridorSegments.push({ x1: fromX, y1: hallY, x2: toX, y2: hallY, color: 0x2a3440 })
+            this.corridorSegments.push({ x1: fromX, y1: hallY, x2: toX, y2: hallY, color: activeTheme.wall })
             const interW = toX - fromX
             // ── Inter-team sidewalk strip ──
             const interSWH = 8 * 3
@@ -383,7 +383,7 @@ export class OfficeCorridors {
     // Shared constants for connector walkway rendering (same as intra-team values)
     const C_HALL_H = 12
     const C_HALL_FLOOR = 0x0f1520
-    const C_HALL_EDGE = 0x1e2830
+    const C_HALL_EDGE = activeTheme.separator
     const C_LEG_W = 6
 
     // Connect rows vertically (stairwell between row 1 and row 2)
@@ -392,7 +392,7 @@ export class OfficeCorridors {
       const upper = rowCenters[i]
       const lower = rowCenters[i + 1]
       const connX = Math.min(upper.minX, lower.minX)
-      this.corridorSegments.push({ x1: connX, y1: upper.y, x2: connX, y2: lower.y, color: 0x2a3440 })
+      this.corridorSegments.push({ x1: connX, y1: upper.y, x2: connX, y2: lower.y, color: activeTheme.wall })
       const connLen = lower.y - upper.y
       // Sidewalk strip
       const VERT_WALK_W = 36
@@ -418,7 +418,7 @@ export class OfficeCorridors {
       const connX = cafeBounds.x + cafeBounds.w / 2
 
       // Vertical corridor from cafe to agent row
-      this.corridorSegments.push({ x1: connX, y1: serviceBottomY, x2: connX, y2: nearestRow.y, color: 0x2a3440 })
+      this.corridorSegments.push({ x1: connX, y1: serviceBottomY, x2: connX, y2: nearestRow.y, color: activeTheme.wall })
       const cafeConnLen = nearestRow.y - serviceBottomY
       if (cafeConnLen > 0) {
         // Sidewalk strip
@@ -451,7 +451,7 @@ export class OfficeCorridors {
 
       // Horizontal leg to connect to the nearest team
       if (Math.abs(connX - nearestRow.minX) > 10) {
-        this.corridorSegments.push({ x1: connX, y1: nearestRow.y, x2: nearestRow.minX, y2: nearestRow.y, color: 0x2a3440 })
+        this.corridorSegments.push({ x1: connX, y1: nearestRow.y, x2: nearestRow.minX, y2: nearestRow.y, color: activeTheme.wall })
         const hx1 = Math.min(connX, nearestRow.minX)
         const hx2 = Math.max(connX, nearestRow.minX)
         const hLen = hx2 - hx1

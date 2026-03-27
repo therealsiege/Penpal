@@ -37,10 +37,15 @@ export interface OfficeTheme {
   badgeBg: string
   nameText: string
   nameBg: string
-  // Tooltip
+  // Tooltip / panel UI
   tooltipBg: number
   tooltipStroke: number
   tooltipText: string
+  panelBg: number        // HUD panels, speech bubbles, overlays (dark: 0x0c1018)
+  panelStroke: number    // panel borders, divider lines (dark: 0x2a3440)
+  separator: number      // separator bars, hall edges (dark: 0x1e2830)
+  accentText: string     // bright accent label color CSS (dark: '#00e5ff')
+  subtleText: string     // muted secondary text CSS (dark: '#8a96a4')
   // Monitor glow
   monitorGlowActive: number
   monitorGlowIdle: number
@@ -63,6 +68,10 @@ export interface OfficeTheme {
   // Coffee mug
   mugBody: number
   mugHandle: number
+  // Atmosphere / terrain
+  fogColor: number       // atmosphere fog / sky base (dark: 0x141a22)
+  ventFill: number       // vent dark fill, industrial detail (dark: 0x1a2230)
+  shadowDark: number     // deep shadow tint (dark: 0x0a0e14)
 }
 
 export const THEMES: Record<ThemeName, OfficeTheme> = {
@@ -89,6 +98,11 @@ export const THEMES: Record<ThemeName, OfficeTheme> = {
     tooltipBg: 0x0c1018,
     tooltipStroke: 0x2a3440,
     tooltipText: '#c4ccd6',
+    panelBg: 0x0c1018,
+    panelStroke: 0x2a3440,
+    separator: 0x1e2830,
+    accentText: '#00e5ff',
+    subtleText: '#8a96a4',
     monitorGlowActive: 0x00e5ff,
     monitorGlowIdle: 0x1e2830,
     thoughtDefault: 0x2a3440,
@@ -105,6 +119,9 @@ export const THEMES: Record<ThemeName, OfficeTheme> = {
     lampShade: 0xd4a017,
     mugBody: 0x00e5ff,
     mugHandle: 0x007a8a,
+    fogColor: 0x141a22,
+    ventFill: 0x1a2230,
+    shadowDark: 0x0a0e14,
   },
 
   // ---- LIGHT (bright office) ----
@@ -130,6 +147,11 @@ export const THEMES: Record<ThemeName, OfficeTheme> = {
     tooltipBg: 0xffffff,
     tooltipStroke: 0xcbd5e1,
     tooltipText: '#1e293b',
+    panelBg: 0xffffff,
+    panelStroke: 0xcbd5e1,
+    separator: 0xd4dae3,
+    accentText: '#2563eb',
+    subtleText: '#64748b',
     monitorGlowActive: 0x2563eb,
     monitorGlowIdle: 0xcbd5e1,
     thoughtDefault: 0x94a3b8,
@@ -146,6 +168,9 @@ export const THEMES: Record<ThemeName, OfficeTheme> = {
     lampShade: 0xf59e0b,
     mugBody: 0x7c3aed,
     mugHandle: 0x6d28d9,
+    fogColor: 0xcbd5e1,
+    ventFill: 0xd4dae3,
+    shadowDark: 0xe2e8f0,
   },
 
   // ---- NEON (cyberpunk) ----
@@ -171,6 +196,11 @@ export const THEMES: Record<ThemeName, OfficeTheme> = {
     tooltipBg: 0x0d0d24,
     tooltipStroke: 0xff00ff,
     tooltipText: '#e0b0ff',
+    panelBg: 0x0d0d24,
+    panelStroke: 0xff00ff,
+    separator: 0x2d1b69,
+    accentText: '#a78bfa',
+    subtleText: '#8b7abf',
     monitorGlowActive: 0x00ffff,
     monitorGlowIdle: 0xff00ff,
     thoughtDefault: 0x6b21a8,
@@ -187,6 +217,9 @@ export const THEMES: Record<ThemeName, OfficeTheme> = {
     lampShade: 0xff00ff,
     mugBody: 0x00ffff,
     mugHandle: 0x0088aa,
+    fogColor: 0x15152e,
+    ventFill: 0x1a0a3a,
+    shadowDark: 0x0a0a1a,
   },
 }
 

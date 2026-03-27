@@ -7,7 +7,7 @@
 
 import Phaser from 'phaser'
 import { flash, pulse, shake } from './juice-utils'
-import { STATUS_DOT_FRAMES, ICON_FRAMES } from './office-asset-keys'
+import { STATUS_DOT_FRAMES, ICON_FRAMES, SPRITESHEET_KEYS } from './office-asset-keys'
 import { EventBus, EVENTS } from './events'
 import type { AgentState } from '../types'
 import { XP_RANKS, getXPForLevel } from '../types'
@@ -23,6 +23,8 @@ import {
   WS_DOT_GAP,
   WS_MONITOR_Y,
   WS_NAME_Y,
+  WORKSTATION_W,
+  WS_DESK_Y,
 } from './office-constants'
 import { WorkstationFactory } from './workstation-creation'
 import { WorkstationAnimator } from './workstation-animation'
@@ -308,17 +310,43 @@ export class OfficeWorkstations {
       pulse(ws.statusDot, this.scene, { scale: 1.5, duration: 180 })
     }
 
-    ws.nameText.setVisible(true)
-    ws.statusDot.setVisible(true)
+    if (!ws.nameText.visible) {
+      ws.nameText.setVisible(true).setAlpha(0)
+      this.scene.tweens.add({ targets: ws.nameText, alpha: 1, duration: 150, ease: 'Power2' })
+    }
+    if (!ws.statusDot.visible) {
+      ws.statusDot.setVisible(true).setAlpha(0)
+      this.scene.tweens.add({ targets: ws.statusDot, alpha: 1, duration: 150, ease: 'Power2' })
+    }
 
     const isWaiting = agent.needsInteraction
     const isPlan = agent.sessionMode === 'plan'
+    const isCompressing = agent.sessionMode === 'compressing'
     const isWorking = (agent.sessionMode === 'working' || isPlan) && !isWaiting
 
     // ── Name tag color + background tint based on state ──────────────────────
-    const nameColor = isWorking ? '#00e5ff' : isWaiting ? '#fbbf24' : isPlan ? '#a78bfa' : '#8a96a4'
-    const nameBg    = isWorking ? '#0a1a2a' : isWaiting ? '#1a1500' : '#0a0e14cc'
-    ws.nameText.setColor(nameColor).setBackgroundColor(nameBg)
+    const nameColor = isWorking ? activeTheme.accentText : isWaiting ? '#fbbf24' : isPlan ? '#a78bfa' : activeTheme.subtleText
+    const nameBg    = activeTheme.nameBg
+    const prevNameColor = ws.nameText.getData('prevColor') as string | undefined
+    if (prevNameColor !== nameColor) {
+      ws.nameText.setData('prevColor', nameColor)
+      // Brief white flash then settle to new color
+      ws.nameText.setColor('#ffffff').setBackgroundColor(nameBg)
+      this.scene.time.delayedCall(80, () => {
+        if (ws.nameText?.active) ws.nameText.setColor(nameColor)
+      })
+      // Scale pop on the name tag
+      this.scene.tweens.add({
+        targets: ws.nameText,
+        scaleX: 1.08,
+        scaleY: 1.08,
+        duration: 100,
+        yoyo: true,
+        ease: 'Back.easeOut',
+      })
+    } else {
+      ws.nameText.setColor(nameColor).setBackgroundColor(nameBg)
+    }
 
     // ── Role badge (S / R / E) ────────────────────────────────────────────────
     if (ws.roleBadge) {
@@ -326,7 +354,12 @@ export class OfficeWorkstations {
       if (podRole) {
         const roleLabel = podRole === 'solver' ? 'S' : podRole === 'reviewer' ? 'R' : 'E'
         const roleBgColor: Record<string, string> = { solver: '#3b82f6', reviewer: '#8b5cf6', executor: '#22c55e' }
+        const wasRoleBadgeVisible = ws.roleBadge.visible
         ws.roleBadge.setText(roleLabel).setBackgroundColor(roleBgColor[podRole] ?? '#3a4858').setVisible(true)
+        if (!wasRoleBadgeVisible) {
+          ws.roleBadge.setAlpha(0)
+          this.scene.tweens.add({ targets: ws.roleBadge, alpha: 0.75, duration: 150, ease: 'Power2' })
+        }
 
         // Pulse the badge when this agent is actively part of a running pod
         const podLines = this.host.getPodLines()
@@ -355,7 +388,11 @@ export class OfficeWorkstations {
       } else {
         ws.roleBadgePulseTween?.destroy()
         ws.roleBadgePulseTween = undefined
-        ws.roleBadge.setVisible(false).setAlpha(1)
+        if (ws.roleBadge.visible) {
+          this.scene.tweens.add({ targets: ws.roleBadge, alpha: 0, duration: 120, ease: 'Power2',
+            onComplete: () => { ws.roleBadge?.setVisible(false) },
+          })
+        }
       }
     }
 
@@ -412,17 +449,28 @@ export class OfficeWorkstations {
     // ── Uptime counter ────────────────────────────────────────────────────────
     if (ws.uptimeText) {
       if (agent.uptime) {
+        const wasUptimeVisible = ws.uptimeText.visible
         ws.uptimeText.setText(agent.uptime).setVisible(true)
-      } else {
-        ws.uptimeText.setVisible(false)
+        if (!wasUptimeVisible) {
+          ws.uptimeText.setAlpha(0)
+          this.scene.tweens.add({ targets: ws.uptimeText, alpha: 1, duration: 150, ease: 'Power2' })
+        }
+      } else if (ws.uptimeText.visible) {
+        this.scene.tweens.add({ targets: ws.uptimeText, alpha: 0, duration: 120, ease: 'Power2',
+          onComplete: () => { ws.uptimeText?.setVisible(false) },
+        })
       }
     }
 
-    // Screen content
-    if (isWorking && ws.screenLines && ws.screenTween) {
-      ws.screenLines.setVisible(true); ws.screenTween.resume()
-    } else if (ws.screenLines) {
-      ws.screenLines.setVisible(false); ws.screenTween?.pause()
+    // Screen content — set mode-specific pattern and timeScale
+    if (ws.screenLines && ws.screenTween) {
+      const screenMode = isWorking ? (isPlan ? 'plan' : 'working') : isCompressing ? 'compressing' : 'idle'
+      if (ws.screenState) ws.screenState.mode = screenMode
+      ws.screenLines.setVisible(true)
+      ws.screenTween.resume()
+      if (screenMode === 'compressing') ws.screenTween.setTimeScale(2)
+      else if (screenMode === 'idle') ws.screenTween.setTimeScale(0.3)
+      else ws.screenTween.setTimeScale(1)
     }
 
     if (ws.monitorSprite) {
@@ -511,20 +559,76 @@ export class OfficeWorkstations {
       const fillColor = xp.level >= 8 ? 0xf59e0b : xp.level >= 5 ? 0xa855f7 : 0x3b82f6
 
       const prevRank = ws.xpBarText.text
-      ws.xpBar.graphics.setAlpha(1).setVisible(true)
+      const prevPct = (ws.xpBar.graphics.getData('lastPct') as number) ?? 0
+      const wasXpBarVisible = ws.xpBar.graphics.visible
+      ws.xpBar.graphics.setVisible(true)
       ws.xpBar.setFillColor(fillColor)
       ws.xpBar.setPercent(pct, true)
+      const wasXpTextVisible = ws.xpBarText.visible
       ws.xpBarText.setText(xp.rank).setVisible(true)
 
+      // XP bar fill flash — briefly brighten bar when percentage increases
+      if (pct > prevPct) {
+        ws.xpBar.graphics.setData('lastPct', pct)
+        ws.xpBar.graphics.setAlpha(1.0)
+        this.scene.tweens.add({
+          targets: ws.xpBar.graphics,
+          alpha: 0.6,
+          duration: 400,
+          ease: 'Power2',
+        })
+      } else if (!wasXpBarVisible) {
+        ws.xpBar.graphics.setAlpha(0)
+        this.scene.tweens.add({ targets: ws.xpBar.graphics, alpha: 0.6, duration: 200, ease: 'Power2' })
+      } else {
+        ws.xpBar.graphics.setAlpha(0.6)
+      }
+      if (!wasXpTextVisible) {
+        ws.xpBarText.setAlpha(0)
+        this.scene.tweens.add({ targets: ws.xpBarText, alpha: 1, duration: 200, ease: 'Power2' })
+      }
+
       // Lego brick segment visibility — each segment represents 20% of the bar
+      // Animate new segments popping in with a sequential scale bounce
       if (ws.legoSegments) {
         for (let i = 0; i < ws.legoSegments.length; i++) {
-          ws.legoSegments[i].setVisible(pct >= (i + 1) * 0.2)
+          const shouldShow = pct >= (i + 1) * 0.2
+          const wasVisible = ws.legoSegments[i].visible
+          ws.legoSegments[i].setVisible(shouldShow)
+          if (shouldShow && !wasVisible) {
+            const origScale = (ws.legoSegments[i].getData('origScale') as number) ?? 0.375
+            ws.legoSegments[i].setScale(0).setAlpha(0)
+            this.scene.tweens.add({
+              targets: ws.legoSegments[i],
+              scaleX: origScale,
+              scaleY: origScale,
+              alpha: 1,
+              duration: 250,
+              delay: i * 60,
+              ease: 'Back.easeOut',
+            })
+          }
         }
       }
 
       // Rank-up celebration
       if (prevRank && prevRank !== xp.rank && prevRank !== '') {
+        // Golden flash across the XP bar before it resets to new level
+        ws.xpBar.setFillColor(0xffd700)
+        ws.xpBar.graphics.setAlpha(1.0)
+        this.scene.tweens.add({
+          targets: ws.xpBar.graphics,
+          alpha: { from: 1.0, to: 0.6 },
+          duration: 600,
+          ease: 'Sine.easeOut',
+        })
+        // Restore fill color after golden flash
+        this.scene.time.delayedCall(500, () => {
+          if (ws.xpBar) ws.xpBar.setFillColor(fillColor)
+        })
+        // Reset tracked pct so new level's lego segments pop in fresh
+        ws.xpBar.graphics.setData('lastPct', 0)
+
         const rooms = this.host.getRooms()
         for (const room of rooms.values()) {
           if (room.workstations.has(agent.config?.id ?? '')) {
@@ -542,8 +646,16 @@ export class OfficeWorkstations {
         }
       }
     } else if (ws.xpBar) {
-      ws.xpBar.graphics.setVisible(false)
-      ws.xpBarText?.setVisible(false)
+      if (ws.xpBar.graphics.visible) {
+        this.scene.tweens.add({ targets: ws.xpBar.graphics, alpha: 0, duration: 120, ease: 'Power2',
+          onComplete: () => { ws.xpBar?.graphics.setVisible(false) },
+        })
+      }
+      if (ws.xpBarText?.visible) {
+        this.scene.tweens.add({ targets: ws.xpBarText, alpha: 0, duration: 120, ease: 'Power2',
+          onComplete: () => { ws.xpBarText?.setVisible(false) },
+        })
+      }
       if (ws.legoSegments) {
         for (const seg of ws.legoSegments) seg.setVisible(false)
       }
@@ -570,7 +682,7 @@ export class OfficeWorkstations {
 
         if (n >= 2) {
           // Axis lines at 0.15 alpha
-          gfx.lineStyle(0.5, 0x2a3440, 0.15)
+          gfx.lineStyle(0.5, activeTheme.wall, 0.15)
           gfx.beginPath()
           gfx.moveTo(0, H); gfx.lineTo(W, H)
           gfx.moveTo(0, H / 2); gfx.lineTo(W, H / 2)
@@ -582,7 +694,7 @@ export class OfficeWorkstations {
             const y0 = toY(history[i - 1])
             const y1 = toY(history[i])
             const v1 = history[i]
-            const col = v1 >= 1 ? 0x34d399 : v1 >= 0.5 ? 0xfbbf24 : 0x2a3440
+            const col = v1 >= 1 ? 0x34d399 : v1 >= 0.5 ? 0xfbbf24 : activeTheme.wall
 
             // Polyline segment
             gfx.lineStyle(1, col, 0.85)
@@ -608,6 +720,7 @@ export class OfficeWorkstations {
     // ── Energy bar drain/recovery ──────────────────────────────────────────
     if (ws.energyFill) {
       const onCoffee = ws.onCoffeeRun ?? false
+      const prevEnergy = ws.energyLevel
       if (isWorking) {
         // Drain slowly while working (min 0.1)
         ws.energyLevel = Math.max(0.1, ws.energyLevel - 0.001)
@@ -626,13 +739,63 @@ export class OfficeWorkstations {
       const pct = ws.energyLevel
       ws.energyFill.setCrop(0, Math.round((1 - pct) * fullH), fullW, Math.round(pct * fullH))
 
-      // Tint based on level: >0.5 = blue (default), 0.25-0.5 = yellow, <0.25 = red
-      if (pct > 0.5) {
-        ws.energyFill.clearTint()
-      } else if (pct > 0.25) {
-        ws.energyFill.setTint(0xfbbf24)
+      // Determine target tint: >0.5 = no tint (0), 0.25-0.5 = yellow, <0.25 = red
+      const targetTint = pct > 0.5 ? 0 : pct > 0.25 ? 0xfbbf24 : 0xef4444
+      const lastTint = ws.energyLastTint ?? 0
+
+      if (targetTint !== lastTint) {
+        ws.energyLastTint = targetTint
+        // Smooth tint transition: flash white briefly then settle to new color
+        ws.energyFill.setTint(0xffffff)
+        this.scene.time.delayedCall(80, () => {
+          if (!ws.energyFill?.active) return
+          if (targetTint === 0) {
+            ws.energyFill.clearTint()
+          } else {
+            ws.energyFill.setTint(targetTint)
+          }
+        })
       } else {
-        ws.energyFill.setTint(0xef4444)
+        // Apply current tint (no transition needed)
+        if (targetTint === 0) {
+          ws.energyFill.clearTint()
+        } else {
+          ws.energyFill.setTint(targetTint)
+        }
+      }
+
+      // Low energy warning pulse — red pulse when below 25%
+      if (ws.energyLevel < 0.25 && !ws.energyPulseTween) {
+        ws.energyPulseTween = this.scene.tweens.add({
+          targets: ws.energyFill,
+          alpha: { from: 0.3, to: 0.7 },
+          duration: 600,
+          yoyo: true,
+          repeat: -1,
+          ease: 'Sine.easeInOut',
+        })
+      } else if (ws.energyLevel >= 0.25 && ws.energyPulseTween) {
+        ws.energyPulseTween.destroy()
+        ws.energyPulseTween = undefined
+        ws.energyFill.setAlpha(0.5)
+      }
+
+      // Coffee recovery sparkle — tiny green particle floats up from the energy bar
+      if (onCoffee && ws.energyLevel > prevEnergy && Math.random() < 0.05) {
+        const ENERGY_BAR_X = WORKSTATION_W / 2 + 2
+        const ENERGY_BAR_Y = WS_DESK_Y - 8
+        const sparkle = this.scene.add.sprite(
+          ENERGY_BAR_X, ENERGY_BAR_Y - 5,
+          SPRITESHEET_KEYS.GAME_ICONS, ICON_FRAMES.CIRCLE_GREEN,
+        ).setScale(0.04).setAlpha(0.6).setDepth(500)
+        ws.container.add(sparkle)
+        this.scene.tweens.add({
+          targets: sparkle,
+          y: sparkle.y - 8,
+          alpha: 0,
+          duration: 400,
+          onComplete: () => { try { sparkle.destroy() } catch { /* gone */ } },
+        })
       }
     }
   }

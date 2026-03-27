@@ -105,7 +105,7 @@ Each extracted module is a class that receives `Phaser.Scene` in its constructor
 
 **Spritesheets** — Compact format: 17 frames per row (4 idle rotations + 12 walk rotations + 1 sit). Loaded as animation strips, 256x512 per frame.
 
-**Theme Colors** — `office-theme.ts` defines dark/light/neon palettes but only dark is functional. ~100 hardcoded hex values (0x0a0e14, 0x0c1018, 0x2a3440, etc.) across 16 files prevent theme switching. To make themes work: replace all hardcoded colors with `activeTheme.x` references, then wire a keyboard shortcut for `setActiveTheme()`.
+**Theme Colors** — 3 themes (dark/light/neon) defined in `office-theme.ts` with 30+ properties. All rendering code references `activeTheme.x` — no hardcoded dark-palette hex values remain outside the theme definitions. Press **T** to cycle themes at runtime.
 
 **Particle Pools** — Pre-allocated circles recycled with `.getData('busy')` flag. Tweens set `busy=true` on use, `busy=false` on complete.
 
@@ -182,4 +182,4 @@ Cohesive game layer on top of the office visualizer. Six interconnected systems:
 - Camera pan is manual drag; `followTarget` for programmatic follow; zoom lerps in `update()`.
 - Prefer sprites from GAME_ICONS/GAME_ITEMS sheets over `add.circle()` for visual elements.
 - All particle/VFX tweens should be <=300ms duration with low alpha changes for subtlety.
-- Only dark theme is functional. Do not reference light/neon themes as working features.
+- All rendering colors must use `activeTheme.x` — never hardcode hex values from the dark palette.

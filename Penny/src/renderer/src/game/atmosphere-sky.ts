@@ -1,5 +1,5 @@
 import Phaser from 'phaser'
-import { lerpColor } from './office-theme'
+import { activeTheme, lerpColor } from './office-theme'
 import { SPRITESHEET_KEYS, ICON_FRAMES } from './office-asset-keys'
 
 // ---------------------------------------------------------------------------
@@ -74,7 +74,7 @@ export class AtmosphereSky {
     gfx.setScrollFactor(0)
 
     // Vertical gradient: transparent at top, slightly foggy in the lower 40%
-    const FOG_COLOR = 0x141a22
+    const FOG_COLOR = activeTheme.fogColor
     const STRIPS = 100
     const stripH = H / STRIPS
     const fogStart = 0.6  // top 60% is clear, bottom 40% has fog

@@ -295,7 +295,7 @@ export class OfficeRooms {
       }
     }
     // Steel plate joint grid lines every 48px
-    g.lineStyle(1.0, 0x3a4858, 0.14)
+    g.lineStyle(1.0, activeTheme.wallInner, 0.14)
     for (let jy = floorY; jy <= floorY + floorH; jy += 48) {
       g.lineBetween(floorX, jy, floorX + floorW, jy)
     }
@@ -751,10 +751,10 @@ export class OfficeRooms {
       for (let vi = 0; vi < 2; vi++) {
         const ventX = floorX + ventSpacing * (vi + 0.5) - ventW / 2
         // Dark vent body
-        g.fillStyle(0x1a2230, 0.525)
+        g.fillStyle(activeTheme.ventFill, 0.525)
         g.fillRect(ventX, ventY, ventW, ventH)
         // Louver bars (3-4 vertical bars)
-        g.lineStyle(1.5, 0x3a4858, 0.375)
+        g.lineStyle(1.5, activeTheme.wallInner, 0.375)
         const louverCount = 3 + (h % 2)
         const louverGap = ventW / (louverCount + 1)
         for (let li = 1; li <= louverCount; li++) {
@@ -776,7 +776,7 @@ export class OfficeRooms {
       const pipeLen = pipeEndY - pipeStartY
       if (pipeLen > 20) {
         // Main pipe body
-        g.fillStyle(0x3a4858, 0.30)
+        g.fillStyle(activeTheme.wallInner, 0.30)
         g.fillRect(pipeX, pipeStartY, pipeW, pipeLen)
         // Highlight stripe (2px)
         g.fillStyle(0x64748b, 0.18)
@@ -946,9 +946,9 @@ export class OfficeRooms {
       `${room.agents.length}`,
       {
         fontSize: '11px',
-        color: isActive ? '#00e5ff' : isWaiting ? '#fbbf24' : '#3a4858',
+        color: isActive ? activeTheme.accentText : isWaiting ? '#fbbf24' : '#3a4858',
         fontFamily: 'system-ui, monospace',
-        backgroundColor: '#0a0e14cc',
+        backgroundColor: activeTheme.nameBg,
         padding: { x: 5, y: 2 },
         resolution: 2,
       },

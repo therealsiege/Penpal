@@ -297,15 +297,15 @@ export class WorkstationAnimator {
       if (ws.soundWaveGfx) {
         const gfx = ws.soundWaveGfx
         gfx.clear()
-        gfx.lineStyle(1, 0x3a4858, 0.15)
+        gfx.lineStyle(1, activeTheme.wallInner, 0.15)
         gfx.beginPath()
         gfx.arc(0, 0, 3, Phaser.Math.DegToRad(-45), Phaser.Math.DegToRad(45), false)
         gfx.strokePath()
-        gfx.lineStyle(1, 0x3a4858, 0.10)
+        gfx.lineStyle(1, activeTheme.wallInner, 0.10)
         gfx.beginPath()
         gfx.arc(0, 0, 5, Phaser.Math.DegToRad(-45), Phaser.Math.DegToRad(45), false)
         gfx.strokePath()
-        gfx.lineStyle(1, 0x3a4858, 0.05)
+        gfx.lineStyle(1, activeTheme.wallInner, 0.05)
         gfx.beginPath()
         gfx.arc(0, 0, 7, Phaser.Math.DegToRad(-45), Phaser.Math.DegToRad(45), false)
         gfx.strokePath()
@@ -367,7 +367,7 @@ export class WorkstationAnimator {
           if (!ring.active) return
           ring.clear()
           // Background track
-          ring.lineStyle(1.5, 0x2a3440, 0.3)
+          ring.lineStyle(1.5, activeTheme.wall, 0.3)
           ring.beginPath()
           ring.arc(0, 0, RING_R, 0, Math.PI * 2, false)
           ring.strokePath()
@@ -758,7 +758,7 @@ export class WorkstationAnimator {
   updateMonitorGlow(ws: WorkstationSprite, isWorking: boolean, isWaiting: boolean): void {
     if (!ws.monitorGlowFx) return
     const isActive = isWorking || isWaiting
-    const baseColor = isWaiting ? 0xfbbf24 : isWorking ? 0x0ea5e9 : 0x1e2830
+    const baseColor = isWaiting ? 0xfbbf24 : isWorking ? 0x0ea5e9 : activeTheme.deskBody
     const baseStrength = isActive ? 3 : 1
     const peakStrength = isActive ? 6 : 2
     const duration     = isActive ? 800 : 2400
@@ -1066,7 +1066,7 @@ export class WorkstationAnimator {
       const txt = this.scene.add.text(0, 0, '', {
         fontFamily: 'monospace',
         fontSize: '8px',
-        color: '#c4ccd6',
+        color: activeTheme.headerText,
         resolution: 2,
       }).setOrigin(0.5)
 
@@ -1091,9 +1091,9 @@ export class WorkstationAnimator {
       const bw = t.width + PAD_X * 2
       const bh = t.height + PAD_Y * 2
       g.clear()
-      g.fillStyle(0x0c1018, 0.9)
+      g.fillStyle(activeTheme.panelBg, 0.9)
       g.fillRoundedRect(-bw / 2, -bh / 2, bw, bh, 3)
-      g.lineStyle(0.5, 0x2a3440, 0.6)
+      g.lineStyle(0.5, activeTheme.panelStroke, 0.6)
       g.strokeRoundedRect(-bw / 2, -bh / 2, bw, bh, 3)
     }
 
@@ -1176,7 +1176,7 @@ export class WorkstationAnimator {
     // Sprite-based panel background — resize to match text dimensions
     if (ws.thoughtBubbleBgSprite) {
       ws.thoughtBubbleBgSprite.setDisplaySize(bw, bh)
-      ws.thoughtBubbleBgSprite.setTint(0x0a0e14)
+      ws.thoughtBubbleBgSprite.setTint(activeTheme.bg)
     }
 
     const g = ws.thoughtBubbleBg
@@ -1184,7 +1184,7 @@ export class WorkstationAnimator {
 
     // Only draw Graphics bg if sprite is not available
     if (!ws.thoughtBubbleBgSprite) {
-      g.fillStyle(0x0a0e14, 0.92)
+      g.fillStyle(activeTheme.bg, 0.92)
       g.fillRoundedRect(-bw / 2, -bh / 2, bw, bh, CORNER)
     }
 
@@ -1197,7 +1197,7 @@ export class WorkstationAnimator {
     const tailW = 6
     const tailH = 6
     const tailY = bh / 2
-    g.fillStyle(0x0a0e14, 0.92)
+    g.fillStyle(activeTheme.bg, 0.92)
     g.fillTriangle(-tailW / 2, tailY, tailW / 2, tailY, 0, tailY + tailH)
   }
 

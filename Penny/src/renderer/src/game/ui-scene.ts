@@ -2,6 +2,7 @@ import Phaser from 'phaser'
 import { BaseScene } from './base-scene'
 import { EventBus, EVENTS } from './events'
 import { SCENE_KEYS, SPRITESHEET_KEYS, TOAST_ICON_FRAMES, ICON_FRAMES, IMAGE_KEYS } from './office-asset-keys'
+import { activeTheme } from './office-theme'
 import { ActivityFeed } from './activity-feed'
 import type { AgentState } from '../types'
 
@@ -199,19 +200,42 @@ export class UIScene extends BaseScene {
       .setScale(0.3).setOrigin(0.5)
 
     const label = this.add.text(26, 6, message, {
-      fontSize: '11px', fontFamily: 'monospace', color: '#c4ccd6',
+      fontSize: '11px', fontFamily: 'monospace', color: activeTheme.headerText,
       wordWrap: { width: TOAST_W - 34 }, resolution: 2,
     })
 
-    const toast = this.add.container(startX + TOAST_SLIDE_PX, slotY, [bg, dot, label])
+    // Countdown progress bar at the bottom of the toast
+    const iconColor = TOAST_DOT[level]
+    const bar = this.add.rectangle(0, TOAST_H - 1, TOAST_W, 1.5, iconColor, 0.4)
+      .setOrigin(0, 0.5)
+
+    const toast = this.add.container(startX + TOAST_SLIDE_PX, slotY, [bg, dot, label, bar])
     toast.setAlpha(0).setScrollFactor(0).setDepth(9998)
     this.toastRoot.add(toast)
+
+    this.tweens.add({
+      targets: bar,
+      width: 0,
+      duration,
+      ease: 'Linear',
+    })
 
     const entry: ActiveToast = { container: toast, startX }
     this.activeToasts.push(entry)
 
     // Slide in from the right with a slight overshoot
     this.tweens.add({ targets: toast, x: startX, alpha: 1, duration: 300, ease: 'Back.easeOut' })
+
+    // Icon entrance pulse after slide-in completes
+    this.tweens.add({
+      targets: dot,
+      scaleX: 0.42,
+      scaleY: 0.42,
+      duration: 150,
+      yoyo: true,
+      delay: 300,
+      ease: 'Back.easeOut',
+    })
 
     // Auto-dismiss: slide back out and fade
     this.time.delayedCall(duration, () => {
@@ -276,8 +300,8 @@ export class UIScene extends BaseScene {
     const vw = this.scale.width
     const vy = this.scale.height
 
-    this.infoBarBg = this.add.rectangle(0, 0, vw, INFO_BAR_H, 0x0c1018, 0.9).setOrigin(0, 0)
-    const sep = this.add.rectangle(0, 0, vw, 1, 0x1e2830, 1).setOrigin(0, 0)
+    this.infoBarBg = this.add.rectangle(0, 0, vw, INFO_BAR_H, activeTheme.panelBg, 0.9).setOrigin(0, 0)
+    const sep = this.add.rectangle(0, 0, vw, 1, activeTheme.separator, 1).setOrigin(0, 0)
 
     const ts = { fontFamily: 'monospace', fontSize: '10px', fontStyle: 'bold', color: '#f1f5f9', resolution: 2 }
     this.infoBarText   = this.add.text(12,      INFO_BAR_H / 2, '', ts).setOrigin(0, 0.5)
@@ -304,9 +328,9 @@ export class UIScene extends BaseScene {
     const backdrop = this.add.rectangle(cx, cy, vw, vh, 0x000000, 0.7).setScrollFactor(0)
 
     const panelGfx = this.add.graphics()
-    panelGfx.fillStyle(0x0c1018, 1)
+    panelGfx.fillStyle(activeTheme.panelBg, 1)
     panelGfx.fillRoundedRect(cx - HELP_W / 2, cy - HELP_H / 2, HELP_W, HELP_H, 10)
-    panelGfx.lineStyle(1, 0x2a3440, 1)
+    panelGfx.lineStyle(1, activeTheme.panelStroke, 1)
     panelGfx.strokeRoundedRect(cx - HELP_W / 2, cy - HELP_H / 2, HELP_W, HELP_H, 10)
 
     const title = this.add.text(cx, cy - HELP_H / 2 + 18, 'Keyboard Shortcuts', {
@@ -314,7 +338,7 @@ export class UIScene extends BaseScene {
     }).setOrigin(0.5, 0).setScrollFactor(0)
 
     const divGfx = this.add.graphics()
-    divGfx.lineStyle(1, 0x2a3440, 0.6)
+    divGfx.lineStyle(1, activeTheme.panelStroke, 0.6)
     divGfx.lineBetween(cx - HELP_W / 2 + 16, cy - HELP_H / 2 + 36, cx + HELP_W / 2 - 16, cy - HELP_H / 2 + 36)
 
     const rowH   = 22
@@ -328,7 +352,7 @@ export class UIScene extends BaseScene {
       const rowY = startY + i * rowH
       rows.push(
         this.add.text(keyX,  rowY, key,  { fontSize: '10px', color: '#5a6a7a', fontFamily: 'monospace', fontStyle: 'bold', resolution: 2 }).setScrollFactor(0),
-        this.add.text(descX, rowY, desc, { fontSize: '10px', color: '#8a96a4', fontFamily: 'monospace', resolution: 2 }).setScrollFactor(0),
+        this.add.text(descX, rowY, desc, { fontSize: '10px', color: activeTheme.subtleText, fontFamily: 'monospace', resolution: 2 }).setScrollFactor(0),
       )
     }
 
@@ -339,7 +363,7 @@ export class UIScene extends BaseScene {
         .setDisplaySize(HELP_W - 32, 4).setAlpha(0.5).setScrollFactor(0)
     } else {
       const hd = this.add.graphics()
-      hd.lineStyle(1, 0x2a3440, 0.4)
+      hd.lineStyle(1, activeTheme.panelStroke, 0.4)
       hd.lineBetween(cx - HELP_W / 2 + 16, cy + HELP_H / 2 - 28, cx + HELP_W / 2 - 16, cy + HELP_H / 2 - 28)
       hintDivider = hd
     }
