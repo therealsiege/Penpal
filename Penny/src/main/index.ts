@@ -22,6 +22,7 @@ import { writeGameStateSnapshot } from './game-state-snapshot'
 import { PreferenceCollector, PreferenceStore, connectCollector } from './preferences'
 import { initAutoUpdater } from './auto-updater'
 import { infraUp, infraDown } from './data-scripts'
+import { generateWeeklyDigest } from './evals/reports/weekly-digest'
 
 // Load analytics/.env for Memgraph/Qdrant connection strings
 // __dirname is out/main (or src/main in dev) — go up to Penny/
@@ -51,6 +52,18 @@ process.on('uncaughtException', (err) => {
 })
 
 let mainWindow: BrowserWindow | null = null
+const RUN_DIGEST_FLAG = '--run-digest'
+
+async function runWeeklyDigestCli(): Promise<void> {
+  try {
+    const result = await generateWeeklyDigest()
+    console.log(`[weekly-digest] generated: ${result.filePath}`)
+    app.exit(0)
+  } catch (error) {
+    console.error('[weekly-digest] failed:', error)
+    app.exit(1)
+  }
+}
 
 function createWindow() {
   const isTest = process.env.NODE_ENV === 'test'
@@ -91,6 +104,12 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+  const shouldRunDigest = app.commandLine.hasSwitch('run-digest') || process.argv.includes(RUN_DIGEST_FLAG)
+  if (shouldRunDigest) {
+    void runWeeklyDigestCli()
+    return
+  }
+
   // Set dock icon (macOS) — ensures custom icon in dev mode
   if (process.platform === 'darwin') {
     const dockIcon = nativeImage.createFromPath(
