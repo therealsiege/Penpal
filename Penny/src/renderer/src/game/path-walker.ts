@@ -6,9 +6,12 @@
 
 import Phaser from 'phaser'
 import type { NavPoint } from './nav-mesh'
+import { SPRITESHEET_KEYS, ICON_FRAMES } from './office-asset-keys'
 
 const DEFAULT_WALK_SPEED = 55 // px/sec
 const WALK_CYCLE_MS = 200
+const DUST_STEP_INTERVAL = 3 // spawn dust every N walk cycles
+const TRAIL_STEP_INTERVAL = 2 // spawn breadcrumb dot every N walk cycles
 
 export class PathWalker {
   private scene: Phaser.Scene
@@ -25,6 +28,8 @@ export class PathWalker {
   private onCompleteCb: (() => void) | null = null
   private destroyed = false
   private walking = false
+  private dustStepCounter = 0
+  private trailDots: Phaser.GameObjects.Sprite[] = []
 
   constructor(
     scene: Phaser.Scene,
@@ -58,6 +63,12 @@ export class PathWalker {
     if (this.shadowTween) { this.shadowTween.destroy(); this.shadowTween = null }
     this.onCompleteCb = null
     this.waypoints = []
+    // Clean up trail dots
+    for (const dot of this.trailDots) {
+      this.scene.tweens.killTweensOf(dot)
+      dot.destroy()
+    }
+    this.trailDots = []
     return pos
   }
 
@@ -105,6 +116,15 @@ export class PathWalker {
         cycleIdx = cycleIdx === 0 ? 1 : 0
         this.sprite.setFrame(startFrame + 1 + cycleIdx)
         this.sprite.setAngle(cycleIdx === 0 ? -3 : 3)
+        // Footstep dust puffs every few steps
+        this.dustStepCounter++
+        if (this.dustStepCounter % DUST_STEP_INTERVAL === 0) {
+          this.spawnDustPuff()
+        }
+        // Breadcrumb trail dots
+        if (this.dustStepCounter % TRAIL_STEP_INTERVAL === 0) {
+          this.spawnTrailDot()
+        }
       },
     })
 
@@ -126,6 +146,55 @@ export class PathWalker {
         duration: dur, ease: 'Linear',
       })
     }
+  }
+
+  /** Spawn a tiny dust puff sprite at the walker's feet. */
+  private spawnDustPuff(): void {
+    if (!this.sprite.active) return
+    const hasIcons = this.scene.textures.exists(SPRITESHEET_KEYS.GAME_ICONS)
+    if (!hasIcons) return
+    const dust = this.scene.add.sprite(
+      this.sprite.x + (Math.random() - 0.5) * 4,
+      this.sprite.y,
+      SPRITESHEET_KEYS.GAME_ICONS,
+      ICON_FRAMES.CIRCLE_GREY,
+    ).setScale(0.06 + Math.random() * 0.04).setAlpha(0.3).setDepth(this.sprite.depth - 1)
+    this.scene.tweens.add({
+      targets: dust,
+      alpha: 0,
+      scaleX: 0.14,
+      scaleY: 0.14,
+      y: dust.y - 3,
+      duration: 300 + Math.random() * 150,
+      ease: 'Power2',
+      onComplete: () => dust.destroy(),
+    })
+  }
+
+  /** Spawn a breadcrumb trail dot that fades out after a short delay. */
+  private spawnTrailDot(): void {
+    if (!this.sprite.active) return
+    const hasIcons = this.scene.textures.exists(SPRITESHEET_KEYS.GAME_ICONS)
+    if (!hasIcons) return
+    const dot = this.scene.add.sprite(
+      this.sprite.x,
+      this.sprite.y,
+      SPRITESHEET_KEYS.GAME_ICONS,
+      ICON_FRAMES.CIRCLE_GREY,
+    ).setScale(0.05).setAlpha(0.25).setDepth(this.sprite.depth - 2)
+    this.trailDots.push(dot)
+    this.scene.tweens.add({
+      targets: dot,
+      alpha: 0,
+      delay: 500,
+      duration: 2000,
+      ease: 'Power2',
+      onComplete: () => {
+        dot.destroy()
+        const idx = this.trailDots.indexOf(dot)
+        if (idx !== -1) this.trailDots.splice(idx, 1)
+      },
+    })
   }
 
   /** Map dx/dy to walk spritesheet base frame: 0=down, 3=right, 6=up, 9=left */

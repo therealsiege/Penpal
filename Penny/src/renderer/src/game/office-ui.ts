@@ -4,7 +4,7 @@ import type { WorkstationSprite, Room } from './office-types'
 import { NavMesh } from './nav-mesh'
 import type { PennyCafe } from './penny-cafe'
 import { WS_DESK_Y } from './office-constants'
-import { SPRITESHEET_KEYS, TOAST_ICON_FRAMES, ICON_FRAMES, ITEM_FRAMES, IMAGE_KEYS } from './office-asset-keys'
+import { SPRITESHEET_KEYS, TOAST_ICON_FRAMES, ICON_FRAMES, ITEM_FRAMES, PET_COUNT, IMAGE_KEYS } from './office-asset-keys'
 import { SIGNATURE_ITEM_NAMES } from './workstation-creation'
 
 // ---------------------------------------------------------------------------
@@ -182,12 +182,34 @@ export class OfficeUI {
     const entry = { container: toast, createdAt: Date.now() }
     this.activeToasts.push(entry)
 
+    // Countdown progress bar at the bottom of the toast
+    const bar = this.scene.add.rectangle(0, TOAST_H - 1, TOAST_W, 1.5, iconColor, 0.4)
+      .setOrigin(0, 0.5)
+    toast.add(bar)
+    this.scene.tweens.add({
+      targets: bar,
+      width: 0,
+      duration: 3500,
+      ease: 'Linear',
+    })
+
     // Slide in from right with a slight overshoot bounce
     this.scene.tweens.add({
       targets: toast,
       x: startX,
       alpha: 1,
       duration: 300,
+      ease: 'Back.easeOut',
+    })
+
+    // Icon entrance pulse after slide-in completes
+    this.scene.tweens.add({
+      targets: dot,
+      scaleX: 0.42,
+      scaleY: 0.42,
+      duration: 150,
+      yoyo: true,
+      delay: 300,
       ease: 'Back.easeOut',
     })
 
@@ -261,10 +283,28 @@ export class OfficeUI {
       sigTrait = SIGNATURE_ITEM_NAMES[sigFrame] ?? ''
     }
     const hasTrait = sigTrait.length > 0
+    // Compute pet frame and sig item frame for tooltip preview sprites
+    let tooltipPetFrame = -1
+    let tooltipSigFrame = -1
+    {
+      let nh2 = 0
+      const aName2 = agent.config.name ?? ''
+      for (let i = 0; i < aName2.length; i++) { nh2 = ((nh2 << 5) - nh2) + aName2.charCodeAt(i); nh2 |= 0 }
+      nh2 = Math.abs(nh2)
+      tooltipPetFrame = nh2 % PET_COUNT
+      const sigItems2 = [
+        ITEM_FRAMES.COFFEE_CUP, ITEM_FRAMES.BOOK, ITEM_FRAMES.HEADPHONES,
+        ITEM_FRAMES.PIZZA, ITEM_FRAMES.PAINT_PALETTE, ITEM_FRAMES.WRENCH,
+        ITEM_FRAMES.BEER, ITEM_FRAMES.CAMERA, ITEM_FRAMES.DONUT,
+        ITEM_FRAMES.FIRST_AID, ITEM_FRAMES.PHONE, ITEM_FRAMES.MONITOR,
+      ]
+      tooltipSigFrame = sigItems2[nh2 % sigItems2.length]
+    }
+    const hasPetPreview = this.scene.textures.exists(SPRITESHEET_KEYS.DESK_PETS) && this.scene.textures.exists(SPRITESHEET_KEYS.GAME_ITEMS)
     const TW = 220, PX = 10, PY = 8, LH = 16, AH = 7
     const hasR = resources.length > 0, hasS = sub.length > 0
     const subL = hasS ? Math.max(1, Math.ceil(sub.length / 26)) : 0
-    const tH = PY + LH + (title ? LH : 0) + 4 + LH + (hasR ? LH : 0) + (hasTrait ? LH : 0) + (hasS ? 6 + subL * LH : 0) + PY, tW = TW + PX * 2
+    const tH = PY + LH + (title ? LH : 0) + 4 + LH + (hasR ? LH : 0) + (hasTrait ? LH : 0) + (hasPetPreview ? LH + 2 : 0) + (hasS ? 6 + subL * LH : 0) + PY, tW = TW + PX * 2
     const flip = screenY < tH + AH + 20
     const aY = flip ? screenY + AH + 2 : screenY - AH - 2 - tH
     const cX = Math.max(8, Math.min(screenX - tW / 2, this.viewWidth - tW - 8))
@@ -284,11 +324,18 @@ export class OfficeUI {
     ty += LH
     if (title) { ct.add(this.scene.add.text(tx, ty, title, { fontSize: '10px', color: '#8a96a4', fontFamily: 'system-ui, sans-serif', resolution: 2 })); ty += LH }
     ty += 4
-    ct.add(this.scene.add.circle(tx + 3.5, ty + LH / 2, 3.5, aInt, 1)); ct.add(this.scene.add.text(tx + 12, ty, statusLabel, { fontSize: '10px', color: statusHex, fontFamily: 'system-ui, sans-serif', fontStyle: 'bold', resolution: 2 }))
+    const statusDotFrame = aInt === 0xfbbf24 ? ICON_FRAMES.CIRCLE_YELLOW : aInt === 0x34d399 ? ICON_FRAMES.CIRCLE_GREEN : aInt === 0xa78bfa ? ICON_FRAMES.CIRCLE_BLUE : ICON_FRAMES.CIRCLE_GREY
+    ct.add(this.scene.add.sprite(tx + 3.5, ty + LH / 2, SPRITESHEET_KEYS.GAME_ICONS, statusDotFrame).setScale(0.22).setOrigin(0.5)); ct.add(this.scene.add.text(tx + 12, ty, statusLabel, { fontSize: '10px', color: statusHex, fontFamily: 'system-ui, sans-serif', fontStyle: 'bold', resolution: 2 }))
     if (uptime) ct.add(this.scene.add.text(cX + tW - PX, ty, uptime, { fontSize: '10px', color: '#5a6a7a', fontFamily: 'system-ui, monospace', resolution: 2 }).setOrigin(1, 0))
     ty += LH
     if (hasR) { ct.add(this.scene.add.text(tx + 12, ty, resources, { fontSize: '9px', color: '#5a6a7a', fontFamily: 'system-ui, monospace', resolution: 2 })); ty += LH }
     if (hasTrait) { ct.add(this.scene.add.text(tx + 12, ty, sigTrait, { fontSize: '9px', color: '#a78bfa', fontFamily: 'system-ui, sans-serif', fontStyle: 'italic', resolution: 2 })); ty += LH }
+    if (hasPetPreview) {
+      ty += 2
+      ct.add(this.scene.add.sprite(tx + 8, ty + 6, SPRITESHEET_KEYS.DESK_PETS, tooltipPetFrame).setScale(0.5).setOrigin(0.5))
+      ct.add(this.scene.add.sprite(tx + 24, ty + 6, SPRITESHEET_KEYS.GAME_ITEMS, tooltipSigFrame).setScale(0.4).setOrigin(0.5))
+      ty += LH
+    }
     if (hasS) { ty += 2; const dg = this.scene.add.graphics(); dg.setScrollFactor(0); dg.lineStyle(1, 0x2a3440, 0.6); dg.lineBetween(tx, ty, cX + tW - PX, ty); ct.add(dg); ty += 4; ct.add(this.scene.add.text(tx, ty, sub, { fontSize: '10px', color: '#8a96a4', fontFamily: 'system-ui, sans-serif', wordWrap: { width: TW }, resolution: 2 })) }
     ct.setAlpha(0); g.setAlpha(0)
     this.tooltipFadeTween = this.scene.tweens.add({ targets: [ct, g], alpha: 1, duration: 150, ease: 'Quad.easeOut' })
@@ -343,7 +390,7 @@ export class OfficeUI {
 
     const { width, height } = this.scene.scale
     const PW = 280
-    const PH = 310
+    const PH = 370
 
     const container = this.scene.add.container(0, 0)
     container.setDepth(9999)
@@ -395,6 +442,8 @@ export class OfficeUI {
       ['+  /  -', 'Zoom in / out'],
       ['1 - 9',   'Jump to agent'],
       ['H  /  ?', 'This help'],
+      ['M',       'Toggle sound'],
+      ['N',       'Cycle day/night'],
       ['`',       'Debug overlay'],
     ]
 
@@ -696,40 +745,104 @@ export class OfficeUI {
     for (const t of teamAreaLabels) t.setVisible(level >= 2)
   }
 
-  applyLodToWorkstation(ws: WorkstationSprite, level: number, useFadeIn: boolean): void {
+  applyLodToWorkstation(ws: WorkstationSprite, level: number, _useFadeIn: boolean): void {
+    // Guard: skip if LOD level hasn't changed for this workstation
+    if (ws.currentLodLevel === level) return
+    const prevLevel = ws.currentLodLevel ?? 1
+    ws.currentLodLevel = level
+
     const showRoom = level >= 2
     const showFull = level >= 3
+    const wasRoom = prevLevel >= 2
+    const wasFull = prevLevel >= 3
 
-    ws.container.setVisible(showRoom)
-    if (!showRoom) return
+    // Container visibility — fade the whole container when entering/leaving L2
+    if (showRoom && !wasRoom) {
+      // Entering L2 from L1: fade in container
+      ws.container.setVisible(true).setAlpha(0)
+      this.scene.tweens.add({ targets: ws.container, alpha: 1, duration: 200, ease: 'Power2' })
+    } else if (!showRoom && wasRoom) {
+      // Leaving L2 to L1: fade out then hide
+      this.scene.tweens.add({
+        targets: ws.container, alpha: 0, duration: 150, ease: 'Power2',
+        onComplete: () => { ws.container.setVisible(false) },
+      })
+      return // container fading out — skip child visibility
+    } else if (!showRoom) {
+      ws.container.setVisible(false)
+      return
+    }
 
-    type VisObj = Phaser.GameObjects.Components.Visible & { setAlpha?: (a: number) => void }
+    type AlphaObj = Phaser.GameObjects.Components.Visible &
+      Phaser.GameObjects.Components.AlphaSingle
 
-    const applyVisibility = (obj: Phaser.GameObjects.GameObject, show: boolean) => {
-      const v = obj as unknown as VisObj
-      if (show) {
-        if (!v.visible && useFadeIn && v.setAlpha) {
-          v.setVisible(true)
-          v.setAlpha(0)
-          this.scene.tweens.add({ targets: obj, alpha: 1, duration: 200, ease: 'Sine.easeOut' })
-        } else {
-          v.setVisible(true)
-        }
+    const fadeIn = (obj: Phaser.GameObjects.GameObject, targetAlpha = 1) => {
+      const v = obj as unknown as AlphaObj
+      // Kill any existing LOD fade tween on this object to prevent conflicts
+      this.scene.tweens.killTweensOf(obj, 'alpha')
+      v.setVisible(true)
+      // Respect objects that manage their own alpha (e.g. quest icons at alpha 0)
+      if (v.alpha > 0 && v.alpha < targetAlpha) {
+        // Already partially visible — tween from current
+        this.scene.tweens.add({ targets: obj, alpha: targetAlpha, duration: 200, ease: 'Power2' })
       } else {
-        v.setVisible(false)
+        v.setAlpha(0)
+        this.scene.tweens.add({ targets: obj, alpha: targetAlpha, duration: 200, ease: 'Power2' })
       }
     }
 
-    for (const obj of ws.lodLevel2Objects) {
-      if (obj && 'setVisible' in obj) applyVisibility(obj, showRoom)
+    const fadeOut = (obj: Phaser.GameObjects.GameObject) => {
+      const v = obj as unknown as AlphaObj
+      if (!v.visible) return // already hidden
+      // Kill any existing LOD fade tween on this object
+      this.scene.tweens.killTweensOf(obj, 'alpha')
+      this.scene.tweens.add({
+        targets: obj, alpha: 0, duration: 150, ease: 'Power2',
+        onComplete: () => { (obj as unknown as AlphaObj).setVisible(false) },
+      })
     }
 
+    // L2 objects: shown at level >= 2
+    const l2Entering = showRoom && !wasRoom
+    for (const obj of ws.lodLevel2Objects) {
+      if (!obj || !('setVisible' in obj)) continue
+      if (showRoom) {
+        if (l2Entering) fadeIn(obj)
+        else (obj as unknown as AlphaObj).setVisible(true)
+      } else {
+        fadeOut(obj)
+      }
+    }
+
+    // L3 objects: shown at level >= 3
+    const l3Entering = showFull && !wasFull
+    const l3Leaving = !showFull && wasFull
     for (const obj of ws.lodLevel3Objects) {
-      if (obj && 'setVisible' in obj) applyVisibility(obj, showFull)
+      if (!obj || !('setVisible' in obj)) continue
+      if (showFull) {
+        if (l3Entering) fadeIn(obj)
+        else (obj as unknown as AlphaObj).setVisible(true)
+      } else if (l3Leaving) {
+        fadeOut(obj)
+      } else {
+        (obj as unknown as AlphaObj).setVisible(false)
+      }
     }
 
     // These are managed by animation state but suppressed below L3
-    if (ws.screenLines) ws.screenLines.setVisible(showFull)
+    if (ws.screenLines) {
+      if (showFull && !wasFull) {
+        ws.screenLines.setVisible(true).setAlpha(0)
+        this.scene.tweens.add({ targets: ws.screenLines, alpha: 1, duration: 200, ease: 'Power2' })
+      } else if (!showFull && wasFull) {
+        this.scene.tweens.add({
+          targets: ws.screenLines, alpha: 0, duration: 150, ease: 'Power2',
+          onComplete: () => { ws.screenLines?.setVisible(false) },
+        })
+      } else {
+        ws.screenLines.setVisible(showFull)
+      }
+    }
     if (ws.monitorGlowFx) {
       if (showFull) {
         if (ws.monitorGlowTween) ws.monitorGlowTween.resume()

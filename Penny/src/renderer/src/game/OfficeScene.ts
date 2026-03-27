@@ -112,6 +112,11 @@ export class OfficeScene extends Phaser.Scene {
   private _roomVisibility = new RoomVisibilityManager()
   private lastRoomCheckAt = 0
 
+  // Performance auto-reducer
+  private _perfFrameCount = 0
+  private _perfLastCheckAt = 0
+  private _perfReducedMode = false
+
   // Game systems
   private celebrations!: CelebrationManager
   private moodManager!: AgentMoodManager
@@ -463,7 +468,12 @@ export class OfficeScene extends Phaser.Scene {
     this.pods = new OfficePods(this)
     this.pods.init()
 
-    // Sky gradient — deepest background layer, behind stars and clouds
+    // Ground plane — solid color fill that covers the entire viewport at any
+    // zoom/scroll, so no transparent gaps are ever visible behind the scene.
+    this.add.rectangle(0, 0, 16000, 16000, COLOR_BG, 1)
+      .setOrigin(0.5, 0.5).setDepth(-12).setScrollFactor(0)
+
+    // Sky gradient — deepest visible layer, behind stars and clouds
     const skyGradient = this.add.graphics().setDepth(-11).setScrollFactor(0)
     this.skyGradient = skyGradient
 
@@ -712,6 +722,26 @@ export class OfficeScene extends Phaser.Scene {
         e.preventDefault()
         this.ui.toggleDebugOverlay(this.navMesh, this.rooms, this.agents, this.cafe)
       })
+
+      // M — toggle sound mute
+      this.input.keyboard.on('keydown-M', (e: KeyboardEvent) => {
+        if (shouldIgnoreKeyboardShortcuts(e)) return
+        e.preventDefault()
+        soundEngine.toggleMute()
+        this.showToast(soundEngine.isMuted ? 'Sound OFF' : 'Sound ON', 'info')
+      })
+
+      // N — cycle atmosphere phase manually
+      this.input.keyboard.on('keydown-N', (e: KeyboardEvent) => {
+        if (shouldIgnoreKeyboardShortcuts(e)) return
+        e.preventDefault()
+        const phases: Array<'morning' | 'day' | 'evening' | 'night'> = ['morning', 'day', 'evening', 'night']
+        const currentIdx = phases.indexOf(this.atmosphere.currentTimePhase)
+        const nextPhase = phases[(currentIdx + 1) % phases.length]
+        this.atmosphere.currentTimePhase = nextPhase as any
+        this.atmosphere.applyDayNightCycle(true)
+        this.showToast(`Phase: ${nextPhase}`, 'info')
+      })
     }
 
     // Vignette: subtle screen-space edge shading
@@ -799,6 +829,7 @@ export class OfficeScene extends Phaser.Scene {
       // Show badge at screen center (scroll-factor 0 position)
       const cam = this.cameras.main
       this.celebrations.achievementUnlocked(cam.width / 2, cam.height / 2, title, iconFrame)
+      soundEngine.achievement()
     })
 
     // Wire season end to dramatic ceremony
@@ -833,6 +864,7 @@ export class OfficeScene extends Phaser.Scene {
             difficulty as 'trivial' | 'normal' | 'hard' | 'epic' | 'legendary',
             xpReward, creditReward,
           )
+          soundEngine.levelUp()
           break
         }
       }
@@ -1044,6 +1076,22 @@ export class OfficeScene extends Phaser.Scene {
       this.lastSeasonHudUpdateAt = time
       this.seasonHud.update()
     }
+
+    // Performance auto-reducer — check avg FPS every 3s
+    this._perfFrameCount++
+    if (time - this._perfLastCheckAt >= 3000) {
+      const avgFps = this._perfFrameCount / 3
+      this._perfFrameCount = 0
+      this._perfLastCheckAt = time
+      if (avgFps < 28 && !this._perfReducedMode) {
+        this._perfReducedMode = true
+        this.particles.setReducedMode(true)
+        this.showToast('Performance mode ON', 'info')
+      } else if (avgFps > 45 && this._perfReducedMode) {
+        this._perfReducedMode = false
+        this.particles.setReducedMode(false)
+      }
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -1130,9 +1178,33 @@ export class OfficeScene extends Phaser.Scene {
       }
     }
 
+    const prevWorldW = this.worldWidth
+    const prevWorldH = this.worldHeight
     this.background.layoutRooms()
     this.officeCamera.updateCameraBounds()
     this.background.updateWhiteboardStats()
+
+    // Brief camera zoom-out when world expands to show new rooms
+    if (this.officeCamera.hasInitialFit &&
+        (this.worldWidth > prevWorldW + 50 || this.worldHeight > prevWorldH + 50)) {
+      const cam = this.cameras.main
+      const origZoom = cam.zoom
+      const pullBackZoom = origZoom * 0.88
+      this.tweens.add({
+        targets: cam,
+        zoom: pullBackZoom,
+        duration: 400,
+        ease: 'Sine.easeOut',
+        onComplete: () => {
+          this.tweens.add({
+            targets: cam,
+            zoom: origZoom,
+            duration: 500,
+            ease: 'Sine.easeInOut',
+          })
+        },
+      })
+    }
 
     // Re-register all rooms with the visibility manager after layout finalises positions.
     // Registration replaces any previous entry for the same id, so this is safe to call on
@@ -1374,40 +1446,95 @@ export class OfficeScene extends Phaser.Scene {
   //   Level 3 (detail, zoom > LOD_L2_MAX):    full detail including accessories, monitor content
 
 
-  private applyLodToWorkstation(ws: WorkstationSprite, level: number, useFadeIn: boolean): void {
+  private applyLodToWorkstation(ws: WorkstationSprite, level: number, _useFadeIn: boolean): void {
+    // Guard: skip if LOD level hasn't changed for this workstation
+    if (ws.currentLodLevel === level) return
+    const prevLevel = ws.currentLodLevel ?? 1
+    ws.currentLodLevel = level
+
     const showRoom = level >= 2
     const showFull = level >= 3
+    const wasRoom = prevLevel >= 2
+    const wasFull = prevLevel >= 3
 
-    ws.container.setVisible(showRoom)
-    if (!showRoom) return
+    // Container visibility — fade the whole container when entering/leaving L2
+    if (showRoom && !wasRoom) {
+      ws.container.setVisible(true).setAlpha(0)
+      this.tweens.add({ targets: ws.container, alpha: 1, duration: 200, ease: 'Power2' })
+    } else if (!showRoom && wasRoom) {
+      this.tweens.add({
+        targets: ws.container, alpha: 0, duration: 150, ease: 'Power2',
+        onComplete: () => { ws.container.setVisible(false) },
+      })
+      return
+    } else if (!showRoom) {
+      ws.container.setVisible(false)
+      return
+    }
 
-    type VisObj = Phaser.GameObjects.Components.Visible & { setAlpha?: (a: number) => void }
+    type AlphaObj = Phaser.GameObjects.Components.Visible &
+      Phaser.GameObjects.Components.AlphaSingle
 
-    const applyVisibility = (obj: Phaser.GameObjects.GameObject, show: boolean) => {
-      const v = obj as unknown as VisObj
-      if (show) {
-        if (!v.visible && useFadeIn && v.setAlpha) {
-          v.setVisible(true)
-          v.setAlpha(0)
-          this.tweens.add({ targets: obj, alpha: 1, duration: 200, ease: 'Sine.easeOut' })
-        } else {
-          v.setVisible(true)
-        }
+    const fadeIn = (obj: Phaser.GameObjects.GameObject, targetAlpha = 1) => {
+      const v = obj as unknown as AlphaObj
+      this.tweens.killTweensOf(obj, 'alpha')
+      v.setVisible(true)
+      if (v.alpha > 0 && v.alpha < targetAlpha) {
+        this.tweens.add({ targets: obj, alpha: targetAlpha, duration: 200, ease: 'Power2' })
       } else {
-        v.setVisible(false)
+        v.setAlpha(0)
+        this.tweens.add({ targets: obj, alpha: targetAlpha, duration: 200, ease: 'Power2' })
       }
     }
 
+    const fadeOut = (obj: Phaser.GameObjects.GameObject) => {
+      const v = obj as unknown as AlphaObj
+      if (!v.visible) return
+      this.tweens.killTweensOf(obj, 'alpha')
+      this.tweens.add({
+        targets: obj, alpha: 0, duration: 150, ease: 'Power2',
+        onComplete: () => { (obj as unknown as AlphaObj).setVisible(false) },
+      })
+    }
+
+    const l2Entering = showRoom && !wasRoom
     for (const obj of ws.lodLevel2Objects) {
-      if (obj && 'setVisible' in obj) applyVisibility(obj, showRoom)
+      if (!obj || !('setVisible' in obj)) continue
+      if (showRoom) {
+        if (l2Entering) fadeIn(obj)
+        else (obj as unknown as AlphaObj).setVisible(true)
+      } else {
+        fadeOut(obj)
+      }
     }
 
+    const l3Entering = showFull && !wasFull
+    const l3Leaving = !showFull && wasFull
     for (const obj of ws.lodLevel3Objects) {
-      if (obj && 'setVisible' in obj) applyVisibility(obj, showFull)
+      if (!obj || !('setVisible' in obj)) continue
+      if (showFull) {
+        if (l3Entering) fadeIn(obj)
+        else (obj as unknown as AlphaObj).setVisible(true)
+      } else if (l3Leaving) {
+        fadeOut(obj)
+      } else {
+        (obj as unknown as AlphaObj).setVisible(false)
+      }
     }
 
-    // These are managed by animation state but suppressed below L3
-    if (ws.screenLines) ws.screenLines.setVisible(showFull)
+    if (ws.screenLines) {
+      if (showFull && !wasFull) {
+        ws.screenLines.setVisible(true).setAlpha(0)
+        this.tweens.add({ targets: ws.screenLines, alpha: 1, duration: 200, ease: 'Power2' })
+      } else if (!showFull && wasFull) {
+        this.tweens.add({
+          targets: ws.screenLines, alpha: 0, duration: 150, ease: 'Power2',
+          onComplete: () => { ws.screenLines?.setVisible(false) },
+        })
+      } else {
+        ws.screenLines.setVisible(showFull)
+      }
+    }
     if (ws.monitorGlowFx) {
       if (showFull) {
         if (ws.monitorGlowTween) ws.monitorGlowTween.resume()

@@ -1,5 +1,5 @@
 import Phaser from 'phaser'
-import { SPRITESHEET_KEYS, EFFECT_ANIM_KEYS } from './office-asset-keys'
+import { SPRITESHEET_KEYS, ICON_FRAMES, EFFECT_ANIM_KEYS } from './office-asset-keys'
 
 // ---------------------------------------------------------------------------
 // WeatherParticles — rain and snow screen-space overlay pools
@@ -143,15 +143,27 @@ export class WeatherParticles {
 
   private initSnowPool(viewWidth: number, viewHeight: number): void {
     const SNOW_COUNT = 30
+    const hasIcons = this.scene.textures.exists(SPRITESHEET_KEYS.GAME_ICONS)
     for (let i = 0; i < SNOW_COUNT; i++) {
-      const radius = 1 + Math.random() * 1.5
       const alpha = 0.2 + Math.random() * 0.2
-      const flake = this.scene.add.circle(Math.random() * viewWidth, Math.random() * viewHeight, radius, 0xffffff, alpha)
+      let flake: Phaser.GameObjects.Arc | Phaser.GameObjects.Sprite
+      if (hasIcons) {
+        const s = this.scene.add.sprite(
+          Math.random() * viewWidth,
+          Math.random() * viewHeight,
+          SPRITESHEET_KEYS.GAME_ICONS,
+          ICON_FRAMES.STAR_GREY,
+        ).setScale(0.08 + Math.random() * 0.06).setAlpha(alpha) as unknown as Phaser.GameObjects.Arc
+        flake = s
+      } else {
+        const radius = 1 + Math.random() * 1.5
+        flake = this.scene.add.circle(Math.random() * viewWidth, Math.random() * viewHeight, radius, 0xffffff, alpha)
+      }
       flake.setScrollFactor(0)
       flake.setDepth(9989)
       flake.setVisible(false)
       flake.setData('speed', 1 + Math.random())
-      this.snowPool.push(flake)
+      this.snowPool.push(flake as Phaser.GameObjects.Arc)
     }
   }
 

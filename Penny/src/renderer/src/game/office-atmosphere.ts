@@ -279,6 +279,26 @@ export class OfficeAtmosphere {
       this.sky.redrawCloud(cloud, targetColor)
     }
 
+    // Dawn/dusk transition flash — brief warm/cool color overlay
+    if (animate) {
+      const flashColor = (phase === 'morning') ? 0xffa500 : (phase === 'evening') ? 0xff6a00 : (phase === 'night') ? 0x1a3a6a : 0
+      if (flashColor !== 0) {
+        const cam = this.callbacks.getCamera()
+        const flashGfx = this.scene.add.graphics().setScrollFactor(0).setDepth(9997)
+        flashGfx.fillStyle(flashColor, 0.12)
+        flashGfx.fillRect(0, 0, cam.width, cam.height)
+        flashGfx.setAlpha(1)
+        this.scene.tweens.add({
+          targets: flashGfx,
+          alpha: 0,
+          duration: 600,
+          ease: 'Power2',
+          delay: 100,
+          onComplete: () => flashGfx.destroy(),
+        })
+      }
+    }
+
     // Delegate rain/snow updates to OfficeScene via callback
     this.callbacks.onPhaseChange(phase, animate, [], [], 0, 0)
 
