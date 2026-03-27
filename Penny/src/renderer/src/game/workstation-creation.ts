@@ -141,7 +141,7 @@ export class WorkstationFactory {
       chairSprite.setScale(0.44).setAlpha(0.85)
       wsContainer.add(chairSprite)
     } else {
-      wsContainer.add(this.scene.add.rectangle(0, WS_CHAIR_Y, 18, 13, 0x1e2830).setStrokeStyle(1, 0x2a3440, 0.6))
+      wsContainer.add(this.scene.add.rectangle(0, WS_CHAIR_Y, 18, 13, activeTheme.deskBody).setStrokeStyle(1, activeTheme.deskTop, 0.6))
     }
 
     const deskBody = this.scene.add.rectangle(0, WS_DESK_Y, 80, 21, COLOR_DESK_BODY).setStrokeStyle(1, activeTheme.deskStrokeIdle, 0.5)
@@ -219,7 +219,7 @@ export class WorkstationFactory {
       })
       screenTween.pause()
     } else {
-      wsContainer.add(this.scene.add.rectangle(0, WS_MONITOR_Y, 16, 13, 0x141a22).setStrokeStyle(1, 0x2a3440, 0.8))
+      wsContainer.add(this.scene.add.rectangle(0, WS_MONITOR_Y, 16, 13, activeTheme.roomFloor).setStrokeStyle(1, activeTheme.deskTop, 0.8))
     }
 
     // Monitor screen frame overlay — sprite-based outline on the monitor screen area
@@ -246,9 +246,9 @@ export class WorkstationFactory {
     const agentLevel = agent.xp?.level ?? 1
 
     // Desk lamp (unlocks at Associate / L4)
-    const lampBase = this.scene.add.rectangle(-34, WS_DESK_Y - 2, 6, 3, 0x3a4858)
+    const lampBase = this.scene.add.rectangle(-34, WS_DESK_Y - 2, 6, 3, activeTheme.lampMetal)
     wsContainer.add(lampBase)
-    const lampArm = this.scene.add.rectangle(-34, WS_DESK_Y - 8, 1.5, 10, 0x3a4858)
+    const lampArm = this.scene.add.rectangle(-34, WS_DESK_Y - 8, 1.5, 10, activeTheme.lampMetal)
     wsContainer.add(lampArm)
     const lampShade = this.scene.add.triangle(-34, WS_DESK_Y - 14, -5, 6, 0, -2, 5, 6, activeTheme.lampShade, 0.8)
     wsContainer.add(lampShade)
@@ -269,18 +269,18 @@ export class WorkstationFactory {
 
     // Keyboard (unlocks at Associate / L3)
     const kbVisible = isDeskItemUnlocked(agentLevel, 'keyboard')
-    const keyboard = this.scene.add.rectangle(0, WS_DESK_Y + 2, 18, 5, 0x141a22).setAlpha(0.8).setVisible(kbVisible)
+    const keyboard = this.scene.add.rectangle(0, WS_DESK_Y + 2, 18, 5, activeTheme.roomFloor).setAlpha(0.8).setVisible(kbVisible)
     wsContainer.add(keyboard)
     const kbLines = this.scene.add.graphics().setVisible(kbVisible)
-    kbLines.lineStyle(0.5, 0x2a3440, 0.6)
+    kbLines.lineStyle(0.5, activeTheme.deskTop, 0.6)
     for (let r = 0; r < 3; r++) kbLines.lineBetween(-7, WS_DESK_Y + r * 1.5, 7, WS_DESK_Y + r * 1.5)
     wsContainer.add(kbLines)
 
     // Desk communicator / phone (unlocks at Expert / L7)
     const phoneVisible = isDeskItemUnlocked(agentLevel, 'phone')
-    const phoneBody = this.scene.add.rectangle(-30, WS_DESK_Y - 2, 4, 6, 0x2a3440).setVisible(phoneVisible)
+    const phoneBody = this.scene.add.rectangle(-30, WS_DESK_Y - 2, 4, 6, activeTheme.deskTop).setVisible(phoneVisible)
     wsContainer.add(phoneBody)
-    const phoneScreen = this.scene.add.rectangle(-30, WS_DESK_Y - 5, 3, 2, 0x141a22).setVisible(phoneVisible)
+    const phoneScreen = this.scene.add.rectangle(-30, WS_DESK_Y - 5, 3, 2, activeTheme.roomFloor).setVisible(phoneVisible)
     wsContainer.add(phoneScreen)
     const phoneLight = this.scene.add.arc(-28, WS_DESK_Y - 6, 1.5, 0, 360, false, 0x00e5ff, 0).setVisible(phoneVisible)
     wsContainer.add(phoneLight)
@@ -296,7 +296,7 @@ export class WorkstationFactory {
     const extraDecos: Phaser.GameObjects.GameObject[] = []
     if (isDeskItemUnlocked(agentLevel, 'pencil_holder')) {
       const phX = nameHash % 2 === 0 ? -20 : 20
-      const cup = this.scene.add.rectangle(phX, WS_DESK_Y - 5, 5, 7, 0x2a3440, 0.7)
+      const cup = this.scene.add.rectangle(phX, WS_DESK_Y - 5, 5, 7, activeTheme.deskTop, 0.7)
       wsContainer.add(cup); extraDecos.push(cup)
       const p1 = this.scene.add.rectangle(phX - 1, WS_DESK_Y - 10, 1, 6, 0xd4a017, 0.6).setAngle(-5)
       wsContainer.add(p1); extraDecos.push(p1)
@@ -308,7 +308,7 @@ export class WorkstationFactory {
     let deskPlantLeaf: Phaser.GameObjects.Arc | null = null
     if (isDeskItemUnlocked(agentLevel, 'plant')) {
       const plX = nameHash % 2 === 0 ? -16 : 16
-      const pot = this.scene.add.rectangle(plX, WS_DESK_Y - 2, 5, 4, 0x2a3440, 0.7)
+      const pot = this.scene.add.rectangle(plX, WS_DESK_Y - 2, 5, 4, activeTheme.deskTop, 0.7)
       wsContainer.add(pot); extraDecos.push(pot)
       const leaf = this.scene.add.sprite(plX, WS_DESK_Y - 6, SPRITESHEET_KEYS.GAME_ICONS, ICON_FRAMES.CIRCLE_GREEN)
         .setScale(0.22).setAlpha(0.6).setOrigin(0.5) as unknown as Phaser.GameObjects.Sprite & { setFillStyle?: never }
@@ -391,7 +391,7 @@ export class WorkstationFactory {
     // bg rect at (26, WS_DESK_Y - 12); text centered inside at (33, WS_DESK_Y - 8).
     // Color tiers: 0 = hidden, 1-4 = gray, 5-9 = blue, 10+ = gold.
     const taskCountBg = this.scene.add.graphics()
-    taskCountBg.fillStyle(0x0a0e14, 0.6)
+    taskCountBg.fillStyle(activeTheme.bg, 0.6)
     taskCountBg.fillRoundedRect(0, 0, 14, 8, 2)
     taskCountBg.setPosition(26, WS_DESK_Y - 12)
     taskCountBg.setAlpha(0)        // hidden until first task completes
@@ -460,7 +460,7 @@ export class WorkstationFactory {
     let thoughtBubbleBgSprite: Phaser.GameObjects.Image | undefined
     if (this.scene.textures.exists(IMAGE_KEYS.PANEL_BG)) {
       thoughtBubbleBgSprite = this.scene.add.image(0, 0, IMAGE_KEYS.PANEL_BG)
-        .setDisplaySize(110, 30).setAlpha(0.9).setTint(0x0a0e14).setOrigin(0.5)
+        .setDisplaySize(110, 30).setAlpha(0.9).setTint(activeTheme.bg).setOrigin(0.5)
       thoughtBubbleBg.setVisible(false)
     }
     const thoughtBubbleText = this.scene.add.text(0, 0, '', {
@@ -533,8 +533,8 @@ export class WorkstationFactory {
     // Role badge (S / R / E) — shown when agent has a pod role assigned.
     // Sits to the left of the name tag; revealed/hidden in updateWorkstation.
     const roleBadge = this.scene.add.text(-30, WS_NAME_Y, '', {
-      fontSize: '9px', color: '#0a0e14', fontFamily: 'system-ui, monospace',
-      fontStyle: 'bold', backgroundColor: '#00e5ff',
+      fontSize: '9px', color: activeTheme.nameBg.replace(/cc$/, ''), fontFamily: 'system-ui, monospace',
+      fontStyle: 'bold', backgroundColor: activeTheme.accentText,
       padding: { x: 3, y: 1 }, resolution: 2,
     }).setOrigin(0.5).setVisible(false)
     wsContainer.add(roleBadge)
@@ -562,7 +562,7 @@ export class WorkstationFactory {
       width: XP_BAR_W,
       height: XP_BAR_H,
       fillColor: 0x3b82f6,
-      backgroundColor: 0x141a22,
+      backgroundColor: activeTheme.roomFloor,
     })
     xpBar.graphics.setAlpha(0.6).setVisible(false)
     wsContainer.add(xpBar.graphics)
@@ -620,7 +620,7 @@ export class WorkstationFactory {
       .setScale(0.32).setOrigin(0.5)
     const blockedIndicatorText = this.scene.add.text(0, -0.5, '!', {
       fontSize: '10px',
-      color: '#0a0e14',
+      color: activeTheme.nameBg.replace(/cc$/, ''),
       fontFamily: 'system-ui, monospace',
       fontStyle: 'bold',
       resolution: 2,

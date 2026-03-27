@@ -4,6 +4,7 @@ import type { WorkstationSprite, Room } from './office-types'
 import { NavMesh } from './nav-mesh'
 import type { PennyCafe } from './penny-cafe'
 import { WS_DESK_Y } from './office-constants'
+import { activeTheme } from './office-theme'
 import { SPRITESHEET_KEYS, TOAST_ICON_FRAMES, ICON_FRAMES, ITEM_FRAMES, PET_COUNT, IMAGE_KEYS } from './office-asset-keys'
 import { SIGNATURE_ITEM_NAMES } from './workstation-creation'
 
@@ -170,7 +171,7 @@ export class OfficeUI {
 
     // Label — offset right to clear the dot
     const label = this.scene.add.text(26, 6, text, {
-      fontSize: '11px', fontFamily: 'monospace', color: '#c4ccd6',
+      fontSize: '11px', fontFamily: 'monospace', color: activeTheme.headerText,
       wordWrap: { width: TOAST_W - 34 },
     })
 
@@ -310,19 +311,19 @@ export class OfficeUI {
     const cX = Math.max(8, Math.min(screenX - tW / 2, this.viewWidth - tW - 8))
     const g = this.scene.add.graphics(); g.setScrollFactor(0).setDepth(10000); this.tooltipGraphics = g
     g.fillStyle(0x000000, 0.35); g.fillRoundedRect(cX + 3, aY + 3, tW, tH, 7)
-    g.fillStyle(0x0c1018, 0.97); g.fillRoundedRect(cX, aY, tW, tH, 7)
-    g.lineStyle(1, 0x2a3440, 0.8); g.strokeRoundedRect(cX, aY, tW, tH, 7)
+    g.fillStyle(activeTheme.panelBg, 0.97); g.fillRoundedRect(cX, aY, tW, tH, 7)
+    g.lineStyle(1, activeTheme.panelStroke, 0.8); g.strokeRoundedRect(cX, aY, tW, tH, 7)
     const aInt = parseInt(statusHex.replace('#', ''), 16), arX = Math.min(Math.max(screenX, cX + 14), cX + tW - 14)
-    g.fillStyle(0x0c1018, 0.97)
-    if (!flip) { g.fillTriangle(arX - 6, aY + tH, arX, aY + tH + AH, arX + 6, aY + tH); g.lineStyle(1, 0x0c1018, 1); g.lineBetween(arX - 5, aY + tH, arX + 5, aY + tH) }
-    else { g.fillTriangle(arX - 6, aY, arX, aY - AH, arX + 6, aY); g.lineStyle(1, 0x0c1018, 1); g.lineBetween(arX - 5, aY, arX + 5, aY) }
+    g.fillStyle(activeTheme.panelBg, 0.97)
+    if (!flip) { g.fillTriangle(arX - 6, aY + tH, arX, aY + tH + AH, arX + 6, aY + tH); g.lineStyle(1, activeTheme.panelBg, 1); g.lineBetween(arX - 5, aY + tH, arX + 5, aY + tH) }
+    else { g.fillTriangle(arX - 6, aY, arX, aY - AH, arX + 6, aY); g.lineStyle(1, activeTheme.panelBg, 1); g.lineBetween(arX - 5, aY, arX + 5, aY) }
     g.lineStyle(2, aInt, 0.6); g.lineBetween(cX + 7, aY, cX + tW - 7, aY)
     const ct = this.scene.add.container(0, 0); ct.setScrollFactor(0).setDepth(10001); this.tooltipContainer = ct
     const tx = cX + PX; let ty = aY + PY
     ct.add(this.scene.add.text(tx, ty, name, { fontSize: '12px', color: '#f1f5f9', fontFamily: 'system-ui, sans-serif', fontStyle: 'bold', resolution: 2 }))
     if (role) { const rc: Record<string, string> = { SOLVER: '#3b82f6', REVIEWER: '#8b5cf6', EXECUTOR: '#22c55e' }; ct.add(this.scene.add.text(cX + tW - PX, ty + 1, role, { fontSize: '9px', color: '#ffffff', fontFamily: 'system-ui, monospace', fontStyle: 'bold', backgroundColor: rc[role] ?? '#3a4858', padding: { x: 4, y: 2 }, resolution: 2 }).setOrigin(1, 0)) }
     ty += LH
-    if (title) { ct.add(this.scene.add.text(tx, ty, title, { fontSize: '10px', color: '#8a96a4', fontFamily: 'system-ui, sans-serif', resolution: 2 })); ty += LH }
+    if (title) { ct.add(this.scene.add.text(tx, ty, title, { fontSize: '10px', color: activeTheme.subtleText, fontFamily: 'system-ui, sans-serif', resolution: 2 })); ty += LH }
     ty += 4
     const statusDotFrame = aInt === 0xfbbf24 ? ICON_FRAMES.CIRCLE_YELLOW : aInt === 0x34d399 ? ICON_FRAMES.CIRCLE_GREEN : aInt === 0xa78bfa ? ICON_FRAMES.CIRCLE_BLUE : ICON_FRAMES.CIRCLE_GREY
     ct.add(this.scene.add.sprite(tx + 3.5, ty + LH / 2, SPRITESHEET_KEYS.GAME_ICONS, statusDotFrame).setScale(0.22).setOrigin(0.5)); ct.add(this.scene.add.text(tx + 12, ty, statusLabel, { fontSize: '10px', color: statusHex, fontFamily: 'system-ui, sans-serif', fontStyle: 'bold', resolution: 2 }))
@@ -336,7 +337,7 @@ export class OfficeUI {
       ct.add(this.scene.add.sprite(tx + 24, ty + 6, SPRITESHEET_KEYS.GAME_ITEMS, tooltipSigFrame).setScale(0.4).setOrigin(0.5))
       ty += LH
     }
-    if (hasS) { ty += 2; const dg = this.scene.add.graphics(); dg.setScrollFactor(0); dg.lineStyle(1, 0x2a3440, 0.6); dg.lineBetween(tx, ty, cX + tW - PX, ty); ct.add(dg); ty += 4; ct.add(this.scene.add.text(tx, ty, sub, { fontSize: '10px', color: '#8a96a4', fontFamily: 'system-ui, sans-serif', wordWrap: { width: TW }, resolution: 2 })) }
+    if (hasS) { ty += 2; const dg = this.scene.add.graphics(); dg.setScrollFactor(0); dg.lineStyle(1, activeTheme.panelStroke, 0.6); dg.lineBetween(tx, ty, cX + tW - PX, ty); ct.add(dg); ty += 4; ct.add(this.scene.add.text(tx, ty, sub, { fontSize: '10px', color: activeTheme.subtleText, fontFamily: 'system-ui, sans-serif', wordWrap: { width: TW }, resolution: 2 })) }
     ct.setAlpha(0); g.setAlpha(0)
     this.tooltipFadeTween = this.scene.tweens.add({ targets: [ct, g], alpha: 1, duration: 150, ease: 'Quad.easeOut' })
   }
@@ -406,9 +407,9 @@ export class OfficeUI {
     const panelX = width / 2
     const panelY = height / 2
     const panelGfx = this.scene.add.graphics()
-    panelGfx.fillStyle(0x0c1018, 1)
+    panelGfx.fillStyle(activeTheme.panelBg, 1)
     panelGfx.fillRoundedRect(panelX - PW / 2, panelY - PH / 2, PW, PH, 10)
-    panelGfx.lineStyle(1, 0x2a3440, 1)
+    panelGfx.lineStyle(1, activeTheme.panelStroke, 1)
     panelGfx.strokeRoundedRect(panelX - PW / 2, panelY - PH / 2, PW, PH, 10)
     container.add(panelGfx)
 
@@ -427,7 +428,7 @@ export class OfficeUI {
 
     // Divider line beneath title
     const divider = this.scene.add.graphics()
-    divider.lineStyle(1, 0x2a3440, 0.6)
+    divider.lineStyle(1, activeTheme.panelStroke, 0.6)
     divider.lineBetween(panelX - PW / 2 + 16, panelY - PH / 2 + 36, panelX + PW / 2 - 16, panelY - PH / 2 + 36)
     container.add(divider)
 
@@ -444,6 +445,7 @@ export class OfficeUI {
       ['H  /  ?', 'This help'],
       ['M',       'Toggle sound'],
       ['N',       'Cycle day/night'],
+      ['T',       'Cycle theme'],
       ['`',       'Debug overlay'],
     ]
 
@@ -459,7 +461,7 @@ export class OfficeUI {
         this.scene.add.text(keyX, rowY, key, { fontSize: '10px', color: '#5a6a7a', fontFamily: 'monospace', fontStyle: 'bold' }).setScrollFactor(0),
       )
       container.add(
-        this.scene.add.text(descX, rowY, desc, { fontSize: '10px', color: '#8a96a4', fontFamily: 'monospace' }).setScrollFactor(0),
+        this.scene.add.text(descX, rowY, desc, { fontSize: '10px', color: activeTheme.subtleText, fontFamily: 'monospace' }).setScrollFactor(0),
       )
     }
 
@@ -471,7 +473,7 @@ export class OfficeUI {
       )
     } else {
       const hintDiv = this.scene.add.graphics()
-      hintDiv.lineStyle(1, 0x2a3440, 0.4)
+      hintDiv.lineStyle(1, activeTheme.panelStroke, 0.4)
       hintDiv.lineBetween(panelX - PW / 2 + 16, panelY + PH / 2 - 28, panelX + PW / 2 - 16, panelY + PH / 2 - 28)
       container.add(hintDiv)
     }
@@ -549,7 +551,7 @@ export class OfficeUI {
     this.debugObjectCountText = this.scene.add.text(16, this.viewHeight - 68, 'Objects: --', textStyle).setScrollFactor(0)
     const navStats = navMesh.getStats()
     const navText = this.scene.add.text(16, this.viewHeight - 54, `NavMesh: ${navStats.walkable}/${navStats.total} walkable`, { ...textStyle, color: '#60a5fa' }).setScrollFactor(0)
-    const roomText = this.scene.add.text(16, this.viewHeight - 40, `Rooms: ${rooms.size}  Agents: ${agents.length}`, { ...textStyle, color: '#8a96a4' }).setScrollFactor(0)
+    const roomText = this.scene.add.text(16, this.viewHeight - 40, `Rooms: ${rooms.size}  Agents: ${agents.length}`, { ...textStyle, color: activeTheme.subtleText }).setScrollFactor(0)
     const hintText = this.scene.add.text(16, this.viewHeight - 26, 'Press ` to dismiss', { ...textStyle, color: '#3a4858', fontSize: '9px' }).setScrollFactor(0)
     container.add([this.debugFpsText, this.debugObjectCountText, navText, roomText, hintText])
 
@@ -678,12 +680,12 @@ export class OfficeUI {
     const y = this.viewHeight - 14 - 28
 
     const bg = this.scene.add.graphics()
-    bg.fillStyle(0x0c1018, 0.72)
+    bg.fillStyle(activeTheme.panelBg, 0.72)
     bg.fillRoundedRect(-72, -11, 72, 22, 4)
 
     const text = this.scene.add.text(-36, 0, label, {
       fontSize: '10px',
-      color: '#8a96a4',
+      color: activeTheme.subtleText,
       fontFamily: 'system-ui, sans-serif',
       resolution: 2,
     }).setOrigin(0.5)
@@ -862,9 +864,9 @@ export class OfficeUI {
     const vw = this.viewWidth;
     const vh = this.viewHeight;
     this.statusBarContainer = this.scene.add.container(0, vh - BAR_H).setDepth(9995).setScrollFactor(0);
-    this.statusBarBg = this.scene.add.rectangle(0, 0, vw, BAR_H, 0x0c1018, 0.85).setOrigin(0, 0);
+    this.statusBarBg = this.scene.add.rectangle(0, 0, vw, BAR_H, activeTheme.panelBg, 0.85).setOrigin(0, 0);
     this.statusBarContainer.add(this.statusBarBg);
-    const ts = { fontFamily: 'monospace', fontSize: '9px', fontStyle: 'bold', color: '#8a96a4' };
+    const ts = { fontFamily: 'monospace', fontSize: '9px', fontStyle: 'bold', color: activeTheme.subtleText };
     const midY = BAR_H / 2;
     const brandText = this.scene.add.text(10, midY, 'PENNY OFFICE', ts).setOrigin(0, 0.5);
     this.statusBarContainer.add(brandText);
@@ -875,7 +877,7 @@ export class OfficeUI {
     this.statusBarContainer.add([this.statusBarAgentText, this.statusBarActiveText, this.statusBarRoomText]);
     this.statusBarTimeText = this.scene.add.text(vw - 10, midY, this.getStatusBarTime(), ts).setOrigin(1, 0.5);
     this.statusBarContainer.add(this.statusBarTimeText);
-    this.statusBarSep = this.scene.add.rectangle(0, BAR_H - 1, vw, 1, 0x1e2830, 1).setOrigin(0, 0);
+    this.statusBarSep = this.scene.add.rectangle(0, BAR_H - 1, vw, 1, activeTheme.separator, 1).setOrigin(0, 0);
     this.statusBarContainer.add(this.statusBarSep);
   }
 
@@ -898,7 +900,7 @@ export class OfficeUI {
     const activeAgents = agents.filter((a) => a.status === 'active').length;
     this.statusBarAgentText.setText('AGENTS ' + totalAgents);
     this.statusBarActiveText.setText('ACTIVE ' + activeAgents);
-    this.statusBarActiveText.setColor(activeAgents > 0 ? '#34d399' : '#8a96a4');
+    this.statusBarActiveText.setColor(activeAgents > 0 ? '#34d399' : activeTheme.subtleText);
     this.statusBarRoomText.setText('ROOMS ' + roomCount);
   }
 

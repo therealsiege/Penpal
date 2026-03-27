@@ -166,7 +166,7 @@ export class OfficeScene extends Phaser.Scene {
     const barW = 220, barH = 6
     const barX = camW / 2 - barW / 2
     const barY = camH / 2 - 20
-    const trackBg = this.add.rectangle(camW / 2, barY, barW, barH, 0x141a22).setDepth(20001)
+    const trackBg = this.add.rectangle(camW / 2, barY, barW, barH, activeTheme.roomFloor).setDepth(20001)
     const barFill = this.add.rectangle(barX, barY, 0, barH, 0x00ff88).setOrigin(0, 0.5).setDepth(20002)
 
     // Glow edge on progress bar fill
@@ -741,6 +741,28 @@ export class OfficeScene extends Phaser.Scene {
         this.atmosphere.currentTimePhase = nextPhase as any
         this.atmosphere.applyDayNightCycle(true)
         this.showToast(`Phase: ${nextPhase}`, 'info')
+      })
+
+      // T — cycle color theme (dark → light → neon)
+      this.input.keyboard.on('keydown-T', (e: KeyboardEvent) => {
+        if (shouldIgnoreKeyboardShortcuts(e)) return
+        e.preventDefault()
+        const names: ThemeName[] = ['dark', 'light', 'neon']
+        const currentName = names.find(n => THEMES[n] === activeTheme) ?? 'dark'
+        const nextIdx = (names.indexOf(currentName) + 1) % names.length
+        const nextName = names[nextIdx]
+        const { newBg } = setActiveTheme(nextName)
+        // Redraw everything with new theme colors
+        this.cameras.main.setBackgroundColor(newBg)
+        this.background.invalidateBgCache()
+        this.background.layoutRooms()
+        this.officeCamera.updateCameraBounds()
+        // Re-sync workstations to pick up new theme colors
+        for (const room of this.rooms.values()) {
+          this.roomRenderer.drawRoomBackground(room)
+          this.roomRenderer.refreshRoomHeaderText(room)
+        }
+        this.showToast(`Theme: ${nextName}`, 'info')
       })
     }
 

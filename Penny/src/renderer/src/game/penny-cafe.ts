@@ -1,6 +1,7 @@
 import Phaser from 'phaser'
 import { ANIM_KEYS, SPRITESHEET_KEYS, ITEM_FRAMES, ICON_FRAMES, EFFECT_ANIM_KEYS } from './office-asset-keys'
 import { CHAR_SCALE } from './office-constants'
+import { activeTheme } from './office-theme'
 import { CafeCoffeeRunManager } from './cafe-coffee-run'
 import type { CoffeeRunHost } from './cafe-coffee-run'
 import { CafeChatManager } from './cafe-chat'
@@ -213,8 +214,8 @@ export class PennyCafe implements CoffeeRunHost, ChatHost {
       bc.add(apron)
 
       const tag = scene.add.text(0, 6, cfg.name, {
-        fontSize: '10px', fontFamily: 'system-ui, sans-serif', color: '#00e5ff',
-        backgroundColor: '#0a0e14cc', padding: { x: 4, y: 2 }, resolution: 2,
+        fontSize: '10px', fontFamily: 'system-ui, sans-serif', color: activeTheme.accentText,
+        backgroundColor: activeTheme.nameBg, padding: { x: 4, y: 2 }, resolution: 2,
       }).setOrigin(0.5, 0)
       bc.add(tag)
 

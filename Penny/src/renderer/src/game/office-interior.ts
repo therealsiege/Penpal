@@ -1,7 +1,7 @@
 import Phaser from 'phaser'
 import { SPRITESHEET_KEYS, ICON_FRAMES } from './office-asset-keys'
 import type { Room } from './office-types'
-import { lerpColor } from './office-theme'
+import { activeTheme, lerpColor } from './office-theme'
 import {
   OFFICE_FRAME_PLANT, OFFICE_FRAME_BOOKSHELF,
   OFFICE_FRAME_PLANT_TALL, OFFICE_FRAME_CACTUS, OFFICE_FRAME_HANGING_PLANT,
@@ -172,11 +172,11 @@ export class OfficeInterior {
           ;(atm2 as { wallClockContainer: Phaser.GameObjects.Container | null }).wallClockContainer = null
         }
         const clockFace = this.scene.add.graphics()
-        clockFace.fillStyle(0x141a22, 0.8)
+        clockFace.fillStyle(activeTheme.roomFloor, 0.8)
         clockFace.fillCircle(0, 0, 12)
-        clockFace.lineStyle(1, 0x2a3440, 1)
+        clockFace.lineStyle(1, activeTheme.wall, 1)
         clockFace.strokeCircle(0, 0, 12)
-        clockFace.lineStyle(1, 0x3a4858, 0.8)
+        clockFace.lineStyle(1, activeTheme.wallInner, 0.8)
         for (let t = 0; t < 12; t++) {
           const ang = Phaser.Math.DegToRad(t * 30 - 90)
           clockFace.lineBetween(Math.cos(ang) * 10, Math.sin(ang) * 10, Math.cos(ang) * 12, Math.sin(ang) * 12)
@@ -371,7 +371,7 @@ export class OfficeInterior {
       const chevronW = 12
       const chevronH = 6
       const yellow = 0xd4a017
-      const black = 0x0a0e14
+      const black = activeTheme.bg
       const hazardAlpha = 0.22
 
       // Top edge
@@ -411,7 +411,7 @@ export class OfficeInterior {
       if (seasonal.extraDecorType === 'winter') {
         const lightColors = [0xef4444, 0x22c55e, 0x3b82f6]
         const lightY = by + 1.5
-        g.lineStyle(1, 0x2a3440, 0.1)
+        g.lineStyle(1, activeTheme.wall, 0.1)
         g.lineBetween(bx + 4, lightY, bx + bw - 4, lightY)
         let colorIdx = 0
         for (let lx = bx + 4; lx < bx + bw - 4; lx += 8) {
@@ -669,7 +669,7 @@ export class OfficeInterior {
       const WALL_T = 3
       const WALL_I = 1
       const floorW = room.width - (WALL_T + WALL_I) * 2
-      const stripColor = hasWaiting ? 0xfbbf24 : activeCount > 0 ? 0x34d399 : 0x2a3440
+      const stripColor = hasWaiting ? 0xfbbf24 : activeCount > 0 ? 0x34d399 : activeTheme.wall
       const stripAlpha = hasWaiting ? 0.75 : activeCount > 0 ? 0.7 : 0.35
       const targetW = agents.length > 0
         ? Math.max(2, (activeCount / agents.length) * floorW)
