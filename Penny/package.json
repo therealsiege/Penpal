@@ -10,6 +10,7 @@
     "icon:generate": "node scripts/generate-icon.mjs",
     "sprites": "node scripts/build-sprites.mjs",
     "sprites:icons": "node scripts/build-game-icons.mjs",
+    "sprites:all": "node scripts/build-all-sprites.mjs",
     "test": "npx playwright test",
     "test:headed": "npx playwright test --headed",
     "typecheck": "tsc --noEmit",

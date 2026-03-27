@@ -154,6 +154,7 @@ export class WorkstationFactory {
     let monitorGlowFx: Phaser.FX.Glow | undefined
     let screenLines: Phaser.GameObjects.Graphics | undefined
     let screenTween: Phaser.Tweens.Tween | undefined
+    const screenState = { mode: 'idle' }
     if (this.host.officeTilesLoaded) {
       monitorSprite = this.scene.add.sprite(0, WS_MONITOR_Y, SPRITESHEET_KEYS.OFFICE, FRAME_MONITOR).setScale(0.42)
       wsContainer.add(monitorSprite)
@@ -161,19 +162,58 @@ export class WorkstationFactory {
       // Scrolling screen content lines
       screenLines = this.scene.add.graphics().setVisible(false)
       wsContainer.add(screenLines)
-      const LINE_COLORS = [0x0ea5e9, 0x34d399]
+      const LINE_COLORS_WORK = [0x0ea5e9, 0x34d399]
+      const LINE_COLORS_PLAN = [0xa78bfa, 0xc4b5fd]
       const lineWidths = Array.from({ length: 4 }, () => 6 + Math.random() * 6)
-      const lineColors = lineWidths.map(() => LINE_COLORS[Math.floor(Math.random() * LINE_COLORS.length)])
+      const lineColorsWork = lineWidths.map(() => LINE_COLORS_WORK[Math.floor(Math.random() * LINE_COLORS_WORK.length)])
+      const lineColorsPlan = lineWidths.map(() => LINE_COLORS_PLAN[Math.floor(Math.random() * LINE_COLORS_PLAN.length)])
+      const planWidths = [10, 7, 9, 5]
       screenTween = this.scene.tweens.addCounter({
         from: 0, to: 1, duration: 1200 + Math.random() * 600, repeat: -1, ease: 'Linear',
         onUpdate: (tw) => {
           if (!screenLines?.active) return
           screenLines.clear()
           const v = tw.getValue()
-          for (let i = 0; i < 4; i++) {
-            const y = WS_MONITOR_Y + ((v * 13 + i * 3.25) % 13) - 6.5
-            screenLines.fillStyle(lineColors[i], 0.5)
-            screenLines.fillRect(-lineWidths[i] / 2, y, lineWidths[i], 1)
+          const mode = screenState.mode
+
+          if (mode === 'plan') {
+            // Document outline — static lines that shift slightly like a bulleted list
+            const shift = Math.sin(v * Math.PI * 2) * 0.5
+            for (let i = 0; i < 4; i++) {
+              const y = WS_MONITOR_Y - 4.5 + i * 3 + shift
+              const w = planWidths[i]
+              screenLines.fillStyle(lineColorsPlan[i], 0.45)
+              screenLines.fillRect(-w / 2 - 1, y, w, 1)
+              screenLines.fillStyle(lineColorsPlan[i], 0.6)
+              screenLines.fillRect(-w / 2 - 3, y, 1, 1)
+            }
+          } else if (mode === 'compressing') {
+            // Fast scrolling lines + static noise dots
+            for (let i = 0; i < 4; i++) {
+              const y = WS_MONITOR_Y + ((v * 13 + i * 3.25) % 13) - 6.5
+              screenLines.fillStyle(lineColorsWork[i], 0.5)
+              screenLines.fillRect(-lineWidths[i] / 2, y, lineWidths[i], 1)
+            }
+            for (let n = 0; n < 7; n++) {
+              const nx = (Math.random() - 0.5) * 12
+              const ny = WS_MONITOR_Y - 5 + Math.random() * 10
+              screenLines.fillStyle(0xffffff, 0.12 + Math.random() * 0.18)
+              screenLines.fillRect(nx, ny, 1, 1)
+            }
+          } else if (mode === 'idle') {
+            // Slow dim screensaver lines
+            for (let i = 0; i < 4; i++) {
+              const y = WS_MONITOR_Y + ((v * 13 + i * 3.25) % 13) - 6.5
+              screenLines.fillStyle(lineColorsWork[i], 0.2)
+              screenLines.fillRect(-lineWidths[i] / 2, y, lineWidths[i], 1)
+            }
+          } else {
+            // Working (default) — scrolling colored lines
+            for (let i = 0; i < 4; i++) {
+              const y = WS_MONITOR_Y + ((v * 13 + i * 3.25) % 13) - 6.5
+              screenLines.fillStyle(lineColorsWork[i], 0.5)
+              screenLines.fillRect(-lineWidths[i] / 2, y, lineWidths[i], 1)
+            }
           }
         },
       })
@@ -270,7 +310,8 @@ export class WorkstationFactory {
       const plX = nameHash % 2 === 0 ? -16 : 16
       const pot = this.scene.add.rectangle(plX, WS_DESK_Y - 2, 5, 4, 0x2a3440, 0.7)
       wsContainer.add(pot); extraDecos.push(pot)
-      const leaf = this.scene.add.circle(plX, WS_DESK_Y - 6, 3, 0x34d399, 0.6)
+      const leaf = this.scene.add.sprite(plX, WS_DESK_Y - 6, SPRITESHEET_KEYS.GAME_ICONS, ICON_FRAMES.CIRCLE_GREEN)
+        .setScale(0.22).setAlpha(0.6).setOrigin(0.5) as unknown as Phaser.GameObjects.Sprite & { setFillStyle?: never }
       wsContainer.add(leaf); extraDecos.push(leaf)
       deskPlantLeaf = leaf
     }
@@ -543,6 +584,7 @@ export class WorkstationFactory {
       const segX = -XP_BAR_W / 2 + (i + 0.5) * (XP_BAR_W / 5)
       const seg = this.scene.add.sprite(segX, XP_BAR_Y, SPRITESHEET_KEYS.LEGO_BAR, legoFrames[i])
         .setScale(LEGO_SEGMENT_SCALE).setOrigin(0.5).setVisible(false)
+      seg.setData('origScale', LEGO_SEGMENT_SCALE)
       wsContainer.add(seg)
       legoSegments.push(seg)
     }
@@ -616,11 +658,12 @@ export class WorkstationFactory {
     const ws: WorkstationSprite = {
       container: wsContainer, sprite, nameText, statusDot, roleBadge,
       deskBody, deskTop, monitorSprite, chairSprite,
-      monitorGlowFx, monitorFrame, screenLines, screenTween,
+      monitorGlowFx, monitorFrame, screenLines, screenTween, screenState,
       monitorText,
       blockedIndicator, blockedIndicatorPulse, blockedIndicatorBadge, blockedIndicatorStem, blockedIndicatorText,
       thoughtBubble, thoughtBubbleText, thoughtBubbleBg, thoughtBubbleBgSprite, state: agent,
       steamTweens: [] as Phaser.Tweens.Tween[], steamContainer: null as Phaser.GameObjects.Container | null,
+      keyboard,
       ledGlow,
       moodEmoji,
       moodBadge,
@@ -650,6 +693,7 @@ export class WorkstationFactory {
       energyTrack,
       energyFill,
       energyLevel: 1.0,
+      lampLight: lampVisible ? lampLight : undefined,
     }
 
     // Desk pet idle bounce — gentle y-oscillation with face sprites in sync
@@ -736,6 +780,25 @@ export class WorkstationFactory {
       this.scene.tweens.killTweensOf(wsContainer)
       this.scene.tweens.add({ targets: wsContainer, scaleX: 1.07, scaleY: 1.07, duration: 140, ease: 'Back.easeOut' })
       ws.deskBody.setStrokeStyle(2, 0x3b82f6, 0.9)
+
+      // --- Micro-interactions: desk items react to pointer ---
+      // Desk pet excited bounce
+      if (ws.deskPet?.visible) {
+        this.scene.tweens.add({ targets: ws.deskPet, y: ws.deskPet.y - 3, duration: 100, yoyo: true, ease: 'Bounce.easeOut' })
+      }
+      // Signature item wiggle
+      if (ws.signatureItem?.visible) {
+        this.scene.tweens.add({ targets: ws.signatureItem, angle: { from: -8, to: 8 }, duration: 120, yoyo: true, ease: 'Sine.easeInOut' })
+      }
+      // Status dot pulse
+      this.scene.tweens.add({ targets: ws.statusDot, scaleX: 0.32, scaleY: 0.32, duration: 100, yoyo: true, ease: 'Back.easeOut' })
+      // Monitor glow boost
+      if (ws.monitorGlowFx) {
+        const origOuter = ws.monitorGlowFx.outerStrength
+        ws.monitorGlowFx.outerStrength = 4
+        this.scene.time.delayedCall(300, () => { if (ws.monitorGlowFx) ws.monitorGlowFx.outerStrength = origOuter })
+      }
+
       // Highlight ring around desk in world-space
       const rWx = room.container.x + wsContainer.x
       const rWy = room.container.y + wsContainer.y
@@ -748,6 +811,8 @@ export class WorkstationFactory {
     hitArea.on('pointerout', () => {
       this.scene.tweens.killTweensOf(wsContainer)
       this.scene.tweens.add({ targets: wsContainer, scaleX: 1, scaleY: 1, duration: 140, ease: 'Power2' })
+      // Reset signature item angle in case yoyo tween was interrupted
+      if (ws.signatureItem) ws.signatureItem.setAngle(0)
       this.restoreDeskStrokeCallback(ws)
       this.host.clearHoverRing()
       this.host.hideTooltip()
@@ -845,9 +910,11 @@ export class WorkstationFactory {
     if (ws.signatureItem)      ws.signatureItem.destroy()
     if (ws.roomProp)           ws.roomProp.destroy()
     if (ws.xpBar)            ws.xpBar.destroy()
+    if (ws.chairRockTween)   ws.chairRockTween.destroy()
     if (ws.soundWaveTween)   ws.soundWaveTween.destroy()
     if (ws.soundWaveGfx)     ws.soundWaveGfx.destroy()
     if (ws.soundWaveSpeaker) ws.soundWaveSpeaker.destroy()
+    if (ws.kbGlowTween)      ws.kbGlowTween.destroy()
     if (ws.typingNoteTimer)  ws.typingNoteTimer.destroy()
     if (ws.shadow)           ws.shadow.destroy()
     if (ws.sparklineGfx)     { ws.sparklineGfx.clear(); ws.sparklineGfx.destroy() }
@@ -864,8 +931,11 @@ export class WorkstationFactory {
     if (ws.mvpMedal)             ws.mvpMedal.destroy()
     if (ws.rivalryGlowTween)     ws.rivalryGlowTween.destroy()
     if (ws.rivalryIndicator)     ws.rivalryIndicator.destroy()
+    if (ws.energyPulseTween)     ws.energyPulseTween.destroy()
     if (ws.energyTrack)          ws.energyTrack.destroy()
     if (ws.energyFill)           ws.energyFill.destroy()
+    if (ws.lampLightTween)       ws.lampLightTween.destroy()
+    if (ws.lampFlickerTimer)     ws.lampFlickerTimer.destroy()
     ws.activityHistory = []
 
     // Exit animation: shrink + fade, then destroy.

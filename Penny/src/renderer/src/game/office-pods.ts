@@ -242,8 +242,9 @@ export class OfficePods {
     const dist  = Math.hypot(toPos.x - fromPos.x, toPos.y - fromPos.y)
     const controlPt = { x: midX, y: midY - dist * 0.4 }
 
-    const dot = this.scene.add.circle(fromPos.x, fromPos.y, 2, 0x3b82f6, 1) as unknown as Phaser.GameObjects.Arc
-    dot.setDepth(210).setVisible(false)
+    const dot = this.scene.add.sprite(fromPos.x, fromPos.y, SPRITESHEET_KEYS.GAME_ICONS, ICON_FRAMES.CIRCLE_BLUE)
+      .setScale(0.12).setDepth(210).setVisible(false) as unknown as Phaser.GameObjects.Arc
+
 
     this.chatAnimations.push({
       fromPos:        { ...fromPos },

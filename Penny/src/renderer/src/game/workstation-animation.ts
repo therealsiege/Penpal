@@ -88,6 +88,9 @@ export class WorkstationAnimator {
     if (ws.headTiltTween)    { ws.headTiltTween.destroy();    ws.headTiltTween    = undefined }
     if (ws.pulseTween)       { ws.pulseTween.destroy();       ws.pulseTween       = undefined }
     if (ws.ledPulseTween)    { ws.ledPulseTween.destroy();    ws.ledPulseTween    = undefined }
+    if (ws.kbGlowTween)     { ws.kbGlowTween.destroy();     ws.kbGlowTween     = undefined }
+    if (ws.lampLightTween)   { ws.lampLightTween.destroy();   ws.lampLightTween   = undefined }
+    if (ws.lampFlickerTimer) { ws.lampFlickerTimer.destroy();  ws.lampFlickerTimer = undefined }
     if (ws.walkBreakTween)   { ws.walkBreakTween.destroy();   ws.walkBreakTween   = undefined }
     if (ws.lookAroundTimer)     { ws.lookAroundTimer.destroy();     ws.lookAroundTimer     = undefined }
     if (ws.stretchTimer)        { ws.stretchTimer.destroy();        ws.stretchTimer        = undefined }
@@ -99,8 +102,15 @@ export class WorkstationAnimator {
     if (ws.soundWaveGfx)   { ws.soundWaveGfx.clear(); ws.soundWaveGfx.setAlpha(1) }
     // Clear sound wave speaker sprite
     if (ws.soundWaveSpeaker) { ws.soundWaveSpeaker.destroy(); ws.soundWaveSpeaker = undefined }
+    // Clear chair rocking tween
+    if (ws.chairRockTween) { ws.chairRockTween.destroy(); ws.chairRockTween = undefined }
+    if (ws.chairSprite) ws.chairSprite.setAngle(0)
     // Clear typing note timer
     if (ws.typingNoteTimer) { ws.typingNoteTimer.destroy(); ws.typingNoteTimer = undefined }
+    // Clear speech bubble
+    if (ws.speechBubbleTween) { ws.speechBubbleTween.destroy(); ws.speechBubbleTween = undefined }
+    if (ws.speechBubbleTimer) { ws.speechBubbleTimer.destroy(); ws.speechBubbleTimer = undefined }
+    if (ws.speechBubble) { ws.speechBubble.setVisible(false).setAlpha(0) }
     // Fade out progress ring when leaving working mode; working branch re-starts it
     if (ws.progressRingTween) { ws.progressRingTween.destroy(); ws.progressRingTween = undefined }
     if (ws.progressRing && ws.progressRing.alpha > 0) {
@@ -128,6 +138,18 @@ export class WorkstationAnimator {
     if (ws.moodBadge) {
       this.scene.tweens.add({ targets: ws.moodBadge, alpha: 0, duration: 200, ease: 'Sine.easeOut',
         onComplete: () => { ws.moodBadge?.setVisible(false) },
+      })
+    }
+
+    // Chair swivel on mode change — quick turn as if the agent is shifting in their seat
+    if (ws.chairSprite?.visible) {
+      const swivelAngle = (Math.random() - 0.5) * 8 // -4 to +4 degrees
+      this.scene.tweens.add({
+        targets: ws.chairSprite,
+        angle: swivelAngle,
+        duration: 200,
+        ease: 'Sine.easeInOut',
+        yoyo: true,
       })
     }
 
@@ -162,6 +184,13 @@ export class WorkstationAnimator {
         ws.ledGlow.fillRoundedRect(-26, WS_DESK_Y + 4, 52, 2, 1)
         this.scene.tweens.add({ targets: ws.ledGlow, alpha: 0.5, duration: 300, ease: 'Sine.easeOut' })
       }
+      // Lamp light cone: dim when waiting
+      if (ws.lampLight) {
+        ws.lampLightTween = this.scene.tweens.add({
+          targets: ws.lampLight, alpha: 0.02,
+          duration: 500, ease: 'Sine.easeOut',
+        })
+      }
       this.restoreDeskStrokeCallback(ws)
     } else if (isWorking) {
       ws.sprite.setFrame(base + POSE_INTERACT)
@@ -178,6 +207,21 @@ export class WorkstationAnimator {
         duration: 1600, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
       })
       ws.deskBody.setStrokeStyle(1, 0x34d399, 0.55)
+
+      // Keyboard glow — subtle blue stroke shimmer while typing
+      if (ws.keyboard) {
+        ws.keyboard.setStrokeStyle(0.5, 0x0ea5e9, 0.4)
+        if (!ws.kbGlowTween) {
+          ws.kbGlowTween = this.scene.tweens.add({
+            targets: ws.keyboard,
+            alpha: { from: 0.7, to: 0.9 },
+            duration: 800,
+            yoyo: true,
+            repeat: -1,
+            ease: 'Sine.easeInOut',
+          })
+        }
+      }
 
       // ── Game systems: auto-wrap into quest ──
       if (prevMode !== 'working') {
@@ -224,6 +268,30 @@ export class WorkstationAnimator {
           },
         })
       }
+      // Lamp light cone: brighten when working with a warm glow
+      if (ws.lampLight) {
+        ws.lampLightTween = this.scene.tweens.add({
+          targets: ws.lampLight, alpha: 0.12,
+          duration: 300, ease: 'Sine.easeOut',
+        })
+        // Subtle flicker every 8-15 seconds — tiny alpha dip then recovery
+        ws.lampFlickerTimer = this.scene.time.addEvent({
+          delay: 8000 + Math.random() * 7000,
+          loop: true,
+          callback: () => {
+            if (!ws.lampLight || !ws.lampLight.active || ws.lastAnimMode !== 'working') return
+            this.scene.tweens.add({
+              targets: ws.lampLight,
+              alpha: 0.08,
+              duration: 50,
+              yoyo: true,
+              hold: 30,
+              ease: 'Sine.easeInOut',
+            })
+          },
+        })
+      }
+
       // Ambient sound-wave indicator — three concentric quarter-circle arcs drawn
       // to the left of the agent, suggesting keyboard/typing audio ambiance.
       if (ws.soundWaveGfx) {
@@ -339,12 +407,28 @@ export class WorkstationAnimator {
           },
         })
       }
+
+      // ── Speech bubble — shows lastAssistantBlurb as typewriter text ──
+      this.showSpeechBubble(ws, agent)
+
     } else {
       ws.sprite.setFrame(base + POSE_SIT)
       ws.breathTween = this.scene.tweens.add({
         targets: ws.sprite, scaleY: CHAR_SCALE * 0.97,
         duration: 2800, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
       })
+
+      // Idle chair rocking — very subtle lean-back oscillation
+      if (ws.chairSprite?.visible) {
+        ws.chairRockTween = this.scene.tweens.add({
+          targets: ws.chairSprite,
+          angle: { from: -1.5, to: 1.5 },
+          duration: 4000,
+          yoyo: true,
+          repeat: -1,
+          ease: 'Sine.easeInOut',
+        })
+      }
 
       // Fart VFX when entering compressing mode
       if (agent.sessionMode === 'compressing' && this.scene.anims.exists(EFFECT_ANIM_KEYS.FART)) {
@@ -355,12 +439,23 @@ export class WorkstationAnimator {
         fart.once('animationcomplete', () => fart.destroy())
       }
 
+      // Remove keyboard glow
+      if (ws.kbGlowTween) { ws.kbGlowTween.destroy(); ws.kbGlowTween = undefined }
+      if (ws.keyboard) ws.keyboard.setStrokeStyle(0, 0, 0).setAlpha(0.8)
+
       // LED: idle — muted dim glow
       if (ws.ledGlow) {
         ws.ledGlow.clear()
         ws.ledGlow.fillStyle(activeTheme.deskStrokeIdle, 1)
         ws.ledGlow.fillRoundedRect(-26, WS_DESK_Y + 4, 52, 2, 1)
         this.scene.tweens.add({ targets: ws.ledGlow, alpha: 0.1, duration: 600, ease: 'Sine.easeOut' })
+      }
+      // Lamp light cone: dim when idle
+      if (ws.lampLight) {
+        ws.lampLightTween = this.scene.tweens.add({
+          targets: ws.lampLight, alpha: 0.02,
+          duration: 500, ease: 'Sine.easeOut',
+        })
       }
       this.restoreDeskStrokeCallback(ws)
 
@@ -512,6 +607,63 @@ export class WorkstationAnimator {
             if (ws.lastAnimMode === 'idle') {
               ws.sprite.setFrame(base + POSE_SIT)
             }
+          })
+        },
+      })
+
+      // Look at desk pet: tilt toward pet + pet bounce every 15-25s
+      if (ws.deskPet && ws.deskPet.visible) {
+        this.scene.time.addEvent({
+          delay: 15000 + Math.random() * 10000,
+          loop: true,
+          callback: () => {
+            if (ws.walkBreakTween || ws.headTiltTween || ws.lastAnimMode !== 'idle') return
+            if (!ws.deskPet || !ws.deskPet.visible) return
+            const petDir = ws.deskPet.x > 0 ? 3 : -3
+            ws.headTiltTween = this.scene.tweens.add({
+              targets: ws.sprite, angle: petDir,
+              duration: 300, hold: 600, yoyo: true, ease: 'Sine.easeInOut',
+              onComplete: () => { ws.sprite.setAngle(0); ws.headTiltTween = undefined },
+            })
+            // Pet does a tiny bounce in response
+            this.scene.tweens.add({
+              targets: ws.deskPet,
+              y: ws.deskPet.y - 2,
+              duration: 200, yoyo: true, ease: 'Sine.easeOut', delay: 200,
+            })
+          },
+        })
+      }
+
+      // Tap signature item: item bounces every 25-40s
+      if (ws.signatureItem && ws.signatureItem.visible) {
+        this.scene.time.addEvent({
+          delay: 25000 + Math.random() * 15000,
+          loop: true,
+          callback: () => {
+            if (ws.walkBreakTween || ws.lastAnimMode !== 'idle') return
+            if (!ws.signatureItem || !ws.signatureItem.visible) return
+            this.scene.tweens.add({
+              targets: ws.signatureItem,
+              angle: { from: 0, to: 8 },
+              duration: 150, yoyo: true, repeat: 1, ease: 'Sine.easeInOut',
+            })
+          },
+        })
+      }
+
+      // Glance at energy bar when energy is low (<30%)
+      this.scene.time.addEvent({
+        delay: 18000 + Math.random() * 12000,
+        loop: true,
+        callback: () => {
+          if (ws.walkBreakTween || ws.headTiltTween || ws.lastAnimMode !== 'idle') return
+          if ((ws.energyLevel ?? 1) > 0.3) return
+          // Lean slightly toward the energy bar (left side of desk)
+          ws.headTiltTween = this.scene.tweens.add({
+            targets: ws.sprite, angle: -4,
+            duration: 250, hold: 500, yoyo: true, ease: 'Sine.easeInOut',
+            onComplete: () => { ws.sprite.setAngle(0); ws.headTiltTween = undefined },
           })
         },
       })
@@ -891,6 +1043,115 @@ export class WorkstationAnimator {
             })
           },
         })
+      },
+    })
+  }
+
+  // ---------------------------------------------------------------------------
+  // Speech bubble — small blurb above workstation during working mode
+  // ---------------------------------------------------------------------------
+
+  private showSpeechBubble(ws: WorkstationSprite, agent: AgentState): void {
+    const blurb = (agent.lastAssistantBlurb ?? '').trim()
+    if (!blurb) return
+
+    const BUBBLE_Y = WS_SPRITE_Y - 40
+    const MAX_CHARS = 40
+    const PAD_X = 6
+    const PAD_Y = 4
+
+    // Create the container + children lazily on first use
+    if (!ws.speechBubble) {
+      const bg = this.scene.add.graphics()
+      const txt = this.scene.add.text(0, 0, '', {
+        fontFamily: 'monospace',
+        fontSize: '8px',
+        color: '#c4ccd6',
+        resolution: 2,
+      }).setOrigin(0.5)
+
+      const container = this.scene.add.container(0, BUBBLE_Y, [bg, txt])
+        .setAlpha(0).setVisible(false)
+      ws.container.add(container)
+
+      ws.speechBubble = container
+      ws.speechBubbleText = txt
+      ws.speechBubbleBg = bg
+
+      // Register as LOD level 3 so it only shows at close zoom
+      ws.lodLevel3Objects.push(container)
+    }
+
+    const displayText = blurb.length > MAX_CHARS ? blurb.slice(0, MAX_CHARS) + '...' : blurb
+
+    // Helper to draw the rounded-rect background sized to the current text
+    const drawBg = () => {
+      const g = ws.speechBubbleBg!
+      const t = ws.speechBubbleText!
+      const bw = t.width + PAD_X * 2
+      const bh = t.height + PAD_Y * 2
+      g.clear()
+      g.fillStyle(0x0c1018, 0.9)
+      g.fillRoundedRect(-bw / 2, -bh / 2, bw, bh, 3)
+      g.lineStyle(0.5, 0x2a3440, 0.6)
+      g.strokeRoundedRect(-bw / 2, -bh / 2, bw, bh, 3)
+    }
+
+    // Helper to run the typewriter + fade cycle for a given string
+    const typewriterCycle = (text: string) => {
+      const bubble = ws.speechBubble!
+      const txt = ws.speechBubbleText!
+
+      // Reset
+      txt.setText('')
+      drawBg()
+      bubble.setVisible(true)
+      bubble.y = BUBBLE_Y
+
+      // Fade in
+      if (ws.speechBubbleTween) { ws.speechBubbleTween.destroy(); ws.speechBubbleTween = undefined }
+      this.scene.tweens.add({ targets: bubble, alpha: 1, duration: 200, ease: 'Sine.easeOut' })
+
+      // Typewriter — character by character
+      const counter = { val: 0 }
+      ws.speechBubbleTween = this.scene.tweens.add({
+        targets: counter,
+        val: text.length,
+        duration: Math.min(600, text.length * 20),
+        ease: 'Linear',
+        onUpdate: () => {
+          txt.setText(text.slice(0, Math.floor(counter.val)))
+          drawBg()
+        },
+        onComplete: () => {
+          txt.setText(text)
+          drawBg()
+          // Hold for 4 seconds then fade out
+          this.scene.time.delayedCall(4000, () => {
+            if (!bubble.active) return
+            this.scene.tweens.add({
+              targets: bubble, alpha: 0,
+              duration: 300, ease: 'Sine.easeOut',
+              onComplete: () => { if (bubble.active) bubble.setVisible(false) },
+            })
+          })
+        },
+      })
+    }
+
+    // Show the first blurb immediately
+    typewriterCycle(displayText)
+
+    // Repeat every 8-12 seconds with the latest blurb
+    ws.speechBubbleTimer = this.scene.time.addEvent({
+      delay: 8000 + Math.random() * 4000,
+      loop: true,
+      callback: () => {
+        if (ws.lastAnimMode !== 'working') return
+        const currentBlurb = (ws.state?.lastAssistantBlurb ?? '').trim()
+        if (!currentBlurb) return
+        const truncated = currentBlurb.length > MAX_CHARS ? currentBlurb.slice(0, MAX_CHARS) + '...' : currentBlurb
+        typewriterCycle(truncated)
       },
     })
   }

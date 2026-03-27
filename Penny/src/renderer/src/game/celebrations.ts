@@ -10,6 +10,7 @@
 import Phaser from 'phaser'
 import { SPRITESHEET_KEYS, EFFECT_ANIM_KEYS, ICON_FRAMES, LEGO_SPECIAL_FRAMES, DIFFICULTY_STAR_FRAME } from './office-asset-keys'
 import type { QuestDifficulty } from './quest-system'
+import { soundEngine } from './sound-engine'
 
 // Pool sizes
 const BURST_POOL_SIZE = 48   // shared by rankUp + milestone burst layers
@@ -66,6 +67,7 @@ export class CelebrationManager {
    * 5. Secondary rank name text, delayed 400 ms
    */
   rankUp(x: number, y: number, agentName: string, newRank: string, rankColor: number): void {
+    soundEngine.levelUp()
     // 1. Burst of 10 particles in a full circle
     this._particleBurst(x, y, 10, rankColor, 52)
 
@@ -116,15 +118,10 @@ export class CelebrationManager {
    * 2. 3-4 tiny sparkle particles
    */
   taskComplete(x: number, y: number): void {
-    // 1. Checkmark text
-    const check = this._scene.add.text(x, y - 14, '\u2713', {
-      fontSize: '14px',
-      fontFamily: 'monospace',
-      color: '#34d399',
-      stroke: '#000000',
-      strokeThickness: 2,
-      resolution: 2,
-    }).setOrigin(0.5).setAlpha(0).setDepth(600)
+    soundEngine.click()
+    // 1. Checkmark sprite
+    const check = this._scene.add.sprite(x, y - 14, SPRITESHEET_KEYS.GAME_ICONS, ICON_FRAMES.CHECKMARK)
+      .setScale(0.4).setOrigin(0.5).setAlpha(0).setDepth(600).setTint(0x34d399)
 
     this._scene.tweens.add({
       targets: check,
@@ -190,6 +187,10 @@ export class CelebrationManager {
    * 3. Confetti — small colored rectangles that fall with gravity
    */
   milestone(x: number, y: number, text: string): void {
+    // Screen shake on milestones
+    this._scene.cameras.main.shake(100, 0.003)
+    soundEngine.levelUp()
+
     // 1. Gold burst — more particles, larger radius
     this._particleBurst(x, y, 16, 0xfbbf24, 72)
     // Inner warm burst layer
@@ -250,6 +251,10 @@ export class CelebrationManager {
    * Use for failed quests, agent errors, blocked state.
    */
   error(x: number, y: number): void {
+    // Subtle screen shake on errors
+    this._scene.cameras.main.shake(60, 0.002)
+    soundEngine.error()
+
     // Black smoke VFX
     if (this._scene.anims.exists(EFFECT_ANIM_KEYS.SMOKE)) {
       const smoke = this._scene.add.sprite(x, y - 10, SPRITESHEET_KEYS.EFFECTS_SMOKE)
@@ -343,6 +348,7 @@ export class CelebrationManager {
    * 6. Second confetti wave at 1.5s
    */
   seasonEnd(seasonName: string, score: number): void {
+    soundEngine.achievement()
     const cam = this._scene.cameras.main
     const cx = cam.width / 2
     const cy = cam.height / 2

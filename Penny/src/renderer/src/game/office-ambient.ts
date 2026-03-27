@@ -170,7 +170,8 @@ export class OfficeAmbient {
     const container = ws.steamContainer
     for (let i = 0; i < 3; i++) {
       const xOff = (i - 1) * 2.5 + (Math.random() - 0.5)
-      const particle = this.scene.add.circle(xOff, 0, 1.5, 0xffffff, 0.5)
+      const particle = this.scene.add.sprite(xOff, 0, SPRITESHEET_KEYS.GAME_ICONS, ICON_FRAMES.CIRCLE_GREY)
+        .setScale(0.08).setAlpha(0.5).setTint(0xffffff)
       container.add(particle)
       this.scene.tweens.add({
         targets: particle,

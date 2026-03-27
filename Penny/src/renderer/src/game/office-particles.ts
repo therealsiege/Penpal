@@ -50,6 +50,7 @@ export interface CorridorSegment {
 
 export class OfficeParticles {
   private scene: Phaser.Scene
+  private _reducedMode = false
 
   // Sub-modules
   private weather: WeatherParticles
@@ -94,6 +95,16 @@ export class OfficeParticles {
 
   getMouseTrailPool(): Phaser.GameObjects.Arc[] {
     return this.mouseTrailPool
+  }
+
+  /** Enable/disable reduced particle mode for low-FPS situations. */
+  setReducedMode(reduced: boolean): void {
+    this._reducedMode = reduced
+  }
+
+  /** Whether reduced mode is active — used by spawn methods to skip particles. */
+  isReducedMode(): boolean {
+    return this._reducedMode
   }
 
   // ---------------------------------------------------------------------------
@@ -470,6 +481,7 @@ export class OfficeParticles {
   // ---------------------------------------------------------------------------
 
   burstConfetti(x: number, y: number): void {
+    if (this._reducedMode && Math.random() > 0.3) return
     if (!this.confettiEmitter) return
     const colors = activeTheme.particleColors
     this.confettiEmitter.setPosition(x, y)
@@ -493,6 +505,7 @@ export class OfficeParticles {
   }
 
   spawnEmojiReaction(worldX: number, worldY: number, emoji: string): void {
+    if (this._reducedMode && Math.random() > 0.3) return
     const label = this.emojiReactionPool.find(t => !t.getData('busy'))
     if (!label) return
     const sway = (Math.random() - 0.5) * 16
@@ -539,6 +552,7 @@ export class OfficeParticles {
   }
 
   spawnSpriteReaction(worldX: number, worldY: number, frame: number): void {
+    if (this._reducedMode && Math.random() > 0.3) return
     const spr = this.spriteReactionPool.find(s => !s.getData('busy'))
     if (!spr) return
 

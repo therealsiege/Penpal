@@ -36,8 +36,12 @@ export interface WorkstationSprite {
   breathTween?: Phaser.Tweens.Tween
   bounceTween?: Phaser.Tweens.Tween
   dotPulseTween?: Phaser.Tweens.Tween
+  keyboard?: Phaser.GameObjects.Rectangle
+  kbGlowTween?: Phaser.Tweens.Tween
   monitorGlowTween?: Phaser.Tweens.Tween
   screenTween?: Phaser.Tweens.Tween
+  /** Mutable ref shared with screenTween callback — set .mode to update screen animation */
+  screenState?: { mode: string }
   typingTween?: Phaser.Tweens.Tween
   headTiltTween?: Phaser.Tweens.Tween
   pulseTween?: Phaser.Tweens.Tween
@@ -116,12 +120,32 @@ export interface WorkstationSprite {
   /** Rivalry indicator — red star shown when agent has an active leaderboard rival */
   rivalryIndicator?: Phaser.GameObjects.Sprite
   rivalryGlowTween?: Phaser.Tweens.Tween
+  /** Idle chair rocking tween — subtle lean-back oscillation */
+  chairRockTween?: Phaser.Tweens.Tween
   /** Vertical energy/stamina bar — track (grey background) */
   energyTrack?: Phaser.GameObjects.Image
   /** Vertical energy/stamina bar — fill (colored, cropped from bottom up) */
   energyFill?: Phaser.GameObjects.Image
   /** Current energy level 0.0 to 1.0 */
   energyLevel: number
+  /** Current LOD level for smooth transition detection */
+  currentLodLevel?: number
+  /** Pulsing tween for low-energy warning on the energy fill bar */
+  energyPulseTween?: Phaser.Tweens.Tween
+  /** Last tint applied to the energy fill bar (for smooth transitions) */
+  energyLastTint?: number
+  /** Desk lamp light cone triangle — animated based on working/idle state */
+  lampLight?: Phaser.GameObjects.Triangle
+  /** Lamp light tween (alpha fade between working/idle) */
+  lampLightTween?: Phaser.Tweens.Tween
+  /** Timer for subtle lamp flicker while working */
+  lampFlickerTimer?: Phaser.Time.TimerEvent
+  /** Speech bubble container — shows last assistant blurb as typewriter text */
+  speechBubble?: Phaser.GameObjects.Container
+  speechBubbleText?: Phaser.GameObjects.Text
+  speechBubbleBg?: Phaser.GameObjects.Graphics
+  speechBubbleTween?: Phaser.Tweens.Tween
+  speechBubbleTimer?: Phaser.Time.TimerEvent
 }
 
 export interface Room {
@@ -153,9 +177,13 @@ export interface Room {
   // Thermal heat overlay — glows warmer as agent activity increases
   heatOverlay?: Phaser.GameObjects.Rectangle
   heatTween?: Phaser.Tweens.Tween
+  // Breathing glow tween — subtle sine pulse on heat overlay alpha
+  heatBreathTween?: Phaser.Tweens.Tween
   // Header status strip — 2px bar below accent line, width proportional to active agents
   statusStrip: Phaser.GameObjects.Graphics | null
   statusStripTween: Phaser.Tweens.Tween | null
+  // Status strip alpha pulse when room has active agents
+  statusStripPulseTween?: Phaser.Tweens.Tween
   // Badge dot pulse tween
   badgeDotTween: Phaser.Tweens.Tween | null
   // Tiled floor texture sprites (very-low-alpha overlays from room-tiles spritesheet)

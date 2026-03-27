@@ -142,9 +142,28 @@ export class OfficeRooms {
     room.agents = agents
     const { width, height } = this.host.calcRoomSize(agents.length, room.cwd)
     const sizeChanged = width !== room.width || height !== room.height
-    room.width  = width
-    room.height = height
-    if (sizeChanged) this.drawRoomBackground(room)
+    if (sizeChanged) {
+      // Animate the room container scale from old proportions to new, then snap
+      const oldW = room.width
+      const oldH = room.height
+      room.width  = width
+      room.height = height
+      this.drawRoomBackground(room)
+      // Start scaled to old proportions, tween to 1.0 over 300ms
+      const scaleX = oldW / Math.max(width, 1)
+      const scaleY = oldH / Math.max(height, 1)
+      room.container.setScale(scaleX, scaleY)
+      this.scene.tweens.add({
+        targets: room.container,
+        scaleX: 1,
+        scaleY: 1,
+        duration: 300,
+        ease: 'Sine.easeOut',
+      })
+    } else {
+      room.width  = width
+      room.height = height
+    }
     this.host.syncWorkstations(room, agents)
     this.host.updateRoomActivity(room)
     this.updateDoorGlow(room)
@@ -156,8 +175,10 @@ export class OfficeRooms {
     if (room.statusLedTween) room.statusLedTween.destroy()
     if (room.doorPulseTween) room.doorPulseTween.destroy()
     if (room.statusStripTween) room.statusStripTween.destroy()
+    if (room.statusStripPulseTween) room.statusStripPulseTween.destroy()
     if (room.badgeDotTween) room.badgeDotTween.destroy()
     if (room.heatTween) room.heatTween.destroy()
+    if (room.heatBreathTween) room.heatBreathTween.destroy()
     if (room.heatOverlay) room.heatOverlay.destroy()
     if (room.headerGlowTween) room.headerGlowTween.destroy()
     room.headerGlowFx = undefined
@@ -579,22 +600,46 @@ export class OfficeRooms {
     if (!dg || !dg.active) return
     this.scene.tweens.killTweensOf(dg)
     dg.setScale(1, 1)
+    dg.setAngle(0)
 
     // Spawn a small puff VFX at the door position when it swings open
     this.spawnDoorPuff(room)
 
+    // Door shadow — simulates the door swinging into the room
+    const WALL_T = 3
+    const WALL_I = 1
+    const floorW = room.width - (WALL_T + WALL_I) * 2
+    const doorW = Math.max(24, Math.min(50, floorW * 0.28))
+    const doorH = Math.max(14, Math.min(20, room.height * 0.08))
+    const doorY = room.doorSide === 'top'
+      ? -room.height / 2 + WALL_T + WALL_I + doorH / 2
+      : room.height / 2 - WALL_T - WALL_I - ROOM_HEADER_H - doorH / 2
+    const doorShadow = this.scene.add.rectangle(5, doorY, 8, doorH, 0x000000, 0.15)
+    room.container.add(doorShadow)
+    this.scene.tweens.add({
+      targets: doorShadow,
+      alpha: 0,
+      duration: 600,
+      delay: 400,
+      onComplete: () => { try { doorShadow.destroy() } catch { /* gone */ } },
+    })
+
+    // Open: scale + rotation with spring ease
     this.scene.tweens.add({
       targets: dg,
       scaleX: 0.3,
-      duration: 300,
-      ease: 'Quad.easeOut',
+      angle: -12,
+      duration: 350,
+      ease: 'Back.easeOut',
       onComplete: () => {
+        // Close: bounce back into place
         this.scene.tweens.add({
           targets: dg,
           scaleX: 1,
+          angle: 0,
           delay: 500,
-          duration: 300,
-          ease: 'Quad.easeIn',
+          duration: 400,
+          ease: 'Bounce.easeOut',
         })
       },
     })
@@ -621,7 +666,7 @@ export class OfficeRooms {
 
     const puff = this.scene.add.sprite(worldX, worldY, SPRITESHEET_KEYS.EFFECTS_PUFF)
       .setDepth(200)
-      .setScale(0.12)
+      .setScale(0.22)
       .setAlpha(0.4)
     puff.play(EFFECT_ANIM_KEYS.PUFF)
     puff.once('animationcomplete', () => puff.destroy())
@@ -630,7 +675,7 @@ export class OfficeRooms {
     const hingeX = worldX - doorW / 2
     const puff2 = this.scene.add.sprite(hingeX, worldY, SPRITESHEET_KEYS.EFFECTS_PUFF)
       .setDepth(200)
-      .setScale(0.08)
+      .setScale(0.15)
       .setAlpha(0.25)
     puff2.play(EFFECT_ANIM_KEYS.PUFF)
     puff2.once('animationcomplete', () => puff2.destroy())
@@ -642,7 +687,7 @@ export class OfficeRooms {
     for (let bi = 0; bi < burstCount; bi++) {
       const angle = arcStart + (bi / (burstCount - 1)) * arcSpan
       const burst = this.scene.add.sprite(worldX, worldY, SPRITESHEET_KEYS.GAME_ICONS, ICON_FRAMES.CIRCLE_BLUE)
-        .setScale(0.08).setAlpha(0.5).setDepth(200)
+        .setScale(0.18).setAlpha(0.5).setDepth(200)
       this.scene.tweens.add({
         targets: burst,
         x: worldX + Math.cos(angle) * 20,
@@ -808,8 +853,25 @@ export class OfficeRooms {
     }
 
     // Neon signage glow on header text
-    // Drop shadow only — no glow blur so text stays crisp
+    // Drop shadow for depth + subtle glow FX that pulses when room has agents
     headerText.postFX.addShadow(1, 1, 0.03, 0.6, 0x000000, 2)
+    const template2 = getTemplate(getRoomType(room.cwd))
+    room.headerGlowFx = headerText.postFX.addGlow(template2.accentColor, 1, 0, false, 0.1, 10)
+    if (room.agents.length > 0) {
+      room.headerGlowTween = this.scene.tweens.addCounter({
+        from: 1,
+        to: 3,
+        duration: 2000,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut',
+        onUpdate: (tw) => {
+          if (room.headerGlowFx) {
+            room.headerGlowFx.outerStrength = tw.getValue()
+          }
+        },
+      })
+    }
 
     // Room-type themed icon — small sprite to the left of the header text
     if (this.scene.textures.exists(SPRITESHEET_KEYS.GAME_ITEMS)) {
@@ -999,7 +1061,7 @@ export class OfficeRooms {
       const template = getTemplate(getRoomType(room.cwd))
       const haze = this.scene.add.sprite(worldX, worldY, SPRITESHEET_KEYS.EFFECTS_PUFF)
         .setDepth(50)
-        .setScale(0.10)
+        .setScale(0.20)
         .setAlpha(0.08)
         .setTint(template.accentColor)
       haze.play(EFFECT_ANIM_KEYS.PUFF)
