@@ -116,46 +116,74 @@ export class OfficeTerrain {
     g.fillStyle(0x1a1e2a, 1)
     g.fillRect(x0, y0, w, h)
 
-    // Steel plate grid lines
-    const PLATE = 160
-    g.lineStyle(1, 0x2a3040, 0.35)
-    for (let gx = x0; gx < x0 + w; gx += PLATE) {
-      g.lineBetween(gx, y0, gx, y0 + h)
+    // Steel plate grid — irregular sizes for organic look
+    // Build a mix of plate widths instead of uniform grid
+    const plateWidths: number[] = []
+    for (let gx = x0; gx < x0 + w;) {
+      const pw = 100 + Math.floor(rand() * 120) // 100-220px wide
+      plateWidths.push(pw)
+      gx += pw
     }
-    for (let gy = y0; gy < y0 + h; gy += PLATE) {
-      g.lineBetween(x0, gy, x0 + w, gy)
+    const plateHeights: number[] = []
+    for (let gy = y0; gy < y0 + h;) {
+      const ph = 100 + Math.floor(rand() * 120)
+      plateHeights.push(ph)
+      gy += ph
+    }
+
+    // Draw plate seam lines (vertical)
+    let accX = x0
+    for (const pw of plateWidths) {
+      accX += pw
+      if (accX >= x0 + w) break
+      const lineAlpha = 0.2 + rand() * 0.2
+      g.lineStyle(rand() > 0.7 ? 1.5 : 1, 0x2a3040, lineAlpha)
+      g.lineBetween(accX, y0, accX, y0 + h)
+    }
+    // Draw plate seam lines (horizontal)
+    let accY = y0
+    for (const ph of plateHeights) {
+      accY += ph
+      if (accY >= y0 + h) break
+      const lineAlpha = 0.2 + rand() * 0.2
+      g.lineStyle(rand() > 0.7 ? 1.5 : 1, 0x2a3040, lineAlpha)
+      g.lineBetween(x0, accY, x0 + w, accY)
     }
 
     // Plate variation — some panels slightly lighter/darker
-    for (let gx = x0; gx < x0 + w; gx += PLATE) {
-      for (let gy = y0; gy < y0 + h; gy += PLATE) {
+    accY = y0
+    for (const ph of plateHeights) {
+      accX = x0
+      for (const pw of plateWidths) {
         const r = rand()
-        if (r < 0.12) {
-          g.fillStyle(0x242a38, 0.5)
-          g.fillRect(gx + 1, gy + 1, PLATE - 2, PLATE - 2)
-        } else if (r < 0.2) {
-          g.fillStyle(0x141822, 0.4)
-          g.fillRect(gx + 1, gy + 1, PLATE - 2, PLATE - 2)
+        if (r < 0.15) {
+          g.fillStyle(0x242a38, 0.35 + rand() * 0.2)
+          g.fillRect(accX + 1, accY + 1, pw - 2, ph - 2)
+        } else if (r < 0.25) {
+          g.fillStyle(0x141822, 0.25 + rand() * 0.15)
+          g.fillRect(accX + 1, accY + 1, pw - 2, ph - 2)
         }
+        accX += pw
       }
+      accY += ph
     }
 
-    // Bolts at plate corners — sprite circles for crisp rendering
-    for (let gx = x0; gx < x0 + w; gx += PLATE) {
-      for (let gy = y0; gy < y0 + h; gy += PLATE) {
-        if (rand() > 0.4) continue
-        const boltPositions = [
-          [gx + 8, gy + 8],
-          [gx + PLATE - 8, gy + 8],
-          [gx + 8, gy + PLATE - 8],
-          [gx + PLATE - 8, gy + PLATE - 8],
-        ]
-        for (const [bx, by] of boltPositions) {
+    // Bolts — sparse, only at some plate corners
+    accY = y0
+    for (const ph of plateHeights) {
+      accX = x0
+      for (const pw of plateWidths) {
+        if (rand() > 0.25) { accX += pw; continue }
+        const corners = [[accX + 6, accY + 6], [accX + pw - 6, accY + 6]]
+        if (rand() > 0.5) corners.push([accX + 6, accY + ph - 6])
+        for (const [bx, by] of corners) {
           const bolt = this.scene.add.sprite(bx, by, SPRITESHEET_KEYS.GAME_ICONS, ICON_FRAMES.CIRCLE_GREY)
-            .setScale(0.16).setAlpha(0.45).setTint(0x3a4050).setDepth(-10)
+            .setScale(0.14).setAlpha(0.3 + rand() * 0.15).setTint(0x3a4050).setDepth(-10)
           this.terrainDecos.push(bolt)
         }
+        accX += pw
       }
+      accY += ph
     }
 
     // ── 2. Mako energy seams — glowing green/cyan lines in the floor ──
@@ -211,23 +239,31 @@ export class OfficeTerrain {
       this.reactorCenter = null
     }
 
-    // ── 3. Pipes — horizontal and vertical runs ──
+    // ── 3. Pipes — horizontal and vertical runs (with overlap avoidance) ──
     const pipePositions: { x1: number; y1: number; x2: number; y2: number; r: number }[] = []
-    for (let attempt = 0; attempt < 15; attempt++) {
+    const pipeTooClose = (mx: number, my: number, pr: number): boolean => {
+      for (const p of pipePositions) {
+        const pmx = (p.x1 + p.x2) / 2, pmy = (p.y1 + p.y2) / 2
+        if (Math.hypot(mx - pmx, my - pmy) < pr + p.r + 60) return true
+      }
+      return false
+    }
+    for (let attempt = 0; attempt < 12; attempt++) {
       const isVert = rand() > 0.5
-      const pr = 14 + rand() * 10
+      const pr = 8 + rand() * 6
       let px1: number, py1: number, px2: number, py2: number
       if (isVert) {
         px1 = px2 = x0 + 80 + rand() * (w - 160)
         py1 = y0 + rand() * h * 0.3
-        py2 = py1 + 250 + rand() * 500
+        py2 = py1 + 150 + rand() * 300
       } else {
         py1 = py2 = y0 + 80 + rand() * (h - 160)
         px1 = x0 + rand() * w * 0.3
-        px2 = px1 + 250 + rand() * 500
+        px2 = px1 + 150 + rand() * 300
       }
       const midX = (px1 + px2) / 2, midY = (py1 + py2) / 2
       if (isOverlapping(midX, midY, 25)) continue
+      if (pipeTooClose(midX, midY, pr)) continue
       pipePositions.push({ x1: px1, y1: py1, x2: px2, y2: py2, r: pr })
     }
 
@@ -283,10 +319,10 @@ export class OfficeTerrain {
       this.terrainDecos.push(endLight)
     }
 
-    // Short building pipe stubs — utility connections
+    // Short building pipe stubs — utility connections (1-2 per building)
     for (const rect of buildingRects) {
       for (let side = 0; side < 4; side++) {
-        if (rand() > 0.4) continue
+        if (rand() > 0.2) continue
         const stubLen = 30 + rand() * 40
         const stubR = 6 + rand() * 4
         let sx1: number, sy1: number, sx2: number, sy2: number
@@ -318,44 +354,45 @@ export class OfficeTerrain {
       }
     }
 
-    // ── 4. Floor detail — rust patches, oil stains, scorch marks ──
-    // Rust stains — orange-brown splotches
-    for (let i = 0; i < 15; i++) {
+    // ── 4. Floor wear — sparse, varied marks for organic texture ──
+    // Rust patches — irregular shapes near plate edges
+    for (let i = 0; i < 8; i++) {
       const rx = x0 + rand() * w
       const ry = y0 + rand() * h
       if (isOverlapping(rx, ry, 10)) continue
-      const rr = 15 + rand() * 20
-      g.fillStyle(0x8a4a1a, 0.06 + rand() * 0.03)
-      g.fillEllipse(rx, ry, rr, rr * (0.6 + rand() * 0.4))
+      const rw = 10 + rand() * 25, rh = 6 + rand() * 15
+      const angle = rand() * 60 - 30
+      g.save()
+      g.fillStyle(0x8a4a1a, 0.04 + rand() * 0.03)
+      // Irregular shape: overlapping offset ellipses
+      g.fillEllipse(rx, ry, rw, rh)
+      if (rand() > 0.5) g.fillEllipse(rx + rw * 0.3, ry - rh * 0.2, rw * 0.6, rh * 0.7)
+      g.restore()
     }
 
-    // Oil stains — dark iridescent puddles
-    for (let i = 0; i < 12; i++) {
+    // Oil stains — fewer, elongated drip shapes
+    for (let i = 0; i < 6; i++) {
       const ox = x0 + rand() * w
       const oy = y0 + rand() * h
       if (isOverlapping(ox, oy, 8)) continue
-      const or_ = 12 + rand() * 18
-      g.fillStyle(0x0a0a1a, 0.1 + rand() * 0.05)
-      g.fillEllipse(ox, oy, or_, or_ * (0.5 + rand() * 0.3))
+      const ow = 8 + rand() * 14, oh = ow * (0.3 + rand() * 0.4)
+      g.fillStyle(0x0a0a1a, 0.06 + rand() * 0.04)
+      g.fillEllipse(ox, oy, ow, oh)
+      // Drip tail
+      if (rand() > 0.4) {
+        g.fillStyle(0x0a0a1a, 0.03)
+        g.fillEllipse(ox + ow * 0.4, oy + oh * 0.8, ow * 0.3, oh * 1.5)
+      }
     }
 
-    // Scorch marks — dark radial burns
-    for (let i = 0; i < 7; i++) {
+    // Scratch marks — varying thickness and direction
+    for (let i = 0; i < 8; i++) {
       const sx = x0 + rand() * w
       const sy = y0 + rand() * h
-      if (isOverlapping(sx, sy, 10)) continue
-      const sr = 10 + rand() * 16
-      g.fillStyle(0x0a0a0a, 0.08 + rand() * 0.04)
-      g.fillCircle(sx, sy, sr)
-    }
-
-    // Scratch marks — thin diagonal lines on plates
-    g.lineStyle(1, 0x3a4a5a, 0.12)
-    for (let i = 0; i < 10; i++) {
-      const sx = x0 + rand() * w
-      const sy = y0 + rand() * h
-      const sLen = 15 + rand() * 30
+      const sLen = 10 + rand() * 25
       const angle = rand() * Math.PI
+      const thick = 0.5 + rand() * 1
+      g.lineStyle(thick, 0x3a4a5a, 0.06 + rand() * 0.08)
       g.lineBetween(sx, sy, sx + Math.cos(angle) * sLen, sy + Math.sin(angle) * sLen)
     }
 
@@ -1047,26 +1084,26 @@ export class OfficeTerrain {
       }
     }
 
-    // ── Zone connecting roads — thin road grid between zones ──
-    g.lineStyle(1, 0x3a4a5a, 0.25)
-    // Horizontal roads along zone row centers
-    for (let row = 0; row < zoneRows; row++) {
-      const roadY = y0 + row * ZONE_SIZE + ZONE_SIZE / 2
-      g.lineBetween(x0 + 20, roadY, x0 + w - 20, roadY)
-    }
-    // Vertical roads along zone column centers
-    for (let col = 0; col < zoneCols; col++) {
-      const roadX = x0 + col * ZONE_SIZE + ZONE_SIZE / 2
-      g.lineBetween(roadX, y0 + 20, roadX, y0 + h - 20)
-    }
-    // Intersection dots at grid crossings
+    // ── Zone connecting roads — sparse road segments between occupied zones ──
+    // Only draw road segments between adjacent non-open zones
     for (let col = 0; col < zoneCols; col++) {
       for (let row = 0; row < zoneRows; row++) {
-        const ix = x0 + col * ZONE_SIZE + ZONE_SIZE / 2
-        const iy = y0 + row * ZONE_SIZE + ZONE_SIZE / 2
-        if (isOverlapping(ix, iy, 30)) continue
-        g.fillStyle(0x3a4a5a, 0.2)
-        g.fillCircle(ix, iy, 3)
+        const t1 = getZoneType(col, row)
+        if (t1 === 'open') continue
+        const cx1 = x0 + col * ZONE_SIZE + ZONE_SIZE / 2
+        const cy1 = y0 + row * ZONE_SIZE + ZONE_SIZE / 2
+        // Connect right
+        if (col + 1 < zoneCols && getZoneType(col + 1, row) !== 'open') {
+          const cx2 = cx1 + ZONE_SIZE
+          g.lineStyle(1, 0x3a4a5a, 0.15 + rand() * 0.1)
+          g.lineBetween(cx1, cy1, cx2, cy1)
+        }
+        // Connect down
+        if (row + 1 < zoneRows && getZoneType(col, row + 1) !== 'open') {
+          const cy2 = cy1 + ZONE_SIZE
+          g.lineStyle(1, 0x3a4a5a, 0.15 + rand() * 0.1)
+          g.lineBetween(cx1, cy1, cx1, cy2)
+        }
       }
     }
 
