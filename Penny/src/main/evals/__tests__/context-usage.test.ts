@@ -48,6 +48,14 @@ function writeJsonl(filePath: string, lines: string[]): void {
   fs.writeFileSync(filePath, lines.join('\n') + '\n')
 }
 
+function makeQueueTaskNotification(status: 'completed' | 'failed'): string {
+  return JSON.stringify({
+    type: 'queue-operation',
+    operation: 'enqueue',
+    content: `<task-notification><status>${status}</status></task-notification>`,
+  })
+}
+
 // ── Tests ───────────────────────────────────────────────────────────────────
 
 describe('analyzeJsonl', () => {
@@ -111,6 +119,17 @@ describe('analyzeJsonl', () => {
       `Second half retry rate (${analysis.retryRateSecondHalf}) should exceed first half (${analysis.retryRateFirstHalf})`,
     )
   })
+
+  it('handles malformed JSONL lines gracefully', () => {
+    const jsonlPath = path.join(tmpDir, 'malformed.jsonl')
+    fs.writeFileSync(
+      jsonlPath,
+      `${makeLine('user', 'hello')}\n{"type":"assistant","message":\n${makeLine('assistant', 'ok')}\n`,
+      'utf-8',
+    )
+    const analysis = analyzeJsonl(jsonlPath)
+    assert.equal(analysis.totalChars, 7)
+  })
 })
 
 describe('ContextMonitor', () => {
@@ -145,28 +164,25 @@ describe('ContextMonitor', () => {
     fs.rmSync(tmpDir, { recursive: true, force: true })
   })
 
-  it('declining success rate (increasing errors) produces higher rot score', async () => {
+  it('declining success rate increases rot score', async () => {
     const monitor = new ContextMonitor(200_000)
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'decline-test-'))
 
-    // Session with errors concentrated in second half
+    // Session where task outcomes decline over time.
     const declineLines: string[] = []
-    for (let i = 0; i < 10; i++) {
-      declineLines.push(makeToolUseLine('Read', `first-${i}`))
-      declineLines.push(makeToolResultLine(`first-${i}`, false))
+    for (let i = 0; i < 6; i++) {
+      declineLines.push(makeQueueTaskNotification('completed'))
     }
-    for (let i = 0; i < 10; i++) {
-      declineLines.push(makeToolUseLine('Bash', `second-${i}`))
-      declineLines.push(makeToolResultLine(`second-${i}`, i < 8)) // 8 errors in second half
+    for (let i = 0; i < 6; i++) {
+      declineLines.push(makeQueueTaskNotification('failed'))
     }
     const declinePath = path.join(tmpDir, 'decline.jsonl')
     writeJsonl(declinePath, declineLines)
 
-    // Baseline session with uniform success
+    // Baseline session with stable success.
     const baselineLines: string[] = []
-    for (let i = 0; i < 20; i++) {
-      baselineLines.push(makeToolUseLine('Read', `base-${i}`))
-      baselineLines.push(makeToolResultLine(`base-${i}`, false))
+    for (let i = 0; i < 12; i++) {
+      baselineLines.push(makeQueueTaskNotification('completed'))
     }
     const baselinePath = path.join(tmpDir, 'baseline.jsonl')
     writeJsonl(baselinePath, baselineLines)
@@ -178,7 +194,7 @@ describe('ContextMonitor', () => {
       declineHealth.rotScore > baselineHealth.rotScore,
       `Declining session rot score (${declineHealth.rotScore}) should exceed baseline (${baselineHealth.rotScore})`,
     )
-    assert.equal(baselineHealth.rotScore, 0, 'Baseline with no errors should have 0 rot score')
+    assert.equal(baselineHealth.rotScore, 0, 'Baseline with stable outcomes should have 0 rot score')
 
     fs.rmSync(tmpDir, { recursive: true, force: true })
   })
