@@ -2,7 +2,7 @@ import { app, BrowserWindow, nativeImage, shell } from 'electron'
 import fs from 'fs'
 import path from 'path'
 import dotenv from 'dotenv'
-import { registerIpcHandlers, registerPreferenceIpc } from './ipc'
+import { registerIpcHandlers, registerPreferenceIpc, ipcEvents } from './ipc'
 import { closeGraph } from './graph'
 import { loadAgentConfigs } from './agents'
 import { registerPtyHandlers, destroyAllPtys, stopPtySweep } from './pty'
@@ -17,7 +17,8 @@ protocol.registerSchemesAsPrivileged([
   { scheme: 'penny-sfx', privileges: { stream: true, supportFetchAPI: true, bypassCSP: true } },
 ])
 import { startFileWatcher, stopFileWatcher } from './file-watcher'
-import { startOrchestrator, stopOrchestrator } from './orchestrator'
+import { startOrchestrator, stopOrchestrator, orchestratorEvents } from './orchestrator'
+import { podEvents } from './pods'
 import { writeGameStateSnapshot } from './game-state-snapshot'
 import { PreferenceCollector, PreferenceStore, connectCollector } from './preferences'
 import { initAutoUpdater } from './auto-updater'
@@ -106,7 +107,7 @@ app.whenReady().then(() => {
   registerPtyHandlers()
   const dataDir = path.resolve(ELECTRON_ROOT, 'data')
   const preferenceStore = new PreferenceStore(dataDir)
-  const preferenceCollector = new PreferenceCollector()
+  const preferenceCollector = new PreferenceCollector(ipcEvents, { orchestratorEvents, podEvents })
   connectCollector(preferenceCollector, preferenceStore)
   registerPreferenceIpc(preferenceStore)
   createWindow()

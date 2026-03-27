@@ -277,7 +277,7 @@ export class OfficeWorkstations {
     // Skip redundant updates — fingerprint the fields that affect visuals
     const blurbSnippet = agent.lastAssistantBlurb?.slice(0, 20) ?? ''
     const ctxRound = agent.contextUtilization != null ? (agent.contextUtilization * 100 | 0) : ''
-    const fp = `${agent.status}|${agent.sessionMode}|${agent.needsInteraction}|${agent.interactionType}|${agent.config.name}|${blurbSnippet}|${agent.uptime ?? ''}|${ctxRound}|${agent.contextRotDetected ?? ''}`
+    const fp = `${agent.status}|${agent.sessionMode}|${agent.needsInteraction}|${agent.interactionType}|${agent.config.name}|${blurbSnippet}|${agent.uptime ?? ''}|${ctxRound}|${agent.contextRotDetected ?? ''}|${agent.qualityStreak ?? 0}`
     if (ws.lastStateFingerprint === fp) {
       ws.state = agent
       return

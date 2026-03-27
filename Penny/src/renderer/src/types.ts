@@ -598,11 +598,13 @@ export interface SpotCheck {
   taskDescription: string
   agentOutput: string
   automatedScore?: number
-  humanVerdict?: 'pass' | 'fail' | 'partial'
+  humanVerdict?: SpotCheckVerdict
   humanNotes?: string
   reviewedAt?: string
   sampledAt: string
 }
+
+export type SpotCheckVerdict = 'pass' | 'fail' | 'partial'
 
 export interface SpotCheckAgreement {
   total: number

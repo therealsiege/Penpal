@@ -181,7 +181,8 @@ contextBridge.exposeInMainWorld('api', {
   // Spot-Check Queue
   evalsSpotCheckQueue: () => ipcRenderer.invoke('evals:spot-check-queue'),
   evalsSpotCheckSample: (count: number) => ipcRenderer.invoke('evals:spot-check-sample', count),
-  evalsSpotCheckReview: (id: string, verdict: string, notes?: string) => ipcRenderer.invoke('evals:spot-check-review', id, verdict, notes),
+  evalsSpotCheckReview: (id: string, verdict: 'pass' | 'fail' | 'partial', notes?: string) =>
+    ipcRenderer.invoke('evals:spot-check-review', id, verdict, notes),
   evalsSpotCheckAgreement: () => ipcRenderer.invoke('evals:spot-check-agreement'),
   // Context Health
   contextHealth: () => ipcRenderer.invoke('evals:context-health'),

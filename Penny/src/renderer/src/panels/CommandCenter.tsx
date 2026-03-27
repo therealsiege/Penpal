@@ -1,9 +1,9 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { usePolling } from '../hooks/usePolling'
 import { AgentAvatar } from '../components/AgentAvatar'
 import { useToast } from '../components/Toast'
 import { Terminal } from '../components/Terminal'
-import type { AgentConfig, AgentState, HealthResult, HotLead, JobStatus, PodWorkflow, PodPreset, ProjectLeaderboardEntry, OpencodeSession, AgentXP, OpenClawInfo, ConfigSnapshot, McpServerEntry, AgentToolSummary, getRankForXP } from '../types'
+import type { AgentConfig, AgentState, HealthResult, HotLead, JobStatus, PodWorkflow, PodPreset, ProjectLeaderboardEntry, OpencodeSession, AgentXP, OpenClawInfo, ConfigSnapshot, McpServerEntry, AgentToolSummary, ContextHealth, getRankForXP } from '../types'
 import { PodLauncherModal, PodStatusModal, PodListModal } from '../components/PodModal'
 import { createOfficeGame } from '../game/OfficeGame'
 import { OfficeScene } from '../game/OfficeScene'
@@ -1358,6 +1358,50 @@ export function CommandCenter(props: CommandCenterProps) {
     () => window.api.orchestratorXP().catch(() => ({})),
     10000,
   )
+  const { data: contextHealthData } = usePolling<ContextHealth[]>(
+    () => window.api.contextHealth().catch(() => []),
+    10000,
+  )
+  const [lastContextHealthAt, setLastContextHealthAt] = useState<number>(0)
+
+  useEffect(() => {
+    if (contextHealthData) setLastContextHealthAt(Date.now())
+  }, [contextHealthData])
+
+  const mergedAgentStatuses = useMemo<AgentState[] | undefined>(() => {
+    if (!agentStatuses) return undefined
+    const contextFresh = Date.now() - lastContextHealthAt <= 30_000
+    const contextRows = contextFresh ? (contextHealthData ?? []) : []
+    const contextByAgentId = new Map<string, ContextHealth>()
+    for (const row of contextRows) contextByAgentId.set(row.agentId, row)
+
+    return agentStatuses.map((agent) => {
+      const health = contextByAgentId.get(agent.config.id)
+      if (!health) {
+        return {
+          ...agent,
+          contextUtilization: undefined,
+          contextRotDetected: undefined,
+        }
+      }
+
+      const rawUtilization = health.utilizationPct / 100
+      const contextUtilization = Number.isFinite(rawUtilization)
+        ? Math.min(1, Math.max(0, rawUtilization))
+        : undefined
+      const contextRotDetected = (
+        health.recommendation === 'compress'
+        || health.recommendation === 'restart'
+        || health.rotScore >= 0.7
+      )
+
+      return {
+        ...agent,
+        contextUtilization,
+        contextRotDetected,
+      }
+    })
+  }, [agentStatuses, contextHealthData, lastContextHealthAt])
 
 
   // --- Agent configs (load once) ---

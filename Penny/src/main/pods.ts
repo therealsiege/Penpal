@@ -3,6 +3,7 @@ import fs from 'fs'
 import path from 'path'
 import { runAgentHeadless } from './sessions'
 import { getAgentConfig, loadPodPresets } from './agents'
+import { podQualityCollector } from './evals/collectors/pod-quality'
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
@@ -260,10 +261,11 @@ export function parseSelfEvalResult(output: string, numCandidates: number): Self
     const parsed = JSON.parse(jsonMatch[0])
     const selected = Number(parsed.selected)
     const confidence = Number(parsed.confidence)
-    const reasoning = String(parsed.reasoning || '')
+    const reasoning = parsed.reasoning
 
     if (!Number.isInteger(selected) || selected < 1 || selected > numCandidates) return null
     if (isNaN(confidence) || confidence < 0 || confidence > 1) return null
+    if (typeof reasoning !== 'string') return null
 
     return { selected, confidence, reasoning }
   } catch {
@@ -420,6 +422,36 @@ function formatExecutorMessage(wf: PodWorkflow, solverOutput?: string, reviewerO
     '- Issue 2: ...',
     '```',
   ].join('\n')
+}
+
+export function formatSelfFixMessage(wf: PodWorkflow, testOutput: string): string {
+  const attemptNumber = wf.selfFixAttempts + 1
+  const codeChanges = wf.solver.output || 'No solver output available.'
+
+  return [
+    `## Pod Workflow: ${wf.name}`,
+    `### Stage: Self-Fix (Attempt ${attemptNumber}/${wf.maxSelfFixes}, Iteration ${wf.iteration}/${wf.maxIterations})`,
+    '',
+    'Your test run failed with these errors:',
+    testOutput || 'No test output captured.',
+    '',
+    'The original task was:',
+    wf.task,
+    '',
+    'Your code changes were:',
+    codeChanges,
+    '',
+    'Diagnose the failure and generate a minimal fix. Only fix what\'s broken.',
+    'Do NOT rewrite the solution — make the smallest change that fixes the test.',
+  ].join('\n')
+}
+
+export function parseTestPassed(output: string): boolean {
+  const normalized = (output || '').toUpperCase()
+  if (!normalized.trim()) return false
+  if (normalized.includes('RESULT: PASS')) return true
+  if (normalized.includes('RESULT: FAIL')) return false
+  return normalized.includes('PASS') && !normalized.includes('FAIL')
 }
 
 // ── Core workflow stages ─────────────────────────────────────────────────────
@@ -597,8 +629,7 @@ async function runExecuteStage(wf: PodWorkflow): Promise<{ passed: boolean }> {
   wf.executor.output = result.output
   console.log(`[pods] Executor done (${Math.round(result.durationMs / 1000)}s)`)
 
-  const output = (wf.executor.output || '').toUpperCase()
-  const passed = output.includes('RESULT: PASS') || (output.includes('PASS') && !output.includes('FAIL'))
+  const passed = parseTestPassed(wf.executor.output || '')
   return { passed }
 }
 
@@ -654,6 +685,51 @@ async function runWorkflow(wf: PodWorkflow): Promise<void> {
         setStatus(wf, 'complete')
         appendWorkflowSummary(wf)
         return
+      }
+
+      let latestFailureOutput = wf.executor.output || ''
+      while (wf.selfFixAttempts < wf.maxSelfFixes) {
+        const attemptNumber = wf.selfFixAttempts + 1
+        setStatus(wf, 'self-fixing')
+        wf.executor.status = 'active'
+        wf.selfFixAttempts = attemptNumber
+
+        const prompt = formatSelfFixMessage(wf, latestFailureOutput)
+        const result = await runAgentHeadless(wf.executor.agentId, wf.cwd, prompt, {
+          timeoutMs: EXECUTE_TIMEOUT_MS,
+        })
+
+        if (!result.success) {
+          latestFailureOutput = `Self-fix attempt failed: ${result.error || 'Unknown executor error'}`
+          wf.executor.output = latestFailureOutput
+          wf.executor.status = 'failed'
+          wf.artifacts.push({
+            stage: 'self-fix',
+            path: `self-fix-attempt-${attemptNumber}-fail`,
+            iteration: wf.iteration,
+            timestamp: Date.now(),
+          })
+          savePods()
+          continue
+        }
+
+        wf.executor.status = 'complete'
+        wf.executor.output = result.output
+        latestFailureOutput = result.output || ''
+        const selfFixPassed = parseTestPassed(latestFailureOutput)
+        wf.artifacts.push({
+          stage: 'self-fix',
+          path: `self-fix-attempt-${attemptNumber}-${selfFixPassed ? 'pass' : 'fail'}`,
+          iteration: wf.iteration,
+          timestamp: Date.now(),
+        })
+        savePods()
+
+        if (selfFixPassed) {
+          setStatus(wf, 'complete')
+          appendWorkflowSummary(wf)
+          return
+        }
       }
 
       // Tests failed — feedback loop

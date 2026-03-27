@@ -14,7 +14,7 @@ describe('PreferenceCollector', () => {
     ipcEvents = new EventEmitter()
     orchestratorEvents = new EventEmitter()
     podEvents = new EventEmitter()
-    collector = new PreferenceCollector({ ipcEvents, orchestratorEvents, podEvents })
+    collector = new PreferenceCollector(ipcEvents, { orchestratorEvents, podEvents })
     events = []
     collector.on('preference', (evt: PreferenceEvent) => events.push(evt))
   })
@@ -93,46 +93,49 @@ describe('PreferenceCollector', () => {
     expect(events[0].agentId).toBe('backend-arch')
   })
 
-  it('pod complete produces { signal: "complete", strength: "strong" }', () => {
+  it('pod reviewer accept produces { signal: "approve", strength: "strong" }', () => {
     podEvents.emit('status-change', {
       id: 'pod-1',
-      status: 'complete',
+      status: 'executing',
       solver: { agentId: 'fullstack-dev' },
-      executor: { output: '' },
+      reviewer: { output: 'Looks good.' },
     })
 
     expect(events).toHaveLength(1)
-    expect(events[0].signal).toBe('complete')
+    expect(events[0].signal).toBe('approve')
     expect(events[0].strength).toBe('strong')
     expect(events[0].agentId).toBe('fullstack-dev')
   })
 
-  it('pod failed produces { signal: "fail", strength: "strong" }', () => {
+  it('pod reviewer reject produces { signal: "reject", strength: "strong" }', () => {
     podEvents.emit('status-change', {
       id: 'pod-2',
-      status: 'failed',
-      solver: { agentId: 'nextjs-frontend' },
-      executor: { output: '' },
-    })
-
-    expect(events).toHaveLength(1)
-    expect(events[0].signal).toBe('fail')
-    expect(events[0].strength).toBe('strong')
-    expect(events[0].agentId).toBe('nextjs-frontend')
-  })
-
-  it('pod feedback produces { signal: "reject", strength: "strong" }', () => {
-    podEvents.emit('status-change', {
-      id: 'pod-3',
       status: 'feedback',
-      solver: { agentId: 'fullstack-dev' },
+      solver: { agentId: 'nextjs-frontend' },
+      critique: { verdict: 'reject', summary: 'Missing error handling.' },
       executor: { output: 'FAIL: tests broken' },
     })
 
     expect(events).toHaveLength(1)
     expect(events[0].signal).toBe('reject')
     expect(events[0].strength).toBe('strong')
-    expect(events[0].context.toolResult).toBe('FAIL: tests broken')
+    expect(events[0].agentId).toBe('nextjs-frontend')
+    expect(events[0].userAction).toBe('Missing error handling.')
+  })
+
+  it('pod feedback without critique still produces reject signal', () => {
+    podEvents.emit('status-change', {
+      id: 'pod-3',
+      status: 'feedback',
+      solver: { agentId: 'fullstack-dev' },
+      executor: { output: 'Need tests.' },
+    })
+
+    expect(events).toHaveLength(1)
+    expect(events[0].signal).toBe('reject')
+    expect(events[0].strength).toBe('strong')
+    expect(events[0].context.toolResult).toBe('pod-3:request-changes')
+    expect(events[0].userAction).toBe('Need tests.')
   })
 
   it('events have valid UUID id and ISO timestamp', () => {
@@ -152,6 +155,7 @@ describe('PreferenceCollector', () => {
       ipcEvents.emit('send', undefined)
       orchestratorEvents.emit('task-completed', null)
       podEvents.emit('status-change', null)
+      podEvents.emit('status-change', { id: 'pod-4', status: 'feedback' })
     }).not.toThrow()
 
     expect(events).toHaveLength(0)
