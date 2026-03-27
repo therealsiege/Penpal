@@ -1559,22 +1559,36 @@ export class WorkstationAnimator {
   // Quality streak flame effect
   // ---------------------------------------------------------------------------
 
+  private getFlameTier(streak: number): 'small' | 'medium' | 'large' {
+    if (streak >= 15) return 'large'
+    if (streak >= 10) return 'medium'
+    return 'small'
+  }
+
+  private getFlameParticlesPerTick(streak: number): number {
+    const totalParticleCount = Math.min(30, Math.max(0, streak * 2))
+    const perSecond = Math.max(1, Math.ceil(totalParticleCount / 3))
+    return Math.max(1, Math.ceil(perSecond / 8))
+  }
+
   startStreakFlame(ws: WorkstationSprite, streak: number, room: Room): void {
     if (ws.lastFlameStreak === streak && ws.flameTimer) return
     this.stopStreakFlame(ws, false)
 
     ws.lastFlameStreak = streak
     if (!ws.flameContainer) return
+    if ((ws.currentLodLevel ?? 3) < 3) return
     ws.flameContainer.setVisible(true)
 
-    const spawnPerTick = Math.max(1, Math.floor(streak / 5))
-    const spawnChance = 0.3
+    const tier = this.getFlameTier(streak)
+    const spawnPerTick = this.getFlameParticlesPerTick(streak)
+    const spawnChance = tier === 'large' ? 0.95 : tier === 'medium' ? 0.8 : 0.65
 
     ws.flameTimer = this.scene.time.addEvent({
-      delay: 180,
+      delay: 120,
       loop: true,
       callback: () => {
-        if (!ws.flameContainer?.visible) return
+        if (!ws.flameContainer?.visible || (ws.currentLodLevel ?? 3) < 3) return
         const worldX = room.x + ws.container.x
         const worldY = room.y + ws.container.y + WS_DESK_Y - 4
         for (let i = 0; i < spawnPerTick; i++) {
@@ -1613,6 +1627,7 @@ export class WorkstationAnimator {
   updateStreakFlame(ws: WorkstationSprite, agent: AgentState): void {
     const streak = agent.xp?.currentStreak ?? 0
     const prevStreak = ws.lastFlameStreak ?? 0
+    const isDetailLod = (ws.currentLodLevel ?? this.host.getLastLodLevel()) >= 3
 
     let ownerRoom: Room | undefined
     for (const room of this.host.getRooms().values()) {
@@ -1622,6 +1637,12 @@ export class WorkstationAnimator {
       }
     }
     if (!ownerRoom) return
+
+    if (!isDetailLod) {
+      if (ws.flameTimer || ws.flameContainer?.visible) this.stopStreakFlame(ws, false)
+      ws.lastFlameStreak = streak >= 5 ? streak : undefined
+      return
+    }
 
     if (streak >= 5) {
       this.startStreakFlame(ws, streak, ownerRoom)

@@ -169,6 +169,17 @@ Three-agent workflow engine (`src/main/pods.ts`):
 
 If tests fail, the executor's feedback goes back to the solver for iteration (max 3 rounds). Results are appended to `agents/CLAUDE.md` as team knowledge.
 
+### Eval Spot-Check Queue
+
+Manual review queue for random agent output spot checks (`src/main/evals/judges/human-judge.ts`):
+
+- Sampling source: recent orchestrator tasks with status `completed` or `failed`
+- Recency policy: last 7 days by `completedAt`
+- Uniqueness policy: a task can only be sampled once (by `taskId`)
+- Persistence: JSON-backed queue at `data/spot-checks.json` with atomic writes
+- Agreement policy: automated score `>= 0.5` maps to pass; human `partial` is treated as pass for binary agreement math
+- Operational limits: file-backed queue, no pagination yet
+
 ### Slack Bridge
 
 Per-project channels (`#sk-penny`, `#sk-medscrub`) via Socket Mode:
@@ -306,6 +317,12 @@ All IPC calls go through `window.api.*`. Each handler uses `wrapHandler` which c
 - `pickDirectory()` -- native directory picker dialog
 - `focusCursorIDE()` -- bring Cursor to front
 
+**Spot Checks**
+- `evalsSpotCheckQueue()` -- fetch pending spot checks for manual review
+- `evalsSpotCheckSample(count)` -- sample recent task outputs into queue
+- `evalsSpotCheckReview(id, verdict, notes?)` -- submit human verdict (`pass`/`partial`/`fail`)
+- `evalsSpotCheckAgreement()` -- compute human-vs-automated agreement metrics
+
 </details>
 
 ## MCP Server
@@ -320,7 +337,11 @@ Penny exposes an MCP (Model Context Protocol) server so Claude sessions can prog
 ### Start the Server
 
 ```bash
+# from Penny/
 npm run mcp:start
+
+# from repo root
+npm run --prefix Penny mcp:start
 ```
 
 The server uses stdio transport — stdout is reserved for the MCP protocol, logs go to stderr.

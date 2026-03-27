@@ -32,11 +32,30 @@ toolRegistry.register({
     additionalProperties: false,
   },
   handler: async (params) => {
-    const name = params.name as string
+    const name = typeof params.name === 'string' ? params.name.trim() : ''
+    if (!name) {
+      return {
+        error: 'Invalid input: "name" must be a non-empty string.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            name: { type: 'string' },
+          },
+          required: ['name'],
+          additionalProperties: false,
+        },
+        _meta: {
+          next_actions: ['Provide a valid tool name and call meta:describe-tool again'],
+          related_tools: ['meta:list-tools'],
+        },
+      }
+    }
+
     const tool = toolRegistry.get(name)
     if (!tool) {
       return {
         error: `Tool not found: ${name}`,
+        requestedTool: name,
         _meta: {
           next_actions: ['Use meta:list-tools to see all available tools'],
           related_tools: ['meta:list-tools'],

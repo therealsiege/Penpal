@@ -185,6 +185,7 @@ export interface WorkstationSprite {
   contextMeterPulseTween?: Phaser.Tweens.Tween
   contextRotShakeTween?: Phaser.Tweens.Tween
   lastContextRotState?: boolean
+  contextRotMonitorBaseX?: number
 }
 
 export interface Room {

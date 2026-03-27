@@ -214,8 +214,8 @@ describe('Weekly Eval Digest', () => {
     expect(result.markdown).toContain('4 pod workflows')
     expect(result.markdown).toContain('Completed: 3')
     expect(result.markdown).toContain('Failed: 1')
-    expect(result.markdown).toContain('First-pass success: 2')
-    expect(result.markdown).toContain('Required iteration: 1')
+    expect(result.markdown).toContain('First-pass completions: 2')
+    expect(result.markdown).toContain('Iterated completions: 1')
   })
 
   it('generates recommendations for high and low performers', async () => {
@@ -264,5 +264,54 @@ describe('Weekly Eval Digest', () => {
     const result = await generateWeeklyDigest(opts)
 
     expect(result.markdown).toContain('gone-agent inactive this week')
+  })
+
+  it('includes events at exact week boundaries', async () => {
+    writeOutcomes(opts.outcomesPath!, [
+      makeOutcome({ agentId: 'boundary-agent', status: 'completed', completedAt: '2026-03-23T00:00:00.000Z' }),
+      makeOutcome({ agentId: 'boundary-agent', status: 'completed', completedAt: '2026-03-29T23:59:59.999Z' }),
+      makeOutcome({ agentId: 'boundary-agent', status: 'failed', completedAt: '2026-03-22T23:59:59.999Z' }),
+    ])
+
+    writePreferences(opts.preferencesDir!, [
+      { id: 'p1', timestamp: '2026-03-23T00:00:00.000Z', agentId: 'boundary-agent', signal: 'approve', strength: 'strong', context: {} },
+      { id: 'p2', timestamp: '2026-03-29T23:59:59.999Z', agentId: 'boundary-agent', signal: 'reject', strength: 'strong', context: {} },
+      { id: 'p3', timestamp: '2026-03-22T23:59:59.999Z', agentId: 'boundary-agent', signal: 'approve', strength: 'strong', context: {} },
+    ])
+
+    writePods(opts.podsPath!, [
+      { id: 'pod-start', status: 'complete', iteration: 1, createdAt: Date.parse('2026-03-23T00:00:00.000Z') },
+      { id: 'pod-end', status: 'failed', iteration: 2, createdAt: Date.parse('2026-03-29T23:59:59.999Z') },
+      { id: 'pod-prior', status: 'complete', iteration: 1, createdAt: Date.parse('2026-03-22T23:59:59.999Z') },
+    ])
+
+    const result = await generateWeeklyDigest(opts)
+    expect(result.markdown).toContain('2 tasks completed (100% success rate')
+    expect(result.markdown).toContain('2 preference signals captured (1 approvals, 1 rejections)')
+    expect(result.markdown).toContain('2 pod workflows')
+    expect(result.markdown).toContain('Completed: 1')
+    expect(result.markdown).toContain('Failed: 1')
+  })
+
+  it('ignores malformed records without throwing', async () => {
+    writeOutcomes(opts.outcomesPath!, [
+      makeOutcome({ agentId: 'safe-agent', status: 'completed', completedAt: '2026-03-24T10:00:00.000Z' }),
+    ])
+    fs.appendFileSync(opts.outcomesPath!, '{"invalid-json":\n', 'utf-8')
+
+    writePreferences(opts.preferencesDir!, [
+      { id: 'ok', timestamp: '2026-03-24T10:00:00.000Z', agentId: 'safe-agent', signal: 'approve', strength: 'strong', context: {} },
+      { id: 'bad-ts', timestamp: 'not-a-date', agentId: 'safe-agent', signal: 'reject', strength: 'strong', context: {} },
+    ])
+
+    fs.writeFileSync(opts.podsPath!, JSON.stringify([
+      { id: 'valid', status: 'complete', iteration: 1, createdAt: Date.parse('2026-03-24T10:00:00.000Z') },
+      { id: 'invalid', status: 'complete', createdAt: Date.parse('2026-03-24T11:00:00.000Z') },
+    ]), 'utf-8')
+
+    const result = await generateWeeklyDigest(opts)
+    expect(result.markdown).toContain('1 tasks completed (100% success rate')
+    expect(result.markdown).toContain('1 preference signals captured (1 approvals, 0 rejections)')
+    expect(result.markdown).toContain('1 pod workflows')
   })
 })

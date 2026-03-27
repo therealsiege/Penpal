@@ -35,6 +35,7 @@ import {
   CTX_METER_W,
   CTX_METER_H,
   CTX_GREEN,
+  CTX_METER_BASE_ALPHA,
 } from './office-constants'
 import type { WorkstationHost } from './office-workstation'
 import { isDeskItemUnlocked, isFlairUnlocked, getRankColor } from './cosmetic-tiers'
@@ -660,7 +661,7 @@ export class WorkstationFactory {
       fillColor: CTX_GREEN,
       backgroundColor: activeTheme.roomFloor,
     })
-    contextMeter.graphics.setAlpha(0.6).setVisible(false)
+    contextMeter.graphics.setAlpha(CTX_METER_BASE_ALPHA).setVisible(false)
     wsContainer.add(contextMeter.graphics)
     lodLevel3Objects.push(contextMeter.graphics)
 
@@ -780,6 +781,7 @@ export class WorkstationFactory {
       flameTweens: [],
       evalGlow,
       contextMeter,
+      contextRotMonitorBaseX: monitorSprite?.x ?? 0,
     }
 
     // Eval glow breathing pulse tween

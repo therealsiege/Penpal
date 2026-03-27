@@ -188,6 +188,14 @@ export class SoundEngine {
       { attack: 0.001, sustain: 0.01, decay: 0.02, peak: 0.18 })
   }
 
+  /** Subtle approval cue ("ding"), gated by mute/volume via master gain. */
+  ding(): void {
+    const ctx = this._ensureContext()
+    const now = ctx.currentTime
+    this._osc('sine', 1320, now, now + 0.12,
+      { attack: 0.003, sustain: 0.02, decay: 0.08, peak: 0.22 })
+  }
+
   /** Toggle/switch sound — uses OGG switch if loaded, else procedural. */
   toggleSwitch(): void {
     const key = Math.random() > 0.5 ? AUDIO_KEYS.SWITCH_A : AUDIO_KEYS.SWITCH_B

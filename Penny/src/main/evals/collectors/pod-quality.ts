@@ -47,7 +47,7 @@ export class PodQualityCollector {
   constructor(filePath?: string) {
     const dataDir = filePath
       ? path.dirname(filePath)
-      : path.resolve(__dirname, '..', '..', '..', 'data')
+      : path.resolve(__dirname, '..', '..', '..', '..', 'data')
     this.filePath = filePath ?? path.join(dataDir, 'eval-pod-quality.jsonl')
 
     const dir = path.dirname(this.filePath)
@@ -81,7 +81,13 @@ export class PodQualityCollector {
       return raw
         .split('\n')
         .filter(line => line.trim().length > 0)
-        .map(line => JSON.parse(line) as PodQualityEvent)
+        .flatMap((line) => {
+          try {
+            return [JSON.parse(line) as PodQualityEvent]
+          } catch {
+            return []
+          }
+        })
     } catch {
       return []
     }
@@ -116,8 +122,8 @@ export class PodQualityCollector {
 
     const executorPassRate = sorted.filter(e => e.executorPassed).length / totalPods
 
-    // Self-fix rate: of pods that initially failed (iteration > 1 and completed),
-    // how many eventually succeeded
+    // Self-fix rate denominator: pods that required at least one rework pass.
+    // This treats iteration > 1 as "needed fixing", then asks how many ended complete.
     const initiallyFailed = sorted.filter(e => e.iterations > 1)
     const selfFixRate = initiallyFailed.length > 0
       ? initiallyFailed.filter(e => e.selfFixed).length / initiallyFailed.length

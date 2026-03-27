@@ -2,7 +2,7 @@ import { app, BrowserWindow, nativeImage, shell } from 'electron'
 import fs from 'fs'
 import path from 'path'
 import dotenv from 'dotenv'
-import { registerIpcHandlers, registerPreferenceIpc } from './ipc'
+import { registerIpcHandlers, registerPreferenceIpc, ipcEvents } from './ipc'
 import { closeGraph } from './graph'
 import { loadAgentConfigs } from './agents'
 import { registerPtyHandlers, destroyAllPtys, stopPtySweep } from './pty'
@@ -22,6 +22,7 @@ import { writeGameStateSnapshot } from './game-state-snapshot'
 import { PreferenceCollector, PreferenceStore, connectCollector } from './preferences'
 import { initAutoUpdater } from './auto-updater'
 import { infraUp, infraDown } from './data-scripts'
+import { taskOutcomeCollector } from './evals/collectors/task-outcomes'
 
 // Load analytics/.env for Memgraph/Qdrant connection strings
 // __dirname is out/main (or src/main in dev) — go up to Penny/
@@ -106,12 +107,18 @@ app.whenReady().then(() => {
   registerPtyHandlers()
   const dataDir = path.resolve(ELECTRON_ROOT, 'data')
   const preferenceStore = new PreferenceStore(dataDir)
+<<<<<<< Updated upstream
   const preferenceCollector = new PreferenceCollector()
+=======
+  const preferenceCollector = new PreferenceCollector(ipcEvents, { ipcEvents, orchestratorEvents, podEvents })
+  preferenceCollector.start()
+>>>>>>> Stashed changes
   connectCollector(preferenceCollector, preferenceStore)
   registerPreferenceIpc(preferenceStore)
   createWindow()
   startSlackBridge()
   startFileWatcher()
+  taskOutcomeCollector.start()
   startOrchestrator()
   initAutoUpdater()
   infraUp()
@@ -132,6 +139,7 @@ app.on('window-all-closed', () => {
 
 app.on('before-quit', async () => {
   stopFileWatcher()
+  taskOutcomeCollector.stop()
   stopOrchestrator()
   stopPtySweep()
   destroyAllPtys()

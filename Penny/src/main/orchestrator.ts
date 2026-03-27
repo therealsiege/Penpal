@@ -597,11 +597,19 @@ function handleStageFailure(task: Task, stage: TaskStage, error: string): void {
     task.status = 'failed'
     task.error = `${stage} failed: ${error}`
     task.completedAt = Date.now()
+    const durationMs = task.assignedAt ? Math.max(0, task.completedAt - task.assignedAt) : 0
     console.log(`[orchestrator] Task ${task.id} failed permanently at ${stage}: ${task.error}`)
 
     if (task.assignedAgent) {
       const newXP = awardXP(task.assignedAgent, -25, 'failed')
       orchestratorEvents.emit('xp-awarded', { agentId: task.assignedAgent, xp: newXP })
+      orchestratorEvents.emit('task-failed', {
+        taskId: task.id,
+        agentId: task.assignedAgent,
+        priority: task.priority,
+        durationMs,
+        completedAt: task.completedAt,
+      })
     }
   }
 }
@@ -724,13 +732,16 @@ async function dispatchTask(task: Task, agent: ScoredAgent): Promise<void> {
       const creditsEarned = PRIORITY_CREDITS[task.priority] ?? 50
       const newCredits = awardCredits(task.assignedAgent, creditsEarned)
       orchestratorEvents.emit('xp-awarded', { agentId: task.assignedAgent, xp: newXP, credits: newCredits })
-      orchestratorEvents.emit('task-completed', { taskId: task.id, agentId: task.assignedAgent, priority: task.priority, durationMs: totalDuration })
+      orchestratorEvents.emit('task-completed', {
+        taskId: task.id,
+        agentId: task.assignedAgent,
+        priority: task.priority,
+        durationMs: totalDuration,
+        completedAt: task.completedAt,
+      })
     }
   } else {
     handleStageFailure(task, 'validating', valResult.output ? 'Validation returned FAIL' : 'Validation failed')
-    if (task.assignedAgent) {
-      orchestratorEvents.emit('task-failed', { taskId: task.id, agentId: task.assignedAgent })
-    }
   }
 
   saveTasks()
@@ -753,12 +764,20 @@ async function monitorActiveTasks(): Promise<void> {
         task.status = 'completed'
         task.completedAt = Date.now()
         task.result = 'Task completed'
+        const durationMs = task.assignedAt ? Math.max(0, task.completedAt - task.assignedAt) : 0
         
         // Award XP for completed task
         if (task.assignedAgent) {
           const xpEarned = calculateTaskXP(task)
           const newXP = awardXP(task.assignedAgent, xpEarned, 'completed')
           orchestratorEvents.emit('xp-awarded', { agentId: task.assignedAgent, xp: newXP })
+          orchestratorEvents.emit('task-completed', {
+            taskId: task.id,
+            agentId: task.assignedAgent,
+            priority: task.priority,
+            durationMs,
+            completedAt: task.completedAt,
+          })
         }
         
         saveTasks()
@@ -788,11 +807,20 @@ async function monitorActiveTasks(): Promise<void> {
             task.status = 'failed'
             task.error = 'Agent process died and max retries exhausted'
             task.completedAt = Date.now()
+            const failedAgentId = task.assignedAgent
+            const durationMs = task.assignedAt ? Math.max(0, task.completedAt - task.assignedAt) : 0
             
             // Award XP penalty for failed task
-            if (task.assignedAgent) {
-              const newXP = awardXP(task.assignedAgent, -25, 'failed')
-              orchestratorEvents.emit('xp-awarded', { agentId: task.assignedAgent, xp: newXP })
+            if (failedAgentId) {
+              const newXP = awardXP(failedAgentId, -25, 'failed')
+              orchestratorEvents.emit('xp-awarded', { agentId: failedAgentId, xp: newXP })
+              orchestratorEvents.emit('task-failed', {
+                taskId: task.id,
+                agentId: failedAgentId,
+                priority: task.priority,
+                durationMs,
+                completedAt: task.completedAt,
+              })
             }
             
             saveTasks()
