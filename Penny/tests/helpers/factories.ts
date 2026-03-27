@@ -1,6 +1,8 @@
-import type { AgentState, Task, PodWorkflow } from '../../src/renderer/src/types'
-import type { PreferenceEvent } from '../../src/main/preferences/types'
 import crypto from 'crypto'
+import type { AgentState } from '../../src/main/agents'
+import type { Task } from '../../src/main/orchestrator'
+import type { PodWorkflow } from '../../src/main/pods'
+import type { PreferenceEvent } from '../../src/main/preferences/types'
 
 export function createMockAgent(overrides?: Partial<AgentState>): AgentState {
   return {
@@ -53,9 +55,12 @@ export function createMockPodWorkflow(overrides?: Partial<PodWorkflow>): PodWork
     solver: { agentId: 'solver-1', status: 'waiting' },
     reviewer: { agentId: 'reviewer-1', status: 'waiting' },
     executor: { agentId: 'executor-1', status: 'waiting' },
-    iteration: 0,
+    iteration: 1,
     maxIterations: 3,
     artifacts: [],
+    solverCandidateCount: 1,
+    selfFixAttempts: 0,
+    maxSelfFixes: 0,
     createdAt: now,
     updatedAt: now,
     stageHistory: [{ stage: 'pending', enteredAt: now }],

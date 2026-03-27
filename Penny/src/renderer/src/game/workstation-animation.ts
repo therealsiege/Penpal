@@ -46,6 +46,7 @@ import type { WorkstationHost } from './office-workstation'
 import type { NavMesh } from './nav-mesh'
 import { buildOwnRoomRect } from './nav-mesh'
 import { PathWalker } from './path-walker'
+import { normalizeQualityStreak, getFlameEmissionProfile, shouldRenderStreakFlame } from './streak-flame'
 
 // ---------------------------------------------------------------------------
 // Eval glow color helper

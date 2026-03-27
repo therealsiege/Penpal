@@ -51,3 +51,15 @@ Always call `meta:list-tools` first to discover the current tool set.
 ## Updates
 
 _This file is automatically updated after completed pod workflows._
+
+### Workflow: first-pass metrics (2026-03-27)
+- Task: first-pass metrics
+- Team: nextjs-frontend / ui-designer / electron-dev
+- Result: PASS (1/1 iterations)
+- Key output: RESULT: PASS
+
+### Workflow: failing metrics (2026-03-27)
+- Task: failing metrics
+- Team: fullstack-dev / backend-arch / electron-dev
+- Result: FAIL (1/1 iterations)
+- Key output: RESULT: FAIL

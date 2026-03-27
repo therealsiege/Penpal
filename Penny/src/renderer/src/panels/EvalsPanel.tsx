@@ -12,13 +12,13 @@ function formatDuration(ms: number): string {
 }
 
 function rateColor(rate: number): string {
-  if (rate >= 0.8) return 'text-emerald-400'
+  if (rate > 0.8) return 'text-emerald-400'
   if (rate >= 0.6) return 'text-amber-400'
   return 'text-red-400'
 }
 
 function rateBgColor(rate: number): string {
-  if (rate >= 0.8) return 'text-emerald-400/80'
+  if (rate > 0.8) return 'text-emerald-400/80'
   if (rate >= 0.6) return 'text-amber-400/80'
   return 'text-red-400/80'
 }
@@ -30,9 +30,10 @@ function TrendIndicator({ trend }: { trend: 'up' | 'down' | 'flat' }) {
 }
 
 function Sparkline({ outcomes }: { outcomes: boolean[] }) {
+  const recentOutcomes = outcomes.slice(-20)
   return (
     <span className="inline-flex items-center gap-px">
-      {outcomes.map((ok, i) => (
+      {recentOutcomes.map((ok, i) => (
         <span
           key={i}
           className={`w-1.5 h-1.5 rounded-full inline-block ${ok ? 'bg-emerald-400' : 'bg-red-400'}`}
@@ -58,7 +59,6 @@ function ShimmerRow() {
       <td className="px-4 py-3"><div className="h-4 w-14 bg-slate-700/50 rounded" /></td>
       <td className="px-4 py-3"><div className="h-4 w-14 bg-slate-700/50 rounded" /></td>
       <td className="px-4 py-3"><div className="h-4 w-8 bg-slate-700/50 rounded" /></td>
-      <td className="px-4 py-3"><div className="h-4 w-6 bg-slate-700/50 rounded" /></td>
       <td className="px-4 py-3"><div className="h-4 w-20 bg-slate-700/50 rounded" /></td>
     </tr>
   )
@@ -75,21 +75,15 @@ function SummaryBar({ stats, loading }: { stats: EvalStats | null; loading: bool
 
   return (
     <div className="rounded-xl bg-slate-900/50 border border-slate-800 px-5 py-3 flex items-center gap-6 text-sm text-slate-300">
-      <span>
-        <span className="font-semibold text-slate-100">{stats.experimentVelocity}</span>{' '}
-        tasks this week
-      </span>
-      <span className="text-slate-600">|</span>
-      <span>
+      <span className="text-slate-200">
+        <span className="font-semibold text-slate-100">{stats.totalTasks}</span>{' '}
+        tasks this week <span className="text-slate-600">|</span>{' '}
         <span className={`font-semibold ${rateBgColor(stats.overallSuccessRate)}`}>
           {(stats.overallSuccessRate * 100).toFixed(0)}%
         </span>{' '}
-        success rate
-      </span>
-      <span className="text-slate-600">|</span>
-      <span>
-        <span className="font-semibold text-slate-100">{stats.totalTasks}</span>{' '}
-        total experiments
+        success rate <span className="text-slate-600">|</span>{' '}
+        <span className="font-semibold text-slate-100">{stats.experimentVelocity}</span>{' '}
+        experiments
       </span>
     </div>
   )
@@ -285,13 +279,12 @@ export function EvalsPanel() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-slate-900/70 text-slate-400 text-xs uppercase tracking-wider">
-                  <th className="px-4 py-3 text-left font-semibold">Agent</th>
+                  <th className="px-4 py-3 text-left font-semibold">Agent Name</th>
                   <th className="px-4 py-3 text-right font-semibold">Tasks</th>
                   <th className="px-4 py-3 text-right font-semibold">Success Rate</th>
                   <th className="px-4 py-3 text-right font-semibold">Avg Duration</th>
                   <th className="px-4 py-3 text-right font-semibold">Streak</th>
-                  <th className="px-4 py-3 text-center font-semibold">Trend</th>
-                  <th className="px-4 py-3 text-left font-semibold">Last 20</th>
+                  <th className="px-4 py-3 text-left font-semibold">Trend</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/60">
@@ -318,11 +311,11 @@ export function EvalsPanel() {
                       <td className="px-4 py-3 text-right">
                         <StreakBadge streak={r.streak} />
                       </td>
-                      <td className="px-4 py-3 text-center">
-                        <TrendIndicator trend={r.trend} />
-                      </td>
                       <td className="px-4 py-3">
-                        <Sparkline outcomes={r.recentOutcomes} />
+                        <span className="inline-flex items-center gap-2">
+                          <TrendIndicator trend={r.trend} />
+                          <Sparkline outcomes={r.recentOutcomes} />
+                        </span>
                       </td>
                     </tr>
                   ))

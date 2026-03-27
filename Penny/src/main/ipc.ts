@@ -1143,13 +1143,17 @@ export function registerIpcHandlers() {
   // ── Spot-Check Queue (Human Judge) ────────────────────────────────────────
   ipcMain.handle('evals:spot-check-queue', wrapHandler(() => spotCheckQueue.getPending()))
   ipcMain.handle('evals:spot-check-sample', wrapHandler((count: unknown) => {
-    if (typeof count !== 'number') throw new Error('count must be a number')
+    if (typeof count !== 'number' || !Number.isFinite(count)) throw new Error('count must be a finite number')
+    if (count < 1) throw new Error('count must be greater than 0')
     return spotCheckQueue.sample(count)
   }))
   ipcMain.handle('evals:spot-check-review', wrapHandler((id: unknown, verdict: unknown, notes?: unknown) => {
-    if (typeof id !== 'string') throw new Error('id must be a string')
+    if (typeof id !== 'string' || !id.trim()) throw new Error('id must be a non-empty string')
     if (verdict !== 'pass' && verdict !== 'fail' && verdict !== 'partial') {
       throw new Error('verdict must be pass, fail, or partial')
+    }
+    if (notes !== undefined && typeof notes !== 'string') {
+      throw new Error('notes must be a string when provided')
     }
     return spotCheckQueue.review(id, verdict, typeof notes === 'string' ? notes : undefined)
   }))

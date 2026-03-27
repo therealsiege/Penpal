@@ -1,5 +1,5 @@
 {
-  "timestamp": 1774623534861,
+  "timestamp": 1774623594848,
   "weekStart": 1774242000000,
   "agents": [
     {
@@ -9,7 +9,7 @@
       "status": "idle",
       "room": "sidekick",
       "roomPath": "/Users/fuzeelogik/sidekick",
-      "currentTask": "[sidekick#12] Add PhaseConfig system for priority-based pod compute allocation",
+      "currentTask": "[sidekick#5] Create MCP server package scaffold with stdio transport",
       "xp": 650,
       "level": 2,
       "rankTitle": "Junior",
@@ -18,7 +18,7 @@
       "tasksFailed": 1,
       "currentStreak": 6,
       "sessionMode": "waiting",
-      "uptime": "27m"
+      "uptime": "28m"
     },
     {
       "id": "nextjs-frontend",
@@ -27,7 +27,7 @@
       "status": "sleeping",
       "room": "1putthealth.com",
       "roomPath": "/Users/fuzeelogik/ComSci/Workspace/1putthealth/1putthealth.com",
-      "currentTask": "[sidekick#5] Create MCP server package scaffold with stdio transport",
+      "currentTask": "[sidekick#13] Implement best-of-N sampling for Solver phase",
       "xp": 600,
       "level": 2,
       "rankTitle": "Junior",
@@ -100,13 +100,13 @@
       "room": "unassigned",
       "roomPath": "",
       "currentTask": "[sidekick#1] Create preference event collector hook",
-      "xp": 400,
-      "level": 1,
-      "rankTitle": "Intern",
-      "credits": 200,
-      "tasksCompleted": 4,
+      "xp": 500,
+      "level": 2,
+      "rankTitle": "Junior",
+      "credits": 250,
+      "tasksCompleted": 5,
       "tasksFailed": 0,
-      "currentStreak": 4,
+      "currentStreak": 5,
       "sessionMode": null,
       "uptime": null
     },
@@ -153,7 +153,7 @@
       "status": "idle",
       "room": "sidekick",
       "roomPath": "/Users/fuzeelogik/sidekick",
-      "currentTask": "[sidekick#28] Set up Vitest test infrastructure for Penny",
+      "currentTask": "[sidekick#14] Implement structured Reviewer critique format",
       "xp": 300,
       "level": 1,
       "rankTitle": "Intern",
@@ -162,7 +162,7 @@
       "tasksFailed": 0,
       "currentStreak": 3,
       "sessionMode": "waiting",
-      "uptime": "27m"
+      "uptime": "28m"
     },
     {
       "id": "product-marketer",
@@ -171,7 +171,7 @@
       "status": "sleeping",
       "room": "1putthealth.com",
       "roomPath": "/Users/fuzeelogik/ComSci/Workspace/1putthealth/1putthealth.com",
-      "currentTask": "[sidekick#14] Implement structured Reviewer critique format",
+      "currentTask": "[sidekick#22] Add context utilization meter to workstations",
       "xp": 175,
       "level": 1,
       "rankTitle": "Intern",
@@ -198,7 +198,7 @@
       "tasksFailed": 0,
       "currentStreak": 0,
       "sessionMode": "waiting",
-      "uptime": "27m"
+      "uptime": "28m"
     }
   ],
   "rooms": [
@@ -267,7 +267,7 @@
   "leaderboard": {
     "alltime": [
       {
-        "rank": 1,
+        "rank": 2,
         "agentId": "backend-arch",
         "agentName": "Ravi Patel",
         "totalXP": 800,
@@ -327,16 +327,16 @@
         "currentStreak": 5
       },
       {
-        "rank": 2,
+        "rank": 1,
         "agentId": "embedded-dev",
         "agentName": "Oleg Volkov",
-        "totalXP": 400,
-        "seasonXP": 400,
-        "weeklyXP": 100,
-        "level": 1,
-        "rankTitle": "Intern",
-        "tasksCompleted": 4,
-        "currentStreak": 4
+        "totalXP": 500,
+        "seasonXP": 500,
+        "weeklyXP": 200,
+        "level": 2,
+        "rankTitle": "Junior",
+        "tasksCompleted": 5,
+        "currentStreak": 5
       },
       {
         "rank": 7,
@@ -401,7 +401,7 @@
     ],
     "season": [
       {
-        "rank": 1,
+        "rank": 2,
         "agentId": "backend-arch",
         "agentName": "Ravi Patel",
         "totalXP": 800,
@@ -461,16 +461,16 @@
         "currentStreak": 5
       },
       {
-        "rank": 2,
+        "rank": 1,
         "agentId": "embedded-dev",
         "agentName": "Oleg Volkov",
-        "totalXP": 400,
-        "seasonXP": 400,
-        "weeklyXP": 100,
-        "level": 1,
-        "rankTitle": "Intern",
-        "tasksCompleted": 4,
-        "currentStreak": 4
+        "totalXP": 500,
+        "seasonXP": 500,
+        "weeklyXP": 200,
+        "level": 2,
+        "rankTitle": "Junior",
+        "tasksCompleted": 5,
+        "currentStreak": 5
       },
       {
         "rank": 7,
@@ -536,6 +536,18 @@
     "weekly": [
       {
         "rank": 1,
+        "agentId": "embedded-dev",
+        "agentName": "Oleg Volkov",
+        "totalXP": 500,
+        "seasonXP": 500,
+        "weeklyXP": 200,
+        "level": 2,
+        "rankTitle": "Junior",
+        "tasksCompleted": 5,
+        "currentStreak": 5
+      },
+      {
+        "rank": 2,
         "agentId": "backend-arch",
         "agentName": "Ravi Patel",
         "totalXP": 800,
@@ -545,18 +557,6 @@
         "rankTitle": "Junior",
         "tasksCompleted": 8,
         "currentStreak": 8
-      },
-      {
-        "rank": 2,
-        "agentId": "embedded-dev",
-        "agentName": "Oleg Volkov",
-        "totalXP": 400,
-        "seasonXP": 400,
-        "weeklyXP": 100,
-        "level": 1,
-        "rankTitle": "Intern",
-        "tasksCompleted": 4,
-        "currentStreak": 4
       },
       {
         "rank": 3,
@@ -668,20 +668,14 @@
       }
     ],
     "weeklyMVP": {
-      "agentId": "backend-arch",
-      "agentName": "Ravi Patel",
-      "weekXP": 100
+      "agentId": "embedded-dev",
+      "agentName": "Oleg Volkov",
+      "weekXP": 200
     },
     "rivalries": [
       {
-        "agent1": "Oleg Volkov",
-        "agent2": "Zara Kim",
-        "xpDiff": 0,
-        "percentDiff": 0
-      },
-      {
-        "agent1": "Oleg Volkov",
-        "agent2": "Ava Reyes",
+        "agent1": "Sofia Ruiz",
+        "agent2": "Oleg Volkov",
         "xpDiff": 0,
         "percentDiff": 0
       },
@@ -694,10 +688,10 @@
     ]
   },
   "orchestrator": {
-    "queueDepth": 1,
-    "activeTasks": 26,
-    "completedToday": 19,
+    "queueDepth": 0,
+    "activeTasks": 25,
+    "completedToday": 21,
     "failedToday": 1,
-    "totalProcessed": 43
+    "totalProcessed": 45
   }
 }
