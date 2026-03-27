@@ -415,6 +415,13 @@ export class OfficeScene extends Phaser.Scene {
     this.load.image(IMAGE_KEYS.PANEL_BG, './sprites/panel-bg.png')
     this.load.image(IMAGE_KEYS.PANEL_OUTLINE, './sprites/panel-outline.png')
     this.load.image(IMAGE_KEYS.BUTTON_SQUARE, './sprites/button-square.png')
+
+    // Terrain prop sprites — Lego-style 64x64 crates, stones, etc.
+    this.load.image(IMAGE_KEYS.TERRAIN_CRATE, './sprites/terrain-crate.png')
+    this.load.image(IMAGE_KEYS.TERRAIN_CRATE_HAZARD, './sprites/terrain-crate-hazard.png')
+    this.load.image(IMAGE_KEYS.TERRAIN_STONE, './sprites/terrain-stone.png')
+    this.load.image(IMAGE_KEYS.TERRAIN_DIRT, './sprites/terrain-dirt.png')
+    this.load.image(IMAGE_KEYS.TERRAIN_BOX_COIN, './sprites/terrain-box-coin.png')
   }
 
   create(): void {

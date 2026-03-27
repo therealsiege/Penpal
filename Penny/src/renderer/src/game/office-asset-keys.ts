@@ -69,6 +69,16 @@ export const IMAGE_KEYS = Object.freeze({
   PANEL_OUTLINE: 'panel-outline',
   /** Square button — mini HUD elements */
   BUTTON_SQUARE: 'button-square',
+  /** Terrain props — 64x64 Lego-style crate */
+  TERRAIN_CRATE: 'terrain-crate',
+  /** Terrain props — 64x64 hazard crate (explosive) */
+  TERRAIN_CRATE_HAZARD: 'terrain-crate-hazard',
+  /** Terrain props — 64x64 stone block */
+  TERRAIN_STONE: 'terrain-stone',
+  /** Terrain props — 64x64 dirt block */
+  TERRAIN_DIRT: 'terrain-dirt',
+  /** Terrain props — 64x64 coin box */
+  TERRAIN_BOX_COIN: 'terrain-box-coin',
 } as const)
 
 // ---------------------------------------------------------------------------
