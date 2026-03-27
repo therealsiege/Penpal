@@ -1,5 +1,6 @@
 import Phaser from 'phaser'
 import { ANIM_KEYS, SPRITESHEET_KEYS, ITEM_FRAMES, ICON_FRAMES, EFFECT_ANIM_KEYS } from './office-asset-keys'
+import { CHAR_SCALE as DUDER_SCALE } from './office-constants'
 import { CHAR_SCALE } from './office-constants'
 import { activeTheme } from './office-theme'
 import { CafeCoffeeRunManager } from './cafe-coffee-run'
@@ -257,6 +258,31 @@ export class PennyCafe implements CoffeeRunHost, ChatHost {
     }
 
     this.worldY = cy + stoolY
+
+    // ── Duder NPC barista helpers — static sprite characters in the behind-counter area ──
+    const duderConfigs = [
+      { key: SPRITESHEET_KEYS.DUDER_1, x: 170, y: baristaWorkY - 4, flipX: false },
+      { key: SPRITESHEET_KEYS.DUDER_2, x: 300, y: baristaWorkY - 4, flipX: true },
+    ]
+    for (const cfg of duderConfigs) {
+      if (!scene.textures.exists(cfg.key)) continue
+      const duder = scene.add.sprite(cfg.x, cfg.y, cfg.key, 0)
+        .setScale(DUDER_SCALE * 0.85)
+        .setOrigin(0.5, 1)
+        .setAlpha(0.7)
+        .setFlipX(cfg.flipX)
+      container.add(duder)
+      // Idle sway tween — gentle left-right lean
+      scene.tweens.add({
+        targets: duder,
+        angle: { from: -2, to: 2 },
+        duration: 1200 + Math.random() * 600,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut',
+        delay: Math.random() * 800,
+      })
+    }
 
     // ── Animated steam — puff VFX sprites ──
     this.steamTimer = scene.time.addEvent({

@@ -686,6 +686,51 @@ export class CelebrationManager {
   }
 
   /**
+   * Quest-complete celebration — difficulty-colored star burst + expanding ring.
+   * Smaller than rank-up; color matches quest difficulty tier.
+   * 1. Difficulty star sprite pop-up with scale bounce
+   * 2. Small expanding ring in difficulty color
+   * 3. Particle burst in difficulty color (6 particles)
+   */
+  questComplete(x: number, y: number, difficulty: QuestDifficulty): void {
+    const diffColor = DIFFICULTY_COLORS[difficulty] ?? 0x3b82f6
+
+    // 1. Difficulty star sprite
+    const starFrame = DIFFICULTY_STAR_FRAME[difficulty] ?? ICON_FRAMES.STAR_GREY
+    const star = this._scene.add.sprite(x, y - 16, SPRITESHEET_KEYS.GAME_ICONS, starFrame)
+      .setScale(0).setOrigin(0.5).setAlpha(0).setDepth(601)
+
+    this._scene.tweens.add({
+      targets: star,
+      alpha: 1,
+      scaleX: 0.7,
+      scaleY: 0.7,
+      y: y - 28,
+      duration: 220,
+      ease: 'Back.easeOut',
+      onComplete: () => {
+        this._scene.tweens.add({
+          targets: star,
+          alpha: 0,
+          scaleX: 0.4,
+          scaleY: 0.4,
+          y: y - 44,
+          duration: 400,
+          ease: 'Power2',
+          delay: 400,
+          onComplete: () => star.destroy(),
+        })
+      },
+    })
+
+    // 2. Small expanding ring in difficulty color (smaller radius than rank-up)
+    this._expandingRing(x, y - 16, diffColor)
+
+    // 3. Particle burst
+    this._particleBurst(x, y - 16, 6, diffColor, 28)
+  }
+
+  /**
    * Quest completion reward popup with Lego special item sprites.
    * 1. Coin sprite pops up with scale bounce, floats upward, fades
    * 2. For epic+ quests, also shows the EXPLOSIVE crate sprite

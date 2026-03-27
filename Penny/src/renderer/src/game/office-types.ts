@@ -146,6 +146,9 @@ export interface WorkstationSprite {
   speechBubbleBg?: Phaser.GameObjects.Graphics
   speechBubbleTween?: Phaser.Tweens.Tween
   speechBubbleTimer?: Phaser.Time.TimerEvent
+  /** Lego exclamation sprite — shown when agent needs interaction */
+  exclamationSprite?: Phaser.GameObjects.Sprite
+  exclamationTween?: Phaser.Tweens.Tween
 }
 
 export interface Room {

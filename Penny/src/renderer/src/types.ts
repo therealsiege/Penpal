@@ -176,7 +176,7 @@ export interface OpencodeSession {
 
 export type AgentStatus = 'sleeping' | 'idle' | 'active'
 
-export type SessionMode = 'working' | 'plan' | 'accept-edits' | 'waiting' | 'idle' | 'compressing'
+export type SessionMode = 'working' | 'plan' | 'accept-edits' | 'waiting' | 'idle' | 'compressing' | 'error' | 'disconnected' | 'crashed'
 
 // Finer-grained classification of WHY the session needs interaction (or doesn't)
 export type InteractionType =
@@ -190,6 +190,14 @@ export interface SubAgentInvocation {
   description: string
   timestamp: number
   status: 'active' | 'completed'
+}
+
+export interface OpenClawInfo {
+  supervised: boolean
+  runtime?: 'openclaw' | 'nemoclaw'
+  sessionId?: string      // OPENCLAW_SESSION_ID
+  agentId?: string        // ACP_AGENT_ID
+  sandboxed?: boolean     // NemoClaw sandbox active
 }
 
 export interface AgentState {
@@ -212,6 +220,11 @@ export interface AgentState {
   subAgents?: AgentState[]
   subAgentInvocations?: SubAgentInvocation[]
   xp?: AgentXP
+  // OpenClaw/NemoClaw supervision
+  openclaw?: OpenClawInfo
+  // Parse/connection error tracking
+  parseErrors?: number
+  lastError?: string | null
 }
 
 export interface AgentXP {
