@@ -88,6 +88,10 @@ export class OfficeWorkstations {
   private animator: WorkstationAnimator
   private _onApproved: (...args: unknown[]) => void
 
+  private isWorkstationSparkleVisible(ws: WorkstationSprite): boolean {
+    return ws.container.visible && ws.container.alpha > 0.05
+  }
+
   constructor(scene: Phaser.Scene, host: WorkstationHost) {
     this.scene = scene
     this.host = host
@@ -116,7 +120,7 @@ export class OfficeWorkstations {
         // Bulk approve — sparkle all workstations that are currently waiting
         for (const room of rooms.values()) {
           for (const ws of room.workstations.values()) {
-            if (ws.state?.needsInteraction) {
+            if (ws.state?.needsInteraction && this.isWorkstationSparkleVisible(ws)) {
               const wx = room.x + ws.container.x
               const wy = room.y + ws.container.y
               this.host.celebrations.approveSparkle(wx, wy)
@@ -127,7 +131,7 @@ export class OfficeWorkstations {
         // Single agent approve
         for (const room of rooms.values()) {
           const ws = room.workstations.get(agentId)
-          if (ws) {
+          if (ws && this.isWorkstationSparkleVisible(ws)) {
             const wx = room.x + ws.container.x
             const wy = room.y + ws.container.y
             this.host.celebrations.approveSparkle(wx, wy)

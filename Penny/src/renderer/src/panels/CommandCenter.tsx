@@ -1507,10 +1507,10 @@ export function CommandCenter(props: CommandCenterProps) {
 
   // --- Push agent data into Phaser scene ---
   useEffect(() => {
-    if (sceneRef.current && agentStatuses) {
-      sceneRef.current.setAgents(agentStatuses, opencodeSessions)
+    if (sceneRef.current && mergedAgentStatuses) {
+      sceneRef.current.setAgents(mergedAgentStatuses, opencodeSessions)
     }
-  }, [agentStatuses, opencodeSessions])
+  }, [mergedAgentStatuses, opencodeSessions])
 
   const isCursorState = useCallback(
     (state: AgentState) =>
@@ -1591,7 +1591,7 @@ export function CommandCenter(props: CommandCenterProps) {
   }, [focusAgentFromState, toast])
 
   // --- Derived data ---
-  const agents = agentStatuses ?? []
+  const agents = mergedAgentStatuses ?? []
   const cursorAgentCount = agents.filter(a => a.config.model === 'cursor-agent').length
   const claudeAgentCount = agents.length - cursorAgentCount
   const externalCliAgentCount = (opencodeSessions ?? []).length
@@ -1732,7 +1732,7 @@ export function CommandCenter(props: CommandCenterProps) {
 
       const before = scene.getDebugSnapshot()
       const issues: string[] = []
-      const liveAgents = agentStatuses ?? []
+      const liveAgents = mergedAgentStatuses ?? []
       const expectedDesks = liveAgents.length + (opencodeSessions?.length ?? 0)
 
       if (!before.ready) issues.push('scene not ready')
@@ -1772,7 +1772,7 @@ export function CommandCenter(props: CommandCenterProps) {
     } finally {
       setSmokeCheckRunning(false)
     }
-  }, [agentStatuses, allConfigs, isCursorState, opencodeSessions, smokeCheckRunning, toast])
+  }, [allConfigs, isCursorState, mergedAgentStatuses, opencodeSessions, smokeCheckRunning, toast])
 
   // --- Health dot ---
   const healthColor =
@@ -1952,7 +1952,7 @@ export function CommandCenter(props: CommandCenterProps) {
       {/* Modals                                                              */}
       {/* ------------------------------------------------------------------ */}
       {actionAgent && (() => {
-        const live = agentStatuses?.find(a => a.config.id === actionAgent.config.id) ?? actionAgent
+        const live = mergedAgentStatuses?.find(a => a.config.id === actionAgent.config.id) ?? actionAgent
         return (
           <AgentActionPopup
             state={live}
@@ -1992,7 +1992,7 @@ export function CommandCenter(props: CommandCenterProps) {
 
       {showLeaderboard && (
         <LeaderboardModal
-          agents={agentStatuses ?? []}
+          agents={mergedAgentStatuses ?? []}
           xpData={xpData}
           onClose={() => setShowLeaderboard(false)}
         />

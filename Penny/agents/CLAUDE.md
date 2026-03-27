@@ -63,3 +63,21 @@ _This file is automatically updated after completed pod workflows._
 - Team: fullstack-dev / backend-arch / electron-dev
 - Result: FAIL (1/1 iterations)
 - Key output: RESULT: FAIL
+
+### Workflow: single candidate task (2026-03-27)
+- Task: single candidate task
+- Team: solver-a / reviewer-b / executor-c
+- Result: PASS (1/1 iterations)
+- Key output: RESULT: PASS
+
+### Workflow: multi candidate task (2026-03-27)
+- Task: multi candidate task
+- Team: solver-a / reviewer-b / executor-c
+- Result: PASS (1/1 iterations)
+- Key output: RESULT: PASS
+
+### Workflow: invalid self eval task (2026-03-27)
+- Task: invalid self eval task
+- Team: solver-a / reviewer-b / executor-c
+- Result: PASS (1/1 iterations)
+- Key output: RESULT: PASS

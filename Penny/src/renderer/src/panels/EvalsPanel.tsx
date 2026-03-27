@@ -32,10 +32,12 @@ function TrendIndicator({ trend }: { trend: 'up' | 'down' | 'flat' }) {
 function Sparkline({ outcomes }: { outcomes: boolean[] }) {
   const recentOutcomes = outcomes.slice(-20)
   return (
-    <span className="inline-flex items-center gap-px">
+    <span className="inline-flex items-center gap-px" role="img" aria-label="Recent task outcomes sparkline">
       {recentOutcomes.map((ok, i) => (
         <span
           key={i}
+          aria-label={ok ? 'success outcome' : 'failure outcome'}
+          data-testid="sparkline-dot"
           className={`w-1.5 h-1.5 rounded-full inline-block ${ok ? 'bg-emerald-400' : 'bg-red-400'}`}
         />
       ))}
@@ -93,10 +95,12 @@ function VerdictButton({
   label,
   color,
   onClick,
+  disabled = false,
 }: {
   label: string
   color: 'emerald' | 'amber' | 'red'
   onClick: () => void
+  disabled?: boolean
 }) {
   const colorMap = {
     emerald: 'bg-emerald-600 hover:bg-emerald-500',
@@ -105,8 +109,9 @@ function VerdictButton({
   }
   return (
     <button
+      disabled={disabled}
       onClick={onClick}
-      className={`px-3 py-1 rounded text-xs font-semibold text-white ${colorMap[color]} transition-colors`}
+      className={`px-3 py-1 rounded text-xs font-semibold text-white ${colorMap[color]} disabled:opacity-50 transition-colors`}
     >
       {label}
     </button>
@@ -116,9 +121,11 @@ function VerdictButton({
 function SpotCheckCard({
   check,
   onReview,
+  disabled = false,
 }: {
   check: SpotCheck
-  onReview: (id: string, verdict: 'pass' | 'fail' | 'partial', notes?: string) => void
+  onReview: (id: string, verdict: 'pass' | 'fail' | 'partial', notes?: string) => Promise<void>
+  disabled?: boolean
 }) {
   const [showNotes, setShowNotes] = useState(false)
   const [notes, setNotes] = useState('')
@@ -154,12 +161,13 @@ function SpotCheckCard({
       )}
 
       <div className="flex items-center gap-2">
-        <VerdictButton label="Pass" color="emerald" onClick={() => submit('pass')} />
-        <VerdictButton label="Partial" color="amber" onClick={() => submit('partial')} />
-        <VerdictButton label="Fail" color="red" onClick={() => submit('fail')} />
+        <VerdictButton label="Pass" color="emerald" disabled={disabled} onClick={() => submit('pass')} />
+        <VerdictButton label="Partial" color="amber" disabled={disabled} onClick={() => submit('partial')} />
+        <VerdictButton label="Fail" color="red" disabled={disabled} onClick={() => submit('fail')} />
         <button
+          disabled={disabled}
           onClick={() => setShowNotes(!showNotes)}
-          className="ml-auto text-xs text-slate-500 hover:text-slate-300 transition-colors"
+          className="ml-auto text-xs text-slate-500 hover:text-slate-300 disabled:opacity-50 transition-colors"
         >
           {showNotes ? 'Hide notes' : 'Add notes'}
         </button>
@@ -178,22 +186,37 @@ function SpotCheckCard({
 }
 
 function SpotCheckSection() {
-  const { data: pending, refresh: refreshPending } = usePolling<SpotCheck[]>(
+  const {
+    data: pending,
+    refresh: refreshPending,
+    loading: pendingLoading,
+    error: pendingError,
+  } = usePolling<SpotCheck[]>(
     () => window.api.evalsSpotCheckQueue(),
     10_000,
   )
-  const { data: agreement, refresh: refreshAgreement } = usePolling<SpotCheckAgreement>(
+  const {
+    data: agreement,
+    refresh: refreshAgreement,
+    loading: agreementLoading,
+    error: agreementError,
+  } = usePolling<SpotCheckAgreement>(
     () => window.api.evalsSpotCheckAgreement(),
     10_000,
   )
   const [sampling, setSampling] = useState(false)
+  const [reviewingId, setReviewingId] = useState<string | null>(null)
+  const [spotCheckError, setSpotCheckError] = useState<string | null>(null)
 
   const handleSample = useCallback(async () => {
     setSampling(true)
+    setSpotCheckError(null)
     try {
       await window.api.evalsSpotCheckSample(10)
       refreshPending()
       refreshAgreement()
+    } catch (err) {
+      setSpotCheckError((err as Error).message)
     } finally {
       setSampling(false)
     }
@@ -201,9 +224,17 @@ function SpotCheckSection() {
 
   const handleReview = useCallback(
     async (id: string, verdict: 'pass' | 'fail' | 'partial', notes?: string) => {
-      await window.api.evalsSpotCheckReview(id, verdict, notes)
-      refreshPending()
-      refreshAgreement()
+      setSpotCheckError(null)
+      setReviewingId(id)
+      try {
+        await window.api.evalsSpotCheckReview(id, verdict, notes)
+        refreshPending()
+        refreshAgreement()
+      } catch (err) {
+        setSpotCheckError((err as Error).message)
+      } finally {
+        setReviewingId(null)
+      }
     },
     [refreshPending, refreshAgreement],
   )
@@ -213,7 +244,7 @@ function SpotCheckSection() {
       <div className="flex items-center justify-between">
         <h2 className="text-sm font-bold text-slate-200 tracking-tight">Spot Check</h2>
         <div className="flex items-center gap-3">
-          {agreement && agreement.total > 0 && (
+          {!agreementLoading && agreement && agreement.total > 0 && (
             <span className="text-xs text-slate-400">
               Agreement:{' '}
               <span className={`font-semibold ${rateColor(agreement.rate)}`}>
@@ -231,14 +262,29 @@ function SpotCheckSection() {
         </div>
       </div>
 
-      {!pending || pending.length === 0 ? (
+      {(spotCheckError || pendingError || agreementError) && (
+        <div className="rounded-xl bg-red-900/20 border border-red-800/60 px-4 py-2 text-sm text-red-300">
+          {spotCheckError || pendingError || agreementError}
+        </div>
+      )}
+
+      {pendingLoading ? (
+        <div className="rounded-xl bg-slate-900/50 border border-slate-800 px-5 py-6 text-center text-slate-500 text-sm">
+          Loading spot checks...
+        </div>
+      ) : !pending || pending.length === 0 ? (
         <div className="rounded-xl bg-slate-900/50 border border-slate-800 px-5 py-6 text-center text-slate-500 text-sm">
           No spot checks pending. Click Sample to queue tasks for review.
         </div>
       ) : (
         <div className="grid gap-3">
           {pending.map((check) => (
-            <SpotCheckCard key={check.id} check={check} onReview={handleReview} />
+            <SpotCheckCard
+              key={check.id}
+              check={check}
+              onReview={handleReview}
+              disabled={reviewingId === check.id}
+            />
           ))}
         </div>
       )}

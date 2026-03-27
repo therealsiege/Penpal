@@ -1,10 +1,9 @@
 import fs from 'fs'
-import os from 'os'
 import path from 'path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const testState = vi.hoisted(() => ({
-  vaultRoot: path.join(os.tmpdir(), 'penny-vault-mcp-tools-test'),
+  vaultRoot: '/tmp/penny-vault-mcp-tools-test',
 }))
 
 vi.mock('../../main/paths', () => ({
