@@ -931,6 +931,8 @@ export class WorkstationFactory {
     if (ws.mvpMedal)             ws.mvpMedal.destroy()
     if (ws.rivalryGlowTween)     ws.rivalryGlowTween.destroy()
     if (ws.rivalryIndicator)     ws.rivalryIndicator.destroy()
+    if (ws.exclamationTween)     ws.exclamationTween.destroy()
+    if (ws.exclamationSprite)    ws.exclamationSprite.destroy()
     if (ws.energyPulseTween)     ws.energyPulseTween.destroy()
     if (ws.energyTrack)          ws.energyTrack.destroy()
     if (ws.energyFill)           ws.energyFill.destroy()

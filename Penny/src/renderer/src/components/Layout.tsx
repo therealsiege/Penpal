@@ -101,45 +101,64 @@ export function Layout({ activePanel, onNavigate, children }: LayoutProps) {
           <div className="px-3 mb-2 shrink-0">
             <div
               className="
-                relative flex flex-col items-center gap-2.5 py-4 px-3 rounded-[1.35rem]
+                relative flex flex-col items-center gap-2.5 py-3.5 px-3 rounded-[1.35rem]
                 overflow-hidden
-                bg-[linear-gradient(155deg,rgba(18,26,36,0.95)_0%,rgba(8,12,18,0.98)_55%,rgba(6,9,14,1)_100%)]
-                border border-[#2a3440]/70
+                bg-[linear-gradient(155deg,rgba(18,26,36,0.96)_0%,rgba(8,12,18,0.99)_55%,rgba(6,9,14,1)_100%)]
+                border border-[#2a3440]/80
                 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.06),0_16px_48px_-24px_rgba(0,0,0,0.75),0_0_0_1px_rgba(0,0,0,0.35)]
               "
             >
               <div
-                className="pointer-events-none absolute inset-0 opacity-[0.45] bg-[radial-gradient(ellipse_80%_60%_at_50%_-20%,rgba(232,184,75,0.12),transparent_60%)]"
+                className="pointer-events-none absolute inset-0 opacity-[0.5] bg-[radial-gradient(ellipse_80%_60%_at_50%_-20%,rgba(232,184,75,0.12),transparent_60%)]"
                 aria-hidden
               />
+              <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[#00ff88]/30 to-transparent" aria-hidden />
+
+              <div className="relative w-full flex items-center justify-between text-[9px] uppercase tracking-[0.18em] text-[#5a6a7a] font-semibold">
+                <span>PenPal OS</span>
+                <span className="inline-flex items-center gap-1 rounded-full border border-[#00ff88]/35 bg-[#00ff88]/10 px-2 py-0.5 text-[#7fffc7]">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#00ff88] shadow-[0_0_8px_rgba(0,255,136,0.75)]" />
+                  Online
+                </span>
+              </div>
+
               <div className="relative">
                 <div
-                  className="absolute -inset-1 rounded-2xl bg-gradient-to-br from-[#e8b84b]/35 via-transparent to-[#00ff88]/10 opacity-70 blur-[2px]"
+                  className="absolute -inset-1 rounded-2xl bg-gradient-to-br from-[#e8b84b]/35 via-transparent to-[#00ff88]/10 opacity-75 blur-[2px]"
                   aria-hidden
                 />
                 <img
                   src="logo.png"
                   alt=""
-                  className="relative w-[3.25rem] h-[3.25rem] rounded-2xl shadow-[0_8px_24px_-6px_rgba(0,0,0,0.6)] ring-1 ring-white/10"
+                  className="relative w-[3.3rem] h-[3.3rem] rounded-2xl shadow-[0_8px_24px_-6px_rgba(0,0,0,0.6)] ring-1 ring-white/10"
                   draggable={false}
                   style={{ animation: 'bounce 0.6s ease-out 0.3s 1 both' }}
                 />
               </div>
-              <span
-                className="relative uppercase leading-none"
-                style={{
-                  fontFamily: "'Monogram', monospace",
-                  fontSize: '36px',
-                  letterSpacing: '0.2em',
-                  color: '#e8b84b',
-                  textShadow: '0 0 12px rgba(232,184,75,0.5), 0 0 36px rgba(232,184,75,0.2)',
-                }}
-              >
-                PenPal
-              </span>
-              <span className="relative text-[10px] text-[#6a7a8c] tracking-[0.22em] uppercase font-semibold">
-                Mission Control
-              </span>
+
+              <div className="relative text-center">
+                <span
+                  className="block uppercase leading-none"
+                  style={{
+                    fontFamily: "'Monogram', monospace",
+                    fontSize: '35px',
+                    letterSpacing: '0.2em',
+                    color: '#e8b84b',
+                    textShadow: '0 0 12px rgba(232,184,75,0.5), 0 0 36px rgba(232,184,75,0.2)',
+                  }}
+                >
+                  PenPal
+                </span>
+                <span className="mt-1 block text-[10px] text-[#6a7a8c] tracking-[0.22em] uppercase font-semibold">
+                  Mission Control
+                </span>
+              </div>
+
+              <div className="w-full h-px bg-gradient-to-r from-transparent via-[#2a3440]/90 to-transparent" />
+              <div className="relative w-full flex items-center justify-between text-[9px] text-[#5a6a7a] font-mono tracking-wide">
+                <span>v0.1.0</span>
+                <span className="text-[#4a5c6e]">Sector-7</span>
+              </div>
             </div>
           </div>
 

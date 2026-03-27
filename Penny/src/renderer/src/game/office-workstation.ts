@@ -7,7 +7,7 @@
 
 import Phaser from 'phaser'
 import { flash, pulse, shake } from './juice-utils'
-import { STATUS_DOT_FRAMES, ICON_FRAMES, SPRITESHEET_KEYS } from './office-asset-keys'
+import { STATUS_DOT_FRAMES, ICON_FRAMES, SPRITESHEET_KEYS, LEGO_SPECIAL_FRAMES } from './office-asset-keys'
 import { EventBus, EVENTS } from './events'
 import type { AgentState } from '../types'
 import { XP_RANKS, getXPForLevel } from '../types'
@@ -262,16 +262,46 @@ export class OfficeWorkstations {
             else if (agent.interactionType === 'accept-edits') rippleColor = 0x3b82f6
             this.host.spawnAlertRipple(wx, wy, rippleColor)
             this.host.spawnSpriteReaction(wx, wy, ICON_FRAMES.CIRCLE_YELLOW) // blocked
+            // Smoke effect on blocked/error state
+            this.host.celebrations.error(wx, wy)
           }
         }
         // Juice: shake the workstation container and flash the sprite red to signal attention needed
         shake(ws.container, this.scene, { intensity: 3, duration: 260 })
         flash(ws.sprite, this.scene, { tint: 0xff4444, duration: 100, repeat: 3 })
+
+        // LEGO_SPECIALS exclamation indicator — bouncing above the agent
+        if (!ws.exclamationSprite && this.scene.textures.exists(SPRITESHEET_KEYS.LEGO_SPECIALS)) {
+          ws.exclamationSprite = this.scene.add.sprite(0, -40, SPRITESHEET_KEYS.LEGO_SPECIALS, LEGO_SPECIAL_FRAMES.EXCLAMATION)
+            .setScale(0).setOrigin(0.5).setAlpha(0).setDepth(500)
+          ws.container.add(ws.exclamationSprite)
+          this.scene.tweens.add({
+            targets: ws.exclamationSprite,
+            alpha: 0.9, scaleX: 0.55, scaleY: 0.55,
+            duration: 250, ease: 'Back.easeOut',
+          })
+          ws.exclamationTween = this.scene.tweens.add({
+            targets: ws.exclamationSprite,
+            y: -43, duration: 600, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
+          })
+        }
       } else if (!agent.needsInteraction && prevState.needsInteraction) {
         // Reset ripple guard so the next blocked event fires a fresh ripple
         ws.rippleFired = false
         const roomU = this.host.getRooms().get(roomKey)
         if (roomU) this.host.spawnSpriteReaction(roomU.x + ws.container.x, roomU.y + ws.container.y, ICON_FRAMES.CHECKMARK) // unblocked
+
+        // Remove exclamation indicator
+        if (ws.exclamationTween) { ws.exclamationTween.destroy(); ws.exclamationTween = undefined }
+        if (ws.exclamationSprite) {
+          const excl = ws.exclamationSprite
+          ws.exclamationSprite = undefined
+          this.scene.tweens.add({
+            targets: excl, alpha: 0, scaleX: 0.2, scaleY: 0.2,
+            duration: 200, ease: 'Power2',
+            onComplete: () => excl.destroy(),
+          })
+        }
       }
 
       if (wasWorking && !isWorking && !agent.needsInteraction) {
@@ -641,6 +671,18 @@ export class OfficeWorkstations {
             // Track in leaderboard + season
             leaderboardManager.recordXP(agent.config.id, agent.config.name, 0, xp.level, xp.rank)
             seasonManager.trackAgentLevel(xp.level)
+
+            // Instant cosmetic refresh — destroy and re-create workstation
+            // so newly unlocked rank-gated items appear immediately
+            this.scene.time.delayedCall(600, () => {
+              const refreshRoom = this.host.getRooms().get(roomKey)
+              if (refreshRoom && refreshRoom.workstations.has(agent.config.id)) {
+                this.destroyWorkstation(ws)
+                const newWs = this.createWorkstation(refreshRoom, agent)
+                refreshRoom.workstations.set(agent.config.id, newWs)
+                this.layoutWorkstations(refreshRoom)
+              }
+            })
             break
           }
         }

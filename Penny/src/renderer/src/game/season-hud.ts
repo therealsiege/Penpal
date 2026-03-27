@@ -418,7 +418,7 @@ export class SeasonHUD {
 
     const x = this.viewWidth - 220
     const y = 50
-    const rowH = 18
+    const rowH = 22
     const panelH = 30 + season.challenges.length * rowH + 10
 
     this.challengeContainer = this.scene.add.container(x, y)
@@ -479,6 +479,26 @@ export class SeasonHUD {
         resolution: 2, wordWrap: { width: 172 },
       })
       this.challengeContainer!.add(row)
+
+      // Progress bar — visual fill bar below the challenge description
+      if (ch.target > 1) {
+        const barW = 160
+        const barH = 3
+        const barX = 28
+        const barY = rowY + 12
+        const pct = Math.min(1, ch.current / ch.target)
+        const barGfx = this.scene.add.graphics()
+        // Track
+        barGfx.fillStyle(activeTheme.roomFloor, 0.5)
+        barGfx.fillRoundedRect(barX, barY, barW, barH, 1)
+        // Fill
+        if (pct > 0) {
+          const fillColor = ch.completed ? 0x34d399 : season.accentColor
+          barGfx.fillStyle(fillColor, 0.8)
+          barGfx.fillRoundedRect(barX, barY, Math.max(3, barW * pct), barH, 1)
+        }
+        this.challengeContainer!.add(barGfx)
+      }
     })
 
     this.scene.tweens.add({

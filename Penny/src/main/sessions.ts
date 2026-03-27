@@ -10,6 +10,28 @@ const execAsync = promisify(exec)
 const CLAUDE_SESSIONS_DIR = path.join(os.homedir(), '.claude', 'sessions')
 const CLAUDE_PROJECTS_DIR = path.join(os.homedir(), '.claude', 'projects')
 
+// ── iTerm2 Circuit Breaker ──────────────────────────────────────────────────
+let itermConsecutiveTimeouts = 0
+let itermBackoffUntil = 0
+let itermLastSuccessfulResult = new Map<string, string>()
+
+// ── OpenClaw Detection Cache ────────────────────────────────────────────────
+export interface OpenClawInfo {
+  supervised: boolean
+  runtime?: 'openclaw' | 'nemoclaw'
+  sessionId?: string
+  agentId?: string
+  sandboxed?: boolean
+}
+const openclawCache = new Map<number, { info: OpenClawInfo; checkedAt: number }>()
+const OPENCLAW_CACHE_TTL = 60_000 // Re-check every 60s
+
+// ── Session Crash Tracking ──────────────────────────────────────────────────
+/** PIDs seen in the previous poll cycle — used to detect crashed sessions */
+let previousSessionPids = new Set<number>()
+/** Recently crashed sessions — kept for 10s so UI can show "crashed" badge */
+const crashedSessions = new Map<string, { session: ClaudeSession; crashedAt: number }>()
+
 function resolveUserPath(inputPath: string): string {
   const raw = (inputPath || '').trim()
   if (!raw) return raw
@@ -43,6 +65,8 @@ export interface ClaudeSession {
   sessionMode: SessionMode
   interactionType: InteractionType
   subAgentInvocations: SubAgentInvocation[]
+  parseErrors: number
+  lastError: string | null
 }
 
 export interface ConversationMessage {
@@ -121,6 +145,62 @@ function findJsonlPath(sessionId: string): string | null {
   return null
 }
 
+// ── OpenClaw Process Detection ──────────────────────────────────────────────
+
+async function detectOpenClaw(pid: number): Promise<OpenClawInfo> {
+  const cached = openclawCache.get(pid)
+  if (cached && Date.now() - cached.checkedAt < OPENCLAW_CACHE_TTL) {
+    return cached.info
+  }
+
+  const noSupervision: OpenClawInfo = { supervised: false }
+
+  try {
+    // Strategy 1: Check parent process command for OpenClaw/NemoClaw
+    const { stdout: ppidStr } = await execAsync(`ps -o ppid= -p ${pid} 2>/dev/null`)
+    const ppid = parseInt(ppidStr.trim(), 10)
+    if (ppid > 1) {
+      const { stdout: parentCmd } = await execAsync(
+        `ps -o command= -p ${ppid} 2>/dev/null`,
+      )
+      const cmd = parentCmd.trim().toLowerCase()
+      if (cmd.includes('nemoclaw')) {
+        const info: OpenClawInfo = { supervised: true, runtime: 'nemoclaw', sandboxed: true }
+        openclawCache.set(pid, { info, checkedAt: Date.now() })
+        return info
+      }
+      if (cmd.includes('openclaw') || cmd.includes('claw')) {
+        const info: OpenClawInfo = { supervised: true, runtime: 'openclaw' }
+        openclawCache.set(pid, { info, checkedAt: Date.now() })
+        return info
+      }
+    }
+
+    // Strategy 2: Check environment variables via ps eww
+    const { stdout: envStr } = await execAsync(
+      `ps eww -o command= -p ${pid} 2>/dev/null`,
+    )
+    const envLine = envStr.trim()
+    if (envLine.includes('OPENCLAW_SESSION_ID=') || envLine.includes('ACP_AGENT_ID=')) {
+      const sessionIdMatch = envLine.match(/OPENCLAW_SESSION_ID=(\S+)/)
+      const agentIdMatch = envLine.match(/ACP_AGENT_ID=(\S+)/)
+      const isSandboxed = envLine.includes('NEMOCLAW_SANDBOX=')
+      const info: OpenClawInfo = {
+        supervised: true,
+        runtime: isSandboxed ? 'nemoclaw' : 'openclaw',
+        sessionId: sessionIdMatch?.[1],
+        agentId: agentIdMatch?.[1],
+        sandboxed: isSandboxed,
+      }
+      openclawCache.set(pid, { info, checkedAt: Date.now() })
+      return info
+    }
+  } catch { /* detection failed — assume not supervised */ }
+
+  openclawCache.set(pid, { info: noSupervision, checkedAt: Date.now() })
+  return noSupervision
+}
+
 // ── Shared JSONL reading ────────────────────────────────────────────────────
 // Read the JSONL file once and extract all needed data from the parsed lines.
 // This eliminates the 3x redundant file reads per session per tick.
@@ -129,6 +209,8 @@ interface SessionData {
   lastUserMessage: string
   lastAssistantBlurb: string
   analysis: SessionAnalysis
+  parseErrors: number
+  lastError: string | null
 }
 
 function readSessionData(sessionId: string): SessionData {
@@ -138,25 +220,58 @@ function readSessionData(sessionId: string): SessionData {
       lastUserMessage: '',
       lastAssistantBlurb: '',
       analysis: { waitingForInput: false, mode: 'idle', interactionType: 'none', subAgentInvocations: [] },
+      parseErrors: 0,
+      lastError: null,
     }
   }
 
   let lines: string[]
+  let parseErrors = 0
+  let lastError: string | null = null
   try {
     const content = fs.readFileSync(jsonlPath, 'utf-8')
-    lines = content.trim().split('\n')
-  } catch {
+    const rawLines = content.trim().split('\n')
+
+    // Filter out lines that fail to parse — track errors
+    lines = []
+    for (let i = 0; i < rawLines.length; i++) {
+      const line = rawLines[i]
+      if (!line.trim()) continue
+      try {
+        JSON.parse(line) // validate
+        lines.push(line)
+      } catch (e) {
+        // Skip the last line if it fails (likely half-written)
+        if (i === rawLines.length - 1) {
+          // Truncated mid-write — skip silently
+        } else {
+          parseErrors++
+          lastError = `Line ${i + 1}: ${(e as Error).message}`
+        }
+      }
+    }
+  } catch (e) {
     return {
       lastUserMessage: '',
       lastAssistantBlurb: '',
-      analysis: { waitingForInput: false, mode: 'idle', interactionType: 'none', subAgentInvocations: [] },
+      analysis: { waitingForInput: false, mode: 'error', interactionType: 'none', subAgentInvocations: [] },
+      parseErrors: 1,
+      lastError: (e as Error).message,
     }
+  }
+
+  const analysis = analyzeLines(lines)
+  // If there are parse errors and the mode would otherwise be idle, flag as error
+  if (parseErrors > 0 && analysis.mode === 'idle') {
+    analysis.mode = 'error'
   }
 
   return {
     lastUserMessage: extractLastUserMessage(lines),
     lastAssistantBlurb: extractLastAssistantBlurb(lines),
-    analysis: analyzeLines(lines),
+    analysis,
+    parseErrors,
+    lastError,
   }
 }
 
@@ -201,7 +316,7 @@ function extractLastAssistantBlurb(lines: string[]): string {
   return ''
 }
 
-export type SessionMode = 'working' | 'plan' | 'accept-edits' | 'waiting' | 'idle' | 'compressing'
+export type SessionMode = 'working' | 'plan' | 'accept-edits' | 'waiting' | 'idle' | 'compressing' | 'error' | 'disconnected' | 'crashed'
 
 // Finer-grained classification of WHY the session needs interaction (or doesn't)
 export type InteractionType =
@@ -464,7 +579,14 @@ function analyzeLines(lines: string[]): SessionAnalysis {
 // ── iTerm2 Session Name ────────────────────────────────────────────────────
 
 // Batch-fetch all iTerm2 session names in a single osascript call
+// Circuit breaker: after 2 consecutive timeouts, skip for 30s and serve stale cache
 async function getAllITermSessionNames(): Promise<Map<string, string>> {
+  // Check circuit breaker
+  if (itermConsecutiveTimeouts >= 2 && Date.now() < itermBackoffUntil) {
+    console.log(`[iTerm2] Circuit breaker active — serving cached names (${itermLastSuccessfulResult.size} entries)`)
+    return itermLastSuccessfulResult
+  }
+
   const result = new Map<string, string>()
   try {
     const { stdout } = await execAsync(`osascript -e '
@@ -479,7 +601,7 @@ async function getAllITermSessionNames(): Promise<Map<string, string>> {
         end repeat
       end tell
       return output
-    '`, { timeout: 5000 })
+    '`, { timeout: 2000 })
     for (const line of stdout.trim().split('\n')) {
       const sep = line.indexOf('|||')
       if (sep === -1) continue
@@ -487,7 +609,18 @@ async function getAllITermSessionNames(): Promise<Map<string, string>> {
       const name = line.slice(sep + 3)
       if (tty && name) result.set(tty, name)
     }
-  } catch { /* iTerm2 not running or not responding */ }
+    // Success — reset circuit breaker
+    itermConsecutiveTimeouts = 0
+    itermLastSuccessfulResult = result
+  } catch {
+    itermConsecutiveTimeouts++
+    if (itermConsecutiveTimeouts >= 2) {
+      itermBackoffUntil = Date.now() + 30_000
+      console.warn(`[iTerm2] ${itermConsecutiveTimeouts} consecutive timeouts — backing off 30s`)
+    }
+    // Return last successful result during failures
+    return itermLastSuccessfulResult
+  }
   return result
 }
 
@@ -510,19 +643,36 @@ export async function getClaudeSessions(): Promise<ClaudeSession[]> {
     } catch { /* skip bad files */ }
   }
 
-  // Phase 2: Parallel async work — process stats + iTerm names
-  const [statsResults, itermNames] = await Promise.all([
+  // Phase 2: Parallel async work — process stats + iTerm names + OpenClaw detection
+  const [statsResults, itermNames, openclawResults] = await Promise.all([
     Promise.all(aliveSessions.map(s => getProcessStats(s.pid))),
     getAllITermSessionNames(),
+    Promise.all(aliveSessions.map(s => detectOpenClaw(s.pid))),
   ])
 
   // Phase 3: Sync JSONL reads + assembly
   const sessions: ClaudeSession[] = []
+  const currentPids = new Set<number>()
   for (let i = 0; i < aliveSessions.length; i++) {
     const { data, pid } = aliveSessions[i]
     const stats = statsResults[i]
     const sessionData = readSessionData(data.sessionId as string)
     const terminalName = stats.tty ? (itermNames.get(stats.tty) || '') : ''
+    currentPids.add(pid)
+
+    // Stale TTY detection — validate tty device still exists
+    let tty = stats.tty
+    let sessionMode = sessionData.analysis.mode
+    if (tty) {
+      const ttyPath = tty.startsWith('/dev/') ? tty : `/dev/${tty}`
+      if (!fs.existsSync(ttyPath)) {
+        console.warn(`[sessions] Stale TTY detected: ${ttyPath} for pid ${pid}`)
+        tty = '' // Clear stale tty
+        sessionMode = 'disconnected'
+        // Clear iTerm name cache for this tty
+        itermLastSuccessfulResult.delete(stats.tty)
+      }
+    }
 
     sessions.push({
       pid,
@@ -536,17 +686,58 @@ export async function getClaudeSessions(): Promise<ClaudeSession[]> {
       alive: true,
       lastUserMessage: sessionData.lastUserMessage,
       lastAssistantBlurb: sessionData.lastAssistantBlurb,
-      tty: stats.tty,
+      tty,
       terminalName,
       waitingForInput: sessionData.analysis.waitingForInput,
-      sessionMode: sessionData.analysis.mode,
+      sessionMode,
       interactionType: sessionData.analysis.interactionType,
       subAgentInvocations: sessionData.analysis.subAgentInvocations,
+      parseErrors: sessionData.parseErrors,
+      lastError: sessionData.lastError,
     })
+  }
+
+  // ── Crash detection — find sessions that disappeared since last poll ────
+  const now = Date.now()
+  for (const prevPid of previousSessionPids) {
+    if (!currentPids.has(prevPid)) {
+      // This PID was alive last poll but is gone now
+      // Find its last known session data from crashedSessions or log it
+      console.warn(`[sessions] Session pid=${prevPid} disappeared (crashed or ended)`)
+    }
+  }
+  previousSessionPids = currentPids
+
+  // Clean up expired crashed sessions (older than 10s)
+  for (const [key, entry] of crashedSessions) {
+    if (now - entry.crashedAt > 10_000) {
+      crashedSessions.delete(key)
+    }
+  }
+
+  // Clean up stale OpenClaw cache entries
+  for (const [pid, entry] of openclawCache) {
+    if (!currentPids.has(pid) && now - entry.checkedAt > OPENCLAW_CACHE_TTL * 2) {
+      openclawCache.delete(pid)
+    }
   }
 
   sessions.sort((a, b) => b.memoryMB - a.memoryMB)
   return sessions
+}
+
+/** Get OpenClaw info for a specific PID (used by IPC layer) */
+export async function getOpenClawInfo(pid: number): Promise<OpenClawInfo> {
+  return detectOpenClaw(pid)
+}
+
+/** Check iTerm2 circuit breaker status */
+export function getITermStatus(): { healthy: boolean; consecutiveTimeouts: number; backoffUntil: number } {
+  return {
+    healthy: itermConsecutiveTimeouts < 2,
+    consecutiveTimeouts: itermConsecutiveTimeouts,
+    backoffUntil: itermBackoffUntil,
+  }
 }
 
 // ── Get Conversation ────────────────────────────────────────────────────────

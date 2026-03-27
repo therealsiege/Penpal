@@ -885,6 +885,10 @@ export class OfficeScene extends Phaser.Scene {
         if (ws) {
           const wx = room.x + ws.container.x
           const wy = room.y + ws.container.y
+          this.celebrations.questComplete(
+            wx, wy,
+            difficulty as 'trivial' | 'normal' | 'hard' | 'epic' | 'legendary',
+          )
           this.celebrations.questReward(
             wx, wy,
             difficulty as 'trivial' | 'normal' | 'hard' | 'epic' | 'legendary',
@@ -1565,6 +1569,20 @@ export class OfficeScene extends Phaser.Scene {
       } else {
         if (ws.monitorGlowTween) ws.monitorGlowTween.pause()
         ws.monitorGlowFx.outerStrength = 0
+      }
+    }
+
+    // HD icon swap — use 64x64 GAME_ICONS_HD at L3 for crisp status dots
+    const hdAvailable = this.textures.exists(SPRITESHEET_KEYS.GAME_ICONS_HD)
+    if (hdAvailable && ws.statusDot) {
+      if (showFull && !wasFull) {
+        // Swap to HD sheet (64x64) at half scale for sharper rendering
+        ws.statusDot.setTexture(SPRITESHEET_KEYS.GAME_ICONS_HD)
+        ws.statusDot.setScale(0.11)
+      } else if (!showFull && wasFull) {
+        // Swap back to standard sheet (32x32)
+        ws.statusDot.setTexture(SPRITESHEET_KEYS.GAME_ICONS)
+        ws.statusDot.setScale(0.22)
       }
     }
   }
