@@ -581,87 +581,109 @@ html.penpal-no-vignette body::before {
 
 /* ── Vault Markdown Preview ─────────────────────────────────────────────── */
 
-.vault-markdown h1 { font-size: 1.4em; font-weight: 700; margin: 1em 0 0.5em; color: #c4ccd6; }
-.vault-markdown h2 { font-size: 1.2em; font-weight: 600; margin: 0.8em 0 0.4em; color: #8a96a4; }
-.vault-markdown h3 { font-size: 1.05em; font-weight: 600; margin: 0.6em 0 0.3em; color: #5a6a7a; }
-.vault-markdown h4, .vault-markdown h5, .vault-markdown h6 { font-size: 0.95em; font-weight: 600; margin: 0.5em 0 0.2em; color: #5a6a7a; }
+.vault-markdown { color: #b0bcc8; }
 
-.vault-markdown p { margin: 0.4em 0; line-height: 1.6; }
-.vault-markdown ul, .vault-markdown ol { margin: 0.4em 0; padding-left: 1.5em; }
-.vault-markdown li { margin: 0.15em 0; }
-.vault-markdown li > ul, .vault-markdown li > ol { margin: 0.1em 0; }
+.vault-markdown h1 { font-size: 1.6em; font-weight: 700; margin: 1.4em 0 0.6em; color: #dce4ec; letter-spacing: -0.02em; border-bottom: 1px solid #1a2030; padding-bottom: 0.3em; }
+.vault-markdown h2 { font-size: 1.35em; font-weight: 600; margin: 1.2em 0 0.5em; color: #c4ccd6; letter-spacing: -0.01em; }
+.vault-markdown h3 { font-size: 1.15em; font-weight: 600; margin: 1em 0 0.4em; color: #a0aab4; }
+.vault-markdown h4, .vault-markdown h5, .vault-markdown h6 { font-size: 1em; font-weight: 600; margin: 0.8em 0 0.3em; color: #8a96a4; }
 
-.vault-markdown a { color: #60a5fa; text-decoration: underline; text-underline-offset: 2px; }
-.vault-markdown strong { color: #c4ccd6; }
-.vault-markdown em { color: #5a6a7a; }
+.vault-markdown p { margin: 0.8em 0; line-height: 1.75; }
+.vault-markdown ul, .vault-markdown ol { margin: 0.6em 0; padding-left: 1.8em; }
+.vault-markdown li { margin: 0.25em 0; line-height: 1.7; }
+.vault-markdown li > ul, .vault-markdown li > ol { margin: 0.2em 0; }
+.vault-markdown li::marker { color: #3a4858; }
+
+.vault-markdown a { color: #60a5fa; text-decoration: underline; text-underline-offset: 2px; transition: color 0.15s; }
+.vault-markdown a:hover { color: #93c5fd; }
+.vault-markdown strong { color: #dce4ec; }
+.vault-markdown em { color: #8a96a4; font-style: italic; }
 
 .vault-markdown code {
   background: rgba(10, 14, 20, 0.6);
-  padding: 0.15em 0.35em;
-  border-radius: 3px;
+  padding: 0.15em 0.4em;
+  border-radius: 4px;
   font-size: 0.85em;
   color: #00e5ff;
+  border: 1px solid rgba(42, 52, 64, 0.3);
 }
 
 .vault-markdown pre {
-  background: rgba(10, 14, 20, 0.8);
+  background: rgba(6, 8, 12, 0.9);
   border: 1px solid rgba(42, 52, 64, 0.4);
-  border-radius: 6px;
-  padding: 0.8em 1em;
+  border-radius: 8px;
+  padding: 1em 1.2em;
   overflow-x: auto;
-  margin: 0.6em 0;
+  margin: 1em 0;
 }
 
 .vault-markdown pre code {
   background: none;
   padding: 0;
+  border: none;
   color: #8a96a4;
-  font-size: 0.8em;
+  font-size: 0.82em;
+  line-height: 1.6;
 }
 
 .vault-markdown blockquote {
-  border-left: 3px solid #2a3440;
-  padding-left: 0.8em;
-  margin: 0.5em 0;
-  color: #5a6a7a;
+  border-left: 3px solid #00e5ff40;
+  padding: 0.4em 0 0.4em 1em;
+  margin: 1em 0;
+  color: #8a96a4;
+  background: rgba(0, 229, 255, 0.02);
+  border-radius: 0 6px 6px 0;
 }
+
+.vault-markdown blockquote p { margin: 0.3em 0; }
 
 .vault-markdown hr {
   border: none;
-  border-top: 1px solid #141a22;
-  margin: 1em 0;
+  border-top: 1px solid #1a2030;
+  margin: 1.5em 0;
 }
 
 .vault-markdown table {
   width: 100%;
   border-collapse: collapse;
-  margin: 0.6em 0;
-  font-size: 0.85em;
+  margin: 1em 0;
+  font-size: 0.88em;
 }
 
 .vault-markdown th {
-  background: rgba(10, 14, 20, 0.5);
+  background: rgba(10, 14, 20, 0.6);
   text-align: left;
-  padding: 0.4em 0.6em;
-  border: 1px solid #141a22;
+  padding: 0.5em 0.8em;
+  border: 1px solid #1a2030;
   font-weight: 600;
-  color: #8a96a4;
+  color: #a0aab4;
 }
 
 .vault-markdown td {
-  padding: 0.35em 0.6em;
-  border: 1px solid #141a22;
+  padding: 0.45em 0.8em;
+  border: 1px solid #1a2030;
+}
+
+.vault-markdown tr:hover td {
+  background: rgba(10, 14, 20, 0.3);
 }
 
 .vault-markdown img {
   max-width: 100%;
-  border-radius: 4px;
-  margin: 0.5em 0;
+  border-radius: 6px;
+  margin: 1em 0;
+  border: 1px solid rgba(42, 52, 64, 0.3);
 }
 
 .vault-markdown input[type="checkbox"] {
-  margin-right: 0.3em;
-  accent-color: #3b82f6;
+  margin-right: 0.4em;
+  accent-color: #00e5ff;
+}
+
+/* Task list style — remove bullet when checkbox is present */
+.vault-markdown ul:has(> li > input[type="checkbox"]) {
+  list-style: none;
+  padding-left: 0.4em;
 }
 
 /* ── Light theme overrides ────────────────────────────────────────────────── */

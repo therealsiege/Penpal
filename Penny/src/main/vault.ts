@@ -396,17 +396,29 @@ export function resolveVaultAsset(filename: string): string | null {
 
 export function registerVaultProtocol() {
   protocol.handle('vault', (request) => {
-    // vault://filename.png — extract just the basename, reject path traversal
-    const raw = decodeURIComponent(new URL(request.url).pathname.slice(1))
-    const filename = path.basename(raw)
-    if (!filename || filename.includes('..') || filename.startsWith('.')) {
+    const url = new URL(request.url)
+    // vault://host/path — host may carry context dir, pathname carries the asset reference
+    const raw = decodeURIComponent(url.hostname + url.pathname)
+    if (!raw || raw.includes('..') || raw.startsWith('.')) {
       return new Response('Forbidden', { status: 403 })
     }
-    const resolved = resolveVaultAsset(filename)
-    if (!resolved) {
-      return new Response('Not found', { status: 404 })
+
+    // 1. Try as a relative path within the vault (e.g. Research/Articles/References/foo.png)
+    const asRelative = path.resolve(VAULT_ROOT, raw)
+    if (asRelative.startsWith(VAULT_ROOT) && fs.existsSync(asRelative) && fs.statSync(asRelative).isFile()) {
+      return net.fetch(`file://${asRelative}`)
     }
-    return net.fetch(`file://${resolved}`)
+
+    // 2. Try basename-only search (original behavior — finds the file anywhere in vault)
+    const filename = path.basename(raw)
+    if (filename && !filename.startsWith('.')) {
+      const resolved = resolveVaultAsset(filename)
+      if (resolved) {
+        return net.fetch(`file://${resolved}`)
+      }
+    }
+
+    return new Response('Not found', { status: 404 })
   })
 }
 

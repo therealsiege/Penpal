@@ -1447,10 +1447,17 @@ export function CommandCenter(props: CommandCenterProps) {
       {/* Main Content: Phaser Office + Agent Cards                           */}
       {/* ------------------------------------------------------------------ */}
       <div className="flex-1 flex flex-col min-h-0 overflow-hidden p-2.5 pt-2">
-        <div
-          ref={gameContainerRef}
-          className="app-main-chrome flex-1 min-h-0 relative overflow-hidden rounded-[14px]"
-        />
+        <div className="flex-1 min-h-0 relative overflow-hidden rounded-[14px]">
+          {/* Faint background image behind the Phaser canvas */}
+          <div
+            className="absolute inset-0 bg-cover bg-center bg-no-repeat opacity-[0.15]"
+            style={{ backgroundImage: 'url(office-bg.jpg)' }}
+          />
+          <div
+            ref={gameContainerRef}
+            className="app-main-chrome absolute inset-0"
+          />
+        </div>
       </div>
 
       {/* ------------------------------------------------------------------ */}

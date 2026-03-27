@@ -14,11 +14,15 @@ class InlineImageWidget extends WidgetType {
     img.style.cssText = 'max-width: 100%; border-radius: 4px; display: block;'
     if (this.width) img.style.width = `${this.width}px`
 
-    // Try vault:// protocol, fall back to relative path
-    img.src = `vault://${this.src}`
-    img.onerror = () => {
-      // If vault protocol fails, try as-is (could be external URL)
-      if (!img.src.startsWith('http')) {
+    if (this.src.startsWith('http://') || this.src.startsWith('https://')) {
+      // External URL — use directly
+      img.src = this.src
+    } else {
+      // Local vault asset — use vault:// protocol
+      // Encode path components but keep slashes so the protocol handler can resolve relative paths
+      const encoded = this.src.split('/').map(s => encodeURIComponent(s)).join('/')
+      img.src = `vault://${encoded}`
+      img.onerror = () => {
         img.style.display = 'none'
       }
     }
@@ -34,8 +38,8 @@ class InlineImageWidget extends WidgetType {
 
 // Match ![[image.png]] or ![[image.png|400]] (Obsidian embeds)
 const obsidianEmbedRegex = /!\[\[([^\]|]+\.(png|jpg|jpeg|gif|svg|webp))(?:\|(\d+))?\]\]/gi
-// Match ![alt](path) (standard markdown images)
-const mdImageRegex = /!\[([^\]]*)\]\(([^)]+\.(png|jpg|jpeg|gif|svg|webp))\)/gi
+// Match ![alt](path) where path contains an image extension (handles query params in URLs)
+const mdImageRegex = /!\[([^\]]*)\]\(([^)]*\.(png|jpg|jpeg|gif|svg|webp)[^)]*)\)/gi
 
 function buildDecorations(view: EditorView): DecorationSet {
   const builder = new RangeSetBuilder<Decoration>()

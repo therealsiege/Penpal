@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { PanelBackground } from '../components/PanelBackground'
 
 interface ScriptCard {
   id: string
@@ -220,8 +219,10 @@ export function DataPanel() {
   }
 
   return (
-    <PanelBackground>
-    <div className="h-full flex flex-col overflow-hidden">
+    <div className="relative h-full overflow-hidden">
+      <div className="absolute inset-0 bg-cover bg-center bg-no-repeat" style={{ backgroundImage: 'url(data-bg.jpg)' }} />
+      <div className="absolute inset-0 bg-[#080a0e]/[0.88]" />
+    <div className="relative h-full flex flex-col overflow-hidden">
       {/* Header */}
       <div className="shrink-0 px-6 pt-5 pb-3 border-b border-[#2a3440]">
         <h1 className="text-lg font-semibold text-slate-100">Data Pipeline</h1>
@@ -236,91 +237,99 @@ export function DataPanel() {
               <span className="text-[#00ff88]">{GROUP_ICONS[groupName]}</span>
               <h2 className="text-sm font-medium text-[#8a96a4] uppercase tracking-wider">{groupName}</h2>
             </div>
-            <div className="space-y-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
               {cards.map(card => {
                 const run = getRunForCard(card)
                 const isRunning = run?.status === 'running'
                 const isExpanded = expandedRun && run && expandedRun === run.runId
 
                 return (
-                  <div key={card.id} className="bg-[#0c1018]/90 border border-[#2a3440] rounded-lg overflow-hidden">
-                    <div className="px-4 py-3 flex items-center gap-3">
-                      {/* Status indicator */}
-                      <div className="shrink-0">
-                        {isRunning ? (
-                          <Spinner />
-                        ) : run?.status === 'done' ? (
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#00ff88" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                            <polyline points="20 6 9 17 4 12" />
-                          </svg>
-                        ) : run?.status === 'error' ? (
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#ff4444" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                            <line x1="18" y1="6" x2="6" y2="18" />
-                            <line x1="6" y1="6" x2="18" y2="18" />
-                          </svg>
-                        ) : (
-                          <div className="w-4 h-4 rounded-full border-2 border-[#2a3440]" />
-                        )}
-                      </div>
-
-                      {/* Card info */}
-                      <div className="flex-1 min-w-0">
-                        <div className="text-sm font-medium text-slate-200">{card.label}</div>
-                        <div className="text-xs text-[#5a6878] mt-0.5">{card.description}</div>
-                        {run?.durationMs != null && (
-                          <div className="text-xs text-[#3a4858] mt-0.5">
-                            Completed in {formatDuration(run.durationMs)}
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Directory picker */}
-                      {card.needsDirectory && (
-                        <button
-                          onClick={() => handlePickDir(card.id)}
-                          className="shrink-0 text-xs text-[#5a6878] hover:text-[#00ff88] border border-[#2a3440] hover:border-[#00ff88]/30 rounded px-2 py-1 transition-colors"
-                          title={selectedDirs[card.id] || 'Choose root directory'}
-                        >
-                          {selectedDirs[card.id]
-                            ? selectedDirs[card.id].split('/').pop()
-                            : 'Choose Dir'}
-                        </button>
-                      )}
-
-                      {/* Action buttons */}
-                      {isRunning ? (
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => run && setExpandedRun(isExpanded ? null : run.runId)}
-                            className="text-xs text-[#5a6878] hover:text-slate-300 transition-colors"
-                          >
-                            {isExpanded ? 'Hide' : 'Logs'}
-                          </button>
-                          <button
-                            onClick={() => run && handleCancel(run.runId)}
-                            className="text-xs text-[#ff4444]/70 hover:text-[#ff4444] transition-colors"
-                          >
-                            Cancel
-                          </button>
+                  <div key={card.id} className="bg-[#0c1018]/90 border border-[#2a3440] rounded-lg overflow-hidden flex flex-col h-full min-h-0">
+                    <div className="px-4 py-3 flex flex-col gap-3 flex-1 min-h-0">
+                      <div className="flex items-start gap-3">
+                        {/* Status indicator */}
+                        <div className="shrink-0 pt-0.5">
+                          {isRunning ? (
+                            <Spinner />
+                          ) : run?.status === 'done' ? (
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#00ff88" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                              <polyline points="20 6 9 17 4 12" />
+                            </svg>
+                          ) : run?.status === 'error' ? (
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#ff4444" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                              <line x1="18" y1="6" x2="6" y2="18" />
+                              <line x1="6" y1="6" x2="18" y2="18" />
+                            </svg>
+                          ) : (
+                            <div className="w-4 h-4 rounded-full border-2 border-[#2a3440]" />
+                          )}
                         </div>
-                      ) : (
-                        <div className="flex items-center gap-2">
-                          {run && (
+
+                        {/* Card info */}
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm font-medium text-slate-200">{card.label}</div>
+                          <div className="text-xs text-[#5a6878] mt-0.5 leading-snug">{card.description}</div>
+                          {run?.durationMs != null && (
+                            <div className="text-xs text-[#3a4858] mt-0.5">
+                              Completed in {formatDuration(run.durationMs)}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="flex flex-wrap items-center justify-end gap-2 mt-auto pt-1 border-t border-[#2a3440]/60">
+                        {/* Directory picker */}
+                        {card.needsDirectory && (
+                          <button
+                            onClick={() => handlePickDir(card.id)}
+                            className="shrink-0 text-xs text-[#5a6878] hover:text-[#00ff88] border border-[#2a3440] hover:border-[#00ff88]/30 rounded px-2 py-1 transition-colors"
+                            title={selectedDirs[card.id] || 'Choose root directory'}
+                          >
+                            {selectedDirs[card.id]
+                              ? selectedDirs[card.id].split('/').pop()
+                              : 'Choose Dir'}
+                          </button>
+                        )}
+
+                        {/* Action buttons */}
+                        {isRunning ? (
+                          <>
                             <button
-                              onClick={() => setExpandedRun(isExpanded ? null : run.runId)}
+                              type="button"
+                              onClick={() => run && setExpandedRun(isExpanded ? null : run.runId)}
                               className="text-xs text-[#5a6878] hover:text-slate-300 transition-colors"
                             >
                               {isExpanded ? 'Hide' : 'Logs'}
                             </button>
-                          )}
-                          <button
-                            onClick={() => handleRun(card)}
-                            className="shrink-0 text-xs font-medium text-[#00ff88] bg-[#00ff88]/10 hover:bg-[#00ff88]/20 border border-[#00ff88]/20 hover:border-[#00ff88]/40 rounded px-3 py-1.5 transition-colors"
-                          >
-                            Run
-                          </button>
-                        </div>
-                      )}
+                            <button
+                              type="button"
+                              onClick={() => run && handleCancel(run.runId)}
+                              className="text-xs text-[#ff4444]/70 hover:text-[#ff4444] transition-colors"
+                            >
+                              Cancel
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            {run && (
+                              <button
+                                type="button"
+                                onClick={() => setExpandedRun(isExpanded ? null : run.runId)}
+                                className="text-xs text-[#5a6878] hover:text-slate-300 transition-colors"
+                              >
+                                {isExpanded ? 'Hide' : 'Logs'}
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => handleRun(card)}
+                              className="shrink-0 text-xs font-medium text-[#00ff88] bg-[#00ff88]/10 hover:bg-[#00ff88]/20 border border-[#00ff88]/20 hover:border-[#00ff88]/40 rounded px-3 py-1.5 transition-colors"
+                            >
+                              Run
+                            </button>
+                          </>
+                        )}
+                      </div>
                     </div>
 
                     {/* Log output */}
@@ -394,6 +403,6 @@ export function DataPanel() {
         </div>
       </div>
     </div>
-    </PanelBackground>
+    </div>
   )
 }
