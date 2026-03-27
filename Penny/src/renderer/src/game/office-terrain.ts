@@ -1,7 +1,7 @@
 import Phaser from 'phaser'
 import type { Room } from './office-types'
 import { WORLD_MARGIN } from './office-constants'
-import { SPRITESHEET_KEYS, EFFECT_ANIM_KEYS, ITEM_FRAMES, ICON_FRAMES } from './office-asset-keys'
+import { SPRITESHEET_KEYS, EFFECT_ANIM_KEYS, ITEM_FRAMES, ICON_FRAMES, IMAGE_KEYS } from './office-asset-keys'
 import { activeTheme } from './office-theme'
 
 // ---------------------------------------------------------------------------
@@ -752,6 +752,15 @@ export class OfficeTerrain {
       }
     }
 
+    // Helper: place a terrain prop image if loaded
+    const placeTerrainProp = (px: number, py: number, key: string, scale: number, alpha: number, tint?: number): void => {
+      if (!this.scene.textures.exists(key)) return
+      const prop = this.scene.add.image(px, py, key)
+        .setScale(scale).setAlpha(alpha).setDepth(-9.5)
+      if (tint !== undefined) prop.setTint(tint)
+      this.terrainDecos.push(prop)
+    }
+
     // ── 19. Zone-based city grid — structured industrial layout ──
     // Divide terrain into zones and render deterministic structures per zone type.
     const ZONE_SIZE = 200
@@ -837,6 +846,9 @@ export class OfficeTerrain {
             fontSize: '4px', fontFamily: 'monospace', color: '#4a5a6a', resolution: 2,
           }).setOrigin(0.5, 0).setDepth(-9).setAlpha(0.6)
           this.terrainDecos.push(label)
+          // Prop: stone blocks near building
+          placeTerrainProp(bx_ - 14, by_ + bh * 0.4, IMAGE_KEYS.TERRAIN_STONE, 0.22, 0.35, 0x4a5a6a)
+          if ((col + row) % 3 === 0) placeTerrainProp(bx_ + bw + 10, by_ + bh * 0.7, IMAGE_KEYS.TERRAIN_DIRT, 0.2, 0.3, 0x4a5a6a)
 
         } else if (zType === 'storage') {
           // Loading dock platform — wide dark slab behind containers
@@ -889,6 +901,10 @@ export class OfficeTerrain {
             fontSize: '4px', fontFamily: 'monospace', color: '#3a4a5a', resolution: 2,
           }).setOrigin(0.5).setDepth(-9).setAlpha(0.5)
           this.terrainDecos.push(sLabel)
+          // Prop: crate sprites stacked near containers
+          placeTerrainProp(cx - 75, cy + 4, IMAGE_KEYS.TERRAIN_CRATE, 0.28, 0.45)
+          placeTerrainProp(cx + 72, cy - 6, IMAGE_KEYS.TERRAIN_CRATE, 0.24, 0.4)
+          if ((col + row) % 2 === 0) placeTerrainProp(cx + 68, cy + 10, IMAGE_KEYS.TERRAIN_CRATE_HAZARD, 0.22, 0.38)
 
         } else if (zType === 'utility') {
           // Transformer box + generator unit
@@ -971,6 +987,8 @@ export class OfficeTerrain {
             fontSize: '2.5px', fontFamily: 'monospace', color: '#8a6a1a', resolution: 2,
           }).setOrigin(0.5).setDepth(-9).setAlpha(0.4)
           this.terrainDecos.push(dangerLabel)
+          // Prop: coin box (equipment locker) near transformer
+          placeTerrainProp(cx - tw / 2 - 18, cy - 8, IMAGE_KEYS.TERRAIN_BOX_COIN, 0.22, 0.35, 0x5a6a7a)
 
         } else if (zType === 'green') {
           // Small park area — organic green space with trees, bushes, benches, path, flowers
@@ -1023,6 +1041,9 @@ export class OfficeTerrain {
           g.fillCircle(cx + 8, cy + 10, 1.5)
           g.fillStyle(0xd4a017, 0.16)
           g.fillCircle(cx + 30, cy + 18, 2)
+          // Prop: decorative dirt/stone blocks at park edges
+          placeTerrainProp(cx - 45, cy + 30, IMAGE_KEYS.TERRAIN_DIRT, 0.18, 0.25, 0x4a6a4a)
+          placeTerrainProp(cx + 42, cy + 28, IMAGE_KEYS.TERRAIN_STONE, 0.16, 0.22, 0x5a6a5a)
 
         } else if (zType === 'parking') {
           // Parking lot with spot markings
