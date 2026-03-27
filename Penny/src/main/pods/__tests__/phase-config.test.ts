@@ -1,5 +1,16 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { getPhaseConfig, PHASE_CONFIGS } from '../phase-config'
+
+vi.mock('../../sessions', () => ({
+  runAgentHeadless: vi.fn().mockResolvedValue({
+    success: false,
+    error: 'stop',
+    output: '',
+    durationMs: 1,
+  }),
+}))
+
+import { createPod } from '../../pods'
 
 describe('getPhaseConfig', () => {
   it('critical priority returns candidates=3, selfEvaluation=true, maxSelfFixes=2', () => {
@@ -40,5 +51,17 @@ describe('getPhaseConfig', () => {
   it('undefined priority falls back to normal config', () => {
     const cfg = getPhaseConfig(undefined as unknown as string)
     expect(cfg).toEqual(PHASE_CONFIGS.normal)
+  })
+
+  it('createPod uses phase config defaults for maxSelfFixes', () => {
+    const normal = createPod('task-normal', { priority: 'normal' })
+    const high = createPod('task-high', { priority: 'high' })
+    const critical = createPod('task-critical', { priority: 'critical' })
+    const low = createPod('task-low', { priority: 'low' })
+
+    expect(normal.maxSelfFixes).toBe(getPhaseConfig('normal').maxSelfFixes)
+    expect(high.maxSelfFixes).toBe(getPhaseConfig('high').maxSelfFixes)
+    expect(critical.maxSelfFixes).toBe(getPhaseConfig('critical').maxSelfFixes)
+    expect(low.maxSelfFixes).toBe(getPhaseConfig('low').maxSelfFixes)
   })
 })

@@ -9,11 +9,21 @@ export default defineConfig({
   },
   test: {
     globals: true,
+<<<<<<< issue-3-create-basic-eval-harness-with-task-pass
     include: ['src/**/*.test.ts', 'tests/**/*.test.ts'],
     exclude: ['**/node_modules/**', '**/out/**', 'tests/*.spec.ts', 'src/main/evals/__tests__/**'],
     environmentMatchGlobs: [
       ['tests/renderer/**', 'jsdom'],
       ['src/renderer/**', 'jsdom'],
+=======
+    environment: 'node',
+    include: [
+      'tests/main/**/infra-smoke.test.ts',
+      'tests/renderer/**/infra-smoke.test.ts',
+>>>>>>> local
     ],
+    setupFiles: ['tests/setup/main.setup.ts'],
+    clearMocks: true,
+    restoreMocks: true,
   },
 })
