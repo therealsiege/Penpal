@@ -25,11 +25,16 @@ export class PreferenceCollector extends EventEmitter {
   }
 
   private hookAllFromModules(): void {
-    // Dynamic require avoids circular dependency issues
-    const { ipcEvents } = require('../ipc') as { ipcEvents: EventEmitter }
-    const { orchestratorEvents } = require('../orchestrator') as { orchestratorEvents: EventEmitter }
-    const { podEvents } = require('../pods') as { podEvents: EventEmitter }
-    this.hookAll({ ipcEvents, orchestratorEvents, podEvents })
+    // Dynamic require may fail in bundled builds (electron-vite collapses to single file).
+    // Degrade gracefully — preference collection is non-critical.
+    try {
+      const { ipcEvents } = require('../ipc') as { ipcEvents: EventEmitter }
+      const { orchestratorEvents } = require('../orchestrator') as { orchestratorEvents: EventEmitter }
+      const { podEvents } = require('../pods') as { podEvents: EventEmitter }
+      this.hookAll({ ipcEvents, orchestratorEvents, podEvents })
+    } catch (err) {
+      console.warn('[PreferenceCollector] Dynamic require failed (bundled build?) — pass sources explicitly.', err)
+    }
   }
 
   private hookAll(sources: CollectorSources): void {

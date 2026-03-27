@@ -1075,6 +1075,7 @@ export class WorkstationFactory {
     if (ws.thinkingDotsContainer) ws.thinkingDotsContainer.destroy()
     ws.thinkingDots = undefined
     ws.thinkingCandidateCount = undefined
+    ws.thinkingMergeInProgress = undefined
     ws.activityHistory = []
 
     // Exit animation: shrink + fade, then destroy.
