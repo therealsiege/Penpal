@@ -10,6 +10,8 @@ export interface WorkstationSprite {
   container: Phaser.GameObjects.Container
   sprite: Phaser.GameObjects.Sprite
   nameText: Phaser.GameObjects.Text
+  /** Subtitle for active orchestrator task (created lazily) */
+  orchestratorTaskLabel?: Phaser.GameObjects.Text
   statusDot: Phaser.GameObjects.Sprite
   roleBadge: Phaser.GameObjects.Text | null
   deskBody: Phaser.GameObjects.Rectangle
@@ -256,6 +258,15 @@ export interface TeamAreaLayout {
 }
 
 // Pod workflow info for connecting lines
+/** Active orchestrator queue task — shown below an agent's name on the Office floor */
+export interface OrchestratorTaskOfficeInfo {
+  taskId: string
+  agentId: string
+  title: string
+  /** planning | executing | validating | queued | … */
+  stage: string
+}
+
 export interface PodLineInfo {
   workflowId: string
   solverAgentId: string

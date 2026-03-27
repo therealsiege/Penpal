@@ -103,6 +103,18 @@ type TweenTarget = Phaser.GameObjects.GameObject & {
   x?: number; y?: number; scaleX?: number; scaleY?: number; alpha?: number
 }
 
+/** Sprites/Images expose setTintFill; Text, Rectangle, etc. often only have setTint. */
+function applyFlashTint(obj: unknown, color: number): void {
+  const o = obj as { setTintFill?: (c: number) => void; setTint?: (c: number) => void }
+  if (typeof o.setTintFill === 'function') o.setTintFill(color)
+  else if (typeof o.setTint === 'function') o.setTint(color)
+}
+
+function clearFlashTint(obj: unknown): void {
+  const o = obj as { clearTint?: () => void }
+  if (typeof o.clearTint === 'function') o.clearTint()
+}
+
 // ---------------------------------------------------------------------------
 // 1. flash — white-tint hit feedback
 // ---------------------------------------------------------------------------
@@ -123,16 +135,16 @@ export function flash(
     yoyo: true,
     repeat: total - 1,
     onYoyo: () => {
-      ;(gameObject as unknown as Phaser.GameObjects.Components.Tint).setTintFill(tint)
+      applyFlashTint(gameObject, tint)
       ;(gameObject as unknown as Phaser.GameObjects.Components.Alpha).setAlpha(0.72)
     },
     onRepeat: () => {
-      ;(gameObject as unknown as Phaser.GameObjects.Components.Tint).clearTint()
+      clearFlashTint(gameObject)
       ;(gameObject as unknown as Phaser.GameObjects.Components.Alpha).setAlpha(1)
       cycles++
     },
     onComplete: () => {
-      ;(gameObject as unknown as Phaser.GameObjects.Components.Tint).clearTint()
+      clearFlashTint(gameObject)
       ;(gameObject as unknown as Phaser.GameObjects.Components.Alpha).setAlpha(1)
       cycles++
       onComplete?.()
