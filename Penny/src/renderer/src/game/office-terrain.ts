@@ -748,13 +748,13 @@ export class OfficeTerrain {
           // Industrial building — steel structure with ventilation
           const bw = 120 + (col % 3) * 20, bh = 70 + (row % 2) * 15
           const bx_ = cx - bw / 2, by_ = cy - bh / 2
-          g.fillStyle(0x000000, 0.08)
+          g.fillStyle(0x000000, 0.12)
           g.fillRect(bx_ + 5, by_ + 5, bw, bh)
-          g.fillStyle(0x1a2030, 0.85)
+          g.fillStyle(0x242e3e, 0.92)
           g.fillRect(bx_, by_, bw, bh)
-          g.lineStyle(1, 0x2a3a4a, 0.6)
+          g.lineStyle(1.5, 0x3a4a5a, 0.7)
           g.strokeRect(bx_, by_, bw, bh)
-          g.fillStyle(0x2a3848, 0.7)
+          g.fillStyle(0x354560, 0.8)
           g.fillRect(bx_, by_, bw, 6)
           // Ventilation units
           for (let vi = 0; vi < 3; vi++) {
@@ -803,22 +803,22 @@ export class OfficeTerrain {
 
         } else if (zType === 'storage') {
           // Loading dock platform — wide dark slab behind containers
-          g.fillStyle(activeTheme.ventFill, 0.5)
-          g.fillRect(cx - 50, cy + 14, 100, 8)
+          g.fillStyle(0x2a3444, 0.65)
+          g.fillRect(cx - 55, cy + 14, 110, 10)
           // Yellow dock edge marking
-          g.lineStyle(1, 0xd4a017, 0.35)
-          g.lineBetween(cx - 50, cy + 14, cx + 50, cy + 14)
+          g.lineStyle(1.5, 0xd4a017, 0.45)
+          g.lineBetween(cx - 55, cy + 14, cx + 55, cy + 14)
 
           // Cargo containers — orderly row of 3
-          const containerColors = [0x2a4a3a, 0x4a2a2a, 0x2a2a4a]
+          const containerColors = [0x3a6a5a, 0x6a3a3a, 0x3a3a6a]
           const cw = 40, ch = 16
           for (let ci = 0; ci < 3; ci++) {
             const ccx = cx - 65 + ci * 45
             const ccy = cy - ch / 2
             const cColor = containerColors[ci % containerColors.length]
-            g.fillStyle(cColor, 0.55)
+            g.fillStyle(cColor, 0.7)
             g.fillRect(ccx, ccy, cw, ch)
-            g.lineStyle(0.8, 0x4a5a6a, 0.4)
+            g.lineStyle(1, 0x5a6a7a, 0.5)
             g.strokeRect(ccx, ccy, cw, ch)
             // Corrugation
             g.lineStyle(0.5, 0x5a6a7a, 0.2)
@@ -855,10 +855,10 @@ export class OfficeTerrain {
 
         } else if (zType === 'utility') {
           // Transformer box + generator unit
-          const tw = 24, th = 24
-          g.fillStyle(0x2a3444, 0.7)
+          const tw = 28, th = 28
+          g.fillStyle(0x354560, 0.8)
           g.fillRect(cx - tw / 2, cy - th / 2, tw, th)
-          g.lineStyle(1, 0x4a5a6a, 0.4)
+          g.lineStyle(1.5, 0x5a6a7a, 0.55)
           g.strokeRect(cx - tw / 2, cy - th / 2, tw, th)
           // Warning diamond
           g.fillStyle(0xd4a017, 0.25)
@@ -871,10 +871,10 @@ export class OfficeTerrain {
           g.fillPath()
           // Generator nearby
           const gx_ = cx + 30, gy_ = cy - 10
-          g.fillStyle(0x1e2836, 0.7)
-          g.fillRect(gx_, gy_, 40, 28)
-          g.lineStyle(1, 0x3a4a5a, 0.5)
-          g.strokeRect(gx_, gy_, 40, 28)
+          g.fillStyle(0x283848, 0.85)
+          g.fillRect(gx_, gy_, 44, 30)
+          g.lineStyle(1.5, 0x4a5a6a, 0.6)
+          g.strokeRect(gx_, gy_, 44, 30)
           // Vent slats
           for (let sl = 0; sl < 2; sl++) {
             g.fillStyle(activeTheme.bg, 0.35)
@@ -938,27 +938,27 @@ export class OfficeTerrain {
         } else if (zType === 'green') {
           // Small park area — organic green space with trees, bushes, benches, path, flowers
           // Irregular ground: two overlapping ellipses
-          g.fillStyle(0x1a2a1a, 0.10)
+          g.fillStyle(0x1a3a1a, 0.18)
           g.fillEllipse(cx - 6, cy + 4, 108, 88)
-          g.fillStyle(0x1a2a1a, 0.09)
+          g.fillStyle(0x1a3a1a, 0.14)
           g.fillEllipse(cx + 8, cy - 5, 96, 100)
           // Walkway path cutting through
-          g.fillStyle(0x2a3a3a, 0.12)
+          g.fillStyle(0x3a4a4a, 0.2)
           g.fillRect(cx - 2, cy - 20, 4, 40)
           // Tree 1 (small, left)
-          g.fillStyle(0x3a2a1a, 0.30)
+          g.fillStyle(0x4a3a2a, 0.45)
           g.fillRect(cx - 28, cy + 2, 2, 10)
-          g.fillStyle(0x2a6a4a, 0.14)
+          g.fillStyle(0x3a8a5a, 0.22)
           g.fillCircle(cx - 27, cy - 4, 8)
           // Tree 2 (large, center-right)
-          g.fillStyle(0x3a2a1a, 0.35)
+          g.fillStyle(0x4a3a2a, 0.5)
           g.fillRect(cx + 16, cy - 6, 4, 18)
-          g.fillStyle(0x2a5a3a, 0.16)
+          g.fillStyle(0x3a7a4a, 0.24)
           g.fillCircle(cx + 18, cy - 16, 16)
           // Tree 3 (medium, far right)
-          g.fillStyle(0x3a2a1a, 0.32)
+          g.fillStyle(0x4a3a2a, 0.45)
           g.fillRect(cx + 36, cy + 4, 3, 14)
-          g.fillStyle(0x1a4a3a, 0.13)
+          g.fillStyle(0x2a6a4a, 0.2)
           g.fillCircle(cx + 37, cy - 4, 11)
           // Bushes/shrubs near trees
           g.fillStyle(0x1a3a2a, 0.18)
@@ -989,22 +989,22 @@ export class OfficeTerrain {
 
         } else if (zType === 'parking') {
           // Parking lot with spot markings
-          const pw = 140, ph = 80
-          g.fillStyle(0x1a1e28, 0.7)
+          const pw = 150, ph = 90
+          g.fillStyle(0x222a38, 0.85)
           g.fillRect(cx - pw / 2, cy - ph / 2, pw, ph)
-          g.lineStyle(1.5, 0x3a4a5a, 0.5)
+          g.lineStyle(2, 0x4a5a6a, 0.6)
           g.strokeRect(cx - pw / 2, cy - ph / 2, pw, ph)
           // Spot markings
           const spotW = 16, spotH = 7
           const spotsPerRow = Math.floor((pw - 30) / 20)
           for (let r = 0; r < 2; r++) {
             for (let c = 0; c < spotsPerRow; c++) {
-              g.lineStyle(0.7, 0x4a5a6a, 0.35)
+              g.lineStyle(0.8, 0x5a6a7a, 0.45)
               g.strokeRect(cx - pw / 2 + 15 + c * 20, cy - ph / 2 + 18 + r * 28, spotW, spotH)
             }
           }
           // Vehicle silhouettes parked in spots
-          const vehicleColors = [0x1a2030, 0x222a38, 0x1e2530]
+          const vehicleColors = [0x303a4a, 0x3a4050, 0x2a3542]
           const vehicleSpots = [
             { r: 0, c: 1 },
             { r: 0, c: 4 },
@@ -1014,7 +1014,7 @@ export class OfficeTerrain {
             const vs = vehicleSpots[vi]
             const vx = cx - pw / 2 + 15 + vs.c * 20 + (spotW - 14) / 2
             const vy = cy - ph / 2 + 18 + vs.r * 28 + (spotH - 6) / 2
-            g.fillStyle(vehicleColors[vi], 0.4)
+            g.fillStyle(vehicleColors[vi], 0.6)
             g.fillRoundedRect(vx, vy, 14, 6, 1)
           }
           // Dashed yellow center lane divider between the two rows
