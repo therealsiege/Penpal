@@ -296,10 +296,20 @@ export class OfficeWorkstations {
     if (ws.container.alpha < 0.9) ws.container.setAlpha(1)
     if (ws.container.scaleX < 0.9) ws.container.setScale(1)
 
+    const podLines = this.host.getPodLines()
+    const agentId = agent.config.id
+    const solverPod = podLines.find(t => t.solverAgentId === agentId)
+    const solverBestOfNActive =
+      solverPod?.status === 'solving' &&
+      (solverPod.candidates ?? 0) > 1 &&
+      !agent.needsInteraction &&
+      (agent.sessionMode === 'working' || agent.sessionMode === 'plan')
+    const solverCandidateSelected = solverBestOfNActive && solverPod?.candidateSelected === true
+
     // Skip redundant updates — fingerprint the fields that affect visuals
     const blurbSnippet = agent.lastAssistantBlurb?.slice(0, 20) ?? ''
     const ctxRound = agent.contextUtilization != null ? (agent.contextUtilization * 100 | 0) : ''
-    const fp = `${agent.status}|${agent.sessionMode}|${agent.needsInteraction}|${agent.interactionType}|${agent.config.name}|${blurbSnippet}|${agent.uptime ?? ''}|${ctxRound}|${agent.contextRotDetected ?? ''}`
+    const fp = `${agent.status}|${agent.sessionMode}|${agent.needsInteraction}|${agent.interactionType}|${agent.config.name}|${blurbSnippet}|${agent.uptime ?? ''}|${ctxRound}|${agent.contextRotDetected ?? ''}|${solverBestOfNActive ? 'thinking' : 'idle'}|${solverCandidateSelected ? 'selected' : 'pending'}|${solverPod?.workflowId ?? ''}`
     if (ws.lastStateFingerprint === fp) {
       ws.state = agent
       return

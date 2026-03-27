@@ -3,6 +3,7 @@ import { toolRegistry } from './tools'
 
 // Side-effect: registers meta tools
 import './tools/meta'
+import './tools/graph'
 
 describe('MCP Tool Registry', () => {
   it('has meta tools registered', () => {
@@ -10,7 +11,33 @@ describe('MCP Tool Registry', () => {
     const names = tools.map((t) => t.name)
     expect(names).toContain('meta:list-tools')
     expect(names).toContain('meta:describe-tool')
+    expect(names).toContain('graph:search-leads')
+    expect(names).toContain('graph:lead-detail')
+    expect(names).toContain('graph:stats')
     expect(tools.length).toBeGreaterThanOrEqual(2)
+  })
+
+  it('graph tools expose issue-9 schemas', () => {
+    const tools = toolRegistry.list()
+    const search = tools.find(t => t.name === 'graph:search-leads')
+    const detail = tools.find(t => t.name === 'graph:lead-detail')
+    const stats = tools.find(t => t.name === 'graph:stats')
+
+    expect(search?.inputSchema).toMatchObject({
+      type: 'object',
+      required: ['query'],
+      properties: { query: { type: 'string' } },
+    })
+    expect((search?.inputSchema as { properties?: Record<string, unknown> })?.properties).toHaveProperty('filters')
+    expect(detail?.inputSchema).toMatchObject({
+      type: 'object',
+      required: ['leadId'],
+      properties: { leadId: { type: 'string' } },
+    })
+    expect(stats?.inputSchema).toMatchObject({
+      type: 'object',
+      properties: {},
+    })
   })
 
   it('meta:list-tools returns tool catalog', async () => {
