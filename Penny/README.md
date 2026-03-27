@@ -316,6 +316,9 @@ Penny exposes an MCP (Model Context Protocol) server so Claude sessions can prog
 
 - **`meta:list-tools`** — Returns all registered tools with names, descriptions, and input schemas
 - **`meta:describe-tool`** — Returns the full schema for a specific tool by name
+- **`office:agents`** — Agent roster with normalized busy/idle/blocked breakdown, XP, and rank (from `analytics/data/game-state.json`)
+- **`office:rooms`** — Room layout with per-room occupancy and inferred capacity metadata
+- **`office:leaderboard`** — Rankings by `period`: `season` \| `weekly` \| `alltime`, plus weekly MVP and rivalries when present
 
 ### Start the Server
 
@@ -344,7 +347,6 @@ Add this to your `.mcp.json`:
 
 - **orchestrator** — task queue, dispatch, agent health
 - **pods** — solver/reviewer/executor workflows
-- **office** — game state, workstations, cosmetics
 - **vault** — file operations, search, graph queries
 - **graph** — Memgraph/Qdrant knowledge graph queries
 
