@@ -548,7 +548,7 @@ export class WorkstationFactory {
     const questIcon = this.scene.add.sprite(0, WS_SPRITE_Y - 36, questSheet, ICON_FRAMES.STAR_GREY)
       .setScale(questScale).setOrigin(0.5).setAlpha(0).setVisible(false)
     wsContainer.add(questIcon)
-    lodLevel2Objects.push(questIcon)
+    // NOT in lodLevel2Objects — quest system manages its own visibility
 
     // MVP medal — gold medal shown for weekly MVP agent
     // Prefer HD medals sheet > HD icons > standard icons
@@ -563,32 +563,32 @@ export class WorkstationFactory {
         .setScale(mvpScale).setOrigin(0.5).setAlpha(0).setVisible(false)
     }
     wsContainer.add(mvpMedal)
-    lodLevel2Objects.push(mvpMedal)
+    // NOT in lodLevel2Objects — MVP logic manages its own visibility
 
     // Rivalry indicator — red star shown when agent has an active leaderboard rival
     const rivalryIndicator = this.scene.add.sprite(20, WS_SPRITE_Y - 36, SPRITESHEET_KEYS.GAME_ICONS, ICON_FRAMES.STAR_RED)
       .setScale(0.32).setOrigin(0.5).setAlpha(0).setVisible(false)
     wsContainer.add(rivalryIndicator)
-    lodLevel2Objects.push(rivalryIndicator)
+    // NOT in lodLevel2Objects — rivalry logic manages its own visibility
 
     // OpenClaw/NemoClaw supervision shield badge — top-left of workstation
     // Cyan = OpenClaw supervised, Green = NemoClaw sandboxed
     const openclawBadge = this.scene.add.sprite(-20, WS_SPRITE_Y - 30, SPRITESHEET_KEYS.GAME_ICONS, ICON_FRAMES.MEDAL_GOLD_BLUE)
       .setScale(0.28).setOrigin(0.5).setAlpha(0).setVisible(false)
     wsContainer.add(openclawBadge)
-    lodLevel2Objects.push(openclawBadge)
+    // NOT in lodLevel2Objects — openclaw logic manages its own visibility
 
     // Orchestrator headless task badge — top-right of workstation
     const orchTaskBadge = this.scene.add.sprite(20, WS_SPRITE_Y - 30, SPRITESHEET_KEYS.GAME_ICONS, ICON_FRAMES.STAR_YELLOW)
       .setScale(0.24).setOrigin(0.5).setAlpha(0).setVisible(false)
     wsContainer.add(orchTaskBadge)
-    lodLevel2Objects.push(orchTaskBadge)
+    // NOT in lodLevel2Objects — orchestrator logic manages its own visibility
 
     // Parse error warning badge — shown when JSONL has errors
     const errorBadge = this.scene.add.sprite(-14, WS_SPRITE_Y - 22, SPRITESHEET_KEYS.GAME_ICONS, ICON_FRAMES.CIRCLE_RED)
       .setScale(0.18).setOrigin(0.5).setAlpha(0).setVisible(false)
     wsContainer.add(errorBadge)
-    lodLevel2Objects.push(errorBadge)
+    // NOT in lodLevel2Objects — error logic manages its own visibility
 
     const dotColor  = this.host.getStatusColor(agent)
     const dotFrame  = STATUS_DOT_FRAMES[dotColor] ?? ICON_FRAMES.CIRCLE_GREY

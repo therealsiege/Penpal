@@ -1,5 +1,5 @@
 {
-  "timestamp": 1774635332203,
+  "timestamp": 1774716894787,
   "weekStart": 1774242000000,
   "agents": [
     {
@@ -9,16 +9,16 @@
       "status": "idle",
       "room": "sidekick",
       "roomPath": "/Users/fuzeelogik/sidekick",
-      "currentTask": "[sidekick#20] Add quality streak flame effect on workstations",
-      "xp": 900,
+      "currentTask": null,
+      "xp": 1200,
       "level": 2,
       "rankTitle": "Junior",
-      "credits": 200,
-      "tasksCompleted": 10,
+      "credits": 350,
+      "tasksCompleted": 13,
       "tasksFailed": 7,
-      "currentStreak": 3,
+      "currentStreak": 6,
       "sessionMode": "waiting",
-      "uptime": "3h 44m"
+      "uptime": "1d 0h"
     },
     {
       "id": "nextjs-frontend",
@@ -81,7 +81,7 @@
       "status": "sleeping",
       "room": "unassigned",
       "roomPath": "",
-      "currentTask": "[sidekick#11] Context-engineer the 10 most-called IPC handlers",
+      "currentTask": null,
       "xp": 550,
       "level": 2,
       "rankTitle": "Junior",
@@ -99,7 +99,7 @@
       "status": "sleeping",
       "room": "unassigned",
       "roomPath": "",
-      "currentTask": "[sidekick#9] Add MCP tools: graph (search-leads, lead-detail, stats)",
+      "currentTask": null,
       "xp": 525,
       "level": 2,
       "rankTitle": "Junior",
@@ -153,16 +153,16 @@
       "status": "idle",
       "room": "sidekick",
       "roomPath": "/Users/fuzeelogik/sidekick",
-      "currentTask": "[sidekick#19] Add thinking animation for best-of-N reasoning",
-      "xp": 675,
+      "currentTask": null,
+      "xp": 975,
       "level": 2,
       "rankTitle": "Junior",
-      "credits": 250,
-      "tasksCompleted": 8,
+      "credits": 400,
+      "tasksCompleted": 11,
       "tasksFailed": 5,
-      "currentStreak": 2,
+      "currentStreak": 5,
       "sessionMode": "waiting",
-      "uptime": "3h 44m"
+      "uptime": "1d 0h"
     },
     {
       "id": "product-marketer",
@@ -189,16 +189,16 @@
       "status": "idle",
       "room": "sidekick",
       "roomPath": "/Users/fuzeelogik/sidekick",
-      "currentTask": "[sidekick#18] Add eval glow effect to workstations based on success rate",
-      "xp": 100,
+      "currentTask": null,
+      "xp": 400,
       "level": 1,
       "rankTitle": "Intern",
-      "credits": 50,
-      "tasksCompleted": 1,
+      "credits": 200,
+      "tasksCompleted": 4,
       "tasksFailed": 5,
-      "currentStreak": 1,
+      "currentStreak": 4,
       "sessionMode": "waiting",
-      "uptime": "3h 44m"
+      "uptime": "1d 0h"
     }
   ],
   "rooms": [
@@ -268,6 +268,18 @@
     "alltime": [
       {
         "rank": 1,
+        "agentId": "fullstack-dev",
+        "agentName": "Marcus Chen",
+        "totalXP": 1200,
+        "seasonXP": 1200,
+        "weeklyXP": 600,
+        "level": 2,
+        "rankTitle": "Junior",
+        "tasksCompleted": 13,
+        "currentStreak": 6
+      },
+      {
+        "rank": 2,
         "agentId": "backend-arch",
         "agentName": "Ravi Patel",
         "totalXP": 1175,
@@ -280,18 +292,18 @@
       },
       {
         "rank": 3,
-        "agentId": "fullstack-dev",
-        "agentName": "Marcus Chen",
-        "totalXP": 900,
-        "seasonXP": 900,
-        "weeklyXP": 300,
+        "agentId": "product-mgr",
+        "agentName": "Jordan Miles",
+        "totalXP": 975,
+        "seasonXP": 975,
+        "weeklyXP": 500,
         "level": 2,
         "rankTitle": "Junior",
-        "tasksCompleted": 10,
-        "currentStreak": 3
+        "tasksCompleted": 11,
+        "currentStreak": 5
       },
       {
-        "rank": 7,
+        "rank": 9,
         "agentId": "electron-dev",
         "agentName": "Kai Tanaka",
         "totalXP": 875,
@@ -303,7 +315,7 @@
         "currentStreak": 1
       },
       {
-        "rank": 8,
+        "rank": 10,
         "agentId": "nextjs-frontend",
         "agentName": "Lena Park",
         "totalXP": 825,
@@ -315,7 +327,7 @@
         "currentStreak": 1
       },
       {
-        "rank": 2,
+        "rank": 4,
         "agentId": "ui-designer",
         "agentName": "Ava Reyes",
         "totalXP": 800,
@@ -327,7 +339,7 @@
         "currentStreak": 8
       },
       {
-        "rank": 4,
+        "rank": 6,
         "agentId": "videogame-dev",
         "agentName": "Zara Kim",
         "totalXP": 675,
@@ -337,18 +349,6 @@
         "rankTitle": "Junior",
         "tasksCompleted": 7,
         "currentStreak": 3
-      },
-      {
-        "rank": 9,
-        "agentId": "product-mgr",
-        "agentName": "Jordan Miles",
-        "totalXP": 675,
-        "seasonXP": 675,
-        "weeklyXP": 200,
-        "level": 2,
-        "rankTitle": "Junior",
-        "tasksCompleted": 8,
-        "currentStreak": 2
       },
       {
         "rank": 11,
@@ -363,7 +363,7 @@
         "currentStreak": 0
       },
       {
-        "rank": 5,
+        "rank": 7,
         "agentId": "embedded-dev",
         "agentName": "Oleg Volkov",
         "totalXP": 525,
@@ -375,7 +375,7 @@
         "currentStreak": 1
       },
       {
-        "rank": 6,
+        "rank": 8,
         "agentId": "product-marketer",
         "agentName": "Dana Webb",
         "totalXP": 475,
@@ -387,21 +387,33 @@
         "currentStreak": 3
       },
       {
-        "rank": 10,
+        "rank": 5,
         "agentId": "exec-assistant",
         "agentName": "Sam Torres",
-        "totalXP": 100,
-        "seasonXP": 100,
-        "weeklyXP": 100,
+        "totalXP": 400,
+        "seasonXP": 400,
+        "weeklyXP": 400,
         "level": 1,
         "rankTitle": "Intern",
-        "tasksCompleted": 1,
-        "currentStreak": 1
+        "tasksCompleted": 4,
+        "currentStreak": 4
       }
     ],
     "season": [
       {
         "rank": 1,
+        "agentId": "fullstack-dev",
+        "agentName": "Marcus Chen",
+        "totalXP": 1200,
+        "seasonXP": 1200,
+        "weeklyXP": 600,
+        "level": 2,
+        "rankTitle": "Junior",
+        "tasksCompleted": 13,
+        "currentStreak": 6
+      },
+      {
+        "rank": 2,
         "agentId": "backend-arch",
         "agentName": "Ravi Patel",
         "totalXP": 1175,
@@ -414,18 +426,18 @@
       },
       {
         "rank": 3,
-        "agentId": "fullstack-dev",
-        "agentName": "Marcus Chen",
-        "totalXP": 900,
-        "seasonXP": 900,
-        "weeklyXP": 300,
+        "agentId": "product-mgr",
+        "agentName": "Jordan Miles",
+        "totalXP": 975,
+        "seasonXP": 975,
+        "weeklyXP": 500,
         "level": 2,
         "rankTitle": "Junior",
-        "tasksCompleted": 10,
-        "currentStreak": 3
+        "tasksCompleted": 11,
+        "currentStreak": 5
       },
       {
-        "rank": 7,
+        "rank": 9,
         "agentId": "electron-dev",
         "agentName": "Kai Tanaka",
         "totalXP": 875,
@@ -437,7 +449,7 @@
         "currentStreak": 1
       },
       {
-        "rank": 8,
+        "rank": 10,
         "agentId": "nextjs-frontend",
         "agentName": "Lena Park",
         "totalXP": 825,
@@ -449,7 +461,7 @@
         "currentStreak": 1
       },
       {
-        "rank": 2,
+        "rank": 4,
         "agentId": "ui-designer",
         "agentName": "Ava Reyes",
         "totalXP": 800,
@@ -461,7 +473,7 @@
         "currentStreak": 8
       },
       {
-        "rank": 4,
+        "rank": 6,
         "agentId": "videogame-dev",
         "agentName": "Zara Kim",
         "totalXP": 675,
@@ -471,18 +483,6 @@
         "rankTitle": "Junior",
         "tasksCompleted": 7,
         "currentStreak": 3
-      },
-      {
-        "rank": 9,
-        "agentId": "product-mgr",
-        "agentName": "Jordan Miles",
-        "totalXP": 675,
-        "seasonXP": 675,
-        "weeklyXP": 200,
-        "level": 2,
-        "rankTitle": "Junior",
-        "tasksCompleted": 8,
-        "currentStreak": 2
       },
       {
         "rank": 11,
@@ -497,7 +497,7 @@
         "currentStreak": 0
       },
       {
-        "rank": 5,
+        "rank": 7,
         "agentId": "embedded-dev",
         "agentName": "Oleg Volkov",
         "totalXP": 525,
@@ -509,7 +509,7 @@
         "currentStreak": 1
       },
       {
-        "rank": 6,
+        "rank": 8,
         "agentId": "product-marketer",
         "agentName": "Dana Webb",
         "totalXP": 475,
@@ -521,21 +521,33 @@
         "currentStreak": 3
       },
       {
-        "rank": 10,
+        "rank": 5,
         "agentId": "exec-assistant",
         "agentName": "Sam Torres",
-        "totalXP": 100,
-        "seasonXP": 100,
-        "weeklyXP": 100,
+        "totalXP": 400,
+        "seasonXP": 400,
+        "weeklyXP": 400,
         "level": 1,
         "rankTitle": "Intern",
-        "tasksCompleted": 1,
-        "currentStreak": 1
+        "tasksCompleted": 4,
+        "currentStreak": 4
       }
     ],
     "weekly": [
       {
         "rank": 1,
+        "agentId": "fullstack-dev",
+        "agentName": "Marcus Chen",
+        "totalXP": 1200,
+        "seasonXP": 1200,
+        "weeklyXP": 600,
+        "level": 2,
+        "rankTitle": "Junior",
+        "tasksCompleted": 13,
+        "currentStreak": 6
+      },
+      {
+        "rank": 2,
         "agentId": "backend-arch",
         "agentName": "Ravi Patel",
         "totalXP": 1175,
@@ -547,7 +559,19 @@
         "currentStreak": 3
       },
       {
-        "rank": 2,
+        "rank": 3,
+        "agentId": "product-mgr",
+        "agentName": "Jordan Miles",
+        "totalXP": 975,
+        "seasonXP": 975,
+        "weeklyXP": 500,
+        "level": 2,
+        "rankTitle": "Junior",
+        "tasksCompleted": 11,
+        "currentStreak": 5
+      },
+      {
+        "rank": 4,
         "agentId": "ui-designer",
         "agentName": "Ava Reyes",
         "totalXP": 800,
@@ -559,19 +583,19 @@
         "currentStreak": 8
       },
       {
-        "rank": 3,
-        "agentId": "fullstack-dev",
-        "agentName": "Marcus Chen",
-        "totalXP": 900,
-        "seasonXP": 900,
-        "weeklyXP": 300,
-        "level": 2,
-        "rankTitle": "Junior",
-        "tasksCompleted": 10,
-        "currentStreak": 3
+        "rank": 5,
+        "agentId": "exec-assistant",
+        "agentName": "Sam Torres",
+        "totalXP": 400,
+        "seasonXP": 400,
+        "weeklyXP": 400,
+        "level": 1,
+        "rankTitle": "Intern",
+        "tasksCompleted": 4,
+        "currentStreak": 4
       },
       {
-        "rank": 4,
+        "rank": 6,
         "agentId": "videogame-dev",
         "agentName": "Zara Kim",
         "totalXP": 675,
@@ -583,7 +607,7 @@
         "currentStreak": 3
       },
       {
-        "rank": 5,
+        "rank": 7,
         "agentId": "embedded-dev",
         "agentName": "Oleg Volkov",
         "totalXP": 525,
@@ -595,7 +619,7 @@
         "currentStreak": 1
       },
       {
-        "rank": 6,
+        "rank": 8,
         "agentId": "product-marketer",
         "agentName": "Dana Webb",
         "totalXP": 475,
@@ -607,7 +631,7 @@
         "currentStreak": 3
       },
       {
-        "rank": 7,
+        "rank": 9,
         "agentId": "electron-dev",
         "agentName": "Kai Tanaka",
         "totalXP": 875,
@@ -619,7 +643,7 @@
         "currentStreak": 1
       },
       {
-        "rank": 8,
+        "rank": 10,
         "agentId": "nextjs-frontend",
         "agentName": "Lena Park",
         "totalXP": 825,
@@ -628,30 +652,6 @@
         "level": 2,
         "rankTitle": "Junior",
         "tasksCompleted": 9,
-        "currentStreak": 1
-      },
-      {
-        "rank": 9,
-        "agentId": "product-mgr",
-        "agentName": "Jordan Miles",
-        "totalXP": 675,
-        "seasonXP": 675,
-        "weeklyXP": 200,
-        "level": 2,
-        "rankTitle": "Junior",
-        "tasksCompleted": 8,
-        "currentStreak": 2
-      },
-      {
-        "rank": 10,
-        "agentId": "exec-assistant",
-        "agentName": "Sam Torres",
-        "totalXP": 100,
-        "seasonXP": 100,
-        "weeklyXP": 100,
-        "level": 1,
-        "rankTitle": "Intern",
-        "tasksCompleted": 1,
         "currentStreak": 1
       },
       {
@@ -668,28 +668,22 @@
       }
     ],
     "weeklyMVP": {
-      "agentId": "backend-arch",
-      "agentName": "Ravi Patel",
-      "weekXP": 500
+      "agentId": "fullstack-dev",
+      "agentName": "Marcus Chen",
+      "weekXP": 600
     },
     "rivalries": [
       {
         "agent1": "Marcus Chen",
-        "agent2": "Kai Tanaka",
+        "agent2": "Ravi Patel",
         "xpDiff": 25,
-        "percentDiff": 3
+        "percentDiff": 2
       },
       {
         "agent1": "Lena Park",
         "agent2": "Ava Reyes",
         "xpDiff": 25,
         "percentDiff": 3
-      },
-      {
-        "agent1": "Zara Kim",
-        "agent2": "Jordan Miles",
-        "xpDiff": 0,
-        "percentDiff": 0
       },
       {
         "agent1": "Sofia Ruiz",
@@ -701,9 +695,9 @@
   },
   "orchestrator": {
     "queueDepth": 0,
-    "activeTasks": 9,
-    "completedToday": 50,
-    "failedToday": 6,
-    "totalProcessed": 79
+    "activeTasks": 0,
+    "completedToday": 0,
+    "failedToday": 0,
+    "totalProcessed": 90
   }
 }
