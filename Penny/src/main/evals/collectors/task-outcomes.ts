@@ -59,6 +59,7 @@ export class TaskOutcomeCollector {
       const computedDurationMs = Math.max(0, completedAtMs - startedAtMs)
       const duration_ms = Math.max(0, data.durationMs ?? computedDurationMs)
 
+      const taskType = task?.requiredSkills?.[0]
       const outcome: TaskOutcome = {
         taskId: data.taskId,
         agentId: data.agentId,
@@ -68,6 +69,7 @@ export class TaskOutcomeCollector {
         completedAt: new Date(completedAtMs).toISOString(),
         retryCount: task?.retryCount ?? 0,
         duration_ms,
+        ...(taskType ? { taskType } : {}),
       }
 
       this.deps.harness.record(outcome).catch(err =>
@@ -84,6 +86,7 @@ export class TaskOutcomeCollector {
       const computedDurationMs = Math.max(0, completedAtMs - startedAtMs)
       const duration_ms = Math.max(0, data.durationMs ?? computedDurationMs)
 
+      const taskType = task?.requiredSkills?.[0]
       const outcome: TaskOutcome = {
         taskId: data.taskId,
         agentId: data.agentId,
@@ -93,6 +96,7 @@ export class TaskOutcomeCollector {
         completedAt: new Date(completedAtMs).toISOString(),
         retryCount: task?.retryCount ?? 0,
         duration_ms,
+        ...(taskType ? { taskType } : {}),
       }
 
       this.deps.harness.record(outcome).catch(err =>

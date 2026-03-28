@@ -19,6 +19,8 @@ export interface TaskOutcome {
   completedAt: string
   retryCount: number
   duration_ms: number
+  /** Primary skill from the task, when available (e.g. first entry in requiredSkills). */
+  taskType?: string
 }
 
 export interface AgentEvalReport {
