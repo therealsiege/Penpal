@@ -1182,6 +1182,10 @@ export class WorkstationAnimator {
       : (agent.lastAssistantBlurb ?? '').trim()
     if (!blurb) return
 
+    // Avoid duplicate repeat timers if this path runs again before mode teardown
+    if (ws.speechBubbleTween) { ws.speechBubbleTween.destroy(); ws.speechBubbleTween = undefined }
+    if (ws.speechBubbleTimer) { ws.speechBubbleTimer.destroy(); ws.speechBubbleTimer = undefined }
+
     const BUBBLE_Y = WS_SPRITE_Y - 40
     const MAX_CHARS = 40
     const PAD_X = 6
@@ -1224,13 +1228,22 @@ export class WorkstationAnimator {
       g.strokeRoundedRect(-bw / 2, -bh / 2, bw, bh, 3)
     }
 
+    const sceneAlive = () => {
+      try {
+        return this.scene.scene.isActive() === true
+      } catch {
+        return false
+      }
+    }
+
     // Helper to run the typewriter + fade cycle for a given string
     const typewriterCycle = (text: string) => {
       const bubble = ws.speechBubble!
       const txt = ws.speechBubbleText!
+      if (!txt.active || !bubble.active || !sceneAlive()) return
 
-      // Reset
-      txt.setText('')
+      // Reset — avoid setText('') alone on some Phaser builds (frame/texture edge cases)
+      txt.setText('\u200b')
       drawBg()
       bubble.setVisible(true)
       bubble.y = BUBBLE_Y
@@ -1247,15 +1260,18 @@ export class WorkstationAnimator {
         duration: Math.min(600, text.length * 20),
         ease: 'Linear',
         onUpdate: () => {
-          txt.setText(text.slice(0, Math.floor(counter.val)))
+          if (!txt.active || !bubble.active || !sceneAlive()) return
+          const slice = text.slice(0, Math.floor(counter.val))
+          txt.setText(slice.length === 0 ? '\u200b' : slice)
           drawBg()
         },
         onComplete: () => {
+          if (!txt.active || !bubble.active || !sceneAlive()) return
           txt.setText(text)
           drawBg()
           // Hold for 4 seconds then fade out
           this.scene.time.delayedCall(4000, () => {
-            if (!bubble.active) return
+            if (!bubble.active || !sceneAlive()) return
             this.scene.tweens.add({
               targets: bubble, alpha: 0,
               duration: 300, ease: 'Sine.easeOut',
@@ -1274,7 +1290,9 @@ export class WorkstationAnimator {
       delay: 8000 + Math.random() * 4000,
       loop: true,
       callback: () => {
+        if (!sceneAlive()) return
         if (ws.lastAnimMode !== 'working') return
+        if (!ws.speechBubbleText?.active || !ws.speechBubble?.active) return
         const currentBlurb = ws.state?.isOrchestratorTask
           ? (ws.state.taskTitle ? `[Task] ${ws.state.taskTitle}` : '').trim()
           : (ws.state?.lastAssistantBlurb ?? '').trim()

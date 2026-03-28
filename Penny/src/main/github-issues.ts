@@ -1,7 +1,7 @@
 /**
  * GitHub Issue Poller — watches for `agent-ready` labeled issues,
- * enqueues them into Penny's orchestrator (which spools up local claude-code
- * sessions), and tracks progress through the pipeline.
+ * enqueues them into Penny's orchestrator (headless agent via PENNY_TASK_RUNNER),
+ * and tracks progress through the pipeline.
  *
  * Label lifecycle (Penny owns this, GA workflows are disabled):
  *   agent-ready  →  agent-working  →  pr-ready | agent-failed
@@ -57,6 +57,8 @@ interface TrackedIssue {
   updatedAt: number
   labelSynced: boolean // true once final label (pr-ready/agent-failed) has been applied
   branch?: string     // git branch created for this issue
+  /** When set, agent cwd + push/PR use this path (`git worktree add` checkout) */
+  worktreePath?: string
 }
 
 let trackedIssues: TrackedIssue[] = []
@@ -134,6 +136,49 @@ function ensureLabels(owner: string, repo: string): void {
 
 // ── Git branch helpers ────────────────────────────────────────────────────
 
+/**
+ * Isolated checkout via `git worktree add` so concurrent issues do not share one working tree.
+ * Set `PENNY_GITHUB_USE_WORKTREE=1` to enable.
+ */
+function createIssueWorktree(
+  mainRepoPath: string,
+  issueNumber: number,
+  slug: string,
+): { branch: string; worktreePath: string } | null {
+  const branch = `issue-${issueNumber}-${slug}`
+  const safeSlug = slug.replace(/[^a-z0-9-]/gi, '-').slice(0, 40).replace(/-$/, '') || 'issue'
+  const worktreesRoot = path.join(mainRepoPath, '.penny-worktrees')
+  const worktreePath = path.join(worktreesRoot, `${issueNumber}-${safeSlug}`)
+
+  try {
+    fs.mkdirSync(worktreesRoot, { recursive: true })
+    execSync('git fetch origin main 2>/dev/null || git fetch origin master 2>/dev/null || true', {
+      cwd: mainRepoPath, encoding: 'utf-8', timeout: 30_000, stdio: 'pipe',
+    })
+    let baseBranch = 'main'
+    try {
+      baseBranch = execSync('git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null || echo refs/remotes/origin/main', {
+        cwd: mainRepoPath, encoding: 'utf-8', timeout: 10_000, stdio: 'pipe',
+      }).trim().replace('refs/remotes/origin/', '')
+    } catch { /* */ }
+
+    if (fs.existsSync(path.join(worktreePath, '.git'))) {
+      execSync(`git worktree remove "${worktreePath}" --force`, {
+        cwd: mainRepoPath, encoding: 'utf-8', timeout: 30_000, stdio: 'pipe',
+      })
+    }
+
+    execSync(`git worktree add "${worktreePath}" -b "${branch}" "origin/${baseBranch}"`, {
+      cwd: mainRepoPath, encoding: 'utf-8', timeout: 60_000, stdio: 'pipe',
+    })
+    console.log(`[github-issues] Worktree ${worktreePath} branch ${branch}`)
+    return { branch, worktreePath }
+  } catch (err) {
+    console.error(`[github-issues] Failed to create worktree at ${worktreePath}:`, err)
+    return null
+  }
+}
+
 function createIssueBranch(localPath: string, issueNumber: number, slug: string): string | null {
   const branch = `issue-${issueNumber}-${slug}`
   try {
@@ -210,6 +255,22 @@ function cleanupBranch(localPath: string): void {
       cwd: localPath, encoding: 'utf-8', timeout: 15_000, stdio: 'pipe',
     })
   } catch { /* best effort */ }
+}
+
+/** After PR push or failure: remove worktree or checkout main on primary clone */
+function cleanupAfterGithubTask(config: RepoConfig, tracked: TrackedIssue): void {
+  if (tracked.worktreePath) {
+    try {
+      execSync(`git worktree remove "${tracked.worktreePath}" --force`, {
+        cwd: config.localPath, encoding: 'utf-8', timeout: 30_000, stdio: 'pipe',
+      })
+      console.log(`[github-issues] Removed worktree ${tracked.worktreePath}`)
+    } catch (err) {
+      console.error(`[github-issues] worktree remove failed for ${tracked.worktreePath}:`, err)
+    }
+    return
+  }
+  cleanupBranch(config.localPath)
 }
 
 // ── GitHub CLI helpers ──────────────────────────────────────────────────────
@@ -319,11 +380,27 @@ async function pollOnce(): Promise<number> {
         console.log(`[github-issues] Re-queuing #${issue.number} (previous: ${existing.stage})`)
       }
 
-      // Create isolated branch for this issue
       const slug = issue.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 40).replace(/-$/, '')
-      const branch = config.localPath
-        ? createIssueBranch(config.localPath, issue.number, slug)
-        : null
+
+      const useWt = process.env.PENNY_GITHUB_USE_WORKTREE === '1' || process.env.PENNY_GITHUB_USE_WORKTREE === 'true'
+      let branch: string | null = null
+      let worktreePath: string | undefined
+      let agentCwd = config.localPath
+
+      if (config.localPath) {
+        if (useWt) {
+          const wt = createIssueWorktree(config.localPath, issue.number, slug)
+          if (wt) {
+            branch = wt.branch
+            worktreePath = wt.worktreePath
+            agentCwd = wt.worktreePath
+          }
+        }
+        if (!branch) {
+          branch = createIssueBranch(config.localPath, issue.number, slug)
+          agentCwd = config.localPath
+        }
+      }
 
       // Build task description with branch context
       const branchNote = branch
@@ -341,7 +418,7 @@ async function pollOnce(): Promise<number> {
       const task = enqueueTask({
         title: `[${config.repo}#${issue.number}] ${issue.title}`,
         description,
-        project: config.localPath,
+        project: agentCwd,
         priority: derivePriority(issue),
         requiredSkills: deriveSkills(issue),
         source: 'github',
@@ -358,6 +435,7 @@ async function pollOnce(): Promise<number> {
         updatedAt: Date.now(),
         labelSynced: false,
         branch: branch ?? undefined,
+        worktreePath,
       })
       saveTracked()
 
@@ -366,8 +444,9 @@ async function pollOnce(): Promise<number> {
 
       // Comment on the issue
       const branchMsg = branch ? `\nBranch: \`${branch}\`` : ''
+      const wtMsg = worktreePath ? `\nWorktree: \`${worktreePath}\`` : ''
       addComment(config, issue.number,
-        `🤖 **Picked up by Penny orchestrator**\n\nTask ID: \`${task.id}\`\nPriority: ${task.priority}\nSkills: ${task.requiredSkills.join(', ')}${branchMsg}\n\nA local claude-code session will be spooled up to work on this.`,
+        `🤖 **Picked up by Penny orchestrator**\n\nTask ID: \`${task.id}\`\nPriority: ${task.priority}\nSkills: ${task.requiredSkills.join(', ')}${branchMsg}${wtMsg}\n\nHeadless agent (Cursor / OpenCode / Claude Code per \`PENNY_TASK_RUNNER\`) runs in that directory.`,
       )
 
       enqueued++
@@ -409,14 +488,15 @@ function syncTaskStatuses(): void {
 
       // Sync terminal labels back to GitHub
       if (newStage === 'done') {
-        // Push branch and create PR if we have a branch
+        // Push branch and create PR if we have a branch (cwd = worktree or main clone)
         let prCreated = false
-        if (tracked.branch && config.localPath) {
+        const gitCwd = tracked.worktreePath ?? config.localPath
+        if (tracked.branch && gitCwd) {
           prCreated = pushBranchAndCreatePR(
-            config, config.localPath, tracked.branch, tracked.number,
+            config, gitCwd, tracked.branch, tracked.number,
             `[${config.repo}#${tracked.number}] ${tracked.title}`,
           )
-          cleanupBranch(config.localPath)
+          cleanupAfterGithubTask(config, tracked)
         }
 
         const doneLabel = prCreated ? 'pr-ready' : 'agent-done'
@@ -427,8 +507,7 @@ function syncTaskStatuses(): void {
         )
         tracked.labelSynced = true
       } else if (newStage === 'failed') {
-        // Cleanup branch on failure
-        if (config.localPath) cleanupBranch(config.localPath)
+        if (config.localPath) cleanupAfterGithubTask(config, tracked)
 
         setLabel(config, tracked.number, ['agent-working'], 'agent-failed')
         addComment(config, tracked.number,
