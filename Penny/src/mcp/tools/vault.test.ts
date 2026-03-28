@@ -13,6 +13,7 @@ describe('mcp vault tools', () => {
     vi.resetModules()
     home = fs.mkdtempSync(path.join(os.tmpdir(), 'penny-vault-'))
     vi.stubEnv('HOME', home)
+    vi.stubEnv('VAULT_PATH', path.join(home, 'sidekick'))
     const v = await import('./vault')
     handleVaultRead = v.handleVaultRead
     handleVaultSearch = v.handleVaultSearch
@@ -32,7 +33,7 @@ describe('mcp vault tools', () => {
 
     const result = await handleVaultRead({ path: 'Folder/note.md' })
     expect(result.data?.content).toContain('hello body')
-    expect(typeof result.data?.size).toBe('number')
+    expect(typeof result.data?.mtime).toBe('number')
     expect(result.summary).toMatch(/read/i)
   })
 
@@ -43,7 +44,7 @@ describe('mcp vault tools', () => {
 
     const result = await handleVaultSearch({ query: 'firmware', limit: 5 })
     expect(result.data.length).toBe(1)
-    expect(result.data[0].text.toLowerCase()).toContain('firmware')
+    expect(result.data[0].snippet.toLowerCase()).toContain('firmware')
     expect(result.data[0].path).toMatch(/a\.md$/)
   })
 
@@ -51,6 +52,7 @@ describe('mcp vault tools', () => {
     const result = await handleVaultWrite({
       path: 'Folder/new.md',
       content: '# New',
+      createIfMissing: true,
     })
     expect(result.data.success).toBe(true)
     expect(result.data.path).toBe('Folder/new.md')

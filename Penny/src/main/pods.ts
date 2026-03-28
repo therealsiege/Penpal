@@ -184,7 +184,9 @@ function savePods(): void {
 function loadPods(): void {
   try {
     if (!fs.existsSync(PERSIST_PATH)) return
-    const data = JSON.parse(fs.readFileSync(PERSIST_PATH, 'utf-8')) as PodWorkflow[]
+    const raw = fs.readFileSync(PERSIST_PATH, 'utf-8').trim()
+    if (!raw) return
+    const data = JSON.parse(raw) as PodWorkflow[]
     for (const wf of data) {
       if (wf.phaseConfig == null) {
         wf.phaseConfig = getPhaseConfig(wf.priority)

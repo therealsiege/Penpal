@@ -78,7 +78,7 @@ describe('orchestrator:enqueue', () => {
     expect(result.summary).toContain('high')
     expect(result.suggestions.length).toBeGreaterThan(0)
     expect(result.related_tools).toContain('orchestrator:queue')
-    expect(result.related_tools).toContain('pod:create')
+    expect(result.related_tools).toContain('pods:create')
     expect(result._meta.suggestions).toEqual(result.suggestions)
     expect(result._meta.related_tools).toEqual(result.related_tools)
   })
@@ -111,7 +111,7 @@ describe('orchestrator:enqueue', () => {
     expect(result._meta.related_tools).toContain('orchestrator:queue')
   })
 
-  it('suggests pod:create when idle agents are available', async () => {
+  it('suggests pods:create when idle agents are available', async () => {
     mockGetTaskQueue.mockReturnValue([])
     mockGetAgentHealthStatuses.mockResolvedValue([
       { agentId: 'marcus', name: 'Marcus Chen', alive: true, activeTasks: 0, status: 'healthy', warnings: [] },
@@ -123,7 +123,7 @@ describe('orchestrator:enqueue', () => {
       priority: 'critical',
     })
 
-    const hasPodSuggestion = result.suggestions.some(s => s.includes('pod:create'))
+    const hasPodSuggestion = result.suggestions.some(s => s.includes('pods:create'))
     expect(hasPodSuggestion).toBe(true)
   })
 })
@@ -181,7 +181,7 @@ describe('orchestrator:queue', () => {
     expect(result._meta.suggestions).toEqual(result.suggestions)
   })
 
-  it('suggests pod:create when critical tasks + idle agents', async () => {
+  it('suggests pods:create when critical tasks + idle agents', async () => {
     const mockTasks: Task[] = [
       { id: 't-1', title: 'Critical bug', description: '', project: '~/sidekick', priority: 'critical', status: 'queued', requiredSkills: [], source: 'api', createdAt: Date.now(), retryCount: 0, maxRetries: 1 },
     ] as Task[]
@@ -193,9 +193,9 @@ describe('orchestrator:queue', () => {
 
     const result = await handleQueue({})
 
-    const hasCriticalSuggestion = result.suggestions.some(s => s.includes('critical') && s.includes('pod:create'))
+    const hasCriticalSuggestion = result.suggestions.some(s => s.includes('critical') && s.includes('pods:create'))
     expect(hasCriticalSuggestion).toBe(true)
-    expect(result._meta.related_tools).toContain('pod:create')
+    expect(result._meta.related_tools).toContain('pods:create')
   })
 })
 
@@ -257,7 +257,7 @@ describe('orchestrator:agent-health', () => {
 
     const hasAssignSuggestion = result.suggestions.some(s => s.includes('idle') && s.includes('queued'))
     expect(hasAssignSuggestion).toBe(true)
-    expect(result._meta.related_tools).toContain('pod:create')
+    expect(result._meta.related_tools).toContain('pods:create')
   })
 
   it('returns benign suggestion when all healthy and no tasks', async () => {
