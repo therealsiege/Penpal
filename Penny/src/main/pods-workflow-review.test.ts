@@ -65,6 +65,7 @@ describe('runWorkflow reviewer routing (mocked agents)', () => {
     })
 
     const wf = createPod('task', { maxIterations: 2, cwd: process.cwd() })
+    let critiqueFileAbs: string | null = null
     try {
       const done = await waitForTerminal(wf.id)
       expect(done?.status).toBe('complete')
@@ -74,12 +75,15 @@ describe('runWorkflow reviewer routing (mocked agents)', () => {
       expect(executorPrompt).toContain('nitpick')
       expect(executorPrompt).toContain('Ship with minor notes.')
 
-      const critiqueFile = critiqueArtifactPath(wf.id)
-      expect(fs.existsSync(critiqueFile)).toBe(true)
-      const parsed = JSON.parse(fs.readFileSync(critiqueFile, 'utf-8')) as { verdict: string }
+      const reviewArtifact = done!.artifacts.find((a) => a.stage === 'review')
+      expect(reviewArtifact).toBeDefined()
+      critiqueFileAbs = path.resolve(process.cwd(), reviewArtifact!.path)
+      expect(fs.existsSync(critiqueFileAbs)).toBe(true)
+      const parsed = JSON.parse(fs.readFileSync(critiqueFileAbs, 'utf-8')) as { verdict: string }
       expect(parsed.verdict).toBe('approve-with-notes')
     } finally {
-      removeCritiqueArtifact(wf.id)
+      if (critiqueFileAbs && fs.existsSync(critiqueFileAbs)) fs.unlinkSync(critiqueFileAbs)
+      else removeCritiqueArtifact(wf.id)
     }
   })
 

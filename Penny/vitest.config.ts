@@ -20,6 +20,7 @@ export default defineConfig({
           // These suites use node:test (run via tsx --test); Vitest would load them with 0 suites.
           exclude: [
             'src/main/evals/__tests__/context-usage.test.ts',
+            'src/main/evals/__tests__/harness.test.ts',
             'src/main/evals/__tests__/human-judge.test.ts',
             'src/main/evals/__tests__/pod-quality.test.ts',
             'src/main/evals/__tests__/task-outcomes.test.ts',
