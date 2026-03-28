@@ -1028,6 +1028,85 @@ export class OfficeScene extends Phaser.Scene {
       this.background.layoutRooms()
       this.officeCamera.updateCameraBounds()
     }
+
+    // Debug: inspect all large visible objects in workstation containers
+    ;(window as any).__inspectWorkstations = () => {
+      const results: any[] = []
+      for (const [roomKey, room] of this.rooms) {
+        for (const [wsKey, ws] of room.workstations) {
+          const children = ws.container.getAll()
+          children.forEach((gc: any, i: number) => {
+            if (!gc.visible || gc.alpha <= 0) return
+            const w = gc.displayWidth || gc.width || 0
+            const h = gc.displayHeight || gc.height || 0
+            if (w > 15 || h > 15) {
+              results.push({
+                room: roomKey, agent: wsKey, idx: i,
+                type: gc.type, w: Math.round(w), h: Math.round(h),
+                x: Math.round(gc.x), y: Math.round(gc.y),
+                scaleX: gc.scaleX?.toFixed(2), scaleY: gc.scaleY?.toFixed(2),
+                alpha: gc.alpha?.toFixed(2),
+                texture: gc.texture?.key || '',
+                frame: gc.frame?.name ?? '',
+                fillColor: gc.fillColor !== undefined ? '0x' + gc.fillColor.toString(16) : '',
+                depth: gc.depth,
+                name: gc.name || '',
+              })
+            }
+          })
+        }
+      }
+      console.table(results)
+      return results
+    }
+
+    // Debug: hide a specific child by index across all workstations
+    ;(window as any).__hideWsChild = (idx: number) => {
+      let count = 0
+      for (const room of this.rooms.values()) {
+        for (const ws of room.workstations.values()) {
+          const child = ws.container.getAt(idx)
+          if (child) { (child as any).setVisible(false); count++ }
+        }
+      }
+      console.log(`Hidden child at index ${idx} across ${count} workstations`)
+    }
+
+    // Debug: show a specific child by index across all workstations
+    ;(window as any).__showWsChild = (idx: number) => {
+      let count = 0
+      for (const room of this.rooms.values()) {
+        for (const ws of room.workstations.values()) {
+          const child = ws.container.getAt(idx)
+          if (child) { (child as any).setVisible(true); count++ }
+        }
+      }
+      console.log(`Shown child at index ${idx} across ${count} workstations`)
+    }
+
+    // Debug: set alpha for a specific child index across all workstations
+    ;(window as any).__setWsChildAlpha = (idx: number, alpha: number) => {
+      let count = 0
+      for (const room of this.rooms.values()) {
+        for (const ws of room.workstations.values()) {
+          const child = ws.container.getAt(idx)
+          if (child) { (child as any).setAlpha(alpha); count++ }
+        }
+      }
+      console.log(`Set alpha ${alpha} on child at index ${idx} across ${count} workstations`)
+    }
+
+    // Debug: set scale for a specific child index across all workstations
+    ;(window as any).__setWsChildScale = (idx: number, scale: number) => {
+      let count = 0
+      for (const room of this.rooms.values()) {
+        for (const ws of room.workstations.values()) {
+          const child = ws.container.getAt(idx)
+          if (child) { (child as any).setScale(scale); count++ }
+        }
+      }
+      console.log(`Set scale ${scale} on child at index ${idx} across ${count} workstations`)
+    }
   }
 
   // ---------------------------------------------------------------------------

@@ -186,17 +186,21 @@ export function pulse(
 ): Phaser.Tweens.Tween {
   const { scale = 1.18, duration = 220, ease = 'Back.easeOut', onComplete } = opts
   const half = duration / 2
+  const origScaleX = (gameObject as { scaleX: number }).scaleX ?? 1
+  const origScaleY = (gameObject as { scaleY: number }).scaleY ?? 1
+  const peakX = origScaleX * scale
+  const peakY = origScaleY * scale
 
   return scene.tweens.add({
     targets: gameObject,
-    scaleX: scale,
-    scaleY: scale,
+    scaleX: peakX,
+    scaleY: peakY,
     duration: half,
     ease,
     yoyo: true,
     onComplete: () => {
-      ;(gameObject as { scaleX: number }).scaleX = 1
-      ;(gameObject as { scaleY: number }).scaleY = 1
+      ;(gameObject as { scaleX: number }).scaleX = origScaleX
+      ;(gameObject as { scaleY: number }).scaleY = origScaleY
       onComplete?.()
     },
   })
