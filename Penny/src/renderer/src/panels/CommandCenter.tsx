@@ -3,7 +3,7 @@ import { usePolling } from '../hooks/usePolling'
 import { AgentAvatar } from '../components/AgentAvatar'
 import { useToast } from '../components/Toast'
 import { Terminal } from '../components/Terminal'
-import type { AgentConfig, AgentState, ContextHealth, HealthResult, HotLead, JobStatus, PodWorkflow, PodPreset, ProjectLeaderboardEntry, OpencodeSession, AgentXP, OpenClawInfo, ConfigSnapshot, McpServerEntry, AgentToolSummary, getRankForXP } from '../types'
+import type { AgentConfig, AgentState, ContextHealth, HealthResult, HotLead, JobStatus, PodWorkflow, PodPreset, ProjectLeaderboardEntry, OpencodeSession, AgentXP, OpenClawInfo, ConfigSnapshot, McpServerEntry, AgentToolSummary, getRankForXP, Task } from '../types'
 import { mergeAgentContextFromHealth } from '../utils/contextHealthMerge'
 import { PodLauncherModal, PodStatusModal, PodListModal } from '../components/PodModal'
 import { createOfficeGame } from '../game/OfficeGame'
@@ -1413,6 +1413,11 @@ export function CommandCenter(props: CommandCenterProps) {
     5000,
   )
 
+  const { data: orchestratorQueueTasks } = usePolling<Task[]>(
+    () => window.api.orchestratorQueue().catch(() => []),
+    5000,
+  )
+
   // --- Embedded terminal ---
   const [terminal, setTerminal] = useState<{ ptyId: string; title: string } | null>(null)
 
@@ -1476,6 +1481,20 @@ export function CommandCenter(props: CommandCenterProps) {
       sceneRef.current.setAgents(agentsForGame, opencodeSessions)
     }
   }, [agentsForGame, opencodeSessions])
+
+  // --- Orchestrator tasks on desks (assigned / active) ---
+  useEffect(() => {
+    if (!sceneRef.current || !orchestratorQueueTasks) return
+    const running = orchestratorQueueTasks
+      .filter(t => (t.status === 'assigned' || t.status === 'active') && t.assignedAgent)
+      .map(t => ({
+        taskId: t.id,
+        agentId: t.assignedAgent!,
+        title: t.title,
+        stage: t.currentStage ?? 'queued',
+      }))
+    sceneRef.current.setOrchestratorTasks(running)
+  }, [orchestratorQueueTasks])
 
   const isCursorState = useCallback(
     (state: AgentState) =>

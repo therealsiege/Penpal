@@ -11,7 +11,7 @@ import { STATUS_DOT_FRAMES, ICON_FRAMES, SPRITESHEET_KEYS, LEGO_SPECIAL_FRAMES }
 import { EventBus, EVENTS } from './events'
 import type { AgentState } from '../types'
 import { XP_RANKS, getXPForLevel } from '../types'
-import type { WorkstationSprite, Room, PodLineInfo } from './office-types'
+import type { WorkstationSprite, Room, PodLineInfo, OrchestratorTaskOfficeInfo } from './office-types'
 import { activeTheme } from './office-theme'
 import { CelebrationManager } from './celebrations'
 import { achievements } from './achievements'
@@ -25,6 +25,7 @@ import {
   WS_NAME_Y,
   WORKSTATION_W,
   WS_DESK_Y,
+  WS_NAME_Y,
   CTX_GREEN,
   CTX_AMBER,
   CTX_RED,
@@ -93,6 +94,8 @@ export interface WorkstationHost {
   propsManager: InteractivePropsManager
   // NavMesh for pathfinding
   getNavMesh(): import('./nav-mesh').NavMesh
+  /** Active orchestrator task for this agent (if any) */
+  getOrchestratorTaskForAgent(agentId: string): OrchestratorTaskOfficeInfo | undefined
 }
 
 // ---------------------------------------------------------------------------
@@ -207,6 +210,48 @@ export class OfficeWorkstations {
     }
 
     this.layoutWorkstations(room)
+  }
+
+  /** Refresh orchestrator task subtitles on all desks (call after queue or agent sync). */
+  syncOrchestratorTaskLabels(): void {
+    for (const room of this.host.getRooms().values()) {
+      for (const ws of room.workstations.values()) {
+        const id = ws.state?.config.id
+        if (!id) continue
+        this.updateOrchestratorTaskLabel(ws, id)
+      }
+    }
+  }
+
+  private updateOrchestratorTaskLabel(ws: WorkstationSprite, agentId: string): void {
+    const task = this.host.getOrchestratorTaskForAgent(agentId)
+    if (!task) {
+      if (ws.orchestratorTaskLabel) ws.orchestratorTaskLabel.setVisible(false)
+      return
+    }
+
+    const line = `[${formatOrchestratorStage(task.stage)}] ${truncateOrchestratorTitle(task.title)}`
+
+    if (!ws.orchestratorTaskLabel) {
+      const text = this.scene.add.text(0, WS_NAME_Y + 11, line, {
+        fontSize: '7px',
+        fontFamily: 'system-ui, monospace',
+        color: '#5eead4',
+        backgroundColor: '#0c1018',
+        padding: { x: 3, y: 1 },
+        align: 'center',
+        resolution: 2,
+      }).setOrigin(0.5).setDepth(5)
+      ws.container.add(text)
+      ws.lodLevel2Objects.push(text)
+      ws.orchestratorTaskLabel = text
+      const level = this.host.getLastLodLevel()
+      if (level >= 2) text.setVisible(true).setAlpha(1)
+      else text.setVisible(false).setAlpha(0)
+    } else {
+      ws.orchestratorTaskLabel.setText(line)
+      ws.orchestratorTaskLabel.setVisible(true).setAlpha(1)
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -1187,6 +1232,23 @@ export class OfficeWorkstations {
       ws.deskBody.setStrokeStyle(1, activeTheme.deskStrokeIdle, 0.5)
     }
   }
+}
+
+function formatOrchestratorStage(stage: string): string {
+  const m: Record<string, string> = {
+    planning: 'Plan',
+    executing: 'Exec',
+    validating: 'Val',
+    queued: 'Queued',
+    done: 'Done',
+  }
+  return m[stage] ?? (stage.length > 5 ? stage.slice(0, 5) : stage)
+}
+
+function truncateOrchestratorTitle(s: string, max = 22): string {
+  const t = s.trim()
+  if (t.length <= max) return t
+  return `${t.slice(0, max - 1)}…`
 }
 
 // Suppress unused-import warnings — these are used in the host interface above
