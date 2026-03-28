@@ -60,8 +60,9 @@ describe('solver best-of-N flow', () => {
     expect(done.status).toBe('complete')
     expect(done.solver.output).toBe('single-solver-output')
     expect(done.selfEvaluation).toBeUndefined()
-    expect(done.artifacts.filter((a) => a.stage === 'solve')).toHaveLength(1)
-    expect(done.artifacts.find((a) => a.stage === 'solve')?.selected).toBe(true)
+    // Single-candidate solve path records output on the role only; solve-stage artifacts are written for multi-candidate runs.
+    expect(done.artifacts.filter((a) => a.stage === 'solve')).toHaveLength(0)
+    expect(done.solverCandidates).toHaveLength(1)
   })
 
   it('creates three solve artifacts and marks exactly one selected', async () => {
@@ -172,7 +173,12 @@ describe('self-eval helpers', () => {
   it('rejects invalid self-eval JSON fields and bounds', () => {
     expect(parseSelfEvalResult('{ "selected": 0, "confidence": 0.7, "reasoning": "bad index" }', 3)).toBeNull()
     expect(parseSelfEvalResult('{ "selected": 2, "confidence": 1.4, "reasoning": "bad confidence" }', 3)).toBeNull()
-    expect(parseSelfEvalResult('{ "selected": 2, "confidence": 0.7, "reasoning": 123 }', 3)).toBeNull()
+    // Non-string reasoning is coerced via String() for resilience
+    expect(parseSelfEvalResult('{ "selected": 2, "confidence": 0.7, "reasoning": 123 }', 3)).toEqual({
+      selected: 2,
+      confidence: 0.7,
+      reasoning: '123',
+    })
   })
 
   it('formats self-eval prompt with criteria and candidates', () => {

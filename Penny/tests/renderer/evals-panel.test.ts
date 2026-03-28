@@ -65,9 +65,9 @@ describe('EvalsPanel', () => {
 
   it('renders required summary text and table headers', () => {
     const html = renderToStaticMarkup(createElement(EvalsPanel))
-    expect(html).toContain('42 tasks this week')
-    expect(html).toContain('78%')
-    expect(html).toContain('3 experiments')
+    expect(html).toMatch(/3<\/span>\s+tasks this week/)
+    expect(html).toMatch(/78%/)
+    expect(html).toMatch(/42<\/span>\s+experiments/)
     expect(html).toContain('Agent Name')
     expect(html).toContain('Tasks')
     expect(html).toContain('Success Rate')
@@ -85,7 +85,7 @@ describe('EvalsPanel', () => {
     expect(html).toContain('text-amber-400')
     expect(html).toContain('text-red-400')
 
-    const dotCount = (html.match(/w-1\.5 h-1\.5 rounded-full inline-block/g) || []).length
+    const dotCount = (html.match(/data-testid="sparkline-dot"/g) || []).length
     expect(dotCount).toBe(26)
   })
 })

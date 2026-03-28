@@ -131,8 +131,8 @@ contextBridge.exposeInMainWorld('api', {
   githubRemoveRepo: (owner: string, repo: string) =>
     ipcRenderer.invoke('github:remove-repo', owner, repo),
   githubListRepos: () => ipcRenderer.invoke('github:list-repos'),
-  // Eval Dashboard
-  evalsReportAll: () => ipcRenderer.invoke('evals:report-all').then(unwrap),
+  // Eval Dashboard (report-* are plain payloads; stats uses contextResponse — unwrap)
+  evalsReportAll: () => ipcRenderer.invoke('evals:report-all'),
   evalsReportAgent: (agentId: string) => ipcRenderer.invoke('evals:report-agent', agentId),
   evalsStats: () => ipcRenderer.invoke('evals:stats').then(unwrap),
   // Preference APIs

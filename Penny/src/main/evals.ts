@@ -1,3 +1,7 @@
+/**
+ * Eval dashboard aggregates from `Penny/data/eval-results.json`: a JSON array of {@link EvalTaskResult}.
+ * (Distinct from JSONL harness reports under `evals:harness-*` IPC.)
+ */
 import fs from 'fs'
 import path from 'path'
 

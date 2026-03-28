@@ -6,6 +6,7 @@ import { runAgentHeadless } from './sessions'
 import { getAgentConfig, loadPodPresets, getTaskRunnerKind, type TaskRunnerKind } from './agents'
 import { getPhaseConfig, type PhaseConfig } from './pods/phase-config'
 import { podQualityCollector, type PodQualityEvent } from './evals/collectors/pod-quality'
+import { evalHarness } from './evals/harness'
 
 export type { PhaseConfig } from './pods/phase-config'
 
@@ -154,6 +155,20 @@ function getPresets(): PodPreset[] {
 // ── Persistence ─────────────────────────────────────────────────────────────
 
 const PERSIST_PATH = path.resolve(__dirname, '..', '..', 'data', 'pod-workflows.json')
+const CRITIQUES_DIR = path.resolve(__dirname, '..', '..', 'data', 'pod-critiques')
+
+function writeCritiqueArtifactFile(wf: PodWorkflow, critique: ReviewerCritique): string {
+  try {
+    if (!fs.existsSync(CRITIQUES_DIR)) fs.mkdirSync(CRITIQUES_DIR, { recursive: true })
+    const fileName = `${wf.id}-review-i${wf.iteration}.json`
+    const fullPath = path.join(CRITIQUES_DIR, fileName)
+    fs.writeFileSync(fullPath, JSON.stringify(critique, null, 2), 'utf-8')
+    return path.join('data', 'pod-critiques', fileName)
+  } catch (err) {
+    console.warn('[pods] Failed to write critique artifact file — using in-workflow only:', err)
+    return 'reviewer-critique'
+  }
+}
 
 function savePods(): void {
   try {
@@ -171,6 +186,9 @@ function loadPods(): void {
     if (!fs.existsSync(PERSIST_PATH)) return
     const data = JSON.parse(fs.readFileSync(PERSIST_PATH, 'utf-8')) as PodWorkflow[]
     for (const wf of data) {
+      if (wf.phaseConfig == null) {
+        wf.phaseConfig = getPhaseConfig(wf.priority)
+      }
       workflows.set(wf.id, wf)
       if (wf.id.startsWith('pod-')) {
         const num = parseInt(wf.id.split('-')[1] || '0', 10)
@@ -443,7 +461,9 @@ function formatReviewerMessage(wf: PodWorkflow): string {
     '',
     '**Output (required)**: Respond with **only** a JSON object inside one markdown fenced block.',
     'Use an opening line ```json then the JSON body, then a closing ``` line.',
-    'The JSON must include: verdict, confidence (0–1), issues (severity, location, description, suggestion), strengths, summary.',
+    'The JSON must include: verdict, confidence (0–1), issues (array — empty [] if none), strengths (string array), summary (string).',
+    'Each object in issues must include all four fields: severity, location, description, suggestion (use empty string if not applicable).',
+    'severity must be one of: critical | major | minor | nitpick.',
     'verdict must be one of: approve | approve-with-notes | request-changes | reject.',
     'Do not include prose outside the fenced JSON block.',
   ].join('\n')
@@ -665,19 +685,26 @@ export function formatSelfFixMessage(wf: PodWorkflow, testError: string): string
     `(Self-fix attempt ${attemptNum}/${wf.maxSelfFixes})`,
     '',
     `**Project Directory**: \`${wf.cwd}\``,
-    `**Original Task**: ${wf.task}`,
     '',
-    '**Test / QA failure output**',
+    'Your test run failed with these errors:',
     '```',
     err,
     '```',
     '',
-    '**Current working tree diff (or solver summary if no diff)**',
+    'The original task was:',
+    '```',
+    wf.task,
+    '```',
+    '',
+    'Your code changes were:',
     '```',
     codeChanges,
     '```',
     '',
-    '**Instructions**: You are still the QA Executor. Apply the **smallest change that fixes the test** failure in the project directory. Do not redesign the solution. When done, report structured results using the same RESULT / test-case format as the main execute stage.',
+    'Diagnose the failure and generate a minimal fix. Only fix what\'s broken.',
+    'Do NOT rewrite the solution — make the smallest change that fixes the test.',
+    '',
+    'When done, report structured results using the same RESULT: PASS|FAIL and test-case format as the main execute stage.',
   ].join('\n')
 }
 
@@ -685,7 +712,8 @@ async function runSelfFixStage(wf: PodWorkflow): Promise<boolean> {
   while (wf.selfFixAttempts < wf.maxSelfFixes) {
     if (isPodPaused(wf)) return false
 
-    const prompt = formatSelfFixMessage(wf, wf.executor.output || '')
+    const priorOutput = wf.executor.output || ''
+    const prompt = formatSelfFixMessage(wf, priorOutput)
     setStatus(wf, 'self-fixing')
     wf.executor.status = 'active'
     console.log(`[pods] Executor self-fix ${wf.selfFixAttempts + 1}/${wf.maxSelfFixes} in ${wf.cwd}`)
@@ -693,14 +721,6 @@ async function runSelfFixStage(wf: PodWorkflow): Promise<boolean> {
       timeoutMs: EXECUTE_TIMEOUT_MS,
     })
 
-    if (!result.success) {
-      wf.error = `Executor failed: ${result.error}`
-      setStatus(wf, 'failed')
-      return false
-    }
-
-    wf.executor.status = 'complete'
-    wf.executor.output = result.output
     wf.selfFixAttempts += 1
     wf.artifacts.push({
       stage: 'self-fix',
@@ -709,8 +729,28 @@ async function runSelfFixStage(wf: PodWorkflow): Promise<boolean> {
       timestamp: Date.now(),
     })
 
-    if (parseTestPassed(wf.executor.output || '')) return true
+    if (!result.success) {
+      wf.executor.status = 'complete'
+      wf.executor.output = [
+        priorOutput,
+        '',
+        `Self-fix runner failed (attempt ${wf.selfFixAttempts}/${wf.maxSelfFixes}): ${result.error}`,
+      ]
+        .join('\n')
+        .trim()
+      wf.lastExecutorPassed = false
+      console.warn(`[pods] Executor self-fix headless failed: ${result.error}`)
+      continue
+    }
+
+    wf.executor.status = 'complete'
+    wf.executor.output = result.output
+    const passed = parseTestPassed(wf.executor.output || '')
+    wf.lastExecutorPassed = passed
+    if (passed) return true
   }
+
+  wf.lastExecutorPassed = parseTestPassed(wf.executor.output || '')
   return false
 }
 
@@ -838,9 +878,15 @@ async function runSolveStage(wf: PodWorkflow, feedback?: string): Promise<boolea
     } else {
       // Fallback: pick the first candidate
       console.log('[pods] Self-eval failed to parse — selecting first candidate')
-      wf.solver.output = candidates[0].output
+      const selected = candidates[0]
+      wf.solver.output = selected.output
       wf.solver.status = 'complete'
       wf.selfEvaluation = { selected: 1, confidence: 0, reasoning: 'Self-eval parse failed — defaulting to first candidate' }
+      for (const a of wf.artifacts) {
+        if (a.stage === 'solve' && a.iteration === wf.iteration && a.candidateIndex === selected.index) {
+          a.selected = true
+        }
+      }
     }
   } else {
     // Single candidate survived or self-eval disabled
@@ -872,9 +918,10 @@ async function runReviewStage(wf: PodWorkflow): Promise<boolean> {
   wf.reviewer.status = 'complete'
   wf.reviewer.output = result.output
   wf.critique = parseReviewerCritique(wf.reviewer.output)
+  const critiquePath = writeCritiqueArtifactFile(wf, wf.critique)
   wf.artifacts.push({
     stage: 'review',
-    path: 'reviewer-critique',
+    path: critiquePath,
     iteration: wf.iteration,
     timestamp: Date.now(),
   })
@@ -919,6 +966,7 @@ function finalizePodQuality(wf: PodWorkflow): void {
   if (wf.qualityRecorded) return
   if (wf.status !== 'complete' && wf.status !== 'failed') return
 
+  // Review runs once per workflow (iteration === 1 only); critique is not overwritten later.
   const firstPassAccepted =
     wf.critique !== undefined &&
     (wf.critique.verdict === 'approve' || wf.critique.verdict === 'approve-with-notes')
@@ -930,7 +978,7 @@ function finalizePodQuality(wf: PodWorkflow): void {
     iterations: wf.iteration,
     firstPassAccepted,
     executorPassed: wf.lastExecutorPassed ?? false,
-    selfFixed: wf.status === 'complete' && wf.iteration > 1,
+    selfFixed: wf.status === 'complete' && wf.selfFixAttempts > 0,
     completionTime_ms: Math.max(0, Date.now() - wf.createdAt),
     timestamp: Date.now(),
   }
@@ -954,6 +1002,7 @@ function appendWorkflowSummary(wf: PodWorkflow): void {
       `- Task: ${wf.task.slice(0, 200)}`,
       `- Team: ${wf.solver.agentId} / ${wf.reviewer.agentId} / ${wf.executor.agentId}`,
       `- Result: ${result} (${wf.iteration}/${wf.maxIterations} iterations)`,
+      ...(wf.selfFixAttempts > 0 ? [`- Self-fix attempts: ${wf.selfFixAttempts}`] : []),
       `- Key output: ${(wf.executor.output || wf.solver.output || 'N/A').slice(0, 150)}`,
       '',
     ].join('\n')
@@ -1141,7 +1190,18 @@ export function createPod(task: string, opts: CreatePodOpts = {}): PodWorkflow {
   savePods()
 
   if (cwdErr) {
+    finalizePodQuality(wf)
     return wf
+  }
+
+  // Avoid appending to real Penny/data during Vitest (createPod is used heavily in tests).
+  if (process.env.VITEST !== 'true') {
+    void evalHarness.recordConfigChange(new Date(), {
+      kind: 'pod-workflow',
+      message:
+        `Pod workflow started — preset \`${presetId}\`, priority ${opts.priority ?? '(default)'}, `
+        + `maxSelfFixes ${maxSelfFixes}, solver candidates ${candidateCount}`,
+    })
   }
 
   const promise = runWorkflow(wf)

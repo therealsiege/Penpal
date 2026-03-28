@@ -130,11 +130,14 @@ export class OfficeWorkstations {
       // Skip if LOD is overview level (workstation not visible)
       if (this.host.getLastLodLevel() <= 1) return
       const rooms = this.host.getRooms()
+      const canSparkle = (ws: { container: { visible: boolean; alpha: number } }) =>
+        ws.container.visible && ws.container.alpha > 0.05
+
       if (agentId === '__all__') {
         // Bulk approve — sparkle all workstations that are currently waiting
         for (const room of rooms.values()) {
           for (const ws of room.workstations.values()) {
-            if (ws.state?.needsInteraction) {
+            if (ws.state?.needsInteraction && canSparkle(ws)) {
               const wx = room.x + ws.container.x
               const wy = room.y + ws.container.y
               this.host.celebrations.approveSparkle(wx, wy)
@@ -145,7 +148,7 @@ export class OfficeWorkstations {
         // Single agent approve
         for (const room of rooms.values()) {
           const ws = room.workstations.get(agentId)
-          if (ws) {
+          if (ws && canSparkle(ws)) {
             const wx = room.x + ws.container.x
             const wy = room.y + ws.container.y
             this.host.celebrations.approveSparkle(wx, wy)
@@ -296,7 +299,14 @@ export class OfficeWorkstations {
     const blurbSnippet = agent.lastAssistantBlurb?.slice(0, 20) ?? ''
     const ctxRound = agent.contextUtilization != null ? (agent.contextUtilization * 100 | 0) : ''
     const streak = agent.xp?.currentStreak ?? 0
-    const fp = `${agent.status}|${agent.sessionMode}|${agent.needsInteraction}|${agent.interactionType}|${agent.config.name}|${blurbSnippet}|${agent.uptime ?? ''}|${ctxRound}|${agent.contextRotDetected ?? ''}|${streak}`
+    // Pod line snapshot for this agent as solver — thinking dots depend on it but agent state alone may not change
+    const podLinesForFp = this.host.getPodLines()
+    const solverLine = podLinesForFp.find(t => t.solverAgentId === agent.config.id)
+    const podFp = solverLine
+      ? `${solverLine.status}|${solverLine.candidates ?? 0}|${solverLine.candidateSelected ? 1 : 0}`
+      : ''
+    const podRole = agent.config.podRole ?? ''
+    const fp = `${agent.status}|${agent.sessionMode}|${agent.needsInteraction}|${agent.interactionType}|${agent.config.name}|${blurbSnippet}|${agent.uptime ?? ''}|${ctxRound}|${agent.contextRotDetected ?? ''}|${streak}|${podRole}|${podFp}`
     if (ws.lastStateFingerprint === fp) {
       ws.state = agent
       // Keep eval glow fresh even when nothing else changed; animator throttles fetches to 30s.
@@ -402,6 +412,13 @@ export class OfficeWorkstations {
     const charIdx = this.host.getAgentCharacterIndex(agent)
     ws.sprite.setFrame(this.host.getPoseFrame(charIdx, agent))
 
+    // Warm orange tint for orchestrator headless task agents
+    if (agent.isOrchestratorTask) {
+      ws.sprite.setTint(0xffcc88)
+    } else if (ws.sprite.tintTopLeft === 0xffcc88) {
+      ws.sprite.clearTint()
+    }
+
     const dotColor = this.host.getStatusColor(agent)
     const prevDotColor = ws.statusDot.getData('lastColor') as number | undefined
     const dotFrame = STATUS_DOT_FRAMES[dotColor] ?? ICON_FRAMES.CIRCLE_GREY
@@ -505,7 +522,7 @@ export class OfficeWorkstations {
       const solverPod = podLines.find(
         t => t.solverAgentId === agentId && t.status === 'solving' && (t.candidates ?? 0) > 1,
       )
-      if (solverPod && isWorking && !ws.thinkingDotsContainer) {
+      if (solverPod && isWorking) {
         this.animator.showThinkingDots(ws, solverPod.candidates!)
       } else if (solverPod?.candidateSelected && ws.thinkingDotsContainer && !ws.thinkingMergeTween) {
         this.animator.playThinkingMerge(ws)
@@ -592,6 +609,34 @@ export class OfficeWorkstations {
         this.scene.tweens.add({
           targets: ws.openclawBadge, alpha: 0, duration: 200, ease: 'Sine.easeOut',
           onComplete: () => { ws.openclawBadge?.setVisible(false) },
+        })
+      }
+    }
+
+    // ── Orchestrator headless task badge ──────────────────────────────────
+    if (ws.orchTaskBadge) {
+      if (agent.isOrchestratorTask) {
+        const stageTints: Record<string, number> = { planning: 0xa78bfa, executing: 0xf97316, validating: 0x06b6d4 }
+        const tint = stageTints[agent.taskStage ?? 'executing'] ?? 0xf97316
+        ws.orchTaskBadge.setTint(tint)
+        if (!ws.orchTaskBadge.visible) {
+          ws.orchTaskBadge.setVisible(true).setAlpha(0)
+          this.scene.tweens.add({ targets: ws.orchTaskBadge, alpha: 0.85, duration: 300, ease: 'Back.easeOut' })
+          if (!ws.orchTaskBadgeTween) {
+            ws.orchTaskBadgeTween = this.scene.tweens.add({
+              targets: ws.orchTaskBadge,
+              scaleX: { from: 0.22, to: 0.26 },
+              scaleY: { from: 0.22, to: 0.26 },
+              duration: 2000,
+              yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
+            })
+          }
+        }
+      } else if (ws.orchTaskBadge.visible) {
+        ws.orchTaskBadgeTween?.destroy(); ws.orchTaskBadgeTween = undefined
+        this.scene.tweens.add({
+          targets: ws.orchTaskBadge, alpha: 0, duration: 200, ease: 'Sine.easeOut',
+          onComplete: () => { ws.orchTaskBadge?.setVisible(false) },
         })
       }
     }
@@ -718,11 +763,12 @@ export class OfficeWorkstations {
     this.updateAnimation(ws, agent)
     this.updateMood(ws, agent)
 
+    // Eval glow first so evalsReportAll() populates caches before streak flame
+    // (harness streak merges with XP streak for the flame).
+    this.animator.updateEvalGlow(ws)
+
     // Streak flame — check on every sync so external streak resets are caught
     this.animator.updateStreakFlame(ws, agent)
-
-    // Eval glow — update color from cached eval data (refreshes every 30s)
-    this.animator.updateEvalGlow(ws)
 
     // XP progress bar — update fill percentage and rank label
     if (ws.xpBar && ws.xpBarText && agent.xp) {

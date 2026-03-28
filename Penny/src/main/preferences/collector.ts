@@ -144,39 +144,39 @@ export class PreferenceCollector extends EventEmitter {
     this.addListenerRef(emitter, 'task-failed', failListener)
   }
 
-  // ── Signal from pod reviewer outcomes in workflow status changes ───
+  // ── Pod reviewer verdict (listen-only on podEvents; single emission per review) ───
   private hookPods(emitter: EventEmitter): void {
     const listener = (data: unknown) => {
       try {
         if (!data || typeof data !== 'object') return
-        const wf = data as {
-          id?: string
-          status?: string
-          solver?: { agentId?: string }
-          reviewer?: { output?: string }
+        const payload = data as {
+          workflowId?: string
+          solverAgentId?: string
+          reviewerAgentId?: string
           critique?: { verdict?: string; summary?: string }
-          executor?: { output?: string }
         }
-        if (typeof wf.id !== 'string' || typeof wf.status !== 'string') return
-        const agentId = wf.solver?.agentId
-        if (typeof agentId !== 'string') return
-        if (wf.status === 'executing') {
-          this.emitPreference(this.buildEvent('approve', 'strong', agentId, {
-            context: { toolCall: 'pods:status-change', toolResult: `${wf.id}:review-accepted` },
-          }))
+        if (typeof payload.workflowId !== 'string' || typeof payload.solverAgentId !== 'string') return
+        const verdict = payload.critique?.verdict
+        if (
+          verdict !== 'approve'
+          && verdict !== 'approve-with-notes'
+          && verdict !== 'request-changes'
+          && verdict !== 'reject'
+        ) {
           return
         }
-        if (wf.status === 'feedback') {
-          const verdict = wf.critique?.verdict ?? 'request-changes'
-          const reason = wf.critique?.summary ?? wf.executor?.output ?? wf.reviewer?.output
-          this.emitPreference(this.buildEvent('reject', 'strong', agentId, {
-            context: { toolCall: 'pods:status-change', toolResult: `${wf.id}:${verdict}` },
-            userAction: reason,
-          }))
-        }
+        const positive = verdict === 'approve' || verdict === 'approve-with-notes'
+        const reason = payload.critique?.summary
+        this.emitPreference(this.buildEvent(positive ? 'approve' : 'reject', 'strong', payload.solverAgentId, {
+          context: {
+            toolCall: 'pods:reviewer-verdict',
+            toolResult: `${payload.workflowId}:${verdict}`,
+          },
+          userAction: typeof reason === 'string' && reason.length > 0 ? reason : undefined,
+        }))
       } catch { /* graceful degradation */ }
     }
-    this.addListenerRef(emitter, 'status-change', listener)
+    this.addListenerRef(emitter, 'reviewer-verdict', listener)
   }
 
   private addListenerRef(emitter: EventEmitter, event: string, listener: (...args: unknown[]) => void): void {

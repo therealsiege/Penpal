@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import type { PodWorkflow, PodPreset, PodStatus, AgentConfig } from '../types'
+import type { PodWorkflow, PodPreset, PodStatus, AgentConfig, TaskPriority } from '../types'
 import { usePolling } from '../hooks/usePolling'
 
 // ── Status helpers ──────────────────────────────────────────────────────────
@@ -59,6 +59,7 @@ export function PodLauncherModal({
   const [customReviewer, setCustomReviewer] = useState('')
   const [customExecutor, setCustomExecutor] = useState('')
   const [solverCandidates, setSolverCandidates] = useState(1)
+  const [priority, setPriority] = useState<TaskPriority>('normal')
   const [cwd, setCwd] = useState('')
   const [customCwd, setCustomCwd] = useState('')
 
@@ -83,6 +84,7 @@ export function PodLauncherModal({
       cwd: effectiveCwd,
       presetId: selectedPreset || undefined,
       maxIterations,
+      priority,
       solverCandidates: solverCandidates > 1 ? solverCandidates : undefined,
       solverAgent: customSolver || undefined,
       reviewerAgent: customReviewer || undefined,
@@ -223,6 +225,24 @@ export function PodLauncherModal({
             rows={4}
             className="w-full bg-[#080a0e] border border-[#2a3440] rounded-md px-3 py-2 text-[12px] text-[#c4ccd6] placeholder-[#2a3440] focus:outline-none focus:border-[#2a3440] font-mono resize-none"
           />
+        </div>
+
+        {/* Task priority (compute allocation) */}
+        <div className="mb-4">
+          <label htmlFor="pod-launch-priority" className="text-[11px] text-[#3a4858] uppercase tracking-wider mb-2 block">
+            Task priority
+          </label>
+          <select
+            id="pod-launch-priority"
+            value={priority}
+            onChange={e => setPriority(e.target.value as TaskPriority)}
+            className="w-full max-w-xs bg-[#0c1018] border border-[#2a3440] rounded-md px-3 py-2 text-[12px] text-[#c4ccd6] focus:outline-none focus:border-[#3a4858]"
+          >
+            <option value="critical">Critical — best-of-3, self-eval, more self-fixes</option>
+            <option value="high">High — best-of-2, self-eval</option>
+            <option value="normal">Normal — single solver path</option>
+            <option value="low">Low — minimal retries</option>
+          </select>
         </div>
 
         {/* Max iterations */}

@@ -15,6 +15,19 @@ describe('phase config mapping', () => {
 
   it('unknown and missing priorities fall back to normal config', () => {
     expect(getPhaseConfig('urgent')).toEqual(PHASE_CONFIGS.normal)
+    expect(getPhaseConfig('unknown')).toEqual(PHASE_CONFIGS.normal)
     expect(getPhaseConfig(undefined)).toEqual(PHASE_CONFIGS.normal)
+  })
+
+  it('high priority matches PHASE_CONFIGS.high', () => {
+    expect(getPhaseConfig('high')).toEqual(PHASE_CONFIGS.high)
+    expect(getPhaseConfig('high').candidates).toBe(2)
+    expect(getPhaseConfig('high').selfEvaluation).toBe(true)
+  })
+
+  it('normal priority matches PHASE_CONFIGS.normal', () => {
+    expect(getPhaseConfig('normal')).toEqual(PHASE_CONFIGS.normal)
+    expect(getPhaseConfig('normal').candidates).toBe(1)
+    expect(getPhaseConfig('normal').selfEvaluation).toBe(false)
   })
 })

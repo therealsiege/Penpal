@@ -13,6 +13,7 @@ const mockReadVaultFile = vi.fn()
 const mockGetBacklinks = vi.fn()
 const mockSearchLeads = vi.fn()
 const mockGetLeadDetail = vi.fn()
+const mockGetAgentConfigs = vi.hoisted(() => vi.fn(() => []))
 
 vi.mock('electron', () => ({
   ipcMain: {
@@ -33,7 +34,7 @@ vi.mock('../../../src/main/graph', () => ({
   getHotLeads: vi.fn(),
   getTerritories: vi.fn(),
   getNewLeads: vi.fn(),
-  getGraphStats: vi.fn(),
+  getGraphStatsWithFreshness: vi.fn(),
   searchLeads: mockSearchLeads,
   getLeadDetail: mockGetLeadDetail,
 }))
@@ -55,7 +56,12 @@ vi.mock('../../../src/main/cursor-sessions', () => ({
   focusCursorIDE: vi.fn(),
 }))
 vi.mock('../../../src/main/opencode-sessions', () => ({ getOpencodeSessions: vi.fn() }))
-vi.mock('../../../src/main/agents', () => ({ getAgentConfigs: vi.fn(() => []), getAgentConfig: vi.fn(), loadAgentSessionMap: vi.fn(() => ({})), removeAgentSession: vi.fn() }))
+vi.mock('../../../src/main/agents', () => ({
+  getAgentConfigs: mockGetAgentConfigs,
+  getAgentConfig: vi.fn(),
+  loadAgentSessionMap: vi.fn(() => ({})),
+  removeAgentSession: vi.fn(),
+}))
 vi.mock('../../../src/main/pods', () => ({
   createPod: vi.fn(),
   listPods: mockListPods,
@@ -129,11 +135,46 @@ vi.mock('../../../src/main/config-reader', () => ({
 const { registerIpcHandlers } = await import('../../../src/main/ipc')
 registerIpcHandlers()
 
+/** Mirrors preload `unwrap` — renderer must keep receiving raw `.data` only. */
+function unwrap<T>(result: T): T {
+  return (result && typeof result === 'object' && 'data' in result && 'summary' in result)
+    ? (result as { data: T }).data
+    : result
+}
+
+function mockClaudeSession(overrides: Record<string, unknown> = {}) {
+  return {
+    pid: 1,
+    sessionId: 's1',
+    project: 'proj',
+    cwd: '/tmp/proj',
+    startedAt: Date.now(),
+    uptime: '1m',
+    cpu: '0',
+    memoryMB: 100,
+    alive: true,
+    lastUserMessage: '',
+    lastAssistantBlurb: '',
+    tty: '/dev/ttys001',
+    terminalName: 'term',
+    waitingForInput: false,
+    sessionMode: 'idle',
+    interactionType: 'none',
+    subAgentInvocations: [],
+    ...overrides,
+  }
+}
+
 describe('context engineered IPC handlers', () => {
   beforeEach(() => {
+    mockGetAgentConfigs.mockReset()
+    mockGetAgentConfigs.mockReturnValue([])
     mockGetClaudeSessions.mockReset()
+    mockGetClaudeSessions.mockResolvedValue([])
     mockGetCursorAgentSessions.mockReset()
+    mockGetCursorAgentSessions.mockResolvedValue([])
     mockGetTaskQueue.mockReset()
+    mockGetTaskQueue.mockReturnValue([])
     mockGetAgentHealthStatuses.mockReset()
     mockListPods.mockReset()
     mockGetPodStatus.mockReset()
@@ -147,7 +188,7 @@ describe('context engineered IPC handlers', () => {
   it('returns context response shape for all 10 handlers', async () => {
     mockGetClaudeSessions.mockResolvedValue([])
     mockGetCursorAgentSessions.mockResolvedValue([])
-    mockGetTaskQueue.mockResolvedValue([])
+    mockGetTaskQueue.mockReturnValue([])
     mockGetAgentHealthStatuses.mockResolvedValue([])
     mockListPods.mockResolvedValue([])
     mockGetPodStatus.mockResolvedValue({
@@ -183,16 +224,29 @@ describe('context engineered IPC handlers', () => {
       expect(sentenceTerminators.length, `${channel} summary: ${String(response.summary)}`).toBe(1)
       expect(Array.isArray(response.suggestions)).toBe(true)
       expect(Array.isArray(response.related_tools)).toBe(true)
+      if (response.context !== undefined) {
+        expect(response.context).toEqual(expect.any(Object))
+      }
     }
+  })
+
+  it('graph:search-leads returns the same engineered shape as leads:search', async () => {
+    mockSearchLeads.mockResolvedValue([])
+    const graphHandler = handleMap.get('graph:search-leads')!
+    const leadsHandler = handleMap.get('leads:search')!
+    const g = await graphHandler({} as never, 'q') as Record<string, unknown>
+    const l = await leadsHandler({} as never, 'q') as Record<string, unknown>
+    expect(g.summary).toBe(l.summary)
+    expect(g.suggestions).toEqual(l.suggestions)
   })
 
   it('varies queue suggestions based on idle capacity', async () => {
     const handler = handleMap.get('orchestrator:queue')!
-    mockGetTaskQueue.mockResolvedValue([{ priority: 'critical', status: 'queued', createdAt: Date.now() - 120000 }])
+    mockGetTaskQueue.mockReturnValue([{ priority: 'critical', status: 'queued', createdAt: Date.now() - 120000 }])
     mockGetAgentHealthStatuses.mockResolvedValue([{ agentId: 'a1', alive: true, activeTasks: 0 }])
     const withIdle = await handler({} as never) as { suggestions: string[] }
 
-    mockGetTaskQueue.mockResolvedValue([{ priority: 'critical', status: 'queued', createdAt: Date.now() - 120000 }])
+    mockGetTaskQueue.mockReturnValue([{ priority: 'critical', status: 'queued', createdAt: Date.now() - 120000 }])
     mockGetAgentHealthStatuses.mockResolvedValue([{ agentId: 'a1', alive: true, activeTasks: 2 }])
     const noIdle = await handler({} as never) as { suggestions: string[] }
 
@@ -203,5 +257,168 @@ describe('context engineered IPC handlers', () => {
   it('registers graph channel aliases', () => {
     expect(handleMap.get('graph:search-leads')).toBeTruthy()
     expect(handleMap.get('graph:lead-detail')).toBeTruthy()
+  })
+
+  it('unwrap yields legacy data for each target handler', async () => {
+    mockGetClaudeSessions.mockResolvedValue([])
+    mockGetCursorAgentSessions.mockResolvedValue([])
+    mockGetTaskQueue.mockReturnValue([])
+    mockGetAgentHealthStatuses.mockResolvedValue([])
+    mockListPods.mockResolvedValue([])
+    mockGetPodStatus.mockResolvedValue({
+      id: 'p1', name: 'pod', status: 'solving', iteration: 1, maxIterations: 3, createdAt: Date.now() - 60000,
+      stageHistory: [{ stage: 'solving', enteredAt: Date.now() - 20000 }],
+      solver: { agentId: 'a' }, reviewer: { agentId: 'b' }, executor: { agentId: 'c' },
+      task: 't', cwd: '/x', artifacts: [], solverCandidateCount: 0, selfFixAttempts: 0, maxSelfFixes: 0, updatedAt: Date.now(),
+    })
+    mockSearchVault.mockResolvedValue([])
+    mockReadVaultFile.mockResolvedValue({ path: 'a.md', content: 'x', mtime: 1 })
+    mockGetBacklinks.mockResolvedValue([])
+    mockSearchLeads.mockResolvedValue([])
+    mockGetLeadDetail.mockResolvedValue(null)
+
+    const cases: Array<[string, unknown[], unknown]> = [
+      ['agents:statuses', [], []],
+      ['orchestrator:queue', [], []],
+      ['pod:list', [], []],
+      ['vault:search', ['q'], []],
+      ['orchestrator:agent-health', [], []],
+      ['vault:read', ['a.md'], { path: 'a.md', content: 'x', mtime: 1 }],
+      ['sessions:list', [], []],
+      ['leads:search', ['q'], []],
+      ['leads:detail', ['n'], null],
+    ]
+
+    for (const [channel, args, expected] of cases) {
+      const handler = handleMap.get(channel)!
+      const payload = await handler({} as never, ...args)
+      expect(unwrap(payload)).toEqual(expected)
+    }
+
+    const podHandler = handleMap.get('pod:status')!
+    const podPayload = await podHandler({} as never, 'p1')
+    const pod = unwrap(podPayload) as { id: string }
+    expect(pod.id).toBe('p1')
+  })
+
+  it('agents:statuses suggestions differ for blocked vs all busy', async () => {
+    const handler = handleMap.get('agents:statuses')!
+    mockGetClaudeSessions.mockResolvedValue([
+      mockClaudeSession({ pid: 1, cpu: '0', interactionType: 'tool-approval', tty: '/dev/tty1' }),
+    ])
+    const blocked = await handler({} as never) as { suggestions: string[] }
+    expect(blocked.suggestions.some(s => s.includes('approval'))).toBe(true)
+
+    mockGetClaudeSessions.mockResolvedValue([
+      mockClaudeSession({ pid: 1, cpu: '5', interactionType: 'none' }),
+      mockClaudeSession({ pid: 2, cpu: '8', interactionType: 'none' }),
+    ])
+    const allBusy = await handler({} as never) as { suggestions: string[] }
+    expect(allBusy.suggestions.some(s => s.includes('All agents busy'))).toBe(true)
+  })
+
+  it('sessions:list suggestions differ for empty vs waiting-for-input', async () => {
+    const handler = handleMap.get('sessions:list')!
+    mockGetClaudeSessions.mockResolvedValue([])
+    mockGetCursorAgentSessions.mockResolvedValue([])
+    const empty = await handler({} as never) as { suggestions: string[] }
+    expect(empty.suggestions.some(s => s.includes('No active sessions'))).toBe(true)
+
+    mockGetClaudeSessions.mockResolvedValue([
+      mockClaudeSession({ waitingForInput: true, tty: '/dev/tty1', cpu: '0.5' }),
+    ])
+    const waiting = await handler({} as never) as { suggestions: string[] }
+    expect(waiting.suggestions.some(s => s.includes('waiting for input'))).toBe(true)
+  })
+
+  it('vault:search suggestions differ for empty vs multi-folder results', async () => {
+    const handler = handleMap.get('vault:search')!
+    mockSearchVault.mockResolvedValue([])
+    const none = await handler({} as never, 'q') as { suggestions: string[] }
+    expect(none.suggestions.some(s => s.includes('Read specific files'))).toBe(true)
+    expect(none.suggestions.some(s => s.includes('Results span'))).toBe(false)
+
+    mockSearchVault.mockResolvedValue([
+      { path: 'A/x.md', line: 1, text: 'a #tag' },
+      { path: 'B/y.md', line: 2, text: 'b' },
+    ])
+    const multi = await handler({} as never, 'q') as { suggestions: string[] }
+    expect(multi.suggestions.some(s => s.includes('Results span'))).toBe(true)
+  })
+
+  it('leads:search suggestions differ for no results vs matches', async () => {
+    const handler = handleMap.get('leads:search')!
+    mockSearchLeads.mockResolvedValue([])
+    const empty = await handler({} as never, 'zzz') as { suggestions: string[] }
+    expect(empty.suggestions.some(s => s.includes('No results'))).toBe(true)
+
+    mockSearchLeads.mockResolvedValue([{ name: 'L', stage: 'prospecting', score: 80, businessArm: 'dental' }])
+    const hits = await handler({} as never, 'dental') as { suggestions: string[] }
+    expect(hits.suggestions.some(s => s.includes('Top lead') || s.includes('high-scoring'))).toBe(true)
+  })
+
+  it('leads:detail suggestions differ for missing vs stale lead', async () => {
+    const handler = handleMap.get('leads:detail')!
+    mockGetLeadDetail.mockResolvedValue(null)
+    const missing = await handler({} as never, 'nobody') as { suggestions: string[] }
+    expect(missing.suggestions).toEqual(['Search via leads:search to find available leads.'])
+
+    const staleDate = new Date(Date.now() - 20 * 86400000).toISOString()
+    mockGetLeadDetail.mockResolvedValue({
+      name: 'L', company: 'C', score: 50, stage: 'prospecting', ehr: '', location: '', nextAction: '', source: '', npi: '', phone: '', specialty: '', website: '',
+      events: [{ type: 'note', date: staleDate, detail: 'x' }],
+      documents: [],
+      stageHistory: [],
+    })
+    const stale = await handler({} as never, 'L') as { suggestions: string[] }
+    expect(stale.suggestions.some(s => s.includes('No activity') || s.includes('follow-up'))).toBe(true)
+  })
+
+  it('pod:list suggestions differ for empty vs failed pods', async () => {
+    const handler = handleMap.get('pod:list')!
+    mockListPods.mockResolvedValue([])
+    const empty = await handler({} as never) as { suggestions: string[] }
+    expect(empty.suggestions.some(s => s.includes('No active pods'))).toBe(true)
+
+    mockListPods.mockResolvedValue([
+      {
+        id: '1', name: 'n', status: 'failed', task: 't', cwd: '/x', iteration: 2, maxIterations: 3,
+        solver: { agentId: 'a' }, reviewer: { agentId: 'b' }, executor: { agentId: 'c' },
+        artifacts: [], solverCandidateCount: 0, selfFixAttempts: 0, maxSelfFixes: 0, createdAt: 1, updatedAt: 1, stageHistory: [],
+      },
+    ])
+    const failed = await handler({} as never) as { suggestions: string[] }
+    expect(failed.suggestions.some(s => s.includes('failed pod'))).toBe(true)
+  })
+
+  it('orchestrator:agent-health suggestions differ when healthy vs dead', async () => {
+    const handler = handleMap.get('orchestrator:agent-health')!
+    mockGetAgentHealthStatuses.mockResolvedValue([
+      { agentId: 'a1', name: 'A', alive: true, activeTasks: 0, status: 'healthy', warnings: [] },
+    ])
+    const ok = await handler({} as never) as { suggestions: string[]; context: { recommendations: unknown[] } }
+    expect(ok.suggestions.some(s => s.includes('All agents healthy'))).toBe(true)
+    expect((ok.context.recommendations as unknown[]).length).toBe(0)
+
+    mockGetAgentHealthStatuses.mockResolvedValue([
+      { agentId: 'a1', name: 'A', alive: false, activeTasks: 0, status: 'dead', warnings: [] },
+    ])
+    const bad = await handler({} as never) as { suggestions: string[]; context: { recommendations: unknown[] } }
+    expect(bad.suggestions.some(s => s.includes('restart'))).toBe(true)
+    expect((bad.context.recommendations as unknown[]).length).toBeGreaterThan(0)
+  })
+
+  it('vault:read unwrap is null when file missing', async () => {
+    const handler = handleMap.get('vault:read')!
+    mockReadVaultFile.mockResolvedValue(null)
+    mockGetBacklinks.mockResolvedValue([])
+    const payload = await handler({} as never, 'missing.md')
+    expect(unwrap(payload)).toBeNull()
+  })
+
+  it('pod:status unwrap is null when workflow missing', async () => {
+    const handler = handleMap.get('pod:status')!
+    mockGetPodStatus.mockResolvedValue(null)
+    expect(unwrap(await handler({} as never, 'bad-id'))).toBeNull()
   })
 })

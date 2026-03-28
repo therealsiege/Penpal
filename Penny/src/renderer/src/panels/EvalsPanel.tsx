@@ -11,14 +11,15 @@ function formatDuration(ms: number): string {
   return `${mins}m ${secs}s`
 }
 
+/** Issue #4: green >80%, amber 60–80% inclusive, red <60% */
 function rateColor(rate: number): string {
-  if (rate >= 0.8) return 'text-emerald-400'
+  if (rate > 0.8) return 'text-emerald-400'
   if (rate >= 0.6) return 'text-amber-400'
   return 'text-red-400'
 }
 
 function rateBgColor(rate: number): string {
-  if (rate >= 0.8) return 'text-emerald-400/80'
+  if (rate > 0.8) return 'text-emerald-400/80'
   if (rate >= 0.6) return 'text-amber-400/80'
   return 'text-red-400/80'
 }
@@ -30,12 +31,25 @@ function TrendIndicator({ trend }: { trend: 'up' | 'down' | 'flat' }) {
 }
 
 function Sparkline({ outcomes }: { outcomes: boolean[] }) {
+  const last20 = outcomes.slice(0, 20)
+  const pass = last20.filter(Boolean).length
+  const fail = last20.length - pass
+  const label =
+    last20.length === 0
+      ? 'No recent outcomes'
+      : `Last ${last20.length} tasks: ${pass} pass, ${fail} fail (left = newer)`
   return (
-    <span className="inline-flex items-center gap-px">
-      {outcomes.map((ok, i) => (
+    <span
+      className="inline-flex items-center gap-px"
+      role="img"
+      aria-label={label}
+    >
+      {last20.map((ok, i) => (
         <span
           key={i}
-          className={`w-1.5 h-1.5 rounded-full inline-block ${ok ? 'bg-emerald-400' : 'bg-red-400'}`}
+          data-testid="sparkline-dot"
+          title={ok ? 'Pass' : 'Fail'}
+          className={`w-1.5 h-1.5 rounded-full inline-block border border-slate-900/80 ${ok ? 'bg-emerald-400' : 'bg-red-400'}`}
         />
       ))}
     </span>
@@ -89,7 +103,7 @@ function SummaryBar({ stats, loading }: { stats: EvalStats | null; loading: bool
       <span className="text-slate-600">|</span>
       <span>
         <span className="font-semibold text-slate-100">{stats.totalTasks}</span>{' '}
-        total experiments
+        experiments
       </span>
     </div>
   )
@@ -99,10 +113,12 @@ function VerdictButton({
   label,
   color,
   onClick,
+  ariaLabel,
 }: {
   label: string
   color: 'emerald' | 'amber' | 'red'
   onClick: () => void
+  ariaLabel: string
 }) {
   const colorMap = {
     emerald: 'bg-emerald-600 hover:bg-emerald-500',
@@ -111,8 +127,10 @@ function VerdictButton({
   }
   return (
     <button
+      type="button"
       onClick={onClick}
-      className={`px-3 py-1 rounded text-xs font-semibold text-white ${colorMap[color]} transition-colors`}
+      aria-label={ariaLabel}
+      className={`px-3 py-1 rounded text-xs font-semibold text-white ${colorMap[color]} transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 focus-visible:ring-white/40`}
     >
       {label}
     </button>
@@ -160,12 +178,30 @@ function SpotCheckCard({
       )}
 
       <div className="flex items-center gap-2">
-        <VerdictButton label="Pass" color="emerald" onClick={() => submit('pass')} />
-        <VerdictButton label="Partial" color="amber" onClick={() => submit('partial')} />
-        <VerdictButton label="Fail" color="red" onClick={() => submit('fail')} />
+        <VerdictButton
+          label="Pass"
+          color="emerald"
+          ariaLabel={`Mark spot check as pass for task ${check.taskId}`}
+          onClick={() => submit('pass')}
+        />
+        <VerdictButton
+          label="Partial"
+          color="amber"
+          ariaLabel={`Mark spot check as partial for task ${check.taskId}`}
+          onClick={() => submit('partial')}
+        />
+        <VerdictButton
+          label="Fail"
+          color="red"
+          ariaLabel={`Mark spot check as fail for task ${check.taskId}`}
+          onClick={() => submit('fail')}
+        />
         <button
+          type="button"
           onClick={() => setShowNotes(!showNotes)}
-          className="ml-auto text-xs text-slate-500 hover:text-slate-300 transition-colors"
+          aria-expanded={showNotes}
+          aria-controls={`spot-check-notes-${check.id}`}
+          className="ml-auto text-xs text-slate-500 hover:text-slate-300 transition-colors rounded px-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/30"
         >
           {showNotes ? 'Hide notes' : 'Add notes'}
         </button>
@@ -173,10 +209,12 @@ function SpotCheckCard({
 
       {showNotes && (
         <textarea
+          id={`spot-check-notes-${check.id}`}
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
           placeholder="Optional notes..."
-          className="w-full rounded bg-slate-800 border border-slate-700 text-sm text-slate-200 p-2 resize-none h-16 focus:outline-none focus:border-slate-500"
+          aria-label="Optional review notes"
+          className="w-full rounded bg-slate-800 border border-slate-700 text-sm text-slate-200 p-2 resize-none h-16 focus:outline-none focus:border-slate-500 focus-visible:ring-2 focus-visible:ring-white/30"
         />
       )}
     </div>
@@ -228,9 +266,12 @@ function SpotCheckSection() {
             </span>
           )}
           <button
+            type="button"
             onClick={handleSample}
             disabled={sampling}
-            className="px-3 py-1 rounded bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-xs font-semibold text-white transition-colors"
+            aria-busy={sampling}
+            aria-label="Sample up to 10 recent completed or failed tasks for manual review"
+            className="px-3 py-1 rounded bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-xs font-semibold text-white transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
           >
             {sampling ? 'Sampling...' : 'Sample 10'}
           </button>
@@ -253,15 +294,16 @@ function SpotCheckSection() {
 }
 
 export function EvalsPanel() {
-  const { data: reports, loading: reportsLoading } = usePolling<EvalAgentReport[]>(
+  const { data: reports, loading: reportsLoading, error: reportsError } = usePolling<EvalAgentReport[]>(
     () => window.api.evalsReportAll(),
     10_000,
   )
-  const { data: stats, loading: statsLoading } = usePolling<EvalStats>(
+  const { data: stats, loading: statsLoading, error: statsError } = usePolling<EvalStats>(
     () => window.api.evalsStats(),
     10_000,
   )
 
+  const fetchError = reportsError || statsError
   const isEmpty = !reportsLoading && (!reports || reports.length === 0)
 
   return (
@@ -271,13 +313,31 @@ export function EvalsPanel() {
           <h1 className="text-lg font-bold text-slate-100 tracking-tight">Eval Dashboard</h1>
         </div>
 
+        {fetchError && (
+          <div
+            role="alert"
+            className="rounded-xl border border-amber-800/80 bg-amber-950/40 px-4 py-3 text-sm text-amber-100"
+          >
+            Could not load eval data: {fetchError}
+          </div>
+        )}
+
         <SummaryBar stats={stats} loading={statsLoading} />
 
         {isEmpty ? (
           <div className="flex-1 flex items-center justify-center">
             <div className="text-center text-slate-500">
-              <p className="text-lg font-medium">No eval data yet</p>
-              <p className="text-sm mt-1">Task results will appear here once the eval harness runs.</p>
+              {reportsError ? (
+                <>
+                  <p className="text-lg font-medium">Eval table unavailable</p>
+                  <p className="text-sm mt-1">Fix the connection issue above, or check Penny/data/eval-results.json.</p>
+                </>
+              ) : (
+                <>
+                  <p className="text-lg font-medium">No eval data yet</p>
+                  <p className="text-sm mt-1">Task results will appear here once the eval harness runs.</p>
+                </>
+              )}
             </div>
           </div>
         ) : (
@@ -285,13 +345,13 @@ export function EvalsPanel() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-slate-900/70 text-slate-400 text-xs uppercase tracking-wider">
-                  <th className="px-4 py-3 text-left font-semibold">Agent</th>
-                  <th className="px-4 py-3 text-right font-semibold">Tasks</th>
-                  <th className="px-4 py-3 text-right font-semibold">Success Rate</th>
-                  <th className="px-4 py-3 text-right font-semibold">Avg Duration</th>
-                  <th className="px-4 py-3 text-right font-semibold">Streak</th>
-                  <th className="px-4 py-3 text-center font-semibold">Trend</th>
-                  <th className="px-4 py-3 text-left font-semibold">Last 20</th>
+                  <th scope="col" className="px-4 py-3 text-left font-semibold">Agent Name</th>
+                  <th scope="col" className="px-4 py-3 text-right font-semibold">Tasks</th>
+                  <th scope="col" className="px-4 py-3 text-right font-semibold">Success Rate</th>
+                  <th scope="col" className="px-4 py-3 text-right font-semibold">Avg Duration</th>
+                  <th scope="col" className="px-4 py-3 text-right font-semibold">Streak</th>
+                  <th scope="col" className="px-4 py-3 text-center font-semibold">Trend</th>
+                  <th scope="col" className="px-4 py-3 text-left font-semibold">Last 20</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/60">

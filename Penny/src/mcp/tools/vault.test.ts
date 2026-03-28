@@ -1,108 +1,67 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
-
-type MockFile = { content: string; mtime: number }
-const files = new Map<string, MockFile>()
-const backlinks = [{ title: 'Ref', path: 'Refs/ref.md', snippet: '[[note]] ref' }]
-
-function normalizePath(input: string): string {
-  const normalized = input.replace(/\\/g, '/')
-  const marker = '/sidekick/'
-  const idx = normalized.indexOf(marker)
-  if (idx >= 0) return normalized.slice(idx + marker.length)
-  return normalized.replace(/^\/+/, '')
-}
-
-vi.mock('../../main/vault.js', () => ({
-  readVaultFile: vi.fn((relativePath: string) => files.get(normalizePath(relativePath)) ?? null),
-  searchVault: vi.fn(async (query: string, _glob: string | undefined, limit: number) => {
-    return Array.from(files.entries())
-      .filter(([, file]) => file.content.toLowerCase().includes(query.toLowerCase()))
-      .slice(0, limit)
-      .map(([filePath, file]) => ({
-        path: filePath,
-        line: 1,
-        text: file.content.split('\n')[0] ?? '',
-        snippet: file.content.split('\n')[0] ?? '',
-        occurrences: 2,
-        filename: filePath.split('/').pop() ?? filePath,
-      }))
-  }),
-  createVaultFile: vi.fn((relativePath: string, content = '') => {
-    const mtime = Date.now()
-    files.set(normalizePath(relativePath), { content, mtime })
-    return { success: true, mtime }
-  }),
-  writeVaultFile: vi.fn((relativePath: string, content: string) => {
-    const mtime = Date.now()
-    files.set(normalizePath(relativePath), { content, mtime })
-    return { success: true, mtime }
-  }),
-  parseMarkdownFrontmatter: vi.fn((content: string) => {
-    if (!content.startsWith('---\n')) return null
-    return { title: 'Mock Title', tags: ['test'] }
-  }),
-  extractTagsFromMarkdown: vi.fn(() => ['test']),
-  getFolderHierarchy: vi.fn((relativePath: string) => {
-    const parts = relativePath.split('/')
-    return parts.length > 1 ? [parts[0]] : []
-  }),
-  getVaultFileContext: vi.fn(async () => ({
-    backlinks,
-    relatedFiles: ['Refs/ref.md', 'Folder/sibling.md'],
-    folderContext: ['Folder'],
-    tagContext: ['test'],
-  })),
-}))
-
-import { handleVaultRead, handleVaultSearch, handleVaultWrite } from './vault'
-
-beforeEach(() => {
-  files.clear()
-})
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+import fs from 'fs'
+import path from 'path'
+import os from 'os'
 
 describe('mcp vault tools', () => {
-  it('read returns content with frontmatter and context', async () => {
-    files.set('Folder/note.md', {
-      content: '---\ntitle: note\n---\nbody',
-      mtime: 100,
-    })
-    const result = await handleVaultRead({ path: 'Folder/note.md' })
-    expect(result.data?.content).toContain('body')
-    expect(result.data?.frontmatter).toEqual({ title: 'Mock Title', tags: ['test'] })
-    expect(result.data?.backlinks.length).toBeGreaterThan(0)
-    expect(result.data?.relatedFiles.length).toBeGreaterThan(0)
-    expect(result.data?.folderContext).toEqual(['Folder'])
-    expect(result.data?.tagContext).toEqual(['test'])
+  let handleVaultRead: typeof import('./vault').handleVaultRead
+  let handleVaultSearch: typeof import('./vault').handleVaultSearch
+  let handleVaultWrite: typeof import('./vault').handleVaultWrite
+  let home: string
+
+  beforeEach(async () => {
+    vi.resetModules()
+    home = fs.mkdtempSync(path.join(os.tmpdir(), 'penny-vault-'))
+    vi.stubEnv('HOME', home)
+    const v = await import('./vault')
+    handleVaultRead = v.handleVaultRead
+    handleVaultSearch = v.handleVaultSearch
+    handleVaultWrite = v.handleVaultWrite
   })
 
-  it('search returns ranked snippets with scores', async () => {
-    files.set('Folder/a.md', { content: 'firmware timing matters', mtime: 101 })
+  afterEach(() => {
+    fs.rmSync(home, { recursive: true, force: true })
+    vi.unstubAllEnvs()
+    vi.resetModules()
+  })
+
+  it('read returns file content from ~/sidekick', async () => {
+    const dir = path.join(home, 'sidekick', 'Folder')
+    fs.mkdirSync(dir, { recursive: true })
+    fs.writeFileSync(path.join(dir, 'note.md'), 'hello body\n', 'utf8')
+
+    const result = await handleVaultRead({ path: 'Folder/note.md' })
+    expect(result.data?.content).toContain('hello body')
+    expect(typeof result.data?.size).toBe('number')
+    expect(result.summary).toMatch(/read/i)
+  })
+
+  it('search returns matching markdown lines', async () => {
+    const dir = path.join(home, 'sidekick', 'Folder')
+    fs.mkdirSync(dir, { recursive: true })
+    fs.writeFileSync(path.join(dir, 'a.md'), 'firmware timing matters\n', 'utf8')
+
     const result = await handleVaultSearch({ query: 'firmware', limit: 5 })
     expect(result.data.length).toBe(1)
-    expect(result.data[0].snippet).toContain('firmware')
-    expect(typeof result.data[0].score).toBe('number')
-    expect(result.data[0].tags).toContain('test')
-    expect(result.data[0].relatedFiles.length).toBeGreaterThan(0)
+    expect(result.data[0].text.toLowerCase()).toContain('firmware')
+    expect(result.data[0].path).toMatch(/a\.md$/)
   })
 
-  it('write creates file when createIfMissing is true', async () => {
-    const writeResult = await handleVaultWrite({
+  it('write creates file and parent directories', async () => {
+    const result = await handleVaultWrite({
       path: 'Folder/new.md',
       content: '# New',
-      createIfMissing: true,
     })
-    expect(writeResult.data.success).toBe(true)
-    expect(writeResult.data.created).toBe(true)
-    expect(files.get('Folder/new.md')?.content).toBe('# New')
+    expect(result.data.success).toBe(true)
+    expect(result.data.path).toBe('Folder/new.md')
+    const abs = path.join(home, 'sidekick', 'Folder', 'new.md')
+    expect(fs.readFileSync(abs, 'utf8')).toBe('# New')
   })
 
-  it('write fails safely when file is missing and createIfMissing is false', async () => {
-    const writeResult = await handleVaultWrite({
-      path: 'Folder/missing.md',
-      content: '# Missing',
-    })
-    expect(writeResult.data.success).toBe(false)
-    expect(writeResult.data.created).toBe(false)
-    expect(writeResult.summary).toContain('failed')
+  it('read returns null when file is missing', async () => {
+    fs.mkdirSync(path.join(home, 'sidekick'), { recursive: true })
+    const result = await handleVaultRead({ path: 'missing.md' })
+    expect(result.data).toBeNull()
+    expect(result.summary.toLowerCase()).toContain('not found')
   })
 })

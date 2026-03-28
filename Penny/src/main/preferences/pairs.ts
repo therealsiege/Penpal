@@ -11,12 +11,14 @@ export interface DPOPair {
   timestamp: string
 }
 
+/** Matches issue #16 stats shape (`totalPairs`, `bySource`). */
 export interface PairStats {
   totalPairs: number
   bySource: Record<string, number>
 }
 
-type PairSource = 'approve_reject' | 'complete_fail' | 'edit_corrective'
+const ORCH_COMPLETE = 'orchestrator:task-completed'
+const ORCH_FAILED = 'orchestrator:task-failed'
 
 export class PairGenerator {
   constructor(private readonly store: PreferenceStore) {}
@@ -33,24 +35,33 @@ export class PairGenerator {
     }
   }
 
-  async export(path: string, format: 'jsonl' | 'parquet'): Promise<number> {
+  async export(
+    path: string,
+    format: 'jsonl' | 'parquet',
+    options?: { since?: Date; trlCoreFieldsOnly?: boolean },
+  ): Promise<number> {
     if (format === 'parquet') {
       throw new Error('Parquet export not yet implemented. Use jsonl format.')
     }
 
     let count = 0
     const lines: string[] = []
-    for await (const pair of this.generate()) {
-      lines.push(JSON.stringify(pair))
+    const iter = options?.since !== undefined ? this.generate(options.since) : this.generate()
+    for await (const pair of iter) {
+      const payload = options?.trlCoreFieldsOnly
+        ? { prompt: pair.prompt, chosen: pair.chosen, rejected: pair.rejected }
+        : pair
+      lines.push(JSON.stringify(payload))
       count++
     }
     await fsp.writeFile(path, lines.length > 0 ? lines.join('\n') + '\n' : '')
     return count
   }
 
-  async stats(): Promise<PairStats> {
+  async stats(since?: Date): Promise<PairStats> {
     const result: PairStats = { totalPairs: 0, bySource: {} }
-    for await (const pair of this.generate()) {
+    const iter = since !== undefined ? this.generate(since) : this.generate()
+    for await (const pair of iter) {
       result.totalPairs++
       result.bySource[pair.source] = (result.bySource[pair.source] ?? 0) + 1
     }
@@ -59,11 +70,9 @@ export class PairGenerator {
 
   private async loadEvents(since?: Date): Promise<PreferenceEvent[]> {
     const events: PreferenceEvent[] = []
-    const sinceMs = since?.getTime()
-    for await (const event of this.store.query()) {
-      const ts = this.parseTimestamp(event.timestamp)
-      if (ts === null) continue
-      if (sinceMs !== undefined && ts < sinceMs) continue
+    const filter = since !== undefined ? { since } : undefined
+    for await (const event of this.store.query(filter)) {
+      if (this.parseTimestamp(event.timestamp) === null) continue
       events.push(event)
     }
     return events.sort(this.compareEvent)
@@ -89,11 +98,28 @@ export class PairGenerator {
       const approve = queue?.shift()
       if (!approve) continue
 
-      const pair = this.buildPair(approve, event, 'approve_reject', approve.context.toolCall)
+      const pair = this.buildApproveRejectPair(approve, event)
       if (pair) pairs.push(pair)
     }
 
     return pairs.sort(this.comparePair)
+  }
+
+  private buildApproveRejectPair(approve: PreferenceEvent, reject: PreferenceEvent): DPOPair | null {
+    const prompt = this.cleanText(approve.context.toolCall ?? reject.context.toolCall)
+    const chosen =
+      this.cleanText(approve.context.toolResult) || this.cleanText(approve.userAction)
+    const rejected =
+      this.cleanText(reject.context.toolResult) || this.cleanText(reject.userAction)
+
+    return this.makePair({
+      prompt,
+      chosen,
+      rejected,
+      source: 'approve_reject',
+      agentId: approve.agentId,
+      timestamp: approve.timestamp,
+    })
   }
 
   private generateOutcomePairs(events: PreferenceEvent[]): DPOPair[] {
@@ -102,9 +128,8 @@ export class PairGenerator {
 
     for (const event of events) {
       if (event.signal !== 'complete' && event.signal !== 'fail') continue
-      const taskType = this.taskTypeKey(event)
-      if (!taskType) continue
-      const key = `${event.agentId}::${taskType}`
+      const key = this.outcomeQueueKey(event)
+      if (!key) continue
 
       if (event.signal === 'complete') {
         const queue = pendingCompletes.get(key)
@@ -117,21 +142,46 @@ export class PairGenerator {
       const complete = queue?.shift()
       if (!complete) continue
 
-      const prompt = complete.context.toolCall ?? event.context.toolCall ?? taskType
-      const pair = this.buildPair(complete, event, 'complete_fail', prompt)
+      const pair = this.buildOutcomePair(complete, event)
       if (pair) pairs.push(pair)
     }
 
     return pairs.sort(this.comparePair)
   }
 
+  private buildOutcomePair(complete: PreferenceEvent, fail: PreferenceEvent): DPOPair | null {
+    const taskType = this.taskTypeKey(complete) ?? this.taskTypeKey(fail)
+    const prompt =
+      this.cleanText(complete.context.toolCall ?? fail.context.toolCall) ||
+      this.cleanText(taskType ?? '')
+
+    let chosen =
+      this.cleanText(complete.context.toolResult) || this.cleanText(complete.context.toolCall)
+    let rejected =
+      this.cleanText(fail.context.toolResult) || this.cleanText(fail.context.toolCall)
+
+    if (chosen === rejected) {
+      chosen = `completed: ${chosen}`
+      rejected = `failed: ${rejected}`
+    }
+
+    return this.makePair({
+      prompt,
+      chosen,
+      rejected,
+      source: 'complete_fail',
+      agentId: complete.agentId,
+      timestamp: complete.timestamp,
+    })
+  }
+
   private generateEditPairs(events: PreferenceEvent[]): DPOPair[] {
     const pairs: DPOPair[] = []
     for (const event of events) {
       if (event.signal !== 'edit') continue
-      const prompt = event.context.toolCall ?? event.agentId
+      const prompt = this.editPrompt(event)
       const chosen = this.cleanText(event.userAction)
-      const rejected = this.cleanText(event.context.toolResult)
+      const rejected = this.editRejectedText(event)
       const pair = this.makePair({
         prompt,
         chosen,
@@ -145,24 +195,28 @@ export class PairGenerator {
     return pairs.sort(this.comparePair)
   }
 
-  private buildPair(
-    chosenEvent: PreferenceEvent,
-    rejectedEvent: PreferenceEvent,
-    source: PairSource,
-    promptCandidate?: string,
-  ): DPOPair | null {
-    const prompt = this.cleanText(promptCandidate ?? chosenEvent.context.toolCall ?? rejectedEvent.context.toolCall)
-    const chosen = this.cleanText(chosenEvent.context.toolResult ?? chosenEvent.context.toolCall)
-    const rejected = this.cleanText(rejectedEvent.context.toolResult ?? rejectedEvent.context.toolCall)
+  /** Prefer stored before-text; else last non-empty recent message (assistant draft). */
+  private editRejectedText(event: PreferenceEvent): string {
+    const tr = this.cleanText(event.context.toolResult)
+    if (tr) return tr
+    const msgs = event.context.recentMessages
+    if (!msgs?.length) return ''
+    for (let i = msgs.length - 1; i >= 0; i--) {
+      const t = this.cleanText(msgs[i])
+      if (t) return t
+    }
+    return ''
+  }
 
-    return this.makePair({
-      prompt,
-      chosen,
-      rejected,
-      source,
-      agentId: chosenEvent.agentId,
-      timestamp: chosenEvent.timestamp,
-    })
+  private editPrompt(event: PreferenceEvent): string {
+    const base = this.cleanText(event.context.toolCall) || event.agentId
+    const snippets =
+      event.context.recentMessages?.map((m) => this.cleanText(m)).filter((s) => s.length > 0) ?? []
+    if (snippets.length === 0) return base
+    const ctx = snippets.join('\n---\n')
+    const max = 2000
+    const truncated = ctx.length > max ? `${ctx.slice(0, max)}…` : ctx
+    return `${base}\n\nContext:\n${truncated}`
   }
 
   private makePair(input: DPOPair): DPOPair | null {
@@ -186,6 +240,25 @@ export class PairGenerator {
     if (!toolCall) return null
     const session = this.normalizeToken(event.sessionId) ?? 'nosession'
     return `${event.agentId}::${session}::${toolCall}`
+  }
+
+  /**
+   * FIFO key for complete→fail pairing. Orchestrator events include task id so unrelated tasks
+   * never pair; generic tool calls still pair on shared task-type prefix (see taskTypeKey).
+   */
+  private outcomeQueueKey(event: PreferenceEvent): string | null {
+    const tc = this.normalizeToken(event.context.toolCall)
+    if (!tc) return null
+
+    if (tc === ORCH_COMPLETE || tc === ORCH_FAILED) {
+      const tid = this.normalizeToken(event.context.toolResult)
+      if (!tid) return null
+      return `${event.agentId}::orch::${tid}`
+    }
+
+    const taskType = this.taskTypeKey(event)
+    if (!taskType) return null
+    return `${event.agentId}::${taskType}`
   }
 
   private taskTypeKey(event: PreferenceEvent): string | null {
