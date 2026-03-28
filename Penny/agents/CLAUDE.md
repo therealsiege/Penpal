@@ -40,13 +40,18 @@ When working in a pod (Solver/Reviewer/Executor):
 
 ## Penny MCP Tools
 
-You have access to Penny tools via MCP. Available tools:
-- `meta:list-tools` — List all available Penny tools
-- `meta:describe-tool` — Get full schema for a specific tool
-- `orchestrator:enqueue` — Add a task to the queue
-- `orchestrator:queue` — View current task queue (filterable by status)
-- `orchestrator:agent-health` — Check health of all agents
-Always call `meta:list-tools` first to discover the current tool set.
+You have access to Penny tools via MCP. Use them to:
+- Check task queue: `orchestrator:queue`
+- Create pods: `pods:create`
+- Search vault: `vault:search`
+- Check your stats: `office:leaderboard`
+
+Operational sequence (run every new session):
+1. Call `meta:list-tools`.
+2. Inspect available tool names.
+3. Run task-specific tools (`orchestrator:queue`, `pods:create`, `vault:search`, `office:leaderboard`).
+
+Tool availability is environment-dependent; always re-check with `meta:list-tools` at session start.
 
 ## Updates
 
