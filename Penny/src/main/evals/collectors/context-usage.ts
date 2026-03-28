@@ -14,7 +14,6 @@
 import fs from 'fs'
 import path from 'path'
 import os from 'os'
-import { evalHarness } from '../harness'
 
 const CLAUDE_PROJECTS_DIR = path.join(os.homedir(), '.claude', 'projects')
 const CLAUDE_SESSIONS_DIR = path.join(os.homedir(), '.claude', 'sessions')
@@ -43,6 +42,12 @@ const DEFAULT_CONTEXT_WINDOW = 200_000
 
 // Rough chars-per-token estimate for English text
 const CHARS_PER_TOKEN = 4
+const UTILIZATION_WARNING_THRESHOLD = 80
+const RECOMMENDATION_COMPRESS_ROT = 0.55
+const RECOMMENDATION_RESTART_ROT = 0.8
+const RECOMMENDATION_RESTART_UTILIZATION = 95
+const MIN_TOOL_EVENTS_FOR_TREND = 6
+const MIN_TASK_OUTCOMES_FOR_TREND = 6
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -62,6 +67,7 @@ interface SessionFileInfo {
   pid: number
   cwd: string
   startedAt: number
+  model?: string
 }
 
 function getActiveSessionFiles(): SessionFileInfo[] {
@@ -81,6 +87,7 @@ function getActiveSessionFiles(): SessionFileInfo[] {
           startedAt: typeof data.startedAt === 'string'
             ? new Date(data.startedAt).getTime()
             : (data.startedAt as number) || 0,
+          model: typeof data.model === 'string' ? data.model : undefined,
         })
       } catch { /* skip bad files */ }
     }
@@ -96,6 +103,9 @@ interface JsonlAnalysis {
   retryRateSecondHalf: number
   toolCallCount: number
   toolErrorCount: number
+  successRateFirstHalf: number
+  successRateSecondHalf: number
+  taskOutcomeCount: number
 }
 
 function extractTextLength(content: unknown): number {
@@ -136,6 +146,7 @@ interface ToolEvent {
 export function analyzeJsonl(jsonlPath: string): JsonlAnalysis {
   let totalChars = 0
   const toolEvents: ToolEvent[] = []
+  const taskOutcomes: Array<'completed' | 'failed'> = []
 
   try {
     const content = fs.readFileSync(jsonlPath, 'utf-8')
@@ -165,8 +176,7 @@ export function analyzeJsonl(jsonlPath: string): JsonlAnalysis {
           if (entry.type === 'user' && typeof msg === 'object' && Array.isArray(msg.content)) {
             for (const block of msg.content) {
               if (block.type === 'tool_result' && block.is_error) {
-                // Find the matching tool event and mark it
-                const toolUseId = block.tool_use_id
+                // Find the latest unresolved tool event and mark it.
                 for (let j = toolEvents.length - 1; j >= 0; j--) {
                   if (!toolEvents[j].isError) {
                     toolEvents[j].isError = true
@@ -175,6 +185,28 @@ export function analyzeJsonl(jsonlPath: string): JsonlAnalysis {
                 }
               }
             }
+          }
+        }
+
+        // Track explicit task outcomes emitted in XML task-notifications.
+        // These are the same notifications that session state logic already parses.
+        if (
+          (entry.type === 'user' || entry.type === 'queue-operation') &&
+          typeof entry.message?.content === 'string'
+        ) {
+          const rawContent = entry.message.content
+          if (rawContent.includes('<task-notification>') && rawContent.includes('<status>completed</status>')) {
+            taskOutcomes.push('completed')
+          } else if (rawContent.includes('<task-notification>') && rawContent.includes('<status>failed</status>')) {
+            taskOutcomes.push('failed')
+          }
+        }
+        if (entry.type === 'queue-operation' && typeof entry.content === 'string') {
+          const rawContent = entry.content
+          if (rawContent.includes('<task-notification>') && rawContent.includes('<status>completed</status>')) {
+            taskOutcomes.push('completed')
+          } else if (rawContent.includes('<task-notification>') && rawContent.includes('<status>failed</status>')) {
+            taskOutcomes.push('failed')
           }
         }
       } catch { /* skip unparseable lines */ }
@@ -194,12 +226,25 @@ export function analyzeJsonl(jsonlPath: string): JsonlAnalysis {
     ? secondHalf.filter(e => e.isError).length / secondHalf.length
     : 0
 
+  const outcomesMidpoint = Math.floor(taskOutcomes.length / 2)
+  const firstOutcomeHalf = taskOutcomes.slice(0, outcomesMidpoint)
+  const secondOutcomeHalf = taskOutcomes.slice(outcomesMidpoint)
+  const successRateFirstHalf = firstOutcomeHalf.length > 0
+    ? firstOutcomeHalf.filter(o => o === 'completed').length / firstOutcomeHalf.length
+    : 0
+  const successRateSecondHalf = secondOutcomeHalf.length > 0
+    ? secondOutcomeHalf.filter(o => o === 'completed').length / secondOutcomeHalf.length
+    : 0
+
   return {
     totalChars,
     retryRateFirstHalf,
     retryRateSecondHalf,
     toolCallCount: toolEvents.length,
     toolErrorCount: toolEvents.filter(e => e.isError).length,
+    successRateFirstHalf,
+    successRateSecondHalf,
+    taskOutcomeCount: taskOutcomes.length,
   }
 }
 
@@ -218,54 +263,32 @@ function computeRetryTrend(firstHalfRate: number, secondHalfRate: number): numbe
   return Math.min(1, delta * 5) // 20% increase → 1.0
 }
 
-function computeSuccessDecline(agentId: string, sessionStartedAt: number): number {
-  // Use eval harness to get task outcomes since session start
-  try {
-    // evalHarness.reportByAgent is async but we need sync behavior here
-    // Instead, we'll return 0 and let the async path handle it
-    return 0
-  } catch {
-    return 0
-  }
-}
-
-async function computeSuccessDeclineAsync(agentId: string, sessionStartedAt: number): Promise<number> {
-  try {
-    const report = await evalHarness.reportByAgent(agentId, new Date(sessionStartedAt))
-    if (report.totalTasks < 4) return 0 // Not enough data
-
-    // Check if recent outcomes are worse than earlier ones
-    // Use the trend: if currentStreak is 0 and successRate < 0.7, that's declining
-    if (report.successRate >= 0.8) return 0
-    if (report.currentStreak > 0 && report.successRate >= 0.6) return 0.1
-
-    // Success rate below 50% with broken streak = strong decline signal
-    if (report.successRate < 0.5 && report.currentStreak === 0) return 0.8
-    if (report.successRate < 0.7 && report.currentStreak === 0) return 0.5
-
-    return Math.max(0, 1 - report.successRate)
-  } catch {
-    return 0
-  }
+function computeSuccessDecline(firstHalfSuccessRate: number, secondHalfSuccessRate: number): number {
+  // Higher score when success rate declines from first to second half.
+  const delta = firstHalfSuccessRate - secondHalfSuccessRate
+  if (delta <= 0) return 0
+  return Math.min(1, delta / 0.5) // 50% drop => 1.0
 }
 
 function deriveRecommendation(
   utilizationPct: number,
   rotScore: number,
 ): ContextHealth['recommendation'] {
-  if (rotScore >= 0.8 || utilizationPct >= 95) return 'restart'
-  if (rotScore >= 0.6) return 'compress'
-  if (utilizationPct >= 80 || rotScore >= 0.3) return 'warning'
+  if (rotScore >= RECOMMENDATION_RESTART_ROT || utilizationPct >= RECOMMENDATION_RESTART_UTILIZATION) {
+    return 'restart'
+  }
+  if (rotScore >= RECOMMENDATION_COMPRESS_ROT) return 'compress'
+  if (utilizationPct >= UTILIZATION_WARNING_THRESHOLD || rotScore >= 0.3) return 'warning'
   return 'healthy'
 }
 
 // ── ContextMonitor ──────────────────────────────────────────────────────────
 
 export class ContextMonitor {
-  private contextWindowSize: number
+  private readonly defaultContextWindowSize: number
 
   constructor(contextWindowSize?: number) {
-    this.contextWindowSize = contextWindowSize ?? DEFAULT_CONTEXT_WINDOW
+    this.defaultContextWindowSize = contextWindowSize ?? DEFAULT_CONTEXT_WINDOW
   }
 
   async check(agentId: string): Promise<ContextHealth> {
@@ -281,7 +304,7 @@ export class ContextMonitor {
       return this.emptyHealth(agentId, '')
     }
 
-    return this.analyzeSession(agentId, session.sessionId, session.startedAt)
+    return this.analyzeSession(agentId, session.sessionId, session.startedAt, session.model)
   }
 
   async checkAll(): Promise<ContextHealth[]> {
@@ -290,7 +313,7 @@ export class ContextMonitor {
 
     for (const session of sessions) {
       const agentId = path.basename(session.cwd) || session.sessionId
-      const health = await this.analyzeSession(agentId, session.sessionId, session.startedAt)
+      const health = await this.analyzeSession(agentId, session.sessionId, session.startedAt, session.model)
       results.push(health)
     }
 
@@ -302,6 +325,7 @@ export class ContextMonitor {
     agentId: string,
     sessionId: string,
     startedAt: number,
+    model?: string,
   ): Promise<ContextHealth> {
     const jsonlPath = findJsonlPath(sessionId)
     if (!jsonlPath) {
@@ -309,15 +333,20 @@ export class ContextMonitor {
     }
 
     const analysis = analyzeJsonl(jsonlPath)
+    const contextWindowSize = this.resolveContextWindow(model)
     const tokenCount = Math.round(analysis.totalChars / CHARS_PER_TOKEN)
-    const utilizationPct = Math.round((tokenCount / this.contextWindowSize) * 100)
+    const utilizationPct = Math.round((tokenCount / contextWindowSize) * 100)
 
-    // Compute rot score components
+    // Compute rot score components with sparse-data guardrails.
     const utilizationPressure = computeUtilizationPressure(utilizationPct)
-    const retryTrend = computeRetryTrend(analysis.retryRateFirstHalf, analysis.retryRateSecondHalf)
-    const successDecline = await computeSuccessDeclineAsync(agentId, startedAt)
+    const retryTrend = analysis.toolCallCount >= MIN_TOOL_EVENTS_FOR_TREND
+      ? computeRetryTrend(analysis.retryRateFirstHalf, analysis.retryRateSecondHalf)
+      : 0
+    const successDecline = analysis.taskOutcomeCount >= MIN_TASK_OUTCOMES_FOR_TREND
+      ? computeSuccessDecline(analysis.successRateFirstHalf, analysis.successRateSecondHalf)
+      : 0
 
-    // Weighted combination
+    // Weighted combination; clamp to [0..1].
     const rotScore = Math.min(1, Math.max(0,
       utilizationPressure * 0.4 +
       retryTrend * 0.3 +
@@ -330,7 +359,7 @@ export class ContextMonitor {
       agentId,
       sessionId,
       tokenCount,
-      contextWindowSize: this.contextWindowSize,
+      contextWindowSize,
       utilizationPct,
       rotScore: Math.round(rotScore * 100) / 100,
       recommendation,
@@ -344,17 +373,24 @@ export class ContextMonitor {
     jsonlPath: string,
     startedAt = 0,
   ): Promise<ContextHealth> {
+    void startedAt
     const analysis = analyzeJsonl(jsonlPath)
+    const contextWindowSize = this.defaultContextWindowSize
     const tokenCount = Math.round(analysis.totalChars / CHARS_PER_TOKEN)
-    const utilizationPct = Math.round((tokenCount / this.contextWindowSize) * 100)
+    const utilizationPct = Math.round((tokenCount / contextWindowSize) * 100)
 
     const utilizationPressure = computeUtilizationPressure(utilizationPct)
-    const retryTrend = computeRetryTrend(analysis.retryRateFirstHalf, analysis.retryRateSecondHalf)
+    const retryTrend = analysis.toolCallCount >= MIN_TOOL_EVENTS_FOR_TREND
+      ? computeRetryTrend(analysis.retryRateFirstHalf, analysis.retryRateSecondHalf)
+      : 0
+    const successDecline = analysis.taskOutcomeCount >= MIN_TASK_OUTCOMES_FOR_TREND
+      ? computeSuccessDecline(analysis.successRateFirstHalf, analysis.successRateSecondHalf)
+      : 0
 
     const rotScore = Math.min(1, Math.max(0,
       utilizationPressure * 0.4 +
       retryTrend * 0.3 +
-      0, // skip evalHarness for direct-path analysis
+      successDecline * 0.3,
     ))
 
     const recommendation = deriveRecommendation(utilizationPct, rotScore)
@@ -363,7 +399,7 @@ export class ContextMonitor {
       agentId,
       sessionId,
       tokenCount,
-      contextWindowSize: this.contextWindowSize,
+      contextWindowSize,
       utilizationPct,
       rotScore: Math.round(rotScore * 100) / 100,
       recommendation,
@@ -375,11 +411,16 @@ export class ContextMonitor {
       agentId,
       sessionId,
       tokenCount: 0,
-      contextWindowSize: this.contextWindowSize,
+      contextWindowSize: this.defaultContextWindowSize,
       utilizationPct: 0,
       rotScore: 0,
       recommendation: 'healthy',
     }
+  }
+
+  private resolveContextWindow(model?: string): number {
+    if (!model) return this.defaultContextWindowSize
+    return MODEL_CONTEXT_WINDOWS[model] ?? this.defaultContextWindowSize
   }
 }
 
