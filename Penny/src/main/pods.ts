@@ -6,6 +6,7 @@ import { runAgentHeadless } from './sessions'
 import { getAgentConfig, loadPodPresets, getTaskRunnerKind, type TaskRunnerKind } from './agents'
 import { getPhaseConfig, type PhaseConfig } from './pods/phase-config'
 import { podQualityCollector, type PodQualityEvent } from './evals/collectors/pod-quality'
+import { evalHarness } from './evals/harness'
 
 export type { PhaseConfig } from './pods/phase-config'
 
@@ -877,9 +878,15 @@ async function runSolveStage(wf: PodWorkflow, feedback?: string): Promise<boolea
     } else {
       // Fallback: pick the first candidate
       console.log('[pods] Self-eval failed to parse — selecting first candidate')
-      wf.solver.output = candidates[0].output
+      const selected = candidates[0]
+      wf.solver.output = selected.output
       wf.solver.status = 'complete'
       wf.selfEvaluation = { selected: 1, confidence: 0, reasoning: 'Self-eval parse failed — defaulting to first candidate' }
+      for (const a of wf.artifacts) {
+        if (a.stage === 'solve' && a.iteration === wf.iteration && a.candidateIndex === selected.index) {
+          a.selected = true
+        }
+      }
     }
   } else {
     // Single candidate survived or self-eval disabled
@@ -1185,6 +1192,16 @@ export function createPod(task: string, opts: CreatePodOpts = {}): PodWorkflow {
   if (cwdErr) {
     finalizePodQuality(wf)
     return wf
+  }
+
+  // Avoid appending to real Penny/data during Vitest (createPod is used heavily in tests).
+  if (process.env.VITEST !== 'true') {
+    void evalHarness.recordConfigChange(new Date(), {
+      kind: 'pod-workflow',
+      message:
+        `Pod workflow started — preset \`${presetId}\`, priority ${opts.priority ?? '(default)'}, `
+        + `maxSelfFixes ${maxSelfFixes}, solver candidates ${candidateCount}`,
+    })
   }
 
   const promise = runWorkflow(wf)

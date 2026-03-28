@@ -859,8 +859,8 @@ export class WorkstationAnimator {
     const orchColors: Record<string, number> = { planning: 0xa78bfa, executing: 0xf97316, validating: 0x06b6d4 }
     const baseColor = orchStage ? (orchColors[orchStage] ?? 0xf97316)
       : isWaiting ? 0xfbbf24 : isWorking ? 0x0ea5e9 : activeTheme.deskBody
-    const baseStrength = isActive ? 3 : 1
-    const peakStrength = isActive ? 6 : 2
+    const baseStrength = isActive ? 1.5 : 0.5
+    const peakStrength = isActive ? 3 : 1
     const duration     = isActive ? 800 : 2400
     ws.monitorGlowFx.color = baseColor
     ws.monitorGlowFx.outerStrength = baseStrength

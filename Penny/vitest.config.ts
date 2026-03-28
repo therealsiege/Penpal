@@ -17,6 +17,13 @@ export default defineConfig({
         test: {
           name: 'main',
           environment: 'node',
+          // These suites use node:test (run via tsx --test); Vitest would load them with 0 suites.
+          exclude: [
+            'src/main/evals/__tests__/context-usage.test.ts',
+            'src/main/evals/__tests__/human-judge.test.ts',
+            'src/main/evals/__tests__/pod-quality.test.ts',
+            'src/main/evals/__tests__/task-outcomes.test.ts',
+          ],
           include: [
             'tests/main/**/*.test.ts',
             'src/main/pods.test.ts',
@@ -25,6 +32,8 @@ export default defineConfig({
             'src/main/pods/__tests__/**/*.test.ts',
             'src/main/context-response.test.ts',
             'src/main/evals/reports/__tests__/**/*.test.ts',
+            'src/main/evals/__tests__/**/*.test.ts',
+            'tests/main/evals/**/*.test.ts',
             'src/mcp/**/*.test.ts',
           ],
           setupFiles: ['tests/setup/main.setup.ts'],

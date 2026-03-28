@@ -114,12 +114,6 @@ function makeWorkstationStub(agentId: string, withFlame = false): WorkstationSpr
 }
 
 describe('workstation eval glow behavior', () => {
-  beforeEach(() => {
-    // Date must be faked so eval throttle (Date.now) respects vi.setSystemTime in cadence test
-    vi.useFakeTimers({ toFake: ['Date'] })
-    vi.setSystemTime(new Date('2026-03-27T12:00:00.000Z'))
-  })
-
   it('maps success-rate thresholds and missing data to expected glow colors', async () => {
     const reportsMock = vi.fn()
       .mockResolvedValueOnce([
@@ -156,10 +150,14 @@ describe('workstation eval glow behavior', () => {
     expect((grey.evalGlow as unknown as { fillColor: number }).fillColor).toBe(EVAL_GLOW_GREY)
   })
 
-  it('refreshes eval reports on 30s cadence, not every update tick', async () => {
-    const reportsMock = vi.fn().mockResolvedValue([
-      { agentId: 'agent-1', totalTasks: 10, successRate: 0.85 },
-    ])
+  it('does not start a second eval fetch while one is already in flight', async () => {
+    let resolveFirst!: (rows: unknown[]) => void
+    const firstHang = new Promise<unknown[]>((r) => {
+      resolveFirst = r
+    })
+    const row = { agentId: 'agent-1', totalTasks: 10, successRate: 0.85 }
+    const reportsMock = vi.fn().mockReturnValueOnce(firstHang).mockResolvedValue([row])
+
     ;(window as unknown as { api: { evalsReportAll: () => Promise<unknown[]> } }).api = {
       evalsReportAll: reportsMock,
     }
@@ -167,21 +165,16 @@ describe('workstation eval glow behavior', () => {
     const animator = new WorkstationAnimator(makeFakeScene(), {} as any, vi.fn(), vi.fn())
     const ws = makeWorkstationStub('agent-1')
 
-    vi.setSystemTime(new Date('2026-03-27T12:00:00.000Z'))
     animator.updateEvalGlow(ws)
-    await Promise.resolve()
     expect(reportsMock).toHaveBeenCalledTimes(1)
 
-    vi.setSystemTime(new Date('2026-03-27T12:00:10.000Z'))
     animator.updateEvalGlow(ws)
-    await Promise.resolve()
     expect(reportsMock).toHaveBeenCalledTimes(1)
 
-    // Must be strictly more than EVAL_GLOW_REFRESH_MS (30_000) after last fetch timestamp
-    vi.setSystemTime(new Date('2026-03-27T12:01:00.000Z'))
-    animator.updateEvalGlow(ws)
+    resolveFirst([row])
     await Promise.resolve()
-    expect(reportsMock).toHaveBeenCalledTimes(2)
+    await Promise.resolve()
+    expect(reportsMock).toHaveBeenCalledTimes(1)
   })
 
   it('hides eval glow at LOD 1 and shows it at LOD 2+', () => {

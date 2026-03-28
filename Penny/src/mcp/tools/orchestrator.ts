@@ -13,19 +13,9 @@ import {
   getOrchestratorStats,
   type Task,
   type TaskPriority,
-  type TaskStatus,
   type AgentHealthStatus,
   type OrchestratorStats,
 } from '../../main/orchestrator.js'
-
-const TASK_STATUSES: TaskStatus[] = [
-  'queued',
-  'assigned',
-  'active',
-  'completed',
-  'failed',
-  'cancelled',
-]
 import { wrapResponse, type ContextEngineeredResponse } from '../response.js'
 
 // ── Exported handler functions (testable without MCP transport) ─────────────
@@ -56,13 +46,13 @@ export async function handleEnqueue(params: {
 
   const suggestions: string[] = []
   if (idleAgents.length > 0) {
-    suggestions.push(`${idleAgents.length} idle agent(s) available — use pods:create to assign a team`)
+    suggestions.push(`${idleAgents.length} idle agent(s) available — use pod:create to assign a team`)
   }
   if (queuedAhead > 0) {
     suggestions.push(`${queuedAhead} task(s) ahead in queue — use orchestrator:queue to check position`)
   }
   if (priority === 'critical') {
-    suggestions.push('Critical task — consider assigning immediately via pods:create')
+    suggestions.push('Critical task — consider assigning immediately via pod:create')
   }
   if (suggestions.length === 0) {
     suggestions.push('Task enqueued. Use orchestrator:queue to monitor progress')
@@ -73,83 +63,64 @@ export async function handleEnqueue(params: {
   return wrapResponse(task, summary, suggestions, [
     'orchestrator:queue',
     'orchestrator:agent-health',
-    'pods:create',
+    'pod:create',
   ])
 }
 
 export async function handleQueue(params: {
   status?: string
-}): Promise<ContextEngineeredResponse<{ tasks: Task[]; stats: OrchestratorStats }>> {
-  const allTasks = getTaskQueue()
-  const filterStatus =
-    params.status && TASK_STATUSES.includes(params.status as TaskStatus)
-      ? (params.status as TaskStatus)
-      : undefined
-
-  const tasks = filterStatus ? allTasks.filter(t => t.status === filterStatus) : allTasks
+}): Promise<ContextEngineeredResponse<{
+  tasks: Task[]
+  stats: OrchestratorStats
+  idle_agents: Array<Pick<AgentHealthStatus, 'agentId' | 'name' | 'status' | 'activeTasks'>>
+}>> {
+  const validStatuses = ['queued', 'assigned', 'active', 'completed', 'failed', 'cancelled']
+  let tasks = getTaskQueue()
+  const statusFilter = validStatuses.includes(params.status ?? '') ? params.status : undefined
+  if (statusFilter) {
+    tasks = tasks.filter(t => t.status === statusFilter)
+  }
 
   const stats = getOrchestratorStats()
   const healthStatuses = await getAgentHealthStatuses()
   const idleAgents = healthStatuses.filter(a => a.alive && a.activeTasks === 0)
-  const idleCount = idleAgents.length
-
-  const criticalQueued = allTasks.filter(t => t.status === 'queued' && t.priority === 'critical')
-  const failedInQueue = allTasks.filter(t => t.status === 'failed').length
+  const idleAgentContext = idleAgents.map(a => ({
+    agentId: a.agentId,
+    name: a.name,
+    status: a.status,
+    activeTasks: a.activeTasks,
+  }))
+  const criticalQueued = tasks.filter(t => t.status === 'queued' && t.priority === 'critical')
 
   const suggestions: string[] = []
-  if (criticalQueued.length > 0 && idleCount > 0) {
+  if (criticalQueued.length > 0 && idleAgents.length > 0) {
     suggestions.push(
-      `${criticalQueued.length} critical task(s) queued with ${idleCount} idle agent(s) — assign via pods:create`,
+      `${criticalQueued.length} critical task(s) queued with ${idleAgents.length} idle agent(s) — assign via pod:create`,
     )
   }
-  if (criticalQueued.length > 0 && idleCount === 0) {
-    suggestions.push(
-      'Critical backlog with no idle agents — pause low-priority work or launch capacity.',
-    )
-  }
-  if (failedInQueue > 0) {
-    suggestions.push(`${failedInQueue} failed task(s) — retry via orchestrator:retry-task.`)
-  }
-  if (stats.failedToday > 0 && failedInQueue === 0) {
+  if (stats.failedToday > 0) {
     suggestions.push(`${stats.failedToday} task(s) failed today — review with orchestrator:queue status=failed`)
-  }
-  if (allTasks.length === 0) {
-    suggestions.push('Queue clear — enqueue new work via orchestrator:enqueue.')
-  }
-  if (idleCount === 0 && allTasks.length > 0) {
-    suggestions.push('No idle agents — monitor via orchestrator:agent-health.')
   }
   if (suggestions.length === 0) {
     suggestions.push('Queue is healthy, no action needed')
   }
 
   const parts: string[] = []
-  if (filterStatus) {
-    parts.push(`${tasks.length} ${filterStatus} task(s) (${allTasks.length} total)`)
+  if (statusFilter) {
+    parts.push(`${tasks.length} ${statusFilter} task(s)`)
+  } else if (params.status) {
+    parts.push(`${tasks.length} task(s)`)
+    suggestions.push(`Ignored unsupported status "${params.status}" — use orchestrator:queue without filter or a valid status`)
   } else {
     parts.push(`${tasks.length} task(s): ${stats.queueDepth} queued, ${stats.activeTasks} active`)
   }
-  parts.push(`${idleCount} agent(s) idle`)
-
-  const related: string[] = ['orchestrator:enqueue', 'orchestrator:agent-health', 'pods:create']
-  if (failedInQueue > 0) related.push('orchestrator:retry-task')
-  related.push('orchestrator:queue')
+  parts.push(`${idleAgents.length} agent(s) idle`)
 
   return wrapResponse(
-    { tasks, stats },
+    { tasks, stats, idle_agents: idleAgentContext },
     parts.join('. ') + '.',
     suggestions,
-    related,
-    {
-      byStatus: Object.fromEntries(
-        [...new Set(allTasks.map(t => t.status))].map(s => [
-          s,
-          allTasks.filter(t => t.status === s).length,
-        ]),
-      ),
-      idleAgentCount: idleCount,
-      filteredBy: filterStatus ?? null,
-    },
+    ['orchestrator:enqueue', 'orchestrator:agent-health', 'pod:create'],
   )
 }
 
@@ -159,70 +130,44 @@ export async function handleAgentHealth(): Promise<
   const agents = await getAgentHealthStatuses()
   const stats = getOrchestratorStats()
 
-  const healthyIds = agents.filter(a => a.status === 'healthy').map(a => a.agentId)
-  const warningEntries = agents
-    .filter(a => a.status === 'warning')
-    .map(a => ({ agentId: a.agentId, reasons: a.warnings }))
-  const deadIds = agents.filter(a => a.status === 'dead').map(a => a.agentId)
-
-  const healthy = healthyIds.length
-  const warning = warningEntries.length
-  const dead = deadIds.length
+  const healthy = agents.filter(a => a.status === 'healthy').length
+  const warning = agents.filter(a => a.status === 'warning').length
+  const dead = agents.filter(a => a.status === 'dead').length
   const idle = agents.filter(a => a.alive && a.activeTasks === 0).length
 
   const suggestions: string[] = []
-  const recommendations: Array<{
-    priority: 'high' | 'medium'
-    agentId: string
-    action: string
-    reason: string
-  }> = []
 
-  for (const d of deadIds.slice(0, 3)) {
-    const name = agents.find(s => s.agentId === d)?.name || d
-    suggestions.push(`${name} is dead — restart via orchestrator:shutdown-agent then agents:launch.`)
-    recommendations.push({ priority: 'high', agentId: d, action: 'restart', reason: 'agent process is dead' })
+  const deadAgents = agents.filter(a => a.status === 'dead')
+  if (deadAgents.length > 0) {
+    suggestions.push(
+      `${deadAgents.length} dead agent(s): ${deadAgents.map(a => a.name).join(', ')} — restart via agent session creation`,
+    )
   }
-  for (const w of warningEntries.slice(0, 3)) {
-    const name = agents.find(s => s.agentId === w.agentId)?.name || w.agentId
-    const reasonStr = w.reasons.join(', ')
-    suggestions.push(`${name} has warnings: ${reasonStr} — consider restarting.`)
-    recommendations.push({
-      priority: 'medium',
-      agentId: w.agentId,
-      action: 'investigate',
-      reason: reasonStr,
-    })
+
+  const warningAgents = agents.filter(a => a.status === 'warning')
+  for (const a of warningAgents) {
+    if (a.warnings.length > 0) {
+      suggestions.push(`Check ${a.name} — ${a.warnings[0]}`)
+    }
   }
 
   if (idle > 0 && stats.queueDepth > 0) {
     suggestions.push(
-      `${idle} idle agent(s) with ${stats.queueDepth} queued task(s) — assign via orchestrator:enqueue + pods:create`,
+      `${idle} idle agent(s) with ${stats.queueDepth} queued task(s) — assign via orchestrator:enqueue + pod:create`,
     )
   }
 
   if (suggestions.length === 0) {
-    suggestions.push('All agents healthy — no action needed.')
+    suggestions.push('All agents healthy, no action needed')
   }
 
   const summary = `${agents.length} agent(s): ${healthy} healthy, ${warning} warning, ${dead} dead. ${idle} idle.`
-
-  const related = ['orchestrator:queue', 'orchestrator:enqueue', 'pods:create', 'agents:statuses']
-  if (dead > 0) {
-    related.push('orchestrator:shutdown-agent', 'agents:launch')
-  }
 
   return wrapResponse(
     { agents },
     summary,
     suggestions,
-    related,
-    {
-      healthy: healthyIds,
-      warnings: warningEntries,
-      dead: deadIds,
-      recommendations,
-    },
+    ['orchestrator:queue', 'orchestrator:enqueue', 'pod:create'],
   )
 }
 
@@ -261,8 +206,8 @@ toolRegistry.register({
     properties: {
       status: {
         type: 'string',
-        enum: [...TASK_STATUSES],
-        description: 'Filter by task status (omit for all tasks)',
+        enum: ['queued', 'assigned', 'active', 'completed', 'failed', 'cancelled'],
+        description: 'Filter by status: queued, assigned, active, completed, failed, cancelled',
       },
     },
     additionalProperties: false,

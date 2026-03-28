@@ -162,10 +162,11 @@ export const THINKING_DOT_HOLD_MS = 500
 
 /** Color per MCP server name — used for dashed connection lines in the game view */
 export const MCP_SERVER_COLORS: Record<string, number> = {
-  serena:    0x8b5cf6, // violet
+  penny:     0x3b82f6, // blue
+  serena:    0x22c55e, // green
   context7:  0x22d3ee, // cyan
   github:    0xc4ccd6, // grey-white
-  Neon:      0x4ade80, // green
+  neon:      0x4ade80, // green
   magic:     0xf472b6, // pink
   linear:    0x818cf8, // indigo
   firecrawl: 0xfb923c, // orange
@@ -183,3 +184,5 @@ export const MCP_REFRESH_MS = 90
 /** Offset from room right edge for the MCP icon cluster */
 export const MCP_ICON_CLUSTER_OFFSET_X = 70
 export const MCP_ICON_CLUSTER_SPACING_Y = 14
+export const MCP_DASH_LENGTH = 4
+export const MCP_DASH_GAP = 4
