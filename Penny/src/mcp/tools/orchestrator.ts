@@ -46,13 +46,13 @@ export async function handleEnqueue(params: {
 
   const suggestions: string[] = []
   if (idleAgents.length > 0) {
-    suggestions.push(`${idleAgents.length} idle agent(s) available — use pod:create to assign a team`)
+    suggestions.push(`${idleAgents.length} idle agent(s) available — use pods:create to assign a team`)
   }
   if (queuedAhead > 0) {
     suggestions.push(`${queuedAhead} task(s) ahead in queue — use orchestrator:queue to check position`)
   }
   if (priority === 'critical') {
-    suggestions.push('Critical task — consider assigning immediately via pod:create')
+    suggestions.push('Critical task — consider assigning immediately via pods:create')
   }
   if (suggestions.length === 0) {
     suggestions.push('Task enqueued. Use orchestrator:queue to monitor progress')
@@ -63,7 +63,7 @@ export async function handleEnqueue(params: {
   return wrapResponse(task, summary, suggestions, [
     'orchestrator:queue',
     'orchestrator:agent-health',
-    'pod:create',
+    'pods:create',
   ])
 }
 
@@ -95,7 +95,7 @@ export async function handleQueue(params: {
   const suggestions: string[] = []
   if (criticalQueued.length > 0 && idleAgents.length > 0) {
     suggestions.push(
-      `${criticalQueued.length} critical task(s) queued with ${idleAgents.length} idle agent(s) — assign via pod:create`,
+      `${criticalQueued.length} critical task(s) queued with ${idleAgents.length} idle agent(s) — assign via pods:create`,
     )
   }
   if (stats.failedToday > 0) {
@@ -120,7 +120,7 @@ export async function handleQueue(params: {
     { tasks, stats, idle_agents: idleAgentContext },
     parts.join('. ') + '.',
     suggestions,
-    ['orchestrator:enqueue', 'orchestrator:agent-health', 'pod:create'],
+    ['orchestrator:enqueue', 'orchestrator:agent-health', 'pods:create'],
   )
 }
 
@@ -153,7 +153,7 @@ export async function handleAgentHealth(): Promise<
 
   if (idle > 0 && stats.queueDepth > 0) {
     suggestions.push(
-      `${idle} idle agent(s) with ${stats.queueDepth} queued task(s) — assign via orchestrator:enqueue + pod:create`,
+      `${idle} idle agent(s) with ${stats.queueDepth} queued task(s) — assign via orchestrator:enqueue + pods:create`,
     )
   }
 
@@ -167,7 +167,7 @@ export async function handleAgentHealth(): Promise<
     { agents },
     summary,
     suggestions,
-    ['orchestrator:queue', 'orchestrator:enqueue', 'pod:create'],
+    ['orchestrator:queue', 'orchestrator:enqueue', 'pods:create'],
   )
 }
 
