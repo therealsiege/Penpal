@@ -299,6 +299,8 @@ export class OfficeWorkstations {
     const fp = `${agent.status}|${agent.sessionMode}|${agent.needsInteraction}|${agent.interactionType}|${agent.config.name}|${blurbSnippet}|${agent.uptime ?? ''}|${ctxRound}|${agent.contextRotDetected ?? ''}|${streak}`
     if (ws.lastStateFingerprint === fp) {
       ws.state = agent
+      // Keep eval glow fresh even when nothing else changed; animator throttles fetches to 30s.
+      this.animator.updateEvalGlow(ws)
       return
     }
     // Fire toasts on meaningful state transitions

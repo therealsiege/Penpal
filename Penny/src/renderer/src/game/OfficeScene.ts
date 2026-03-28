@@ -1755,6 +1755,7 @@ export class OfficeScene extends Phaser.Scene {
 
     this.ambient.destroy()
     this.pods.destroy()
+    this.mcp.destroy()
 
     // UI subsystem cleanup (helpOverlay, debugOverlay, tooltips, hover ring, notifications)
     this.ui.destroy()
