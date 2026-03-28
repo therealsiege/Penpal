@@ -1,9 +1,10 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { usePolling } from '../hooks/usePolling'
 import { AgentAvatar } from '../components/AgentAvatar'
 import { useToast } from '../components/Toast'
 import { Terminal } from '../components/Terminal'
-import type { AgentConfig, AgentState, HealthResult, HotLead, JobStatus, PodWorkflow, PodPreset, ProjectLeaderboardEntry, OpencodeSession, AgentXP, OpenClawInfo, ConfigSnapshot, McpServerEntry, AgentToolSummary, getRankForXP } from '../types'
+import type { AgentConfig, AgentState, ContextHealth, HealthResult, HotLead, JobStatus, PodWorkflow, PodPreset, ProjectLeaderboardEntry, OpencodeSession, AgentXP, OpenClawInfo, ConfigSnapshot, McpServerEntry, AgentToolSummary, getRankForXP } from '../types'
+import { mergeAgentContextFromHealth } from '../utils/contextHealthMerge'
 import { PodLauncherModal, PodStatusModal, PodListModal } from '../components/PodModal'
 import { createOfficeGame } from '../game/OfficeGame'
 import { OfficeScene } from '../game/OfficeScene'
@@ -1358,7 +1359,15 @@ export function CommandCenter(props: CommandCenterProps) {
     () => window.api.orchestratorXP().catch(() => ({})),
     10000,
   )
+  const { data: contextHealthReports } = usePolling<ContextHealth[]>(
+    () => window.api.contextHealth().catch(() => []),
+    10000,
+  )
 
+  const agentsForGame = useMemo(() => {
+    if (!agentStatuses) return undefined
+    return mergeAgentContextFromHealth(agentStatuses, contextHealthReports)
+  }, [agentStatuses, contextHealthReports])
 
   // --- Agent configs (load once) ---
   const [allConfigs, setAllConfigs] = useState<AgentConfig[]>([])
@@ -1463,10 +1472,10 @@ export function CommandCenter(props: CommandCenterProps) {
 
   // --- Push agent data into Phaser scene ---
   useEffect(() => {
-    if (sceneRef.current && agentStatuses) {
-      sceneRef.current.setAgents(agentStatuses, opencodeSessions)
+    if (sceneRef.current && agentsForGame) {
+      sceneRef.current.setAgents(agentsForGame, opencodeSessions)
     }
-  }, [agentStatuses, opencodeSessions])
+  }, [agentsForGame, opencodeSessions])
 
   const isCursorState = useCallback(
     (state: AgentState) =>
@@ -1512,7 +1521,12 @@ export function CommandCenter(props: CommandCenterProps) {
           executorAgentId: wf.executor.agentId,
           status: wf.status,
           candidates: wf.solverCandidateCount > 1 ? wf.solverCandidateCount : undefined,
-          candidateSelected: !!wf.selfEvaluation,
+          candidateSelected:
+            !!wf.selfEvaluation ||
+            (wf.solverCandidateCount > 1 &&
+              wf.solver.status === 'complete' &&
+              wf.status === 'solving' &&
+              wf.phaseConfig?.selfEvaluation === false),
         }))
       sceneRef.current.setPodWorkflows(activeWorkflows)
     }

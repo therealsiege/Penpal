@@ -174,6 +174,7 @@ If tests fail, the executor's feedback goes back to the solver for iteration (ma
 Manual review queue for random agent output spot checks (`src/main/evals/judges/human-judge.ts`):
 
 - Sampling source: recent orchestrator tasks with status `completed` or `failed`
+- Automated score at sample time: `1.0` when status is `completed`, `0.0` when `failed` (for agreement vs human verdict)
 - Recency policy: last 7 days by `completedAt`
 - Uniqueness policy: a task can only be sampled once (by `taskId`)
 - Persistence: JSON-backed queue at `data/spot-checks.json` with atomic writes
@@ -342,12 +343,20 @@ For lead channels, `leads:*` remains canonical in renderer APIs and `graph:*` al
 
 ## MCP Server
 
-Penny exposes an MCP (Model Context Protocol) server so Claude sessions can programmatically discover and invoke Penny's capabilities.
+Penny exposes an MCP (Model Context Protocol) server so Claude sessions can programmatically discover and invoke Penny's capabilities. The MCP process is a standalone Node child (`tsx`); tool handlers import Penny main-process modules directly (same code paths as the Electron app), not a live IPC bridge into a running app window.
 
 ### Available Tools
 
-- **`meta:list-tools`** — Returns all registered tools with names, descriptions, and input schemas
-- **`meta:describe-tool`** — Returns the full schema for a specific tool by name
+Call **`meta:list-tools`** first for the live catalog. Registered groups mirror main IPC domains:
+
+| Group | Tools |
+|-------|--------|
+| **meta** | `meta:list-tools`, `meta:describe-tool` |
+| **orchestrator** | `orchestrator:enqueue`, `orchestrator:queue`, `orchestrator:agent-health` |
+| **pods** | `pod:list`, `pod:status`, `pod:create` |
+| **office** | `office:rooms`, `office:agents`, `office:leaderboard` |
+| **vault** | `vault:read`, `vault:search`, `vault:write` |
+| **graph** | `graph:search-leads`, `graph:lead-detail`, `graph:stats` |
 
 ### Start the Server
 
@@ -359,11 +368,23 @@ npm run mcp:start
 npm run --prefix Penny mcp:start
 ```
 
-The server uses stdio transport — stdout is reserved for the MCP protocol, logs go to stderr.
+The server uses stdio transport — stdout is reserved for the MCP protocol; startup and errors log to stderr only.
 
-### Connect Claude Sessions
+### Environment
 
-Add this to your `.mcp.json`:
+Tools that touch on-disk data or Veritas may read:
+
+| Variable | Required | Notes |
+|----------|----------|--------|
+| `PENNY_DATA_DIR` | No | Data directory (e.g. `./data` under Penny when using profile configs) |
+| `PENNY_VERITAS_API_URL` | No | Veritas API base (defaults and related keys are in **Environment Variables** above) |
+| `PENNY_VERITAS_AGENT_KEY` | Recommended | Non-admin key for Veritas-backed operations |
+
+### Connect Claude / Cursor
+
+`config-reader.ts` loads project MCP servers from `<sidekick-root>/.mcp.json` and profile overlays from `Penny/agents/mcp-profiles/*.json`.
+
+**Option A — npm from repo root** (cwd defaults to the project root):
 
 ```json
 {
@@ -376,13 +397,29 @@ Add this to your `.mcp.json`:
 }
 ```
 
-### Future Tool Groups
+**Option B — `npx tsx` with `cwd` on `Penny`** (matches agent profiles and many local setups):
 
-- **orchestrator** — task queue, dispatch, agent health
-- **pods** — solver/reviewer/executor workflows
-- **office** — game state, workstations, cosmetics
-- **vault** — file operations, search, graph queries
-- **graph** — Memgraph/Qdrant knowledge graph queries
+```json
+{
+  "mcpServers": {
+    "penny-mcp": {
+      "command": "npx",
+      "args": ["tsx", "src/mcp/index.ts"],
+      "cwd": "Penny",
+      "env": {
+        "PENNY_DATA_DIR": "./data"
+      }
+    }
+  }
+}
+```
+
+Use paths relative to your sidekick repo root; expand `cwd` to an absolute path if your client does not resolve relative `cwd` the same way.
+
+### Follow-ups (not in this server yet)
+
+- **Resources** — `resources/list` and resource providers (capabilities are declared; handlers can be added later)
+- **IPC-only bridge** — only if a tool must drive a single long-lived Electron main process that cannot share state with the MCP Node process
 
 ## macOS Notes
 

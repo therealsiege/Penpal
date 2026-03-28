@@ -4,6 +4,10 @@
  * Implements the "20-50 outputs" manual review practice (Hamel Husain).
  * Persists spot-check records to a JSON file and computes agreement
  * between human verdicts and automated scores.
+ *
+ * Automated score at sample time: 1.0 for `completed`, 0.0 for `failed`.
+ * Agreement: auto-pass iff score >= automatedPassThreshold (default 0.5);
+ * human "partial" counts as pass-leaning for the binary comparison.
  */
 
 import fs from 'fs'
@@ -54,9 +58,10 @@ export class SpotCheckQueue {
   constructor(opts?: string | SpotCheckQueueOptions) {
     const options: SpotCheckQueueOptions = typeof opts === 'string' ? { filePath: opts } : (opts ?? {})
     const filePath = options.filePath
+    // Align with orchestrator / evals: Penny/data (judges/ is one level deeper than evals/)
     const dataDir = filePath
       ? path.dirname(filePath)
-      : path.resolve(__dirname, '..', '..', '..', 'data')
+      : path.resolve(__dirname, '..', '..', '..', '..', 'data')
     this.filePath = filePath ?? path.join(dataDir, 'spot-checks.json')
     this.recentWindowMs = options.recentWindowMs ?? 7 * 24 * 60 * 60 * 1000
     this.automatedPassThreshold = options.automatedPassThreshold ?? 0.5

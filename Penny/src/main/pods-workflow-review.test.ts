@@ -1,3 +1,5 @@
+import fs from 'fs'
+import path from 'path'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 const runAgentHeadlessMock = vi.hoisted(() => vi.fn())
@@ -22,9 +24,63 @@ async function waitForTerminal(id: string, timeoutMs = 8000) {
   return getPodStatus(id)
 }
 
+function critiqueArtifactPath(wfId: string, iteration = 1): string {
+  return path.join(__dirname, '..', '..', 'data', 'pod-critiques', `${wfId}-review-i${iteration}.json`)
+}
+
+function removeCritiqueArtifact(wfId: string, iteration = 1): void {
+  const p = critiqueArtifactPath(wfId, iteration)
+  if (fs.existsSync(p)) fs.unlinkSync(p)
+}
+
 describe('runWorkflow reviewer routing (mocked agents)', () => {
   beforeEach(() => {
     runAgentHeadlessMock.mockReset()
+  })
+
+  it('approve-with-notes: routes to executor; prompt includes verdict, issues, and non-blocking guidance', async () => {
+    let executorPrompt = ''
+    const critique = fencedCritique({
+      verdict: 'approve-with-notes',
+      confidence: 0.88,
+      issues: [
+        {
+          severity: 'nitpick',
+          location: 'x.ts',
+          description: 'style',
+          suggestion: 'rename',
+        },
+      ],
+      strengths: ['Solid structure'],
+      summary: 'Ship with minor notes.',
+    })
+    runAgentHeadlessMock.mockImplementation(async (agentId: string, _cwd: string, prompt: string) => {
+      if (agentId === 'fullstack-dev') return { success: true, output: 'solver summary', durationMs: 1 }
+      if (agentId === 'backend-arch') return { success: true, output: critique, durationMs: 1 }
+      if (agentId === 'electron-dev') {
+        executorPrompt = prompt
+        return { success: true, output: 'RESULT: PASS\n', durationMs: 1 }
+      }
+      return { success: false, output: '', error: 'unknown agent', durationMs: 0 }
+    })
+
+    const wf = createPod('task', { maxIterations: 2, cwd: process.cwd() })
+    try {
+      const done = await waitForTerminal(wf.id)
+      expect(done?.status).toBe('complete')
+      expect(runAgentHeadlessMock).toHaveBeenCalledTimes(3)
+      expect(executorPrompt).toContain('approve-with-notes')
+      expect(executorPrompt).toContain('non-blocking')
+      expect(executorPrompt).toContain('nitpick')
+      expect(executorPrompt).toContain('Ship with minor notes.')
+
+      const critiqueFile = critiqueArtifactPath(wf.id)
+      expect(fs.existsSync(critiqueFile)).toBe(true)
+      const parsed = JSON.parse(fs.readFileSync(critiqueFile, 'utf-8')) as { verdict: string }
+      expect(parsed.verdict).toBe('approve-with-notes')
+    } finally {
+      removeCritiqueArtifact(wf.id)
+    }
   })
 
   it('approve: runs solver → reviewer → executor and completes', async () => {
@@ -43,9 +99,15 @@ describe('runWorkflow reviewer routing (mocked agents)', () => {
     })
 
     const wf = createPod('task', { maxIterations: 2, cwd: process.cwd() })
-    const done = await waitForTerminal(wf.id)
-    expect(done?.status).toBe('complete')
-    expect(runAgentHeadlessMock).toHaveBeenCalledTimes(3)
+    try {
+      const done = await waitForTerminal(wf.id)
+      expect(done?.status).toBe('complete')
+      expect(runAgentHeadlessMock).toHaveBeenCalledTimes(3)
+      const reviewArtifact = done?.artifacts?.find(a => a.stage === 'review')
+      expect(reviewArtifact?.path).toMatch(/data\/pod-critiques\/.*-review-i1\.json/)
+    } finally {
+      removeCritiqueArtifact(wf.id)
+    }
   })
 
   it('reject: fails before executor', async () => {
@@ -63,10 +125,14 @@ describe('runWorkflow reviewer routing (mocked agents)', () => {
     })
 
     const wf = createPod('task', { maxIterations: 2, cwd: process.cwd() })
-    const done = await waitForTerminal(wf.id)
-    expect(done?.status).toBe('failed')
-    expect(done?.error).toContain('Reviewer rejected:')
-    expect(runAgentHeadlessMock).toHaveBeenCalledTimes(2)
+    try {
+      const done = await waitForTerminal(wf.id)
+      expect(done?.status).toBe('failed')
+      expect(done?.error).toContain('Reviewer rejected:')
+      expect(runAgentHeadlessMock).toHaveBeenCalledTimes(2)
+    } finally {
+      removeCritiqueArtifact(wf.id)
+    }
   })
 
   it('request-changes: second solve receives reviewer feedback then executor runs', async () => {
@@ -97,9 +163,13 @@ describe('runWorkflow reviewer routing (mocked agents)', () => {
     })
 
     const wf = createPod('task', { maxIterations: 2, cwd: process.cwd() })
-    const done = await waitForTerminal(wf.id)
-    expect(done?.status).toBe('complete')
-    expect(runAgentHeadlessMock).toHaveBeenCalledTimes(4)
+    try {
+      const done = await waitForTerminal(wf.id)
+      expect(done?.status).toBe('complete')
+      expect(runAgentHeadlessMock).toHaveBeenCalledTimes(4)
+    } finally {
+      removeCritiqueArtifact(wf.id)
+    }
   })
 
   it('malformed reviewer JSON falls back to approve and still reaches executor', async () => {
@@ -112,11 +182,15 @@ describe('runWorkflow reviewer routing (mocked agents)', () => {
     })
 
     const wf = createPod('task', { maxIterations: 1, cwd: process.cwd() })
-    const done = await waitForTerminal(wf.id)
-    expect(done?.status).toBe('complete')
-    expect(runAgentHeadlessMock).toHaveBeenCalledTimes(3)
-    const final = getPodStatus(wf.id)
-    expect(final?.critique?.verdict).toBe('approve')
-    expect(final?.critique?.summary).toContain('falling back')
+    try {
+      const done = await waitForTerminal(wf.id)
+      expect(done?.status).toBe('complete')
+      expect(runAgentHeadlessMock).toHaveBeenCalledTimes(3)
+      const final = getPodStatus(wf.id)
+      expect(final?.critique?.verdict).toBe('approve')
+      expect(final?.critique?.summary).toContain('falling back')
+    } finally {
+      removeCritiqueArtifact(wf.id)
+    }
   })
 })

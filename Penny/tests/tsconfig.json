@@ -6,8 +6,16 @@
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
-    "lib": ["ESNext"],
+    "jsx": "react-jsx",
+    "lib": ["ESNext", "DOM", "DOM.Iterable"],
     "types": ["node", "vitest/globals"]
   },
-  "include": ["./**/*.ts", "../src/main/**/*.test.ts"]
+  "include": [
+    "./**/*.ts",
+    "./**/*.tsx",
+    "../src/main/**/*.test.ts",
+    "../src/mcp/**/*.test.ts",
+    "../src/renderer/**/*.test.ts",
+    "../src/renderer/**/*.test.tsx"
+  ]
 }

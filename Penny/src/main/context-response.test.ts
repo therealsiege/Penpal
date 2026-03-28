@@ -12,6 +12,9 @@ function assertShape<T>(r: ContextEngineeredResponse<T>) {
   expect(Array.isArray(r.related_tools)).toBe(true)
   // summary should be a single sentence (no newlines)
   expect(r.summary).not.toContain('\n')
+  if (r.context !== undefined) {
+    expect(r.context).toEqual(expect.any(Object))
+  }
 }
 
 // ── contextResponse helper ──────────────────────────────────────────────────
@@ -49,7 +52,7 @@ describe('agents:statuses context logic', () => {
 
     return contextResponse(agents, summary, suggestions,
       ['orchestrator:queue', 'orchestrator:agent-health', 'pod:list', 'sessions:approve'],
-      { idle: idleIds, blocked: blockedIds, activeCount, totalMemoryMB },
+      { breakdown: { busy: activeCount, idle: idleCount, blocked: blockedIds.length }, idle: idleIds, blocked: blockedIds, activeCount, totalMemoryMB },
     )
   }
 

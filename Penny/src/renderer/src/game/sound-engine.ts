@@ -13,8 +13,6 @@ import { AUDIO_KEYS } from './office-asset-keys'
 // Frequency constants (Hz) — note names for readability
 // ---------------------------------------------------------------------------
 
-const C4  = 261.63
-const G4  = 392.00
 const A5  = 880.00
 const C5  = 523.25
 const E5  = 659.25
@@ -93,26 +91,6 @@ export class SoundEngine {
   // -------------------------------------------------------------------------
   // Sound effects
   // -------------------------------------------------------------------------
-
-  /** Ascending 3-note chime (C5→E5→G5), 80ms each, sine wave. */
-  agentArrived(): void {
-    const ctx = this._ensureContext()
-    const now = ctx.currentTime
-    const step = 0.09
-    const env = { attack: 0.005, sustain: 0.04, decay: 0.04, peak: 0.6 }
-    this._osc('sine', C5, now,            now + step,        env)
-    this._osc('sine', E5, now + step,     now + step * 2,    env)
-    this._osc('sine', G5, now + step * 2, now + step * 3,    env)
-  }
-
-  /** Descending 2-note tone (G4→C4), 100ms each, triangle wave. */
-  agentDeparted(): void {
-    const ctx = this._ensureContext()
-    const now = ctx.currentTime
-    const env = { attack: 0.005, sustain: 0.05, decay: 0.05, peak: 0.45 }
-    this._osc('triangle', G4, now,      now + 0.11, env)
-    this._osc('triangle', C4, now + 0.11, now + 0.22, env)
-  }
 
   /** Short buzz (square wave 200 Hz, 150ms, sharp cutoff). */
   agentBlocked(): void {
@@ -291,26 +269,21 @@ export class SoundEngine {
 
   // -------------------------------------------------------------------------
   // EventBus integration
-  // Registers listeners for game events so callers don't have to manually
-  // wire sounds. Call once at app startup (e.g., inside OfficeGame.ts or
-  // App.tsx after first user interaction).
+  // Lightweight hooks (toasts, clicks). Celebrations use soundEngine directly.
+  // Call once at app startup (e.g. OfficeScene after first user interaction).
   // -------------------------------------------------------------------------
 
   /**
-   * Wire all automatic sound triggers to the EventBus.
+   * Wire EventBus sounds: NOTIFICATION, DESK_CLICKED, AGENT_CLICKED.
    * Safe to call multiple times — stores refs for cleanup.
    */
   private _wired = false
-  private _cbArrived    = () => this.agentArrived()
-  private _cbDeparted   = () => this.agentDeparted()
   private _cbNotif      = () => this.notification()
   private _cbClick      = () => this.click()
 
   wireEvents(): void {
     if (this._wired) return
     this._wired = true
-    EventBus.on(EVENTS.AGENT_ARRIVED,  this._cbArrived)
-    EventBus.on(EVENTS.AGENT_DEPARTED, this._cbDeparted)
     EventBus.on(EVENTS.NOTIFICATION,   this._cbNotif)
     EventBus.on(EVENTS.DESK_CLICKED,   this._cbClick)
     EventBus.on(EVENTS.AGENT_CLICKED,  this._cbClick)
@@ -320,8 +293,6 @@ export class SoundEngine {
   unwireEvents(): void {
     if (!this._wired) return
     this._wired = false
-    EventBus.off(EVENTS.AGENT_ARRIVED,  this._cbArrived)
-    EventBus.off(EVENTS.AGENT_DEPARTED, this._cbDeparted)
     EventBus.off(EVENTS.NOTIFICATION,   this._cbNotif)
     EventBus.off(EVENTS.DESK_CLICKED,   this._cbClick)
     EventBus.off(EVENTS.AGENT_CLICKED,  this._cbClick)

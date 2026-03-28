@@ -154,6 +154,9 @@ export interface WorkstationSprite {
   /** OpenClaw/NemoClaw supervision shield badge */
   openclawBadge?: Phaser.GameObjects.Sprite
   openclawBadgeTween?: Phaser.Tweens.Tween
+  /** Orchestrator headless task badge */
+  orchTaskBadge?: Phaser.GameObjects.Sprite
+  orchTaskBadgeTween?: Phaser.Tweens.Tween
   /** Parse error warning badge */
   errorBadge?: Phaser.GameObjects.Sprite
   errorBadgeTween?: Phaser.Tweens.Tween
@@ -178,8 +181,8 @@ export interface WorkstationSprite {
   /** Eval glow arc rendered behind the desk — color reflects recent success rate */
   evalGlow?: Phaser.GameObjects.Arc
   evalGlowTween?: Phaser.Tweens.Tween
-  /** Cached eval success rate (0–1), undefined = no data */
-  evalSuccessRate?: number
+  /** Cached eval success rate (0–1); null/undefined = no data for tint */
+  evalSuccessRate?: number | null
   /** Context utilization meter — small bar below XP bar */
   contextMeter?: AnimatedBar
   contextMeterPulseTween?: Phaser.Tweens.Tween
@@ -265,7 +268,7 @@ export interface PodLineInfo {
   status: string
   /** Number of best-of-N solver candidates (>1 triggers thinking animation) */
   candidates?: number
-  /** True when solver has selected a candidate from best-of-N */
+  /** True when a chosen candidate exists (self-eval result, or multi-candidate + solver complete while still in solving without self-eval) */
   candidateSelected?: boolean
 }
 

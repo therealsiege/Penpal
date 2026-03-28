@@ -154,7 +154,8 @@ export class WorkstationFactory {
     }
 
     // Eval glow arc — rendered behind desk via painter's order
-    const evalGlow = this.scene.add.arc(0, WS_DESK_Y, EVAL_GLOW_RADIUS, 0, 360, false, EVAL_GLOW_GREY, 0.15)
+    const evalGlow = this.scene.add.arc(0, WS_DESK_Y, EVAL_GLOW_RADIUS, 0, 360, false, EVAL_GLOW_GREY, 1)
+      .setAlpha((EVAL_GLOW_ALPHA_MIN + EVAL_GLOW_ALPHA_MAX) / 2)
     wsContainer.add(evalGlow)
 
     const deskBody = this.scene.add.rectangle(0, WS_DESK_Y, 80, 21, COLOR_DESK_BODY).setStrokeStyle(1, activeTheme.deskStrokeIdle, 0.5)
@@ -577,6 +578,12 @@ export class WorkstationFactory {
     wsContainer.add(openclawBadge)
     lodLevel2Objects.push(openclawBadge)
 
+    // Orchestrator headless task badge — top-right of workstation
+    const orchTaskBadge = this.scene.add.sprite(20, WS_SPRITE_Y - 30, SPRITESHEET_KEYS.GAME_ICONS, ICON_FRAMES.STAR_YELLOW)
+      .setScale(0.24).setOrigin(0.5).setAlpha(0).setVisible(false)
+    wsContainer.add(orchTaskBadge)
+    lodLevel2Objects.push(orchTaskBadge)
+
     // Parse error warning badge — shown when JSONL has errors
     const errorBadge = this.scene.add.sprite(-14, WS_SPRITE_Y - 22, SPRITESHEET_KEYS.GAME_ICONS, ICON_FRAMES.CIRCLE_RED)
       .setScale(0.18).setOrigin(0.5).setAlpha(0).setVisible(false)
@@ -772,6 +779,7 @@ export class WorkstationFactory {
       roomProp: roomPropSprite ?? undefined,
       rivalryIndicator,
       openclawBadge,
+      orchTaskBadge,
       errorBadge,
       energyTrack,
       energyFill,
@@ -1052,6 +1060,8 @@ export class WorkstationFactory {
     if (ws.rivalryIndicator)     ws.rivalryIndicator.destroy()
     if (ws.exclamationTween)     ws.exclamationTween.destroy()
     if (ws.exclamationSprite)    ws.exclamationSprite.destroy()
+    if (ws.orchTaskBadgeTween)   ws.orchTaskBadgeTween.destroy()
+    if (ws.orchTaskBadge)        ws.orchTaskBadge.destroy()
     if (ws.openclawBadgeTween)   ws.openclawBadgeTween.destroy()
     if (ws.openclawBadge)        ws.openclawBadge.destroy()
     if (ws.errorBadgeTween)      ws.errorBadgeTween.destroy()

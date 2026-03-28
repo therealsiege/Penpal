@@ -6,7 +6,16 @@ import os from 'os'
 import { checkHealth } from './health'
 import { startSlackBridge, stopSlackBridge, isSlackBridgeRunning } from './slack-bridge'
 import { getJobStatuses, getJobHistory, forceRunJob } from './scheduler-bridge'
-import { getPipelineSummary, getHotLeads, getTerritories, getNewLeads, getGraphStats, searchLeads, getLeadDetail } from './graph'
+import {
+  getPipelineSummary,
+  getHotLeads,
+  getTerritories,
+  getNewLeads,
+  getGraphStatsWithFreshness,
+  searchLeads,
+  getLeadDetail,
+} from './graph'
+import { suggestedActionsForStage } from './stage-suggestions'
 import {
   getClaudeSessions,
   getSessionConversation,
@@ -41,7 +50,45 @@ import {
   resumePod,
   cancelPod,
   getPodPresets,
+  type CreatePodOpts,
 } from './pods'
+
+function parsePodCreateOpts(opts: unknown): CreatePodOpts {
+  const raw = opts && typeof opts === 'object' && !Array.isArray(opts) ? (opts as Record<string, unknown>) : {}
+  const out: CreatePodOpts = {}
+
+  if (typeof raw.name === 'string') out.name = raw.name
+  if (typeof raw.cwd === 'string') out.cwd = raw.cwd
+  if (typeof raw.maxIterations === 'number' && Number.isInteger(raw.maxIterations) && raw.maxIterations > 0) {
+    out.maxIterations = raw.maxIterations
+  }
+  if (typeof raw.presetId === 'string') out.presetId = raw.presetId
+  if (typeof raw.solverAgent === 'string') out.solverAgent = raw.solverAgent
+  if (typeof raw.reviewerAgent === 'string') out.reviewerAgent = raw.reviewerAgent
+  if (typeof raw.executorAgent === 'string') out.executorAgent = raw.executorAgent
+
+  if (raw.priority !== undefined) {
+    if (typeof raw.priority !== 'string') throw new Error('priority must be a string')
+    out.priority = raw.priority
+  }
+
+  if (
+    typeof raw.solverCandidates === 'number' &&
+    Number.isInteger(raw.solverCandidates) &&
+    raw.solverCandidates > 0
+  ) {
+    out.solverCandidates = raw.solverCandidates
+  }
+  if (
+    typeof raw.maxSelfFixes === 'number' &&
+    Number.isInteger(raw.maxSelfFixes) &&
+    raw.maxSelfFixes >= 0
+  ) {
+    out.maxSelfFixes = raw.maxSelfFixes
+  }
+
+  return out
+}
 import {
   listVaultDir,
   readVaultFile,
@@ -229,6 +276,8 @@ export function registerIpcHandlers() {
   ipcMain.handle('pipeline:hot-leads', wrapHandler(() => getHotLeads()))
   ipcMain.handle('pipeline:territories', wrapHandler(() => getTerritories()))
   ipcMain.handle('pipeline:new-leads', wrapHandler(() => getNewLeads()))
+  // Context-engineered IPC handlers (issue #11): return ContextEngineeredResponse from main;
+  // preload unwrap() strips to `.data` for window.api so React keeps legacy shapes — use *Rich APIs for the full envelope.
   ipcMain.handle('sessions:list', wrapHandler(async () => {
     const [claudeSessions, cursorSessions] = await Promise.all([
       getClaudeSessions(),
@@ -288,21 +337,22 @@ export function registerIpcHandlers() {
     return broadcastToSessions(message)
   }))
   ipcMain.handle('graph:stats', wrapHandler(async () => {
-    const stats = await getGraphStats()
+    const stats = await getGraphStatsWithFreshness()
     const totalNodes = stats?.totalNodes ?? 0
     const totalRels = stats?.totalRelationships ?? 0
     const leadCount = stats?.nodesByLabel?.['Lead'] ?? 0
 
-    const summary = `Graph: ${totalNodes} nodes, ${totalRels} relationships.${leadCount > 0 ? ` ${leadCount} leads indexed.` : ''}`
+    const summary = `Graph: ${totalNodes} nodes, ${totalRels} relationships.${leadCount > 0 ? ` ${leadCount} leads indexed.` : ''} Freshness: ${stats.freshness.status}.`
 
     const suggestions: string[] = []
     if (totalNodes === 0) suggestions.push('Graph is empty — run ETL to populate data.')
     if (leadCount > 0) suggestions.push(`${leadCount} leads available — search via leads:search.`)
     if (totalNodes > 0 && leadCount === 0) suggestions.push('No lead nodes — run sales ingestion pipeline.')
+    if (stats.freshness.status === 'stale') suggestions.push('Lead timestamps look stale — refresh ETL.')
 
     return contextResponse(stats, summary, suggestions,
       ['leads:search', 'leads:detail', 'pipeline:summary'],
-      { totalNodes, totalRels, leadCount },
+      { totalNodes, totalRels, leadCount, freshness: stats.freshness },
     )
   }))
   const handleLeadsSearch = wrapHandler(async (query: unknown) => {
@@ -343,6 +393,7 @@ export function registerIpcHandlers() {
         stageDistribution,
         businessArmDistribution: armDistribution,
         topLead: topLead?.name ?? null,
+        topLeadId: topLead?.leadId ?? null,
       },
     )
   })
@@ -358,15 +409,7 @@ export function registerIpcHandlers() {
         ['leads:search', 'vault:search'])
     }
 
-    const stageSuggestions: Record<string, string[]> = {
-      prospecting: ['Schedule a discovery call.', 'Research practice via vault:search.'],
-      qualified: ['Send a demo invite.', 'Check competitor EHR via leads:search.'],
-      demo: ['Follow up on demo feedback.', 'Prepare pricing proposal.'],
-      negotiation: ['Review contract terms.', 'Check similar deals via leads:search.'],
-      'closed-won': ['Log final outcome.', 'Update pipeline via vault:write.'],
-      'closed-lost': ['Log loss reason.', 'Update pipeline via vault:write.'],
-    }
-    const suggestions = [...(stageSuggestions[detail.stage] || ['Review lead details and determine next step.'])]
+    const suggestions = [...suggestedActionsForStage(detail.stage)]
 
     const lastEvent = detail.events.length > 0 ? detail.events[detail.events.length - 1] : null
     const daysSinceLastEvent = lastEvent ? Math.floor((Date.now() - new Date(lastEvent.date).getTime()) / 86400000) : null
@@ -383,7 +426,7 @@ export function registerIpcHandlers() {
         documentCount: detail.documents.length,
         stageHistory: detail.stageHistory,
         daysSinceLastEvent,
-        suggestedStageActions: stageSuggestions[detail.stage] || [],
+        suggestedStageActions: suggestedActionsForStage(detail.stage),
       },
     )
   })
@@ -430,7 +473,7 @@ export function registerIpcHandlers() {
 
   ipcMain.handle('agents:list', wrapHandler(() => getAgentConfigs()))
 
-  ipcMain.handle('agents:statuses', wrapHandler(async (): Promise<AgentState[]> => {
+  ipcMain.handle('agents:statuses', wrapHandler(async () => {
     const configs = getAgentConfigs()
     const [sessions, cursorSessions] = await Promise.all([
       getClaudeSessions(),
@@ -635,6 +678,48 @@ export function registerIpcHandlers() {
       }
     }
 
+    // ── Surface active orchestrator tasks as synthetic agents ──
+    // Headless tasks spawned by runAgentHeadless() don't create session files,
+    // so they're invisible to getClaudeSessions(). Synthesize AgentState entries
+    // so they appear in the office scene.
+    const visibleAgentIds = new Set(agentStates.map(a => a.config.id))
+    const activeTasks = getTaskQueue().filter(
+      t => t.status === 'active' && t.currentStage && t.currentStage !== 'queued' && t.currentStage !== 'done',
+    )
+    for (const task of activeTasks) {
+      // Skip if the assigned agent already has a visible session
+      if (task.assignedAgent && visibleAgentIds.has(task.assignedAgent)) continue
+
+      const taskName = task.title.length > 30 ? task.title.slice(0, 29) + '..' : task.title
+      const taskStage = task.currentStage as 'planning' | 'executing' | 'validating'
+      const taskConfig: AgentConfig = {
+        id: `orch-task-${task.id}`,
+        name: taskName,
+        title: `Task: ${taskStage}`,
+        podRole: 'executor',
+        systemPrompt: '',
+        model: 'orchestrator-task',
+        mcpProfile: '',
+        skills: task.requiredSkills || [],
+        allowedTools: [],
+        subAgents: {},
+        defaultRepos: task.project ? [task.project] : [],
+        avatar: 'orchestrator',
+        desk: { row: 0, col: 0 },
+        autonomy: 'headless',
+      }
+      agentStates.push({
+        config: taskConfig,
+        status: 'active',
+        needsInteraction: false,
+        sessionMode: taskStage === 'planning' ? 'plan' : 'working',
+        cwd: task.project || undefined,
+        isOrchestratorTask: true,
+        taskStage,
+        taskTitle: task.title,
+      })
+    }
+
     // No sub-agents to remove from top-level (they are synthetic, not real sessions)
     const topLevel = agentStates
 
@@ -749,7 +834,7 @@ export function registerIpcHandlers() {
   // ── Pod Workflow Handlers ──────────────────────────────────────────
   ipcMain.handle('pod:create', wrapHandler((task: unknown, opts: unknown) => {
     if (typeof task !== 'string') throw new Error('task must be a string')
-    return createPod(task, (opts as Record<string, unknown>) || {})
+    return createPod(task, parsePodCreateOpts(opts))
   }))
 
   ipcMain.handle('pod:list', wrapHandler(async () => {
@@ -760,7 +845,9 @@ export function registerIpcHandlers() {
       byPhase[p.status] = (byPhase[p.status] || 0) + 1
     }
     const phaseStr = Object.entries(byPhase).map(([s, n]) => `${n} ${s}`).join(', ')
-    const summary = `${pods.length} pod(s)${phaseStr ? `: ${phaseStr}` : ''}.`
+    const avgIterations = pods.length > 0 ? +(pods.reduce((sum, p) => sum + p.iteration, 0) / pods.length).toFixed(1) : 0
+    const estimatedRemainingMinutes = Math.max(0, Math.round((pods.filter(p => !['complete', 'failed', 'cancelled'].includes(p.status)).length * 12) + (avgIterations * 3)))
+    const summary = `${pods.length} pod(s)${phaseStr ? `: ${phaseStr}` : ''}, rough completion estimate ~${estimatedRemainingMinutes}m remaining.`
 
     const suggestions: string[] = []
     const feedbackPods = pods.filter(p => p.status === 'feedback')
@@ -770,9 +857,6 @@ export function registerIpcHandlers() {
     if (pods.length === 0) suggestions.push('No active pods — create one via pod:create.')
     const activePods = pods.filter(p => ['solving', 'reviewing', 'executing', 'self-fixing'].includes(p.status))
     if (activePods.length > 0) suggestions.push('Monitor active pods via pod:status for detailed progress.')
-
-    const avgIterations = pods.length > 0 ? +(pods.reduce((sum, p) => sum + p.iteration, 0) / pods.length).toFixed(1) : 0
-    const estimatedRemainingMinutes = Math.max(0, Math.round((pods.filter(p => !['complete', 'failed', 'cancelled'].includes(p.status)).length * 12) + (avgIterations * 3)))
 
     return contextResponse(pods, summary, suggestions,
       ['pod:create', 'pod:status', 'pod:cancel', 'agents:statuses'],
@@ -1172,7 +1256,9 @@ export function registerIpcHandlers() {
     return { provider: getModelProvider(), ollamaAvailable: await checkOllamaAvailable() }
   }))
 
-  // ── Eval Dashboard ──────────────────────────────────────────────────────
+  // ── Eval Dashboard (`eval-results.json`) ───────────────────────────────
+  // report-all / report-agent: plain payloads for tables (no contextResponse).
+  // stats: context-engineered; preload unwraps to EvalStats for the panel.
   ipcMain.handle('evals:report-all', wrapHandler(() => getEvalReportAll()))
   ipcMain.handle('evals:report-agent', wrapHandler((agentId: unknown) => {
     if (typeof agentId !== 'string') throw new Error('agentId must be a string')
@@ -1222,7 +1308,7 @@ export function registerIpcHandlers() {
   // ── Spot-Check Queue (Human Judge) ────────────────────────────────────────
   ipcMain.handle('evals:spot-check-queue', wrapHandler(() => spotCheckQueue.getPending()))
   ipcMain.handle('evals:spot-check-sample', wrapHandler((count: unknown) => {
-    if (typeof count !== 'number') throw new Error('count must be a number')
+    if (typeof count !== 'number' || !Number.isFinite(count)) throw new Error('count must be a finite number')
     return spotCheckQueue.sample(count)
   }))
   ipcMain.handle('evals:spot-check-review', wrapHandler((id: unknown, verdict: unknown, notes?: unknown) => {

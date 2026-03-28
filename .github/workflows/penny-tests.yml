@@ -1,0 +1,34 @@
+name: Penny unit tests
+
+on:
+  push:
+    paths:
+      - 'Penny/**'
+      - '.github/workflows/penny-tests.yml'
+  pull_request:
+    paths:
+      - 'Penny/**'
+      - '.github/workflows/penny-tests.yml'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: Penny
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: Penny/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run unit tests
+        run: npm test

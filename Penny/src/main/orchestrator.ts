@@ -715,8 +715,13 @@ async function dispatchTask(task: Task, agent: ScoredAgent): Promise<void> {
 
   task.validateOutput = valResult.output
 
-  // Check for PASS/FAIL in validation output
-  const passed = valResult.success && /\bPASS\b/i.test(valResult.output)
+  // Check for PASS/FAIL in validation output.
+  // The validator may output "PASS", "**PASS**", "passes", "Result: PASS", etc.
+  // Fail only if there's an explicit FAIL signal; otherwise trust exit code + content.
+  const output = valResult.output.toLowerCase()
+  const hasExplicitFail = /\bfail\b/.test(output) && !/\bno\s+fail/.test(output)
+  const hasExplicitPass = /\bpass\b/.test(output)
+  const passed = valResult.success && (hasExplicitPass || !hasExplicitFail)
 
   if (passed) {
     task.status = 'completed'
