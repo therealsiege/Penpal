@@ -4,9 +4,9 @@
 
 import fsp from 'fs/promises'
 import path from 'path'
-import os from 'os'
 import { toolRegistry } from '../tools.js'
 import { wrapResponse, type ContextEngineeredResponse } from '../response.js'
+import { DOCS_ROOT } from '../../main/paths.js'
 import {
   readVaultFile,
   searchVault,
@@ -18,7 +18,8 @@ import {
   getVaultFileContext,
 } from '../../main/vault.js'
 
-const VAULT_ROOT = path.join(os.homedir(), 'sidekick')
+/** Same root as main-process vault I/O (see paths.ts / VAULT_PATH / SIDEKICK_DOCS_ROOT). */
+const VAULT_ROOT = DOCS_ROOT
 
 function safePath(relativePath: string): string {
   const resolved = path.resolve(VAULT_ROOT, relativePath)

@@ -1,4 +1,7 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import fs from 'fs'
+import path from 'path'
+import os from 'os'
+import { beforeEach, describe, expect, it, vi, afterEach } from 'vitest'
 
 type MockFile = { content: string; mtime: number }
 const files = new Map<string, MockFile>()
@@ -50,10 +53,28 @@ vi.mock('../../../src/main/vault.js', () => ({
   })),
 }))
 
-import { handleVaultRead, handleVaultSearch, handleVaultWrite } from '../../../src/mcp/tools/vault'
-
 describe('vault mcp infra smoke', () => {
-  beforeEach(() => files.clear())
+  let handleVaultRead: typeof import('../../../src/mcp/tools/vault').handleVaultRead
+  let handleVaultSearch: typeof import('../../../src/mcp/tools/vault').handleVaultSearch
+  let handleVaultWrite: typeof import('../../../src/mcp/tools/vault').handleVaultWrite
+  let tmpHome: string
+
+  beforeEach(async () => {
+    vi.resetModules()
+    files.clear()
+    tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), 'vault-infra-'))
+    vi.stubEnv('HOME', tmpHome)
+    vi.stubEnv('VAULT_PATH', path.join(tmpHome, 'vault-root'))
+    const v = await import('../../../src/mcp/tools/vault')
+    handleVaultRead = v.handleVaultRead
+    handleVaultSearch = v.handleVaultSearch
+    handleVaultWrite = v.handleVaultWrite
+  })
+
+  afterEach(() => {
+    vi.unstubAllEnvs()
+    if (tmpHome) fs.rmSync(tmpHome, { recursive: true, force: true })
+  })
 
   it('read returns rich context response', async () => {
     files.set('Folder/note.md', { content: '# body', mtime: 100 })

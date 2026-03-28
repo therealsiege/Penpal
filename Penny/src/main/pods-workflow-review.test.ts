@@ -75,6 +75,7 @@ describe('runWorkflow reviewer routing (mocked agents)', () => {
       expect(executorPrompt).toContain('nitpick')
       expect(executorPrompt).toContain('Ship with minor notes.')
 
+      expect(done!.critique?.verdict).toBe('approve-with-notes')
       const reviewArtifact = done!.artifacts.find((a) => a.stage === 'review')
       expect(reviewArtifact).toBeDefined()
       critiqueFileAbs = path.resolve(process.cwd(), reviewArtifact!.path)
