@@ -106,14 +106,12 @@
       }
     },
     "penny": {
-      "command": "npx",
+      "command": "node",
       "args": [
-        "tsx",
-        "src/mcp/index.ts"
+        "Penny/src/mcp/index.js"
       ],
-      "cwd": "Penny",
       "env": {
-        "PENNY_DATA_DIR": "./data"
+        "PENNY_DATA_DIR": "./Penny/data"
       }
     }
   }
