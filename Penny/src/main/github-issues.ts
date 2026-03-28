@@ -10,7 +10,7 @@
  * On completion/failure: orchestrator events update labels via callbacks.
  */
 
-import { execSync } from 'child_process'
+import { execSync, execFileSync } from 'child_process'
 import fs from 'fs'
 import path from 'path'
 import { enqueueTask, getTaskQueue, getTask, type TaskPriority } from './orchestrator'
@@ -122,11 +122,12 @@ const REQUIRED_LABELS = [
 function ensureLabels(owner: string, repo: string): void {
   for (const label of REQUIRED_LABELS) {
     try {
-      execSync(
-        `gh label create "${label.name}" --color "${label.color}" ` +
-        `--description "${label.description}" --repo ${owner}/${repo}`,
-        { encoding: 'utf-8', timeout: 15_000, stdio: 'pipe' },
-      )
+      execFileSync('gh', [
+        'label', 'create', label.name,
+        '--color', label.color,
+        '--description', label.description,
+        '--repo', `${owner}/${repo}`,
+      ], { encoding: 'utf-8', timeout: 15_000, stdio: 'pipe' })
       console.log(`[github-issues] Created label "${label.name}" in ${owner}/${repo}`)
     } catch {
       // Label already exists — expected, ignore
@@ -223,22 +224,24 @@ function pushBranchAndCreatePR(
       return false
     }
 
-    execSync(
-      `git commit -m "$(cat <<'COMMITEOF'\n${title}\n\nCloses #${issueNumber}\n\nCo-Authored-By: Penny Orchestrator <noreply@penny.dev>\nCOMMITEOF\n)"`,
-      { cwd: localPath, encoding: 'utf-8', timeout: 15_000, stdio: 'pipe', shell: '/bin/bash' },
-    )
+    const commitMsg = `${title}\n\nCloses #${issueNumber}\n\nCo-Authored-By: Penny Orchestrator <noreply@penny.dev>`
+    execFileSync('git', ['commit', '-m', commitMsg], {
+      cwd: localPath, encoding: 'utf-8', timeout: 15_000, stdio: 'pipe',
+    })
 
-    execSync(`git push -u origin "${branch}"`, {
+    execFileSync('git', ['push', '-u', 'origin', branch], {
       cwd: localPath, encoding: 'utf-8', timeout: 60_000, stdio: 'pipe',
     })
 
     // Create PR
-    execSync(
-      `gh pr create --repo ${config.owner}/${config.repo} ` +
-      `--head "${branch}" --title "${title.replace(/"/g, '\\"')}" ` +
-      `--body "$(cat <<'PREOF'\nCloses #${issueNumber}\n\nAutomated implementation by Penny orchestrator.\nPREOF\n)"`,
-      { cwd: localPath, encoding: 'utf-8', timeout: 30_000, stdio: 'pipe', shell: '/bin/bash' },
-    )
+    const prBody = `Closes #${issueNumber}\n\nAutomated implementation by Penny orchestrator.`
+    execFileSync('gh', [
+      'pr', 'create',
+      '--repo', `${config.owner}/${config.repo}`,
+      '--head', branch,
+      '--title', title,
+      '--body', prBody,
+    ], { cwd: localPath, encoding: 'utf-8', timeout: 30_000, stdio: 'pipe' })
 
     console.log(`[github-issues] Created PR for branch ${branch}`)
     return true
@@ -286,12 +289,14 @@ interface GHIssue {
 
 function fetchAgentReadyIssues(config: RepoConfig): GHIssue[] {
   try {
-    const raw = execSync(
-      `gh issue list --repo ${config.owner}/${config.repo} ` +
-      `--label "${config.label}" --state open ` +
-      `--json number,title,body,labels,assignees,url --limit 20`,
-      { encoding: 'utf-8', timeout: 30_000 },
-    )
+    const raw = execFileSync('gh', [
+      'issue', 'list',
+      '--repo', `${config.owner}/${config.repo}`,
+      '--label', config.label,
+      '--state', 'open',
+      '--json', 'number,title,body,labels,assignees,url',
+      '--limit', '20',
+    ], { encoding: 'utf-8', timeout: 30_000 })
     return JSON.parse(raw)
   } catch (err) {
     console.error(`[github-issues] Failed to fetch issues from ${config.owner}/${config.repo}:`, err)
@@ -301,11 +306,12 @@ function fetchAgentReadyIssues(config: RepoConfig): GHIssue[] {
 
 function swapLabel(config: RepoConfig, issueNumber: number): void {
   try {
-    execSync(
-      `gh issue edit ${issueNumber} --repo ${config.owner}/${config.repo} ` +
-      `--remove-label "${config.label}" --add-label "${config.workingLabel}"`,
-      { encoding: 'utf-8', timeout: 15_000 },
-    )
+    execFileSync('gh', [
+      'issue', 'edit', String(issueNumber),
+      '--repo', `${config.owner}/${config.repo}`,
+      '--remove-label', config.label,
+      '--add-label', config.workingLabel,
+    ], { encoding: 'utf-8', timeout: 15_000 })
     console.log(`[github-issues] Swapped labels on ${config.owner}/${config.repo}#${issueNumber}`)
   } catch (err) {
     console.error(`[github-issues] Failed to swap labels on #${issueNumber}:`, err)
@@ -314,12 +320,10 @@ function swapLabel(config: RepoConfig, issueNumber: number): void {
 
 function setLabel(config: RepoConfig, issueNumber: number, removeLabels: string[], addLabel: string): void {
   try {
-    const removeParts = removeLabels.map(l => `--remove-label "${l}"`).join(' ')
-    execSync(
-      `gh issue edit ${issueNumber} --repo ${config.owner}/${config.repo} ` +
-      `${removeParts} --add-label "${addLabel}"`,
-      { encoding: 'utf-8', timeout: 15_000 },
-    )
+    const args = ['issue', 'edit', String(issueNumber), '--repo', `${config.owner}/${config.repo}`]
+    for (const l of removeLabels) args.push('--remove-label', l)
+    args.push('--add-label', addLabel)
+    execFileSync('gh', args, { encoding: 'utf-8', timeout: 15_000 })
   } catch (err) {
     console.error(`[github-issues] Failed to set label ${addLabel} on #${issueNumber}:`, err)
   }
@@ -327,10 +331,11 @@ function setLabel(config: RepoConfig, issueNumber: number, removeLabels: string[
 
 function addComment(config: RepoConfig, issueNumber: number, body: string): void {
   try {
-    execSync(
-      `gh issue comment ${issueNumber} --repo ${config.owner}/${config.repo} --body ${JSON.stringify(body)}`,
-      { encoding: 'utf-8', timeout: 15_000 },
-    )
+    execFileSync('gh', [
+      'issue', 'comment', String(issueNumber),
+      '--repo', `${config.owner}/${config.repo}`,
+      '--body', body,
+    ], { encoding: 'utf-8', timeout: 15_000 })
   } catch (err) {
     console.error(`[github-issues] Failed to comment on #${issueNumber}:`, err)
   }
