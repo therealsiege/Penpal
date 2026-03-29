@@ -196,6 +196,30 @@ export class OfficeCamera {
       if (this.targetZoom < 0.8) this.targetZoom = 0.9
     }
   }
+
+  /** Brief zoom pulse for camera juice effects (celebrations, errors, departures) */
+  pulseZoom(hint: string): void {
+    const cam = this.scene.cameras.main
+    const saved = this.targetZoom
+    let delta = 0
+    let duration = 200
+
+    switch (hint) {
+      case 'rankUp':      delta = -0.08; duration = 300; break
+      case 'taskComplete': delta = 0.04; duration = 200; break
+      case 'errorZoomOut': delta = -0.05; duration = 250; break
+      case 'agentLeave':   delta = -0.03; duration = 200; break
+      default: return
+    }
+
+    this.targetZoom = Phaser.Math.Clamp(saved + delta, this.getMinZoom(), ZOOM_MAX)
+    this.scene.time.delayedCall(duration, () => {
+      if (Math.abs(this.targetZoom - (saved + delta)) < 0.01) {
+        this.targetZoom = saved
+      }
+    })
+    if (hint === 'errorZoomOut') cam.shake(60, 0.002)
+  }
 }
 
 /** Find world-space position of a workstation by agent ID */
