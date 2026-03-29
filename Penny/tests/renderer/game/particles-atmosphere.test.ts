@@ -553,12 +553,18 @@ describe('OfficeAmbient', () => {
 })
 
 describe('CelebrationManager.questComplete', () => {
-  it('uses 220ms star pop tween and spawns 6 burst particles', () => {
+  it('uses 220ms star pop tween and spawns burst particles after queue drain', () => {
     vi.spyOn(Math, 'random').mockReturnValue(0)
     const captured: Record<string, unknown>[] = []
-    const { scene } = createRendererPhaserScene({ texturesExist: true, captureTweenConfigs: captured, tweensAutoComplete: false })
+    const { scene, delayedCall } = createRendererPhaserScene({ texturesExist: true, captureTweenConfigs: captured, tweensAutoComplete: false })
     const mgr = new CelebrationManager(scene)
     mgr.questComplete(200, 300, 'normal')
+    // Drain the celebration queue by invoking the dispatch timer callback
+    const lastCall = delayedCall.mock.calls[delayedCall.mock.calls.length - 1]
+    if (lastCall) {
+      const cb = lastCall[1] as () => void
+      cb()
+    }
     const starTween = captured.find(c => (c as { duration?: number }).duration === 220)
     expect(starTween).toBeTruthy()
     const burstPool = mgr as unknown as { _burstPool: { getData(k: string): boolean }[] }
