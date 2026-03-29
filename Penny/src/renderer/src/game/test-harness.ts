@@ -442,7 +442,7 @@ export class PennyHarness {
 
   /**
    * Fire a celebration effect.
-   * Types: 'rankUp', 'taskComplete', 'milestone', 'error', 'achievement'
+   * Types: 'rankUp', 'taskComplete', 'milestone', 'error', 'achievement', 'seasonEnd', 'seasonStart'
    * If agentId is supplied, the effect fires at the workstation world position.
    * Otherwise it fires at the camera center.
    *
@@ -484,8 +484,55 @@ export class PennyHarness {
       case 'achievement':
         celebrations.achievementUnlocked(x, y, 'First Achievement', 0)
         break
+      case 'seasonEnd': {
+        const ids = agentId ? [agentId] : this.addAgents(2, { status: 'idle', sessionMode: 'idle' })
+        const mvpId = ids[0]
+        const mvpPos = agentId ? pos : this._workstationPos(mvpId)
+        celebrations.seasonEndCeremony(
+          {
+            seasonId: 'ph-mock-end',
+            seasonName: 'Ship It',
+            theme: 'ship',
+            accentColor: 0x34d399,
+            score: 1200,
+            questsCompletedThisSeason: 47,
+            totalSeasonXP: 2340,
+            summaryLine: 'Ship It Season Complete — 47 quests, 2340 XP',
+            rankings: [
+              { rank: 1, agentId: mvpId, agentName: 'MVP Agent', seasonXP: 900, tasksCompleted: 30 },
+              {
+                rank: 2,
+                agentId: ids[1] ?? 'runner-up',
+                agentName: 'Runner Up',
+                seasonXP: 400,
+                tasksCompleted: 12,
+              },
+            ],
+            mvpAgentId: mvpId,
+            mvpWorldX: mvpPos.x,
+            mvpWorldY: mvpPos.y,
+            creditBonusShown: 84,
+          },
+          { bypassDedupe: true },
+        )
+        break
+      }
+      case 'seasonStart':
+        celebrations.seasonStartIntro({
+          seasonName: 'Neon Sprint',
+          theme: 'neon',
+          accentColor: 0x00e5ff,
+          themeIconFrame: themeIconFrameForTheme('neon'),
+          challenges: [
+            { description: 'Complete 50 tasks', completed: false },
+            { description: 'Earn 500 credits', completed: false },
+          ],
+        })
+        break
       default:
-        console.warn(`[PH] Unknown celebration type "${type}". Valid: rankUp, taskComplete, milestone, error, achievement`)
+        console.warn(
+          `[PH] Unknown celebration type "${type}". Valid: rankUp, taskComplete, milestone, error, achievement, seasonEnd, seasonStart`,
+        )
         return
     }
     console.log(`[PH] Fired celebration "${type}" at (${Math.round(x)}, ${Math.round(y)})`)
@@ -712,7 +759,7 @@ export class PennyHarness {
       `  PH.block(id, type?)            Block agent. type: tool-approval|question|accept-edits|idle-prompt\n` +
       `  PH.unblock(id)                 Unblock agent\n\n` +
       `%cCelebrations\n%c` +
-      `  PH.celebrate(type, agentId?, opts?)   Fire effect. opts: { skipCooldown }. Types: rankUp|taskComplete|milestone|error|achievement\n\n` +
+      `  PH.celebrate(type, agentId?, opts?)   Fire effect. opts: { skipCooldown }. Types: rankUp|taskComplete|milestone|error|achievement|seasonEnd|seasonStart\n\n` +
       `%cAtmosphere\n%c` +
       `  PH.setTimeOfDay(phase)         morning|day|evening|night\n` +
       `  PH.setWeather(type)            clear|rain|snow|sunset\n\n` +

@@ -593,6 +593,7 @@ export class WorkstationAnimator {
             creditManager.earn(reward.credits)
             seasonManager.trackCreditsEarned(reward.credits)
             seasonManager.trackQuestDifficulty(questDifficulty)
+            seasonManager.trackQuestCompleted()
             // Emit QUEST_COMPLETED so OfficeScene can trigger reward VFX
             EventBus.emit(
               EVENTS.QUEST_COMPLETED,

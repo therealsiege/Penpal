@@ -27,6 +27,39 @@ class GameEventBus {
 
 export const EventBus = new GameEventBus()
 
+export interface SeasonCeremonyRankingRow {
+  rank: number
+  agentId: string
+  agentName: string
+  seasonXP: number
+  tasksCompleted: number
+}
+
+export interface SeasonIntroChallengeRow {
+  description: string
+  completed: boolean
+}
+
+export interface SeasonEndedEventPayload {
+  seasonId: string
+  seasonName: string
+  theme: string
+  accentColor: number
+  score: number
+  questsCompletedThisSeason: number
+  totalSeasonXP: number
+  summaryLine: string
+}
+
+export interface SeasonStartedEventPayload {
+  seasonId: string
+  seasonName: string
+  theme: string
+  accentColor: number
+  challenges: SeasonIntroChallengeRow[]
+  skipIntroCelebration?: boolean
+}
+
 export const EVENTS = {
   // --- Agent interaction ---
   /** Fired when an agent sprite is single-clicked. Payload: (agentId: string, state: AgentState) */
@@ -101,9 +134,9 @@ export const EVENTS = {
   LEADERBOARD_UPDATED: 'leaderboard:updated',
   /** Fired when a season challenge completes. Payload: (challengeId: string, description: string) */
   CHALLENGE_COMPLETED: 'challenge:completed',
-  /** Fired when a season ends. Payload: (seasonId: string, seasonName: string, score: number) */
+  /** Fired when a season ends. Payload: `SeasonEndedEventPayload` */
   SEASON_ENDED: 'season:ended',
-  /** Fired when a new season starts. Payload: (seasonId: string, seasonName: string) */
+  /** Fired when a new season starts. Payload: `SeasonStartedEventPayload` */
   SEASON_STARTED: 'season:started',
   /** Fired when an achievement is unlocked. Payload: (achievementId: string, title: string, iconFrame: number) */
   ACHIEVEMENT_UNLOCKED: 'achievement:unlocked',
@@ -186,7 +219,7 @@ export interface EventPayloadMap {
   [EVENTS.CREDITS_EARNED]: [amount: number, newBalance: number]
   [EVENTS.LEADERBOARD_UPDATED]: []
   [EVENTS.CHALLENGE_COMPLETED]: [challengeId: string, description: string]
-  [EVENTS.SEASON_ENDED]: [seasonId: string, seasonName: string, score: number]
-  [EVENTS.SEASON_STARTED]: [seasonId: string, seasonName: string]
+  [EVENTS.SEASON_ENDED]: [payload: SeasonEndedEventPayload]
+  [EVENTS.SEASON_STARTED]: [payload: SeasonStartedEventPayload]
   [EVENTS.ACHIEVEMENT_UNLOCKED]: [achievementId: string, title: string, iconFrame: number]
 }

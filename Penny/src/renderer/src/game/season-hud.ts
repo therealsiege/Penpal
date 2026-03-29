@@ -68,6 +68,18 @@ export class SeasonHUD {
     this._repositionHUD()
   }
 
+  refreshForSeasonChange(): void {
+    this.update()
+    if (this.challengeVisible) {
+      this.challengeContainer?.destroy()
+      this.challengeContainer = null
+      this._showChallenges()
+    }
+    if (this.leaderboardVisible) {
+      this._refreshLeaderboard()
+    }
+  }
+
   // -------------------------------------------------------------------------
   // Update — called periodically from main scene update loop
   // -------------------------------------------------------------------------
@@ -89,7 +101,8 @@ export class SeasonHUD {
     // Season progress
     const season = seasonManager.getCurrentSeason()
     if (season && this.progressBar && this.progressText && this.seasonNameText) {
-      this.seasonNameText.setText(season.name)
+      const suffix = seasonManager.getSeasonTimeRemainingLabel()
+      this.seasonNameText.setText(suffix ? `${season.name}  \u00B7  ${suffix}` : season.name)
       const completed = season.challenges.filter(c => c.completed).length
       const total = season.challenges.length
       const pct = total > 0 ? completed / total : 0
@@ -113,6 +126,8 @@ export class SeasonHUD {
         }
       }
       this.progressText.setText(`${completed}/${total}`)
+    } else if (this.seasonNameText) {
+      this.seasonNameText.setText('')
     }
 
     // Update leaderboard if visible
