@@ -1,0 +1,8 @@
+{
+  "version": 1,
+  "agents": [
+    { "name": "Pod-Solver", "status": "active", "sessionMode": "working", "needsInteraction": false, "interactionType": "none", "cwd": "/pod/alpha", "xpLevel": 4, "podRole": "solver", "desk": { "row": 0, "col": 0 } },
+    { "name": "Pod-Reviewer", "status": "active", "sessionMode": "plan", "needsInteraction": false, "interactionType": "none", "cwd": "/pod/beta", "xpLevel": 5, "podRole": "reviewer", "desk": { "row": 0, "col": 1 } },
+    { "name": "Pod-Executor", "status": "active", "sessionMode": "working", "needsInteraction": false, "interactionType": "none", "cwd": "/pod/gamma", "xpLevel": 3, "podRole": "executor", "desk": { "row": 0, "col": 2 } }
+  ]
+}

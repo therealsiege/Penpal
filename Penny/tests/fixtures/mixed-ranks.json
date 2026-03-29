@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "agents": [
+    { "name": "Rank-Solver", "status": "active", "sessionMode": "working", "needsInteraction": false, "interactionType": "none", "cwd": "/pod/solver", "xpLevel": 2, "podRole": "solver", "desk": { "row": 0, "col": 0 } },
+    { "name": "Rank-Reviewer", "status": "active", "sessionMode": "plan", "needsInteraction": false, "interactionType": "none", "cwd": "/pod/reviewer", "xpLevel": 5, "podRole": "reviewer", "desk": { "row": 0, "col": 1 } },
+    { "name": "Rank-Executor", "status": "active", "sessionMode": "working", "needsInteraction": false, "interactionType": "none", "cwd": "/pod/executor", "xpLevel": 9, "podRole": "executor", "desk": { "row": 0, "col": 2 } },
+    { "name": "Rank-Intern", "status": "active", "sessionMode": "idle", "needsInteraction": false, "interactionType": "none", "cwd": "/pod/junior", "xpLevel": 1, "podRole": "solver", "desk": { "row": 1, "col": 0 } },
+    { "name": "Rank-Lead", "status": "active", "sessionMode": "working", "needsInteraction": false, "interactionType": "none", "cwd": "/pod/lead", "xpLevel": 7, "podRole": "solver", "desk": { "row": 1, "col": 1 } },
+    { "name": "Rank-Legend", "status": "active", "sessionMode": "compressing", "needsInteraction": false, "interactionType": "none", "cwd": "/pod/senior", "xpLevel": 10, "podRole": "reviewer", "desk": { "row": 1, "col": 2 } }
+  ]
+}

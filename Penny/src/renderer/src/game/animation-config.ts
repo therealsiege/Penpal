@@ -8,14 +8,18 @@
 // (e.g. from a debug panel or test harness) take effect immediately on the
 // next animation cycle without requiring a scene restart.
 //
+// Particle atmosphere (wind, spiral bursts, drag): see `particles` section.
+// Consumers: office-particles.ts (typing sparks, flames, emitter), celebrations.ts.
+//
 // Usage:
 //   import { AnimConfig, patchAnimConfig, resetAnimConfig, getAnimConfig } from './animation-config'
 //
 //   // Read at tween creation time:
 //   this.scene.tweens.add({ duration: AnimConfig.working.typingDuration, ... })
 //
-//   // Patch at runtime (debug panel, test override):
+//   // Patch at runtime (debug panel, test override, PH.config):
 //   patchAnimConfig({ working: { typingAmplitude: 2.0 } })
+//   patchAnimConfig({ monitor: { l2ActiveBaseStrength: 0.12 }, evalGlow: { radius: 12 } })
 //
 //   // Restore factory defaults:
 //   resetAnimConfig()
@@ -159,18 +163,32 @@ export interface AnimationConfig {
   }
 
   /**
-   * Celebration queue spacing, combo streaks, merge window, and per-agent cooldowns (sidekick#72).
+   * Celebration queue, combo streaks, and per-type cooldowns ({@link CelebrationManager}).
+   * Tweak here instead of scattering magic numbers in celebrations.ts.
    */
   celebrations: {
+    /** Minimum time (ms) between *starting* consecutive queued celebration effects. */
     queueGapMs: number
+    /** Rolling window (ms) for counting rapid task completions toward combo tiers. */
     comboWindowMs: number
+    /**
+     * Alias for the combo rolling window (ms); same default as comboWindowMs.
+     * Kept for parity with issue wording ("combo cooldown" / 10s window).
+     */
     comboCooldownMs: number
+    /** If two queue items of the same kind arrive within this window, merge into one amplified play. */
     sameTypeMergeWindowMs: number
+    /** Cooldown (ms) before the same agent can trigger another rank-up celebration. */
     rankUpCooldownMs: number
+    /** Cooldown (ms) before the same agent can trigger another task-complete celebration. */
     taskCompleteCooldownMs: number
+    /** Cooldown (ms) before the same agent can trigger another error celebration. */
     errorCooldownMs: number
+    /** Task completions in the combo window at or above this count get a larger burst. */
     comboTier2Min: number
+    /** At or above: screen flash + floating combo text. */
     comboTier3Min: number
+    /** At or above: "on fire" particle tint (orange/red). */
     comboTierFireMin: number
   }
 
@@ -292,16 +310,16 @@ function makeDefaults(): AnimationConfig {
     },
 
     celebrations: {
-      queueGapMs: 400,
-      comboWindowMs: 10_000,
-      comboCooldownMs: 10_000,
-      sameTypeMergeWindowMs: 2000,
-      rankUpCooldownMs: 5000,
-      taskCompleteCooldownMs: 1000,
-      errorCooldownMs: 3000,
-      comboTier2Min: 2,
-      comboTier3Min: 3,
-      comboTierFireMin: 5,
+      queueGapMs:              400,
+      comboWindowMs:           10_000,
+      comboCooldownMs:         10_000,
+      sameTypeMergeWindowMs:   2000,
+      rankUpCooldownMs:        5000,
+      taskCompleteCooldownMs:  1000,
+      errorCooldownMs:         3000,
+      comboTier2Min:           2,
+      comboTier3Min:           3,
+      comboTierFireMin:        5,
     },
 
     camera: {

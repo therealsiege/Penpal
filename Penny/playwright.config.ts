@@ -11,4 +11,14 @@ export default defineConfig({
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
   },
+  projects: [
+    {
+      name: 'e2e',
+      testIgnore: /visual-regression\.spec\.ts$/,
+    },
+    {
+      name: 'visual',
+      testMatch: /visual-regression\.spec\.ts$/,
+    },
+  ],
 })
