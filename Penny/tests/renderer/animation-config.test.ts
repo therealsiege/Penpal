@@ -62,7 +62,7 @@ describe('AnimationConfig', () => {
 
     expect(AnimConfig.working.typingDuration).toBe(400)
     expect(AnimConfig.idle.breathDuration).toBe(2800)
-    expect(AnimConfig.monitor.glowDistance).toBe(16)
+    expect(AnimConfig.monitor.glowDistance).toBe(6)
   })
 
   it('getAnimConfig returns a snapshot matching current state', () => {
@@ -115,7 +115,7 @@ describe('AnimationConfig', () => {
 
     // Untouched sections remain at defaults
     expect(AnimConfig.working.typingDuration).toBe(400)
-    expect(AnimConfig.monitor.glowDistance).toBe(16)
+    expect(AnimConfig.monitor.glowDistance).toBe(6)
   })
 
   it('monitor defaults are within expected ranges', () => {
