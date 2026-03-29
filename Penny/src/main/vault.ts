@@ -2,6 +2,7 @@ import fs from 'fs'
 import path from 'path'
 import { execFile } from 'child_process'
 import { protocol, net } from 'electron'
+import { parse as parseYaml } from 'yaml'
 import { DOCS_ROOT } from './paths'
 
 const VAULT_ROOT = DOCS_ROOT
@@ -24,6 +25,9 @@ export interface VaultSearchResult {
   path: string
   line: number
   text: string
+  snippet: string
+  occurrences: number
+  filename: string
 }
 
 export interface VaultTag {
@@ -37,6 +41,13 @@ export interface VaultBacklink {
   snippet: string
 }
 
+export interface VaultFileContext {
+  backlinks: VaultBacklink[]
+  relatedFiles: string[]
+  folderContext: string[]
+  tagContext: string[]
+}
+
 // Directories to hide from listings
 const HIDDEN_ROOT_DIRS = new Set([
   'node_modules', '.obsidian', '.git', '.trash',
@@ -48,6 +59,59 @@ function validatePath(relativePath: string): string {
     throw new Error('Path traversal denied')
   }
   return resolved
+}
+
+export function parseMarkdownFrontmatter(content: string): Record<string, unknown> | null {
+  if (!content.startsWith('---\n')) return null
+  const endIdx = content.indexOf('\n---', 4)
+  if (endIdx < 0) return null
+  const yamlBlock = content.slice(4, endIdx)
+  try {
+    const parsed = parseYaml(yamlBlock)
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      return parsed as Record<string, unknown>
+    }
+    return null
+  } catch {
+    return null
+  }
+}
+
+export function extractTagsFromMarkdown(content: string, frontmatter: Record<string, unknown> | null): string[] {
+  const tags = new Set<string>()
+  const frontmatterTags = frontmatter?.['tags']
+  if (typeof frontmatterTags === 'string') {
+    if (frontmatterTags.trim()) tags.add(frontmatterTags.trim())
+  } else if (Array.isArray(frontmatterTags)) {
+    for (const tag of frontmatterTags) {
+      if (typeof tag === 'string' && tag.trim()) tags.add(tag.trim())
+    }
+  }
+  const inlineTags = content.match(/(?:^|\s)#([a-zA-Z][\w/-]*)/g) || []
+  for (const raw of inlineTags) {
+    const normalized = raw.trim().slice(1).replace(/^#/, '')
+    if (normalized) tags.add(normalized)
+  }
+  return Array.from(tags).slice(0, 20)
+}
+
+export function getFolderHierarchy(relativePath: string): string[] {
+  const dir = path.dirname(relativePath)
+  if (dir === '.' || dir.length === 0) return []
+  const parts = dir.split(/[\\/]/).filter(Boolean)
+  return parts.map((_, idx) => parts.slice(0, idx + 1).join('/'))
+}
+
+export function getSiblingFiles(relativePath: string, limit = 8): string[] {
+  const full = validatePath(relativePath)
+  const folder = path.dirname(full)
+  const relFolder = path.dirname(relativePath)
+  if (!fs.existsSync(folder)) return []
+  return fs.readdirSync(folder, { withFileTypes: true })
+    .filter((entry) => entry.isFile() && !entry.name.startsWith('.'))
+    .map((entry) => relFolder === '.' ? entry.name : path.join(relFolder, entry.name))
+    .filter((p) => p !== relativePath)
+    .slice(0, limit)
 }
 
 // ── List directory ─────────────────────────────────────────────────────────
@@ -321,7 +385,14 @@ export function searchVault(
 
       for (const file of files) {
         const rel = path.relative(VAULT_ROOT, file)
-        results.push({ path: rel, line: 0, text: '' })
+        results.push({
+          path: rel,
+          line: 0,
+          text: '',
+          snippet: '',
+          occurrences: 0,
+          filename: path.basename(rel),
+        })
       }
 
       // Get context lines with a second pass
@@ -357,6 +428,8 @@ export function searchVault(
             if (match) {
               r.line = match.line
               r.text = match.text
+              r.snippet = match.text
+              r.occurrences = 1
             }
           }
 
@@ -507,6 +580,39 @@ export async function getFilesByTag(tag: string): Promise<string[]> {
 
   walk(VAULT_ROOT, '')
   return results.sort()
+}
+
+export async function getVaultFileContext(relativePath: string): Promise<VaultFileContext> {
+  const file = readVaultFile(relativePath)
+  const frontmatter = file ? parseMarkdownFrontmatter(file.content) : null
+  const tags = file ? extractTagsFromMarkdown(file.content, frontmatter) : []
+  const [backlinks, tagRelated] = await Promise.all([
+    getBacklinks(relativePath).catch(() => []),
+    (async () => {
+      const related = new Set<string>()
+      for (const tag of tags.slice(0, 2)) {
+        const files = await getFilesByTag(tag).catch(() => [])
+        for (const filePath of files) {
+          if (filePath !== relativePath) related.add(filePath)
+          if (related.size >= 10) break
+        }
+        if (related.size >= 10) break
+      }
+      return Array.from(related)
+    })(),
+  ])
+
+  const siblingFiles = getSiblingFiles(relativePath, 8)
+  const dedupedRelated = Array.from(
+    new Set([...backlinks.map((link) => link.path), ...siblingFiles, ...tagRelated]),
+  ).slice(0, 20)
+
+  return {
+    backlinks: backlinks.slice(0, 20),
+    relatedFiles: dedupedRelated,
+    folderContext: getFolderHierarchy(relativePath),
+    tagContext: tags,
+  }
 }
 
 // ── Backlinks (filesystem wikilink scan) ──────────────────────────────────

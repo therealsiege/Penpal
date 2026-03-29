@@ -6,6 +6,7 @@
 import fs from 'fs'
 import path from 'path'
 import type { TaskOutcome } from '../harness'
+import { PodQualityCollector } from '../collectors/pod-quality'
 import { PreferenceStore } from '../../preferences/store'
 import type { PreferenceEvent } from '../../preferences/types'
 
@@ -15,6 +16,8 @@ export interface DigestOptions {
   outcomesPath?: string
   preferencesDir?: string
   podsPath?: string
+  /** JSONL path for `PodQualityCollector` (default: Penny/data/eval-pod-quality.jsonl) */
+  podQualityPath?: string
   outputDir?: string
   weekOf?: Date
 }
@@ -92,7 +95,13 @@ function loadOutcomes(filePath: string): TaskOutcome[] {
     return raw
       .split('\n')
       .filter(line => line.trim().length > 0)
-      .map(line => JSON.parse(line) as TaskOutcome)
+      .flatMap((line) => {
+        try {
+          return [JSON.parse(line) as TaskOutcome]
+        } catch {
+          return []
+        }
+      })
   } catch {
     return []
   }
@@ -145,7 +154,13 @@ function loadPods(filePath: string, start: Date, end: Date): PodSummary {
     if (!fs.existsSync(filePath)) return summary
     const raw = JSON.parse(fs.readFileSync(filePath, 'utf-8'))
     const pods: PodWorkflowRecord[] = Array.isArray(raw) ? raw : []
-    const filtered = pods.filter(p => inRange(p.createdAt, start, end))
+    const filtered = pods.filter(
+      p =>
+        inRange(p.createdAt, start, end)
+        && typeof p.iteration === 'number'
+        && Number.isFinite(p.iteration)
+        && (p.status === 'complete' || p.status === 'failed'),
+    )
 
     summary.total = filtered.length
     for (const p of filtered) {
@@ -173,6 +188,7 @@ async function loadPreferences(
       const ts = typeof event.timestamp === 'string'
         ? new Date(event.timestamp).getTime()
         : event.timestamp
+      if (!Number.isFinite(ts)) continue
       if (ts > end.getTime()) continue
       result.total++
       if (event.signal in result) {
@@ -230,6 +246,7 @@ export async function generateWeeklyDigest(opts: DigestOptions = {}): Promise<We
   const outcomesPath = opts.outcomesPath ?? path.join(dataDir, 'eval-outcomes.jsonl')
   const preferencesDir = opts.preferencesDir ?? dataDir
   const podsPath = opts.podsPath ?? path.join(dataDir, 'pod-workflows.json')
+  const podQualityPath = opts.podQualityPath ?? path.join(dataDir, 'eval-pod-quality.jsonl')
 
   const now = opts.weekOf ?? new Date()
   const thisWeek = getISOWeekBounds(now)
@@ -257,8 +274,10 @@ export async function generateWeeklyDigest(opts: DigestOptions = {}): Promise<We
   // Preferences
   const prefs = await loadPreferences(preferencesDir, thisWeek.start, thisWeek.end)
 
-  // Pods
+  // Pods (workflow snapshot) + eval JSONL metrics
   const pods = loadPods(podsPath, thisWeek.start, thisWeek.end)
+  const podQualityCollector = new PodQualityCollector(podQualityPath)
+  const podQuality = podQualityCollector.report(thisWeek.start, thisWeek.end)
 
   // Recommendations
   const recs = generateRecommendations(currentStats, priorStats)
@@ -307,9 +326,30 @@ export async function generateWeeklyDigest(opts: DigestOptions = {}): Promise<We
   lines.push('## Pod Quality')
   if (pods.total > 0) {
     lines.push(`- Total: ${pods.total} | Completed: ${pods.completed} | Failed: ${pods.failed}`)
-    lines.push(`- First-pass success: ${pods.firstPass} | Required iteration: ${pods.iterated}`)
+    lines.push(`- First-pass completions: ${pods.firstPass} | Iterated completions: ${pods.iterated}`)
   } else {
-    lines.push('No pod workflows this week.')
+    lines.push('No pod workflows this week (snapshot).')
+  }
+  if (podQuality.totalPods > 0) {
+    lines.push(
+      `- Eval JSONL (${podQuality.totalPods} terminal pods): completion ${pct(podQuality.completionRate)}, `
+        + `reviewer first-pass ${pct(podQuality.reviewerFirstPassRate)} (of completed), `
+        + `executor pass ${pct(podQuality.executorPassRate)} (of all terminal), `
+        + `avg iterations ${podQuality.avgIterations.toFixed(2)}, `
+        + `self-fix proxy ${pct(podQuality.selfFixRate)} (pods with iteration > 1)`,
+    )
+    const presetKeys = Object.keys(podQuality.byPreset).sort()
+    if (presetKeys.length > 0) {
+      lines.push('- By preset:')
+      for (const pid of presetKeys) {
+        const b = podQuality.byPreset[pid]
+        lines.push(
+          `  - \`${pid}\`: ${b.completed}/${b.total} completed, avg iterations ${b.avgIterations.toFixed(2)}`,
+        )
+      }
+    }
+  } else {
+    lines.push('- No pod quality eval events in this week window (eval-pod-quality.jsonl).')
   }
   lines.push('')
 

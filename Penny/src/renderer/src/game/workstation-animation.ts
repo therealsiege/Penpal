@@ -8,6 +8,7 @@ import Phaser from 'phaser'
 import type { AgentState } from '../types'
 import type { WorkstationSprite, Room } from './office-types'
 import { activeTheme } from './office-theme'
+import { AnimConfig } from './animation-config'
 import { EventBus, EVENTS } from './events'
 import { questSystem } from './quest-system'
 import { creditManager } from './credits'
@@ -30,6 +31,7 @@ import {
   THINKING_DOT_RADIUS,
   THINKING_DOT_SPACING,
   THINKING_DOT_Y,
+  THINKING_DOT_APPEAR_MS,
   THINKING_DOT_FADE_MS,
   THINKING_DOT_HOLD_MS,
   EVAL_GLOW_GREEN,
@@ -77,10 +79,18 @@ export class WorkstationAnimator {
 
   /** Cached eval success rates: agentId → successRate (null = no data) */
   private evalCache = new Map<string, number | null>()
+  /**
+   * Cached eval harness consecutive-success streak (0+). Only agents present in
+   * evalsReportAll() have an entry; missing key means harness has no row yet for
+   * that agent (flame falls back to XP streak only until the next fetch).
+   */
+  private evalStreakCache = new Map<string, number>()
   /** Timestamp of last eval data fetch */
   private lastEvalFetchAt = 0
   /** Guard against duplicate in-flight eval fetches */
   private evalFetchPromise: Promise<void> | null = null
+  /** Workstations that need a glow refresh when the current eval fetch completes */
+  private pendingEvalGlowWorkstations = new Set<WorkstationSprite>()
 
   constructor(
     scene: Phaser.Scene,
@@ -99,32 +109,52 @@ export class WorkstationAnimator {
   // ---------------------------------------------------------------------------
 
   /** Refresh eval data from main process (throttled to EVAL_GLOW_REFRESH_MS). */
-  private refreshEvalData(): void {
+  private refreshEvalCacheIfDue(): void {
     const now = Date.now()
-    if (now - this.lastEvalFetchAt < EVAL_GLOW_REFRESH_MS) return
     if (this.evalFetchPromise) return
+    if (now - this.lastEvalFetchAt < EVAL_GLOW_REFRESH_MS) return
     this.lastEvalFetchAt = now
     this.evalFetchPromise = window.api.evalsReportAll()
       .then((reports) => {
         this.evalCache.clear()
+        this.evalStreakCache.clear()
         for (const r of reports) {
           this.evalCache.set(r.agentId, r.totalTasks > 0 ? r.successRate : null)
+          if (r.totalTasks > 0) {
+            // Harness streak is signed (negative if latest outcomes are failures); flame uses successes only.
+            this.evalStreakCache.set(r.agentId, Math.max(0, r.streak ?? 0))
+          }
+        }
+        const pending = [...this.pendingEvalGlowWorkstations]
+        for (const w of pending) {
+          this.applyEvalGlowFromCache(w)
         }
       })
       .catch(() => { /* silently ignore — grey glow on failure */ })
       .finally(() => { this.evalFetchPromise = null })
   }
 
-  /** Apply eval glow color to a workstation based on cached data. */
-  updateEvalGlow(ws: WorkstationSprite): void {
-    this.refreshEvalData()
+  /**
+   * Apply eval glow tint from the in-memory cache only (no IPC).
+   * Canonical rate: null = missing agent in report or zero tasks; number = success rate 0–1.
+   */
+  applyEvalGlowFromCache(ws: WorkstationSprite): void {
     if (!ws.evalGlow) return
     const agentId = ws.state?.config.id
     if (!agentId) return
-    const cached = this.evalCache.has(agentId) ? this.evalCache.get(agentId)! : undefined
-    if (cached === ws.evalSuccessRate) return
-    ws.evalSuccessRate = cached
-    ws.evalGlow.setFillStyle(evalGlowColor(cached))
+    const canonical: number | null = this.evalCache.has(agentId)
+      ? this.evalCache.get(agentId)!
+      : null
+    if (canonical === ws.evalSuccessRate) return
+    ws.evalSuccessRate = canonical
+    ws.evalGlow.setFillStyle(evalGlowColor(canonical))
+  }
+
+  /** Queue workstation, refresh evals on cadence, apply tint (again when fetch completes). */
+  updateEvalGlow(ws: WorkstationSprite): void {
+    this.pendingEvalGlowWorkstations.add(ws)
+    this.refreshEvalCacheIfDue()
+    this.applyEvalGlowFromCache(ws)
   }
 
   // ---------------------------------------------------------------------------
@@ -231,16 +261,16 @@ export class WorkstationAnimator {
     if (isWaiting) {
       ws.sprite.setFrame(base + POSE_IDLE)
       ws.pulseTween = this.scene.tweens.add({
-        targets: ws.sprite, scaleX: CHAR_SCALE * 1.06, scaleY: CHAR_SCALE * 1.06,
-        duration: 900, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
+        targets: ws.sprite, scaleX: CHAR_SCALE * AnimConfig.waiting.pulseScaleFactor, scaleY: CHAR_SCALE * AnimConfig.waiting.pulseScaleFactor,
+        duration: AnimConfig.waiting.pulseDuration, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
       })
       ws.typingTween = this.scene.tweens.add({
-        targets: ws.sprite, x: 1.2,
-        duration: 600, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
+        targets: ws.sprite, x: AnimConfig.waiting.swayAmplitude,
+        duration: AnimConfig.waiting.swayDuration, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
       })
       ws.dotPulseTween = this.scene.tweens.add({
-        targets: ws.statusDot, alpha: 0.3,
-        duration: 600, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
+        targets: ws.statusDot, alpha: AnimConfig.waiting.dotPulseAlphaMin,
+        duration: AnimConfig.waiting.dotPulseDuration, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
       })
       // LED: waiting — amber steady glow
       if (ws.ledGlow) {
@@ -252,24 +282,24 @@ export class WorkstationAnimator {
       // Lamp light cone: dim when waiting
       if (ws.lampLight) {
         ws.lampLightTween = this.scene.tweens.add({
-          targets: ws.lampLight, alpha: 0.02,
-          duration: 500, ease: 'Sine.easeOut',
+          targets: ws.lampLight, alpha: AnimConfig.waiting.lampDimAlpha,
+          duration: AnimConfig.waiting.ledFadeDuration, ease: 'Sine.easeOut',
         })
       }
       this.restoreDeskStrokeCallback(ws)
     } else if (isWorking) {
       ws.sprite.setFrame(base + POSE_INTERACT)
       ws.typingTween = this.scene.tweens.add({
-        targets: ws.sprite, x: 0.8,
-        duration: 400, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
+        targets: ws.sprite, x: AnimConfig.working.typingAmplitude,
+        duration: AnimConfig.working.typingDuration, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
       })
       ws.bounceTween = this.scene.tweens.add({
-        targets: ws.sprite, y: WS_SPRITE_Y - 2,
-        duration: 800, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
+        targets: ws.sprite, y: WS_SPRITE_Y - AnimConfig.working.bounceOffset,
+        duration: AnimConfig.working.bounceDuration, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
       })
       ws.headTiltTween = this.scene.tweens.add({
-        targets: ws.sprite, angle: 1.5,
-        duration: 1600, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
+        targets: ws.sprite, angle: AnimConfig.working.headTiltAngle,
+        duration: AnimConfig.working.headTiltDuration, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
       })
       ws.deskBody.setStrokeStyle(1, 0x34d399, 0.55)
 
@@ -279,8 +309,8 @@ export class WorkstationAnimator {
         if (!ws.kbGlowTween) {
           ws.kbGlowTween = this.scene.tweens.add({
             targets: ws.keyboard,
-            alpha: { from: 0.7, to: 0.9 },
-            duration: 800,
+            alpha: { from: AnimConfig.working.keyboardGlowAlphaMin, to: AnimConfig.working.keyboardGlowAlphaMax },
+            duration: AnimConfig.working.keyboardGlowDuration,
             yoyo: true,
             repeat: -1,
             ease: 'Sine.easeInOut',
@@ -293,7 +323,9 @@ export class WorkstationAnimator {
         const aid = agent.config.id
         // Only start a quest if this agent doesn't already have one active
         if (questSystem.getAgentActiveQuests(aid).length === 0) {
-          const blurb = agent.lastAssistantBlurb?.slice(0, 40) ?? 'Working'
+          const blurb = agent.isOrchestratorTask
+            ? (agent.taskTitle?.slice(0, 40) ?? 'Task')
+            : (agent.lastAssistantBlurb?.slice(0, 40) ?? 'Working')
           questSystem.startQuest({
             title: blurb,
             agentId: aid,
@@ -325,10 +357,10 @@ export class WorkstationAnimator {
         this.scene.tweens.add({ targets: ws.ledGlow, alpha: 0.6, duration: 300, ease: 'Sine.easeOut',
           onComplete: () => {
             if (!ws.ledGlow) return
-            ws.ledGlow.setAlpha(0.4)
+            ws.ledGlow.setAlpha(AnimConfig.working.ledPulseAlphaBase)
             ws.ledPulseTween = this.scene.tweens.add({
-              targets: ws.ledGlow, alpha: 0.7,
-              duration: 1000, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
+              targets: ws.ledGlow, alpha: AnimConfig.working.ledPulseAlphaPeak,
+              duration: AnimConfig.working.ledPulseDuration, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
             })
           },
         })
@@ -336,12 +368,12 @@ export class WorkstationAnimator {
       // Lamp light cone: brighten when working with a warm glow
       if (ws.lampLight) {
         ws.lampLightTween = this.scene.tweens.add({
-          targets: ws.lampLight, alpha: 0.12,
+          targets: ws.lampLight, alpha: AnimConfig.working.lampBrightAlpha,
           duration: 300, ease: 'Sine.easeOut',
         })
         // Subtle flicker every 8-15 seconds — tiny alpha dip then recovery
         ws.lampFlickerTimer = this.scene.time.addEvent({
-          delay: 8000 + Math.random() * 7000,
+          delay: AnimConfig.working.lampFlickerIntervalMin + Math.random() * AnimConfig.working.lampFlickerIntervalVar,
           loop: true,
           callback: () => {
             if (!ws.lampLight || !ws.lampLight.active || ws.lastAnimMode !== 'working') return
@@ -479,16 +511,16 @@ export class WorkstationAnimator {
     } else {
       ws.sprite.setFrame(base + POSE_SIT)
       ws.breathTween = this.scene.tweens.add({
-        targets: ws.sprite, scaleY: CHAR_SCALE * 0.97,
-        duration: 2800, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
+        targets: ws.sprite, scaleY: CHAR_SCALE * AnimConfig.idle.breathScaleFactor,
+        duration: AnimConfig.idle.breathDuration, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
       })
 
       // Idle chair rocking — very subtle lean-back oscillation
       if (ws.chairSprite?.visible) {
         ws.chairRockTween = this.scene.tweens.add({
           targets: ws.chairSprite,
-          angle: { from: -1.5, to: 1.5 },
-          duration: 4000,
+          angle: { from: -AnimConfig.idle.chairRockAngle, to: AnimConfig.idle.chairRockAngle },
+          duration: AnimConfig.idle.chairRockDuration,
           yoyo: true,
           repeat: -1,
           ease: 'Sine.easeInOut',
@@ -518,8 +550,8 @@ export class WorkstationAnimator {
       // Lamp light cone: dim when idle
       if (ws.lampLight) {
         ws.lampLightTween = this.scene.tweens.add({
-          targets: ws.lampLight, alpha: 0.02,
-          duration: 500, ease: 'Sine.easeOut',
+          targets: ws.lampLight, alpha: AnimConfig.waiting.lampDimAlpha,
+          duration: AnimConfig.waiting.ledFadeDuration, ease: 'Sine.easeOut',
         })
       }
       this.restoreDeskStrokeCallback(ws)
@@ -576,9 +608,6 @@ export class WorkstationAnimator {
 
         // Track in season
         seasonManager.trackTaskCompleted(xpData?.currentStreak ?? 0)
-
-        // Update streak flame effect
-        this.updateStreakFlame(ws, agent)
       }
 
       // Stamp idleSince so later timers can detect prolonged boredom
@@ -826,10 +855,14 @@ export class WorkstationAnimator {
   updateMonitorGlow(ws: WorkstationSprite, isWorking: boolean, isWaiting: boolean): void {
     if (!ws.monitorGlowFx) return
     const isActive = isWorking || isWaiting
-    const baseColor = isWaiting ? 0xfbbf24 : isWorking ? 0x0ea5e9 : activeTheme.deskBody
-    const baseStrength = isActive ? 3 : 1
-    const peakStrength = isActive ? 6 : 2
-    const duration     = isActive ? 800 : 2400
+    // Orchestrator tasks get stage-colored monitor glow
+    const orchStage = ws.state?.isOrchestratorTask ? (ws.state.taskStage ?? 'executing') : null
+    const orchColors: Record<string, number> = { planning: 0xa78bfa, executing: 0xf97316, validating: 0x06b6d4 }
+    const baseColor = orchStage ? (orchColors[orchStage] ?? 0xf97316)
+      : isWaiting ? 0xfbbf24 : isWorking ? 0x0ea5e9 : activeTheme.deskBody
+    const baseStrength = isActive ? AnimConfig.monitor.activeBaseStrength : AnimConfig.monitor.idleBaseStrength
+    const peakStrength = isActive ? AnimConfig.monitor.activePeakStrength : AnimConfig.monitor.idlePeakStrength
+    const duration     = isActive ? AnimConfig.monitor.activePulseDuration : AnimConfig.monitor.idlePulseDuration
     ws.monitorGlowFx.color = baseColor
     ws.monitorGlowFx.outerStrength = baseStrength
     ws.monitorGlowTween = this.scene.tweens.add({
@@ -1145,8 +1178,14 @@ export class WorkstationAnimator {
   // ---------------------------------------------------------------------------
 
   private showSpeechBubble(ws: WorkstationSprite, agent: AgentState): void {
-    const blurb = (agent.lastAssistantBlurb ?? '').trim()
+    const blurb = agent.isOrchestratorTask
+      ? (agent.taskTitle ? `[Task] ${agent.taskTitle}` : '').trim()
+      : (agent.lastAssistantBlurb ?? '').trim()
     if (!blurb) return
+
+    // Avoid duplicate repeat timers if this path runs again before mode teardown
+    if (ws.speechBubbleTween) { ws.speechBubbleTween.destroy(); ws.speechBubbleTween = undefined }
+    if (ws.speechBubbleTimer) { ws.speechBubbleTimer.destroy(); ws.speechBubbleTimer = undefined }
 
     const BUBBLE_Y = WS_SPRITE_Y - 40
     const MAX_CHARS = 40
@@ -1190,13 +1229,22 @@ export class WorkstationAnimator {
       g.strokeRoundedRect(-bw / 2, -bh / 2, bw, bh, 3)
     }
 
+    const sceneAlive = () => {
+      try {
+        return this.scene.scene.isActive() === true
+      } catch {
+        return false
+      }
+    }
+
     // Helper to run the typewriter + fade cycle for a given string
     const typewriterCycle = (text: string) => {
       const bubble = ws.speechBubble!
       const txt = ws.speechBubbleText!
+      if (!txt.active || !bubble.active || !sceneAlive()) return
 
-      // Reset
-      txt.setText('')
+      // Reset — avoid setText('') alone on some Phaser builds (frame/texture edge cases)
+      txt.setText('\u200b')
       drawBg()
       bubble.setVisible(true)
       bubble.y = BUBBLE_Y
@@ -1213,15 +1261,18 @@ export class WorkstationAnimator {
         duration: Math.min(600, text.length * 20),
         ease: 'Linear',
         onUpdate: () => {
-          txt.setText(text.slice(0, Math.floor(counter.val)))
+          if (!txt.active || !bubble.active || !sceneAlive()) return
+          const slice = text.slice(0, Math.floor(counter.val))
+          txt.setText(slice.length === 0 ? '\u200b' : slice)
           drawBg()
         },
         onComplete: () => {
+          if (!txt.active || !bubble.active || !sceneAlive()) return
           txt.setText(text)
           drawBg()
           // Hold for 4 seconds then fade out
           this.scene.time.delayedCall(4000, () => {
-            if (!bubble.active) return
+            if (!bubble.active || !sceneAlive()) return
             this.scene.tweens.add({
               targets: bubble, alpha: 0,
               duration: 300, ease: 'Sine.easeOut',
@@ -1240,8 +1291,12 @@ export class WorkstationAnimator {
       delay: 8000 + Math.random() * 4000,
       loop: true,
       callback: () => {
+        if (!sceneAlive()) return
         if (ws.lastAnimMode !== 'working') return
-        const currentBlurb = (ws.state?.lastAssistantBlurb ?? '').trim()
+        if (!ws.speechBubbleText?.active || !ws.speechBubble?.active) return
+        const currentBlurb = ws.state?.isOrchestratorTask
+          ? (ws.state.taskTitle ? `[Task] ${ws.state.taskTitle}` : '').trim()
+          : (ws.state?.lastAssistantBlurb ?? '').trim()
         if (!currentBlurb) return
         const truncated = currentBlurb.length > MAX_CHARS ? currentBlurb.slice(0, MAX_CHARS) + '...' : currentBlurb
         typewriterCycle(truncated)
@@ -1404,9 +1459,13 @@ export class WorkstationAnimator {
   // ---------------------------------------------------------------------------
 
   showThinkingDots(ws: WorkstationSprite, candidateCount: number): void {
-    if (ws.thinkingDotsContainer) return // already showing
     if (candidateCount < 2) return // no animation for single candidate
+    if (ws.thinkingDotsContainer) {
+      if (ws.thinkingCandidateCount === candidateCount) return
+      this.hideThinkingDots(ws)
+    }
 
+    // Phaser.GameObjects.Arc — scene.add.circle fills as a disc (radius matches issue #19)
     const container = this.scene.add.container(0, THINKING_DOT_Y)
     const dots: Phaser.GameObjects.Arc[] = []
 
@@ -1439,7 +1498,7 @@ export class WorkstationAnimator {
     const dots = ws.thinkingDots
     if (!dots || dots.length === 0) return
 
-    const stepMs = THINKING_DOT_FADE_MS
+    const stepMs = THINKING_DOT_APPEAR_MS
     const holdMs = THINKING_DOT_HOLD_MS
     const totalAppear = dots.length * stepMs
     const cycleDuration = totalAppear + holdMs + THINKING_DOT_FADE_MS
@@ -1497,7 +1556,7 @@ export class WorkstationAnimator {
     }
 
     // Tween all dots to center (x=0) simultaneously
-    const mergeTargets = dots.map(d => ({ x: d.x, ref: d }))
+    const mergeTargets = dots.map(d => ({ ref: d }))
     let completedCount = 0
     for (const mt of mergeTargets) {
       this.scene.tweens.add({
@@ -1507,29 +1566,31 @@ export class WorkstationAnimator {
         ease: 'Power2',
         onComplete: () => {
           completedCount++
-          if (completedCount === mergeTargets.length) {
-            // All merged — scale pulse on center dot
-            const centerDot = dots[0]
-            centerDot.setFillStyle(0xffffff, 1)
-            ws.thinkingMergeTween = this.scene.tweens.add({
-              targets: centerDot,
-              scaleX: { from: 1, to: 1.8 },
-              scaleY: { from: 1, to: 1.8 },
-              duration: 300,
-              yoyo: true,
-              ease: 'Back.easeOut',
-              onComplete: () => {
-                // Fade out after pulse
-                this.scene.tweens.add({
-                  targets: centerDot,
-                  alpha: 0,
-                  duration: 300,
-                  ease: 'Sine.easeOut',
-                  onComplete: () => this.hideThinkingDots(ws),
-                })
-              },
-            })
+          if (completedCount !== mergeTargets.length) return
+          // Hide stacked satellites so only one bright dot pulses
+          for (let i = 1; i < dots.length; i++) {
+            this.scene.tweens.killTweensOf(dots[i])
+            dots[i].setVisible(false)
           }
+          const centerDot = dots[0]
+          centerDot.setFillStyle(0xffffff, 1).setAlpha(1)
+          ws.thinkingMergeTween = this.scene.tweens.add({
+            targets: centerDot,
+            scaleX: { from: 1, to: 1.8 },
+            scaleY: { from: 1, to: 1.8 },
+            duration: 300,
+            yoyo: true,
+            ease: 'Back.easeOut',
+            onComplete: () => {
+              this.scene.tweens.add({
+                targets: centerDot,
+                alpha: 0,
+                duration: 300,
+                ease: 'Sine.easeOut',
+                onComplete: () => this.hideThinkingDots(ws),
+              })
+            },
+          })
         },
       })
     }
@@ -1544,8 +1605,13 @@ export class WorkstationAnimator {
       ws.thinkingMergeTween.destroy()
       ws.thinkingMergeTween = undefined
     }
+    if (ws.thinkingDots?.length) {
+      for (const dot of ws.thinkingDots) {
+        if (dot?.active) this.scene.tweens.killTweensOf(dot)
+      }
+    }
     if (ws.thinkingDotsContainer) {
-      // Remove from lodLevel3Objects
+      this.scene.tweens.killTweensOf(ws.thinkingDotsContainer)
       const idx = ws.lodLevel3Objects.indexOf(ws.thinkingDotsContainer)
       if (idx >= 0) ws.lodLevel3Objects.splice(idx, 1)
       ws.thinkingDotsContainer.destroy()
@@ -1559,22 +1625,46 @@ export class WorkstationAnimator {
   // Quality streak flame effect
   // ---------------------------------------------------------------------------
 
+  /**
+   * Streak that drives the desk flame: max(Command Center XP streak, eval harness
+   * consecutive-success streak when the agent appears in eval reports).
+   */
+  private qualityStreakForFlame(agentId: string, xpStreak: number): number {
+    const harness = this.evalStreakCache.get(agentId)
+    if (harness === undefined) return xpStreak
+    return Math.max(xpStreak, harness)
+  }
+
+  private getFlameTier(streak: number): 'small' | 'medium' | 'large' {
+    if (streak >= 15) return 'large'
+    if (streak >= 10) return 'medium'
+    return 'small'
+  }
+
+  private getFlameParticlesPerTick(streak: number): number {
+    const totalParticleCount = Math.min(30, Math.max(0, streak * 2))
+    const perSecond = Math.max(1, Math.ceil(totalParticleCount / 3))
+    return Math.max(1, Math.ceil(perSecond / 8))
+  }
+
   startStreakFlame(ws: WorkstationSprite, streak: number, room: Room): void {
     if (ws.lastFlameStreak === streak && ws.flameTimer) return
     this.stopStreakFlame(ws, false)
 
     ws.lastFlameStreak = streak
     if (!ws.flameContainer) return
+    if ((ws.currentLodLevel ?? 3) < 3) return
     ws.flameContainer.setVisible(true)
 
-    const spawnPerTick = Math.max(1, Math.floor(streak / 5))
-    const spawnChance = 0.3
+    const tier = this.getFlameTier(streak)
+    const spawnPerTick = this.getFlameParticlesPerTick(streak)
+    const spawnChance = tier === 'large' ? 0.95 : tier === 'medium' ? 0.8 : 0.65
 
     ws.flameTimer = this.scene.time.addEvent({
-      delay: 180,
+      delay: 120,
       loop: true,
       callback: () => {
-        if (!ws.flameContainer?.visible) return
+        if (!ws.flameContainer?.visible || (ws.currentLodLevel ?? 3) < 3) return
         const worldX = room.x + ws.container.x
         const worldY = room.y + ws.container.y + WS_DESK_Y - 4
         for (let i = 0; i < spawnPerTick; i++) {
@@ -1611,17 +1701,26 @@ export class WorkstationAnimator {
   }
 
   updateStreakFlame(ws: WorkstationSprite, agent: AgentState): void {
-    const streak = agent.xp?.currentStreak ?? 0
+    const agentId = agent.config.id
+    const xpStreak = agent.xp?.currentStreak ?? 0
+    const streak = this.qualityStreakForFlame(agentId, xpStreak)
     const prevStreak = ws.lastFlameStreak ?? 0
+    const isDetailLod = (ws.currentLodLevel ?? this.host.getLastLodLevel()) >= 3
 
     let ownerRoom: Room | undefined
     for (const room of this.host.getRooms().values()) {
-      if (room.workstations.has(agent.config.id)) {
+      if (room.workstations.has(agentId)) {
         ownerRoom = room
         break
       }
     }
     if (!ownerRoom) return
+
+    if (!isDetailLod) {
+      if (ws.flameTimer || ws.flameContainer?.visible) this.stopStreakFlame(ws, false)
+      ws.lastFlameStreak = streak >= 5 ? streak : undefined
+      return
+    }
 
     if (streak >= 5) {
       this.startStreakFlame(ws, streak, ownerRoom)

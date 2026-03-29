@@ -180,7 +180,7 @@ describe('EvalHarness', () => {
     fs.rmSync(path.dirname(h4Path), { recursive: true, force: true })
   })
 
-  it('should sort reportAll by success rate descending', async () => {
+  it('should sort reportAll by success rate descending with stable tie-breaks', async () => {
     const h5Path = makeTmpPath()
     const h5 = new EvalHarness(h5Path)
 
@@ -197,13 +197,32 @@ describe('EvalHarness', () => {
       await h5.record(makeOutcome({ agentId: 'zero', status: 'failed' }))
     }
 
+    // Another 50% agent with fewer tasks; should sort after `half`
+    for (let i = 0; i < 2; i++) {
+      await h5.record(makeOutcome({
+        agentId: 'half-small',
+        status: i < 1 ? 'completed' : 'failed',
+      }))
+    }
+    // Same 50% and same task count as `half`; alphabetical tie-break.
+    for (let i = 0; i < 4; i++) {
+      await h5.record(makeOutcome({
+        agentId: 'half-zulu',
+        status: i < 2 ? 'completed' : 'failed',
+      }))
+    }
+
     const reports = await h5.reportAll()
     assert.equal(reports[0].agentId, 'perfect')
     assert.equal(reports[0].successRate, 1)
     assert.equal(reports[1].agentId, 'half')
     assert.equal(reports[1].successRate, 0.5)
-    assert.equal(reports[2].agentId, 'zero')
-    assert.equal(reports[2].successRate, 0)
+    assert.equal(reports[2].agentId, 'half-zulu')
+    assert.equal(reports[2].successRate, 0.5)
+    assert.equal(reports[3].agentId, 'half-small')
+    assert.equal(reports[3].successRate, 0.5)
+    assert.equal(reports[4].agentId, 'zero')
+    assert.equal(reports[4].successRate, 0)
 
     fs.rmSync(path.dirname(h5Path), { recursive: true, force: true })
   })

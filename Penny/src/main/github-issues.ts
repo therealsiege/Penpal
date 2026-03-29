@@ -1,7 +1,7 @@
 /**
  * GitHub Issue Poller — watches for `agent-ready` labeled issues,
- * enqueues them into Penny's orchestrator (which spools up local claude-code
- * sessions), and tracks progress through the pipeline.
+ * enqueues them into Penny's orchestrator (headless agent via PENNY_TASK_RUNNER),
+ * and tracks progress through the pipeline.
  *
  * Label lifecycle (Penny owns this, GA workflows are disabled):
  *   agent-ready  →  agent-working  →  pr-ready | agent-failed
@@ -10,10 +10,12 @@
  * On completion/failure: orchestrator events update labels via callbacks.
  */
 
-import { execSync } from 'child_process'
+import { execSync, execFileSync } from 'child_process'
 import fs from 'fs'
 import path from 'path'
 import { enqueueTask, getTaskQueue, getTask, type TaskPriority } from './orchestrator'
+import { ingestIssue, drivePipeline, initPipeline, getPipelineIssues } from './github-pipeline'
+import { atomicWrite } from './atomic-store'
 
 // ── Config ──────────────────────────────────────────────────────────────────
 
@@ -57,6 +59,8 @@ interface TrackedIssue {
   updatedAt: number
   labelSynced: boolean // true once final label (pr-ready/agent-failed) has been applied
   branch?: string     // git branch created for this issue
+  /** When set, agent cwd + push/PR use this path (`git worktree add` checkout) */
+  worktreePath?: string
 }
 
 let trackedIssues: TrackedIssue[] = []
@@ -99,8 +103,7 @@ function loadTracked(): void {
 
 function saveTracked(): void {
   try {
-    if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true })
-    fs.writeFileSync(SEEN_PATH, JSON.stringify(trackedIssues, null, 2))
+    atomicWrite(SEEN_PATH, trackedIssues)
   } catch (err) {
     console.error('[github-issues] Failed to save tracked issues:', err)
   }
@@ -109,22 +112,26 @@ function saveTracked(): void {
 // ── Label definitions ─────────────────────────────────────────────────────
 
 const REQUIRED_LABELS = [
-  { name: 'agent-ready',   color: '8e3e85', description: 'Issue ready for agent pickup' },
-  { name: 'agent-working', color: '3130c0', description: 'Agent is actively working on this' },
-  { name: 'agent-done',    color: '0beb24', description: 'Agent completed the work' },
-  { name: 'agent-failed',  color: '3c303e', description: 'Agent failed to complete the work' },
-  { name: 'pr-ready',      color: '0beb24', description: 'PR has been created for review' },
+  { name: 'agent-ready',     color: '8e3e85', description: 'Issue ready for agent pickup' },
+  { name: 'agent-planning',  color: 'a855f7', description: 'Planner agent is designing the approach' },
+  { name: 'agent-question',  color: 'fbbf24', description: 'Agent has a question — answer on the issue' },
+  { name: 'agent-executing', color: '3b82f6', description: 'Executor agent is implementing' },
+  { name: 'agent-working',   color: '3130c0', description: 'Agent is actively working on this (legacy)' },
+  { name: 'agent-done',      color: '0beb24', description: 'Agent completed the work' },
+  { name: 'agent-failed',    color: '3c303e', description: 'Agent failed to complete the work' },
+  { name: 'pr-ready',        color: '0beb24', description: 'PR has been created for review' },
 ]
 
 /** Ensure all required labels exist in a repo. Silently skips existing ones. */
 function ensureLabels(owner: string, repo: string): void {
   for (const label of REQUIRED_LABELS) {
     try {
-      execSync(
-        `gh label create "${label.name}" --color "${label.color}" ` +
-        `--description "${label.description}" --repo ${owner}/${repo}`,
-        { encoding: 'utf-8', timeout: 15_000, stdio: 'pipe' },
-      )
+      execFileSync('gh', [
+        'label', 'create', label.name,
+        '--color', label.color,
+        '--description', label.description,
+        '--repo', `${owner}/${repo}`,
+      ], { encoding: 'utf-8', timeout: 15_000, stdio: 'pipe' })
       console.log(`[github-issues] Created label "${label.name}" in ${owner}/${repo}`)
     } catch {
       // Label already exists — expected, ignore
@@ -133,6 +140,49 @@ function ensureLabels(owner: string, repo: string): void {
 }
 
 // ── Git branch helpers ────────────────────────────────────────────────────
+
+/**
+ * Isolated checkout via `git worktree add` so concurrent issues do not share one working tree.
+ * Set `PENNY_GITHUB_USE_WORKTREE=1` to enable.
+ */
+function createIssueWorktree(
+  mainRepoPath: string,
+  issueNumber: number,
+  slug: string,
+): { branch: string; worktreePath: string } | null {
+  const branch = `issue-${issueNumber}-${slug}`
+  const safeSlug = slug.replace(/[^a-z0-9-]/gi, '-').slice(0, 40).replace(/-$/, '') || 'issue'
+  const worktreesRoot = path.join(mainRepoPath, '.penny-worktrees')
+  const worktreePath = path.join(worktreesRoot, `${issueNumber}-${safeSlug}`)
+
+  try {
+    fs.mkdirSync(worktreesRoot, { recursive: true })
+    execSync('git fetch origin main 2>/dev/null || git fetch origin master 2>/dev/null || true', {
+      cwd: mainRepoPath, encoding: 'utf-8', timeout: 30_000, stdio: 'pipe',
+    })
+    let baseBranch = 'main'
+    try {
+      baseBranch = execSync('git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null || echo refs/remotes/origin/main', {
+        cwd: mainRepoPath, encoding: 'utf-8', timeout: 10_000, stdio: 'pipe',
+      }).trim().replace('refs/remotes/origin/', '')
+    } catch { /* */ }
+
+    if (fs.existsSync(path.join(worktreePath, '.git'))) {
+      execSync(`git worktree remove "${worktreePath}" --force`, {
+        cwd: mainRepoPath, encoding: 'utf-8', timeout: 30_000, stdio: 'pipe',
+      })
+    }
+
+    execSync(`git worktree add "${worktreePath}" -b "${branch}" "origin/${baseBranch}"`, {
+      cwd: mainRepoPath, encoding: 'utf-8', timeout: 60_000, stdio: 'pipe',
+    })
+    console.log(`[github-issues] Worktree ${worktreePath} branch ${branch}`)
+    return { branch, worktreePath }
+  } catch (err) {
+    console.error(`[github-issues] Failed to create worktree at ${worktreePath}:`, err)
+    return null
+  }
+}
 
 function createIssueBranch(localPath: string, issueNumber: number, slug: string): string | null {
   const branch = `issue-${issueNumber}-${slug}`
@@ -178,22 +228,24 @@ function pushBranchAndCreatePR(
       return false
     }
 
-    execSync(
-      `git commit -m "$(cat <<'COMMITEOF'\n${title}\n\nCloses #${issueNumber}\n\nCo-Authored-By: Penny Orchestrator <noreply@penny.dev>\nCOMMITEOF\n)"`,
-      { cwd: localPath, encoding: 'utf-8', timeout: 15_000, stdio: 'pipe', shell: '/bin/bash' },
-    )
+    const commitMsg = `${title}\n\nCloses #${issueNumber}\n\nCo-Authored-By: Penny Orchestrator <noreply@penny.dev>`
+    execFileSync('git', ['commit', '-m', commitMsg], {
+      cwd: localPath, encoding: 'utf-8', timeout: 15_000, stdio: 'pipe',
+    })
 
-    execSync(`git push -u origin "${branch}"`, {
+    execFileSync('git', ['push', '-u', 'origin', branch], {
       cwd: localPath, encoding: 'utf-8', timeout: 60_000, stdio: 'pipe',
     })
 
     // Create PR
-    execSync(
-      `gh pr create --repo ${config.owner}/${config.repo} ` +
-      `--head "${branch}" --title "${title.replace(/"/g, '\\"')}" ` +
-      `--body "$(cat <<'PREOF'\nCloses #${issueNumber}\n\nAutomated implementation by Penny orchestrator.\nPREOF\n)"`,
-      { cwd: localPath, encoding: 'utf-8', timeout: 30_000, stdio: 'pipe', shell: '/bin/bash' },
-    )
+    const prBody = `Closes #${issueNumber}\n\nAutomated implementation by Penny orchestrator.`
+    execFileSync('gh', [
+      'pr', 'create',
+      '--repo', `${config.owner}/${config.repo}`,
+      '--head', branch,
+      '--title', title,
+      '--body', prBody,
+    ], { cwd: localPath, encoding: 'utf-8', timeout: 30_000, stdio: 'pipe' })
 
     console.log(`[github-issues] Created PR for branch ${branch}`)
     return true
@@ -212,6 +264,22 @@ function cleanupBranch(localPath: string): void {
   } catch { /* best effort */ }
 }
 
+/** After PR push or failure: remove worktree or checkout main on primary clone */
+function cleanupAfterGithubTask(config: RepoConfig, tracked: TrackedIssue): void {
+  if (tracked.worktreePath) {
+    try {
+      execSync(`git worktree remove "${tracked.worktreePath}" --force`, {
+        cwd: config.localPath, encoding: 'utf-8', timeout: 30_000, stdio: 'pipe',
+      })
+      console.log(`[github-issues] Removed worktree ${tracked.worktreePath}`)
+    } catch (err) {
+      console.error(`[github-issues] worktree remove failed for ${tracked.worktreePath}:`, err)
+    }
+    return
+  }
+  cleanupBranch(config.localPath)
+}
+
 // ── GitHub CLI helpers ──────────────────────────────────────────────────────
 
 interface GHIssue {
@@ -225,12 +293,14 @@ interface GHIssue {
 
 function fetchAgentReadyIssues(config: RepoConfig): GHIssue[] {
   try {
-    const raw = execSync(
-      `gh issue list --repo ${config.owner}/${config.repo} ` +
-      `--label "${config.label}" --state open ` +
-      `--json number,title,body,labels,assignees,url --limit 20`,
-      { encoding: 'utf-8', timeout: 30_000 },
-    )
+    const raw = execFileSync('gh', [
+      'issue', 'list',
+      '--repo', `${config.owner}/${config.repo}`,
+      '--label', config.label,
+      '--state', 'open',
+      '--json', 'number,title,body,labels,assignees,url',
+      '--limit', '20',
+    ], { encoding: 'utf-8', timeout: 30_000 })
     return JSON.parse(raw)
   } catch (err) {
     console.error(`[github-issues] Failed to fetch issues from ${config.owner}/${config.repo}:`, err)
@@ -240,11 +310,12 @@ function fetchAgentReadyIssues(config: RepoConfig): GHIssue[] {
 
 function swapLabel(config: RepoConfig, issueNumber: number): void {
   try {
-    execSync(
-      `gh issue edit ${issueNumber} --repo ${config.owner}/${config.repo} ` +
-      `--remove-label "${config.label}" --add-label "${config.workingLabel}"`,
-      { encoding: 'utf-8', timeout: 15_000 },
-    )
+    execFileSync('gh', [
+      'issue', 'edit', String(issueNumber),
+      '--repo', `${config.owner}/${config.repo}`,
+      '--remove-label', config.label,
+      '--add-label', config.workingLabel,
+    ], { encoding: 'utf-8', timeout: 15_000 })
     console.log(`[github-issues] Swapped labels on ${config.owner}/${config.repo}#${issueNumber}`)
   } catch (err) {
     console.error(`[github-issues] Failed to swap labels on #${issueNumber}:`, err)
@@ -253,12 +324,10 @@ function swapLabel(config: RepoConfig, issueNumber: number): void {
 
 function setLabel(config: RepoConfig, issueNumber: number, removeLabels: string[], addLabel: string): void {
   try {
-    const removeParts = removeLabels.map(l => `--remove-label "${l}"`).join(' ')
-    execSync(
-      `gh issue edit ${issueNumber} --repo ${config.owner}/${config.repo} ` +
-      `${removeParts} --add-label "${addLabel}"`,
-      { encoding: 'utf-8', timeout: 15_000 },
-    )
+    const args = ['issue', 'edit', String(issueNumber), '--repo', `${config.owner}/${config.repo}`]
+    for (const l of removeLabels) args.push('--remove-label', l)
+    args.push('--add-label', addLabel)
+    execFileSync('gh', args, { encoding: 'utf-8', timeout: 15_000 })
   } catch (err) {
     console.error(`[github-issues] Failed to set label ${addLabel} on #${issueNumber}:`, err)
   }
@@ -266,10 +335,11 @@ function setLabel(config: RepoConfig, issueNumber: number, removeLabels: string[
 
 function addComment(config: RepoConfig, issueNumber: number, body: string): void {
   try {
-    execSync(
-      `gh issue comment ${issueNumber} --repo ${config.owner}/${config.repo} --body ${JSON.stringify(body)}`,
-      { encoding: 'utf-8', timeout: 15_000 },
-    )
+    execFileSync('gh', [
+      'issue', 'comment', String(issueNumber),
+      '--repo', `${config.owner}/${config.repo}`,
+      '--body', body,
+    ], { encoding: 'utf-8', timeout: 15_000 })
   } catch (err) {
     console.error(`[github-issues] Failed to comment on #${issueNumber}:`, err)
   }
@@ -310,68 +380,25 @@ async function pollOnce(): Promise<number> {
     }
 
     for (const issue of issues) {
-      // Already tracked? Allow re-queue if previous attempt is terminal (done/failed)
+      // Already in pipeline? Skip unless terminal
+      const pipelineIssues = getPipelineIssues()
+      const inPipeline = pipelineIssues.find(p => p.repo === repoKey && p.number === issue.number)
+      if (inPipeline && inPipeline.stage !== 'done' && inPipeline.stage !== 'failed') continue
+
+      // Also check legacy tracked issues
       const existing = trackedIssues.find(t => t.repo === repoKey && t.number === issue.number)
       if (existing) {
         if (existing.stage !== 'done' && existing.stage !== 'failed') continue
-        // Remove stale entry so we can re-enqueue fresh
         trackedIssues = trackedIssues.filter(t => !(t.repo === repoKey && t.number === issue.number))
-        console.log(`[github-issues] Re-queuing #${issue.number} (previous: ${existing.stage})`)
       }
 
-      // Create isolated branch for this issue
-      const slug = issue.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 40).replace(/-$/, '')
-      const branch = config.localPath
-        ? createIssueBranch(config.localPath, issue.number, slug)
-        : null
-
-      // Build task description with branch context
-      const branchNote = branch
-        ? `\n\n**IMPORTANT**: You are on branch \`${branch}\`. Commit your work to this branch. Do NOT push or create PRs — that will be handled automatically.`
-        : ''
-
-      const description = [
-        `GitHub Issue: ${repoKey}#${issue.number}`,
-        `URL: https://github.com/${repoKey}/issues/${issue.number}`,
-        branchNote,
-        '',
-        issue.body || '(no description)',
-      ].join('\n')
-
-      const task = enqueueTask({
-        title: `[${config.repo}#${issue.number}] ${issue.title}`,
-        description,
-        project: config.localPath,
-        priority: derivePriority(issue),
-        requiredSkills: deriveSkills(issue),
-        source: 'github',
-      })
-
-      trackedIssues.push({
-        number: issue.number,
-        repo: repoKey,
-        taskId: task.id,
-        title: issue.title,
-        stage: 'queued',
-        priority: task.priority,
-        ingestedAt: Date.now(),
-        updatedAt: Date.now(),
-        labelSynced: false,
-        branch: branch ?? undefined,
-      })
-      saveTracked()
-
-      // Swap label: agent-ready → agent-working
-      swapLabel(config, issue.number)
-
-      // Comment on the issue
-      const branchMsg = branch ? `\nBranch: \`${branch}\`` : ''
-      addComment(config, issue.number,
-        `🤖 **Picked up by Penny orchestrator**\n\nTask ID: \`${task.id}\`\nPriority: ${task.priority}\nSkills: ${task.requiredSkills.join(', ')}${branchMsg}\n\nA local claude-code session will be spooled up to work on this.`,
+      // Route to 2-agent pipeline
+      ingestIssue(
+        { owner: config.owner, repo: config.repo, localPath: config.localPath },
+        { number: issue.number, title: issue.title, body: issue.body, labels: issue.labels },
       )
 
       enqueued++
-      console.log(`[github-issues] Enqueued #${issue.number}: "${issue.title}" as ${task.id} (branch: ${branch || 'none'})`)
     }
   }
 
@@ -409,14 +436,15 @@ function syncTaskStatuses(): void {
 
       // Sync terminal labels back to GitHub
       if (newStage === 'done') {
-        // Push branch and create PR if we have a branch
+        // Push branch and create PR if we have a branch (cwd = worktree or main clone)
         let prCreated = false
-        if (tracked.branch && config.localPath) {
+        const gitCwd = tracked.worktreePath ?? config.localPath
+        if (tracked.branch && gitCwd) {
           prCreated = pushBranchAndCreatePR(
-            config, config.localPath, tracked.branch, tracked.number,
+            config, gitCwd, tracked.branch, tracked.number,
             `[${config.repo}#${tracked.number}] ${tracked.title}`,
           )
-          cleanupBranch(config.localPath)
+          cleanupAfterGithubTask(config, tracked)
         }
 
         const doneLabel = prCreated ? 'pr-ready' : 'agent-done'
@@ -427,8 +455,7 @@ function syncTaskStatuses(): void {
         )
         tracked.labelSynced = true
       } else if (newStage === 'failed') {
-        // Cleanup branch on failure
-        if (config.localPath) cleanupBranch(config.localPath)
+        if (config.localPath) cleanupAfterGithubTask(config, tracked)
 
         setLabel(config, tracked.number, ['agent-working'], 'agent-failed')
         addComment(config, tracked.number,
@@ -450,6 +477,7 @@ let syncTimer: ReturnType<typeof setInterval> | null = null
 export function startGithubIssuePoller(): void {
   if (pollTimer) return
   loadTracked()
+  initPipeline()
   // Self-heal: consolidate any duplicate entries from re-queued issues
   consolidateTrackedIssues()
   console.log(`[github-issues] Starting poller (${POLL_INTERVAL / 1000}s) for ${REPOS.map(r => `${r.owner}/${r.repo}`).join(', ')}`)
@@ -464,8 +492,12 @@ export function startGithubIssuePoller(): void {
 
   pollTimer = setInterval(() => { pollOnce().catch(console.error) }, POLL_INTERVAL)
 
-  // Task status → label sync loop
-  syncTimer = setInterval(() => syncTaskStatuses(), TASK_SYNC_INTERVAL)
+  // Task status → label sync loop + 2-agent pipeline driver
+  const repoConfigs = REPOS.map(r => ({ owner: r.owner, repo: r.repo, localPath: r.localPath }))
+  syncTimer = setInterval(() => {
+    syncTaskStatuses()
+    drivePipeline(repoConfigs).catch(console.error)
+  }, TASK_SYNC_INTERVAL)
 }
 
 export function stopGithubIssuePoller(): void {

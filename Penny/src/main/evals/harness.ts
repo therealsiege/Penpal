@@ -3,6 +3,12 @@
  *
  * Records task pass/fail outcomes to a JSONL file and computes per-agent
  * metrics: success rate, avg duration, streaks, priority breakdown.
+ *
+ * **GitHub issues vs evals:** closing an issue means the capability shipped;
+ * eval outcomes measure how the system behaves in use (quality, regressions).
+ * Do not gate eval recording on issue state — optional `githubIssue` (or similar)
+ * metadata on tasks/outcomes is fine for traceability, but success in production
+ * is the signal evals are for.
  */
 
 import fs from 'fs'
@@ -19,6 +25,8 @@ export interface TaskOutcome {
   completedAt: string
   retryCount: number
   duration_ms: number
+  /** Primary skill from the task, when available (e.g. first entry in requiredSkills). */
+  taskType?: string
 }
 
 export interface AgentEvalReport {
@@ -40,7 +48,7 @@ export class EvalHarness {
   constructor(outcomesPath?: string) {
     const dataDir = outcomesPath
       ? path.dirname(outcomesPath)
-      : path.resolve(__dirname, '..', '..', 'data')
+      : path.resolve(__dirname, '..', '..', '..', 'data')
     this.outcomesPath = outcomesPath ?? path.join(dataDir, 'eval-outcomes.jsonl')
 
     // Ensure data directory exists
@@ -83,8 +91,12 @@ export class EvalHarness {
       return this.buildReport(id, agentOutcomes)
     })
 
-    // Sort by success rate descending
-    return reports.sort((a, b) => b.successRate - a.successRate)
+    // Sort by success rate desc, then volume desc, then agent id asc for stable output.
+    return reports.sort((a, b) => {
+      if (b.successRate !== a.successRate) return b.successRate - a.successRate
+      if (b.totalTasks !== a.totalTasks) return b.totalTasks - a.totalTasks
+      return a.agentId.localeCompare(b.agentId)
+    })
   }
 
   async experimentVelocity(_since?: Date): Promise<number> {
@@ -101,7 +113,14 @@ export class EvalHarness {
       return raw
         .split('\n')
         .filter(line => line.trim().length > 0)
-        .map(line => JSON.parse(line) as TaskOutcome)
+        .flatMap((line) => {
+          try {
+            return [JSON.parse(line) as TaskOutcome]
+          } catch {
+            // Ignore malformed rows so one bad line doesn't block reporting.
+            return []
+          }
+        })
     } catch {
       return []
     }

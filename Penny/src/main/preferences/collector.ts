@@ -6,46 +6,61 @@ import type { PreferenceEvent, PreferenceSignal, SignalStrength } from './types'
 export type { PreferenceEvent } from './types'
 
 const APPROVE_CHOICES = new Set(['y', 'yes', '1'])
+const REJECT_CHOICES = new Set(['n', 'no', '2', '3', 'skip', 'deny', 'reject'])
 
 export interface CollectorSources {
-  ipcEvents: EventEmitter
-  orchestratorEvents: EventEmitter
-  podEvents: EventEmitter
+  orchestratorEvents?: EventEmitter
+  podEvents?: EventEmitter
+}
+
+type DisposableListener = {
+  emitter: EventEmitter
+  event: string
+  listener: (...args: unknown[]) => void
 }
 
 export class PreferenceCollector extends EventEmitter {
-  constructor(sources?: CollectorSources) {
+  private readonly ipcEvents: EventEmitter
+  private readonly listeners: DisposableListener[] = []
+  private readonly sources: CollectorSources
+  private started = false
+
+  constructor(ipcEvents: EventEmitter, sources: CollectorSources = {}) {
     super()
-    if (sources) {
-      this.hookAll(sources)
-    } else {
-      // Lazy-import to avoid circular deps at module load time
-      this.hookAllFromModules()
+    this.ipcEvents = ipcEvents
+    this.sources = sources
+    this.start()
+  }
+
+  start(): void {
+    if (this.started) return
+    this.started = true
+    this.hookIpcApprove(this.ipcEvents)
+    this.hookIpcSend(this.ipcEvents)
+    if (this.sources.orchestratorEvents) this.hookOrchestrator(this.sources.orchestratorEvents)
+    if (this.sources.podEvents) this.hookPods(this.sources.podEvents)
+  }
+
+  dispose(): void {
+    for (const { emitter, event, listener } of this.listeners) {
+      emitter.off(event, listener)
     }
+    this.listeners.length = 0
+    this.started = false
   }
 
-  private hookAllFromModules(): void {
-    // Dynamic require avoids circular dependency issues
-    const { ipcEvents } = require('../ipc') as { ipcEvents: EventEmitter }
-    const { orchestratorEvents } = require('../orchestrator') as { orchestratorEvents: EventEmitter }
-    const { podEvents } = require('../pods') as { podEvents: EventEmitter }
-    this.hookAll({ ipcEvents, orchestratorEvents, podEvents })
+  emitPreference(event: PreferenceEvent): void {
+    this.emit('preference', event)
+    this.ipcEvents.emit('preferences:event', event)
   }
 
-  private hookAll(sources: CollectorSources): void {
-    this.hookIpcApprove(sources.ipcEvents)
-    this.hookIpcSend(sources.ipcEvents)
-    this.hookOrchestrator(sources.orchestratorEvents)
-    this.hookPods(sources.podEvents)
-  }
-
-  emitPreference(
+  private buildEvent(
     signal: PreferenceSignal,
     strength: SignalStrength,
     agentId: string,
     extra?: Partial<Pick<PreferenceEvent, 'sessionId' | 'context' | 'userAction'>>,
-  ): void {
-    const event: PreferenceEvent = {
+  ): PreferenceEvent {
+    return {
       id: crypto.randomUUID(),
       timestamp: new Date().toISOString(),
       agentId,
@@ -54,78 +69,118 @@ export class PreferenceCollector extends EventEmitter {
       context: {},
       ...extra,
     }
-    this.emit('preference', event)
   }
 
   // ── Signal 1 & 2: approve / reject from tool approval ──────────────
   private hookIpcApprove(emitter: EventEmitter): void {
-    emitter.on('approve', (data: { tty: string; choice: string }) => {
+    const listener = (data: unknown) => {
       try {
-        const isApprove = APPROVE_CHOICES.has(data.choice.toLowerCase())
-        this.emitPreference(
+        if (!data || typeof data !== 'object') return
+        const payload = data as { tty?: string; choice?: string; sessionId?: string }
+        if (typeof payload.tty !== 'string' || typeof payload.choice !== 'string') return
+        const normalizedChoice = payload.choice.toLowerCase()
+        const isApprove = APPROVE_CHOICES.has(normalizedChoice)
+        const isReject = REJECT_CHOICES.has(normalizedChoice)
+        if (!isApprove && !isReject) return
+        this.emitPreference(this.buildEvent(
           isApprove ? 'approve' : 'reject',
           'strong',
-          data.tty,
-          { context: { toolCall: data.choice } },
-        )
+          payload.tty,
+          {
+            sessionId: payload.sessionId,
+            context: { toolCall: 'sessions:approve', toolResult: normalizedChoice },
+          },
+        ))
       } catch { /* graceful degradation */ }
-    })
+    }
+    this.addListenerRef(emitter, 'approve', listener)
   }
 
   // ── Signal 3: message edit before send (weak corrective) ───────────
   private hookIpcSend(emitter: EventEmitter): void {
-    emitter.on('send', (data: { tty: string; message: string }) => {
+    const listener = (data: unknown) => {
       try {
-        this.emitPreference('edit', 'weak', data.tty, {
-          userAction: data.message,
-        })
+        if (!data || typeof data !== 'object') return
+        const payload = data as { tty?: string; message?: string; sessionId?: string; recentMessages?: string[] }
+        if (typeof payload.tty !== 'string' || typeof payload.message !== 'string') return
+        this.emitPreference(this.buildEvent('edit', 'weak', payload.tty, {
+          sessionId: payload.sessionId,
+          context: {
+            toolCall: 'sessions:send',
+            recentMessages: Array.isArray(payload.recentMessages)
+              ? payload.recentMessages.filter((msg): msg is string => typeof msg === 'string')
+              : undefined,
+          },
+          userAction: payload.message,
+        }))
       } catch { /* graceful degradation */ }
-    })
+    }
+    this.addListenerRef(emitter, 'send', listener)
   }
 
   // ── Signal 4 & 5: task completion / failure from orchestrator ──────
   private hookOrchestrator(emitter: EventEmitter): void {
-    emitter.on(
-      'task-completed',
-      (data: { taskId: string; agentId: string; priority: string; durationMs: number }) => {
-        try {
-          this.emitPreference('complete', 'strong', data.agentId, {
-            context: { toolCall: data.taskId },
-          })
-        } catch { /* graceful degradation */ }
-      },
-    )
-
-    emitter.on(
-      'task-failed',
-      (data: { taskId: string; agentId: string }) => {
-        try {
-          this.emitPreference('fail', 'strong', data.agentId, {
-            context: { toolCall: data.taskId },
-          })
-        } catch { /* graceful degradation */ }
-      },
-    )
+    const completeListener = (data: unknown) => {
+      try {
+        if (!data || typeof data !== 'object') return
+        const payload = data as { taskId?: string; agentId?: string }
+        if (typeof payload.taskId !== 'string' || typeof payload.agentId !== 'string') return
+        this.emitPreference(this.buildEvent('complete', 'strong', payload.agentId, {
+          context: { toolCall: 'orchestrator:task-completed', toolResult: payload.taskId },
+        }))
+      } catch { /* graceful degradation */ }
+    }
+    const failListener = (data: unknown) => {
+      try {
+        if (!data || typeof data !== 'object') return
+        const payload = data as { taskId?: string; agentId?: string }
+        if (typeof payload.taskId !== 'string' || typeof payload.agentId !== 'string') return
+        this.emitPreference(this.buildEvent('fail', 'strong', payload.agentId, {
+          context: { toolCall: 'orchestrator:task-failed', toolResult: payload.taskId },
+        }))
+      } catch { /* graceful degradation */ }
+    }
+    this.addListenerRef(emitter, 'task-completed', completeListener)
+    this.addListenerRef(emitter, 'task-failed', failListener)
   }
 
-  // ── Signal from pod workflow status changes ────────────────────────
+  // ── Pod reviewer verdict (listen-only on podEvents; single emission per review) ───
   private hookPods(emitter: EventEmitter): void {
-    emitter.on('status-change', (wf: { id: string; status: string; solver: { agentId: string }; executor: { output?: string } }) => {
+    const listener = (data: unknown) => {
       try {
-        if (wf.status === 'complete') {
-          this.emitPreference('complete', 'strong', wf.solver.agentId, {
-            context: { toolCall: wf.id },
-          })
-        } else if (wf.status === 'failed') {
-          this.emitPreference('fail', 'strong', wf.solver.agentId, {
-            context: { toolCall: wf.id },
-          })
-        } else if (wf.status === 'feedback') {
-          this.emitPreference('reject', 'strong', wf.solver.agentId, {
-            context: { toolResult: wf.executor.output },
-          })
+        if (!data || typeof data !== 'object') return
+        const payload = data as {
+          workflowId?: string
+          solverAgentId?: string
+          reviewerAgentId?: string
+          critique?: { verdict?: string; summary?: string }
         }
+        if (typeof payload.workflowId !== 'string' || typeof payload.solverAgentId !== 'string') return
+        const verdict = payload.critique?.verdict
+        if (
+          verdict !== 'approve'
+          && verdict !== 'approve-with-notes'
+          && verdict !== 'request-changes'
+          && verdict !== 'reject'
+        ) {
+          return
+        }
+        const positive = verdict === 'approve' || verdict === 'approve-with-notes'
+        const reason = payload.critique?.summary
+        this.emitPreference(this.buildEvent(positive ? 'approve' : 'reject', 'strong', payload.solverAgentId, {
+          context: {
+            toolCall: 'pods:reviewer-verdict',
+            toolResult: `${payload.workflowId}:${verdict}`,
+          },
+          userAction: typeof reason === 'string' && reason.length > 0 ? reason : undefined,
+        }))
       } catch { /* graceful degradation */ }
-    })
+    }
+    this.addListenerRef(emitter, 'reviewer-verdict', listener)
+  }
+
+  private addListenerRef(emitter: EventEmitter, event: string, listener: (...args: unknown[]) => void): void {
+    emitter.on(event, listener)
+    this.listeners.push({ emitter, event, listener })
   }
 }

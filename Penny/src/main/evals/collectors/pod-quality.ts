@@ -4,6 +4,13 @@
  * Records per-workflow outcomes to a JSONL file and computes aggregated
  * metrics: reviewer first-pass acceptance, executor test pass rate,
  * self-fix rate, completion time, and per-preset breakdowns.
+ *
+ * Denominators (do not change without updating PR/issue #24 docs):
+ * - reviewerFirstPassRate: completed pods only; fraction where first (and only) review
+ *   was approve | approve-with-notes (see pods.ts finalizePodQuality).
+ * - executorPassRate: all terminal pods; executorPassed false if execute never ran or failed.
+ * - selfFixRate: pods with iterations > 1 only; fraction that still completed (proxy until #15
+ *   exposes explicit self-fix events).
  */
 
 import fs from 'fs'
@@ -47,7 +54,7 @@ export class PodQualityCollector {
   constructor(filePath?: string) {
     const dataDir = filePath
       ? path.dirname(filePath)
-      : path.resolve(__dirname, '..', '..', '..', 'data')
+      : path.resolve(__dirname, '..', '..', '..', '..', 'data')
     this.filePath = filePath ?? path.join(dataDir, 'eval-pod-quality.jsonl')
 
     const dir = path.dirname(this.filePath)
@@ -61,13 +68,16 @@ export class PodQualityCollector {
     fs.appendFileSync(this.filePath, line, 'utf-8')
   }
 
-  report(since?: Date): PodQualityReport {
+  report(since?: Date, until?: Date): PodQualityReport {
     const events = this.loadEvents()
     const sinceMs = since ? since.getTime() : 0
+    const untilMs = until ? until.getTime() : Number.POSITIVE_INFINITY
 
-    const filtered = sinceMs > 0
-      ? events.filter(e => e.timestamp >= sinceMs)
-      : events
+    const filtered = events.filter(e => {
+      if (sinceMs > 0 && e.timestamp < sinceMs) return false
+      if (untilMs !== Number.POSITIVE_INFINITY && e.timestamp > untilMs) return false
+      return true
+    })
 
     return this.buildReport(filtered)
   }
@@ -81,7 +91,13 @@ export class PodQualityCollector {
       return raw
         .split('\n')
         .filter(line => line.trim().length > 0)
-        .map(line => JSON.parse(line) as PodQualityEvent)
+        .flatMap((line) => {
+          try {
+            return [JSON.parse(line) as PodQualityEvent]
+          } catch {
+            return []
+          }
+        })
     } catch {
       return []
     }
@@ -116,11 +132,11 @@ export class PodQualityCollector {
 
     const executorPassRate = sorted.filter(e => e.executorPassed).length / totalPods
 
-    // Self-fix rate: of pods that initially failed (iteration > 1 and completed),
-    // how many eventually succeeded
-    const initiallyFailed = sorted.filter(e => e.iterations > 1)
-    const selfFixRate = initiallyFailed.length > 0
-      ? initiallyFailed.filter(e => e.selfFixed).length / initiallyFailed.length
+    // Self-fix rate: of pods that needed rework (extra solver iterations or executor self-fix),
+    // how many recovered via executor self-fix (selfFixed) vs solver-only paths.
+    const neededRework = sorted.filter(e => e.iterations > 1 || e.selfFixed)
+    const selfFixRate = neededRework.length > 0
+      ? neededRework.filter(e => e.selfFixed).length / neededRework.length
       : 0
 
     const avgCompletionTime_ms = sorted.reduce((sum, e) => sum + e.completionTime_ms, 0) / totalPods

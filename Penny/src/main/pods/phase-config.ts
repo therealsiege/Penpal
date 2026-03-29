@@ -15,6 +15,6 @@ export const PHASE_CONFIGS: Record<string, PhaseConfig> = {
   low:      { candidates: 1, selfEvaluation: false, confidenceThreshold: 0.3, maxSelfFixes: 0 },
 }
 
-export function getPhaseConfig(priority: string | undefined): PhaseConfig {
+export function getPhaseConfig(priority?: string): PhaseConfig {
   return PHASE_CONFIGS[priority ?? 'normal'] ?? PHASE_CONFIGS.normal
 }

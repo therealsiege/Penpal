@@ -9,6 +9,7 @@ import assert from 'node:assert/strict'
 import fs from 'fs'
 import path from 'path'
 import os from 'os'
+import type { Task } from '../../orchestrator'
 import { SpotCheckQueue, type SpotCheck } from '../judges/human-judge'
 
 function makeTmpPath(): string {
@@ -31,6 +32,25 @@ function makeSpotCheck(overrides: Partial<SpotCheck> = {}): SpotCheck {
 
 function seedQueue(filePath: string, checks: SpotCheck[]): void {
   fs.writeFileSync(filePath, JSON.stringify(checks, null, 2), 'utf-8')
+}
+
+function makeTask(overrides: Partial<Task> = {}): Task {
+  return {
+    id: `task-${Math.random().toString(36).slice(2, 8)}`,
+    title: 'Test task title',
+    description: 'Test task description',
+    project: '/tmp/project',
+    priority: 'normal',
+    status: 'completed',
+    requiredSkills: [],
+    source: 'dashboard',
+    createdAt: Date.now() - 10_000,
+    completedAt: Date.now() - 5_000,
+    retryCount: 0,
+    maxRetries: 1,
+    result: 'Agent output',
+    ...overrides,
+  }
 }
 
 describe('SpotCheckQueue', () => {
@@ -89,6 +109,55 @@ describe('SpotCheckQueue', () => {
     fs.rmSync(path.dirname(p), { recursive: true, force: true })
   })
 
+  it('sampling returns requested unique count and excludes already sampled tasks', async () => {
+    const now = Date.now()
+    const p = makeTmpPath()
+    const alreadySampledTaskId = 'task-already-sampled'
+    seedQueue(p, [makeSpotCheck({ taskId: alreadySampledTaskId })])
+
+    const tasks: Task[] = [
+      makeTask({ id: alreadySampledTaskId, completedAt: now - 60_000 }),
+      makeTask({ id: 'task-a', completedAt: now - 70_000 }),
+      makeTask({ id: 'task-b', completedAt: now - 80_000 }),
+      makeTask({ id: 'task-c', completedAt: now - 90_000 }),
+      makeTask({ id: 'task-old', completedAt: now - (8 * 24 * 60 * 60 * 1000) }),
+      makeTask({ id: 'task-queued', status: 'queued', completedAt: undefined }),
+    ]
+
+    const q = new SpotCheckQueue({
+      filePath: p,
+      taskProvider: () => tasks,
+      now: () => now,
+    })
+
+    const sampled = await q.sample(3)
+    assert.equal(sampled.length, 3)
+    const sampledTaskIds = sampled.map(s => s.taskId)
+    assert.equal(new Set(sampledTaskIds).size, 3, 'sampled tasks must be unique')
+    assert.ok(!sampledTaskIds.includes(alreadySampledTaskId), 'must exclude already-sampled task')
+    assert.ok(!sampledTaskIds.includes('task-old'), 'must exclude stale task outside recency window')
+    assert.ok(!sampledTaskIds.includes('task-queued'), 'must exclude non-completed task status')
+
+    const persisted = await q.getQueue()
+    assert.equal(persisted.length, 4) // existing + 3 new
+
+    fs.rmSync(path.dirname(p), { recursive: true, force: true })
+  })
+
+  it('sampling with non-positive count returns empty and does not persist', async () => {
+    const p = makeTmpPath()
+    const q = new SpotCheckQueue({
+      filePath: p,
+      taskProvider: () => [makeTask({ id: 'task-x' })],
+    })
+
+    const sampled = await q.sample(0)
+    assert.deepEqual(sampled, [])
+    assert.deepEqual(await q.getQueue(), [])
+
+    fs.rmSync(path.dirname(p), { recursive: true, force: true })
+  })
+
   it('should filter reviewed checks out of pending', async () => {
     const p = makeTmpPath()
     const checks = [
@@ -141,6 +210,23 @@ describe('SpotCheckQueue', () => {
     assert.equal(agreement.total, 4)
     assert.equal(agreement.agreed, 2) // ag-1 and ag-3 agree
     assert.equal(agreement.rate, 0.5)
+
+    fs.rmSync(path.dirname(p), { recursive: true, force: true })
+  })
+
+  it('agreement uses threshold and treats partial as pass for comparison', async () => {
+    const p = makeTmpPath()
+    const reviewedAt = new Date().toISOString()
+    const checks: SpotCheck[] = [
+      makeSpotCheck({ id: 'thr-1', automatedScore: 0.6, humanVerdict: 'pass', reviewedAt }), // agree
+      makeSpotCheck({ id: 'thr-2', automatedScore: 0.4, humanVerdict: 'partial', reviewedAt }), // disagree
+      makeSpotCheck({ id: 'thr-3', automatedScore: 0.4, humanVerdict: 'fail', reviewedAt }), // agree
+    ]
+    seedQueue(p, checks)
+    const q = new SpotCheckQueue({ filePath: p, automatedPassThreshold: 0.5 })
+
+    const agreement = await q.agreement()
+    assert.deepEqual(agreement, { total: 3, agreed: 2, rate: 2 / 3 })
 
     fs.rmSync(path.dirname(p), { recursive: true, force: true })
   })

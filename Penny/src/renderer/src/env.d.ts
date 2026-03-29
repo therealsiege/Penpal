@@ -179,7 +179,7 @@ declare global {
       // Spot-Check Queue
       evalsSpotCheckQueue: () => Promise<import('./types').SpotCheck[]>
       evalsSpotCheckSample: (count: number) => Promise<import('./types').SpotCheck[]>
-      evalsSpotCheckReview: (id: string, verdict: string, notes?: string) => Promise<void>
+      evalsSpotCheckReview: (id: string, verdict: 'pass' | 'fail' | 'partial', notes?: string) => Promise<void>
       evalsSpotCheckAgreement: () => Promise<import('./types').SpotCheckAgreement>
       // Pod Quality Metrics
       evalsPodQuality: (since?: string) => Promise<{

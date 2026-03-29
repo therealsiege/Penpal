@@ -1,6 +1,6 @@
 import fs from 'fs'
 import path from 'path'
-import { exec, spawn } from 'child_process'
+import { exec, execFileSync, spawn } from 'child_process'
 import { promisify } from 'util'
 import os from 'os'
 import {
@@ -1344,9 +1344,47 @@ export async function createAgentSession(
     return { success: false, error: `Directory not found: ${cwd}` }
   }
 
+  // Create a git worktree for isolation so multiple agents can work on the same repo
+  let sessionCwd = resolvedCwd
+  try {
+    const isGitRepo = fs.existsSync(path.join(resolvedCwd, '.git'))
+    if (isGitRepo) {
+      const worktreesRoot = path.join(resolvedCwd, '.penny-worktrees')
+      const ts = Date.now()
+      const safeName = agentId.replace(/[^a-z0-9-]/gi, '-')
+      const worktreePath = path.join(worktreesRoot, `${safeName}-${ts}`)
+      const branch = `agent/${safeName}/${ts}`
+
+      fs.mkdirSync(worktreesRoot, { recursive: true })
+      // Fetch latest
+      try {
+        execFileSync('git', ['fetch', 'origin'], {
+          cwd: resolvedCwd, encoding: 'utf-8', timeout: 30_000, stdio: 'pipe',
+        })
+      } catch { /* offline ok */ }
+
+      let baseBranch = 'main'
+      try {
+        baseBranch = execFileSync('git', ['symbolic-ref', 'refs/remotes/origin/HEAD'], {
+          cwd: resolvedCwd, encoding: 'utf-8', timeout: 10_000, stdio: 'pipe',
+        }).trim().replace('refs/remotes/origin/', '')
+      } catch { /* default main */ }
+
+      execFileSync('git', ['worktree', 'add', worktreePath, '-b', branch, `origin/${baseBranch}`], {
+        cwd: resolvedCwd, encoding: 'utf-8', timeout: 60_000, stdio: 'pipe',
+      })
+      sessionCwd = worktreePath
+      console.log(`[sessions] Created worktree for ${agentId}: ${worktreePath} (branch ${branch})`)
+    }
+  } catch (err) {
+    // Worktree creation failed — fall back to shared working tree
+    console.warn(`[sessions] Worktree creation failed for ${agentId}, using shared cwd:`, err)
+    sessionCwd = resolvedCwd
+  }
+
   let cliArgs: string[]
   try {
-    cliArgs = buildAgentCliArgs(agentId, resolvedCwd, { dispatch })
+    cliArgs = buildAgentCliArgs(agentId, sessionCwd, { dispatch })
   } catch (err) {
     return { success: false, error: (err as Error).message }
   }
@@ -1354,7 +1392,7 @@ export async function createAgentSession(
   // Write a launcher script to avoid shell/AppleScript escaping hell
   const tmpScript = path.join(os.tmpdir(), `agent-launch-${agentId}.sh`)
   const shellArgs = cliArgs.map(arg => `'${arg.replace(/'/g, "'\\''")}'`).join(' ')
-  const scriptContent = `#!/bin/bash\ncd ${JSON.stringify(resolvedCwd)} && claude ${shellArgs}\n`
+  const scriptContent = `#!/bin/bash\ncd ${JSON.stringify(sessionCwd)} && claude ${shellArgs}\n`
   fs.writeFileSync(tmpScript, scriptContent, { mode: 0o755 })
 
   const escapedScript = tmpScript.replace(/"/g, '\\"')
@@ -1372,7 +1410,7 @@ export async function createAgentSession(
       end tell
     `)
 
-    saveAgentSession(agentId, 'pending', 0, resolvedCwd)
+    saveAgentSession(agentId, 'pending', 0, sessionCwd)
     return { success: true }
   } catch (err) {
     return { success: false, error: (err as Error).message }
