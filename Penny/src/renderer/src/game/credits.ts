@@ -26,6 +26,8 @@ export interface CosmeticItem {
   previewFrame: number
   /** Optional tint color applied to the preview sprite (e.g. LED color items) */
   previewTint?: number
+  /** When false, item is reward-only and omitted from the shop list. */
+  shopVisible?: boolean
 }
 
 export interface CreditAccount {
@@ -62,6 +64,10 @@ const SHOP_CATALOG: CosmeticItem[] = [
   { id: 'name_cyan',        name: 'Cyan Name',       description: 'Cyan agent name color',      category: 'name_color',      price: 30,  icon: '\uD83D\uDCDB', value: '#00e5ff', previewFrame: ICON_FRAMES.ACHIEVEMENT_BADGE, previewTint: 0x00e5ff },
   { id: 'name_pink',        name: 'Pink Name',       description: 'Pink agent name color',      category: 'name_color',      price: 30,  icon: '\uD83D\uDCDB', value: '#f43f5e', previewFrame: ICON_FRAMES.ACHIEVEMENT_BADGE, previewTint: 0xf43f5e },
   { id: 'name_gold',        name: 'Gold Name',       description: 'Gold agent name color',      category: 'name_color',      price: 50,  icon: '\uD83D\uDCDB', value: '#fbbf24', previewFrame: ICON_FRAMES.ACHIEVEMENT_BADGE, previewTint: 0xfbbf24 },
+
+  { id: 'season_badge_gold',   name: 'Season Gold',   description: 'Top season finisher badge', category: 'particle_effect', price: 0, icon: '\u2B50', value: 'season_badge_gold',   previewFrame: ICON_FRAMES.MEDAL_GOLD,   shopVisible: false },
+  { id: 'season_badge_silver', name: 'Season Silver', description: '2nd place season badge',    category: 'particle_effect', price: 0, icon: '\u2B50', value: 'season_badge_silver', previewFrame: ICON_FRAMES.MEDAL_SILVER, shopVisible: false },
+  { id: 'season_badge_bronze', name: 'Season Bronze', description: '3rd place season badge',    category: 'particle_effect', price: 0, icon: '\u2B50', value: 'season_badge_bronze', previewFrame: ICON_FRAMES.MEDAL_BRONZE, shopVisible: false },
 ]
 
 // ---------------------------------------------------------------------------
@@ -161,7 +167,18 @@ export class CreditManager {
   }
 
   getCatalog(): readonly CosmeticItem[] {
-    return SHOP_CATALOG
+    return SHOP_CATALOG.filter(i => i.shopVisible !== false)
+  }
+
+  grantSeasonRewardItem(agentId: string, itemId: string, doEquip = true): boolean {
+    const item = SHOP_CATALOG.find(i => i.id === itemId)
+    if (!item) return false
+    if (!this._account.purchasedItems.includes(itemId)) {
+      this._account.purchasedItems.push(itemId)
+    }
+    this.save()
+    if (doEquip) return this.equip(agentId, itemId)
+    return true
   }
 
   getOwnedItems(): CosmeticItem[] {

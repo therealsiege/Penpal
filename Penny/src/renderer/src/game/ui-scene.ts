@@ -1,6 +1,6 @@
 import Phaser from 'phaser'
 import { BaseScene } from './base-scene'
-import { EventBus, EVENTS } from './events'
+import { EventBus, EVENTS, type SeasonEndedEventPayload, type SeasonStartedEventPayload } from './events'
 import { SCENE_KEYS, SPRITESHEET_KEYS, TOAST_ICON_FRAMES, ICON_FRAMES, IMAGE_KEYS } from './office-asset-keys'
 import { activeTheme } from './office-theme'
 import { ActivityFeed } from './activity-feed'
@@ -107,11 +107,14 @@ export class UIScene extends BaseScene {
   private readonly _onCreditsEarned = (amount: number) => {
     this.activityFeed?.push('credits_earned', `+${amount} credits`)
   }
-  private readonly _onSeasonEnded = (_id: string, name: string, score: number) => {
-    this.activityFeed?.push('season_challenge', `Season "${name}" ended! Score: ${score}`)
+  private readonly _onSeasonEnded = (payload: SeasonEndedEventPayload) => {
+    this.activityFeed?.push(
+      'season_challenge',
+      `Season "${payload.seasonName}" ended! ${payload.summaryLine}`,
+    )
   }
-  private readonly _onSeasonStarted = (_id: string, name: string) => {
-    this.activityFeed?.push('task_start', `New season: ${name}`)
+  private readonly _onSeasonStarted = (payload: SeasonStartedEventPayload) => {
+    this.activityFeed?.push('task_start', `New season: ${payload.seasonName}`)
   }
 
   constructor() {
