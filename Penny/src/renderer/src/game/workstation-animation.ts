@@ -8,6 +8,7 @@ import Phaser from 'phaser'
 import type { AgentState } from '../types'
 import type { WorkstationSprite, Room } from './office-types'
 import { activeTheme } from './office-theme'
+import { AnimConfig } from './animation-config'
 import { EventBus, EVENTS } from './events'
 import { questSystem } from './quest-system'
 import { creditManager } from './credits'
@@ -260,16 +261,16 @@ export class WorkstationAnimator {
     if (isWaiting) {
       ws.sprite.setFrame(base + POSE_IDLE)
       ws.pulseTween = this.scene.tweens.add({
-        targets: ws.sprite, scaleX: CHAR_SCALE * 1.06, scaleY: CHAR_SCALE * 1.06,
-        duration: 900, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
+        targets: ws.sprite, scaleX: CHAR_SCALE * AnimConfig.waiting.pulseScaleFactor, scaleY: CHAR_SCALE * AnimConfig.waiting.pulseScaleFactor,
+        duration: AnimConfig.waiting.pulseDuration, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
       })
       ws.typingTween = this.scene.tweens.add({
-        targets: ws.sprite, x: 1.2,
-        duration: 600, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
+        targets: ws.sprite, x: AnimConfig.waiting.swayAmplitude,
+        duration: AnimConfig.waiting.swayDuration, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
       })
       ws.dotPulseTween = this.scene.tweens.add({
-        targets: ws.statusDot, alpha: 0.3,
-        duration: 600, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
+        targets: ws.statusDot, alpha: AnimConfig.waiting.dotPulseAlphaMin,
+        duration: AnimConfig.waiting.dotPulseDuration, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
       })
       // LED: waiting — amber steady glow
       if (ws.ledGlow) {
@@ -281,24 +282,24 @@ export class WorkstationAnimator {
       // Lamp light cone: dim when waiting
       if (ws.lampLight) {
         ws.lampLightTween = this.scene.tweens.add({
-          targets: ws.lampLight, alpha: 0.02,
-          duration: 500, ease: 'Sine.easeOut',
+          targets: ws.lampLight, alpha: AnimConfig.waiting.lampDimAlpha,
+          duration: AnimConfig.waiting.ledFadeDuration, ease: 'Sine.easeOut',
         })
       }
       this.restoreDeskStrokeCallback(ws)
     } else if (isWorking) {
       ws.sprite.setFrame(base + POSE_INTERACT)
       ws.typingTween = this.scene.tweens.add({
-        targets: ws.sprite, x: 0.8,
-        duration: 400, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
+        targets: ws.sprite, x: AnimConfig.working.typingAmplitude,
+        duration: AnimConfig.working.typingDuration, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
       })
       ws.bounceTween = this.scene.tweens.add({
-        targets: ws.sprite, y: WS_SPRITE_Y - 2,
-        duration: 800, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
+        targets: ws.sprite, y: WS_SPRITE_Y - AnimConfig.working.bounceOffset,
+        duration: AnimConfig.working.bounceDuration, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
       })
       ws.headTiltTween = this.scene.tweens.add({
-        targets: ws.sprite, angle: 1.5,
-        duration: 1600, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
+        targets: ws.sprite, angle: AnimConfig.working.headTiltAngle,
+        duration: AnimConfig.working.headTiltDuration, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
       })
       ws.deskBody.setStrokeStyle(1, 0x34d399, 0.55)
 
@@ -308,8 +309,8 @@ export class WorkstationAnimator {
         if (!ws.kbGlowTween) {
           ws.kbGlowTween = this.scene.tweens.add({
             targets: ws.keyboard,
-            alpha: { from: 0.7, to: 0.9 },
-            duration: 800,
+            alpha: { from: AnimConfig.working.keyboardGlowAlphaMin, to: AnimConfig.working.keyboardGlowAlphaMax },
+            duration: AnimConfig.working.keyboardGlowDuration,
             yoyo: true,
             repeat: -1,
             ease: 'Sine.easeInOut',
@@ -356,10 +357,10 @@ export class WorkstationAnimator {
         this.scene.tweens.add({ targets: ws.ledGlow, alpha: 0.6, duration: 300, ease: 'Sine.easeOut',
           onComplete: () => {
             if (!ws.ledGlow) return
-            ws.ledGlow.setAlpha(0.4)
+            ws.ledGlow.setAlpha(AnimConfig.working.ledPulseAlphaBase)
             ws.ledPulseTween = this.scene.tweens.add({
-              targets: ws.ledGlow, alpha: 0.7,
-              duration: 1000, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
+              targets: ws.ledGlow, alpha: AnimConfig.working.ledPulseAlphaPeak,
+              duration: AnimConfig.working.ledPulseDuration, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
             })
           },
         })
@@ -367,12 +368,12 @@ export class WorkstationAnimator {
       // Lamp light cone: brighten when working with a warm glow
       if (ws.lampLight) {
         ws.lampLightTween = this.scene.tweens.add({
-          targets: ws.lampLight, alpha: 0.12,
+          targets: ws.lampLight, alpha: AnimConfig.working.lampBrightAlpha,
           duration: 300, ease: 'Sine.easeOut',
         })
         // Subtle flicker every 8-15 seconds — tiny alpha dip then recovery
         ws.lampFlickerTimer = this.scene.time.addEvent({
-          delay: 8000 + Math.random() * 7000,
+          delay: AnimConfig.working.lampFlickerIntervalMin + Math.random() * AnimConfig.working.lampFlickerIntervalVar,
           loop: true,
           callback: () => {
             if (!ws.lampLight || !ws.lampLight.active || ws.lastAnimMode !== 'working') return
@@ -510,16 +511,16 @@ export class WorkstationAnimator {
     } else {
       ws.sprite.setFrame(base + POSE_SIT)
       ws.breathTween = this.scene.tweens.add({
-        targets: ws.sprite, scaleY: CHAR_SCALE * 0.97,
-        duration: 2800, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
+        targets: ws.sprite, scaleY: CHAR_SCALE * AnimConfig.idle.breathScaleFactor,
+        duration: AnimConfig.idle.breathDuration, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
       })
 
       // Idle chair rocking — very subtle lean-back oscillation
       if (ws.chairSprite?.visible) {
         ws.chairRockTween = this.scene.tweens.add({
           targets: ws.chairSprite,
-          angle: { from: -1.5, to: 1.5 },
-          duration: 4000,
+          angle: { from: -AnimConfig.idle.chairRockAngle, to: AnimConfig.idle.chairRockAngle },
+          duration: AnimConfig.idle.chairRockDuration,
           yoyo: true,
           repeat: -1,
           ease: 'Sine.easeInOut',
@@ -549,8 +550,8 @@ export class WorkstationAnimator {
       // Lamp light cone: dim when idle
       if (ws.lampLight) {
         ws.lampLightTween = this.scene.tweens.add({
-          targets: ws.lampLight, alpha: 0.02,
-          duration: 500, ease: 'Sine.easeOut',
+          targets: ws.lampLight, alpha: AnimConfig.waiting.lampDimAlpha,
+          duration: AnimConfig.waiting.ledFadeDuration, ease: 'Sine.easeOut',
         })
       }
       this.restoreDeskStrokeCallback(ws)
@@ -859,9 +860,9 @@ export class WorkstationAnimator {
     const orchColors: Record<string, number> = { planning: 0xa78bfa, executing: 0xf97316, validating: 0x06b6d4 }
     const baseColor = orchStage ? (orchColors[orchStage] ?? 0xf97316)
       : isWaiting ? 0xfbbf24 : isWorking ? 0x0ea5e9 : activeTheme.deskBody
-    const baseStrength = isActive ? 1.5 : 0.5
-    const peakStrength = isActive ? 3 : 1
-    const duration     = isActive ? 800 : 2400
+    const baseStrength = isActive ? AnimConfig.monitor.activeBaseStrength : AnimConfig.monitor.idleBaseStrength
+    const peakStrength = isActive ? AnimConfig.monitor.activePeakStrength : AnimConfig.monitor.idlePeakStrength
+    const duration     = isActive ? AnimConfig.monitor.activePulseDuration : AnimConfig.monitor.idlePulseDuration
     ws.monitorGlowFx.color = baseColor
     ws.monitorGlowFx.outerStrength = baseStrength
     ws.monitorGlowTween = this.scene.tweens.add({

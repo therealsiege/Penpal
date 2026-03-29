@@ -3,6 +3,12 @@
  *
  * Records task pass/fail outcomes to a JSONL file and computes per-agent
  * metrics: success rate, avg duration, streaks, priority breakdown.
+ *
+ * **GitHub issues vs evals:** closing an issue means the capability shipped;
+ * eval outcomes measure how the system behaves in use (quality, regressions).
+ * Do not gate eval recording on issue state — optional `githubIssue` (or similar)
+ * metadata on tasks/outcomes is fine for traceability, but success in production
+ * is the signal evals are for.
  */
 
 import fs from 'fs'
