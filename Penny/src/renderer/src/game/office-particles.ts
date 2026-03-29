@@ -634,28 +634,36 @@ export class OfficeParticles {
 
   /**
    * Spawn a single flame particle drifting upward from (worldX, worldY).
-   * Color shifts based on streak intensity: orange < 10, yellow < 15, white 15+.
+   * Color shifts based on streak intensity:
+   * 5-9 (small): orange-dominant, 10-14 (medium): warmer yellow, 15+ (large): hot white accents.
    */
   spawnFlameParticle(worldX: number, worldY: number, streak: number): void {
     if (this._reducedMode && Math.random() > 0.3) return
     const p = this.streakFlamePool.find(c => !c.getData('busy'))
     if (!p) return
 
-    const colors = streak >= 15
-      ? [0xfefce8, 0xfef3c7, 0xfbbf24]
-      : streak >= 10
-        ? [0xfbbf24, 0xfde68a, 0xfb923c]
-        : [0xf97316, 0xfb923c, 0xea580c]
+    const hotness = streak >= 15 ? 3 : streak >= 10 ? 2 : streak >= 5 ? 1 : 0
+    if (hotness === 0) return
+    const roll = Math.random()
+    let color = 0xf97316
+    if (hotness === 1) {
+      color = roll < 0.7 ? 0xf97316 : roll < 0.95 ? 0xfbbf24 : 0xfefce8
+    } else if (hotness === 2) {
+      color = roll < 0.5 ? 0xf97316 : roll < 0.85 ? 0xfbbf24 : 0xfefce8
+    } else {
+      color = roll < 0.3 ? 0xf97316 : roll < 0.7 ? 0xfbbf24 : 0xfefce8
+    }
 
-    const color = colors[Math.floor(Math.random() * colors.length)]
-    const radius = 0.8 + Math.random() * 1.4
+    const radiusBias = hotness === 3 ? 0.45 : hotness === 2 ? 0.25 : 0.1
+    const alphaBias = hotness === 3 ? 0.25 : hotness === 2 ? 0.15 : 0.08
+    const radius = 0.8 + Math.random() * 1.4 + radiusBias
     const xOff = (Math.random() - 0.5) * 12
     const startX = worldX + xOff
 
     p.setPosition(startX, worldY)
     p.setFillStyle(color)
     p.setRadius(radius)
-    p.setAlpha(0.8).setVisible(true).setData('busy', true)
+    p.setAlpha(Math.min(0.98, 0.72 + alphaBias)).setVisible(true).setData('busy', true)
 
     const driftY = -10 - Math.random() * 12
     const swayAmp = 2 + Math.random()

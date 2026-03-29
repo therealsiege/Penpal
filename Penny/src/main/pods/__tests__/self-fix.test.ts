@@ -79,10 +79,14 @@ describe('formatSelfFixMessage', () => {
     expect(msg).toContain('2/3')
   })
 
-  it('includes minimal-fix instruction', () => {
+  it('uses issue self-fix prompt wording', () => {
     const wf = makeWorkflow()
     const msg = formatSelfFixMessage(wf, 'some error')
-    expect(msg).toContain('smallest change that fixes the test')
+    expect(msg).toContain('Your test run failed with these errors:')
+    expect(msg).toContain('The original task was:')
+    expect(msg).toContain('Your code changes were:')
+    expect(msg).toContain('Diagnose the failure and generate a minimal fix. Only fix what\'s broken.')
+    expect(msg).toContain('Do NOT rewrite the solution — make the smallest change that fixes the test.')
   })
 })
 

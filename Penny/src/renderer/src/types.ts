@@ -64,20 +64,34 @@ export interface NewLead {
   source: string
 }
 
+export type GraphFreshnessStatus = 'fresh' | 'recent' | 'stale' | 'unknown'
+
+export interface GraphFreshness {
+  lastLeadUpdate: string | null
+  lastLeadCreated: string | null
+  daysSinceLastUpdate: number | null
+  status: GraphFreshnessStatus
+}
+
 export interface GraphStats {
   totalNodes: number
   totalRelationships: number
   nodesByLabel: Record<string, number>
   relsByType: Record<string, number>
+  totalLeads?: number
+  leadsByStage?: Record<string, number>
+  freshness?: GraphFreshness
 }
 
 export interface LeadSearchResult {
+  leadId?: string
   name: string
   company: string
   score: number
   businessArm: string
   stage: string
   ehr: string
+  territory?: string
   location: string
   nextAction: string
   source: string
@@ -228,6 +242,10 @@ export interface AgentState {
   // Context window utilization (0.0–1.0) and rot detection
   contextUtilization?: number
   contextRotDetected?: boolean
+  // Orchestrator headless task agents (synthesized, not real sessions)
+  isOrchestratorTask?: boolean
+  taskStage?: 'planning' | 'executing' | 'validating'
+  taskTitle?: string
 }
 
 export interface AgentXP {
@@ -343,6 +361,14 @@ export interface ReviewerCritique {
   summary: string
 }
 
+/** Resolved pod compute policy (from task priority at creation). Mirrors main process `PhaseConfig`. */
+export interface PhaseConfig {
+  candidates: number
+  selfEvaluation: boolean
+  confidenceThreshold: number
+  maxSelfFixes: number
+}
+
 export interface PodWorkflow {
   id: string
   name: string
@@ -359,10 +385,14 @@ export interface PodWorkflow {
   selfEvaluation?: SelfEvalResult
   solverCandidateCount: number
   critique?: ReviewerCritique
+  pendingReviewerFeedback?: string
   selfFixAttempts: number
   maxSelfFixes: number
   priority?: string
-  phaseConfig?: { candidates: number; selfEvaluation: boolean; confidenceThreshold: number; maxSelfFixes: number }
+  phaseConfig?: PhaseConfig
+  presetId?: string
+  lastExecutorPassed?: boolean
+  qualityRecorded?: boolean
   createdAt: number
   updatedAt: number
   error?: string
@@ -598,11 +628,13 @@ export interface SpotCheck {
   taskDescription: string
   agentOutput: string
   automatedScore?: number
-  humanVerdict?: 'pass' | 'fail' | 'partial'
+  humanVerdict?: SpotCheckVerdict
   humanNotes?: string
   reviewedAt?: string
   sampledAt: string
 }
+
+export type SpotCheckVerdict = 'pass' | 'fail' | 'partial'
 
 export interface SpotCheckAgreement {
   total: number

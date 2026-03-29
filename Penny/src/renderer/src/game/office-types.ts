@@ -10,6 +10,8 @@ export interface WorkstationSprite {
   container: Phaser.GameObjects.Container
   sprite: Phaser.GameObjects.Sprite
   nameText: Phaser.GameObjects.Text
+  /** Subtitle for active orchestrator task (created lazily) */
+  orchestratorTaskLabel?: Phaser.GameObjects.Text
   statusDot: Phaser.GameObjects.Sprite
   roleBadge: Phaser.GameObjects.Text | null
   deskBody: Phaser.GameObjects.Rectangle
@@ -154,6 +156,9 @@ export interface WorkstationSprite {
   /** OpenClaw/NemoClaw supervision shield badge */
   openclawBadge?: Phaser.GameObjects.Sprite
   openclawBadgeTween?: Phaser.Tweens.Tween
+  /** Orchestrator headless task badge */
+  orchTaskBadge?: Phaser.GameObjects.Sprite
+  orchTaskBadgeTween?: Phaser.Tweens.Tween
   /** Parse error warning badge */
   errorBadge?: Phaser.GameObjects.Sprite
   errorBadgeTween?: Phaser.Tweens.Tween
@@ -173,18 +178,21 @@ export interface WorkstationSprite {
   thinkingDotsTween?: Phaser.Tweens.Tween
   /** Merge tween when candidate is selected */
   thinkingMergeTween?: Phaser.Tweens.Tween
+  /** True while merge animation is in progress */
+  thinkingMergeInProgress?: boolean
   /** Number of thinking candidates currently shown */
   thinkingCandidateCount?: number
   /** Eval glow arc rendered behind the desk — color reflects recent success rate */
   evalGlow?: Phaser.GameObjects.Arc
   evalGlowTween?: Phaser.Tweens.Tween
-  /** Cached eval success rate (0–1), undefined = no data */
-  evalSuccessRate?: number
+  /** Cached eval success rate (0–1); null/undefined = no data for tint */
+  evalSuccessRate?: number | null
   /** Context utilization meter — small bar below XP bar */
   contextMeter?: AnimatedBar
   contextMeterPulseTween?: Phaser.Tweens.Tween
   contextRotShakeTween?: Phaser.Tweens.Tween
   lastContextRotState?: boolean
+  contextRotMonitorBaseX?: number
 }
 
 export interface Room {
@@ -256,6 +264,15 @@ export interface TeamAreaLayout {
 }
 
 // Pod workflow info for connecting lines
+/** Active orchestrator queue task — shown below an agent's name on the Office floor */
+export interface OrchestratorTaskOfficeInfo {
+  taskId: string
+  agentId: string
+  title: string
+  /** planning | executing | validating | queued | … */
+  stage: string
+}
+
 export interface PodLineInfo {
   workflowId: string
   solverAgentId: string
@@ -264,7 +281,7 @@ export interface PodLineInfo {
   status: string
   /** Number of best-of-N solver candidates (>1 triggers thinking animation) */
   candidates?: number
-  /** True when solver has selected a candidate from best-of-N */
+  /** True when a chosen candidate exists (self-eval result, or multi-candidate + solver complete while still in solving without self-eval) */
   candidateSelected?: boolean
 }
 

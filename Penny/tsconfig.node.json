@@ -11,5 +11,5 @@
     "lib": ["ESNext"],
     "types": ["node"]
   },
-  "include": ["src/main/**/*", "src/preload/**/*", "electron.vite.config.ts"]
+  "include": ["src/main/**/*", "src/preload/**/*", "src/mcp/**/*", "electron.vite.config.ts"]
 }

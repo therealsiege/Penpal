@@ -115,12 +115,14 @@ export const MAKO_MOTE_POOL_SIZE = 15
 export const SPARK_POOL_SIZE = 12
 export const STEAM_WISP_POOL_SIZE = 8
 
-// Eval glow — success-rate indicator behind workstation desk
+// Eval glow — success-rate indicator behind workstation desk (sidekick#18)
+// Thresholds (successRate 0–1): green if >80%, amber if 60–80% inclusive, red if <60%, grey if no data.
 export const EVAL_GLOW_GREEN   = 0x22c55e
 export const EVAL_GLOW_AMBER   = 0xf59e0b
 export const EVAL_GLOW_RED     = 0xef4444
 export const EVAL_GLOW_GREY    = 0x6b7280
-export const EVAL_GLOW_RADIUS  = 30
+export const EVAL_GLOW_RADIUS  = 18
+/** Object alpha pulse (issue: ~0.15 effective mid; tween 0.1 ↔ 0.2) */
 export const EVAL_GLOW_ALPHA_MIN      = 0.1
 export const EVAL_GLOW_ALPHA_MAX      = 0.2
 export const EVAL_GLOW_PULSE_DURATION = 2000
@@ -134,12 +136,24 @@ export const CTX_AMBER = 0xf59e0b
 export const CTX_RED = 0xef4444
 export const CTX_THRESHOLD_AMBER = 0.6
 export const CTX_THRESHOLD_RED = 0.8
+export const CTX_METER_BASE_ALPHA = 0.6
+export const CTX_METER_PULSE_ALPHA_MIN = 0.4
+export const CTX_METER_PULSE_ALPHA_MAX = 1.0
+export const CTX_METER_PULSE_MS = 600
+export const CTX_ROT_SHAKE_PX = 1
+export const CTX_ROT_SHAKE_MS = 80
+export const CTX_ROT_SHAKE_REPEATS = 3
 
 // Thinking dots (best-of-N reasoning animation)
 export const THINKING_DOT_RADIUS = 3
 export const THINKING_DOT_SPACING = 10
+/** Above agent head, between speech bubble band (~-40) and thought bubble (~-62) */
 export const THINKING_DOT_Y = -55
+/** Per-dot appear duration (issue #19: 0.3s each) */
+export const THINKING_DOT_APPEAR_MS = 300
+/** Shared fade-out duration after hold */
 export const THINKING_DOT_FADE_MS = 300
+/** Hold with all dots visible before fade (issue #19: 0.5s) */
 export const THINKING_DOT_HOLD_MS = 500
 
 // ---------------------------------------------------------------------------
@@ -148,10 +162,11 @@ export const THINKING_DOT_HOLD_MS = 500
 
 /** Color per MCP server name — used for dashed connection lines in the game view */
 export const MCP_SERVER_COLORS: Record<string, number> = {
-  serena:    0x8b5cf6, // violet
+  penny:     0x3b82f6, // blue
+  serena:    0x22c55e, // green
   context7:  0x22d3ee, // cyan
   github:    0xc4ccd6, // grey-white
-  Neon:      0x4ade80, // green
+  neon:      0x4ade80, // green
   magic:     0xf472b6, // pink
   linear:    0x818cf8, // indigo
   firecrawl: 0xfb923c, // orange
@@ -169,3 +184,5 @@ export const MCP_REFRESH_MS = 90
 /** Offset from room right edge for the MCP icon cluster */
 export const MCP_ICON_CLUSTER_OFFSET_X = 70
 export const MCP_ICON_CLUSTER_SPACING_Y = 14
+export const MCP_DASH_LENGTH = 4
+export const MCP_DASH_GAP = 4

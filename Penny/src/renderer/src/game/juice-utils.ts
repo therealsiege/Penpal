@@ -103,6 +103,18 @@ type TweenTarget = Phaser.GameObjects.GameObject & {
   x?: number; y?: number; scaleX?: number; scaleY?: number; alpha?: number
 }
 
+/** Sprites/Images expose setTintFill; Text, Rectangle, etc. often only have setTint. */
+function applyFlashTint(obj: unknown, color: number): void {
+  const o = obj as { setTintFill?: (c: number) => void; setTint?: (c: number) => void }
+  if (typeof o.setTintFill === 'function') o.setTintFill(color)
+  else if (typeof o.setTint === 'function') o.setTint(color)
+}
+
+function clearFlashTint(obj: unknown): void {
+  const o = obj as { clearTint?: () => void }
+  if (typeof o.clearTint === 'function') o.clearTint()
+}
+
 // ---------------------------------------------------------------------------
 // 1. flash — white-tint hit feedback
 // ---------------------------------------------------------------------------
@@ -123,16 +135,16 @@ export function flash(
     yoyo: true,
     repeat: total - 1,
     onYoyo: () => {
-      ;(gameObject as unknown as Phaser.GameObjects.Components.Tint).setTintFill(tint)
+      applyFlashTint(gameObject, tint)
       ;(gameObject as unknown as Phaser.GameObjects.Components.Alpha).setAlpha(0.72)
     },
     onRepeat: () => {
-      ;(gameObject as unknown as Phaser.GameObjects.Components.Tint).clearTint()
+      clearFlashTint(gameObject)
       ;(gameObject as unknown as Phaser.GameObjects.Components.Alpha).setAlpha(1)
       cycles++
     },
     onComplete: () => {
-      ;(gameObject as unknown as Phaser.GameObjects.Components.Tint).clearTint()
+      clearFlashTint(gameObject)
       ;(gameObject as unknown as Phaser.GameObjects.Components.Alpha).setAlpha(1)
       cycles++
       onComplete?.()
@@ -186,17 +198,21 @@ export function pulse(
 ): Phaser.Tweens.Tween {
   const { scale = 1.18, duration = 220, ease = 'Back.easeOut', onComplete } = opts
   const half = duration / 2
+  const origScaleX = (gameObject as { scaleX: number }).scaleX ?? 1
+  const origScaleY = (gameObject as { scaleY: number }).scaleY ?? 1
+  const peakX = origScaleX * scale
+  const peakY = origScaleY * scale
 
   return scene.tweens.add({
     targets: gameObject,
-    scaleX: scale,
-    scaleY: scale,
+    scaleX: peakX,
+    scaleY: peakY,
     duration: half,
     ease,
     yoyo: true,
     onComplete: () => {
-      ;(gameObject as { scaleX: number }).scaleX = 1
-      ;(gameObject as { scaleY: number }).scaleY = 1
+      ;(gameObject as { scaleX: number }).scaleX = origScaleX
+      ;(gameObject as { scaleY: number }).scaleY = origScaleY
       onComplete?.()
     },
   })

@@ -16,7 +16,7 @@ import { OfficeWorkstations } from './office-workstation'
 import { OfficeBackground } from './office-background'
 import { OfficeBroadcast } from './office-broadcast'
 import { OfficeCamera } from './office-camera'
-import type { WorkstationSprite, Room, PodLineInfo, OfficeDebugSnapshot } from './office-types'
+import type { WorkstationSprite, Room, PodLineInfo, OfficeDebugSnapshot, OrchestratorTaskOfficeInfo } from './office-types'
 import {
   getPoseFrame, getRoomDoorY, getStatusColor,
   hashToken, getAgentCharacterIndex, getTeamInfo, getTeamColor,
@@ -55,6 +55,9 @@ import {
 export class OfficeScene extends Phaser.Scene {
   private pendingAgents: AgentState[] | null = null
   private isReady = false
+
+  /** Orchestrator queue tasks assigned to agents — shown on desks via OfficeWorkstations */
+  private orchestratorTasksByAgent = new Map<string, OrchestratorTaskOfficeInfo>()
 
   private rooms = new Map<string, Room>()
   private agents: AgentState[] = []
@@ -147,6 +150,14 @@ export class OfficeScene extends Phaser.Scene {
   constructor() {
     super({ key: SCENE_KEYS.OFFICE })
   }
+
+  // ---------------------------------------------------------------------------
+  // Public getters — used by test-harness and external tooling
+  // ---------------------------------------------------------------------------
+
+  get celebrationsManager() { return this.celebrations }
+  get atmosphereManager() { return this.atmosphere }
+  get roomMap() { return this.rooms }
 
   // ---------------------------------------------------------------------------
   // Lifecycle
@@ -1028,6 +1039,88 @@ export class OfficeScene extends Phaser.Scene {
       this.background.layoutRooms()
       this.officeCamera.updateCameraBounds()
     }
+
+    // Debug: inspect all large visible objects in workstation containers
+    ;(window as any).__inspectWorkstations = () => {
+      const results: any[] = []
+      for (const [roomKey, room] of this.rooms) {
+        for (const [wsKey, ws] of room.workstations) {
+          const children = ws.container.getAll()
+          children.forEach((gc: any, i: number) => {
+            if (!gc.visible || gc.alpha <= 0) return
+            const w = gc.displayWidth || gc.width || 0
+            const h = gc.displayHeight || gc.height || 0
+            if (w > 15 || h > 15) {
+              results.push({
+                room: roomKey, agent: wsKey, idx: i,
+                type: gc.type, w: Math.round(w), h: Math.round(h),
+                x: Math.round(gc.x), y: Math.round(gc.y),
+                scaleX: gc.scaleX?.toFixed(2), scaleY: gc.scaleY?.toFixed(2),
+                alpha: gc.alpha?.toFixed(2),
+                texture: gc.texture?.key || '',
+                frame: gc.frame?.name ?? '',
+                fillColor: gc.fillColor !== undefined ? '0x' + gc.fillColor.toString(16) : '',
+                depth: gc.depth,
+                name: gc.name || '',
+              })
+            }
+          })
+        }
+      }
+      console.table(results)
+      return results
+    }
+
+    // Debug: hide a specific child by index across all workstations
+    ;(window as any).__hideWsChild = (idx: number) => {
+      let count = 0
+      for (const room of this.rooms.values()) {
+        for (const ws of room.workstations.values()) {
+          const child = ws.container.getAt(idx)
+          if (child) { (child as any).setVisible(false); count++ }
+        }
+      }
+      console.log(`Hidden child at index ${idx} across ${count} workstations`)
+    }
+
+    // Debug: show a specific child by index across all workstations
+    ;(window as any).__showWsChild = (idx: number) => {
+      let count = 0
+      for (const room of this.rooms.values()) {
+        for (const ws of room.workstations.values()) {
+          const child = ws.container.getAt(idx)
+          if (child) { (child as any).setVisible(true); count++ }
+        }
+      }
+      console.log(`Shown child at index ${idx} across ${count} workstations`)
+    }
+
+    // Debug: set alpha for a specific child index across all workstations
+    ;(window as any).__setWsChildAlpha = (idx: number, alpha: number) => {
+      let count = 0
+      for (const room of this.rooms.values()) {
+        for (const ws of room.workstations.values()) {
+          const child = ws.container.getAt(idx)
+          if (child) { (child as any).setAlpha(alpha); count++ }
+        }
+      }
+      console.log(`Set alpha ${alpha} on child at index ${idx} across ${count} workstations`)
+    }
+
+    // Debug: set scale for a specific child index across all workstations
+    ;(window as any).__setWsChildScale = (idx: number, scale: number) => {
+      let count = 0
+      for (const room of this.rooms.values()) {
+        for (const ws of room.workstations.values()) {
+          const child = ws.container.getAt(idx)
+          if (child) { (child as any).setScale(scale); count++ }
+        }
+      }
+      console.log(`Set scale ${scale} on child at index ${idx} across ${count} workstations`)
+    }
+
+    // Test harness — dynamic import for tree-shaking in production
+    import('./test-harness').then(m => m.mountHarness(this)).catch(() => {})
   }
 
   // ---------------------------------------------------------------------------
@@ -1082,6 +1175,7 @@ export class OfficeScene extends Phaser.Scene {
         celebrations: scene.celebrations,
         propsManager: scene.propsManager,
         getNavMesh: () => scene.navMesh,
+        getOrchestratorTaskForAgent: (id) => scene.orchestratorTasksByAgent.get(id),
       })
     }
   }
@@ -1377,7 +1471,8 @@ export class OfficeScene extends Phaser.Scene {
     // Mark MCP connection lines as dirty after agent state update
     if (this.mcp) this.mcp.markDirty()
 
-
+    this.ensureWsManager()
+    this.wsManager.syncOrchestratorTaskLabels()
 
     // Fit camera on first layout only — don't hijack user's pan on every poll.
     if (this.rooms.size > 0 && !this.officeCamera.hasInitialFit) {
@@ -1412,6 +1507,16 @@ export class OfficeScene extends Phaser.Scene {
     this.pods.drawPodLines(this.time.now, this.rooms)
     this.pods.setLastDrawAt(this.time.now)
     this.pods.clearDirty()
+  }
+
+  /** Active orchestrator tasks — shows `[stage] title` below each assigned agent's name */
+  setOrchestratorTasks(tasks: OrchestratorTaskOfficeInfo[]): void {
+    this.orchestratorTasksByAgent.clear()
+    for (const t of tasks) {
+      this.orchestratorTasksByAgent.set(t.agentId, t)
+    }
+    this.ensureWsManager()
+    this.wsManager.syncOrchestratorTaskLabels()
   }
 
   /** Highlight a workstation for drag-over feedback */
@@ -1755,6 +1860,7 @@ export class OfficeScene extends Phaser.Scene {
 
     this.ambient.destroy()
     this.pods.destroy()
+    this.mcp.destroy()
 
     // UI subsystem cleanup (helpOverlay, debugOverlay, tooltips, hover ring, notifications)
     this.ui.destroy()

@@ -169,6 +169,18 @@ Three-agent workflow engine (`src/main/pods.ts`):
 
 If tests fail, the executor's feedback goes back to the solver for iteration (max 3 rounds). Results are appended to `agents/CLAUDE.md` as team knowledge.
 
+### Eval Spot-Check Queue
+
+Manual review queue for random agent output spot checks (`src/main/evals/judges/human-judge.ts`):
+
+- Sampling source: recent orchestrator tasks with status `completed` or `failed`
+- Automated score at sample time: `1.0` when status is `completed`, `0.0` when `failed` (for agreement vs human verdict)
+- Recency policy: last 7 days by `completedAt`
+- Uniqueness policy: a task can only be sampled once (by `taskId`)
+- Persistence: JSON-backed queue at `data/spot-checks.json` with atomic writes
+- Agreement policy: automated score `>= 0.5` maps to pass; human `partial` is treated as pass for binary agreement math
+- Operational limits: file-backed queue, no pagination yet
+
 ### Slack Bridge
 
 Per-project channels (`#sk-penny`, `#sk-medscrub`) via Socket Mode:
@@ -226,6 +238,21 @@ Optional Penny infra vars can be set in `Penny/docker/.env.control-plane`:
 ## IPC API Reference
 
 All IPC calls go through `window.api.*`. Each handler uses `wrapHandler` which catches errors and returns `{ error: string }`.
+
+### Context-Engineered Handler Contract
+
+The most frequently called orchestration handlers return a context-engineered envelope:
+
+- `data` (original payload for backward compatibility)
+- `summary` (single sentence)
+- `suggestions` (state-aware next actions)
+- `related_tools` (adjacent tools likely needed next)
+- optional `context` (supporting state for better decisions)
+
+For lead channels, `leads:*` remains canonical in renderer APIs and `graph:*` aliases are now registered for tooling parity:
+
+- `graph:search-leads` -> `leads:search`
+- `graph:lead-detail` -> `leads:detail`
 
 <details>
 <summary>Full API list</summary>
@@ -306,28 +333,58 @@ All IPC calls go through `window.api.*`. Each handler uses `wrapHandler` which c
 - `pickDirectory()` -- native directory picker dialog
 - `focusCursorIDE()` -- bring Cursor to front
 
+**Spot Checks**
+- `evalsSpotCheckQueue()` -- fetch pending spot checks for manual review
+- `evalsSpotCheckSample(count)` -- sample recent task outputs into queue
+- `evalsSpotCheckReview(id, verdict, notes?)` -- submit human verdict (`pass`/`partial`/`fail`)
+- `evalsSpotCheckAgreement()` -- compute human-vs-automated agreement metrics
+
 </details>
 
 ## MCP Server
 
-Penny exposes an MCP (Model Context Protocol) server so Claude sessions can programmatically discover and invoke Penny's capabilities.
+Penny exposes an MCP (Model Context Protocol) server so Claude sessions can programmatically discover and invoke Penny's capabilities. The MCP process is a standalone Node child (`tsx`); tool handlers import Penny main-process modules directly (same code paths as the Electron app), not a live IPC bridge into a running app window.
 
 ### Available Tools
 
-- **`meta:list-tools`** — Returns all registered tools with names, descriptions, and input schemas
-- **`meta:describe-tool`** — Returns the full schema for a specific tool by name
+Call **`meta:list-tools`** first for the live catalog. Registered groups mirror main IPC domains:
+
+| Group | Tools |
+|-------|--------|
+| **meta** | `meta:list-tools`, `meta:describe-tool` |
+| **orchestrator** | `orchestrator:enqueue`, `orchestrator:queue`, `orchestrator:agent-health` |
+| **pods** | `pod:list`, `pod:status`, `pod:create` |
+| **office** | `office:rooms`, `office:agents`, `office:leaderboard` |
+| **vault** | `vault:read`, `vault:search`, `vault:write` |
+| **graph** | `graph:search-leads`, `graph:lead-detail`, `graph:stats` |
 
 ### Start the Server
 
 ```bash
+# from Penny/
 npm run mcp:start
+
+# from repo root
+npm run --prefix Penny mcp:start
 ```
 
-The server uses stdio transport — stdout is reserved for the MCP protocol, logs go to stderr.
+The server uses stdio transport — stdout is reserved for the MCP protocol; startup and errors log to stderr only.
 
-### Connect Claude Sessions
+### Environment
 
-Add this to your `.mcp.json`:
+Tools that touch on-disk data or Veritas may read:
+
+| Variable | Required | Notes |
+|----------|----------|--------|
+| `PENNY_DATA_DIR` | No | Data directory (e.g. `./data` under Penny when using profile configs) |
+| `PENNY_VERITAS_API_URL` | No | Veritas API base (defaults and related keys are in **Environment Variables** above) |
+| `PENNY_VERITAS_AGENT_KEY` | Recommended | Non-admin key for Veritas-backed operations |
+
+### Connect Claude / Cursor
+
+`config-reader.ts` loads project MCP servers from `<sidekick-root>/.mcp.json` and profile overlays from `Penny/agents/mcp-profiles/*.json`.
+
+**Option A — npm from repo root** (cwd defaults to the project root):
 
 ```json
 {
@@ -340,13 +397,29 @@ Add this to your `.mcp.json`:
 }
 ```
 
-### Future Tool Groups
+**Option B — `npx tsx` with `cwd` on `Penny`** (matches agent profiles and many local setups):
 
-- **orchestrator** — task queue, dispatch, agent health
-- **pods** — solver/reviewer/executor workflows
-- **office** — game state, workstations, cosmetics
-- **vault** — file operations, search, graph queries
-- **graph** — Memgraph/Qdrant knowledge graph queries
+```json
+{
+  "mcpServers": {
+    "penny-mcp": {
+      "command": "npx",
+      "args": ["tsx", "src/mcp/index.ts"],
+      "cwd": "Penny",
+      "env": {
+        "PENNY_DATA_DIR": "./data"
+      }
+    }
+  }
+}
+```
+
+Use paths relative to your sidekick repo root; expand `cwd` to an absolute path if your client does not resolve relative `cwd` the same way.
+
+### Follow-ups (not in this server yet)
+
+- **Resources** — `resources/list` and resource providers (capabilities are declared; handlers can be added later)
+- **IPC-only bridge** — only if a tool must drive a single long-lived Electron main process that cannot share state with the MCP Node process
 
 ## macOS Notes
 

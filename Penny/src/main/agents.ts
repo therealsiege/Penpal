@@ -2,6 +2,7 @@ import fs from 'fs'
 import path from 'path'
 import yaml from 'js-yaml'
 import { resolveUserPath } from './paths'
+import { atomicUpdate } from './atomic-store'
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
@@ -405,17 +406,17 @@ export function loadAgentSessionMap(): AgentSessionMap {
 }
 
 export function saveAgentSession(agentId: string, sessionId: string, pid: number, cwd: string): void {
-  const dir = path.dirname(STATE_FILE)
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
-  const map = loadAgentSessionMap()
-  map[agentId] = { sessionId, pid, cwd, launchedAt: Date.now() }
-  fs.writeFileSync(STATE_FILE, JSON.stringify(map, null, 2))
+  atomicUpdate<Record<string, { sessionId: string; pid: number; cwd: string; launchedAt: number }>>(
+    STATE_FILE,
+    (map) => ({ ...map, [agentId]: { sessionId, pid, cwd, launchedAt: Date.now() } }),
+    {},
+  )
 }
 
 export function removeAgentSession(agentId: string): void {
-  const map = loadAgentSessionMap()
-  delete map[agentId]
-  const dir = path.dirname(STATE_FILE)
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
-  fs.writeFileSync(STATE_FILE, JSON.stringify(map, null, 2))
+  atomicUpdate<Record<string, unknown>>(
+    STATE_FILE,
+    (map) => { const next = { ...map }; delete next[agentId]; return next },
+    {},
+  )
 }

@@ -1,0 +1,8 @@
+{
+  "id": "task-fixture-1",
+  "title": "Fixture Task",
+  "description": "Shared fixture for smoke tests",
+  "project": "/tmp/project",
+  "priority": "normal",
+  "status": "queued"
+}

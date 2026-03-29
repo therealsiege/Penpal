@@ -7,6 +7,7 @@
 import Phaser from 'phaser'
 import { SPRITESHEET_KEYS, ICON_FRAMES, ITEM_FRAMES, STATUS_DOT_FRAMES, LEGO_FRAMES, PET_COUNT, PET_FACE_FRAMES, EFFECT_ANIM_KEYS, IMAGE_KEYS, ANIMAL_SPECIES, ANIMAL_COUNT, ANIMAL_IDLE_FRAMES, MEDAL_HD_FRAMES } from './office-asset-keys'
 import { fadeInUp, fadeOutDown, pulse } from './juice-utils'
+import { AnimConfig } from './animation-config'
 import { EventBus, EVENTS } from './events'
 import type { AgentState } from '../types'
 import type { WorkstationSprite, Room } from './office-types'
@@ -35,6 +36,7 @@ import {
   CTX_METER_W,
   CTX_METER_H,
   CTX_GREEN,
+  CTX_METER_BASE_ALPHA,
 } from './office-constants'
 import type { WorkstationHost } from './office-workstation'
 import { isDeskItemUnlocked, isFlairUnlocked, getRankColor } from './cosmetic-tiers'
@@ -153,7 +155,8 @@ export class WorkstationFactory {
     }
 
     // Eval glow arc — rendered behind desk via painter's order
-    const evalGlow = this.scene.add.arc(0, WS_DESK_Y, EVAL_GLOW_RADIUS, 0, 360, false, EVAL_GLOW_GREY, 0.15)
+    const evalGlow = this.scene.add.arc(0, WS_DESK_Y, EVAL_GLOW_RADIUS, 0, 360, false, EVAL_GLOW_GREY, 1)
+      .setAlpha((EVAL_GLOW_ALPHA_MIN + EVAL_GLOW_ALPHA_MAX) / 2)
     wsContainer.add(evalGlow)
 
     const deskBody = this.scene.add.rectangle(0, WS_DESK_Y, 80, 21, COLOR_DESK_BODY).setStrokeStyle(1, activeTheme.deskStrokeIdle, 0.5)
@@ -170,7 +173,7 @@ export class WorkstationFactory {
     if (this.host.officeTilesLoaded) {
       monitorSprite = this.scene.add.sprite(0, WS_MONITOR_Y, SPRITESHEET_KEYS.OFFICE, FRAME_MONITOR).setScale(0.42)
       wsContainer.add(monitorSprite)
-      monitorGlowFx = monitorSprite.postFX.addGlow(0x0ea5e9, 0, 0, false, 0.1, 16)
+      monitorGlowFx = monitorSprite.postFX.addGlow(0x0ea5e9, 0, 0, false, AnimConfig.monitor.glowQuality, AnimConfig.monitor.glowDistance)
       // Scrolling screen content lines
       screenLines = this.scene.add.graphics().setVisible(false)
       wsContainer.add(screenLines)
@@ -546,7 +549,7 @@ export class WorkstationFactory {
     const questIcon = this.scene.add.sprite(0, WS_SPRITE_Y - 36, questSheet, ICON_FRAMES.STAR_GREY)
       .setScale(questScale).setOrigin(0.5).setAlpha(0).setVisible(false)
     wsContainer.add(questIcon)
-    lodLevel2Objects.push(questIcon)
+    // NOT in lodLevel2Objects — quest system manages its own visibility
 
     // MVP medal — gold medal shown for weekly MVP agent
     // Prefer HD medals sheet > HD icons > standard icons
@@ -561,26 +564,32 @@ export class WorkstationFactory {
         .setScale(mvpScale).setOrigin(0.5).setAlpha(0).setVisible(false)
     }
     wsContainer.add(mvpMedal)
-    lodLevel2Objects.push(mvpMedal)
+    // NOT in lodLevel2Objects — MVP logic manages its own visibility
 
     // Rivalry indicator — red star shown when agent has an active leaderboard rival
     const rivalryIndicator = this.scene.add.sprite(20, WS_SPRITE_Y - 36, SPRITESHEET_KEYS.GAME_ICONS, ICON_FRAMES.STAR_RED)
       .setScale(0.32).setOrigin(0.5).setAlpha(0).setVisible(false)
     wsContainer.add(rivalryIndicator)
-    lodLevel2Objects.push(rivalryIndicator)
+    // NOT in lodLevel2Objects — rivalry logic manages its own visibility
 
     // OpenClaw/NemoClaw supervision shield badge — top-left of workstation
     // Cyan = OpenClaw supervised, Green = NemoClaw sandboxed
     const openclawBadge = this.scene.add.sprite(-20, WS_SPRITE_Y - 30, SPRITESHEET_KEYS.GAME_ICONS, ICON_FRAMES.MEDAL_GOLD_BLUE)
       .setScale(0.28).setOrigin(0.5).setAlpha(0).setVisible(false)
     wsContainer.add(openclawBadge)
-    lodLevel2Objects.push(openclawBadge)
+    // NOT in lodLevel2Objects — openclaw logic manages its own visibility
+
+    // Orchestrator headless task badge — top-right of workstation
+    const orchTaskBadge = this.scene.add.sprite(20, WS_SPRITE_Y - 30, SPRITESHEET_KEYS.GAME_ICONS, ICON_FRAMES.STAR_YELLOW)
+      .setScale(0.24).setOrigin(0.5).setAlpha(0).setVisible(false)
+    wsContainer.add(orchTaskBadge)
+    // NOT in lodLevel2Objects — orchestrator logic manages its own visibility
 
     // Parse error warning badge — shown when JSONL has errors
     const errorBadge = this.scene.add.sprite(-14, WS_SPRITE_Y - 22, SPRITESHEET_KEYS.GAME_ICONS, ICON_FRAMES.CIRCLE_RED)
       .setScale(0.18).setOrigin(0.5).setAlpha(0).setVisible(false)
     wsContainer.add(errorBadge)
-    lodLevel2Objects.push(errorBadge)
+    // NOT in lodLevel2Objects — error logic manages its own visibility
 
     const dotColor  = this.host.getStatusColor(agent)
     const dotFrame  = STATUS_DOT_FRAMES[dotColor] ?? ICON_FRAMES.CIRCLE_GREY
@@ -660,7 +669,7 @@ export class WorkstationFactory {
       fillColor: CTX_GREEN,
       backgroundColor: activeTheme.roomFloor,
     })
-    contextMeter.graphics.setAlpha(0.6).setVisible(false)
+    contextMeter.graphics.setAlpha(CTX_METER_BASE_ALPHA).setVisible(false)
     wsContainer.add(contextMeter.graphics)
     lodLevel3Objects.push(contextMeter.graphics)
 
@@ -771,6 +780,7 @@ export class WorkstationFactory {
       roomProp: roomPropSprite ?? undefined,
       rivalryIndicator,
       openclawBadge,
+      orchTaskBadge,
       errorBadge,
       energyTrack,
       energyFill,
@@ -780,6 +790,7 @@ export class WorkstationFactory {
       flameTweens: [],
       evalGlow,
       contextMeter,
+      contextRotMonitorBaseX: monitorSprite?.x ?? 0,
     }
 
     // Eval glow breathing pulse tween
@@ -1033,6 +1044,8 @@ export class WorkstationFactory {
     if (ws.soundWaveSpeaker) ws.soundWaveSpeaker.destroy()
     if (ws.kbGlowTween)      ws.kbGlowTween.destroy()
     if (ws.typingNoteTimer)  ws.typingNoteTimer.destroy()
+    if (ws.speechBubbleTween) { ws.speechBubbleTween.destroy(); ws.speechBubbleTween = undefined }
+    if (ws.speechBubbleTimer) { ws.speechBubbleTimer.destroy(); ws.speechBubbleTimer = undefined }
     if (ws.shadow)           ws.shadow.destroy()
     if (ws.sparklineGfx)     { ws.sparklineGfx.clear(); ws.sparklineGfx.destroy() }
     if (ws.phoneLightTween)      ws.phoneLightTween.destroy()
@@ -1050,6 +1063,8 @@ export class WorkstationFactory {
     if (ws.rivalryIndicator)     ws.rivalryIndicator.destroy()
     if (ws.exclamationTween)     ws.exclamationTween.destroy()
     if (ws.exclamationSprite)    ws.exclamationSprite.destroy()
+    if (ws.orchTaskBadgeTween)   ws.orchTaskBadgeTween.destroy()
+    if (ws.orchTaskBadge)        ws.orchTaskBadge.destroy()
     if (ws.openclawBadgeTween)   ws.openclawBadgeTween.destroy()
     if (ws.openclawBadge)        ws.openclawBadge.destroy()
     if (ws.errorBadgeTween)      ws.errorBadgeTween.destroy()
@@ -1070,11 +1085,13 @@ export class WorkstationFactory {
     if (ws.contextMeterPulseTween) ws.contextMeterPulseTween.destroy()
     if (ws.contextRotShakeTween)   ws.contextRotShakeTween.destroy()
     if (ws.contextMeter)           ws.contextMeter.destroy()
+    if (ws.orchestratorTaskLabel) ws.orchestratorTaskLabel.destroy()
     if (ws.thinkingDotsTween)    ws.thinkingDotsTween.destroy()
     if (ws.thinkingMergeTween)   ws.thinkingMergeTween.destroy()
     if (ws.thinkingDotsContainer) ws.thinkingDotsContainer.destroy()
     ws.thinkingDots = undefined
     ws.thinkingCandidateCount = undefined
+    ws.thinkingMergeInProgress = undefined
     ws.activityHistory = []
 
     // Exit animation: shrink + fade, then destroy.

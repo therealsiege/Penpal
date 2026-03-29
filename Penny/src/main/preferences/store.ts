@@ -2,13 +2,13 @@ import fs from 'fs'
 import fsp from 'fs/promises'
 import path from 'path'
 import readline from 'readline'
-import type { PreferenceEvent } from './collector'
+import type { PreferenceEvent, PreferenceSignal } from './types'
 
 const MAX_FILE_SIZE = 50 * 1024 * 1024 // 50MB
 
 export interface PreferenceFilter {
   agentId?: string
-  signal?: string
+  signal?: PreferenceSignal
   since?: Date
 }
 
@@ -71,14 +71,7 @@ export class PreferenceStore {
 
   async count(): Promise<number> {
     let total = 0
-    const files = await this.getJsonlFiles()
-    for (const file of files) {
-      const stream = fs.createReadStream(file, { encoding: 'utf-8' })
-      const rl = readline.createInterface({ input: stream, crlfDelay: Infinity })
-      for await (const line of rl) {
-        if (line.trim()) total++
-      }
-    }
+    for await (const _event of this.query()) total++
     return total
   }
 

@@ -3,11 +3,12 @@ import type { Room, McpConnectionInfo } from './office-types'
 import {
   MCP_SERVER_COLORS,
   MCP_SERVER_COLOR_DEFAULT,
-  MCP_REFRESH_MS,
   MCP_ICON_CLUSTER_OFFSET_X,
   MCP_ICON_CLUSTER_SPACING_Y,
+  MCP_DASH_LENGTH,
+  MCP_DASH_GAP,
 } from './office-constants'
-import { drawDashedLine } from './office-helpers'
+import { drawDashedLine, hashToken } from './office-helpers'
 import { SPRITESHEET_KEYS, ICON_FRAMES } from './office-asset-keys'
 
 // ---------------------------------------------------------------------------
@@ -15,10 +16,11 @@ import { SPRITESHEET_KEYS, ICON_FRAMES } from './office-asset-keys'
 // ---------------------------------------------------------------------------
 
 const SERVER_SHORT_LABELS: Record<string, string> = {
+  penny:     'PN',
   serena:    'SR',
   context7:  'C7',
   github:    'GH',
-  Neon:      'NE',
+  neon:      'NE',
   magic:     'MG',
   linear:    'LN',
   firecrawl: 'FC',
@@ -30,11 +32,12 @@ const SERVER_SHORT_LABELS: Record<string, string> = {
 }
 
 function getServerColor(name: string): number {
-  return MCP_SERVER_COLORS[name] ?? MCP_SERVER_COLOR_DEFAULT
+  return MCP_SERVER_COLORS[name.toLowerCase()] ?? MCP_SERVER_COLOR_DEFAULT
 }
 
 function getServerLabel(name: string): string {
-  return SERVER_SHORT_LABELS[name] ?? name.slice(0, 2).toUpperCase()
+  const normalized = name.toLowerCase()
+  return SERVER_SHORT_LABELS[normalized] ?? normalized.slice(0, 2).toUpperCase()
 }
 
 /** Extract unique MCP server names from an agent's allowedTools list. */
@@ -42,7 +45,7 @@ function extractMcpServers(allowedTools: string[]): string[] {
   const servers = new Set<string>()
   for (const tool of allowedTools) {
     const m = tool.match(/^mcp__([^_]+)__/)
-    if (m) servers.add(m[1])
+    if (m) servers.add(m[1].toLowerCase())
   }
   return Array.from(servers)
 }
@@ -86,7 +89,7 @@ export class OfficeMcp {
     const connections: McpConnectionInfo[] = []
     for (const ws of room.workstations.values()) {
       if (!ws.state) continue
-      const servers = extractMcpServers(ws.state.config.allowedTools)
+      const servers = extractMcpServers(ws.state.config.allowedTools ?? [])
       const isActive = ws.state.sessionMode === 'working' || ws.state.sessionMode === 'plan'
       for (const srv of servers) {
         connections.push({
@@ -123,7 +126,7 @@ export class OfficeMcp {
       if (connections.length === 0) continue
 
       // Collect unique servers in this room
-      const uniqueServers = [...new Set(connections.map(c => c.serverName))]
+      const uniqueServers = [...new Set(connections.map(c => c.serverName))].sort()
 
       // Icon cluster position — right edge of the room, vertically centered
       const clusterX = room.x + room.width / 2 + MCP_ICON_CLUSTER_OFFSET_X
@@ -163,12 +166,12 @@ export class OfficeMcp {
 
           const alpha = conn.active ? 0.5 : 0.25
           this.mcpGraphics.lineStyle(1.5, color, alpha)
-          drawDashedLine(this.mcpGraphics, wsX, wsY, clusterX, iconY, 4, 4)
+          drawDashedLine(this.mcpGraphics, wsX, wsY, clusterX, iconY, MCP_DASH_LENGTH, MCP_DASH_GAP)
 
           // Animated traveling dot for active connections
           if (conn.active) {
             const speed = 0.0006
-            const seed = (conn.agentId.length * 17 + srv.length * 31) % 1000
+            const seed = hashToken(`${conn.agentId}:${srv}`) % 1000
             const t = (timeMs * speed + seed * 0.001) % 1
 
             const px = Phaser.Math.Linear(wsX, clusterX, t)

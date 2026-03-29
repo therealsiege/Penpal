@@ -1,5 +1,18 @@
+import fs from 'fs'
+import os from 'os'
+import path from 'path'
 import { describe, it, expect, vi } from 'vitest'
-import { parseSelfEvalResult, formatSelfEvalMessage, parseReviewerCritique } from './pods'
+import {
+  parseSelfEvalResult,
+  formatSelfEvalMessage,
+  parseReviewerCritique,
+  categorizePodFailure,
+  validatePodCwd,
+  executorOutputIndicatesPass,
+  routeAfterReview,
+  formatCritiqueForSolver,
+  formatReviewerRejectError,
+} from './pods'
 
 describe('parseSelfEvalResult', () => {
   it('parses valid JSON with all fields', () => {
@@ -315,5 +328,104 @@ Overall good work.`
       summary: 'Non-numeric confidence.',
     })
     expect(parseReviewerCritique(raw).confidence).toBe(0.5)
+  })
+})
+
+describe('routeAfterReview', () => {
+  it('routes approve and approve-with-notes to execute', () => {
+    expect(routeAfterReview({ verdict: 'approve', confidence: 1, issues: [], strengths: [], summary: 'x' })).toBe(
+      'execute',
+    )
+    expect(
+      routeAfterReview({ verdict: 'approve-with-notes', confidence: 1, issues: [], strengths: [], summary: 'x' }),
+    ).toBe('execute')
+  })
+
+  it('routes request-changes to feedback', () => {
+    expect(
+      routeAfterReview({ verdict: 'request-changes', confidence: 1, issues: [], strengths: [], summary: 'x' }),
+    ).toBe('feedback')
+  })
+
+  it('routes reject to fail', () => {
+    expect(routeAfterReview({ verdict: 'reject', confidence: 1, issues: [], strengths: [], summary: 'x' })).toBe('fail')
+  })
+})
+
+describe('formatCritiqueForSolver', () => {
+  it('includes summary and issues', () => {
+    const text = formatCritiqueForSolver({
+      verdict: 'request-changes',
+      confidence: 0.8,
+      issues: [
+        {
+          severity: 'major',
+          location: 'a.ts',
+          description: 'bug',
+          suggestion: 'fix it',
+        },
+      ],
+      strengths: ['nice'],
+      summary: 'Please fix.',
+    })
+    expect(text).toContain('Please fix.')
+    expect(text).toContain('[major]')
+    expect(text).toContain('nice')
+  })
+})
+
+describe('formatReviewerRejectError', () => {
+  it('includes summary and critical issue descriptions', () => {
+    const err = formatReviewerRejectError({
+      verdict: 'reject',
+      confidence: 0.9,
+      issues: [
+        { severity: 'critical', location: 'x', description: 'bad', suggestion: 'redo' },
+        { severity: 'minor', location: 'y', description: 'small', suggestion: 'nit' },
+      ],
+      strengths: [],
+      summary: 'Unacceptable.',
+    })
+    expect(err).toContain('Reviewer rejected: Unacceptable.')
+    expect(err).toContain('bad')
+    expect(err).not.toContain('small')
+  })
+})
+
+describe('categorizePodFailure', () => {
+  it('maps known error prefixes', () => {
+    expect(categorizePodFailure('Solver failed: timeout')).toBe('headless-solver')
+    expect(categorizePodFailure('Reviewer failed: oops')).toBe('headless-reviewer')
+    expect(categorizePodFailure('Executor failed: bad')).toBe('headless-executor')
+    expect(categorizePodFailure('All solver candidates failed')).toBe('all-candidates-failed')
+    expect(categorizePodFailure('Exhausted 3 iterations without passing tests')).toBe('exhausted-iterations')
+    expect(categorizePodFailure('Cancelled by user')).toBe('cancelled')
+    expect(categorizePodFailure('Working directory does not exist: /nope')).toBe('invalid-cwd')
+    expect(categorizePodFailure('Reviewer rejected: nope')).toBe('reviewer-reject')
+    expect(
+      categorizePodFailure('Reviewer requested changes but no solver iterations remain to address them.'),
+    ).toBe('reviewer-feedback-no-iterations')
+  })
+})
+
+describe('validatePodCwd', () => {
+  it('accepts existing temp directory', () => {
+    const d = fs.mkdtempSync(path.join(os.tmpdir(), 'penny-pod-'))
+    try {
+      expect(validatePodCwd(d)).toBeNull()
+    } finally {
+      fs.rmSync(d, { recursive: true })
+    }
+  })
+
+  it('rejects missing path', () => {
+    expect(validatePodCwd(path.join(os.tmpdir(), 'penny-pod-does-not-exist-xyz'))).not.toBeNull()
+  })
+})
+
+describe('executorOutputIndicatesPass', () => {
+  it('prefers explicit RESULT lines', () => {
+    expect(executorOutputIndicatesPass('RESULT: PASS\nnoise FAIL')).toBe(true)
+    expect(executorOutputIndicatesPass('RESULT: FAIL\nRESULT: PASS')).toBe(false)
   })
 })

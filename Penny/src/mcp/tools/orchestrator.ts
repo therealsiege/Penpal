@@ -46,13 +46,13 @@ export async function handleEnqueue(params: {
 
   const suggestions: string[] = []
   if (idleAgents.length > 0) {
-    suggestions.push(`${idleAgents.length} idle agent(s) available — use pod:create to assign a team`)
+    suggestions.push(`${idleAgents.length} idle agent(s) available — use pods:create to assign a team`)
   }
   if (queuedAhead > 0) {
     suggestions.push(`${queuedAhead} task(s) ahead in queue — use orchestrator:queue to check position`)
   }
   if (priority === 'critical') {
-    suggestions.push('Critical task — consider assigning immediately via pod:create')
+    suggestions.push('Critical task — consider assigning immediately via pods:create')
   }
   if (suggestions.length === 0) {
     suggestions.push('Task enqueued. Use orchestrator:queue to monitor progress')
@@ -63,27 +63,39 @@ export async function handleEnqueue(params: {
   return wrapResponse(task, summary, suggestions, [
     'orchestrator:queue',
     'orchestrator:agent-health',
-    'pod:create',
+    'pods:create',
   ])
 }
 
 export async function handleQueue(params: {
   status?: string
-}): Promise<ContextEngineeredResponse<{ tasks: Task[]; stats: OrchestratorStats }>> {
+}): Promise<ContextEngineeredResponse<{
+  tasks: Task[]
+  stats: OrchestratorStats
+  idle_agents: Array<Pick<AgentHealthStatus, 'agentId' | 'name' | 'status' | 'activeTasks'>>
+}>> {
+  const validStatuses = ['queued', 'assigned', 'active', 'completed', 'failed', 'cancelled']
   let tasks = getTaskQueue()
-  if (params.status) {
-    tasks = tasks.filter(t => t.status === params.status)
+  const statusFilter = validStatuses.includes(params.status ?? '') ? params.status : undefined
+  if (statusFilter) {
+    tasks = tasks.filter(t => t.status === statusFilter)
   }
 
   const stats = getOrchestratorStats()
   const healthStatuses = await getAgentHealthStatuses()
   const idleAgents = healthStatuses.filter(a => a.alive && a.activeTasks === 0)
+  const idleAgentContext = idleAgents.map(a => ({
+    agentId: a.agentId,
+    name: a.name,
+    status: a.status,
+    activeTasks: a.activeTasks,
+  }))
   const criticalQueued = tasks.filter(t => t.status === 'queued' && t.priority === 'critical')
 
   const suggestions: string[] = []
   if (criticalQueued.length > 0 && idleAgents.length > 0) {
     suggestions.push(
-      `${criticalQueued.length} critical task(s) queued with ${idleAgents.length} idle agent(s) — assign via pod:create`,
+      `${criticalQueued.length} critical task(s) queued with ${idleAgents.length} idle agent(s) — assign via pods:create`,
     )
   }
   if (stats.failedToday > 0) {
@@ -94,18 +106,21 @@ export async function handleQueue(params: {
   }
 
   const parts: string[] = []
-  if (params.status) {
-    parts.push(`${tasks.length} ${params.status} task(s)`)
+  if (statusFilter) {
+    parts.push(`${tasks.length} ${statusFilter} task(s)`)
+  } else if (params.status) {
+    parts.push(`${tasks.length} task(s)`)
+    suggestions.push(`Ignored unsupported status "${params.status}" — use orchestrator:queue without filter or a valid status`)
   } else {
     parts.push(`${tasks.length} task(s): ${stats.queueDepth} queued, ${stats.activeTasks} active`)
   }
   parts.push(`${idleAgents.length} agent(s) idle`)
 
   return wrapResponse(
-    { tasks, stats },
+    { tasks, stats, idle_agents: idleAgentContext },
     parts.join('. ') + '.',
     suggestions,
-    ['orchestrator:enqueue', 'orchestrator:agent-health', 'pod:create'],
+    ['orchestrator:enqueue', 'orchestrator:agent-health', 'pods:create'],
   )
 }
 
@@ -138,7 +153,7 @@ export async function handleAgentHealth(): Promise<
 
   if (idle > 0 && stats.queueDepth > 0) {
     suggestions.push(
-      `${idle} idle agent(s) with ${stats.queueDepth} queued task(s) — assign via orchestrator:enqueue + pod:create`,
+      `${idle} idle agent(s) with ${stats.queueDepth} queued task(s) — assign via orchestrator:enqueue + pods:create`,
     )
   }
 
@@ -152,7 +167,7 @@ export async function handleAgentHealth(): Promise<
     { agents },
     summary,
     suggestions,
-    ['orchestrator:queue', 'orchestrator:enqueue', 'pod:create'],
+    ['orchestrator:queue', 'orchestrator:enqueue', 'pods:create'],
   )
 }
 
@@ -191,6 +206,7 @@ toolRegistry.register({
     properties: {
       status: {
         type: 'string',
+        enum: ['queued', 'assigned', 'active', 'completed', 'failed', 'cancelled'],
         description: 'Filter by status: queued, assigned, active, completed, failed, cancelled',
       },
     },

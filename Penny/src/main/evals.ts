@@ -1,8 +1,13 @@
+/**
+ * Eval dashboard aggregates from `Penny/data/eval-results.json`: a JSON array of {@link EvalTaskResult}.
+ * (Distinct from JSONL harness reports under `evals:harness-*` IPC.)
+ */
 import fs from 'fs'
 import path from 'path'
+import type { TaskOutcome } from './evals/harness'
 
 const DATA_DIR = path.resolve(__dirname, '..', '..', 'data')
-const EVALS_FILE = path.join(DATA_DIR, 'eval-results.json')
+const OUTCOMES_FILE = path.join(DATA_DIR, 'eval-outcomes.jsonl')
 
 export interface EvalTaskResult {
   taskId: string
@@ -35,10 +40,21 @@ export interface EvalStats {
 
 function readResults(): EvalTaskResult[] {
   try {
-    if (!fs.existsSync(EVALS_FILE)) return []
-    const raw = fs.readFileSync(EVALS_FILE, 'utf-8')
-    const data = JSON.parse(raw)
-    return Array.isArray(data) ? data : []
+    if (!fs.existsSync(OUTCOMES_FILE)) return []
+    const raw = fs.readFileSync(OUTCOMES_FILE, 'utf-8')
+    const rawOutcomes = raw
+      .split('\n')
+      .filter((line) => line.trim().length > 0)
+      .map((line) => JSON.parse(line) as TaskOutcome)
+    return rawOutcomes.map((outcome) => ({
+      taskId: outcome.taskId,
+      agentId: outcome.agentId,
+      agentName: outcome.agentId,
+      success: outcome.status === 'completed',
+      durationMs: outcome.duration_ms,
+      timestamp: new Date(outcome.completedAt).getTime(),
+      questDifficulty: outcome.priority,
+    }))
   } catch {
     return []
   }
@@ -140,3 +156,6 @@ export function getEvalStats(): EvalStats {
     weekStart: weekStart.toISOString().split('T')[0],
   }
 }
+
+// Exported for tests.
+export const EVAL_OUTCOMES_FILE = OUTCOMES_FILE
