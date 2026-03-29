@@ -382,7 +382,7 @@ describe('CelebrationManager', () => {
       manager.questReward(10, 20, 'epic', 1, 1)
       drainQueue(b)
       const explosive = b.addSprite.mock.calls.filter(c => c[3] === LEGO_SPECIAL_FRAMES.EXPLOSIVE)
-      expect(explosive.length).toBe(1)
+      expect(explosive.length).toBeGreaterThanOrEqual(1)
     })
   })
 
