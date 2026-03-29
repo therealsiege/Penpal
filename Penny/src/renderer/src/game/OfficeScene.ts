@@ -1,5 +1,5 @@
 import Phaser from 'phaser'
-import { EventBus, EVENTS } from './events'
+import { EventBus, EVENTS, type SeasonCeremonyRankingRow, type SeasonEndedEventPayload, type SeasonStartedEventPayload } from './events'
 import type { AgentState, OpencodeSession } from '../types'
 import { activeTheme, setActiveTheme, lerpColor, THEMES, type ThemeName } from './office-theme'
 import { NavMesh } from './nav-mesh'
@@ -15,7 +15,8 @@ import { OfficeRooms } from './office-rooms'
 import { OfficeWorkstations } from './office-workstation'
 import { OfficeBackground } from './office-background'
 import { OfficeBroadcast } from './office-broadcast'
-import { OfficeCamera } from './office-camera'
+import { OfficeCamera, panDurationFromDistance, getWorkstationWorldPos } from './office-camera'
+import { AnimConfig } from './animation-config'
 import type { WorkstationSprite, Room, PodLineInfo, OfficeDebugSnapshot, OrchestratorTaskOfficeInfo } from './office-types'
 import {
   getPoseFrame, getRoomDoorY, getStatusColor,
@@ -27,7 +28,7 @@ import { SPRITESHEET_KEYS, ANIM_KEYS, SCENE_KEYS, EFFECT_ANIM_KEYS, IMAGE_KEYS, 
 import { RoomVisibilityManager } from './room-visibility'
 import { soundEngine } from './sound-engine'
 import { achievements } from './achievements'
-import { CelebrationManager } from './celebrations'
+import { CelebrationManager, themeIconFrameForTheme, type CameraJuiceHint } from './celebrations'
 import { AgentMoodManager } from './agent-mood'
 import { InteractivePropsManager } from './interactive-props'
 import { SeasonHUD } from './season-hud'
@@ -107,6 +108,12 @@ export class OfficeScene extends Phaser.Scene {
   // Camera & navigation — extracted to OfficeCamera
   private officeCamera!: OfficeCamera
   private resizeTimer: ReturnType<typeof setTimeout> | null = null
+  private _cameraJuiceLockDepth = 0
+  private _workstationRefitTimer: ReturnType<typeof setTimeout> | null = null
+  private _lastWorkstationCount = -1
+  private _defaultCamScrollX = 0
+  private _defaultCamScrollY = 0
+  private _defaultCamZoom = 1
   /** Current LOD level: 1=overview, 2=room, 3=full detail. Initialized to 3 so first frame always applies the correct state. */
   private lastLodLevel = 3
   // Room rendering subsystem (extracted to OfficeRooms)
@@ -145,7 +152,7 @@ export class OfficeScene extends Phaser.Scene {
   // PA system broadcast banner — extracted to OfficeBroadcast
   private broadcast!: OfficeBroadcast
   private broadcastHandler: ((msg: unknown) => void) | null = null
-  private agentClickedHandler: ((agentId: string) => void) | null = null
+  private agentClickedHandler: ((...args: unknown[]) => void) | null = null
 
   constructor() {
     super({ key: SCENE_KEYS.OFFICE })
@@ -158,6 +165,91 @@ export class OfficeScene extends Phaser.Scene {
   get celebrationsManager() { return this.celebrations }
   get atmosphereManager() { return this.atmosphere }
   get roomMap() { return this.rooms }
+
+  get targetZoom() { return this.officeCamera.targetZoom }
+  set targetZoom(z: number) { this.officeCamera.targetZoom = z }
+  get followTarget() { return this.officeCamera.followTarget }
+  set followTarget(t: { x: number; y: number } | null) { this.officeCamera.followTarget = t }
+  get defaultCameraX() { return this._defaultCamScrollX }
+  get defaultCameraY() { return this._defaultCamScrollY }
+  get defaultCameraZoom() { return this._defaultCamZoom }
+
+  getMinZoom(): number {
+    return this.officeCamera.getMinZoom()
+  }
+
+  zoomToFit(animated: boolean, opts?: { slow?: boolean }): void {
+    this.officeCamera.zoomToFit(animated, opts)
+    this._scheduleDefaultCameraSnapshot(animated, opts)
+  }
+
+  private _snapshotDefaultCamera(): void {
+    const c = this.cameras.main
+    this._defaultCamScrollX = c.scrollX
+    this._defaultCamScrollY = c.scrollY
+    this._defaultCamZoom = c.zoom
+  }
+
+  private _scheduleDefaultCameraSnapshot(animated: boolean, opts?: { slow?: boolean }): void {
+    if (!animated) {
+      this._snapshotDefaultCamera()
+      return
+    }
+    if (opts?.slow) {
+      this.time.delayedCall(AnimConfig.camera.fitSlowDurationMs + 50, () => this._snapshotDefaultCamera())
+    } else {
+      this.time.delayedCall(750, () => this._snapshotDefaultCamera())
+    }
+  }
+
+  getCameraWorldCenter(): { x: number; y: number } {
+    const c = this.cameras.main
+    return {
+      x: c.scrollX + c.width / (2 * c.zoom),
+      y: c.scrollY + c.height / (2 * c.zoom),
+    }
+  }
+
+  smoothNavigateCameraTo(wx: number, wy: number): void {
+    const ctr = this.getCameraWorldCenter()
+    const dist = Phaser.Math.Distance.Between(ctr.x, ctr.y, wx, wy)
+    if (dist >= AnimConfig.camera.crossRoomPanMinWorldDist) {
+      const dur = panDurationFromDistance(dist)
+      this.officeCamera.smoothPanTo(wx, wy, dur)
+    } else {
+      this.officeCamera.followTarget = { x: wx, y: wy }
+    }
+  }
+
+  prepareFocusCamera(wx: number, wy: number): void {
+    const ctr = this.getCameraWorldCenter()
+    const dist = Phaser.Math.Distance.Between(ctr.x, ctr.y, wx, wy)
+    const dur = panDurationFromDistance(dist)
+    this.officeCamera.smoothPanTo(wx, wy, dur)
+  }
+
+  private lockCameraJuiceInput(): void {
+    this._cameraJuiceLockDepth++
+  }
+
+  private unlockCameraJuiceInput(): void {
+    this._cameraJuiceLockDepth = Math.max(0, this._cameraJuiceLockDepth - 1)
+  }
+
+  private onCameraJuice(hint: CameraJuiceHint): void {
+    if (hint === 'rankUp') this.officeCamera.pulseZoom('rankUp')
+    else if (hint === 'taskComplete') this.officeCamera.pulseZoom('taskComplete')
+    else this.officeCamera.pulseZoom('errorZoomOut')
+  }
+
+  private readonly _agentArrivedCamera = (...args: unknown[]) => {
+    const id = args[0] as string
+    if (id) this.officeCamera.panToAgent(id, this.rooms, { scripted: true })
+  }
+
+  private readonly _agentDepartedCamera = (..._args: unknown[]) => {
+    this.officeCamera.pulseZoom('agentLeave')
+  }
 
   // ---------------------------------------------------------------------------
   // Lifecycle
@@ -515,6 +607,8 @@ export class OfficeScene extends Phaser.Scene {
       getViewSize: () => ({ viewWidth: this.viewWidth, viewHeight: this.viewHeight }),
       getWorldSize: () => ({ worldWidth: this.worldWidth, worldHeight: this.worldHeight }),
       setWorldSize: (w, h) => { this.worldWidth = w; this.worldHeight = h },
+      softLockCameraInput: () => this.lockCameraJuiceInput(),
+      softUnlockCameraInput: () => this.unlockCameraJuiceInput(),
     })
     this.officeCamera.init()
 
@@ -598,6 +692,7 @@ export class OfficeScene extends Phaser.Scene {
 
     // Camera pan -- cancel follow on manual drag
     this.input.on('pointermove', (p: Phaser.Input.Pointer) => {
+      if (this._cameraJuiceLockDepth > 0) return
       if (p.isDown && !this.isDraggingAgent) {
         cam.scrollX -= (p.x - p.prevPosition.x) / cam.zoom
         cam.scrollY -= (p.y - p.prevPosition.y) / cam.zoom
@@ -646,6 +741,7 @@ export class OfficeScene extends Phaser.Scene {
     this.input.on(
       'wheel',
       (_p: Phaser.Input.Pointer, _gx: unknown, _gy: unknown, _gz: unknown, deltaY: number) => {
+        if (this._cameraJuiceLockDepth > 0) return
         this.officeCamera.targetZoom = Phaser.Math.Clamp(this.officeCamera.targetZoom - deltaY * 0.001, this.officeCamera.getMinZoom(), ZOOM_MAX)
         this.officeCamera.followTarget = null
       },
@@ -662,10 +758,14 @@ export class OfficeScene extends Phaser.Scene {
         lastSceneClickTime = now
         return
       }
+      if (this._cameraJuiceLockDepth > 0) {
+        lastSceneClickTime = now
+        return
+      }
       if (now - lastSceneClickTime < 350) {
         const wp = cam.getWorldPoint(p.x, p.y)
         if (!this.getAgentAtWorldPoint(wp.x, wp.y)) {
-          this.officeCamera.zoomToFit(true)
+          this.zoomToFit(true)
         }
       }
       lastSceneClickTime = now
@@ -688,7 +788,7 @@ export class OfficeScene extends Phaser.Scene {
         this.background.invalidateBgCache()
         this.background.layoutRooms()
         this.officeCamera.updateCameraBounds()
-        if (this.rooms.size > 0) this.officeCamera.zoomToFit(true)
+        if (this.rooms.size > 0) this.zoomToFit(true)
       }, 100)
     })
 
@@ -872,11 +972,13 @@ export class OfficeScene extends Phaser.Scene {
       if (this.cafe.isOnCoffeeRun(agentId)) {
         this.cafe.cancelCoffeeRun(agentId)
       }
-    }) as (msg: unknown) => void
+    })
     EventBus.on(EVENTS.AGENT_CLICKED, this.agentClickedHandler)
+    EventBus.on(EVENTS.AGENT_ARRIVED, this._agentArrivedCamera)
+    EventBus.on(EVENTS.AGENT_DEPARTED, this._agentDepartedCamera)
 
     // Game systems — celebrations, mood, achievements, sound, props, season HUD
-    this.celebrations = new CelebrationManager(this)
+    this.celebrations = new CelebrationManager(this, { onCameraJuice: (h: CameraJuiceHint) => this.onCameraJuice(h) })
 
     // VFX sprite animations (loaded in preload)
     if (!this.anims.exists(EFFECT_ANIM_KEYS.FLASH)) {
@@ -969,16 +1071,99 @@ export class OfficeScene extends Phaser.Scene {
       soundEngine.achievement()
     })
 
-    // Wire season end to dramatic ceremony
     EventBus.on(EVENTS.SEASON_ENDED, (...args: unknown[]) => {
-      const [, seasonName, score] = args as [string, string, number]
-      this.celebrations.seasonEnd(seasonName, score)
+      const payload = args[0] as SeasonEndedEventPayload
+      const awaiting = seasonManager.isAwaitingSeasonRollover()
+      this.selection.lockInput()
+
+      const snap = leaderboardManager.getRankingsSnapshot(12)
+      const mvp = leaderboardManager.getSeasonMVP()
+      const mvpPos = this._workstationWorldPosForAgent(mvp?.agentId ?? null)
+
+      let creditBonusShown = 0
+      if (awaiting) {
+        for (const e of snap) {
+          if (e.tasksCompleted > 0) creditBonusShown += Math.floor(2 * e.tasksCompleted)
+        }
+        if (creditBonusShown > 0) creditManager.earn(creditBonusShown)
+
+        const topBadges = ['season_badge_gold', 'season_badge_silver', 'season_badge_bronze'] as const
+        snap.slice(0, 3).forEach((e, i) => {
+          creditManager.grantSeasonRewardItem(e.agentId, topBadges[i])
+        })
+        if (mvp) creditManager.grantSeasonRewardItem(mvp.agentId, 'name_gold')
+      }
+
+      const rankings: SeasonCeremonyRankingRow[] = snap.map(e => ({
+        rank: e.rank,
+        agentId: e.agentId,
+        agentName: e.agentName,
+        seasonXP: e.seasonXP,
+        tasksCompleted: e.tasksCompleted,
+      }))
+
+      const ceremonyPayload = {
+        ...payload,
+        rankings,
+        mvpAgentId: mvp?.agentId ?? null,
+        mvpWorldX: mvpPos.x,
+        mvpWorldY: mvpPos.y,
+        creditBonusShown,
+      }
+
+      const afterVisual = (didRollover: boolean) => {
+        this.ensureWsManager()
+        if (didRollover) this.wsManager.playSeasonRefreshPulseAll()
+        this.seasonHud.refreshForSeasonChange()
+        this.selection.unlockInput()
+      }
+
+      this.celebrations.seasonEndCeremony(ceremonyPayload, {
+        onComplete: () => {
+          if (awaiting) {
+            leaderboardManager.resetSeason()
+            seasonManager.finishSeasonRollover()
+          }
+          const introSeason = awaiting ? seasonManager.getCurrentSeason() : null
+          if (introSeason) {
+            this.celebrations.seasonStartIntro({
+              seasonName: introSeason.name,
+              theme: introSeason.theme,
+              accentColor: introSeason.accentColor,
+              themeIconFrame: themeIconFrameForTheme(introSeason.theme),
+              challenges: introSeason.challenges.map(ch => ({
+                description: ch.description,
+                completed: ch.completed,
+              })),
+            }, {
+              onComplete: () => afterVisual(awaiting),
+            })
+          } else {
+            afterVisual(awaiting)
+          }
+        },
+      })
     })
 
-    // Wire season start to announcement
     EventBus.on(EVENTS.SEASON_STARTED, (...args: unknown[]) => {
-      const [, seasonName] = args as [string, string]
-      this.celebrations.seasonStart(seasonName)
+      const payload = args[0] as SeasonStartedEventPayload
+      if (payload.skipIntroCelebration) {
+        this.seasonHud.refreshForSeasonChange()
+        return
+      }
+      this.celebrations.seasonStartIntro({
+        seasonName: payload.seasonName,
+        theme: payload.theme,
+        accentColor: payload.accentColor,
+        themeIconFrame: themeIconFrameForTheme(payload.theme),
+        challenges: payload.challenges.map(c => ({ ...c })),
+      }, {
+        onComplete: () => {
+          this.ensureWsManager()
+          this.wsManager.playSeasonRefreshPulseAll()
+          this.seasonHud.refreshForSeasonChange()
+        },
+      })
     })
 
     // Wire challenge completion to mini-celebration
@@ -996,16 +1181,16 @@ export class OfficeScene extends Phaser.Scene {
         if (ws) {
           const wx = room.x + ws.container.x
           const wy = room.y + ws.container.y
-          this.celebrations.questComplete(
-            wx, wy,
-            difficulty as 'trivial' | 'normal' | 'hard' | 'epic' | 'legendary',
-          )
-          this.celebrations.questReward(
+          this.celebrations.questCelebration(
             wx, wy,
             difficulty as 'trivial' | 'normal' | 'hard' | 'epic' | 'legendary',
             xpReward, creditReward,
+            { agentId },
           )
           soundEngine.levelUp()
+          if (difficulty === 'epic' || difficulty === 'legendary') {
+            this.officeCamera.focusAgentBriefly(agentId, this.rooms)
+          }
           break
         }
       }
@@ -1020,7 +1205,7 @@ export class OfficeScene extends Phaser.Scene {
         if (ws) {
           const wx = room.x + ws.container.x
           const wy = room.y + ws.container.y
-          this.celebrations.error(wx, wy)
+          this.celebrations.error(wx, wy, { agentId })
           break
         }
       }
@@ -1178,6 +1363,15 @@ export class OfficeScene extends Phaser.Scene {
         getOrchestratorTaskForAgent: (id) => scene.orchestratorTasksByAgent.get(id),
       })
     }
+  }
+
+  private _workstationWorldPosForAgent(agentId: string | null): { x: number; y: number } {
+    const cam = this.cameras.main
+    const cx = cam.scrollX + cam.width / 2
+    const cy = cam.scrollY + cam.height * 0.55
+    if (!agentId) return { x: cx, y: cy }
+    const p = getWorkstationWorldPos(agentId, this.rooms)
+    return p ?? { x: cx, y: cy }
   }
 
   // ---------------------------------------------------------------------------
@@ -1478,8 +1672,28 @@ export class OfficeScene extends Phaser.Scene {
     if (this.rooms.size > 0 && !this.officeCamera.hasInitialFit) {
       this.officeCamera.hasInitialFit = true
       this.officeCamera.followTarget = null
-      this.officeCamera.zoomToFit(false)
+      this.zoomToFit(false)
       this.officeCamera.pendingCameraRecoveryUntil = this.time.now + 1500
+    }
+
+    let wsCount = 0
+    for (const room of this.rooms.values()) wsCount += room.workstations.size
+    if (this.officeCamera.hasInitialFit) {
+      if (this._lastWorkstationCount < 0) {
+        this._lastWorkstationCount = wsCount
+      } else if (Math.abs(wsCount - this._lastWorkstationCount) >= AnimConfig.camera.workstationRefitThreshold) {
+        if (this._workstationRefitTimer) clearTimeout(this._workstationRefitTimer)
+        this._workstationRefitTimer = setTimeout(() => {
+          this._workstationRefitTimer = null
+          let c = 0
+          for (const r of this.rooms.values()) c += r.workstations.size
+          this._lastWorkstationCount = c
+          this.officeCamera.followTarget = null
+          this.zoomToFit(true, { slow: true })
+        }, AnimConfig.camera.workstationRefitDebounceMs)
+      } else {
+        this._lastWorkstationCount = wsCount
+      }
     }
   }
 
@@ -1538,6 +1752,13 @@ export class OfficeScene extends Phaser.Scene {
   /** Public: smooth-pan camera to center on a specific agent */
   panToAgent(agentId: string): void {
     this.officeCamera.panToAgent(agentId, this.rooms)
+  }
+
+  /** Pan toward an agent with cross-room smooth pan when needed (Command Center / React). */
+  navigateCameraToAgent(agentId: string): void {
+    const pos = getWorkstationWorldPos(agentId, this.rooms)
+    if (!pos) return
+    this.smoothNavigateCameraTo(pos.x, pos.y)
   }
 
   /** Delegate for CafeHostScene — cafe calls scene.spawnEmojiReaction() */
@@ -1823,9 +2044,12 @@ export class OfficeScene extends Phaser.Scene {
 
   destroy(): void {
     if (this.resizeTimer) { clearTimeout(this.resizeTimer); this.resizeTimer = null }
+    if (this._workstationRefitTimer) { clearTimeout(this._workstationRefitTimer); this._workstationRefitTimer = null }
 
     // PA system broadcast banner cleanup
     this.broadcast.destroy()
+    EventBus.off(EVENTS.AGENT_ARRIVED, this._agentArrivedCamera)
+    EventBus.off(EVENTS.AGENT_DEPARTED, this._agentDepartedCamera)
     if (this.agentClickedHandler) {
       EventBus.off(EVENTS.AGENT_CLICKED, this.agentClickedHandler)
       this.agentClickedHandler = null

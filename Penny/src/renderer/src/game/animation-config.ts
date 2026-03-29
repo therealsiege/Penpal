@@ -157,6 +157,42 @@ export interface AnimationConfig {
     /** Quality parameter of the Phaser FX glow effect (0–1). */
     glowQuality: number
   }
+
+  /**
+   * Celebration queue spacing, combo streaks, merge window, and per-agent cooldowns (sidekick#72).
+   */
+  celebrations: {
+    queueGapMs: number
+    comboWindowMs: number
+    comboCooldownMs: number
+    sameTypeMergeWindowMs: number
+    rankUpCooldownMs: number
+    taskCompleteCooldownMs: number
+    errorCooldownMs: number
+    comboTier2Min: number
+    comboTier3Min: number
+    comboTierFireMin: number
+  }
+
+  /** Camera juice: zoom pulses, scripted pans, slow zoom-to-fit (sidekick#79). */
+  camera: {
+    pulse: Record<
+      'taskComplete' | 'rankUp' | 'errorZoomOut' | 'agentLeave' | 'epicQuest',
+      { delta: number; durationMs: number }
+    >
+    pan: {
+      minWorldDist: number
+      maxWorldDist: number
+      minMs: number
+      maxMs: number
+      ease: string
+    }
+    crossRoomPanMinWorldDist: number
+    fitSlowDurationMs: number
+    epicQuestHoldMs: number
+    workstationRefitThreshold: number
+    workstationRefitDebounceMs: number
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -253,6 +289,41 @@ function makeDefaults(): AnimationConfig {
       idlePulseDuration:   2400,
       glowDistance:        6,
       glowQuality:         0.25,
+    },
+
+    celebrations: {
+      queueGapMs: 400,
+      comboWindowMs: 10_000,
+      comboCooldownMs: 10_000,
+      sameTypeMergeWindowMs: 2000,
+      rankUpCooldownMs: 5000,
+      taskCompleteCooldownMs: 1000,
+      errorCooldownMs: 3000,
+      comboTier2Min: 2,
+      comboTier3Min: 3,
+      comboTierFireMin: 5,
+    },
+
+    camera: {
+      pulse: {
+        taskComplete:  { delta: 0.04, durationMs: 220 },
+        rankUp:        { delta: 0.07, durationMs: 320 },
+        errorZoomOut:  { delta: -0.06, durationMs: 280 },
+        agentLeave:    { delta: -0.03, durationMs: 200 },
+        epicQuest:     { delta: 0.09, durationMs: 400 },
+      },
+      pan: {
+        minWorldDist: 120,
+        maxWorldDist: 2200,
+        minMs: 400,
+        maxMs: 800,
+        ease: 'Sine.easeInOut',
+      },
+      crossRoomPanMinWorldDist: 380,
+      fitSlowDurationMs: 1000,
+      epicQuestHoldMs: 120,
+      workstationRefitThreshold: 2,
+      workstationRefitDebounceMs: 400,
     },
   }
 }
