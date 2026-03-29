@@ -103,6 +103,217 @@ function isProcessAlive(pid: number): boolean {
   }
 }
 
+// ── Process-based session discovery ─────────────────────────────────────────
+
+function normalizeTty(tty: string): string {
+  if (!tty || tty === '??') return ''
+  return tty.replace(/^\/dev\//, '')
+}
+
+function isClaudeSessionProcess(command: string): boolean {
+  if (!command) return false
+  const lower = command.toLowerCase()
+
+  // Reject VSCode extension helper processes
+  if (lower.includes('code helper') && lower.includes('claude')) return false
+
+  // Reject MCP server processes
+  if (lower.includes('start-mcp-server')) return false
+  if (lower.includes('mcp serve')) return false
+  if (lower.includes('mcp-server')) return false
+
+  // Look for claude or claude-composer as the main executable
+  const tokens = command.trim().split(/\s+/)
+  for (let i = 0; i < tokens.length; i++) {
+    const token = tokens[i]
+    // Skip runtime prefixes (node, env, etc.)
+    if (token === 'node' || token.endsWith('/node') || token === 'env' || token.endsWith('/env')) continue
+    if (token.startsWith('-')) continue // node flags like --max-old-space-size
+
+    const base = (token.split('/').pop() || '').replace(/\.(js|mjs|cjs|ts)$/, '')
+    if (base === 'claude' || base === 'claude-composer') {
+      return true
+    }
+    // First real token wasn't claude — stop looking
+    break
+  }
+
+  return false
+}
+
+interface ClaudeProcess {
+  pid: number
+  ppid: number
+  tty: string
+  cpu: string
+  memoryMB: number
+  startedAt: number
+  command: string
+}
+
+async function getWorkingDirectory(pid: number): Promise<string> {
+  try {
+    const { stdout } = await execAsync(
+      `lsof -a -p ${pid} -d cwd -Fn 2>/dev/null`,
+    )
+    const cwdLine = stdout
+      .trim()
+      .split('\n')
+      .find(line => line.startsWith('n'))
+    return cwdLine?.slice(1).trim() || os.homedir()
+  } catch {
+    return os.homedir()
+  }
+}
+
+function parseElapsedTimeToStart(etime: string): number {
+  // etime format: [[dd-]hh:]mm:ss
+  let days = 0
+  let hours = 0
+  let mins = 0
+  let secs = 0
+
+  const trimmed = etime.trim()
+  if (!trimmed) return Date.now()
+
+  const daySplit = trimmed.split('-')
+  const timePart = daySplit.length > 1 ? daySplit[daySplit.length - 1] : daySplit[0]
+  if (daySplit.length > 1) days = parseInt(daySplit[0] || '0', 10) || 0
+
+  const parts = timePart.split(':').map(n => parseInt(n, 10) || 0)
+  if (parts.length === 3) {
+    hours = parts[0]
+    mins = parts[1]
+    secs = parts[2]
+  } else if (parts.length === 2) {
+    mins = parts[0]
+    secs = parts[1]
+  } else if (parts.length === 1) {
+    secs = parts[0]
+  }
+
+  const elapsedSec = days * 86400 + hours * 3600 + mins * 60 + secs
+  return Date.now() - elapsedSec * 1000
+}
+
+async function findClaudeProcesses(): Promise<{ pid: number; tty: string; cpu: string; memoryMB: number; startedAt: number; cwd: string }[]> {
+  try {
+    const { stdout } = await execAsync(
+      'ps -ww -eo pid=,ppid=,tty=,%cpu=,rss=,etime=,command= 2>/dev/null',
+    )
+
+    const matched: ClaudeProcess[] = []
+    for (const rawLine of stdout.split('\n')) {
+      const line = rawLine.trim()
+      if (!line) continue
+
+      const match = line.match(/^(\d+)\s+(\d+)\s+(\S+)\s+(\S+)\s+(\d+)\s+(\S+)\s+(.+)$/)
+      if (!match) continue
+
+      const pid = parseInt(match[1], 10)
+      if (!Number.isFinite(pid) || pid <= 0) continue
+
+      const command = match[7]
+      if (!isClaudeSessionProcess(command)) continue
+
+      const cpuVal = parseFloat(match[4] || '0')
+      const memoryKB = parseInt(match[5] || '0', 10)
+
+      matched.push({
+        pid,
+        ppid: parseInt(match[2], 10),
+        tty: normalizeTty(match[3]),
+        cpu: `${(Number.isFinite(cpuVal) ? cpuVal : 0).toFixed(1)}%`,
+        memoryMB: Math.round((Number.isFinite(memoryKB) ? memoryKB : 0) / 1024),
+        startedAt: parseElapsedTimeToStart(match[6]),
+        command,
+      })
+    }
+
+    // Deduplicate parent/child pairs — keep the child (actual TUI), not the launcher.
+    // A "parent" is any matched process whose PID is another matched process's PPID.
+    const pidSet = new Set(matched.map(p => p.pid))
+    const isParent = new Set<number>()
+    for (const p of matched) {
+      if (pidSet.has(p.ppid) && p.ppid !== p.pid) {
+        isParent.add(p.ppid)
+      }
+    }
+    const children = matched.filter(p => !isParent.has(p.pid))
+
+    // Resolve CWDs in parallel
+    const cwdResults = await Promise.all(children.map(p => getWorkingDirectory(p.pid)))
+
+    const withCwd = children.map((p, i) => ({
+      pid: p.pid,
+      tty: p.tty,
+      cpu: p.cpu,
+      memoryMB: p.memoryMB,
+      startedAt: p.startedAt,
+      cwd: cwdResults[i],
+    }))
+
+    // Deduplicate by CWD — keep highest memory process
+    const byCwd = new Map<string, typeof withCwd[0]>()
+    for (const proc of withCwd) {
+      const existing = byCwd.get(proc.cwd)
+      if (!existing || proc.memoryMB > existing.memoryMB) {
+        byCwd.set(proc.cwd, proc)
+      }
+    }
+
+    return Array.from(byCwd.values())
+  } catch {
+    return []
+  }
+}
+
+function cwdToProjectDir(cwd: string): string | null {
+  try {
+    // Claude encodes paths by replacing / with -
+    // e.g., /Users/cj/SideKick → -Users-cj-SideKick
+    const encoded = cwd.replace(/\//g, '-')
+    const dirs = fs.readdirSync(CLAUDE_PROJECTS_DIR)
+
+    // Exact match first
+    if (dirs.includes(encoded)) return encoded
+
+    // Also try with leading dash stripped
+    const withoutLeading = encoded.replace(/^-/, '')
+    if (dirs.includes(withoutLeading)) return withoutLeading
+
+    // Fuzzy: check if decoded dir matches CWD
+    for (const dir of dirs) {
+      const decoded = '/' + dir.replace(/-/g, '/')
+      if (decoded === cwd) return dir
+    }
+  } catch { /* */ }
+  return null
+}
+
+function findActiveSessionId(projectDir: string): { sessionId: string; jsonlPath: string } | null {
+  const dirPath = path.join(CLAUDE_PROJECTS_DIR, projectDir)
+  try {
+    const files = fs.readdirSync(dirPath).filter(f => f.endsWith('.jsonl'))
+    if (files.length === 0) return null
+
+    let latest: { file: string; mtime: number } | null = null
+    for (const file of files) {
+      const filePath = path.join(dirPath, file)
+      const stat = fs.statSync(filePath)
+      if (!latest || stat.mtimeMs > latest.mtime) {
+        latest = { file, mtime: stat.mtimeMs }
+      }
+    }
+
+    if (!latest) return null
+    const sessionId = latest.file.replace(/\.jsonl$/, '')
+    return { sessionId, jsonlPath: path.join(dirPath, latest.file) }
+  } catch {
+    return null
+  }
+}
+
 async function getProcessStats(pid: number): Promise<{ cpu: string; memoryMB: number; tty: string }> {
   try {
     const { stdout } = await execAsync(
@@ -652,7 +863,7 @@ async function getAllITermSessionNames(): Promise<Map<string, string>> {
 
 // ── Get Sessions ────────────────────────────────────────────────────────────
 
-export async function getClaudeSessions(): Promise<ClaudeSession[]> {
+async function getClaudeSessionsLegacy(): Promise<ClaudeSession[]> {
   if (!fs.existsSync(CLAUDE_SESSIONS_DIR)) return []
 
   const sessionFiles = fs.readdirSync(CLAUDE_SESSIONS_DIR).filter(f => f.endsWith('.json'))
@@ -766,6 +977,70 @@ export function getITermStatus(): { healthy: boolean; consecutiveTimeouts: numbe
     consecutiveTimeouts: itermConsecutiveTimeouts,
     backoffUntil: itermBackoffUntil,
   }
+}
+
+export async function getClaudeSessions(): Promise<ClaudeSession[]> {
+  // Legacy path: if ~/.claude/sessions/ has session files, use file-based discovery
+  if (fs.existsSync(CLAUDE_SESSIONS_DIR)) {
+    const legacySessions = await getClaudeSessionsLegacy()
+    if (legacySessions.length > 0) return legacySessions
+  }
+
+  // Process-based discovery
+  const processes = await findClaudeProcesses()
+  if (processes.length === 0) return []
+
+  // Batch: iTerm names + process stats in parallel
+  const [itermNames, ...statsResults] = await Promise.all([
+    getAllITermSessionNames(),
+    ...processes.map(p => getProcessStats(p.pid)),
+  ])
+
+  const sessions: ClaudeSession[] = []
+  for (let i = 0; i < processes.length; i++) {
+    const proc = processes[i]
+    const stats = statsResults[i]
+
+    // Map CWD to project directory, then find active session transcript
+    const projectDir = cwdToProjectDir(proc.cwd)
+    const activeSession = projectDir ? findActiveSessionId(projectDir) : null
+    const sessionId = activeSession?.sessionId || `proc-${proc.pid}`
+
+    // Read session data from JSONL (reuses existing parsing)
+    const sessionData = activeSession ? readSessionData(sessionId) : {
+      lastUserMessage: '',
+      lastAssistantBlurb: '',
+      analysis: { waitingForInput: false, mode: 'idle' as SessionMode, interactionType: 'none' as InteractionType, subAgentInvocations: [] as SubAgentInvocation[] },
+    }
+
+    // Prefer parent-walked TTY from getProcessStats (resolves Claude's internal PTY
+    // to the shell's TTY that iTerm2 knows about)
+    const tty = stats.tty || proc.tty
+    const terminalName = tty ? (itermNames.get(tty) || '') : ''
+
+    sessions.push({
+      pid: proc.pid,
+      sessionId,
+      project: path.basename(proc.cwd) || '',
+      cwd: proc.cwd,
+      startedAt: proc.startedAt,
+      uptime: formatUptime(proc.startedAt),
+      cpu: stats.cpu,
+      memoryMB: stats.memoryMB || proc.memoryMB,
+      alive: true,
+      lastUserMessage: sessionData.lastUserMessage,
+      lastAssistantBlurb: sessionData.lastAssistantBlurb,
+      tty,
+      terminalName,
+      waitingForInput: sessionData.analysis.waitingForInput,
+      sessionMode: sessionData.analysis.mode,
+      interactionType: sessionData.analysis.interactionType,
+      subAgentInvocations: sessionData.analysis.subAgentInvocations,
+    })
+  }
+
+  sessions.sort((a, b) => b.memoryMB - a.memoryMB)
+  return sessions
 }
 
 // ── Get Conversation ────────────────────────────────────────────────────────
