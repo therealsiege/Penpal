@@ -50,9 +50,10 @@ export function createRendererPhaserScene(options: FakeSceneOptions = {}) {
 
   let timeNow = 10_000
 
-  const delayedCall = vi.fn((_delay: number, fn: () => void) => {
+  const delayedCall = vi.fn((delay: number, fn: () => void) => {
     const handle = {
       destroy: vi.fn(),
+      pendingDelay: delay,
       __invoke: () => {
         fn()
       },

@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "agents": [
+    {
+      "name": "Smoke-A",
+      "status": "active",
+      "sessionMode": "working",
+      "needsInteraction": false,
+      "interactionType": "none",
+      "cwd": "/tmp/penny-smoke",
+      "xpLevel": 2,
+      "podRole": "solver",
+      "desk": { "row": 0, "col": 0 }
+    },
+    {
+      "name": "Smoke-B",
+      "status": "active",
+      "sessionMode": "idle",
+      "needsInteraction": false,
+      "interactionType": "none",
+      "cwd": "/tmp/penny-smoke",
+      "xpLevel": 1,
+      "podRole": "executor",
+      "desk": { "row": 0, "col": 1 }
+    }
+  ]
+}
