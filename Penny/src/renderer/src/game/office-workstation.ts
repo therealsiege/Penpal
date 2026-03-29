@@ -25,7 +25,6 @@ import {
   WS_NAME_Y,
   WORKSTATION_W,
   WS_DESK_Y,
-  WS_NAME_Y,
   CTX_GREEN,
   CTX_AMBER,
   CTX_RED,
@@ -165,6 +164,16 @@ export class OfficeWorkstations {
 
   destroy(): void {
     EventBus.off(EVENTS.AGENT_APPROVED, this._onApproved)
+  }
+
+  /** One subtle scale pulse on every visible desk — new season intro. */
+  playSeasonRefreshPulseAll(): void {
+    for (const room of this.host.getRooms().values()) {
+      for (const ws of room.workstations.values()) {
+        if (!ws.container.visible || ws.container.alpha < 0.05) continue
+        pulse(ws.container, this.scene, { scale: 1.05, duration: 260, ease: 'Sine.easeInOut' })
+      }
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -390,7 +399,7 @@ export class OfficeWorkstations {
             this.host.spawnAlertRipple(wx, wy, rippleColor)
             this.host.spawnSpriteReaction(wx, wy, ICON_FRAMES.CIRCLE_YELLOW) // blocked
             // Smoke effect on blocked/error state
-            this.host.celebrations.error(wx, wy)
+            this.host.celebrations.error(wx, wy, { agentId: agent.config?.id ?? '' })
           }
         }
         // Juice: shake the workstation container and flash the sprite red to signal attention needed
@@ -906,8 +915,9 @@ export class OfficeWorkstations {
           if (room.workstations.has(agent.config?.id ?? '')) {
             const wx = room.x + ws.container.x
             const wy = room.y + ws.container.y
-            this.host.celebrations.rankUp(wx, wy, agent.config?.name ?? 'Agent', xp.rank, fillColor)
-            this.host.celebrations.taskComplete(wx, wy)
+            const aid = agent.config?.id ?? ''
+            this.host.celebrations.rankUp(wx, wy, agent.config?.name ?? 'Agent', xp.rank, fillColor, { agentId: aid })
+            this.host.celebrations.taskComplete(wx, wy, { agentId: aid })
             achievements.trackRankUp()
             soundEngine.levelUp()
             // Track in leaderboard + season

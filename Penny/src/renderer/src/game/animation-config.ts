@@ -191,6 +191,26 @@ export interface AnimationConfig {
     /** At or above: "on fire" particle tint (orange/red). */
     comboTierFireMin: number
   }
+
+  /** Camera juice: zoom pulses, scripted pans, slow zoom-to-fit (sidekick#79). */
+  camera: {
+    pulse: Record<
+      'taskComplete' | 'rankUp' | 'errorZoomOut' | 'agentLeave' | 'epicQuest',
+      { delta: number; durationMs: number }
+    >
+    pan: {
+      minWorldDist: number
+      maxWorldDist: number
+      minMs: number
+      maxMs: number
+      ease: string
+    }
+    crossRoomPanMinWorldDist: number
+    fitSlowDurationMs: number
+    epicQuestHoldMs: number
+    workstationRefitThreshold: number
+    workstationRefitDebounceMs: number
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -300,6 +320,28 @@ function makeDefaults(): AnimationConfig {
       comboTier2Min:           2,
       comboTier3Min:           3,
       comboTierFireMin:        5,
+    },
+
+    camera: {
+      pulse: {
+        taskComplete:  { delta: 0.04, durationMs: 220 },
+        rankUp:        { delta: 0.07, durationMs: 320 },
+        errorZoomOut:  { delta: -0.06, durationMs: 280 },
+        agentLeave:    { delta: -0.03, durationMs: 200 },
+        epicQuest:     { delta: 0.09, durationMs: 400 },
+      },
+      pan: {
+        minWorldDist: 120,
+        maxWorldDist: 2200,
+        minMs: 400,
+        maxMs: 800,
+        ease: 'Sine.easeInOut',
+      },
+      crossRoomPanMinWorldDist: 380,
+      fitSlowDurationMs: 1000,
+      epicQuestHoldMs: 120,
+      workstationRefitThreshold: 2,
+      workstationRefitDebounceMs: 400,
     },
   }
 }
