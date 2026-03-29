@@ -587,22 +587,48 @@ export interface GitHubIssueCard {
 export function getGithubIssueCards(): GitHubIssueCard[] {
   const queue = getTaskQueue()
   const taskMap = new Map(queue.map(t => [t.id, t]))
+  const cards: GitHubIssueCard[] = []
 
-  return trackedIssues.map(tracked => {
+  // Legacy tracked issues
+  for (const tracked of trackedIssues) {
     const task = taskMap.get(tracked.taskId)
-    return {
-      issueNumber: tracked.number,
-      repo: tracked.repo,
-      title: tracked.title,
-      taskId: tracked.taskId,
-      taskStatus: task?.status || tracked.stage,
-      taskStage: task?.currentStage || tracked.stage,
-      priority: task?.priority || tracked.priority,
-      assignedAgent: task?.assignedAgent || null,
-      ingestedAt: tracked.ingestedAt,
+    cards.push({
+      issueNumber: tracked.number, repo: tracked.repo, title: tracked.title,
+      taskId: tracked.taskId, taskStatus: task?.status || tracked.stage,
+      taskStage: task?.currentStage || tracked.stage, priority: task?.priority || tracked.priority,
+      assignedAgent: task?.assignedAgent || null, ingestedAt: tracked.ingestedAt,
       url: `https://github.com/${tracked.repo}/issues/${tracked.number}`,
+    })
+  }
+
+  // 2-agent pipeline issues
+  try {
+    const { getPipelineIssues } = require('./github-pipeline') as { getPipelineIssues: () => { number: number; repo: string; title: string; stage: string; priority: string; plannerRunning: boolean; executorRunning: boolean; ingestedAt: number }[] }
+    for (const pi of getPipelineIssues()) {
+      cards.push({
+        issueNumber: pi.number, repo: pi.repo, title: pi.title,
+        taskId: `pipeline-${pi.number}`,
+        taskStatus: pi.stage === 'done' ? 'completed' : pi.stage === 'failed' ? 'failed' : 'active',
+        taskStage: pi.stage, priority: pi.priority,
+        assignedAgent: pi.plannerRunning ? 'issue-planner' : pi.executorRunning ? 'executor' : null,
+        ingestedAt: pi.ingestedAt, url: `https://github.com/${pi.repo}/issues/${pi.number}`,
+      })
     }
-  })
+  } catch { /* pipeline module may not be loaded */ }
+
+  // Orchestrator tasks not already shown
+  const seen = new Set(cards.map(c => c.taskId))
+  for (const task of queue) {
+    if (seen.has(task.id)) continue
+    cards.push({
+      issueNumber: 0, repo: task.source || 'orchestrator', title: task.title,
+      taskId: task.id, taskStatus: task.status, taskStage: task.currentStage || null,
+      priority: task.priority, assignedAgent: task.assignedAgent || null,
+      ingestedAt: task.createdAt, url: '',
+    })
+  }
+
+  return cards
 }
 
 // ── Repo management (persisted) ────────────────────────────────────────────

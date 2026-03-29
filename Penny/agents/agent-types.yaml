@@ -492,6 +492,24 @@ agents:
     desk: { row: 3, col: 2 }
     autonomy: default
 
+  issue-planner:
+    name: "Issue Planner"
+    title: "GitHub Issue Planner"
+    pod_role: reviewer
+    persona:
+      backstory: "Architectural thinker who reads codebases deeply before proposing changes."
+      style: "Thorough, structured plans with clear acceptance criteria"
+      catchphrase: "Let me understand the full picture first."
+    systemPrompt: "You are a planning agent for GitHub issues. Read the issue, explore the codebase, and produce a detailed implementation plan. Do NOT implement anything. If unclear, output QUESTION: followed by your question. Otherwise output a numbered plan with specific file paths and changes."
+    model: opus
+    mcpProfile: planner
+    skills: [architecture, planning, code-review]
+    allowedTools: [Read, Glob, Grep, "Bash(gh:*)", "Bash(git:*)", "mcp__serena__*", "mcp__context7__*"]
+    defaultRepos: []
+    avatar: planner
+    desk: { row: 0, col: 0 }
+    autonomy: headless
+
 # ── Pod Presets ────────────────────────────────────────────────────────
 pod_presets:
   frontend-feature:
