@@ -3,6 +3,8 @@
  *
  * - Compare mode (default): pixelmatch + threshold from VISUAL_DIFF_THRESHOLD (default 0.01 = 1%).
  * - Update mode: VISUAL_UPDATE=1 writes baselines and skips comparison.
+ *
+ * pixelmatch `threshold` 0.1 tolerates minor anti-alias drift; ratio gate still enforces 1% max.
  */
 
 import fs from 'fs'
@@ -57,6 +59,9 @@ function diffPathFor(name: string): string {
   return path.join(DIFF_DIR, `${safe}.png`)
 }
 
+/**
+ * Write or compare `current` PNG buffer for a scenario `name` (filename stem, e.g. empty-office).
+ */
 export function compareOrUpdateVisual(name: string, current: Buffer): VisualCompareResult {
   fs.mkdirSync(BASELINE_DIR, { recursive: true })
   fs.mkdirSync(DIFF_DIR, { recursive: true })

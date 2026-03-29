@@ -1,0 +1,79 @@
+# Page snapshot
+
+```yaml
+- generic [ref=e3]:
+  - complementary "Primary navigation" [ref=e4]:
+    - generic [ref=e5]:
+      - generic [ref=e8]:
+        - generic [ref=e9]:
+          - generic [ref=e10]: PenPal OS
+          - generic [ref=e11]: Online
+        - generic [ref=e15]:
+          - generic [ref=e16]: PenPal
+          - generic [ref=e17]: Mission Control
+        - generic [ref=e19]:
+          - generic [ref=e20]: v0.1.0
+          - generic [ref=e21]: Sector-7
+      - navigation [ref=e22]:
+        - paragraph [ref=e23]: Workspace
+        - button "Office" [ref=e25] [cursor=pointer]:
+          - img [ref=e29]
+          - generic [ref=e32]: Office
+        - generic [ref=e33]:
+          - button "Tasks" [ref=e34] [cursor=pointer]:
+            - img [ref=e37]
+            - generic [ref=e41]: Tasks
+          - generic: Tasks
+        - generic [ref=e42]:
+          - button "Data" [ref=e43] [cursor=pointer]:
+            - img [ref=e46]
+            - generic [ref=e50]: Data
+          - generic: Data
+        - generic [ref=e51]:
+          - button "Vault" [ref=e52] [cursor=pointer]:
+            - img [ref=e55]
+            - generic [ref=e58]: Vault
+          - generic: Vault
+        - paragraph [ref=e59]: Tools
+        - generic [ref=e60]:
+          - button "Evals" [ref=e61] [cursor=pointer]:
+            - img [ref=e64]
+            - generic [ref=e65]: Evals
+          - generic: Evals
+        - generic [ref=e66]:
+          - button "Soundboard" [ref=e67] [cursor=pointer]:
+            - img [ref=e70]
+            - generic [ref=e74]: Soundboard
+          - generic: Soundboard
+        - generic [ref=e75]:
+          - button "Settings" [ref=e76] [cursor=pointer]:
+            - img [ref=e79]
+            - generic [ref=e82]: Settings
+          - generic: Settings
+      - generic [ref=e84]:
+        - button "Quick search ⌘K" [ref=e85] [cursor=pointer]:
+          - img [ref=e87]
+          - generic [ref=e90]:
+            - generic [ref=e91]: Quick search
+            - generic [ref=e92]: ⌘K
+        - generic: Command palette
+  - main [ref=e93]:
+    - generic [ref=e95]:
+      - generic [ref=e96]:
+        - generic "Office workspace" [ref=e97]:
+          - generic [ref=e98]: Office
+          - generic [ref=e100]:
+            - generic [ref=e101]: Agents
+            - generic [ref=e102]: 10/17
+            - generic "Claude 10 | Cursor 7 | OpenCode/Claw 0" [ref=e103]: C10 Cu7 X0
+        - generic "Local time 20:08" [ref=e104]: 20:08
+        - generic "Degraded" [ref=e105]:
+          - generic [ref=e107]: Degraded
+      - generic [ref=e108]:
+        - button "Smoke" [ref=e109] [cursor=pointer]
+        - button "🏆 Ranks" [ref=e110] [cursor=pointer]
+        - button "Downloads" [ref=e111] [cursor=pointer]:
+          - img [ref=e112]
+          - text: Downloads
+        - button "Config" [ref=e115] [cursor=pointer]
+```
