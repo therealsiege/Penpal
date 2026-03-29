@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "agents": [
+    { "name": "Mode-Work", "status": "active", "sessionMode": "working", "needsInteraction": false, "interactionType": "none", "cwd": "/modes/work", "xpLevel": 3, "podRole": "solver", "desk": { "row": 0, "col": 0 } },
+    { "name": "Mode-Idle", "status": "idle", "sessionMode": "idle", "needsInteraction": false, "interactionType": "none", "cwd": "/modes/idle", "xpLevel": 2, "podRole": "executor", "desk": { "row": 0, "col": 1 } },
+    { "name": "Mode-Plan", "status": "active", "sessionMode": "plan", "needsInteraction": false, "interactionType": "none", "cwd": "/modes/plan", "xpLevel": 4, "podRole": "reviewer", "desk": { "row": 0, "col": 2 } },
+    { "name": "Mode-Wait", "status": "active", "sessionMode": "waiting", "needsInteraction": true, "interactionType": "tool-approval", "cwd": "/modes/wait", "xpLevel": 5, "podRole": "solver", "desk": { "row": 1, "col": 0 } }
+  ]
+}

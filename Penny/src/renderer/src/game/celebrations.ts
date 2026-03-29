@@ -35,8 +35,20 @@ const DIFFICULTY_COLORS: Record<string, number> = {
 // CelebrationManager
 // ---------------------------------------------------------------------------
 
+/** Optional per-call guards (global toggle via {@link CelebrationManager.setCelebrationsAllowed}). */
+export type CelebrationOptions = {
+  /** When false, this call is skipped (e.g. agent not visible). */
+  allow?: boolean
+  /** When set, a second call with the same key before TTL expires is ignored. */
+  dedupeKey?: string
+  dedupeTtlMs?: number
+}
+
 export class CelebrationManager {
   private _scene: Phaser.Scene
+
+  private _celebrationsEnabled = true
+  private _dedupeKeys = new Set<string>()
 
   // Burst particle pool (Arc circles, ADD blend)
   private _burstPool: Phaser.GameObjects.Arc[] = []
@@ -54,6 +66,26 @@ export class CelebrationManager {
     this._initSparklePool()
   }
 
+  /** When false, all celebration entry points no-op until re-enabled. */
+  setCelebrationsAllowed(enabled: boolean): void {
+    this._celebrationsEnabled = enabled
+  }
+
+  private _guardCelebration(opts?: CelebrationOptions): boolean {
+    if (!this._celebrationsEnabled) return false
+    if (opts?.allow === false) return false
+    const key = opts?.dedupeKey
+    if (key) {
+      if (this._dedupeKeys.has(key)) return false
+      this._dedupeKeys.add(key)
+      const ttl = opts?.dedupeTtlMs ?? 2500
+      this._scene.time.delayedCall(ttl, () => {
+        this._dedupeKeys.delete(key)
+      })
+    }
+    return true
+  }
+
   // ---------------------------------------------------------------------------
   // Public API
   // ---------------------------------------------------------------------------
@@ -66,7 +98,8 @@ export class CelebrationManager {
    * 4. Brief screen flash overlay
    * 5. Secondary rank name text, delayed 400 ms
    */
-  rankUp(x: number, y: number, agentName: string, newRank: string, rankColor: number): void {
+  rankUp(x: number, y: number, agentName: string, newRank: string, rankColor: number, opts?: CelebrationOptions): void {
+    if (!this._guardCelebration(opts)) return
     soundEngine.levelUp()
     // 1. Burst of 10 particles in a full circle
     this._particleBurst(x, y, 10, rankColor, 52)
@@ -117,7 +150,8 @@ export class CelebrationManager {
    * 1. Green checkmark pop-up with pulse
    * 2. 3-4 tiny sparkle particles
    */
-  taskComplete(x: number, y: number): void {
+  taskComplete(x: number, y: number, opts?: CelebrationOptions): void {
+    if (!this._guardCelebration(opts)) return
     soundEngine.click()
     // 1. Checkmark sprite
     const check = this._scene.add.sprite(x, y - 14, SPRITESHEET_KEYS.GAME_ICONS, ICON_FRAMES.CHECKMARK)
@@ -186,7 +220,8 @@ export class CelebrationManager {
    * 2. Banner text that slides in from the right
    * 3. Confetti — small colored rectangles that fall with gravity
    */
-  milestone(x: number, y: number, text: string): void {
+  milestone(x: number, y: number, text: string, opts?: CelebrationOptions): void {
+    if (!this._guardCelebration(opts)) return
     // Screen shake on milestones
     this._scene.cameras.main.shake(100, 0.003)
     soundEngine.levelUp()
@@ -250,7 +285,8 @@ export class CelebrationManager {
    * Error/failure effect — black smoke puff + red cross icon.
    * Use for failed quests, agent errors, blocked state.
    */
-  error(x: number, y: number): void {
+  error(x: number, y: number, opts?: CelebrationOptions): void {
+    if (!this._guardCelebration(opts)) return
     // Subtle screen shake on errors
     this._scene.cameras.main.shake(60, 0.002)
     soundEngine.error()
@@ -295,7 +331,8 @@ export class CelebrationManager {
    * Achievement unlock visual — badge sprite + rising title text.
    * Called via ACHIEVEMENT_UNLOCKED event from the AchievementManager.
    */
-  achievementUnlocked(x: number, y: number, title: string, iconFrame: number): void {
+  achievementUnlocked(x: number, y: number, title: string, iconFrame: number, opts?: CelebrationOptions): void {
+    if (!this._guardCelebration(opts)) return
     // Badge sprite popup
     const badge = this._scene.add.sprite(x, y - 20, SPRITESHEET_KEYS.GAME_ICONS, iconFrame)
       .setScale(0).setOrigin(0.5).setAlpha(0).setDepth(602)
@@ -347,7 +384,8 @@ export class CelebrationManager {
    * 5. Season name + score text, delayed 500ms
    * 6. Second confetti wave at 1.5s
    */
-  seasonEnd(seasonName: string, score: number): void {
+  seasonEnd(seasonName: string, score: number, opts?: CelebrationOptions): void {
+    if (!this._guardCelebration(opts)) return
     soundEngine.achievement()
     const cam = this._scene.cameras.main
     const cx = cam.width / 2
@@ -475,7 +513,8 @@ export class CelebrationManager {
    * 3. Small sparkle burst at screen center
    * 4. Puff VFX at screen center
    */
-  seasonStart(seasonName: string): void {
+  seasonStart(seasonName: string, opts?: CelebrationOptions): void {
+    if (!this._guardCelebration(opts)) return
     const cam = this._scene.cameras.main
     const cx = cam.width / 2
     const cy = cam.height / 2
@@ -552,7 +591,8 @@ export class CelebrationManager {
    * 2. Rising text with challenge description
    * 3. Small green particle burst
    */
-  challengeCompleted(description: string): void {
+  challengeCompleted(description: string, opts?: CelebrationOptions): void {
+    if (!this._guardCelebration(opts)) return
     const cam = this._scene.cameras.main
     const cx = cam.width / 2
     const cy = cam.height * 0.45
@@ -631,7 +671,8 @@ export class CelebrationManager {
    * Purchase celebration — coin bounce + small confetti + rising item name.
    * Triggered when a cosmetic item is bought from the shop.
    */
-  purchase(x: number, y: number, itemName: string): void {
+  purchase(x: number, y: number, itemName: string, opts?: CelebrationOptions): void {
+    if (!this._guardCelebration(opts)) return
     // 1. Coin sprite bouncing upward (use STAR_YELLOW as coin stand-in)
     const hasIcons = this._scene.textures.exists(SPRITESHEET_KEYS.GAME_ICONS)
     if (hasIcons) {
@@ -692,7 +733,8 @@ export class CelebrationManager {
    * 2. Small expanding ring in difficulty color
    * 3. Particle burst in difficulty color (6 particles)
    */
-  questComplete(x: number, y: number, difficulty: QuestDifficulty): void {
+  questComplete(x: number, y: number, difficulty: QuestDifficulty, opts?: CelebrationOptions): void {
+    if (!this._guardCelebration(opts)) return
     const diffColor = DIFFICULTY_COLORS[difficulty] ?? 0x3b82f6
 
     // 1. Difficulty star sprite
@@ -743,7 +785,9 @@ export class CelebrationManager {
     difficulty: QuestDifficulty,
     xpAmount: number,
     creditAmount: number,
+    opts?: CelebrationOptions,
   ): void {
+    if (!this._guardCelebration(opts)) return
     const diffColor = DIFFICULTY_COLORS[difficulty] ?? 0x3b82f6
     const diffHex = '#' + diffColor.toString(16).padStart(6, '0')
 
@@ -850,7 +894,8 @@ export class CelebrationManager {
    * Brief gold sparkle burst on a workstation when the user approves a tool call.
    * 8-12 particles radiate outward with upward drift, shrink and fade over 500ms.
    */
-  approveSparkle(x: number, y: number): void {
+  approveSparkle(x: number, y: number, opts?: CelebrationOptions): void {
+    if (!this._guardCelebration(opts)) return
     soundEngine.ding()
     const count = 8 + Math.floor(Math.random() * 5) // 8-12
     for (let i = 0; i < count; i++) {
@@ -886,7 +931,8 @@ export class CelebrationManager {
    * Shows a small GRADE_A sprite at the origin and a rising "+{amount}" text.
    * Subtle upward drift over 1.2 seconds, fading out.
    */
-  xpGain(x: number, y: number, amount: number, color: number = 0x34d399): void {
+  xpGain(x: number, y: number, amount: number, color: number = 0x34d399, opts?: CelebrationOptions): void {
+    if (!this._guardCelebration(opts)) return
     const hexColor = '#' + color.toString(16).padStart(6, '0')
 
     // Grade A sprite — small accent at the origin
@@ -950,6 +996,7 @@ export class CelebrationManager {
    * Release all pooled objects. Call when the scene shuts down.
    */
   destroy(): void {
+    this._dedupeKeys.clear()
     for (const p of this._burstPool) { this._scene.tweens.killTweensOf(p); p.destroy() }
     this._burstPool = []
     for (const g of this._confettiPool) { this._scene.tweens.killTweensOf(g); g.destroy() }
