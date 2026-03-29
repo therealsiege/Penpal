@@ -8,9 +8,11 @@
 // ---------------------------------------------------------------------------
 
 import Phaser from 'phaser'
-import { SPRITESHEET_KEYS, EFFECT_ANIM_KEYS, ICON_FRAMES, LEGO_SPECIAL_FRAMES, DIFFICULTY_STAR_FRAME } from './office-asset-keys'
+import type { SeasonCeremonyRankingRow, SeasonEndedEventPayload } from './events'
+import { SPRITESHEET_KEYS, EFFECT_ANIM_KEYS, ICON_FRAMES, LEGO_SPECIAL_FRAMES, DIFFICULTY_STAR_FRAME, MEDAL_HD_FRAMES } from './office-asset-keys'
 import type { QuestDifficulty } from './quest-system'
 import { soundEngine } from './sound-engine'
+import { AnimConfig } from './animation-config'
 
 // Pool sizes
 const BURST_POOL_SIZE = 48   // shared by rankUp + milestone burst layers
@@ -31,12 +33,52 @@ const DIFFICULTY_COLORS: Record<string, number> = {
   legendary: 0xef4444,
 }
 
-// ---------------------------------------------------------------------------
-// CelebrationManager
-// ---------------------------------------------------------------------------
+export function themeIconFrameForTheme(theme: string): number {
+  switch (theme) {
+    case 'neon':
+      return ICON_FRAMES.MEDAL_GOLD_BLUE
+    case 'focus':
+      return ICON_FRAMES.MEDAL_GOLD_PURPLE
+    case 'ship':
+      return ICON_FRAMES.MEDAL_GOLD_WHITE
+    case 'blitz':
+      return ICON_FRAMES.STAR_YELLOW
+    default:
+      return ICON_FRAMES.STAR_BLUE
+  }
+}
+
+export interface SeasonEndCeremonyPayload extends SeasonEndedEventPayload {
+  rankings: SeasonCeremonyRankingRow[]
+  mvpAgentId: string | null
+  mvpWorldX: number
+  mvpWorldY: number
+  creditBonusShown: number
+}
+
+export interface SeasonIntroPayload {
+  seasonName: string
+  theme: string
+  accentColor: number
+  themeIconFrame: number
+  challenges: { description: string; completed: boolean }[]
+}
+
+export interface SeasonCeremonyOpts {
+  bypassDedupe?: boolean
+  onComplete?: () => void
+}
+
+export type CameraJuiceHint = 'taskComplete' | 'rankUp' | 'errorZoomOut'
+
+export interface CelebrationManagerOptions {
+  onCameraJuice?: (hint: CameraJuiceHint) => void
+}
 
 /** Optional per-call guards (global toggle via {@link CelebrationManager.setCelebrationsAllowed}). */
-export type CelebrationOptions = {
+export interface CelebrationOptions {
+  agentId?: string
+  skipCooldown?: boolean
   /** When false, this call is skipped (e.g. agent not visible). */
   allow?: boolean
   /** When set, a second call with the same key before TTL expires is ignored. */
@@ -44,8 +86,39 @@ export type CelebrationOptions = {
   dedupeTtlMs?: number
 }
 
+type QueuedCelebrationKind = 'rank-up' | 'milestone' | 'quest' | 'task' | 'error'
+
+const CELEBRATION_PRIORITY: Record<QueuedCelebrationKind, number> = {
+  'rank-up': 5,
+  milestone: 4,
+  quest: 3,
+  task: 2,
+  error: 1,
+}
+
+type PendingCelebration = {
+  seq: number
+  kind: QueuedCelebrationKind
+  enqueuedAtScene: number
+  mergeCount: number
+  run: () => void
+}
+
+// ---------------------------------------------------------------------------
+// CelebrationManager
+// ---------------------------------------------------------------------------
+//
+// Queued: rank-up > milestone > quest > task > error (sidekick#72). Season
+// ceremonies, achievements, purchases, approveSparkle, and xpGain bypass the
+// queue and fire immediately.
+
 export class CelebrationManager {
   private _scene: Phaser.Scene
+  private _onCameraJuice?: (hint: CameraJuiceHint) => void
+
+  private _celebrationsAllowed = true
+  private _lastSeasonEndKey = ''
+  private _lastSeasonEndAt = 0
 
   private _celebrationsEnabled = true
   private _dedupeKeys = new Set<string>()
@@ -59,31 +132,122 @@ export class CelebrationManager {
   // Small sparkle pool for taskComplete
   private _sparklePool: Phaser.GameObjects.Arc[] = []
 
-  constructor(scene: Phaser.Scene) {
+  private _pending: PendingCelebration[] = []
+  private _pendingSeq = 0
+  private _nextAllowedStart = 0
+  private _dispatchTimer: Phaser.Time.TimerEvent | null = null
+  private _lastRankUpAt = new Map<string, number>()
+  private _lastTaskCompleteAt = new Map<string, number>()
+  private _lastErrorAt = new Map<string, number>()
+  private _taskComboStreak = 0
+  private _taskComboLastPlayAt = 0
+
+  constructor(scene: Phaser.Scene, opts?: CelebrationManagerOptions) {
     this._scene = scene
+    this._onCameraJuice = opts?.onCameraJuice
     this._initBurstPool()
     this._initConfettiPool()
     this._initSparklePool()
   }
 
-  /** When false, all celebration entry points no-op until re-enabled. */
-  setCelebrationsAllowed(enabled: boolean): void {
-    this._celebrationsEnabled = enabled
+  setCelebrationsAllowed(allowed: boolean): void {
+    this._celebrationsAllowed = allowed
+    this._celebrationsEnabled = allowed
+    if (!allowed) {
+      this._cancelDispatchTimer()
+      this._pending = []
+      this._taskComboStreak = 0
+      this._taskComboLastPlayAt = 0
+    }
   }
+
+  setWindOutdoor(_outdoor: boolean): void { /* reserved for wind-aware FX */ }
 
   private _guardCelebration(opts?: CelebrationOptions): boolean {
     if (!this._celebrationsEnabled) return false
-    if (opts?.allow === false) return false
-    const key = opts?.dedupeKey
-    if (key) {
-      if (this._dedupeKeys.has(key)) return false
-      this._dedupeKeys.add(key)
-      const ttl = opts?.dedupeTtlMs ?? 2500
-      this._scene.time.delayedCall(ttl, () => {
-        this._dedupeKeys.delete(key)
-      })
-    }
+    if (!this._celebrationsAllowed) return false
     return true
+  }
+
+  private _cancelDispatchTimer(): void {
+    if (this._dispatchTimer) {
+      this._dispatchTimer.remove(false)
+      this._dispatchTimer = null
+    }
+  }
+
+  private _enqueueCelebration(
+    kind: QueuedCelebrationKind,
+    opts: CelebrationOptions | undefined,
+    cooldown: { map: Map<string, number>; key: string; ms: number } | null,
+    buildRun: (e: PendingCelebration) => void,
+  ): void {
+    if (!this._celebrationsAllowed) return
+
+    const c = AnimConfig.celebrations
+    const nowS = this._scene.time.now
+    const tail = this._pending[this._pending.length - 1]
+    if (tail && tail.kind === kind && nowS - tail.enqueuedAtScene < c.sameTypeMergeWindowMs) {
+      tail.mergeCount += 1
+      tail.enqueuedAtScene = nowS
+      this._kickDispatch()
+      return
+    }
+
+    if (cooldown && !opts?.skipCooldown) {
+      const last = cooldown.map.get(cooldown.key) ?? 0
+      if (nowS - last < cooldown.ms) return
+    }
+
+    const entry: PendingCelebration = {
+      seq: ++this._pendingSeq,
+      kind,
+      enqueuedAtScene: nowS,
+      mergeCount: 1,
+      run: () => {},
+    }
+    buildRun(entry)
+    this._pending.push(entry)
+    this._kickDispatch()
+  }
+
+  private _kickDispatch(): void {
+    if (this._dispatchTimer != null) return
+    if (this._pending.length === 0) return
+    const now = this._scene.time.now
+    const wait = Math.max(0, this._nextAllowedStart - now)
+    this._dispatchTimer = this._scene.time.delayedCall(Math.max(1, wait), () => {
+      this._dispatchTimer = null
+      this._dispatchOne()
+    })
+  }
+
+  private _dispatchOne(): void {
+    if (!this._celebrationsAllowed) {
+      this._pending = []
+      return
+    }
+    if (this._pending.length === 0) return
+    const now = this._scene.time.now
+    if (now < this._nextAllowedStart) {
+      this._dispatchTimer = this._scene.time.delayedCall(this._nextAllowedStart - now, () => {
+        this._dispatchTimer = null
+        this._dispatchOne()
+      })
+      return
+    }
+
+    let bi = 0
+    for (let i = 1; i < this._pending.length; i++) {
+      const a = this._pending[i], b = this._pending[bi]
+      const pa = CELEBRATION_PRIORITY[a.kind], pb = CELEBRATION_PRIORITY[b.kind]
+      if (pa > pb || (pa === pb && a.seq < b.seq)) bi = i
+    }
+    const item = this._pending.splice(bi, 1)[0]
+    const gap = AnimConfig.celebrations.queueGapMs
+    this._nextAllowedStart = now + gap
+    item.run()
+    if (this._pending.length > 0) this._kickDispatch()
   }
 
   // ---------------------------------------------------------------------------
@@ -99,12 +263,34 @@ export class CelebrationManager {
    * 5. Secondary rank name text, delayed 400 ms
    */
   rankUp(x: number, y: number, agentName: string, newRank: string, rankColor: number, opts?: CelebrationOptions): void {
-    if (!this._guardCelebration(opts)) return
-    soundEngine.levelUp()
-    // 1. Burst of 10 particles in a full circle
-    this._particleBurst(x, y, 10, rankColor, 52)
+    const c = AnimConfig.celebrations
+    const key = opts?.agentId ?? agentName
+    this._enqueueCelebration(
+      'rank-up',
+      opts,
+      { map: this._lastRankUpAt, key, ms: c.rankUpCooldownMs },
+      (e) => {
+        e.run = () => {
+          this._lastRankUpAt.set(key, this._scene.time.now)
+          this._playRankUp(x, y, agentName, newRank, rankColor, e.mergeCount)
+        }
+      },
+    )
+  }
 
-    // 2. Rising headline text
+  private _playRankUp(
+    x: number,
+    y: number,
+    agentName: string,
+    newRank: string,
+    rankColor: number,
+    mergeCount: number,
+  ): void {
+    this._onCameraJuice?.('rankUp')
+    soundEngine.levelUp()
+    const burstN = Math.min(28, Math.round(10 * (1 + 0.15 * (mergeCount - 1))))
+    const radius = Math.round(52 * (1 + 0.08 * (mergeCount - 1)))
+    this._particleBurst(x, y, burstN, rankColor, radius)
     this._risingText(x, y - 18, `PROMOTED!`, {
       fontSize: '13px',
       fontFamily: 'monospace',
@@ -113,14 +299,8 @@ export class CelebrationManager {
       strokeThickness: 3,
       resolution: 2,
     })
-
-    // 3. Expanding ring
     this._expandingRing(x, y, rankColor)
-
-    // 4. Subtle screen flash (screen-space, scrollFactor 0)
     this._screenFlash(rankColor)
-
-    // 5. Rank name label — delayed 400 ms
     this._scene.time.delayedCall(400, () => {
       this._risingText(x, y - 10, newRank, {
         fontSize: '10px',
@@ -131,8 +311,6 @@ export class CelebrationManager {
         resolution: 2,
       })
     })
-
-    // 6. Agent name label — subtle, delayed 200 ms
     this._scene.time.delayedCall(200, () => {
       this._risingText(x, y + 8, agentName, {
         fontSize: '9px',
@@ -151,17 +329,52 @@ export class CelebrationManager {
    * 2. 3-4 tiny sparkle particles
    */
   taskComplete(x: number, y: number, opts?: CelebrationOptions): void {
-    if (!this._guardCelebration(opts)) return
+    const c = AnimConfig.celebrations
+    const key = opts?.agentId ?? '_global'
+    this._enqueueCelebration(
+      'task',
+      opts,
+      { map: this._lastTaskCompleteAt, key, ms: c.taskCompleteCooldownMs },
+      (e) => {
+        e.run = () => {
+          this._lastTaskCompleteAt.set(key, this._scene.time.now)
+          this._playTaskComplete(x, y, e.mergeCount)
+        }
+      },
+    )
+  }
+
+  private _playTaskComplete(x: number, y: number, mergeCount: number): void {
+    const cel = AnimConfig.celebrations
+    const now = this._scene.time.now
+    if (now - this._taskComboLastPlayAt > cel.comboWindowMs) this._taskComboStreak = 0
+    this._taskComboStreak += 1
+    this._taskComboLastPlayAt = now
+    const streak = this._taskComboStreak
+
+    this._onCameraJuice?.('taskComplete')
     soundEngine.click()
-    // 1. Checkmark sprite
+
+    const onFire = streak >= cel.comboTierFireMin
+    const comboTier = streak >= cel.comboTier3Min
+    const biggerBurst = streak >= cel.comboTier2Min
+    const sparkleColor = onFire ? 0xff6600 : 0x34d399
+    const checkScale = biggerBurst ? 0.46 : 0.4
+    const checkPeak = biggerBurst ? 1.42 : 1.3
+
+    if (comboTier) {
+      this._screenFlash(0x34d399)
+      this._comboFloatingLabel(streak)
+    }
+
     const check = this._scene.add.sprite(x, y - 14, SPRITESHEET_KEYS.GAME_ICONS, ICON_FRAMES.CHECKMARK)
-      .setScale(0.4).setOrigin(0.5).setAlpha(0).setDepth(600).setTint(0x34d399)
+      .setScale(checkScale).setOrigin(0.5).setAlpha(0).setDepth(600).setTint(sparkleColor)
 
     this._scene.tweens.add({
       targets: check,
       alpha: 1,
-      scaleX: 1.3,
-      scaleY: 1.3,
+      scaleX: checkPeak,
+      scaleY: checkPeak,
       y: y - 24,
       duration: 180,
       ease: 'Back.easeOut',
@@ -180,7 +393,6 @@ export class CelebrationManager {
       },
     })
 
-    // 2. White puff VFX sprite
     if (this._scene.anims.exists(EFFECT_ANIM_KEYS.PUFF)) {
       const puff = this._scene.add.sprite(x, y - 14, SPRITESHEET_KEYS.EFFECTS_PUFF)
         .setDepth(600)
@@ -191,21 +403,24 @@ export class CelebrationManager {
       puff.once('animationcomplete', () => puff.destroy())
     }
 
-    // 3. Tiny sparkle burst (3-4 particles)
-    const count = 3 + Math.floor(Math.random() * 2)
+    let count = 3 + Math.floor(Math.random() * 2)
+    if (biggerBurst) count += 2
+    if (onFire) count += 4
+    count += Math.min(4, mergeCount - 1)
     for (let i = 0; i < count; i++) {
       const p = this._sparklePool.find(c => !c.getData('busy'))
       if (!p) continue
       const angle = (i / count) * Math.PI * 2 + Math.random() * 0.4
-      const dist = 10 + Math.random() * 12
-      p.setPosition(x, y - 14)
-      p.setFillStyle(0x34d399)
-      p.setRadius(1.2 + Math.random())
+      const dist = (10 + Math.random() * 12) * (biggerBurst ? 1.2 : 1)
+      const sy = y - 14
+      p.setPosition(x, sy)
+      p.setFillStyle(sparkleColor)
+      p.setRadius((1.2 + Math.random()) * (biggerBurst ? 1.15 : 1))
       p.setAlpha(0.9).setVisible(true).setData('busy', true)
       this._scene.tweens.add({
         targets: p,
         x: x + Math.cos(angle) * dist,
-        y: (y - 14) + Math.sin(angle) * dist,
+        y: sy + Math.sin(angle) * dist,
         alpha: 0,
         duration: 380 + Math.random() * 120,
         ease: 'Power2',
@@ -214,24 +429,57 @@ export class CelebrationManager {
     }
   }
 
+  private _comboFloatingLabel(streak: number): void {
+    const cam = this._scene.cameras.main
+    const cx = cam.width / 2
+    const cy = cam.height * 0.38
+    const t = this._scene.add.text(cx, cy, `COMBO x${streak}`, {
+      fontSize: '18px',
+      fontFamily: 'monospace',
+      color: '#34d399',
+      stroke: '#000000',
+      strokeThickness: 4,
+      resolution: 2,
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(10001).setAlpha(0)
+    this._scene.tweens.add({
+      targets: t,
+      alpha: 1,
+      y: cy - 12,
+      duration: 220,
+      ease: 'Back.easeOut',
+      onComplete: () => {
+        this._scene.tweens.add({
+          targets: t,
+          alpha: 0,
+          y: cy - 28,
+          duration: 500,
+          ease: 'Power2',
+          delay: 500,
+          onComplete: () => t.destroy(),
+        })
+      },
+    })
+  }
+
   /**
    * Milestone celebration (100 tasks, streaks, etc.).
    * 1. Gold particle burst (larger than rankUp) + Explosion VFX
    * 2. Banner text that slides in from the right
    * 3. Confetti — small colored rectangles that fall with gravity
    */
-  milestone(x: number, y: number, text: string, opts?: CelebrationOptions): void {
-    if (!this._guardCelebration(opts)) return
-    // Screen shake on milestones
-    this._scene.cameras.main.shake(100, 0.003)
+  milestone(x: number, y: number, text: string): void {
+    this._enqueueCelebration('milestone', undefined, null, (e) => {
+      e.run = () => this._playMilestone(x, y, text, e.mergeCount)
+    })
+  }
+
+  private _playMilestone(x: number, y: number, text: string, mergeCount: number): void {
+    this._scene.cameras.main.shake(100, 0.003 + 0.0004 * (mergeCount - 1))
     soundEngine.levelUp()
-
-    // 1. Gold burst — more particles, larger radius
-    this._particleBurst(x, y, 16, 0xfbbf24, 72)
-    // Inner warm burst layer
-    this._scene.time.delayedCall(80, () => this._particleBurst(x, y, 8, 0xf59e0b, 36))
-
-    // Explosion VFX at the center of the burst
+    const n1 = Math.min(28, 16 + (mergeCount - 1) * 2)
+    const n2 = Math.min(16, 8 + (mergeCount - 1))
+    this._particleBurst(x, y, n1, 0xfbbf24, 72)
+    this._scene.time.delayedCall(80, () => this._particleBurst(x, y, n2, 0xf59e0b, 36))
     if (this._scene.anims.exists(EFFECT_ANIM_KEYS.EXPLOSION)) {
       const explosion = this._scene.add.sprite(x, y, SPRITESHEET_KEYS.EFFECTS_EXPLOSION)
         .setDepth(601)
@@ -242,8 +490,6 @@ export class CelebrationManager {
       explosion.play(EFFECT_ANIM_KEYS.EXPLOSION)
       explosion.once('animationcomplete', () => explosion.destroy())
     }
-
-    // 2. Banner text slides in from the right
     const cam = this._scene.cameras.main
     const screenX = cam.width - 20
     const screenY = 60
@@ -257,7 +503,6 @@ export class CelebrationManager {
       padding: { x: 10, y: 5 },
       resolution: 2,
     }).setOrigin(1, 0.5).setScrollFactor(0).setDepth(9998).setAlpha(0)
-
     this._scene.tweens.add({
       targets: banner,
       x: screenX,
@@ -276,9 +521,7 @@ export class CelebrationManager {
         })
       },
     })
-
-    // 3. Confetti burst
-    this._confetti(x, y, 22)
+    this._confetti(x, y, Math.min(40, 22 + (mergeCount - 1) * 3))
   }
 
   /**
@@ -286,12 +529,26 @@ export class CelebrationManager {
    * Use for failed quests, agent errors, blocked state.
    */
   error(x: number, y: number, opts?: CelebrationOptions): void {
-    if (!this._guardCelebration(opts)) return
-    // Subtle screen shake on errors
-    this._scene.cameras.main.shake(60, 0.002)
-    soundEngine.error()
+    const c = AnimConfig.celebrations
+    const key = opts?.agentId ?? '_global'
+    this._enqueueCelebration(
+      'error',
+      opts,
+      { map: this._lastErrorAt, key, ms: c.errorCooldownMs },
+      (e) => {
+        e.run = () => {
+          this._lastErrorAt.set(key, this._scene.time.now)
+          this._playError(x, y, e.mergeCount)
+        }
+      },
+    )
+  }
 
-    // Black smoke VFX
+  private _playError(x: number, y: number, mergeCount: number): void {
+    this._onCameraJuice?.('errorZoomOut')
+    const shakeDur = Math.min(120, 60 + (mergeCount - 1) * 12)
+    this._scene.cameras.main.shake(shakeDur, 0.002 + (mergeCount - 1) * 0.0003)
+    soundEngine.error()
     if (this._scene.anims.exists(EFFECT_ANIM_KEYS.SMOKE)) {
       const smoke = this._scene.add.sprite(x, y - 10, SPRITESHEET_KEYS.EFFECTS_SMOKE)
         .setDepth(600)
@@ -300,11 +557,8 @@ export class CelebrationManager {
       smoke.play(EFFECT_ANIM_KEYS.SMOKE)
       smoke.once('animationcomplete', () => smoke.destroy())
     }
-
-    // Red cross icon rising up
     const cross = this._scene.add.sprite(x, y - 14, SPRITESHEET_KEYS.GAME_ICONS, ICON_FRAMES.CROSS_RED)
       .setScale(0.32).setOrigin(0.5).setAlpha(0).setDepth(601)
-
     this._scene.tweens.add({
       targets: cross,
       alpha: 1,
@@ -376,213 +630,349 @@ export class CelebrationManager {
   }
 
   /**
-   * Season end ceremony — dramatic full-screen celebration.
-   * 1. Full-screen gold flash (300ms, longer than rank-up)
-   * 2. Explosion VFX at screen center
-   * 3. Massive confetti burst (30+ pieces) falling from the top
-   * 4. "SEASON COMPLETE!" banner slides in from left
-   * 5. Season name + score text, delayed 500ms
-   * 6. Second confetti wave at 1.5s
+   * Season end — legacy shorthand (gold flash + banner). Prefer `seasonEndCeremony`.
    */
-  seasonEnd(seasonName: string, score: number, opts?: CelebrationOptions): void {
-    if (!this._guardCelebration(opts)) return
-    soundEngine.achievement()
-    const cam = this._scene.cameras.main
-    const cx = cam.width / 2
-    const cy = cam.height / 2
-
-    // 1. Gold screen flash — longer, more intense
-    const flash = this._scene.add.graphics()
-      .setScrollFactor(0)
-      .setDepth(9999)
-    flash.fillStyle(0xfbbf24, 0.18)
-    flash.fillRect(0, 0, cam.width, cam.height)
-    flash.setAlpha(1)
-
-    this._scene.tweens.add({
-      targets: flash,
-      alpha: 0,
-      duration: 300,
-      ease: 'Power2',
-      delay: 60,
-      onComplete: () => flash.destroy(),
-    })
-
-    // Flash VFX sprite
-    if (this._scene.anims.exists(EFFECT_ANIM_KEYS.FLASH)) {
-      const flashSprite = this._scene.add.sprite(cx, cy, SPRITESHEET_KEYS.EFFECTS_FLASH)
-        .setScrollFactor(0)
-        .setDepth(9998)
-        .setScale(1.5)
-        .setAlpha(0.5)
-        .setTint(0xfbbf24)
-        .setBlendMode(Phaser.BlendModes.ADD)
-      flashSprite.play(EFFECT_ANIM_KEYS.FLASH)
-      flashSprite.once('animationcomplete', () => flashSprite.destroy())
-    }
-
-    // 2. Explosion VFX at screen center
-    if (this._scene.anims.exists(EFFECT_ANIM_KEYS.EXPLOSION)) {
-      const explosion = this._scene.add.sprite(cx, cy, SPRITESHEET_KEYS.EFFECTS_EXPLOSION)
-        .setScrollFactor(0)
-        .setDepth(9998)
-        .setScale(0.7)
-        .setAlpha(0.5)
-        .setBlendMode(Phaser.BlendModes.ADD)
-        .setTint(0xfbbf24)
-      explosion.play(EFFECT_ANIM_KEYS.EXPLOSION)
-      explosion.once('animationcomplete', () => explosion.destroy())
-    }
-
-    // 3. Massive confetti burst from top of screen
-    this._screenConfetti(32)
-
-    // 4. "SEASON COMPLETE!" banner slides in from the left
-    const banner = this._scene.add.text(-300, cam.height * 0.35, 'SEASON COMPLETE!', {
-      fontSize: '22px',
-      fontFamily: 'monospace',
-      color: '#fbbf24',
-      stroke: '#000000',
-      strokeThickness: 4,
-      backgroundColor: '#00000099',
-      padding: { x: 16, y: 8 },
-      resolution: 2,
-    }).setOrigin(0.5).setScrollFactor(0).setDepth(10000).setAlpha(0)
-
-    this._scene.tweens.add({
-      targets: banner,
-      x: cx,
-      alpha: 1,
-      duration: 400,
-      ease: 'Back.easeOut',
-      onComplete: () => {
-        this._scene.tweens.add({
-          targets: banner,
-          alpha: 0,
-          y: banner.y - 20,
-          duration: 400,
-          ease: 'Power2',
-          delay: 3000,
-          onComplete: () => banner.destroy(),
-        })
+  seasonEnd(seasonName: string, score: number): void {
+    this.seasonEndCeremony(
+      {
+        seasonId: 'legacy',
+        seasonName,
+        theme: 'neon',
+        accentColor: 0xfbbf24,
+        score,
+        questsCompletedThisSeason: 0,
+        totalSeasonXP: score,
+        summaryLine: `${seasonName} Season Complete — 0 quests, ${score} XP`,
+        rankings: [],
+        mvpAgentId: null,
+        mvpWorldX: 0,
+        mvpWorldY: 0,
+        creditBonusShown: 0,
       },
-    })
+      { bypassDedupe: true },
+    )
+  }
 
-    // 5. Season name + score — delayed 500ms
-    this._scene.time.delayedCall(500, () => {
-      const subtitle = this._scene.add.text(cx, cam.height * 0.35 + 36, `${seasonName}  |  Score: ${score}`, {
-        fontSize: '13px',
-        fontFamily: 'monospace',
-        color: '#ffffff',
-        stroke: '#000000',
-        strokeThickness: 3,
-        backgroundColor: '#00000077',
-        padding: { x: 10, y: 4 },
-        resolution: 2,
-      }).setOrigin(0.5).setScrollFactor(0).setDepth(10000).setAlpha(0)
-
-      this._scene.tweens.add({
-        targets: subtitle,
-        alpha: 1,
-        duration: 300,
-        ease: 'Power2',
-        onComplete: () => {
-          this._scene.tweens.add({
-            targets: subtitle,
-            alpha: 0,
-            y: subtitle.y - 10,
-            duration: 400,
-            ease: 'Power2',
-            delay: 2800,
-            onComplete: () => subtitle.destroy(),
-          })
-        },
-      })
-    })
-
-    // 6. Second confetti wave at 1.5s
-    this._scene.time.delayedCall(1500, () => {
-      this._screenConfetti(30)
+  /**
+   * Season start — legacy shorthand. Prefer `seasonStartIntro`.
+   */
+  seasonStart(seasonName: string): void {
+    this.seasonStartIntro({
+      seasonName,
+      theme: 'focus',
+      accentColor: 0xa855f7,
+      themeIconFrame: themeIconFrameForTheme('focus'),
+      challenges: [],
     })
   }
 
   /**
-   * Season start announcement — subtle but noticeable.
-   * 1. Blue/purple screen flash
-   * 2. "NEW SEASON: {name}" banner slides in
-   * 3. Small sparkle burst at screen center
-   * 4. Puff VFX at screen center
+   * Full season-end sequence: dim overlay, leaderboard from right, MVP spotlight,
+   * summary line, credit badge pulse, brief fade to black (~5–7s).
    */
-  seasonStart(seasonName: string, opts?: CelebrationOptions): void {
-    if (!this._guardCelebration(opts)) return
-    const cam = this._scene.cameras.main
-    const cx = cam.width / 2
-    const cy = cam.height / 2
+  seasonEndCeremony(payload: SeasonEndCeremonyPayload, opts?: SeasonCeremonyOpts): void {
+    const finish = () => { opts?.onComplete?.() }
 
-    // 1. Blue/purple screen flash
-    const flash = this._scene.add.graphics()
-      .setScrollFactor(0)
-      .setDepth(9999)
-    flash.fillStyle(0xa855f7, 0.12)
-    flash.fillRect(0, 0, cam.width, cam.height)
-    flash.setAlpha(1)
+    if (!this._celebrationsAllowed) {
+      finish()
+      return
+    }
+
+    const dedupeKey = `${payload.seasonId}|${payload.summaryLine}`
+    const now = Date.now()
+    if (!opts?.bypassDedupe && dedupeKey === this._lastSeasonEndKey && now - this._lastSeasonEndAt < 4000) {
+      finish()
+      return
+    }
+    this._lastSeasonEndKey = dedupeKey
+    this._lastSeasonEndAt = now
+
+    soundEngine.achievement()
+    const cam = this._scene.cameras.main
+    const w = cam.width
+    const h = cam.height
+    const toDestroy: Phaser.GameObjects.GameObject[] = []
+
+    const dim = this._scene.add.rectangle(w / 2, h / 2, w, h, 0x000000, 0.15)
+      .setScrollFactor(0).setDepth(9990).setOrigin(0.5)
+    toDestroy.push(dim)
+
+    const panelW = 188
+    const panelX0 = w + 24
+    const panelX1 = w - panelW - 14
+    const panelTop = 56
+    const rowH = 28
+    const rows = payload.rankings
+    const panelH = 36 + Math.max(rows.length, 1) * rowH + 8
+
+    const panel = this._scene.add.container(panelX0, panelTop)
+      .setScrollFactor(0).setDepth(9992)
+    toDestroy.push(panel)
+
+    const bg = this._scene.add.graphics()
+    bg.fillStyle(0x0c1018, 0.94)
+    bg.fillRoundedRect(0, 0, panelW, panelH, 8)
+    bg.lineStyle(1, payload.accentColor, 0.65)
+    bg.strokeRoundedRect(0, 0, panelW, panelH, 8)
+    panel.add(bg)
+
+    const hdr = this._scene.add.text(panelW / 2, 10, 'Final standings', {
+      fontSize: '10px', fontFamily: 'monospace', color: '#e2e8f0', resolution: 2,
+    }).setOrigin(0.5, 0)
+    panel.add(hdr)
+
+    if (rows.length === 0) {
+      const empty = this._scene.add.text(10, 32, 'No agents ranked yet', {
+        fontSize: '8px', fontFamily: 'monospace', color: '#64748b', resolution: 2,
+      })
+      panel.add(empty)
+    } else {
+      rows.forEach((entry, i) => {
+        const rowY = 30 + i * rowH
+        const rank = entry.rank
+        let medal: Phaser.GameObjects.Sprite | null = null
+        if (rank >= 1 && rank <= 3) {
+          const hasHd = this._scene.textures.exists(SPRITESHEET_KEYS.MEDALS_HD)
+          const hdFrame = rank === 1 ? MEDAL_HD_FRAMES.GOLD_STAR
+            : rank === 2 ? MEDAL_HD_FRAMES.SILVER_FLORAL : MEDAL_HD_FRAMES.BRONZE_FLORAL
+          const loFrame = rank === 1 ? ICON_FRAMES.MEDAL_GOLD
+            : rank === 2 ? ICON_FRAMES.MEDAL_SILVER : ICON_FRAMES.MEDAL_BRONZE
+          medal = hasHd
+            ? this._scene.add.sprite(14, rowY + 10, SPRITESHEET_KEYS.MEDALS_HD, hdFrame).setScale(0.14)
+            : this._scene.add.sprite(14, rowY + 10, SPRITESHEET_KEYS.GAME_ICONS, loFrame).setScale(0.26)
+          panel.add(medal)
+        }
+        const nameCol = rank <= 3 ? '#fbbf24' : '#94a3b8'
+        const line = this._scene.add.text(medal ? 28 : 8, rowY, `${rank}. ${entry.agentName}`, {
+          fontSize: '8px', fontFamily: 'monospace', color: nameCol, resolution: 2,
+        })
+        const sub = this._scene.add.text(medal ? 28 : 8, rowY + 11, `${entry.seasonXP} XP · ${entry.tasksCompleted} tasks`, {
+          fontSize: '7px', fontFamily: 'monospace', color: '#64748b', resolution: 2,
+        })
+        panel.add(line)
+        panel.add(sub)
+      })
+    }
 
     this._scene.tweens.add({
-      targets: flash,
-      alpha: 0,
-      duration: 200,
-      ease: 'Power2',
-      delay: 40,
-      onComplete: () => flash.destroy(),
+      targets: panel,
+      x: panelX1,
+      duration: 480,
+      ease: 'Cubic.easeOut',
+      delay: 120,
     })
 
-    // 2. Banner slides in from left
-    const banner = this._scene.add.text(-300, cam.height * 0.38, `NEW SEASON: ${seasonName}`, {
-      fontSize: '16px',
+    const cam2 = this._scene.cameras.main
+    const mvpSx = payload.mvpAgentId
+      ? payload.mvpWorldX - cam2.scrollX
+      : w / 2
+    const mvpSy = payload.mvpAgentId
+      ? payload.mvpWorldY - cam2.scrollY
+      : h * 0.55
+
+    this._scene.time.delayedCall(400, () => {
+      this._mvpSpotlightScreen(mvpSx, mvpSy, h, payload.accentColor, toDestroy)
+      const wx = cam2.scrollX + mvpSx
+      const wy = cam2.scrollY + mvpSy
+      this._particleBurst(wx, wy, 14, 0xfbbf24, 56)
+    })
+
+    const summary = this._scene.add.text(w / 2, h * 0.62, payload.summaryLine, {
+      fontSize: '11px',
       fontFamily: 'monospace',
-      color: '#a855f7',
+      color: '#f8fafc',
       stroke: '#000000',
       strokeThickness: 3,
       backgroundColor: '#00000088',
       padding: { x: 12, y: 6 },
       resolution: 2,
-    }).setOrigin(0.5).setScrollFactor(0).setDepth(10000).setAlpha(0)
-
-    this._scene.tweens.add({
-      targets: banner,
-      x: cx,
-      alpha: 1,
-      duration: 380,
-      ease: 'Back.easeOut',
-      onComplete: () => {
-        this._scene.tweens.add({
-          targets: banner,
-          alpha: 0,
-          y: banner.y - 14,
-          duration: 350,
-          ease: 'Power2',
-          delay: 2200,
-          onComplete: () => banner.destroy(),
-        })
-      },
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(9993).setAlpha(0)
+    toDestroy.push(summary)
+    this._scene.time.delayedCall(520, () => {
+      this._scene.tweens.add({ targets: summary, alpha: 1, duration: 420, ease: 'Power2' })
     })
 
-    // 3. Small sparkle burst at screen center (world coords from camera center)
-    const worldX = cam.scrollX + cx
-    const worldY = cam.scrollY + cy
-    this._particleBurst(worldX, worldY, 8, 0xa855f7, 40)
+    const creditLabel = `+${payload.creditBonusShown} season credits`
+    const creditBadge = this._scene.add.text(w / 2, h * 0.72, creditLabel, {
+      fontSize: '10px',
+      fontFamily: 'monospace',
+      color: '#fbbf24',
+      stroke: '#000000',
+      strokeThickness: 2,
+      backgroundColor: '#422006cc',
+      padding: { x: 10, y: 5 },
+      resolution: 2,
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(9993).setAlpha(0).setScale(0.92)
+    toDestroy.push(creditBadge)
+    this._scene.time.delayedCall(900, () => {
+      this._scene.tweens.add({
+        targets: creditBadge,
+        alpha: 1,
+        scaleX: 1,
+        scaleY: 1,
+        duration: 220,
+        ease: 'Back.easeOut',
+        onComplete: () => {
+          this._scene.tweens.add({
+            targets: creditBadge,
+            scaleX: 1.06,
+            scaleY: 1.06,
+            duration: 280,
+            yoyo: true,
+            repeat: 2,
+            ease: 'Sine.easeInOut',
+          })
+        },
+      })
+    })
 
-    // 4. Puff VFX at screen center
-    if (this._scene.anims.exists(EFFECT_ANIM_KEYS.PUFF)) {
-      const puff = this._scene.add.sprite(cx, cy, SPRITESHEET_KEYS.EFFECTS_PUFF)
-        .setScrollFactor(0)
-        .setDepth(9998)
-        .setScale(0.35)
-        .setAlpha(0.5)
-        .setBlendMode(Phaser.BlendModes.ADD)
-      puff.play(EFFECT_ANIM_KEYS.PUFF)
-      puff.once('animationcomplete', () => puff.destroy())
+    const blackout = this._scene.add.rectangle(w / 2, h / 2, w, h, 0x000000, 1)
+      .setScrollFactor(0).setDepth(10020).setOrigin(0.5).setAlpha(0)
+    toDestroy.push(blackout)
+
+    this._scene.time.delayedCall(5600, () => {
+      this._scene.tweens.add({
+        targets: blackout,
+        alpha: 1,
+        duration: 120,
+        ease: 'Power1',
+        onComplete: () => {
+          for (const o of toDestroy) {
+            try { o.destroy() } catch { /* gone */ }
+          }
+          this._scene.tweens.add({
+            targets: blackout,
+            alpha: 0,
+            duration: 180,
+            ease: 'Power1',
+            onComplete: () => {
+              blackout.destroy()
+              finish()
+            },
+          })
+        },
+      })
+    })
+  }
+
+  /** New season intro: title + icon, challenges from left, themed confetti. */
+  seasonStartIntro(payload: SeasonIntroPayload, opts?: SeasonCeremonyOpts): void {
+    const done = () => { opts?.onComplete?.() }
+    if (!this._celebrationsAllowed) {
+      done()
+      return
     }
+
+    const cam = this._scene.cameras.main
+    const w = cam.width
+    const h = cam.height
+    const cx = w / 2
+    const toDestroy: Phaser.GameObjects.GameObject[] = []
+
+    this._screenConfettiThemed(payload.accentColor, 28)
+
+    const accentHex = '#' + payload.accentColor.toString(16).padStart(6, '0')
+    const glowLayers: Phaser.GameObjects.Text[] = []
+    for (let i = 0; i < 3; i++) {
+      const t = this._scene.add.text(cx + (i - 1) * 2, h * 0.28 + (i - 1), payload.seasonName, {
+        fontSize: '20px',
+        fontFamily: 'monospace',
+        color: accentHex,
+        stroke: '#000000',
+        strokeThickness: 5,
+        resolution: 2,
+      }).setOrigin(0.5).setScrollFactor(0).setDepth(9991).setAlpha(0)
+      glowLayers.push(t)
+      toDestroy.push(t)
+    }
+    const title = this._scene.add.text(cx, h * 0.28, payload.seasonName, {
+      fontSize: '20px',
+      fontFamily: 'monospace',
+      color: '#ffffff',
+      stroke: accentHex,
+      strokeThickness: 4,
+      resolution: 2,
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(9992).setAlpha(0)
+    toDestroy.push(title)
+
+    const icon = this._scene.add.sprite(cx, h * 0.28 + 36, SPRITESHEET_KEYS.GAME_ICONS, payload.themeIconFrame)
+      .setScrollFactor(0).setDepth(9992).setScale(0.55).setAlpha(0)
+    toDestroy.push(icon)
+
+    glowLayers.forEach((t, i) => {
+      this._scene.tweens.add({
+        targets: t,
+        alpha: 0.28 + i * 0.08,
+        duration: 480,
+        ease: 'Power2',
+        delay: 40,
+      })
+    })
+    this._scene.tweens.add({ targets: title, alpha: 1, duration: 480, ease: 'Power2', delay: 40 })
+    this._scene.tweens.add({ targets: icon, alpha: 1, duration: 480, ease: 'Power2', delay: 40 })
+
+    const listLeft = -240
+    const listX = 24
+    const list = this._scene.add.container(listLeft, h * 0.42)
+      .setScrollFactor(0).setDepth(9991)
+    toDestroy.push(list)
+
+    const listBg = this._scene.add.graphics()
+    const challenges = payload.challenges
+    const lh = 18
+    const listH = 22 + challenges.length * lh + 10
+    listBg.fillStyle(0x0c1018, 0.9)
+    listBg.fillRoundedRect(0, 0, 220, listH, 6)
+    listBg.lineStyle(1, payload.accentColor, 0.5)
+    listBg.strokeRoundedRect(0, 0, 220, listH, 6)
+    list.add(listBg)
+
+    const listTitle = this._scene.add.text(110, 8, 'Challenges', {
+      fontSize: '9px', fontFamily: 'monospace', color: '#e2e8f0', resolution: 2,
+    }).setOrigin(0.5, 0)
+    list.add(listTitle)
+
+    challenges.forEach((ch, i) => {
+      const mark = ch.completed ? '\u2713' : '\u25CB'
+      const row = this._scene.add.text(10, 24 + i * lh, `${mark} ${ch.description}`, {
+        fontSize: '8px',
+        fontFamily: 'monospace',
+        color: ch.completed ? '#34d399' : '#94a3b8',
+        resolution: 2,
+        wordWrap: { width: 200 },
+      })
+      list.add(row)
+    })
+
+    this._scene.tweens.add({
+      targets: list,
+      x: listX,
+      duration: 520,
+      ease: 'Cubic.easeOut',
+      delay: 200,
+    })
+
+    const worldX = cam.scrollX + cx
+    const worldY = cam.scrollY + h * 0.5
+    this._scene.time.delayedCall(300, () => {
+      this._particleBurst(worldX, worldY, 10, payload.accentColor, 44)
+    })
+
+    const fadeOut = [title, icon, list, ...glowLayers]
+    this._scene.time.delayedCall(3800, () => {
+      this._scene.tweens.add({
+        targets: fadeOut,
+        alpha: 0,
+        duration: 400,
+        ease: 'Power2',
+        onComplete: () => {
+          for (const o of toDestroy) {
+            try { o.destroy() } catch { /* */ }
+          }
+          done()
+        },
+      })
+    })
   }
 
   /**
@@ -727,17 +1117,50 @@ export class CelebrationManager {
   }
 
   /**
-   * Quest-complete celebration — difficulty-colored star burst + expanding ring.
-   * Smaller than rank-up; color matches quest difficulty tier.
-   * 1. Difficulty star sprite pop-up with scale bounce
-   * 2. Small expanding ring in difficulty color
-   * 3. Particle burst in difficulty color (6 particles)
+   * Single queued slot for quest star/ring plus optional XP/credit rewards (sidekick#72).
+   * Prefer this over calling `questComplete` + `questReward` separately.
    */
-  questComplete(x: number, y: number, difficulty: QuestDifficulty, opts?: CelebrationOptions): void {
-    if (!this._guardCelebration(opts)) return
-    const diffColor = DIFFICULTY_COLORS[difficulty] ?? 0x3b82f6
+  questCelebration(
+    x: number,
+    y: number,
+    difficulty: QuestDifficulty,
+    xpAmount: number,
+    creditAmount: number,
+    opts?: CelebrationOptions,
+  ): void {
+    this._enqueueCelebration('quest', opts, null, (e) => {
+      e.run = () => this._playQuestCelebration(x, y, difficulty, xpAmount, creditAmount, e.mergeCount)
+    })
+  }
 
-    // 1. Difficulty star sprite
+  /** Thin wrapper — use `questCelebration` from new call sites (one queue slot). */
+  questComplete(x: number, y: number, difficulty: QuestDifficulty, opts?: CelebrationOptions): void {
+    this.questCelebration(x, y, difficulty, 0, 0, opts)
+  }
+
+  /** Thin wrapper — use `questCelebration` from new call sites (one queue slot). */
+  questReward(
+    x: number,
+    y: number,
+    difficulty: QuestDifficulty,
+    xpAmount: number,
+    creditAmount: number,
+    opts?: CelebrationOptions,
+  ): void {
+    this.questCelebration(x, y, difficulty, xpAmount, creditAmount, opts)
+  }
+
+  private _playQuestCelebration(
+    x: number,
+    y: number,
+    difficulty: QuestDifficulty,
+    xpAmount: number,
+    creditAmount: number,
+    mergeCount: number,
+  ): void {
+    const diffColor = DIFFICULTY_COLORS[difficulty] ?? 0x3b82f6
+    const diffHex = '#' + diffColor.toString(16).padStart(6, '0')
+    const ringBoost = 1 + 0.06 * (mergeCount - 1)
     const starFrame = DIFFICULTY_STAR_FRAME[difficulty] ?? ICON_FRAMES.STAR_GREY
     const star = this._scene.add.sprite(x, y - 16, SPRITESHEET_KEYS.GAME_ICONS, starFrame)
       .setScale(0).setOrigin(0.5).setAlpha(0).setDepth(601)
@@ -745,8 +1168,8 @@ export class CelebrationManager {
     this._scene.tweens.add({
       targets: star,
       alpha: 1,
-      scaleX: 0.7,
-      scaleY: 0.7,
+      scaleX: 0.7 * ringBoost,
+      scaleY: 0.7 * ringBoost,
       y: y - 28,
       duration: 220,
       ease: 'Back.easeOut',
@@ -765,129 +1188,102 @@ export class CelebrationManager {
       },
     })
 
-    // 2. Small expanding ring in difficulty color (smaller radius than rank-up)
     this._expandingRing(x, y - 16, diffColor)
+    const burst1 = Math.min(14, 6 + (mergeCount - 1) * 2)
+    this._particleBurst(x, y - 16, burst1, diffColor, Math.round(28 * ringBoost))
 
-    // 3. Particle burst
-    this._particleBurst(x, y - 16, 6, diffColor, 28)
-  }
-
-  /**
-   * Quest completion reward popup with Lego special item sprites.
-   * 1. Coin sprite pops up with scale bounce, floats upward, fades
-   * 2. For epic+ quests, also shows the EXPLOSIVE crate sprite
-   * 3. Rising "+{xpAmount} XP" and "+{creditAmount}c" text below the sprite
-   * 4. Small particle burst in the quest difficulty color
-   */
-  questReward(
-    x: number,
-    y: number,
-    difficulty: QuestDifficulty,
-    xpAmount: number,
-    creditAmount: number,
-    opts?: CelebrationOptions,
-  ): void {
-    if (!this._guardCelebration(opts)) return
-    const diffColor = DIFFICULTY_COLORS[difficulty] ?? 0x3b82f6
-    const diffHex = '#' + diffColor.toString(16).padStart(6, '0')
-
-    // 1. Coin sprite — pop up with bounce, float upward, fade out
-    const coin = this._scene.add.sprite(
-      x, y - 16,
-      SPRITESHEET_KEYS.LEGO_SPECIALS,
-      LEGO_SPECIAL_FRAMES.COIN,
-    ).setScale(0).setOrigin(0.5).setAlpha(0).setDepth(602)
-
-    this._scene.tweens.add({
-      targets: coin,
-      alpha: 1,
-      scaleX: 0.78,
-      scaleY: 0.78,
-      y: y - 28,
-      duration: 250,
-      ease: 'Back.easeOut',
-      onComplete: () => {
-        // Settle to normal scale then drift up and fade
-        this._scene.tweens.add({
-          targets: coin,
-          scaleX: 0.6,
-          scaleY: 0.6,
-          duration: 120,
-          ease: 'Sine.easeOut',
-          onComplete: () => {
-            this._scene.tweens.add({
-              targets: coin,
-              alpha: 0,
-              y: y - 56,
-              duration: 600,
-              ease: 'Power2',
-              delay: 400,
-              onComplete: () => coin.destroy(),
-            })
-          },
-        })
-      },
-    })
-
-    // 2. Epic/legendary: also show explosive crate sprite offset to the right
-    if (difficulty === 'epic' || difficulty === 'legendary') {
-      const crate = this._scene.add.sprite(
-        x + 14, y - 12,
+    const showReward = xpAmount > 0 || creditAmount > 0
+    if (showReward) {
+      const coin = this._scene.add.sprite(
+        x, y - 16,
         SPRITESHEET_KEYS.LEGO_SPECIALS,
-        LEGO_SPECIAL_FRAMES.EXPLOSIVE,
+        LEGO_SPECIAL_FRAMES.COIN,
       ).setScale(0).setOrigin(0.5).setAlpha(0).setDepth(602)
 
       this._scene.tweens.add({
-        targets: crate,
-        alpha: 0.9,
-        scaleX: 0.65,
-        scaleY: 0.65,
-        y: y - 24,
-        duration: 300,
+        targets: coin,
+        alpha: 1,
+        scaleX: 0.78,
+        scaleY: 0.78,
+        y: y - 28,
+        duration: 250,
         ease: 'Back.easeOut',
-        delay: 100,
         onComplete: () => {
           this._scene.tweens.add({
-            targets: crate,
-            alpha: 0,
-            y: y - 50,
-            scaleX: 0.3,
-            scaleY: 0.3,
-            duration: 500,
-            ease: 'Power2',
-            delay: 500,
-            onComplete: () => crate.destroy(),
+            targets: coin,
+            scaleX: 0.6,
+            scaleY: 0.6,
+            duration: 120,
+            ease: 'Sine.easeOut',
+            onComplete: () => {
+              this._scene.tweens.add({
+                targets: coin,
+                alpha: 0,
+                y: y - 56,
+                duration: 600,
+                ease: 'Power2',
+                delay: 400,
+                onComplete: () => coin.destroy(),
+              })
+            },
           })
         },
       })
+
+      if (difficulty === 'epic' || difficulty === 'legendary') {
+        const crate = this._scene.add.sprite(
+          x + 14, y - 12,
+          SPRITESHEET_KEYS.LEGO_SPECIALS,
+          LEGO_SPECIAL_FRAMES.EXPLOSIVE,
+        ).setScale(0).setOrigin(0.5).setAlpha(0).setDepth(602)
+
+        this._scene.tweens.add({
+          targets: crate,
+          alpha: 0.9,
+          scaleX: 0.65,
+          scaleY: 0.65,
+          y: y - 24,
+          duration: 300,
+          ease: 'Back.easeOut',
+          delay: 100,
+          onComplete: () => {
+            this._scene.tweens.add({
+              targets: crate,
+              alpha: 0,
+              y: y - 50,
+              scaleX: 0.3,
+              scaleY: 0.3,
+              duration: 500,
+              ease: 'Power2',
+              delay: 500,
+              onComplete: () => crate.destroy(),
+            })
+          },
+        })
+      }
+
+      this._scene.time.delayedCall(120, () => {
+        this._risingText(x, y - 6, `+${xpAmount} XP`, {
+          fontSize: '10px',
+          fontFamily: 'monospace',
+          color: diffHex,
+          stroke: '#000000',
+          strokeThickness: 2,
+          resolution: 2,
+        })
+      })
+      this._scene.time.delayedCall(250, () => {
+        this._risingText(x, y + 4, `+${creditAmount}c`, {
+          fontSize: '9px',
+          fontFamily: 'monospace',
+          color: '#fbbf24',
+          stroke: '#000000',
+          strokeThickness: 2,
+          resolution: 2,
+        })
+      })
+      this._particleBurst(x, y - 16, Math.min(12, 6 + mergeCount - 1), diffColor, 32)
     }
-
-    // 3. Rising XP text
-    this._scene.time.delayedCall(120, () => {
-      this._risingText(x, y - 6, `+${xpAmount} XP`, {
-        fontSize: '10px',
-        fontFamily: 'monospace',
-        color: diffHex,
-        stroke: '#000000',
-        strokeThickness: 2,
-        resolution: 2,
-      })
-    })
-
-    // Rising credits text — offset below XP text, slightly delayed
-    this._scene.time.delayedCall(250, () => {
-      this._risingText(x, y + 4, `+${creditAmount}c`, {
-        fontSize: '9px',
-        fontFamily: 'monospace',
-        color: '#fbbf24',
-        stroke: '#000000',
-        strokeThickness: 2,
-        resolution: 2,
-      })
-    })
-
-    // 4. Particle burst in difficulty color
-    this._particleBurst(x, y - 16, 6, diffColor, 32)
   }
 
   /**
@@ -997,6 +1393,13 @@ export class CelebrationManager {
    */
   destroy(): void {
     this._dedupeKeys.clear()
+    this._cancelDispatchTimer()
+    this._pending = []
+    this._lastRankUpAt.clear()
+    this._lastTaskCompleteAt.clear()
+    this._lastErrorAt.clear()
+    this._taskComboStreak = 0
+    this._taskComboLastPlayAt = 0
     for (const p of this._burstPool) { this._scene.tweens.killTweensOf(p); p.destroy() }
     this._burstPool = []
     for (const g of this._confettiPool) { this._scene.tweens.killTweensOf(g); g.destroy() }
@@ -1008,6 +1411,66 @@ export class CelebrationManager {
   // ---------------------------------------------------------------------------
   // Private helpers
   // ---------------------------------------------------------------------------
+
+  /** Confetti shower biased toward a season accent color. */
+  private _screenConfettiThemed(accent: number, count: number): void {
+    const palette = [accent, ...CONFETTI_COLORS]
+    const cam = this._scene.cameras.main
+    const topY = cam.scrollY - 10
+    const leftX = cam.scrollX
+    const width = cam.width
+
+    let spawned = 0
+    for (const g of this._confettiPool) {
+      if (spawned >= count) break
+      if (g.getData('busy')) continue
+      const color = palette[Math.floor(Math.random() * palette.length)]
+      const w = 3 + Math.random() * 5
+      const h = 2 + Math.random() * 3
+      g.clear()
+      g.fillStyle(color, 1)
+      g.fillRect(-w / 2, -h / 2, w, h)
+      const startX = leftX + Math.random() * width
+      g.setPosition(startX, topY - Math.random() * 40)
+      g.setAngle(Math.random() * 360)
+      g.setAlpha(1).setVisible(true).setData('busy', true)
+
+      const driftX = (Math.random() - 0.5) * 120
+      const fallY = cam.height + 40 + Math.random() * 80
+      const spinEnd = g.angle + (Math.random() - 0.5) * 720
+      const dur = 1400 + Math.random() * 800
+
+      this._scene.tweens.add({
+        targets: g,
+        x: g.x + driftX,
+        y: g.y + fallY,
+        angle: spinEnd,
+        alpha: 0,
+        duration: dur,
+        ease: 'Power1',
+        onComplete: () => { g.setVisible(false).setData('busy', false) },
+      })
+      spawned++
+    }
+  }
+
+  /** Soft vertical spotlight in screen space, anchored toward the MVP desk. */
+  private _mvpSpotlightScreen(
+    screenX: number,
+    screenY: number,
+    viewH: number,
+    accent: number,
+    sink: Phaser.GameObjects.GameObject[],
+  ): void {
+    const beam = this._scene.add.graphics().setScrollFactor(0).setDepth(9991)
+    const bottom = Math.min(viewH - 6, Math.max(48, screenY + 28))
+    const half = 24
+    beam.fillStyle(accent, 0.09)
+    beam.fillTriangle(screenX - half, 0, screenX + half, 0, screenX, bottom)
+    beam.fillStyle(0xfffbeb, 0.12)
+    beam.fillRect(screenX - 2, 0, 4, bottom)
+    sink.push(beam)
+  }
 
   /**
    * Spawn N confetti pieces from the top of the screen, falling down.

@@ -4,7 +4,13 @@
 // and history. Runs in the renderer process with localStorage persistence.
 // ---------------------------------------------------------------------------
 
-import { EventBus, EVENTS } from './events'
+import {
+  EventBus,
+  EVENTS,
+  type SeasonEndedEventPayload,
+  type SeasonStartedEventPayload,
+} from './events'
+import { leaderboardManager } from './leaderboard'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -20,13 +26,13 @@ export interface SeasonChallenge {
 }
 
 export type ChallengeType =
-  | 'tasks_completed'        // Complete N tasks total
-  | 'agents_at_level'        // N agents reach level X
-  | 'streak'                 // Maintain N-day streak without failures
-  | 'no_failures'            // No failed tasks for N days
-  | 'quest_difficulty'       // Complete N quests of a given difficulty
-  | 'credits_earned'         // Earn N credits
-  | 'mvp_weeks'              // Win MVP N weeks
+  | 'tasks_completed'
+  | 'agents_at_level'
+  | 'streak'
+  | 'no_failures'
+  | 'quest_difficulty'
+  | 'credits_earned'
+  | 'mvp_weeks'
 
 export interface Season {
   id: string
@@ -39,8 +45,8 @@ export interface Season {
   durationDays: number
   challenges: SeasonChallenge[]
   score: number
+  questsCompletedThisSeason: number
   completed: boolean
-  // Cosmetic reward for completing the season
   rewardItemId?: string
   rewardDescription?: string
 }
@@ -56,10 +62,6 @@ export interface SeasonHistory {
   startDate: number
   endDate: number
 }
-
-// ---------------------------------------------------------------------------
-// Season templates
-// ---------------------------------------------------------------------------
 
 const SEASON_TEMPLATES = [
   {
@@ -122,10 +124,6 @@ const SEASON_TEMPLATES = [
   },
 ]
 
-// ---------------------------------------------------------------------------
-// SeasonManager
-// ---------------------------------------------------------------------------
-
 const STORAGE_KEY = 'penpal:seasons'
 const DEFAULT_DURATION_DAYS = 30
 
@@ -134,28 +132,132 @@ export class SeasonManager {
   private _history: SeasonHistory[] = []
   private _noFailureDays = 0
   private _lastFailureDate: string | null = null
+  private _rolloverPending = false
+  private _endedSeasonDisplay: Season | null = null
 
   constructor() {
     this.load()
     this._ensureActiveSeason()
   }
 
-  // -------------------------------------------------------------------------
-  // Season lifecycle
-  // -------------------------------------------------------------------------
-
-  /** Get the current active season (creates one if none exists). */
   getCurrentSeason(): Season | null {
     this._checkSeasonExpiry()
+    if (this._rolloverPending && this._endedSeasonDisplay) {
+      return this._endedSeasonDisplay
+    }
     return this._currentSeason
   }
 
-  /** Start a new season. If one is active, it ends first. */
+  isAwaitingSeasonRollover(): boolean {
+    return this._rolloverPending
+  }
+
+  getSeasonTimeRemainingLabel(): string {
+    if (this._rolloverPending) return 'Ending…'
+    if (!this._currentSeason) return ''
+    const ms = Math.max(0, this._currentSeason.endDate - Date.now())
+    const days = Math.floor(ms / 86400000)
+    if (days >= 1) return `${days}d left`
+    const hours = Math.max(1, Math.ceil(ms / 3600000))
+    return `${hours}h left`
+  }
+
   startNewSeason(templateIndex?: number): Season {
+    if (this._rolloverPending) {
+      return this.finishSeasonRollover(templateIndex)
+    }
     if (this._currentSeason && !this._currentSeason.completed) {
-      this.endSeason()
+      this.endSeason({ emitEvent: false, holdForCeremony: false })
+    }
+    return this._activateNewSeason(templateIndex, { skipIntroCelebration: false })
+  }
+
+  finishSeasonRollover(templateIndex?: number): Season {
+    if (!this._rolloverPending) {
+      return this.getCurrentSeason() ?? this.startNewSeason(templateIndex)
+    }
+    this._rolloverPending = false
+    this._endedSeasonDisplay = null
+    return this._activateNewSeason(templateIndex, { skipIntroCelebration: true })
+  }
+
+  endSeason(opts?: { emitEvent?: boolean; holdForCeremony?: boolean }): SeasonHistory | null {
+    const emitEvent = opts?.emitEvent !== false
+    const holdForCeremony = opts?.holdForCeremony === true
+
+    if (!this._currentSeason) return null
+
+    this._currentSeason.completed = true
+    const s = this._currentSeason
+
+    const rankings = leaderboardManager.getRankings()
+    const totalSeasonXP = rankings.reduce((acc, e) => acc + e.seasonXP, 0)
+    const questsDone = s.questsCompletedThisSeason ?? 0
+    const summaryLine = `${s.name} Season Complete — ${questsDone} quests, ${totalSeasonXP} XP`
+
+    const history: SeasonHistory = {
+      seasonId: s.id,
+      name: s.name,
+      theme: s.theme,
+      score: s.score,
+      challengesCompleted: s.challenges.filter(c => c.completed).length,
+      challengesTotal: s.challenges.length,
+      earnedReward: s.rewardDescription,
+      startDate: s.startDate,
+      endDate: Date.now(),
     }
 
+    this._history.unshift(history)
+
+    const endedPayload: SeasonEndedEventPayload = {
+      seasonId: s.id,
+      seasonName: s.name,
+      theme: s.theme,
+      accentColor: s.accentColor,
+      score: s.score,
+      questsCompletedThisSeason: questsDone,
+      totalSeasonXP,
+      summaryLine,
+    }
+
+    if (holdForCeremony) {
+      this._endedSeasonDisplay = this._cloneSeasonSnapshot(s)
+      this._rolloverPending = true
+    }
+
+    this._currentSeason = null
+    this.save()
+
+    if (emitEvent) {
+      EventBus.emit(
+        EVENTS.NOTIFICATION,
+        `Season "${s.name}" ended! Score: ${s.score}`,
+        'info',
+      )
+      EventBus.emit(EVENTS.SEASON_ENDED, endedPayload)
+    }
+
+    return history
+  }
+
+  trackQuestCompleted(): void {
+    if (!this._currentSeason) return
+    this._currentSeason.questsCompletedThisSeason =
+      (this._currentSeason.questsCompletedThisSeason ?? 0) + 1
+    this.save()
+  }
+
+  private _cloneSeasonSnapshot(season: Season): Season {
+    return {
+      ...season,
+      challenges: season.challenges.map(c => ({ ...c })),
+    }
+  }
+
+  private _activateNewSeason(
+    templateIndex: number | undefined,
+    started: { skipIntroCelebration: boolean },
+  ): Season {
     const idx = templateIndex ?? Math.floor(Math.random() * SEASON_TEMPLATES.length)
     const template = SEASON_TEMPLATES[idx % SEASON_TEMPLATES.length]
     const now = Date.now()
@@ -178,6 +280,7 @@ export class SeasonManager {
         type: c.type,
       })),
       score: 0,
+      questsCompletedThisSeason: 0,
       completed: false,
       rewardDescription: template.rewardDescription,
     }
@@ -187,63 +290,35 @@ export class SeasonManager {
     this._lastFailureDate = null
     this.save()
 
+    const startedPayload: SeasonStartedEventPayload = {
+      seasonId: season.id,
+      seasonName: season.name,
+      theme: season.theme,
+      accentColor: season.accentColor,
+      challenges: season.challenges.map(ch => ({
+        description: ch.description,
+        completed: ch.completed,
+      })),
+      skipIntroCelebration: started.skipIntroCelebration,
+    }
+
     EventBus.emit(
       EVENTS.NOTIFICATION,
       `New season started: ${season.name}!`,
       'info',
     )
 
-    EventBus.emit(EVENTS.SEASON_STARTED, season.id, season.name)
+    EventBus.emit(EVENTS.SEASON_STARTED, startedPayload)
 
     return season
   }
 
-  /** End the current season and archive it. */
-  endSeason(): SeasonHistory | null {
-    if (!this._currentSeason) return null
-
-    this._currentSeason.completed = true
-    const s = this._currentSeason
-
-    const history: SeasonHistory = {
-      seasonId: s.id,
-      name: s.name,
-      theme: s.theme,
-      score: s.score,
-      challengesCompleted: s.challenges.filter(c => c.completed).length,
-      challengesTotal: s.challenges.length,
-      earnedReward: s.rewardDescription,
-      startDate: s.startDate,
-      endDate: Date.now(),
-    }
-
-    this._history.unshift(history)
-    this._currentSeason = null
-    this.save()
-
-    EventBus.emit(
-      EVENTS.NOTIFICATION,
-      `Season "${s.name}" ended! Score: ${s.score}`,
-      'info',
-    )
-
-    EventBus.emit(EVENTS.SEASON_ENDED, s.id, s.name, s.score)
-
-    return history
-  }
-
-  // -------------------------------------------------------------------------
-  // Challenge tracking
-  // -------------------------------------------------------------------------
-
-  /** Track a task completion. */
   trackTaskCompleted(streak: number): void {
     if (!this._currentSeason) return
 
     this._currentSeason.score += 10
     this._updateChallenge('tasks_completed', 1)
 
-    // Streak challenges
     for (const ch of this._currentSeason.challenges) {
       if (ch.type === 'streak' && !ch.completed) {
         ch.current = Math.max(ch.current, streak)
@@ -257,7 +332,6 @@ export class SeasonManager {
     this.save()
   }
 
-  /** Track a task failure. */
   trackTaskFailed(): void {
     if (!this._currentSeason) return
 
@@ -265,7 +339,6 @@ export class SeasonManager {
     this._lastFailureDate = today
     this._noFailureDays = 0
 
-    // Reset no_failures challenges
     for (const ch of this._currentSeason.challenges) {
       if (ch.type === 'no_failures' && !ch.completed) {
         ch.current = 0
@@ -275,7 +348,6 @@ export class SeasonManager {
     this.save()
   }
 
-  /** Track a day passing without failures (call once per day). */
   trackNoFailureDay(): void {
     if (!this._currentSeason) return
 
@@ -287,18 +359,13 @@ export class SeasonManager {
     this.save()
   }
 
-  /** Track agent level ups. */
-  trackAgentLevel(level: number): void {
+  trackAgentLevel(_level: number): void {
     if (!this._currentSeason) return
     this._currentSeason.score += 50
-
-    // Count how many agents are at or above the target level
-    // (caller should pass the count, but for simplicity we just increment)
     this._updateChallenge('agents_at_level', 1)
     this.save()
   }
 
-  /** Track quest completion by difficulty. */
   trackQuestDifficulty(difficulty: string): void {
     if (!this._currentSeason) return
 
@@ -310,23 +377,17 @@ export class SeasonManager {
     this.save()
   }
 
-  /** Track credits earned. */
   trackCreditsEarned(amount: number): void {
     if (!this._currentSeason) return
     this._updateChallenge('credits_earned', amount)
     this.save()
   }
 
-  /** Track MVP win. */
   trackMVPWin(): void {
     if (!this._currentSeason) return
     this._updateChallenge('mvp_weeks', 1)
     this.save()
   }
-
-  // -------------------------------------------------------------------------
-  // Queries
-  // -------------------------------------------------------------------------
 
   getHistory(): readonly SeasonHistory[] {
     return this._history
@@ -344,11 +405,8 @@ export class SeasonManager {
     return Math.max(0, Math.ceil((this._currentSeason.endDate - Date.now()) / 86400000))
   }
 
-  // -------------------------------------------------------------------------
-  // Private helpers
-  // -------------------------------------------------------------------------
-
   private _ensureActiveSeason(): void {
+    if (this._rolloverPending) return
     if (!this._currentSeason || this._currentSeason.completed) {
       this.startNewSeason()
     }
@@ -356,8 +414,7 @@ export class SeasonManager {
 
   private _checkSeasonExpiry(): void {
     if (this._currentSeason && Date.now() > this._currentSeason.endDate) {
-      this.endSeason()
-      this.startNewSeason()
+      this.endSeason({ emitEvent: true, holdForCeremony: true })
     }
   }
 
@@ -392,10 +449,6 @@ export class SeasonManager {
     EventBus.emit(EVENTS.CHALLENGE_COMPLETED, ch.id, ch.description)
   }
 
-  // -------------------------------------------------------------------------
-  // Persistence
-  // -------------------------------------------------------------------------
-
   private save(): void {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify({
@@ -403,6 +456,8 @@ export class SeasonManager {
         history: this._history,
         noFailureDays: this._noFailureDays,
         lastFailureDate: this._lastFailureDate,
+        rolloverPending: this._rolloverPending,
+        endedSeasonDisplay: this._endedSeasonDisplay,
       }))
     } catch { /* noop */ }
   }
@@ -412,16 +467,22 @@ export class SeasonManager {
       const raw = localStorage.getItem(STORAGE_KEY)
       if (!raw) return
       const data = JSON.parse(raw)
-      if (data.currentSeason) this._currentSeason = data.currentSeason
+      if (data.currentSeason) {
+        const cs = data.currentSeason as Season
+        if (typeof cs.questsCompletedThisSeason !== 'number') cs.questsCompletedThisSeason = 0
+        this._currentSeason = cs
+      }
       if (Array.isArray(data.history)) this._history = data.history
       if (typeof data.noFailureDays === 'number') this._noFailureDays = data.noFailureDays
       if (data.lastFailureDate) this._lastFailureDate = data.lastFailureDate
+      if (data.rolloverPending === true) this._rolloverPending = true
+      if (data.endedSeasonDisplay) {
+        const es = data.endedSeasonDisplay as Season
+        if (typeof es.questsCompletedThisSeason !== 'number') es.questsCompletedThisSeason = 0
+        this._endedSeasonDisplay = es
+      }
     } catch { /* corrupt — start fresh */ }
   }
 }
-
-// ---------------------------------------------------------------------------
-// Singleton
-// ---------------------------------------------------------------------------
 
 export const seasonManager = new SeasonManager()

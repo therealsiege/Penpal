@@ -139,6 +139,15 @@ export class LeaderboardManager {
   // Queries
   // -------------------------------------------------------------------------
 
+  getRankingsSnapshot(limit = 12): LeaderboardEntry[] {
+    return this.getRankings().slice(0, Math.max(0, limit))
+  }
+
+  getSeasonMVP(): LeaderboardEntry | null {
+    const entries = this.getRankings()
+    return entries.length > 0 ? entries[0] : null
+  }
+
   /** Get sorted leaderboard entries. */
   getRankings(): LeaderboardEntry[] {
     const entries: LeaderboardEntry[] = []
