@@ -1,12 +1,12 @@
 {
-  "timestamp": 1774745238123,
+  "timestamp": 1774745995130,
   "weekStart": 1774242000000,
   "agents": [
     {
       "id": "fullstack-dev",
       "name": "Marcus Chen",
       "title": "Full Stack Developer",
-      "status": "idle",
+      "status": "blocked",
       "room": "sidekick",
       "roomPath": "/Users/fuzeelogik/sidekick",
       "currentTask": null,
@@ -150,7 +150,7 @@
       "id": "product-mgr",
       "name": "Jordan Miles",
       "title": "Product Manager",
-      "status": "idle",
+      "status": "blocked",
       "room": "sidekick",
       "roomPath": "/Users/fuzeelogik/sidekick",
       "currentTask": null,
@@ -186,7 +186,7 @@
       "id": "exec-assistant",
       "name": "Sam Torres",
       "title": "Executive Assistant",
-      "status": "idle",
+      "status": "blocked",
       "room": "sidekick",
       "roomPath": "/Users/fuzeelogik/sidekick",
       "currentTask": null,
@@ -211,9 +211,9 @@
         "Sam Torres"
       ],
       "agentCount": 3,
-      "idleCount": 3,
+      "idleCount": 0,
       "activeCount": 0,
-      "blockedCount": 0
+      "blockedCount": 3
     },
     {
       "name": "1putthealth.com",
