@@ -1113,6 +1113,14 @@ export function registerIpcHandlers() {
   ipcMain.handle('slack:start', wrapHandler(() => startSlackBridge()))
   ipcMain.handle('slack:stop', wrapHandler(() => stopSlackBridge()))
 
+  // ── Capabilities (epic #50) ───────────────────────────────────────────
+  // Stub until subsystems report in (#54/#55). `overall` becomes aggregated once `items` has keys.
+  ipcMain.handle('capabilities:status', wrapHandler(() => ({
+    updatedAt: new Date().toISOString(),
+    overall: 'unknown',
+    items: {} as Record<string, string>,
+  })))
+
   // ── Veritas Control Plane ──────────────────────────────────────────────
   ipcMain.handle('veritas:status', wrapHandler(() => getVeritasStatus()))
   ipcMain.handle('veritas:start', wrapHandler(() => startVeritasService()))

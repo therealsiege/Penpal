@@ -259,6 +259,21 @@ describe('context engineered IPC handlers', () => {
     expect(handleMap.get('graph:lead-detail')).toBeTruthy()
   })
 
+  it('capabilities:status returns stub payload with empty items', async () => {
+    const handler = handleMap.get('capabilities:status')!
+    const result = await handler({} as never) as {
+      updatedAt: string
+      overall: string
+      items: Record<string, unknown>
+    }
+    expect(result).not.toHaveProperty('error')
+    expect(typeof result.updatedAt).toBe('string')
+    expect(result.updatedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/)
+    expect(result.overall).toBe('unknown')
+    expect(result.items).toEqual({})
+    expect(Object.keys(result.items).length).toBe(0)
+  })
+
   it('unwrap yields legacy data for each target handler', async () => {
     mockGetClaudeSessions.mockResolvedValue([])
     mockGetCursorAgentSessions.mockResolvedValue([])
