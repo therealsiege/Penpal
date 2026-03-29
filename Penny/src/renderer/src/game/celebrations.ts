@@ -75,9 +75,15 @@ export interface CelebrationManagerOptions {
   onCameraJuice?: (hint: CameraJuiceHint) => void
 }
 
+/** Optional per-call guards (global toggle via {@link CelebrationManager.setCelebrationsAllowed}). */
 export interface CelebrationOptions {
   agentId?: string
   skipCooldown?: boolean
+  /** When false, this call is skipped (e.g. agent not visible). */
+  allow?: boolean
+  /** When set, a second call with the same key before TTL expires is ignored. */
+  dedupeKey?: string
+  dedupeTtlMs?: number
 }
 
 type QueuedCelebrationKind = 'rank-up' | 'milestone' | 'quest' | 'task' | 'error'
@@ -114,6 +120,9 @@ export class CelebrationManager {
   private _lastSeasonEndKey = ''
   private _lastSeasonEndAt = 0
 
+  private _celebrationsEnabled = true
+  private _dedupeKeys = new Set<string>()
+
   // Burst particle pool (Arc circles, ADD blend)
   private _burstPool: Phaser.GameObjects.Arc[] = []
 
@@ -143,6 +152,7 @@ export class CelebrationManager {
 
   setCelebrationsAllowed(allowed: boolean): void {
     this._celebrationsAllowed = allowed
+    this._celebrationsEnabled = allowed
     if (!allowed) {
       this._cancelDispatchTimer()
       this._pending = []
@@ -152,6 +162,12 @@ export class CelebrationManager {
   }
 
   setWindOutdoor(_outdoor: boolean): void { /* reserved for wind-aware FX */ }
+
+  private _guardCelebration(opts?: CelebrationOptions): boolean {
+    if (!this._celebrationsEnabled) return false
+    if (!this._celebrationsAllowed) return false
+    return true
+  }
 
   private _cancelDispatchTimer(): void {
     if (this._dispatchTimer) {
@@ -238,6 +254,14 @@ export class CelebrationManager {
   // Public API
   // ---------------------------------------------------------------------------
 
+  /**
+   * Full rank-up celebration at a workstation world position.
+   * 1. Colored particle burst radiating outward
+   * 2. Rising "PROMOTED!" headline text
+   * 3. Expanding ring that grows and fades
+   * 4. Brief screen flash overlay
+   * 5. Secondary rank name text, delayed 400 ms
+   */
   rankUp(x: number, y: number, agentName: string, newRank: string, rankColor: number, opts?: CelebrationOptions): void {
     const c = AnimConfig.celebrations
     const key = opts?.agentId ?? agentName
@@ -299,6 +323,11 @@ export class CelebrationManager {
     })
   }
 
+  /**
+   * Small celebration for a completed task.
+   * 1. Green checkmark pop-up with pulse
+   * 2. 3-4 tiny sparkle particles
+   */
   taskComplete(x: number, y: number, opts?: CelebrationOptions): void {
     const c = AnimConfig.celebrations
     const key = opts?.agentId ?? '_global'
@@ -432,6 +461,12 @@ export class CelebrationManager {
     })
   }
 
+  /**
+   * Milestone celebration (100 tasks, streaks, etc.).
+   * 1. Gold particle burst (larger than rankUp) + Explosion VFX
+   * 2. Banner text that slides in from the right
+   * 3. Confetti — small colored rectangles that fall with gravity
+   */
   milestone(x: number, y: number, text: string): void {
     this._enqueueCelebration('milestone', undefined, null, (e) => {
       e.run = () => this._playMilestone(x, y, text, e.mergeCount)
@@ -489,6 +524,10 @@ export class CelebrationManager {
     this._confetti(x, y, Math.min(40, 22 + (mergeCount - 1) * 3))
   }
 
+  /**
+   * Error/failure effect — black smoke puff + red cross icon.
+   * Use for failed quests, agent errors, blocked state.
+   */
   error(x: number, y: number, opts?: CelebrationOptions): void {
     const c = AnimConfig.celebrations
     const key = opts?.agentId ?? '_global'
@@ -546,7 +585,8 @@ export class CelebrationManager {
    * Achievement unlock visual — badge sprite + rising title text.
    * Called via ACHIEVEMENT_UNLOCKED event from the AchievementManager.
    */
-  achievementUnlocked(x: number, y: number, title: string, iconFrame: number): void {
+  achievementUnlocked(x: number, y: number, title: string, iconFrame: number, opts?: CelebrationOptions): void {
+    if (!this._guardCelebration(opts)) return
     // Badge sprite popup
     const badge = this._scene.add.sprite(x, y - 20, SPRITESHEET_KEYS.GAME_ICONS, iconFrame)
       .setScale(0).setOrigin(0.5).setAlpha(0).setDepth(602)
@@ -941,7 +981,8 @@ export class CelebrationManager {
    * 2. Rising text with challenge description
    * 3. Small green particle burst
    */
-  challengeCompleted(description: string): void {
+  challengeCompleted(description: string, opts?: CelebrationOptions): void {
+    if (!this._guardCelebration(opts)) return
     const cam = this._scene.cameras.main
     const cx = cam.width / 2
     const cy = cam.height * 0.45
@@ -1020,7 +1061,8 @@ export class CelebrationManager {
    * Purchase celebration — coin bounce + small confetti + rising item name.
    * Triggered when a cosmetic item is bought from the shop.
    */
-  purchase(x: number, y: number, itemName: string): void {
+  purchase(x: number, y: number, itemName: string, opts?: CelebrationOptions): void {
+    if (!this._guardCelebration(opts)) return
     // 1. Coin sprite bouncing upward (use STAR_YELLOW as coin stand-in)
     const hasIcons = this._scene.textures.exists(SPRITESHEET_KEYS.GAME_ICONS)
     if (hasIcons) {
@@ -1248,7 +1290,8 @@ export class CelebrationManager {
    * Brief gold sparkle burst on a workstation when the user approves a tool call.
    * 8-12 particles radiate outward with upward drift, shrink and fade over 500ms.
    */
-  approveSparkle(x: number, y: number): void {
+  approveSparkle(x: number, y: number, opts?: CelebrationOptions): void {
+    if (!this._guardCelebration(opts)) return
     soundEngine.ding()
     const count = 8 + Math.floor(Math.random() * 5) // 8-12
     for (let i = 0; i < count; i++) {
@@ -1284,7 +1327,8 @@ export class CelebrationManager {
    * Shows a small GRADE_A sprite at the origin and a rising "+{amount}" text.
    * Subtle upward drift over 1.2 seconds, fading out.
    */
-  xpGain(x: number, y: number, amount: number, color: number = 0x34d399): void {
+  xpGain(x: number, y: number, amount: number, color: number = 0x34d399, opts?: CelebrationOptions): void {
+    if (!this._guardCelebration(opts)) return
     const hexColor = '#' + color.toString(16).padStart(6, '0')
 
     // Grade A sprite — small accent at the origin
@@ -1348,6 +1392,7 @@ export class CelebrationManager {
    * Release all pooled objects. Call when the scene shuts down.
    */
   destroy(): void {
+    this._dedupeKeys.clear()
     this._cancelDispatchTimer()
     this._pending = []
     this._lastRankUpAt.clear()

@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "agents": [
+    { "name": "Block-Tool", "status": "active", "sessionMode": "working", "needsInteraction": true, "interactionType": "tool-approval", "cwd": "/queue/1", "xpLevel": 3, "podRole": "solver", "desk": { "row": 0, "col": 0 } },
+    { "name": "Block-Q", "status": "active", "sessionMode": "working", "needsInteraction": true, "interactionType": "question", "cwd": "/queue/2", "xpLevel": 4, "podRole": "reviewer", "desk": { "row": 0, "col": 1 } },
+    { "name": "Block-Edits", "status": "active", "sessionMode": "accept-edits", "needsInteraction": true, "interactionType": "accept-edits", "cwd": "/queue/3", "xpLevel": 5, "podRole": "executor", "desk": { "row": 0, "col": 2 } },
+    { "name": "Block-Idle", "status": "active", "sessionMode": "idle", "needsInteraction": true, "interactionType": "idle-prompt", "cwd": "/queue/4", "xpLevel": 2, "podRole": "solver", "desk": { "row": 1, "col": 0 } },
+    { "name": "Block-Extra", "status": "active", "sessionMode": "waiting", "needsInteraction": true, "interactionType": "tool-approval", "cwd": "/queue/5", "xpLevel": 6, "podRole": "solver", "desk": { "row": 1, "col": 1 } }
+  ]
+}

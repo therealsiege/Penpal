@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "agents": [
+    { "name": "HS-01", "status": "active", "sessionMode": "working", "needsInteraction": false, "interactionType": "none", "cwd": "/proj/a", "xpLevel": 4, "podRole": "solver", "desk": { "row": 0, "col": 0 } },
+    { "name": "HS-02", "status": "active", "sessionMode": "working", "needsInteraction": false, "interactionType": "none", "cwd": "/proj/b", "xpLevel": 3, "podRole": "solver", "desk": { "row": 0, "col": 1 } },
+    { "name": "HS-03", "status": "active", "sessionMode": "working", "needsInteraction": false, "interactionType": "none", "cwd": "/proj/c", "xpLevel": 5, "podRole": "reviewer", "desk": { "row": 0, "col": 2 } },
+    { "name": "HS-04", "status": "active", "sessionMode": "working", "needsInteraction": false, "interactionType": "none", "cwd": "/proj/d", "xpLevel": 2, "podRole": "executor", "desk": { "row": 1, "col": 0 } },
+    { "name": "HS-05", "status": "active", "sessionMode": "working", "needsInteraction": false, "interactionType": "none", "cwd": "/proj/e", "xpLevel": 6, "podRole": "solver", "desk": { "row": 1, "col": 1 } },
+    { "name": "HS-06", "status": "active", "sessionMode": "working", "needsInteraction": false, "interactionType": "none", "cwd": "/proj/f", "xpLevel": 3, "podRole": "solver", "desk": { "row": 1, "col": 2 } },
+    { "name": "HS-07", "status": "active", "sessionMode": "working", "needsInteraction": true, "interactionType": "tool-approval", "cwd": "/proj/g", "xpLevel": 7, "podRole": "reviewer", "desk": { "row": 2, "col": 0 } },
+    { "name": "HS-08", "status": "active", "sessionMode": "plan", "needsInteraction": false, "interactionType": "none", "cwd": "/proj/h", "xpLevel": 4, "podRole": "solver", "desk": { "row": 2, "col": 1 } },
+    { "name": "HS-09", "status": "active", "sessionMode": "working", "needsInteraction": false, "interactionType": "none", "cwd": "/proj/i", "xpLevel": 5, "podRole": "executor", "desk": { "row": 2, "col": 2 } },
+    { "name": "HS-10", "status": "active", "sessionMode": "working", "needsInteraction": false, "interactionType": "none", "cwd": "/proj/j", "xpLevel": 2, "podRole": "solver", "desk": { "row": 3, "col": 0 } },
+    { "name": "HS-11", "status": "idle", "sessionMode": "idle", "needsInteraction": false, "interactionType": "none", "cwd": "/proj/k", "xpLevel": 1, "podRole": "executor", "desk": { "row": 3, "col": 1 } },
+    { "name": "HS-12", "status": "active", "sessionMode": "working", "needsInteraction": true, "interactionType": "question", "cwd": "/proj/l", "xpLevel": 8, "podRole": "solver", "desk": { "row": 3, "col": 2 } }
+  ]
+}
