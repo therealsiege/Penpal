@@ -131,6 +131,7 @@ import {
   getWatchedRepos,
   consolidateTrackedIssues,
 } from './github-issues'
+import { getPipelineIssues } from './github-pipeline'
 import {
   getVeritasStatus,
   startVeritasService,
@@ -717,6 +718,41 @@ export function registerIpcHandlers() {
         isOrchestratorTask: true,
         taskStage,
         taskTitle: task.title,
+      })
+    }
+
+    // ── Surface active 2-agent pipeline issues as synthetic agents ──
+    const pipelineIssues = getPipelineIssues().filter(
+      p => p.stage === 'planning' || p.stage === 'executing',
+    )
+    for (const pi of pipelineIssues) {
+      const piName = pi.title.length > 25 ? pi.title.slice(0, 24) + '..' : pi.title
+      const piStage = pi.stage === 'planning' ? 'planning' : 'executing'
+      const piConfig: AgentConfig = {
+        id: `pipeline-${pi.repo.replace('/', '-')}-${pi.number}`,
+        name: piName,
+        title: pi.stage === 'planning' ? 'Planner' : 'Executor',
+        podRole: pi.stage === 'planning' ? 'reviewer' : 'executor',
+        systemPrompt: '',
+        model: 'orchestrator-task',
+        mcpProfile: '',
+        skills: [],
+        allowedTools: [],
+        subAgents: {},
+        defaultRepos: [],
+        avatar: 'orchestrator',
+        desk: { row: 0, col: 0 },
+        autonomy: 'headless',
+      }
+      agentStates.push({
+        config: piConfig,
+        status: (pi.plannerRunning || pi.executorRunning) ? 'active' : 'idle',
+        needsInteraction: false,
+        sessionMode: piStage === 'planning' ? 'plan' : 'working',
+        cwd: pi.repo.includes('/') ? undefined : undefined, // no cwd for pipeline agents
+        isOrchestratorTask: true,
+        taskStage: piStage as 'planning' | 'executing',
+        taskTitle: `[${pi.repo.split('/')[1]}#${pi.number}] ${pi.title}`,
       })
     }
 

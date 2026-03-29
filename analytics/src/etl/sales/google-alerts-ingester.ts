@@ -1,4 +1,5 @@
 import { exec } from "child_process";
+import fs from "fs";
 import { promisify } from "util";
 import { verifyConnection, closeConnections } from "../../shared/connections.js";
 import { GraphImporter } from "../graph/importer.js";
@@ -18,7 +19,13 @@ import { fetchRedditPosts } from "./sources/reddit-source.js";
 import { fetchHNPosts } from "./sources/hn-source.js";
 
 const execAsync = promisify(exec);
-const GOG = "/opt/homebrew/bin/gog";
+const GOG = (() => {
+  const fromEnv = process.env.GOG_CLI?.trim();
+  if (fromEnv) return fromEnv;
+  if (fs.existsSync("/opt/homebrew/bin/gog")) return "/opt/homebrew/bin/gog";
+  if (fs.existsSync("/usr/local/bin/gog")) return "/usr/local/bin/gog";
+  return "gog";
+})();
 const GOOGLE_ALERTS_ACCOUNT = process.env.GOOGLE_ALERTS_ACCOUNT
   || process.env.GMAIL_ACCOUNT
   || "fuzeelogik@gmail.com";

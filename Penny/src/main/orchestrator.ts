@@ -9,6 +9,7 @@
 import { EventEmitter } from 'events'
 import fs from 'fs'
 import path from 'path'
+import { atomicWrite } from './atomic-store'
 import {
   getClaudeSessions,
   sendToSession,
@@ -114,8 +115,7 @@ function loadTasks(): Task[] {
 
 function saveTasks(): void {
   try {
-    if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true })
-    fs.writeFileSync(PERSIST_PATH, JSON.stringify(tasks, null, 2))
+    atomicWrite(PERSIST_PATH, tasks)
   } catch (err) {
     console.error('[orchestrator] Failed to save tasks:', err)
   }
@@ -162,8 +162,7 @@ function loadAgentXP(): Record<string, AgentXP> {
 
 function saveAgentXP(xpData: Record<string, AgentXP>): void {
   try {
-    if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true })
-    fs.writeFileSync(XP_PERSIST_PATH, JSON.stringify(xpData, null, 2))
+    atomicWrite(XP_PERSIST_PATH, xpData)
   } catch (err) {
     console.error('[orchestrator] Failed to save XP:', err)
   }
@@ -243,8 +242,7 @@ const creditData = loadCredits()
 
 function saveCredits(): void {
   try {
-    if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true })
-    fs.writeFileSync(CREDIT_PERSIST_PATH, JSON.stringify(creditData, null, 2))
+    atomicWrite(CREDIT_PERSIST_PATH, creditData)
   } catch (err) {
     console.error('[orchestrator] Failed to save credits:', err)
   }

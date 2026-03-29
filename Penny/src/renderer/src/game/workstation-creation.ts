@@ -7,6 +7,7 @@
 import Phaser from 'phaser'
 import { SPRITESHEET_KEYS, ICON_FRAMES, ITEM_FRAMES, STATUS_DOT_FRAMES, LEGO_FRAMES, PET_COUNT, PET_FACE_FRAMES, EFFECT_ANIM_KEYS, IMAGE_KEYS, ANIMAL_SPECIES, ANIMAL_COUNT, ANIMAL_IDLE_FRAMES, MEDAL_HD_FRAMES } from './office-asset-keys'
 import { fadeInUp, fadeOutDown, pulse } from './juice-utils'
+import { AnimConfig } from './animation-config'
 import { EventBus, EVENTS } from './events'
 import type { AgentState } from '../types'
 import type { WorkstationSprite, Room } from './office-types'
@@ -172,7 +173,7 @@ export class WorkstationFactory {
     if (this.host.officeTilesLoaded) {
       monitorSprite = this.scene.add.sprite(0, WS_MONITOR_Y, SPRITESHEET_KEYS.OFFICE, FRAME_MONITOR).setScale(0.42)
       wsContainer.add(monitorSprite)
-      monitorGlowFx = monitorSprite.postFX.addGlow(0x0ea5e9, 0, 0, false, 0.1, 16)
+      monitorGlowFx = monitorSprite.postFX.addGlow(0x0ea5e9, 0, 0, false, AnimConfig.monitor.glowQuality, AnimConfig.monitor.glowDistance)
       // Scrolling screen content lines
       screenLines = this.scene.add.graphics().setVisible(false)
       wsContainer.add(screenLines)

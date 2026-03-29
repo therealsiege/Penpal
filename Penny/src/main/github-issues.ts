@@ -14,6 +14,8 @@ import { execSync, execFileSync } from 'child_process'
 import fs from 'fs'
 import path from 'path'
 import { enqueueTask, getTaskQueue, getTask, type TaskPriority } from './orchestrator'
+import { ingestIssue, drivePipeline, initPipeline, getPipelineIssues } from './github-pipeline'
+import { atomicWrite } from './atomic-store'
 
 // ── Config ──────────────────────────────────────────────────────────────────
 
@@ -101,8 +103,7 @@ function loadTracked(): void {
 
 function saveTracked(): void {
   try {
-    if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true })
-    fs.writeFileSync(SEEN_PATH, JSON.stringify(trackedIssues, null, 2))
+    atomicWrite(SEEN_PATH, trackedIssues)
   } catch (err) {
     console.error('[github-issues] Failed to save tracked issues:', err)
   }
@@ -111,11 +112,14 @@ function saveTracked(): void {
 // ── Label definitions ─────────────────────────────────────────────────────
 
 const REQUIRED_LABELS = [
-  { name: 'agent-ready',   color: '8e3e85', description: 'Issue ready for agent pickup' },
-  { name: 'agent-working', color: '3130c0', description: 'Agent is actively working on this' },
-  { name: 'agent-done',    color: '0beb24', description: 'Agent completed the work' },
-  { name: 'agent-failed',  color: '3c303e', description: 'Agent failed to complete the work' },
-  { name: 'pr-ready',      color: '0beb24', description: 'PR has been created for review' },
+  { name: 'agent-ready',     color: '8e3e85', description: 'Issue ready for agent pickup' },
+  { name: 'agent-planning',  color: 'a855f7', description: 'Planner agent is designing the approach' },
+  { name: 'agent-question',  color: 'fbbf24', description: 'Agent has a question — answer on the issue' },
+  { name: 'agent-executing', color: '3b82f6', description: 'Executor agent is implementing' },
+  { name: 'agent-working',   color: '3130c0', description: 'Agent is actively working on this (legacy)' },
+  { name: 'agent-done',      color: '0beb24', description: 'Agent completed the work' },
+  { name: 'agent-failed',    color: '3c303e', description: 'Agent failed to complete the work' },
+  { name: 'pr-ready',        color: '0beb24', description: 'PR has been created for review' },
 ]
 
 /** Ensure all required labels exist in a repo. Silently skips existing ones. */
@@ -376,86 +380,25 @@ async function pollOnce(): Promise<number> {
     }
 
     for (const issue of issues) {
-      // Already tracked? Allow re-queue if previous attempt is terminal (done/failed)
+      // Already in pipeline? Skip unless terminal
+      const pipelineIssues = getPipelineIssues()
+      const inPipeline = pipelineIssues.find(p => p.repo === repoKey && p.number === issue.number)
+      if (inPipeline && inPipeline.stage !== 'done' && inPipeline.stage !== 'failed') continue
+
+      // Also check legacy tracked issues
       const existing = trackedIssues.find(t => t.repo === repoKey && t.number === issue.number)
       if (existing) {
         if (existing.stage !== 'done' && existing.stage !== 'failed') continue
-        // Remove stale entry so we can re-enqueue fresh
         trackedIssues = trackedIssues.filter(t => !(t.repo === repoKey && t.number === issue.number))
-        console.log(`[github-issues] Re-queuing #${issue.number} (previous: ${existing.stage})`)
       }
 
-      const slug = issue.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 40).replace(/-$/, '')
-
-      const useWt = process.env.PENNY_GITHUB_USE_WORKTREE === '1' || process.env.PENNY_GITHUB_USE_WORKTREE === 'true'
-      let branch: string | null = null
-      let worktreePath: string | undefined
-      let agentCwd = config.localPath
-
-      if (config.localPath) {
-        if (useWt) {
-          const wt = createIssueWorktree(config.localPath, issue.number, slug)
-          if (wt) {
-            branch = wt.branch
-            worktreePath = wt.worktreePath
-            agentCwd = wt.worktreePath
-          }
-        }
-        if (!branch) {
-          branch = createIssueBranch(config.localPath, issue.number, slug)
-          agentCwd = config.localPath
-        }
-      }
-
-      // Build task description with branch context
-      const branchNote = branch
-        ? `\n\n**IMPORTANT**: You are on branch \`${branch}\`. Commit your work to this branch. Do NOT push or create PRs — that will be handled automatically.`
-        : ''
-
-      const description = [
-        `GitHub Issue: ${repoKey}#${issue.number}`,
-        `URL: https://github.com/${repoKey}/issues/${issue.number}`,
-        branchNote,
-        '',
-        issue.body || '(no description)',
-      ].join('\n')
-
-      const task = enqueueTask({
-        title: `[${config.repo}#${issue.number}] ${issue.title}`,
-        description,
-        project: agentCwd,
-        priority: derivePriority(issue),
-        requiredSkills: deriveSkills(issue),
-        source: 'github',
-      })
-
-      trackedIssues.push({
-        number: issue.number,
-        repo: repoKey,
-        taskId: task.id,
-        title: issue.title,
-        stage: 'queued',
-        priority: task.priority,
-        ingestedAt: Date.now(),
-        updatedAt: Date.now(),
-        labelSynced: false,
-        branch: branch ?? undefined,
-        worktreePath,
-      })
-      saveTracked()
-
-      // Swap label: agent-ready → agent-working
-      swapLabel(config, issue.number)
-
-      // Comment on the issue
-      const branchMsg = branch ? `\nBranch: \`${branch}\`` : ''
-      const wtMsg = worktreePath ? `\nWorktree: \`${worktreePath}\`` : ''
-      addComment(config, issue.number,
-        `🤖 **Picked up by Penny orchestrator**\n\nTask ID: \`${task.id}\`\nPriority: ${task.priority}\nSkills: ${task.requiredSkills.join(', ')}${branchMsg}${wtMsg}\n\nHeadless agent (Cursor / OpenCode / Claude Code per \`PENNY_TASK_RUNNER\`) runs in that directory.`,
+      // Route to 2-agent pipeline
+      ingestIssue(
+        { owner: config.owner, repo: config.repo, localPath: config.localPath },
+        { number: issue.number, title: issue.title, body: issue.body, labels: issue.labels },
       )
 
       enqueued++
-      console.log(`[github-issues] Enqueued #${issue.number}: "${issue.title}" as ${task.id} (branch: ${branch || 'none'})`)
     }
   }
 
@@ -534,6 +477,7 @@ let syncTimer: ReturnType<typeof setInterval> | null = null
 export function startGithubIssuePoller(): void {
   if (pollTimer) return
   loadTracked()
+  initPipeline()
   // Self-heal: consolidate any duplicate entries from re-queued issues
   consolidateTrackedIssues()
   console.log(`[github-issues] Starting poller (${POLL_INTERVAL / 1000}s) for ${REPOS.map(r => `${r.owner}/${r.repo}`).join(', ')}`)
@@ -548,8 +492,12 @@ export function startGithubIssuePoller(): void {
 
   pollTimer = setInterval(() => { pollOnce().catch(console.error) }, POLL_INTERVAL)
 
-  // Task status → label sync loop
-  syncTimer = setInterval(() => syncTaskStatuses(), TASK_SYNC_INTERVAL)
+  // Task status → label sync loop + 2-agent pipeline driver
+  const repoConfigs = REPOS.map(r => ({ owner: r.owner, repo: r.repo, localPath: r.localPath }))
+  syncTimer = setInterval(() => {
+    syncTaskStatuses()
+    drivePipeline(repoConfigs).catch(console.error)
+  }, TASK_SYNC_INTERVAL)
 }
 
 export function stopGithubIssuePoller(): void {

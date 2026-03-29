@@ -152,6 +152,14 @@ export class OfficeScene extends Phaser.Scene {
   }
 
   // ---------------------------------------------------------------------------
+  // Public getters — used by test-harness and external tooling
+  // ---------------------------------------------------------------------------
+
+  get celebrationsManager() { return this.celebrations }
+  get atmosphereManager() { return this.atmosphere }
+  get roomMap() { return this.rooms }
+
+  // ---------------------------------------------------------------------------
   // Lifecycle
   // ---------------------------------------------------------------------------
 
@@ -1110,6 +1118,9 @@ export class OfficeScene extends Phaser.Scene {
       }
       console.log(`Set scale ${scale} on child at index ${idx} across ${count} workstations`)
     }
+
+    // Test harness — dynamic import for tree-shaking in production
+    import('./test-harness').then(m => m.mountHarness(this)).catch(() => {})
   }
 
   // ---------------------------------------------------------------------------
