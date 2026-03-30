@@ -140,6 +140,14 @@ export const EVENTS = {
   SEASON_STARTED: 'season:started',
   /** Fired when an achievement is unlocked. Payload: (achievementId: string, title: string, iconFrame: number) */
   ACHIEVEMENT_UNLOCKED: 'achievement:unlocked',
+
+  // --- Navigation ---
+  /** Fired to navigate to the campus overview scene. No payload. */
+  NAVIGATE_CAMPUS: 'navigate-campus',
+  /** Fired to navigate into a specific building. Payload: (building: 'office' | 'pod-foundry') */
+  NAVIGATE_BUILDING: 'navigate-building',
+  /** Fired when agent/pod counts update for campus display. Payload: (agents: number, pods: number) */
+  CAMPUS_COUNTS_UPDATED: 'campus-counts-updated',
 } as const
 
 /**
@@ -222,4 +230,9 @@ export interface EventPayloadMap {
   [EVENTS.SEASON_ENDED]: [payload: SeasonEndedEventPayload]
   [EVENTS.SEASON_STARTED]: [payload: SeasonStartedEventPayload]
   [EVENTS.ACHIEVEMENT_UNLOCKED]: [achievementId: string, title: string, iconFrame: number]
+
+  // --- Navigation ---
+  [EVENTS.NAVIGATE_CAMPUS]: []
+  [EVENTS.NAVIGATE_BUILDING]: [building: 'office' | 'pod-foundry']
+  [EVENTS.CAMPUS_COUNTS_UPDATED]: [agents: number, pods: number]
 }
