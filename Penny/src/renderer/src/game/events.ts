@@ -102,7 +102,7 @@ export const EVENTS = {
   NOTIFICATION: 'notification',
   /** Fired when the "Add Worker" button or tile is clicked. No payload. */
   ADD_WORKER_CLICKED: 'addWorker:clicked',
-  /** Fired when an empty desk is clicked. Payload: (deskId: string) */
+  /** Fired when an empty desk or room header is clicked. Payload: (deskId: string, worldX: number, worldY: number) */
   DESK_CLICKED: 'desk:clicked',
   /** Fired to show a broadcast message in the scene. Payload: (message: string) */
   BROADCAST: 'broadcast',
@@ -201,8 +201,8 @@ export interface EventPayloadMap {
   [EVENTS.NOTIFICATION]: [message: string, level: 'info' | 'warn' | 'error']
   /** No payload */
   [EVENTS.ADD_WORKER_CLICKED]: []
-  /** (deskId: string) */
-  [EVENTS.DESK_CLICKED]: [deskId: string]
+  /** (deskId: string, worldX: number, worldY: number) */
+  [EVENTS.DESK_CLICKED]: [deskId: string, worldX: number, worldY: number]
   /** (message: string) */
   [EVENTS.BROADCAST]: [message: string]
 

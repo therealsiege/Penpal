@@ -24,6 +24,12 @@ import { XP_RANKS } from '../types'
 import { EventBus } from './events'
 import { getFixtureMap, listFixtureNames, type HarnessFixtureAgentRow } from './harness-fixtures'
 import { themeIconFrameForTheme, type CelebrationOptions } from './celebrations'
+import {
+  patchAnimConfig,
+  resetAnimConfig,
+  getAnimConfig,
+  type AnimationConfig as RealAnimationConfig,
+} from './animation-config'
 
 // ---------------------------------------------------------------------------
 // Minimal AnimationConfig shape — defined locally so no circular dep is needed.
@@ -36,8 +42,6 @@ export interface AnimationConfig {
   thoughtBubbleDelay?: number
   [key: string]: unknown
 }
-
-let _globalConfig: AnimationConfig = {}
 
 export const REPLAY_VERSION = 1 as const
 
@@ -621,12 +625,13 @@ export class PennyHarness {
    */
   config(patch?: Partial<AnimationConfig>): AnimationConfig | void {
     if (!patch) {
-      console.log('[PH] Current animation config:', { ..._globalConfig })
-      return { ..._globalConfig }
+      const snap = getAnimConfig()
+      console.log('[PH] Current animation config:', snap)
+      return snap as unknown as AnimationConfig
     }
     this._maybeRecord('config', [cloneOpts(patch)])
-    Object.assign(_globalConfig, patch)
-    console.log('[PH] Animation config patched:', { ..._globalConfig })
+    patchAnimConfig(patch as any)
+    console.log('[PH] Animation config patched:', getAnimConfig())
   }
 
   /**
@@ -634,7 +639,7 @@ export class PennyHarness {
    */
   configReset(): void {
     this._maybeRecord('configReset', [])
-    _globalConfig = {}
+    resetAnimConfig()
     console.log('[PH] Animation config reset.')
   }
 
