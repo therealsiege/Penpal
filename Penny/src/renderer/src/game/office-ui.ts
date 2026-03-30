@@ -457,6 +457,7 @@ export class OfficeUI {
       ['M',       'Toggle sound'],
       ['N',       'Cycle day/night'],
       ['T',       'Toggle dark/light'],
+      ['Q',       'Quest log'],
       ['`',       'Debug overlay'],
     ]
 
