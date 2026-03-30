@@ -51,6 +51,7 @@ export interface CorridorSegment {
 export class OfficeParticles {
   private scene: Phaser.Scene
   private _reducedMode = false
+  private _sleeping = false
 
   // Sub-modules
   private weather: WeatherParticles
@@ -108,6 +109,24 @@ export class OfficeParticles {
   /** Whether reduced mode is active — used by spawn methods to skip particles. */
   isReducedMode(): boolean {
     return this._reducedMode
+  }
+
+  /** Pause all particle timers and block new spawns (scene sleep). */
+  pause(): void {
+    this._sleeping = true
+    if (this.typingParticleTimer) this.typingParticleTimer.paused = true
+    if (this.corridorParticleTimer) this.corridorParticleTimer.paused = true
+    this.weather.pause()
+    this.ambient.pause()
+  }
+
+  /** Resume particle timers and allow spawns (scene wake). */
+  resume(): void {
+    this._sleeping = false
+    if (this.typingParticleTimer) this.typingParticleTimer.paused = false
+    if (this.corridorParticleTimer) this.corridorParticleTimer.paused = false
+    this.weather.resume()
+    this.ambient.resume()
   }
 
   // ---------------------------------------------------------------------------
@@ -245,6 +264,7 @@ export class OfficeParticles {
   }
 
   spawnTypingParticle(worldX: number, worldY: number, isWaiting = false, isCompressing = false): void {
+    if (this._sleeping) return
     const p = this.typingParticlePool.find(c => !c.getData('busy'))
     if (!p) return
     const colors = isCompressing
@@ -388,6 +408,7 @@ export class OfficeParticles {
   }
 
   spawnAlertRipple(worldX: number, worldY: number, color: number): void {
+    if (this._sleeping) return
     const circle = this.alertRipplePool.find(c => !c.getData('busy'))
     if (!circle) return
 
@@ -420,6 +441,7 @@ export class OfficeParticles {
   // ---------------------------------------------------------------------------
 
   spawnSteamParticles(ws: SteamHost): void {
+    if (this._sleeping) return
     if (!ws.steamContainer) return
     this.clearSteamParticles(ws)
 
@@ -488,6 +510,7 @@ export class OfficeParticles {
   // ---------------------------------------------------------------------------
 
   burstConfetti(x: number, y: number): void {
+    if (this._sleeping) return
     if (this._reducedMode && Math.random() > 0.3) return
     if (!this.confettiEmitter) return
     const colors = activeTheme.particleColors
@@ -512,6 +535,7 @@ export class OfficeParticles {
   }
 
   spawnEmojiReaction(worldX: number, worldY: number, emoji: string): void {
+    if (this._sleeping) return
     if (this._reducedMode && Math.random() > 0.3) return
     const label = this.emojiReactionPool.find(t => !t.getData('busy'))
     if (!label) return
@@ -559,6 +583,7 @@ export class OfficeParticles {
   }
 
   spawnSpriteReaction(worldX: number, worldY: number, frame: number): void {
+    if (this._sleeping) return
     if (this._reducedMode && Math.random() > 0.3) return
     const spr = this.spriteReactionPool.find(s => !s.getData('busy'))
     if (!spr) return
@@ -638,6 +663,7 @@ export class OfficeParticles {
    * 5-9 (small): orange-dominant, 10-14 (medium): warmer yellow, 15+ (large): hot white accents.
    */
   spawnFlameParticle(worldX: number, worldY: number, streak: number): void {
+    if (this._sleeping) return
     if (this._reducedMode && Math.random() > 0.3) return
     const p = this.streakFlamePool.find(c => !c.getData('busy'))
     if (!p) return

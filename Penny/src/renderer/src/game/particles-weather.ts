@@ -219,6 +219,14 @@ export class WeatherParticles {
   isSnowActive(): boolean { return this.snowActive }
 
   // ---------------------------------------------------------------------------
+  // Sleep / Wake lifecycle
+  // ---------------------------------------------------------------------------
+
+  /** No-op — weather is tick-driven, not timer-driven. */
+  pause(): void { /* intentional no-op */ }
+  resume(): void { /* intentional no-op */ }
+
+  // ---------------------------------------------------------------------------
   // Destroy / cleanup
   // ---------------------------------------------------------------------------
 
