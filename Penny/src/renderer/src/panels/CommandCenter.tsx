@@ -1331,6 +1331,19 @@ function LeaderboardModal({ agents, xpData, onClose }: {
 }
 
 // ---------------------------------------------------------------------------
+// Capability display names — replace with shared util when #61 lands
+// ---------------------------------------------------------------------------
+
+const CAPABILITY_TITLES: Record<string, string> = {
+  graph: 'Knowledge Graph',
+  scheduler: 'Scheduler',
+  agents: 'Agent Sessions',
+  pods: 'Pod Workflows',
+  etl: 'ETL Pipeline',
+  mcp: 'MCP Servers',
+}
+
+// ---------------------------------------------------------------------------
 // CommandCenter
 // ---------------------------------------------------------------------------
 
@@ -1361,6 +1374,10 @@ export function CommandCenter(props: CommandCenterProps) {
   )
   const { data: contextHealthReports } = usePolling<ContextHealth[]>(
     () => window.api.contextHealth().catch(() => []),
+    10000,
+  )
+  const { data: capStatus } = usePolling<{ updatedAt: string; overall: string; items: Record<string, string> } | null>(
+    () => window.api.capabilitiesStatus().catch(() => null),
     10000,
   )
 
@@ -1550,6 +1567,17 @@ export function CommandCenter(props: CommandCenterProps) {
       sceneRef.current.setPodWorkflows(activeWorkflows)
     }
   }, [podWorkflows])
+
+  // --- Push capabilities status into Phaser scene for ops board overlay ---
+  useEffect(() => {
+    if (!capStatus || !sceneRef.current) return
+    const rows = Object.entries(capStatus.items as Record<string, string>).map(([id, status]) => ({
+      id,
+      title: CAPABILITY_TITLES[id] ?? id,
+      status,
+    }))
+    sceneRef.current.setCapabilitiesBoard(rows)
+  }, [capStatus])
 
   // --- Wire EventBus to React state ---
   useEffect(() => {

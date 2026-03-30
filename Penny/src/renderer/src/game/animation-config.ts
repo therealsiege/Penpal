@@ -324,10 +324,10 @@ function makeDefaults(): AnimationConfig {
 
     camera: {
       pulse: {
-        taskComplete:  { delta: 0.04, durationMs: 220 },
-        rankUp:        { delta: 0.07, durationMs: 320 },
-        errorZoomOut:  { delta: -0.06, durationMs: 280 },
-        agentLeave:    { delta: -0.03, durationMs: 200 },
+        taskComplete:  { delta: 0.02, durationMs: 200 },
+        rankUp:        { delta: 0.05, durationMs: 320 },
+        errorZoomOut:  { delta: -0.01, durationMs: 280 },
+        agentLeave:    { delta: -0.01, durationMs: 200 },
         epicQuest:     { delta: 0.09, durationMs: 400 },
       },
       pan: {
@@ -335,12 +335,12 @@ function makeDefaults(): AnimationConfig {
         maxWorldDist: 2200,
         minMs: 400,
         maxMs: 800,
-        ease: 'Sine.easeInOut',
+        ease: 'Power2.easeInOut',
       },
       crossRoomPanMinWorldDist: 380,
       fitSlowDurationMs: 1000,
-      epicQuestHoldMs: 120,
-      workstationRefitThreshold: 2,
+      epicQuestHoldMs: 500,
+      workstationRefitThreshold: 3,
       workstationRefitDebounceMs: 400,
     },
   }
@@ -356,17 +356,28 @@ export const AnimConfig: AnimationConfig = makeDefaults()
 // Deep-merge a partial patch into AnimConfig
 // ---------------------------------------------------------------------------
 
+function deepMerge(target: Record<string, unknown>, source: Record<string, unknown>): void {
+  for (const key of Object.keys(source)) {
+    const sv = source[key]
+    if (sv === undefined) continue
+    const tv = target[key]
+    if (tv != null && typeof tv === 'object' && !Array.isArray(tv) &&
+        sv != null && typeof sv === 'object' && !Array.isArray(sv)) {
+      deepMerge(tv as Record<string, unknown>, sv as Record<string, unknown>)
+    } else {
+      target[key] = sv
+    }
+  }
+}
+
 export function patchAnimConfig(patch: DeepPartial<AnimationConfig>): void {
   for (const sectionKey of Object.keys(patch) as Array<keyof AnimationConfig>) {
     const sectionPatch = patch[sectionKey]
     if (sectionPatch == null) continue
-    const target = AnimConfig[sectionKey] as Record<string, unknown>
-    const source = sectionPatch as Record<string, unknown>
-    for (const key of Object.keys(source)) {
-      if (source[key] !== undefined) {
-        target[key] = source[key]
-      }
-    }
+    deepMerge(
+      AnimConfig[sectionKey] as Record<string, unknown>,
+      sectionPatch as Record<string, unknown>,
+    )
   }
 }
 
