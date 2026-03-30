@@ -126,6 +126,22 @@ export class OfficeAtmosphere {
   }
 
   // ---------------------------------------------------------------------------
+  // Sleep / Wake lifecycle
+  // ---------------------------------------------------------------------------
+
+  pause(): void {
+    if (this.dayNightTimer) this.dayNightTimer.paused = true
+    this.scene.tweens.pauseAll()
+  }
+
+  resume(): void {
+    if (this.dayNightTimer) this.dayNightTimer.paused = false
+    this.scene.tweens.resumeAll()
+    // Re-sync day/night to wall-clock time so the office sky isn't frozen at the pre-sleep moment
+    this.applyDayNightCycle(false)
+  }
+
+  // ---------------------------------------------------------------------------
   // Destroy
   // ---------------------------------------------------------------------------
 

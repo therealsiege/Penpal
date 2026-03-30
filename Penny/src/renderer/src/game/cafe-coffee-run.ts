@@ -88,6 +88,16 @@ export class CafeCoffeeRunManager {
     })
   }
 
+  /** Pause the coffee run timer (scene sleep). */
+  pause(): void {
+    if (this.coffeeRunTimer) this.coffeeRunTimer.paused = true
+  }
+
+  /** Resume the coffee run timer (scene wake). */
+  resume(): void {
+    if (this.coffeeRunTimer) this.coffeeRunTimer.paused = false
+  }
+
   /** Stop and discard the timer. */
   destroy(): void {
     if (this.coffeeRunTimer) { this.coffeeRunTimer.destroy(); this.coffeeRunTimer = null }
