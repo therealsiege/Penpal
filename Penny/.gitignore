@@ -36,4 +36,5 @@ release/
 # Nested duplicate (accidental)
 Penny/
 
+# Visual regression diff artifacts (regenerate on failure locally / CI)
 tests/screenshots/diffs/
