@@ -238,6 +238,94 @@ export function buildAgentTaggedSystemPrompt(agentId: string, opts: BuildCliOpts
 
 export type TaskRunnerKind = 'claude' | 'opencode' | 'cursor-agent'
 
+/** Stages that can each use a different headless backend chain (see PENNY_TASK_RUNNER_* env vars). */
+export type HeadlessPhase = 'planning' | 'executing' | 'validating' | 'reviewing'
+
+/** CLI runner or local Ollama (read-only / cheap validation). */
+export type HeadlessBackend = TaskRunnerKind | 'ollama'
+
+function normalizeTaskRunnerToken(raw: string): TaskRunnerKind | null {
+  const s = raw.trim().toLowerCase()
+  if (!s) return null
+  if (s === 'opencode' || s === 'open-code') return 'opencode'
+  if (s === 'cursor' || s === 'cursor-agent') return 'cursor-agent'
+  if (s === 'claude' || s === 'claude-code') return 'claude'
+  return null
+}
+
+/**
+ * Parse a comma-separated backend list, e.g. `claude,cursor-agent` or `ollama,claude`.
+ * Tokens `ollama` / `local` use the Ollama-compatible API (`PENNY_OLLAMA_BASE_URL`, `PENNY_OLLAMA_MODEL`).
+ */
+export function parseHeadlessBackends(spec: string | undefined): HeadlessBackend[] | null {
+  if (spec == null || !spec.trim()) return null
+  const out: HeadlessBackend[] = []
+  for (const part of spec.split(',')) {
+    const t = part.trim().toLowerCase()
+    if (!t) continue
+    if (t === 'ollama' || t === 'local') {
+      out.push('ollama')
+      continue
+    }
+    const k = normalizeTaskRunnerToken(t)
+    if (k) out.push(k)
+  }
+  return out.length ? out : null
+}
+
+/**
+ * Resolved backend chain for a workflow phase. Falls back to `PENNY_TASK_RUNNER` (single runner) when no phase-specific env is set.
+ * Reviewing: PENNY_TASK_RUNNER_REVIEW* → PENNY_TASK_RUNNER_VALIDATE* → PENNY_TASK_RUNNER_PLAN* → default.
+ */
+export function getHeadlessBackendChain(phase: HeadlessPhase): HeadlessBackend[] {
+  let spec: string | undefined
+  switch (phase) {
+    case 'planning':
+      spec = process.env.PENNY_TASK_RUNNER_PLANNING?.trim() || process.env.PENNY_TASK_RUNNER_PLAN?.trim()
+      break
+    case 'executing':
+      spec = process.env.PENNY_TASK_RUNNER_EXECUTING?.trim() || process.env.PENNY_TASK_RUNNER_EXECUTE?.trim()
+      break
+    case 'validating':
+      spec = process.env.PENNY_TASK_RUNNER_VALIDATING?.trim() || process.env.PENNY_TASK_RUNNER_VALIDATE?.trim()
+      break
+    case 'reviewing':
+      spec =
+        process.env.PENNY_TASK_RUNNER_REVIEWING?.trim() ||
+        process.env.PENNY_TASK_RUNNER_REVIEW?.trim() ||
+        process.env.PENNY_TASK_RUNNER_VALIDATING?.trim() ||
+        process.env.PENNY_TASK_RUNNER_VALIDATE?.trim() ||
+        process.env.PENNY_TASK_RUNNER_PLANNING?.trim() ||
+        process.env.PENNY_TASK_RUNNER_PLAN?.trim()
+      break
+  }
+  const parsed = parseHeadlessBackends(spec)
+  if (parsed?.length) return parsed
+  return [getTaskRunnerKind()]
+}
+
+/** True when stderr/stdout suggests quota, rate limit, or local Ollama unavailable — try next backend in chain. */
+export function headlessFailureShouldFallback(errorText: string, outputText: string): boolean {
+  if (process.env.PENNY_TASK_RUNNER_RETRY_ANY_FAILURE === '1') return true
+  const blob = `${errorText || ''}\n${outputText || ''}`.toLowerCase()
+  if (!blob.trim()) return false
+  return (
+    blob.includes('hit your limit') ||
+    blob.includes("you've hit your limit") ||
+    blob.includes('rate limit') ||
+    blob.includes('rate_limit') ||
+    blob.includes('too many requests') ||
+    blob.includes('status code 429') ||
+    /\b429\b/.test(blob) ||
+    blob.includes('quota') ||
+    blob.includes('overloaded') ||
+    blob.includes('capacity') ||
+    blob.includes('ollama not running') ||
+    blob.includes('ollama endpoint unreachable') ||
+    blob.includes('econnrefused')
+  )
+}
+
 /** Headless orchestrator/pods execution. Default: Cursor Agent CLI. Override with `PENNY_TASK_RUNNER=claude` or `opencode`. */
 export function getTaskRunnerKind(): TaskRunnerKind {
   const fromEnv = (process.env.PENNY_TASK_RUNNER || '').trim().toLowerCase()
@@ -272,10 +360,10 @@ export function buildAgentHeadlessInvocation(
   agentId: string,
   cwd: string,
   userPrompt: string,
-  opts: BuildCliOpts & { permissionMode?: string } = {},
+  opts: BuildCliOpts & { permissionMode?: string; runner?: TaskRunnerKind } = {},
 ): HeadlessInvocation {
   const resolvedCwd = resolveUserPath(cwd)
-  const runner = getTaskRunnerKind()
+  const runner = opts.runner ?? getTaskRunnerKind()
 
   if (runner === 'claude') {
     const cliArgs = buildAgentCliArgs(agentId, resolvedCwd, {

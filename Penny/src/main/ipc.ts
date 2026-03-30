@@ -142,6 +142,7 @@ import {
   getVeritasLogs,
 } from './veritas-service'
 import { getEvalReportAll, getEvalReportAgent, getEvalStats } from './evals'
+import { computeCapabilitiesStatus } from './capabilities-status'
 import { taskOutcomeCollector } from './evals/collectors/task-outcomes'
 import { podQualityCollector } from './evals/collectors/pod-quality'
 import { evalHarness } from './evals/harness'
@@ -1115,13 +1116,8 @@ export function registerIpcHandlers() {
   ipcMain.handle('slack:start', wrapHandler(() => startSlackBridge()))
   ipcMain.handle('slack:stop', wrapHandler(() => stopSlackBridge()))
 
-  // ── Capabilities (epic #50) ───────────────────────────────────────────
-  // Stub until subsystems report in (#54/#55). `overall` becomes aggregated once `items` has keys.
-  ipcMain.handle('capabilities:status', wrapHandler(() => ({
-    updatedAt: new Date().toISOString(),
-    overall: 'unknown',
-    items: {} as Record<string, string>,
-  })))
+  // ── Capabilities (epic #50) — #54/#55 aggregated snapshot
+  ipcMain.handle('capabilities:status', wrapHandler(() => computeCapabilitiesStatus()))
 
   // ── Veritas Control Plane ──────────────────────────────────────────────
   ipcMain.handle('veritas:status', wrapHandler(() => getVeritasStatus()))

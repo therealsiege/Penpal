@@ -169,6 +169,18 @@ Three-agent workflow engine (`src/main/pods.ts`):
 
 If tests fail, the executor's feedback goes back to the solver for iteration (max 3 rounds). Results are appended to `agents/CLAUDE.md` as team knowledge.
 
+**Headless backends (pods, GitHub pipeline, orchestrator execute/validate):** `runAgentHeadless` can use a **per-phase** comma-separated chain. If the first backend fails with a quota/rate-limit style message (or Ollama unreachable), the next backend runs automatically.
+
+| Env | Phase |
+|-----|--------|
+| `PENNY_TASK_RUNNER` | Default single runner when no phase override is set (`claude`, `cursor-agent`, `opencode`). |
+| `PENNY_TASK_RUNNER_PLAN` / `PENNY_TASK_RUNNER_PLANNING` | Planning (GitHub planner, orchestrator plan, pod self-eval). |
+| `PENNY_TASK_RUNNER_EXECUTE` / `PENNY_TASK_RUNNER_EXECUTING` | Implementation / executor / self-fix. |
+| `PENNY_TASK_RUNNER_VALIDATE` / `PENNY_TASK_RUNNER_VALIDATING` | Orchestrator validation; also used for pod **reviewer** unless `PENNY_TASK_RUNNER_REVIEW` is set. |
+| `PENNY_TASK_RUNNER_REVIEW` / `PENNY_TASK_RUNNER_REVIEWING` | Pod reviewer only (overrides validate/plan fallback). |
+
+Chain entries: `claude`, `cursor-agent`, `opencode`, `ollama` (or `local`). Example: `PENNY_TASK_RUNNER_PLAN=claude,cursor-agent` when Claude Code hits limits. **Ollama-compatible API** (orchestrator + headless `ollama` backend): set `PENNY_OLLAMA_BASE_URL` to your NemoClaw/OpenClaw tunnel or gateway base URL (Ollama-style `/api/tags` + `/api/generate`). Aliases: `PENNY_NEMOCLAW_OLLAMA_URL`, `PENNY_OPENCLAW_OLLAMA_URL`. Default base is `http://127.0.0.1:11434`. `PENNY_OLLAMA_MODEL` selects the model name (default `qwen3-coder:30b`). Optional `PENNY_OLLAMA_API_KEY` sends `Authorization: Bearer …` if your gateway requires it. Set `PENNY_TASK_RUNNER_RETRY_ANY_FAILURE=1` to always try the next backend on any error (debugging). Orchestrator tasks with `provider: ollama` still use this HTTP client for plan/validate (unchanged, but now respect the same base URL env vars).
+
 ### Eval Spot-Check Queue
 
 Manual review queue for random agent output spot checks (`src/main/evals/judges/human-judge.ts`):

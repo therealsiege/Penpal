@@ -9,6 +9,7 @@ import { PodLauncherModal, PodStatusModal, PodListModal } from '../components/Po
 import { createOfficeGame } from '../game/OfficeGame'
 import { OfficeScene } from '../game/OfficeScene'
 import { EventBus, EVENTS } from '../game/events'
+import { mergeCapabilityRows } from '../capabilities/merge'
 
 // ---------------------------------------------------------------------------
 // Props
@@ -1331,19 +1332,6 @@ function LeaderboardModal({ agents, xpData, onClose }: {
 }
 
 // ---------------------------------------------------------------------------
-// Capability display names — replace with shared util when #61 lands
-// ---------------------------------------------------------------------------
-
-const CAPABILITY_TITLES: Record<string, string> = {
-  graph: 'Knowledge Graph',
-  scheduler: 'Scheduler',
-  agents: 'Agent Sessions',
-  pods: 'Pod Workflows',
-  etl: 'ETL Pipeline',
-  mcp: 'MCP Servers',
-}
-
-// ---------------------------------------------------------------------------
 // CommandCenter
 // ---------------------------------------------------------------------------
 
@@ -1571,10 +1559,10 @@ export function CommandCenter(props: CommandCenterProps) {
   // --- Push capabilities status into Phaser scene for ops board overlay ---
   useEffect(() => {
     if (!capStatus || !sceneRef.current) return
-    const rows = Object.entries(capStatus.items as Record<string, string>).map(([id, status]) => ({
-      id,
-      title: CAPABILITY_TITLES[id] ?? id,
-      status,
+    const rows = mergeCapabilityRows(capStatus.items as Record<string, string>).map(r => ({
+      id: r.id,
+      title: r.title,
+      status: r.status,
     }))
     sceneRef.current.setCapabilitiesBoard(rows)
   }, [capStatus])

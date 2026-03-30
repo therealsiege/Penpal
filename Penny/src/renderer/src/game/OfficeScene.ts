@@ -33,6 +33,7 @@ import { AgentMoodManager } from './agent-mood'
 import { InteractivePropsManager } from './interactive-props'
 import { SeasonHUD } from './season-hud'
 import { QuestPanel } from './quest-panel'
+import { AchievementPanel } from './achievement-panel'
 import { questSystem } from './quest-system'
 import { creditManager } from './credits'
 import { leaderboardManager } from './leaderboard'
@@ -141,7 +142,9 @@ export class OfficeScene extends Phaser.Scene {
   private propsManager!: InteractivePropsManager
   private seasonHud!: SeasonHUD
   private questPanel!: QuestPanel
+  private achievementPanel!: AchievementPanel
   private lastQuestPanelUpdateAt = 0
+  private lastAchievementPanelUpdateAt = 0
   private lastMoodUpdateAt = 0
   private lastSeasonHudUpdateAt = 0
 
@@ -459,6 +462,7 @@ export class OfficeScene extends Phaser.Scene {
       if (this.ui) { this.ui.setViewSize(gameSize.width, gameSize.height) }
       if (this.seasonHud) { this.seasonHud.setViewSize(gameSize.width, gameSize.height) }
       if (this.questPanel) { this.questPanel.setViewSize(gameSize.width, gameSize.height) }
+      if (this.achievementPanel) { this.achievementPanel.setViewSize(gameSize.width, gameSize.height) }
 
       if (this.resizeTimer) clearTimeout(this.resizeTimer)
       this.resizeTimer = setTimeout(() => {
@@ -503,11 +507,12 @@ export class OfficeScene extends Phaser.Scene {
         this.selection.confirmSelectedAgent()
       })
 
-      // ESC document order: ops board → help → focus → deselect
+      // ESC document order: ops board → achievements → help → focus → deselect
       this.input.keyboard.on('keydown-ESC', (e: KeyboardEvent) => {
         if (shouldIgnoreKeyboardShortcuts(e)) return
         e.preventDefault()
         if (this.ui.opsVisible) { this.ui.hideOpsBoardOverlay(); return }
+        if (this.achievementPanel?.isVisible) { this.achievementPanel.hide(); return }
         if (this.ui.helpVisible) { this.ui.hideHelpOverlay(); return }
         if (this.selection.isFocused) { this.selection.exitFocusMode(); return }
         this.selection.deselectAgent()
@@ -585,6 +590,13 @@ export class OfficeScene extends Phaser.Scene {
         if (shouldIgnoreKeyboardShortcuts(e)) return
         e.preventDefault()
         this.questPanel.toggleQuestLog()
+      })
+
+      // A — toggle achievements panel
+      this.input.keyboard.on('keydown-A', (e: KeyboardEvent) => {
+        if (shouldIgnoreKeyboardShortcuts(e)) return
+        e.preventDefault()
+        this.achievementPanel.toggle()
       })
 
       // Backtick — toggle debug overlay (dev only)
@@ -698,6 +710,9 @@ export class OfficeScene extends Phaser.Scene {
     this.seasonHud.init(this.viewWidth, this.viewHeight)
     this.questPanel = new QuestPanel(this)
     this.questPanel.init(this.viewWidth, this.viewHeight)
+    this.achievementPanel = new AchievementPanel(this)
+    this.achievementPanel.init(this.viewWidth, this.viewHeight)
+
     soundEngine.setScene(this)
     soundEngine.wireEvents()
     achievements.load()
@@ -1174,6 +1189,11 @@ export class OfficeScene extends Phaser.Scene {
     }
 
     // Quest panel — update every 3s
+    if (this.achievementPanel && time - this.lastAchievementPanelUpdateAt >= 4000) {
+      this.lastAchievementPanelUpdateAt = time
+      this.achievementPanel.update()
+    }
+
     if (this.questPanel && time - this.lastQuestPanelUpdateAt >= 3000) {
       this.lastQuestPanelUpdateAt = time
       this.questPanel.update()
@@ -1824,6 +1844,7 @@ export class OfficeScene extends Phaser.Scene {
     this.ui.destroy()
     this.seasonHud.destroy()
     this.questPanel.destroy()
+    this.achievementPanel.destroy()
 
     if (this.roomRenderer) {
       for (const room of this.rooms.values()) {

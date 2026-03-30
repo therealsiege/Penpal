@@ -5,9 +5,9 @@ import {
 } from '../../../src/renderer/src/capabilities/catalog'
 
 describe('capabilities catalog', () => {
-  it('has exactly one catalog entry', () => {
-    expect(Object.keys(CAPABILITY_CATALOG).length).toBe(1)
-    expect(listCapabilities().length).toBe(1)
-    expect(listCapabilities()[0]).toBe('orchestrator')
+  it('lists every catalog id in stable order', () => {
+    const keys = Object.keys(CAPABILITY_CATALOG)
+    expect(keys.length).toBe(7)
+    expect(listCapabilities()).toEqual(keys)
   })
 })

@@ -6,9 +6,16 @@ import os from 'os'
 import {
   buildAgentCliArgs,
   buildAgentHeadlessInvocation,
+  getHeadlessBackendChain,
+  getTaskRunnerKind,
+  headlessFailureShouldFallback,
   saveAgentSession,
   type BuildCliOpts,
+  type HeadlessBackend,
+  type HeadlessInvocation,
+  type HeadlessPhase,
 } from './agents'
+import { runOllama } from './ollama-client'
 
 const execAsync = promisify(exec)
 
@@ -1466,34 +1473,23 @@ export interface HeadlessResult {
   durationMs: number
 }
 
-export async function runAgentHeadless(
-  agentId: string,
-  cwd: string,
-  prompt: string,
-  opts: { permissionMode?: string; timeoutMs?: number } = {},
-): Promise<HeadlessResult> {
-  const timeoutMs = opts.timeoutMs ?? 600_000
+export interface RunHeadlessOptions {
+  permissionMode?: string
+  timeoutMs?: number
+  /**
+   * Selects backend chain from env (`PENNY_TASK_RUNNER_PLAN`, `_EXECUTE`, `_VALIDATE`, `_REVIEW`, comma-separated fallbacks).
+   * Omit for legacy behavior: single `PENNY_TASK_RUNNER` with no automatic fallback.
+   */
+  phase?: HeadlessPhase
+}
 
-  let invocation: { command: string; args: string[]; cwd: string }
-  try {
-    invocation = buildAgentHeadlessInvocation(agentId, cwd, prompt, {
-      headless: true,
-      permissionMode: opts.permissionMode,
-    })
-  } catch (err) {
-    return { success: false, output: '', error: (err as Error).message, durationMs: 0 }
-  }
-
+function spawnHeadlessCli(invocation: HeadlessInvocation, timeoutMs: number): Promise<HeadlessResult> {
   const start = Date.now()
 
   return new Promise<HeadlessResult>((resolve) => {
-    // Resolve the command to an absolute path if it's a bare name.
-    // Electron launched from Finder/Dock may have a stale or minimal PATH
-    // that doesn't include /opt/homebrew/bin or ~/.local/bin.
     const resolvedCommand = resolveCommandPath(invocation.command)
     console.log(`[headless] spawn: ${resolvedCommand} ${invocation.args.slice(0, 3).join(' ')}... cwd=${invocation.cwd}`)
 
-    // Ensure child process PATH includes well-known bin dirs
     const childEnv = { ...process.env }
     const currentPath = childEnv.PATH || ''
     const missingDirs = EXTRA_BIN_DIRS.filter(d => !currentPath.includes(d) && fs.existsSync(d))
@@ -1517,34 +1513,11 @@ export async function runAgentHeadless(
       resolve(result)
     }
 
-    child.stdout.on('data', (chunk: Buffer) => { stdout += chunk.toString() })
-    child.stderr.on('data', (chunk: Buffer) => { stderr += chunk.toString() })
-
-    child.on('close', (code) => {
-      const durationMs = Date.now() - start
-      if (code !== 0) {
-        console.error(`[headless] exit ${code} after ${Math.round(durationMs / 1000)}s. stderr: ${stderr.slice(-500)}`)
-      } else if (!stdout.trim()) {
-        console.warn(`[headless] exit 0 but empty stdout after ${Math.round(durationMs / 1000)}s. stderr: ${stderr.slice(-500)}`)
-      }
-      if (code === 0) {
-        // If stdout is empty but stderr has content, use stderr as output
-        // (claude -p may write results to stderr in some configurations)
-        const output = stdout.trim() || stderr.trim()
-        settle({ success: true, output, durationMs })
-      } else {
-        settle({ success: false, output: stdout.trim(), error: stderr || `Exit code ${code}`, durationMs })
-      }
-    })
-
-    child.on('error', (err) => {
-      settle({ success: false, output: '', error: err.message, durationMs: Date.now() - start })
-    })
-
-    // Kill if exceeds timeout
     const timer = setTimeout(() => {
       child.kill('SIGTERM')
-      setTimeout(() => { if (!settled) child.kill('SIGKILL') }, 5000)
+      setTimeout(() => {
+        if (!settled) child.kill('SIGKILL')
+      }, 5000)
       settle({
         success: false,
         output: stdout.trim(),
@@ -1553,8 +1526,100 @@ export async function runAgentHeadless(
       })
     }, timeoutMs)
 
-    child.on('close', () => clearTimeout(timer))
+    child.stdout.on('data', (chunk: Buffer) => { stdout += chunk.toString() })
+    child.stderr.on('data', (chunk: Buffer) => { stderr += chunk.toString() })
+
+    child.on('error', (err) => {
+      clearTimeout(timer)
+      settle({ success: false, output: '', error: err.message, durationMs: Date.now() - start })
+    })
+
+    child.on('close', (code) => {
+      clearTimeout(timer)
+      const durationMs = Date.now() - start
+      if (code !== 0) {
+        console.error(`[headless] exit ${code} after ${Math.round(durationMs / 1000)}s. stderr: ${stderr.slice(-500)}`)
+      } else if (!stdout.trim()) {
+        console.warn(`[headless] exit 0 but empty stdout after ${Math.round(durationMs / 1000)}s. stderr: ${stderr.slice(-500)}`)
+      }
+      if (code === 0) {
+        const output = stdout.trim() || stderr.trim()
+        settle({ success: true, output, durationMs })
+      } else {
+        settle({ success: false, output: stdout.trim(), error: stderr || `Exit code ${code}`, durationMs })
+      }
+    })
   })
+}
+
+async function runSingleHeadlessBackend(
+  backend: HeadlessBackend,
+  agentId: string,
+  cwd: string,
+  prompt: string,
+  opts: { permissionMode?: string; timeoutMs: number },
+): Promise<HeadlessResult> {
+  if (backend === 'ollama') {
+    const r = await runOllama(prompt, { timeoutMs: opts.timeoutMs })
+    return {
+      success: r.success,
+      output: r.output,
+      error: r.error,
+      durationMs: r.durationMs,
+    }
+  }
+
+  let invocation: HeadlessInvocation
+  try {
+    invocation = buildAgentHeadlessInvocation(agentId, cwd, prompt, {
+      headless: true,
+      permissionMode: opts.permissionMode,
+      runner: backend,
+    })
+  } catch (err) {
+    return { success: false, output: '', error: (err as Error).message, durationMs: 0 }
+  }
+
+  return spawnHeadlessCli(invocation, opts.timeoutMs)
+}
+
+export async function runAgentHeadless(
+  agentId: string,
+  cwd: string,
+  prompt: string,
+  opts: RunHeadlessOptions = {},
+): Promise<HeadlessResult> {
+  const timeoutMs = opts.timeoutMs ?? 600_000
+  const chain: HeadlessBackend[] = opts.phase
+    ? getHeadlessBackendChain(opts.phase)
+    : [getTaskRunnerKind()]
+
+  let last: HeadlessResult = {
+    success: false,
+    output: '',
+    error: 'No headless backends configured',
+    durationMs: 0,
+  }
+
+  for (let i = 0; i < chain.length; i++) {
+    const backend = chain[i]
+    console.log(`[headless] backend ${i + 1}/${chain.length}: ${backend}${opts.phase ? ` (phase=${opts.phase})` : ''}`)
+    last = await runSingleHeadlessBackend(backend, agentId, cwd, prompt, {
+      permissionMode: opts.permissionMode,
+      timeoutMs,
+    })
+
+    if (last.success) return last
+
+    const tryNext = i < chain.length - 1 && headlessFailureShouldFallback(last.error || '', last.output || '')
+    if (tryNext) {
+      console.warn(`[headless] ${backend} failed (${(last.error || '').slice(0, 120)}…); trying next backend`)
+      continue
+    }
+    return last
+  }
+
+  return last
 }
 
 // ── Session Pruning ──────────────────────────────────────────────────────────

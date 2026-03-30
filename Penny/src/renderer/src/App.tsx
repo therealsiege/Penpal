@@ -15,6 +15,7 @@ import { SettingsPanel } from './panels/SettingsPanel'
 import { SoundboardPanel } from './panels/SoundboardPanel'
 import { EvalsPanel } from './panels/EvalsPanel'
 import { DataPanel } from './panels/DataPanel'
+import { HandbookPanel } from './panels/HandbookPanel'
 import type { SystemPaths } from './types'
 import { getPathPresets } from './utils/path-presets'
 import { EventBus, EVENTS } from './game/events'
@@ -125,6 +126,13 @@ function AppContent() {
       description: 'Play any mp3 from Penny sound effects folder',
       category: 'Navigation',
       action: () => setActivePanel('soundboard'),
+    },
+    {
+      id: 'open-handbook',
+      label: 'Open Handbook',
+      description: 'Capability catalog and live validation status',
+      category: 'Navigation',
+      action: () => setActivePanel('handbook'),
     },
     {
       id: 'open-tasks',
@@ -344,6 +352,7 @@ function AppContent() {
         {activePanel === 'data' && <DataPanel />}
         {activePanel === 'vault' && <VaultPanel />}
         {activePanel === 'evals' && <EvalsPanel />}
+        {activePanel === 'handbook' && <HandbookPanel />}
         {activePanel === 'soundboard' && <SoundboardPanel />}
         {activePanel === 'settings' && <SettingsPanel />}
       </Layout>
