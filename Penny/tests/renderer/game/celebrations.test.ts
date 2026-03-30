@@ -542,6 +542,23 @@ describe('CelebrationManager', () => {
       expect(b.shake).not.toHaveBeenCalled()
       expect(soundEngine.levelUp).not.toHaveBeenCalled()
     })
+
+    it('drops duplicate rankUp for same agent within cooldown window', () => {
+      vi.spyOn(soundEngine, 'levelUp').mockImplementation(() => {})
+      vi.spyOn(Math, 'random').mockReturnValue(0.2)
+      const b = createScene()
+      const m = new CelebrationManager(b.scene as never)
+
+      m.rankUp(1, 2, 'agent-A', 'Senior', 0xffffff)
+      drainQueue(b)
+      const firstSoundCount = (soundEngine.levelUp as ReturnType<typeof vi.fn>).mock.calls.length
+
+      // Second rankUp for same agent — cooldown not expired, should be dropped
+      m.rankUp(1, 2, 'agent-A', 'Staff', 0xffffff)
+      drainQueue(b)
+
+      expect((soundEngine.levelUp as ReturnType<typeof vi.fn>).mock.calls.length).toBe(firstSoundCount)
+    })
   })
 
   describe('destroy', () => {
