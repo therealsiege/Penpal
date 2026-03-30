@@ -25,6 +25,16 @@ import { initAutoUpdater } from './auto-updater'
 import { infraUp, infraDown } from './data-scripts'
 import { taskOutcomeCollector } from './evals/collectors/task-outcomes'
 
+// Electron apps launched from Dock/Finder get a minimal PATH (/usr/bin:/bin:/usr/sbin:/sbin).
+// Ensure common tool locations are reachable (homebrew, nvm, local bin, etc.)
+const extraPaths = ['/opt/homebrew/bin', '/opt/homebrew/sbin', '/usr/local/bin', `${process.env.HOME}/.local/bin`, `${process.env.HOME}/.nvm/current/bin`]
+const currentPath = process.env.PATH || ''
+for (const p of extraPaths) {
+  if (!currentPath.includes(p)) {
+    process.env.PATH = `${p}:${process.env.PATH}`
+  }
+}
+
 // Load analytics/.env for Memgraph/Qdrant connection strings
 // __dirname is out/main (or src/main in dev) — go up to Penny/
 // then up one more to sidekick/, then into analytics/
@@ -36,10 +46,10 @@ const envPath = fs.existsSync(path.join(SIDEKICK_GRAPH, '.env'))
   : path.join(ELECTRON_ROOT, 'analytics', '.env')
 dotenv.config({ path: envPath })
 
-// Optionally load Penny-controlled infra variables (Veritas, docker controls).
+// Load Penny's own .env — override: true so Penny config wins over analytics/.env
 const pennyEnvPath = path.join(ELECTRON_ROOT, '.env')
 if (fs.existsSync(pennyEnvPath)) {
-  dotenv.config({ path: pennyEnvPath, override: false })
+  dotenv.config({ path: pennyEnvPath, override: true })
 }
 const controlPlaneEnvPath = process.env.PENNY_VERITAS_ENV_FILE || path.join(ELECTRON_ROOT, 'docker', '.env.control-plane')
 if (fs.existsSync(controlPlaneEnvPath)) {

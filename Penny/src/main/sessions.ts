@@ -15,6 +15,46 @@ const execAsync = promisify(exec)
 const CLAUDE_SESSIONS_DIR = path.join(os.homedir(), '.claude', 'sessions')
 const CLAUDE_PROJECTS_DIR = path.join(os.homedir(), '.claude', 'projects')
 
+// ── Command Resolution ─────────────────────────────────────────────────────
+// Electron launched from Finder/Dock inherits a minimal PATH from launchd,
+// which may not include /opt/homebrew/bin, ~/.local/bin, or ~/.nvm paths.
+// We probe well-known locations so `spawn('claude', ...)` doesn't ENOENT.
+
+const EXTRA_BIN_DIRS = [
+  '/opt/homebrew/bin',
+  '/usr/local/bin',
+  path.join(os.homedir(), '.local', 'bin'),
+  path.join(os.homedir(), '.nvm', 'versions', 'node', process.versions?.node ?? '', 'bin'),
+]
+
+const commandPathCache = new Map<string, string>()
+
+function resolveCommandPath(command: string): string {
+  // Already absolute or relative path
+  if (command.includes('/')) return command
+
+  const cached = commandPathCache.get(command)
+  if (cached) return cached
+
+  // Check current PATH dirs first, then well-known extras (no subprocess spawn)
+  const pathDirs = (process.env.PATH || '').split(':')
+  const allDirs = [...pathDirs, ...EXTRA_BIN_DIRS]
+
+  for (const dir of allDirs) {
+    if (!dir) continue
+    const candidate = path.join(dir, command)
+    try {
+      if (fs.existsSync(candidate)) {
+        commandPathCache.set(command, candidate)
+        return candidate
+      }
+    } catch { /* skip */ }
+  }
+
+  // Fall back to bare command (let spawn try PATH)
+  return command
+}
+
 // ── iTerm2 Circuit Breaker ──────────────────────────────────────────────────
 let itermConsecutiveTimeouts = 0
 let itermBackoffUntil = 0
@@ -1447,10 +1487,24 @@ export async function runAgentHeadless(
   const start = Date.now()
 
   return new Promise<HeadlessResult>((resolve) => {
-    const child = spawn(invocation.command, invocation.args, {
+    // Resolve the command to an absolute path if it's a bare name.
+    // Electron launched from Finder/Dock may have a stale or minimal PATH
+    // that doesn't include /opt/homebrew/bin or ~/.local/bin.
+    const resolvedCommand = resolveCommandPath(invocation.command)
+    console.log(`[headless] spawn: ${resolvedCommand} ${invocation.args.slice(0, 3).join(' ')}... cwd=${invocation.cwd}`)
+
+    // Ensure child process PATH includes well-known bin dirs
+    const childEnv = { ...process.env }
+    const currentPath = childEnv.PATH || ''
+    const missingDirs = EXTRA_BIN_DIRS.filter(d => !currentPath.includes(d) && fs.existsSync(d))
+    if (missingDirs.length > 0) {
+      childEnv.PATH = [...missingDirs, currentPath].join(':')
+    }
+
+    const child = spawn(resolvedCommand, invocation.args, {
       cwd: invocation.cwd,
       stdio: ['ignore', 'pipe', 'pipe'],
-      env: { ...process.env },
+      env: childEnv,
     })
 
     let stdout = ''
@@ -1468,8 +1522,16 @@ export async function runAgentHeadless(
 
     child.on('close', (code) => {
       const durationMs = Date.now() - start
+      if (code !== 0) {
+        console.error(`[headless] exit ${code} after ${Math.round(durationMs / 1000)}s. stderr: ${stderr.slice(-500)}`)
+      } else if (!stdout.trim()) {
+        console.warn(`[headless] exit 0 but empty stdout after ${Math.round(durationMs / 1000)}s. stderr: ${stderr.slice(-500)}`)
+      }
       if (code === 0) {
-        settle({ success: true, output: stdout.trim(), durationMs })
+        // If stdout is empty but stderr has content, use stderr as output
+        // (claude -p may write results to stderr in some configurations)
+        const output = stdout.trim() || stderr.trim()
+        settle({ success: true, output, durationMs })
       } else {
         settle({ success: false, output: stdout.trim(), error: stderr || `Exit code ${code}`, durationMs })
       }
@@ -1493,4 +1555,61 @@ export async function runAgentHeadless(
 
     child.on('close', () => clearTimeout(timer))
   })
+}
+
+// ── Session Pruning ──────────────────────────────────────────────────────────
+
+export interface PruneResult {
+  killed: { pid: number; sessionId: string; uptime: string; mode: string }[]
+  skipped: { pid: number; reason: string }[]
+}
+
+/**
+ * Kill idle Claude sessions that have been running longer than `maxIdleMinutes`.
+ * Skips sessions that are actively working (CPU >= 1%), waiting for input,
+ * or whose PID matches the current process (self-protection).
+ */
+export async function pruneStaleSessions(maxIdleMinutes = 60): Promise<PruneResult> {
+  const sessions = await getClaudeSessions()
+  const result: PruneResult = { killed: [], skipped: [] }
+  const selfPid = process.pid
+
+  for (const s of sessions) {
+    if (s.pid === selfPid) {
+      result.skipped.push({ pid: s.pid, reason: 'self' })
+      continue
+    }
+    if (parseFloat(s.cpu || '0') >= 1) {
+      result.skipped.push({ pid: s.pid, reason: 'active (CPU >= 1%)' })
+      continue
+    }
+    if (s.waitingForInput) {
+      result.skipped.push({ pid: s.pid, reason: 'waiting for input' })
+      continue
+    }
+    if (s.sessionMode !== 'idle') {
+      result.skipped.push({ pid: s.pid, reason: `mode: ${s.sessionMode}` })
+      continue
+    }
+    const ageMs = Date.now() - s.startedAt
+    if (ageMs < maxIdleMinutes * 60_000) {
+      result.skipped.push({ pid: s.pid, reason: `only ${Math.round(ageMs / 60_000)}m old` })
+      continue
+    }
+
+    try {
+      process.kill(s.pid, 'SIGTERM')
+      result.killed.push({ pid: s.pid, sessionId: s.sessionId, uptime: s.uptime, mode: s.sessionMode })
+    } catch {
+      result.skipped.push({ pid: s.pid, reason: 'kill failed (already dead?)' })
+    }
+  }
+
+  // Clean up session files for killed PIDs
+  for (const k of result.killed) {
+    const sessionFile = path.join(CLAUDE_SESSIONS_DIR, `${k.pid}.json`)
+    try { fs.unlinkSync(sessionFile) } catch { /* already gone */ }
+  }
+
+  return result
 }

@@ -38,6 +38,7 @@ contextBridge.exposeInMainWorld('api', {
   focusSessionByName: (name: string, cwd?: string) => ipcRenderer.invoke('sessions:focus-by-name', name, cwd),
   createNewSession: (cwd: string) => ipcRenderer.invoke('sessions:create', cwd),
   broadcastToSessions: (message: string) => ipcRenderer.invoke('sessions:broadcast', message),
+  pruneStaleSessions: (maxIdleMinutes?: number) => ipcRenderer.invoke('sessions:prune', maxIdleMinutes),
   getGraphStats: () => ipcRenderer.invoke('graph:stats'),
   searchLeads: (query: string) => ipcRenderer.invoke('leads:search', query).then(unwrap),
   getLeadDetail: (name: string) => ipcRenderer.invoke('leads:detail', name).then(unwrap),

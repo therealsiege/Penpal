@@ -209,18 +209,21 @@ export function buildAgentTaggedSystemPrompt(agentId: string, opts: BuildCliOpts
 
   const isDispatch = opts.dispatch || agent.autonomy === 'dispatch'
 
-  const sharedMemoryPath = path.join(AGENTS_DIR, 'CLAUDE.md')
+  // Headless agents get a lean prompt — skip shared memory and verbose persona
   let sharedMemoryNote = ''
-  if (fs.existsSync(sharedMemoryPath)) {
-    try {
-      const sharedContent = fs.readFileSync(sharedMemoryPath, 'utf-8')
-      sharedMemoryNote = `\n\n--- SHARED TEAM KNOWLEDGE ---\n${sharedContent}\n--- END SHARED TEAM KNOWLEDGE ---`
-    } catch {
-      sharedMemoryNote = ''
+  if (!opts.headless) {
+    const sharedMemoryPath = path.join(AGENTS_DIR, 'CLAUDE.md')
+    if (fs.existsSync(sharedMemoryPath)) {
+      try {
+        const sharedContent = fs.readFileSync(sharedMemoryPath, 'utf-8')
+        sharedMemoryNote = `\n\n--- SHARED TEAM KNOWLEDGE ---\n${sharedContent}\n--- END SHARED TEAM KNOWLEDGE ---`
+      } catch {
+        sharedMemoryNote = ''
+      }
     }
   }
 
-  const personaContext = agent.persona
+  const personaContext = (!opts.headless && agent.persona)
     ? `\n\nYour name is ${agent.name}. ${agent.persona.backstory} Your working style: ${agent.persona.style}.`
     : ''
 
@@ -338,7 +341,9 @@ export function buildAgentCliArgs(agentId: string, cwd: string, opts: BuildCliOp
   }
 
   if (agent.allowedTools.length > 0) {
-    args.push('--allowedTools', ...agent.allowedTools)
+    for (const tool of agent.allowedTools) {
+      args.push('--allowedTools', tool)
+    }
   }
 
   if (Object.keys(agent.subAgents).length > 0) {
