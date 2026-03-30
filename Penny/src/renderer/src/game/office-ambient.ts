@@ -31,6 +31,16 @@ export class OfficeAmbient {
     this.scheduleNext()
   }
 
+  /** Pause the ambient timer (scene sleep). */
+  pause(): void {
+    if (this.timer) this.timer.paused = true
+  }
+
+  /** Resume the ambient timer (scene wake). */
+  resume(): void {
+    if (this.timer) this.timer.paused = false
+  }
+
   destroy(): void {
     this.timer?.destroy()
     this.timer = null

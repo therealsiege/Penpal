@@ -325,6 +325,16 @@ export class OfficeWorkstations {
     this.animator.updateThoughtBubble(ws, agent, shouldShow, accentColor, isWorking)
   }
 
+  /** Pause all per-workstation timers/tweens (scene sleep). */
+  pauseAll(): void {
+    this.animator.pauseAll()
+  }
+
+  /** Resume all per-workstation timers/tweens (scene wake). */
+  resumeAll(): void {
+    this.animator.resumeAll()
+  }
+
   // ---------------------------------------------------------------------------
   // updateWorkstation — updates workstation state from agent data, fires toasts
   // ---------------------------------------------------------------------------

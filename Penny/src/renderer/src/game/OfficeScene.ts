@@ -124,6 +124,11 @@ export class OfficeScene extends Phaser.Scene {
   private _roomVisibility = new RoomVisibilityManager()
   private lastRoomCheckAt = 0
 
+  // Sleep / wake lifecycle
+  private _isSleeping = false
+  private _navMeshDirtyWhileSleeping = false
+  private _roomCountAtSleep = 0
+
   // Performance auto-reducer
   private _perfFrameCount = 0
   private _perfLastCheckAt = 0
@@ -811,6 +816,13 @@ export class OfficeScene extends Phaser.Scene {
     this.scene.launch(SCENE_KEYS.UI_SCENE)
 
     this.isReady = true
+
+    // Scene sleep/wake lifecycle hooks — pause all subsystem timers/tweens when
+    // this scene is put to sleep (e.g., switching to another scene) and resume
+    // them on wake, re-syncing wall-clock-driven visuals.
+    this.events.on(Phaser.Scenes.Events.SLEEP, this._onSleep, this)
+    this.events.on(Phaser.Scenes.Events.WAKE, this._onWake, this)
+
     this.cafe.startCoffeeRunTimer()
     if (this.pendingAgents) {
       this.setAgents(this.pendingAgents)
@@ -975,6 +987,10 @@ export class OfficeScene extends Phaser.Scene {
   // ---------------------------------------------------------------------------
 
   update(time: number, _delta: number): void {
+    // Belt-and-suspenders: Phaser stops calling update() on sleeping scenes,
+    // but guard against manual invocations.
+    if (this._isSleeping) return
+
     const cam = this.cameras.main
 
     // Camera smooth zoom + follow + recovery
@@ -1200,6 +1216,13 @@ export class OfficeScene extends Phaser.Scene {
         const room = this.roomRenderer.createRoom(cwd, label, teamKey, teamLabel, roomAgents)
         this.rooms.set(cwd, room)
       }
+    }
+
+    // If the scene is sleeping and room count changed, mark nav mesh dirty for
+    // deferred rebuild on wake — skip the expensive layout/camera work.
+    if (this._isSleeping && this.rooms.size !== this._roomCountAtSleep) {
+      this._navMeshDirtyWhileSleeping = true
+      return
     }
 
     const prevWorldW = this.worldWidth
@@ -1635,10 +1658,43 @@ export class OfficeScene extends Phaser.Scene {
   }
 
   // ---------------------------------------------------------------------------
+  // Sleep / Wake lifecycle
+  // ---------------------------------------------------------------------------
+
+  private _onSleep(): void {
+    this._isSleeping = true
+    this._roomCountAtSleep = this.rooms.size
+    this.atmosphere?.pause()
+    this.particles?.pause()
+    this.cafe?.pause()
+    this.ambient?.pause()
+    if (this.wsManager) this.wsManager.pauseAll()
+    if (this.bgTransitionTween) this.bgTransitionTween.pause()
+  }
+
+  private _onWake(): void {
+    this._isSleeping = false
+    this.atmosphere?.resume()   // re-syncs day/night to wall clock
+    this.particles?.resume()
+    this.cafe?.resume()
+    this.ambient?.resume()
+    if (this.wsManager) this.wsManager.resumeAll()
+    if (this.bgTransitionTween) this.bgTransitionTween.resume()
+
+    // If rooms changed while sleeping, rebuild the nav mesh now
+    if (this._navMeshDirtyWhileSleeping) {
+      this.background.layoutRooms()
+      this._navMeshDirtyWhileSleeping = false
+    }
+  }
+
+  // ---------------------------------------------------------------------------
   // Cleanup
   // ---------------------------------------------------------------------------
 
   destroy(): void {
+    this.events.off(Phaser.Scenes.Events.SLEEP, this._onSleep, this)
+    this.events.off(Phaser.Scenes.Events.WAKE, this._onWake, this)
     if (this.resizeTimer) { clearTimeout(this.resizeTimer); this.resizeTimer = null }
     if (this._workstationRefitTimer) { clearTimeout(this._workstationRefitTimer); this._workstationRefitTimer = null }
 
