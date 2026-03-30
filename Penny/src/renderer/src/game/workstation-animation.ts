@@ -1786,4 +1786,44 @@ export class WorkstationAnimator {
       this.stopStreakFlame(ws, true)
     }
   }
+
+  // ---------------------------------------------------------------------------
+  // Sleep / Wake lifecycle — pause and resume all per-workstation timers/tweens
+  // ---------------------------------------------------------------------------
+
+  pauseAll(): void {
+    for (const room of this.host.getRooms().values()) {
+      for (const ws of room.workstations.values()) {
+        if (ws.lookAroundTimer)     ws.lookAroundTimer.paused     = true
+        if (ws.stretchTimer)        ws.stretchTimer.paused        = true
+        if (ws.walkBreakTimer)      ws.walkBreakTimer.paused      = true
+        if (ws.lookAtNeighborTimer) ws.lookAtNeighborTimer.paused = true
+        if (ws.yawnTimer)           ws.yawnTimer.paused           = true
+        if (ws.lampFlickerTimer)    ws.lampFlickerTimer.paused    = true
+        if (ws.typingNoteTimer)     ws.typingNoteTimer.paused     = true
+        if (ws.speechBubbleTimer)   ws.speechBubbleTimer.paused   = true
+        if (ws.flameTimer)          ws.flameTimer.paused          = true
+        if (ws.blurbFadeTimer)      ws.blurbFadeTimer.paused      = true
+        ws.walkBreakTween?.pause()
+      }
+    }
+  }
+
+  resumeAll(): void {
+    for (const room of this.host.getRooms().values()) {
+      for (const ws of room.workstations.values()) {
+        if (ws.lookAroundTimer)     ws.lookAroundTimer.paused     = false
+        if (ws.stretchTimer)        ws.stretchTimer.paused        = false
+        if (ws.walkBreakTimer)      ws.walkBreakTimer.paused      = false
+        if (ws.lookAtNeighborTimer) ws.lookAtNeighborTimer.paused = false
+        if (ws.yawnTimer)           ws.yawnTimer.paused           = false
+        if (ws.lampFlickerTimer)    ws.lampFlickerTimer.paused    = false
+        if (ws.typingNoteTimer)     ws.typingNoteTimer.paused     = false
+        if (ws.speechBubbleTimer)   ws.speechBubbleTimer.paused   = false
+        if (ws.flameTimer)          ws.flameTimer.paused          = false
+        if (ws.blurbFadeTimer)      ws.blurbFadeTimer.paused      = false
+        ws.walkBreakTween?.resume()
+      }
+    }
+  }
 }

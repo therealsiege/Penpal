@@ -125,6 +125,11 @@ export class OfficeScene extends Phaser.Scene {
   private _roomVisibility = new RoomVisibilityManager()
   private lastRoomCheckAt = 0
 
+  // Sleep / wake lifecycle
+  private _isSleeping = false
+  private _navMeshDirtyWhileSleeping = false
+  private _roomCountAtSleep = 0
+
   // Performance auto-reducer
   private _perfFrameCount = 0
   private _perfLastCheckAt = 0
@@ -154,6 +159,7 @@ export class OfficeScene extends Phaser.Scene {
   private broadcast!: OfficeBroadcast
   private broadcastHandler: ((msg: unknown) => void) | null = null
   private agentClickedHandler: ((...args: unknown[]) => void) | null = null
+  private _deskClickedHandler: ((...args: unknown[]) => void) | null = null
 
   constructor() {
     super({ key: SCENE_KEYS.OFFICE })
@@ -645,14 +651,26 @@ export class OfficeScene extends Phaser.Scene {
     this.broadcastHandler = (msg: unknown) => this.broadcast.showBroadcastEffect(String(msg), () => this.rooms)
     EventBus.on(EVENTS.BROADCAST, this.broadcastHandler)
 
-    // Desk click recall — if agent is at cafe, cancel their coffee run so they walk back
+    // Desk click recall — if agent is at cafe, cancel their coffee run so they walk back.
+    // Also smooth-pan camera to the clicked agent's workstation.
     this.agentClickedHandler = ((...args: unknown[]) => {
       const agentId = args[0] as string
       if (this.cafe.isOnCoffeeRun(agentId)) {
         this.cafe.cancelCoffeeRun(agentId)
       }
+      this.navigateCameraToAgent(agentId)
     })
     EventBus.on(EVENTS.AGENT_CLICKED, this.agentClickedHandler)
+
+    // Desk / room-header click — smooth-pan to the clicked world position.
+    this._deskClickedHandler = ((...args: unknown[]) => {
+      const [, wx, wy] = args as [string, number, number]
+      if (typeof wx === 'number' && typeof wy === 'number') {
+        this.smoothNavigateCameraTo(wx, wy)
+      }
+    })
+    EventBus.on(EVENTS.DESK_CLICKED, this._deskClickedHandler)
+
     EventBus.on(EVENTS.AGENT_ARRIVED, this._agentArrivedCamera)
     EventBus.on(EVENTS.AGENT_DEPARTED, this._agentDepartedCamera)
 
@@ -832,7 +850,22 @@ export class OfficeScene extends Phaser.Scene {
     // Launch UIScene as a parallel overlay — owns all screen-space HUD elements
     this.scene.launch(SCENE_KEYS.UI_SCENE)
 
+    // Navigate back to campus when NAVIGATE_BUILDING requests it
+    EventBus.on(EVENTS.NAVIGATE_BUILDING, (building: string) => {
+      if (building === 'campus') {
+        this.scene.sleep(SCENE_KEYS.OFFICE)
+        EventBus.emit(EVENTS.NAVIGATE_CAMPUS)
+      }
+    })
+
     this.isReady = true
+
+    // Scene sleep/wake lifecycle hooks — pause all subsystem timers/tweens when
+    // this scene is put to sleep (e.g., switching to another scene) and resume
+    // them on wake, re-syncing wall-clock-driven visuals.
+    this.events.on(Phaser.Scenes.Events.SLEEP, this._onSleep, this)
+    this.events.on(Phaser.Scenes.Events.WAKE, this._onWake, this)
+
     this.cafe.startCoffeeRunTimer()
     if (this.pendingAgents) {
       this.setAgents(this.pendingAgents)
@@ -997,6 +1030,10 @@ export class OfficeScene extends Phaser.Scene {
   // ---------------------------------------------------------------------------
 
   update(time: number, _delta: number): void {
+    // Belt-and-suspenders: Phaser stops calling update() on sleeping scenes,
+    // but guard against manual invocations.
+    if (this._isSleeping) return
+
     const cam = this.cameras.main
 
     // Camera smooth zoom + follow + recovery
@@ -1230,6 +1267,13 @@ export class OfficeScene extends Phaser.Scene {
       }
     }
 
+    // If the scene is sleeping and room count changed, mark nav mesh dirty for
+    // deferred rebuild on wake — skip the expensive layout/camera work.
+    if (this._isSleeping && this.rooms.size !== this._roomCountAtSleep) {
+      this._navMeshDirtyWhileSleeping = true
+      return
+    }
+
     const prevWorldW = this.worldWidth
     const prevWorldH = this.worldHeight
     this.background.layoutRooms()
@@ -1319,6 +1363,9 @@ export class OfficeScene extends Phaser.Scene {
         this._lastWorkstationCount = wsCount
       }
     }
+
+    // Push live counts to CampusScene
+    EventBus.emit(EVENTS.CAMPUS_COUNTS_UPDATED, allAgents.length, this.pods?.podLines?.length ?? 0)
   }
 
   /** Called from React to check if a world point is over a workstation */
@@ -1345,6 +1392,8 @@ export class OfficeScene extends Phaser.Scene {
     this.pods.drawPodLines(this.time.now, this.rooms)
     this.pods.setLastDrawAt(this.time.now)
     this.pods.clearDirty()
+    // Push updated pod count to CampusScene
+    EventBus.emit(EVENTS.CAMPUS_COUNTS_UPDATED, this.agents.length, workflows.length)
   }
 
   /** Active orchestrator tasks — shows `[stage] title` below each assigned agent's name */
@@ -1663,10 +1712,43 @@ export class OfficeScene extends Phaser.Scene {
   }
 
   // ---------------------------------------------------------------------------
+  // Sleep / Wake lifecycle
+  // ---------------------------------------------------------------------------
+
+  private _onSleep(): void {
+    this._isSleeping = true
+    this._roomCountAtSleep = this.rooms.size
+    this.atmosphere?.pause()
+    this.particles?.pause()
+    this.cafe?.pause()
+    this.ambient?.pause()
+    if (this.wsManager) this.wsManager.pauseAll()
+    if (this.bgTransitionTween) this.bgTransitionTween.pause()
+  }
+
+  private _onWake(): void {
+    this._isSleeping = false
+    this.atmosphere?.resume()   // re-syncs day/night to wall clock
+    this.particles?.resume()
+    this.cafe?.resume()
+    this.ambient?.resume()
+    if (this.wsManager) this.wsManager.resumeAll()
+    if (this.bgTransitionTween) this.bgTransitionTween.resume()
+
+    // If rooms changed while sleeping, rebuild the nav mesh now
+    if (this._navMeshDirtyWhileSleeping) {
+      this.background.layoutRooms()
+      this._navMeshDirtyWhileSleeping = false
+    }
+  }
+
+  // ---------------------------------------------------------------------------
   // Cleanup
   // ---------------------------------------------------------------------------
 
   destroy(): void {
+    this.events.off(Phaser.Scenes.Events.SLEEP, this._onSleep, this)
+    this.events.off(Phaser.Scenes.Events.WAKE, this._onWake, this)
     if (this.resizeTimer) { clearTimeout(this.resizeTimer); this.resizeTimer = null }
     if (this._workstationRefitTimer) { clearTimeout(this._workstationRefitTimer); this._workstationRefitTimer = null }
 
@@ -1677,6 +1759,10 @@ export class OfficeScene extends Phaser.Scene {
     if (this.agentClickedHandler) {
       EventBus.off(EVENTS.AGENT_CLICKED, this.agentClickedHandler)
       this.agentClickedHandler = null
+    }
+    if (this._deskClickedHandler) {
+      EventBus.off(EVENTS.DESK_CLICKED, this._deskClickedHandler)
+      this._deskClickedHandler = null
     }
     if (this.broadcastHandler) {
       EventBus.off(EVENTS.BROADCAST, this.broadcastHandler)

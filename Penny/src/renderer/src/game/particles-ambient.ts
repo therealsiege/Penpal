@@ -399,6 +399,18 @@ export class AmbientParticles {
   }
 
   // ---------------------------------------------------------------------------
+  // Sleep / Wake lifecycle
+  // ---------------------------------------------------------------------------
+
+  pause(): void {
+    if (this.ambientMoteTimer) this.ambientMoteTimer.paused = true
+  }
+
+  resume(): void {
+    if (this.ambientMoteTimer) this.ambientMoteTimer.paused = false
+  }
+
+  // ---------------------------------------------------------------------------
   // Destroy / cleanup
   // ---------------------------------------------------------------------------
 
