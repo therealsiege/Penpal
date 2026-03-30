@@ -1,4 +1,5 @@
 import Phaser from 'phaser'
+import { BootScene } from './boot-scene'
 import { OfficeScene } from './OfficeScene'
 import { UIScene } from './ui-scene'
 
@@ -20,7 +21,7 @@ export function createOfficeGame(container: HTMLDivElement): {
     width: Math.max(1, Math.floor(rect.width)),
     height: Math.max(1, Math.floor(rect.height)),
     transparent: true,
-    scene: [scene, new UIScene()],
+    scene: [new BootScene(), scene, new UIScene()],
     scale: {
       mode: Phaser.Scale.RESIZE,
       autoCenter: Phaser.Scale.NO_CENTER,
