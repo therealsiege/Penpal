@@ -1414,7 +1414,7 @@ export class OfficeScene extends Phaser.Scene {
 
   setCapabilitiesBoard(rows: { id: string; title: string; status: string }[]): void {
     this._capRows = rows
-    if (this.ui.opsVisible) {
+    if (this.ui && this.ui.opsVisible) {
       // Refresh live
       this.ui.showOpsBoardOverlay(rows)
     }
