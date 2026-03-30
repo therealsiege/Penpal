@@ -517,17 +517,12 @@ broken
 - Key output: RESULT: PASS
 
 
-### Workflow: pod quality pass (2026-03-30)
-- Task: pod quality pass
-- Team: nextjs-frontend / ui-designer / electron-dev
-- Result: PASS (1/1 iterations)
+### Workflow: task (2026-03-30)
+- Task: task
+- Team: fullstack-dev / backend-arch / electron-dev
+- Result: PASS (1/2 iterations)
 - Key output: RESULT: PASS
 
-### Workflow: single candidate task (2026-03-30)
-- Task: single candidate task
-- Team: solver-a / reviewer-b / executor-c
-- Result: PASS (1/1 iterations)
-- Key output: RESULT: PASS
 
 ### Workflow: task (2026-03-30)
 - Task: task
@@ -535,6 +530,12 @@ broken
 - Result: FAIL (1/1 iterations)
 - Key output: RESULT: FAIL
 broken
+
+### Workflow: single candidate task (2026-03-30)
+- Task: single candidate task
+- Team: solver-a / reviewer-b / executor-c
+- Result: PASS (1/1 iterations)
+- Key output: RESULT: PASS
 
 ### Workflow: task (2026-03-30)
 - Task: task
@@ -549,6 +550,12 @@ broken
 - Result: PASS (1/1 iterations)
 - Key output: RESULT: PASS
 
+### Workflow: pod quality pass (2026-03-30)
+- Task: pod quality pass
+- Team: nextjs-frontend / ui-designer / electron-dev
+- Result: PASS (1/1 iterations)
+- Key output: RESULT: PASS
+
 ### Workflow: rejected (2026-03-30)
 - Task: rejected
 - Team: fullstack-dev / backend-arch / electron-dev
@@ -560,13 +567,6 @@ broken
 - Team: solver-a / reviewer-b / executor-c
 - Result: PASS (1/1 iterations)
 - Key output: RESULT: PASS
-
-### Workflow: task (2026-03-30)
-- Task: task
-- Team: fullstack-dev / backend-arch / electron-dev
-- Result: PASS (1/2 iterations)
-- Key output: RESULT: PASS
-
 
 ### Workflow: task (2026-03-30)
 - Task: task

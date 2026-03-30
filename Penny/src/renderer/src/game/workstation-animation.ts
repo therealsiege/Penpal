@@ -10,7 +10,7 @@ import type { WorkstationSprite, Room } from './office-types'
 import { activeTheme } from './office-theme'
 import { AnimConfig } from './animation-config'
 import { EventBus, EVENTS } from './events'
-import { questSystem } from './quest-system'
+import { questSystem, type QuestDifficulty } from './quest-system'
 import { creditManager } from './credits'
 import { leaderboardManager } from './leaderboard'
 import { seasonManager } from './seasons'
@@ -212,6 +212,7 @@ export class WorkstationAnimator {
     ws.workStartTime = undefined
     // Hide quest icon on mode transition
     if (ws.questIconTween) { ws.questIconTween.destroy(); ws.questIconTween = undefined }
+    if (ws.questIconPulseTween) { ws.questIconPulseTween.destroy(); ws.questIconPulseTween = undefined }
     if (ws.questIcon && ws.questIcon.alpha > 0) {
       this.scene.tweens.add({ targets: ws.questIcon, alpha: 0, duration: 200, ease: 'Sine.easeOut',
         onComplete: () => { ws.questIcon?.setVisible(false) },
@@ -336,17 +337,14 @@ export class WorkstationAnimator {
         const xpD = agent.xp
         leaderboardManager.recordXP(aid, agent.config.name, 0, xpD?.level ?? 1, xpD?.rank ?? 'Intern')
 
-        // Show quest difficulty star
+        // Show quest difficulty star with difficulty-proportional animation
         const activeQ = questSystem.getAgentActiveQuests(aid)[0]
         if (activeQ && ws.questIcon) {
           const frame = DIFFICULTY_STAR_FRAME[activeQ.difficulty] ?? ICON_FRAMES.STAR_GREY
           ws.questIcon.setFrame(frame).setVisible(true).setAlpha(0)
           if (ws.questIconTween) { ws.questIconTween.destroy(); ws.questIconTween = undefined }
-          this.scene.tweens.add({ targets: ws.questIcon, alpha: 0.9, duration: 300, ease: 'Back.easeOut' })
-          ws.questIconTween = this.scene.tweens.add({
-            targets: ws.questIcon, y: ws.questIcon.y - 2,
-            duration: 1200, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
-          })
+          if (ws.questIconPulseTween) { ws.questIconPulseTween.destroy(); ws.questIconPulseTween = undefined }
+          this._applyQuestStarStyle(ws, activeQ.difficulty as QuestDifficulty)
         }
       }
       // LED: working — green pulsing glow
@@ -845,6 +843,65 @@ export class WorkstationAnimator {
             })
           })
         },
+      })
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Quest star difficulty-proportional styling
+  // ---------------------------------------------------------------------------
+
+  private _applyQuestStarStyle(ws: WorkstationSprite, difficulty: QuestDifficulty): void {
+    const icon = ws.questIcon
+    if (!icon) return
+
+    // Base fade-in
+    const targetAlpha = difficulty === 'hard' ? 0.95 : 1.0
+    const bobDuration =
+      difficulty === 'legendary' ? 500
+        : difficulty === 'epic' ? 700
+          : difficulty === 'hard' ? 900
+            : 1200
+
+    this.scene.tweens.add({
+      targets: icon, alpha: difficulty === 'trivial' || difficulty === 'normal' ? 0.9 : targetAlpha,
+      duration: 300, ease: 'Back.easeOut',
+    })
+
+    // Bob tween (all difficulties)
+    ws.questIconTween = this.scene.tweens.add({
+      targets: icon, y: icon.y - 2,
+      duration: bobDuration, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
+    })
+
+    // Higher difficulties get additional scale pulse + tint
+    if (difficulty === 'hard' || difficulty === 'epic' || difficulty === 'legendary') {
+      const pulseScale = difficulty === 'legendary' ? 0.12 : difficulty === 'epic' ? 0.08 : 0.04
+      const pulseDuration = difficulty === 'legendary' ? 600 : difficulty === 'epic' ? 900 : 1600
+
+      ws.questIconPulseTween = this.scene.tweens.add({
+        targets: icon,
+        scaleX: icon.scaleX + pulseScale,
+        scaleY: icon.scaleY + pulseScale,
+        duration: pulseDuration,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut',
+      })
+    }
+
+    if (difficulty === 'epic') {
+      icon.setTint(0xf59e0b)
+    } else if (difficulty === 'legendary') {
+      icon.setTint(0xef4444)
+      // Additional alpha flicker for legendary
+      this.scene.tweens.add({
+        targets: icon,
+        alpha: { from: 1.0, to: 0.8 },
+        duration: 400,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut',
       })
     }
   }
