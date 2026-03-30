@@ -365,6 +365,28 @@ describe('WorkstationAnimator — animation state machine', () => {
     expect(ws.lastAnimMode).toBe('waiting')
     expect(ws.sprite.setFrame).toHaveBeenCalledWith(0 * CHAR_COLS + POSE_IDLE)
   })
+
+  it('working → waiting clears working tweens before setting waiting tweens', () => {
+    const { scene } = makeAnimScene()
+    const ws = makeWorkstation('a7')
+    const animator = new WorkstationAnimator(scene, makeMinimalHost(ws), vi.fn(), vi.fn())
+
+    // Enter working state
+    animator.updateAnimation(ws, {
+      ...agentBase('a7'),
+      sessionMode: 'working',
+      needsInteraction: false,
+    })
+    expect(ws.lastAnimMode).toBe('working')
+
+    // Transition to waiting — previous tweens should be cleaned up
+    animator.updateAnimation(ws, {
+      ...agentBase('a7'),
+      sessionMode: 'working',
+      needsInteraction: true,
+    })
+    expect(ws.lastAnimMode).toBe('waiting')
+  })
 })
 
 describe('WorkstationAnimator — monitor glow', () => {
@@ -430,6 +452,13 @@ describe('WorkstationAnimator — monitor glow', () => {
     expect(ws.monitorGlowFx!.color).toBe(activeTheme.deskBody)
   })
 
+  it('no monitorGlowFx returns early without throwing', () => {
+    const { scene } = makeAnimScene()
+    const ws = makeWorkstation('g-none', { monitorGlowFx: undefined as unknown as WorkstationSprite['monitorGlowFx'] })
+    const animator = new WorkstationAnimator(scene, makeMinimalHost(ws), vi.fn(), vi.fn())
+    expect(() => animator.updateMonitorGlow(ws, true, false)).not.toThrow()
+  })
+
   it('destroys previous monitor glow tween on transition', () => {
     const { scene, tweensChain } = makeAnimScene()
     const ws = makeWorkstation('g-tw')
@@ -488,6 +517,14 @@ describe('WorkstationAnimator — mood', () => {
     anim.updateMood(ws, { ...agentBase('m2'), sessionMode: 'working' } as AgentState)
     expect(tweensAdd).toHaveBeenCalled()
     expect(moodEmoji.setText).toHaveBeenCalledWith('💻')
+  })
+
+  it('updateMood returns early without throwing when moodEmoji is undefined', () => {
+    const { scene: s, tweensAdd } = makeAnimScene()
+    const anim = new WorkstationAnimator(s, makeMinimalHost(makeWorkstation('m4')), vi.fn(), vi.fn())
+    const ws = makeWorkstation('m4', { moodEmoji: undefined as unknown as WorkstationSprite['moodEmoji'] })
+    expect(() => anim.updateMood(ws, { ...agentBase('m4'), sessionMode: 'working' } as AgentState)).not.toThrow()
+    expect(tweensAdd).not.toHaveBeenCalled()
   })
 
   it('updateMood sets mood badge frame from MOOD_CONFIGS for working (focused)', () => {
@@ -563,6 +600,33 @@ describe('WorkstationAnimator — blocked indicator', () => {
     })
     expect(ws.blockedIndicatorBadge.setFrame).toHaveBeenCalledWith(ICON_FRAMES.CIRCLE_BLUE)
     expect(ws.blockedIndicatorText.setText).toHaveBeenCalledWith('?')
+  })
+
+  it('accept-edits uses blue badge and ~ glyph', () => {
+    const { scene } = makeAnimScene()
+    const ws = wsBlocked('b4')
+    const animator = new WorkstationAnimator(scene, makeMinimalHost(ws), vi.fn(), vi.fn())
+    animator.updateBlockedIndicator(ws, {
+      ...agentBase('b4'),
+      needsInteraction: true,
+      interactionType: 'accept-edits',
+    })
+    expect(ws.blockedIndicatorBadge.setFrame).toHaveBeenCalledWith(ICON_FRAMES.CIRCLE_BLUE)
+    expect(ws.blockedIndicatorText.setText).toHaveBeenCalledWith('~')
+  })
+
+  it('destroys existing blockedIndicatorTween before creating new one', () => {
+    const { scene } = makeAnimScene()
+    const ws = wsBlocked('b5')
+    const oldTween = { destroy: vi.fn() }
+    ws.blockedIndicatorTween = oldTween as unknown as WorkstationSprite['blockedIndicatorTween']
+    const animator = new WorkstationAnimator(scene, makeMinimalHost(ws), vi.fn(), vi.fn())
+    animator.updateBlockedIndicator(ws, {
+      ...agentBase('b5'),
+      needsInteraction: true,
+      interactionType: 'tool-approval',
+    })
+    expect(oldTween.destroy).toHaveBeenCalled()
   })
 })
 
