@@ -161,7 +161,7 @@ describe('BootScene', () => {
   // -----------------------------------------------------------------------
   // OfficeGame scene order — BootScene is first
   // -----------------------------------------------------------------------
-  it('OfficeGame registers BootScene before OfficeScene', async () => {
+  it('OfficeGame registers BootScene, CampusScene, then OfficeScene', async () => {
     const src = await import('fs').then(fs =>
       fs.readFileSync(
         require('path').resolve(__dirname, '../../../src/renderer/src/game/OfficeGame.ts'),
@@ -169,25 +169,28 @@ describe('BootScene', () => {
       ),
     )
     expect(src).toContain("import { BootScene } from './boot-scene'")
-    // BootScene must appear before scene (OfficeScene) in the array
+    expect(src).toContain("import { CampusScene } from './campus-scene'")
+    // BootScene < CampusScene < OfficeScene in the array
     const sceneArrayMatch = src.match(/scene:\s*\[([^\]]+)\]/)
     expect(sceneArrayMatch).toBeTruthy()
     const sceneArray = sceneArrayMatch![1]
     const bootIdx = sceneArray.indexOf('new BootScene()')
-    const officeIdx = sceneArray.indexOf('scene')
-    expect(bootIdx).toBeLessThan(officeIdx)
+    const campusIdx = sceneArray.indexOf('new CampusScene()')
+    const officeIdx = sceneArray.indexOf('scene,')
+    expect(bootIdx).toBeLessThan(campusIdx)
+    expect(campusIdx).toBeLessThan(officeIdx)
   })
 
   // -----------------------------------------------------------------------
-  // BootScene complete handler transitions to OfficeScene
+  // BootScene complete handler transitions to CampusScene
   // -----------------------------------------------------------------------
-  it('BootScene starts OfficeScene on load complete', async () => {
+  it('BootScene starts CampusScene on load complete', async () => {
     const src = await import('fs').then(fs =>
       fs.readFileSync(
         require('path').resolve(__dirname, '../../../src/renderer/src/game/boot-scene.ts'),
         'utf-8',
       ),
     )
-    expect(src).toContain('this.scene.start(SCENE_KEYS.OFFICE)')
+    expect(src).toContain('this.scene.start(SCENE_KEYS.CAMPUS)')
   })
 })

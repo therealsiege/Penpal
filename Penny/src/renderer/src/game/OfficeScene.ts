@@ -810,6 +810,14 @@ export class OfficeScene extends Phaser.Scene {
     // Launch UIScene as a parallel overlay — owns all screen-space HUD elements
     this.scene.launch(SCENE_KEYS.UI_SCENE)
 
+    // Navigate back to campus when NAVIGATE_BUILDING requests it
+    EventBus.on(EVENTS.NAVIGATE_BUILDING, (building: string) => {
+      if (building === 'campus') {
+        this.scene.sleep(SCENE_KEYS.OFFICE)
+        EventBus.emit(EVENTS.NAVIGATE_CAMPUS)
+      }
+    })
+
     this.isReady = true
     this.cafe.startCoffeeRunTimer()
     if (this.pendingAgents) {
@@ -1291,6 +1299,9 @@ export class OfficeScene extends Phaser.Scene {
         this._lastWorkstationCount = wsCount
       }
     }
+
+    // Push live counts to CampusScene
+    EventBus.emit(EVENTS.CAMPUS_COUNTS_UPDATED, allAgents.length, this.pods?.podLines?.length ?? 0)
   }
 
   /** Called from React to check if a world point is over a workstation */
@@ -1317,6 +1328,8 @@ export class OfficeScene extends Phaser.Scene {
     this.pods.drawPodLines(this.time.now, this.rooms)
     this.pods.setLastDrawAt(this.time.now)
     this.pods.clearDirty()
+    // Push updated pod count to CampusScene
+    EventBus.emit(EVENTS.CAMPUS_COUNTS_UPDATED, this.agents.length, workflows.length)
   }
 
   /** Active orchestrator tasks — shows `[stage] title` below each assigned agent's name */
