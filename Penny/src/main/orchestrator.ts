@@ -412,9 +412,12 @@ async function runStage(
     return { success: result.success, output: result.output, durationMs: result.durationMs, provider: 'ollama' }
   }
 
+  const phase =
+    stage === 'planning' ? 'planning' : stage === 'executing' ? 'executing' : 'validating'
   const result = await runAgentHeadless(agentId, task.project, prompt, {
     permissionMode: stage === 'validating' ? 'plan' : undefined,
     timeoutMs: 1_800_000,
+    phase,
   })
   const runner = getTaskRunnerKind()
   const headlessProvider: StageResultProvider =

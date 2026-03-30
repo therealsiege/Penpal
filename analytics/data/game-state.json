@@ -1,5 +1,5 @@
 {
-  "timestamp": 1774895300420,
+  "timestamp": 1774907029732,
   "weekStart": 1774846800000,
   "agents": [
     {
@@ -18,7 +18,7 @@
       "tasksFailed": 0,
       "currentStreak": 0,
       "sessionMode": "waiting",
-      "uptime": "1d 14h"
+      "uptime": "1d 17h"
     },
     {
       "id": "nextjs-frontend",
@@ -162,7 +162,7 @@
       "tasksFailed": 0,
       "currentStreak": 0,
       "sessionMode": "waiting",
-      "uptime": "1d 14h"
+      "uptime": "1d 17h"
     },
     {
       "id": "product-marketer",
@@ -198,7 +198,7 @@
       "tasksFailed": 0,
       "currentStreak": 0,
       "sessionMode": "waiting",
-      "uptime": "1d 14h"
+      "uptime": "1d 17h"
     },
     {
       "id": "issue-planner",

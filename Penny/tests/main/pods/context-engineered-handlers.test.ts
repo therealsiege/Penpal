@@ -15,6 +15,19 @@ const mockSearchLeads = vi.fn()
 const mockGetLeadDetail = vi.fn()
 const mockGetAgentConfigs = vi.hoisted(() => vi.fn(() => []))
 
+const mockComputeCapabilitiesStatus = vi.hoisted(() =>
+  vi.fn().mockResolvedValue({
+    updatedAt: '2020-01-01T00:00:00.000Z',
+    overall: 'unknown',
+    items: {},
+    facets: { graph_orchestrator: {}, evals_vault: {} },
+  }),
+)
+
+vi.mock('../../../src/main/capabilities-status', () => ({
+  computeCapabilitiesStatus: mockComputeCapabilitiesStatus,
+}))
+
 vi.mock('electron', () => ({
   ipcMain: {
     handle: vi.fn((channel: string, handler: (...args: unknown[]) => Promise<unknown>) => {
@@ -259,12 +272,13 @@ describe('context engineered IPC handlers', () => {
     expect(handleMap.get('graph:lead-detail')).toBeTruthy()
   })
 
-  it('capabilities:status returns stub payload with empty items', async () => {
+  it('capabilities:status returns aggregator payload from computeCapabilitiesStatus', async () => {
     const handler = handleMap.get('capabilities:status')!
     const result = await handler({} as never) as {
       updatedAt: string
       overall: string
       items: Record<string, unknown>
+      facets: { graph_orchestrator: Record<string, unknown>; evals_vault: Record<string, unknown> }
     }
     expect(result).not.toHaveProperty('error')
     expect(typeof result.updatedAt).toBe('string')
@@ -272,6 +286,8 @@ describe('context engineered IPC handlers', () => {
     expect(result.overall).toBe('unknown')
     expect(result.items).toEqual({})
     expect(Object.keys(result.items).length).toBe(0)
+    expect(result.facets).toEqual({ graph_orchestrator: {}, evals_vault: {} })
+    expect(mockComputeCapabilitiesStatus).toHaveBeenCalled()
   })
 
   it('unwrap yields legacy data for each target handler', async () => {

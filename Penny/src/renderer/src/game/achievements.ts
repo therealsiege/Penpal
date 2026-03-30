@@ -225,6 +225,11 @@ export class AchievementManager {
     return this._stats.sessionTasks
   }
 
+  /** Lifetime completed task count (persisted) — for incremental achievement progress. */
+  getTotalTasks(): number {
+    return this._stats.totalTasks
+  }
+
   /** Returns the peak concurrent agent count seen this session. */
   getMaxConcurrentAgents(): number {
     return this._stats.maxConcurrentAgents

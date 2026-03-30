@@ -2,8 +2,14 @@ import { EventEmitter } from 'events'
 import { execSync } from 'child_process'
 import fs from 'fs'
 import path from 'path'
+import {
+  getAgentConfig,
+  getHeadlessBackendChain,
+  getTaskRunnerKind,
+  loadPodPresets,
+  type TaskRunnerKind,
+} from './agents'
 import { runAgentHeadless } from './sessions'
-import { getAgentConfig, loadPodPresets, getTaskRunnerKind, type TaskRunnerKind } from './agents'
 import { getPhaseConfig, type PhaseConfig } from './pods/phase-config'
 import { podQualityCollector, type PodQualityEvent } from './evals/collectors/pod-quality'
 import { evalHarness } from './evals/harness'
@@ -628,6 +634,8 @@ export interface PodRunnerDiagnostics {
   runnerBinary: string
   runnerBinaryFound: boolean
   cursorApiKeySet: boolean
+  /** Resolved backend chains per phase (env `PENNY_TASK_RUNNER_*`). */
+  phaseBackendChains: Record<'planning' | 'executing' | 'validating' | 'reviewing', string[]>
 }
 
 function resolveHeadlessRunnerBinary(): { taskRunner: TaskRunnerKind; binary: string } {
@@ -661,6 +669,12 @@ export function getPodRunnerDiagnostics(): PodRunnerDiagnostics {
     runnerBinary: binary,
     runnerBinaryFound: isRunnerBinaryResolvable(binary),
     cursorApiKeySet: taskRunner !== 'cursor-agent' ? true : cursorApiKeySet,
+    phaseBackendChains: {
+      planning: getHeadlessBackendChain('planning'),
+      executing: getHeadlessBackendChain('executing'),
+      validating: getHeadlessBackendChain('validating'),
+      reviewing: getHeadlessBackendChain('reviewing'),
+    },
   }
 }
 
@@ -721,6 +735,7 @@ async function runSelfFixStage(wf: PodWorkflow): Promise<boolean> {
     console.log(`[pods] Executor self-fix ${wf.selfFixAttempts + 1}/${wf.maxSelfFixes} in ${wf.cwd}`)
     const result = await runAgentHeadless(wf.executor.agentId, wf.cwd, prompt, {
       timeoutMs: EXECUTE_TIMEOUT_MS,
+      phase: 'executing',
     })
 
     wf.selfFixAttempts += 1
@@ -779,6 +794,7 @@ async function runSolveStage(wf: PodWorkflow, feedback?: string): Promise<boolea
     const startMs = Date.now()
     const result = await runAgentHeadless(wf.solver.agentId, wf.cwd, prompt, {
       timeoutMs: EXECUTE_TIMEOUT_MS,
+      phase: 'executing',
     })
 
     if (!result.success) {
@@ -807,6 +823,7 @@ async function runSolveStage(wf: PodWorkflow, feedback?: string): Promise<boolea
   const promises = Array.from({ length: candidateCount }, (_, i) =>
     runAgentHeadless(wf.solver.agentId, wf.cwd, prompt, {
       timeoutMs: EXECUTE_TIMEOUT_MS,
+      phase: 'executing',
     }).then(result => ({
       index: i + 1,
       result,
@@ -856,6 +873,7 @@ async function runSolveStage(wf: PodWorkflow, feedback?: string): Promise<boolea
     const evalResult = await runAgentHeadless(wf.solver.agentId, wf.cwd, evalPrompt, {
       permissionMode: 'plan',
       timeoutMs: PLAN_TIMEOUT_MS,
+      phase: 'planning',
     })
 
     let selection: SelfEvalResult | null = null
@@ -909,6 +927,7 @@ async function runReviewStage(wf: PodWorkflow): Promise<boolean> {
   const result = await runAgentHeadless(wf.reviewer.agentId, wf.cwd, prompt, {
     permissionMode: 'plan',
     timeoutMs: PLAN_TIMEOUT_MS,
+    phase: 'reviewing',
   })
 
   if (!result.success) {
@@ -946,6 +965,7 @@ async function runExecuteStage(wf: PodWorkflow): Promise<{ passed: boolean }> {
   console.log(`[pods] Running executor ${wf.executor.agentId} headless in ${wf.cwd}`)
   const result = await runAgentHeadless(wf.executor.agentId, wf.cwd, prompt, {
     timeoutMs: EXECUTE_TIMEOUT_MS,
+    phase: 'executing',
   })
 
   if (!result.success) {

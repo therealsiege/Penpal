@@ -307,6 +307,7 @@ async function runPlannerAgent(
   console.log(`[github-pipeline] Running planner for ${repoKey}#${tracked.number}`)
   const result = await runAgentHeadless('issue-planner', config.localPath, prompt, {
     timeoutMs: PLANNER_TIMEOUT_MS,
+    phase: 'planning',
   })
 
   if (!result.success) {
@@ -352,6 +353,7 @@ async function runExecutorAgent(
   console.log(`[github-pipeline] Running executor for ${repoKey}#${tracked.number} (attempt ${tracked.executorAttempts + 1}/${MAX_EXECUTOR_ATTEMPTS})`)
   const result = await runAgentHeadless('electron-dev', agentCwd, prompt, {
     timeoutMs: EXECUTOR_TIMEOUT_MS,
+    phase: 'executing',
   })
 
   if (!result.success) {

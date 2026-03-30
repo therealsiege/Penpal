@@ -470,6 +470,7 @@ export class OfficeUI {
       ['O',       'Ops board'],
       ['T',       'Toggle dark/light'],
       ['Q',       'Quest log'],
+      ['A',       'Achievements'],
       ['`',       'Debug overlay'],
     ]
 
