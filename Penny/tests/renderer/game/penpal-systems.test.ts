@@ -282,6 +282,12 @@ describe('SeasonManager', () => {
     })
     vi.spyOn(Math, 'random').mockReturnValue(0.55)
     const sm = new SeasonManager()
+    // First call triggers expiry check → rollover hold (ceremony)
+    sm.getCurrentSeason()
+    // Finish the ceremony to activate the new season
+    if (sm.isAwaitingSeasonRollover()) {
+      sm.finishSeasonRollover()
+    }
     const next = sm.getCurrentSeason()
     expect(next).not.toBeNull()
     expect(next!.endDate).toBeGreaterThan(Date.now())
