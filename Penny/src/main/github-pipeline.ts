@@ -9,9 +9,13 @@
  * The system pushes the branch and creates the PR.
  */
 
-import { execFileSync } from 'child_process'
+import { execFile } from 'child_process'
+import { promisify } from 'util'
 import fs from 'fs'
 import path from 'path'
+import os from 'os'
+
+const execFileAsync = promisify(execFile)
 import { runAgentHeadless } from './sessions'
 import { atomicWrite } from './atomic-store'
 
@@ -56,26 +60,26 @@ interface GHIssue {
 // ── Constants ────────────────────────────────────────────────────────────────
 
 const QUESTION_TIMEOUT_MS = 7 * 24 * 60 * 60 * 1000 // 7 days
-const PLANNER_TIMEOUT_MS = 600_000  // 10 min
+const PLANNER_TIMEOUT_MS = 900_000  // 15 min
 const EXECUTOR_TIMEOUT_MS = 1_800_000 // 30 min
 const MAX_EXECUTOR_ATTEMPTS = 3
 
 // ── Label helpers ────────────────────────────────────────────────────────────
 
-function setLabel(config: RepoConfig, issueNumber: number, removeLabels: string[], addLabel: string): void {
+async function setLabel(config: RepoConfig, issueNumber: number, removeLabels: string[], addLabel: string): Promise<void> {
   try {
     const args = ['issue', 'edit', String(issueNumber), '--repo', `${config.owner}/${config.repo}`]
     for (const l of removeLabels) args.push('--remove-label', l)
     args.push('--add-label', addLabel)
-    execFileSync('gh', args, { encoding: 'utf-8', timeout: 15_000 })
+    await execFileAsync('gh', args, { encoding: 'utf-8', timeout: 15_000 })
   } catch (err) {
     console.error(`[github-pipeline] Failed to set label ${addLabel} on #${issueNumber}:`, err)
   }
 }
 
-function addComment(config: RepoConfig, issueNumber: number, body: string): void {
+async function addComment(config: RepoConfig, issueNumber: number, body: string): Promise<void> {
   try {
-    execFileSync('gh', [
+    await execFileAsync('gh', [
       'issue', 'comment', String(issueNumber),
       '--repo', `${config.owner}/${config.repo}`,
       '--body', body,
@@ -85,28 +89,28 @@ function addComment(config: RepoConfig, issueNumber: number, body: string): void
   }
 }
 
-function hasLabel(config: RepoConfig, issueNumber: number, label: string): boolean {
+async function hasLabel(config: RepoConfig, issueNumber: number, label: string): Promise<boolean> {
   try {
-    const raw = execFileSync('gh', [
+    const { stdout } = await execFileAsync('gh', [
       'issue', 'view', String(issueNumber),
       '--repo', `${config.owner}/${config.repo}`,
       '--json', 'labels',
     ], { encoding: 'utf-8', timeout: 15_000 })
-    const data = JSON.parse(raw) as { labels: { name: string }[] }
+    const data = JSON.parse(stdout) as { labels: { name: string }[] }
     return data.labels.some(l => l.name === label)
   } catch {
     return true // assume still present on error
   }
 }
 
-function fetchIssueComments(config: RepoConfig, issueNumber: number, limit = 5): string {
+async function fetchIssueComments(config: RepoConfig, issueNumber: number, limit = 5): Promise<string> {
   try {
-    const raw = execFileSync('gh', [
+    const { stdout } = await execFileAsync('gh', [
       'issue', 'view', String(issueNumber),
       '--repo', `${config.owner}/${config.repo}`,
       '--json', 'comments',
     ], { encoding: 'utf-8', timeout: 15_000 })
-    const data = JSON.parse(raw) as { comments: { body: string; author: { login: string }; createdAt: string }[] }
+    const data = JSON.parse(stdout) as { comments: { body: string; author: { login: string }; createdAt: string }[] }
     return data.comments
       .slice(-limit)
       .map(c => `**${c.author.login}** (${c.createdAt}):\n${c.body}`)
@@ -118,11 +122,17 @@ function fetchIssueComments(config: RepoConfig, issueNumber: number, limit = 5):
 
 // ── Git helpers ──────────────────────────────────────────────────────────────
 
-function createIssueWorktree(
+function expandHome(p: string): string {
+  if (p.startsWith('~/') || p === '~') return path.join(os.homedir(), p.slice(2))
+  return p
+}
+
+async function createIssueWorktree(
   mainRepoPath: string,
   issueNumber: number,
   slug: string,
-): { branch: string; worktreePath: string } | null {
+): Promise<{ branch: string; worktreePath: string } | null> {
+  mainRepoPath = expandHome(mainRepoPath)
   const branch = `issue-${issueNumber}-${slug}`
   const safeSlug = slug.replace(/[^a-z0-9-]/gi, '-').slice(0, 40).replace(/-$/, '') || 'issue'
   const worktreesRoot = path.join(mainRepoPath, '.penny-worktrees')
@@ -130,24 +140,32 @@ function createIssueWorktree(
 
   try {
     fs.mkdirSync(worktreesRoot, { recursive: true })
-    execFileSync('git', ['fetch', 'origin', 'main'], {
-      cwd: mainRepoPath, encoding: 'utf-8', timeout: 30_000, stdio: 'pipe',
-    })
+    await execFileAsync('git', ['fetch', 'origin', 'main'], {
+      cwd: mainRepoPath, encoding: 'utf-8', timeout: 30_000,
+    }).catch(() => execFileAsync('git', ['fetch', 'origin', 'master'], {
+      cwd: mainRepoPath, encoding: 'utf-8', timeout: 30_000,
+    }).catch(() => {}))
     let baseBranch = 'main'
     try {
-      baseBranch = execFileSync('git', ['symbolic-ref', 'refs/remotes/origin/HEAD'], {
-        cwd: mainRepoPath, encoding: 'utf-8', timeout: 10_000, stdio: 'pipe',
-      }).trim().replace('refs/remotes/origin/', '')
+      const { stdout } = await execFileAsync('git', ['symbolic-ref', 'refs/remotes/origin/HEAD'], {
+        cwd: mainRepoPath, encoding: 'utf-8', timeout: 10_000,
+      })
+      baseBranch = stdout.trim().replace('refs/remotes/origin/', '')
     } catch { /* default to main */ }
 
     if (fs.existsSync(path.join(worktreePath, '.git'))) {
-      execFileSync('git', ['worktree', 'remove', worktreePath, '--force'], {
-        cwd: mainRepoPath, encoding: 'utf-8', timeout: 30_000, stdio: 'pipe',
+      await execFileAsync('git', ['worktree', 'remove', worktreePath, '--force'], {
+        cwd: mainRepoPath, encoding: 'utf-8', timeout: 30_000,
       })
     }
 
-    execFileSync('git', ['worktree', 'add', worktreePath, '-b', branch, `origin/${baseBranch}`], {
-      cwd: mainRepoPath, encoding: 'utf-8', timeout: 60_000, stdio: 'pipe',
+    // Delete stale branch from previous failed attempts
+    await execFileAsync('git', ['branch', '-D', branch], {
+      cwd: mainRepoPath, encoding: 'utf-8', timeout: 10_000,
+    }).catch(() => { /* branch didn't exist — fine */ })
+
+    await execFileAsync('git', ['worktree', 'add', worktreePath, '-b', branch, `origin/${baseBranch}`], {
+      cwd: mainRepoPath, encoding: 'utf-8', timeout: 60_000,
     })
     console.log(`[github-pipeline] Worktree ${worktreePath} branch ${branch}`)
     return { branch, worktreePath }
@@ -157,21 +175,30 @@ function createIssueWorktree(
   }
 }
 
-function createIssueBranch(localPath: string, issueNumber: number, slug: string): string | null {
+async function createIssueBranch(localPath: string, issueNumber: number, slug: string): Promise<string | null> {
+  localPath = expandHome(localPath)
   const branch = `issue-${issueNumber}-${slug}`
   try {
-    execFileSync('git', ['fetch', 'origin', 'main'], {
-      cwd: localPath, encoding: 'utf-8', timeout: 30_000, stdio: 'pipe',
-    })
+    await execFileAsync('git', ['fetch', 'origin', 'main'], {
+      cwd: localPath, encoding: 'utf-8', timeout: 30_000,
+    }).catch(() => execFileAsync('git', ['fetch', 'origin', 'master'], {
+      cwd: localPath, encoding: 'utf-8', timeout: 30_000,
+    }).catch(() => {}))
     let baseBranch = 'main'
     try {
-      baseBranch = execFileSync('git', ['symbolic-ref', 'refs/remotes/origin/HEAD'], {
-        cwd: localPath, encoding: 'utf-8', timeout: 10_000, stdio: 'pipe',
-      }).trim().replace('refs/remotes/origin/', '')
+      const { stdout } = await execFileAsync('git', ['symbolic-ref', 'refs/remotes/origin/HEAD'], {
+        cwd: localPath, encoding: 'utf-8', timeout: 10_000,
+      })
+      baseBranch = stdout.trim().replace('refs/remotes/origin/', '')
     } catch { /* */ }
 
-    execFileSync('git', ['checkout', '-b', branch, `origin/${baseBranch}`], {
-      cwd: localPath, encoding: 'utf-8', timeout: 15_000, stdio: 'pipe',
+    // Delete stale branch from previous failed attempts
+    await execFileAsync('git', ['branch', '-D', branch], {
+      cwd: localPath, encoding: 'utf-8', timeout: 10_000,
+    }).catch(() => { /* branch didn't exist — fine */ })
+
+    await execFileAsync('git', ['checkout', '-b', branch, `origin/${baseBranch}`], {
+      cwd: localPath, encoding: 'utf-8', timeout: 15_000,
     })
     return branch
   } catch (err) {
@@ -180,35 +207,36 @@ function createIssueBranch(localPath: string, issueNumber: number, slug: string)
   }
 }
 
-function pushBranchAndCreatePR(
+async function pushBranchAndCreatePR(
   config: RepoConfig,
   localPath: string,
   branch: string,
   issueNumber: number,
   title: string,
-): boolean {
+): Promise<boolean> {
+  localPath = expandHome(localPath)
   try {
-    execFileSync('git', ['add', '-A'], { cwd: localPath, encoding: 'utf-8', timeout: 15_000, stdio: 'pipe' })
-    const status = execFileSync('git', ['status', '--porcelain'], {
-      cwd: localPath, encoding: 'utf-8', timeout: 10_000, stdio: 'pipe',
-    }).trim()
-    if (!status) return false
+    await execFileAsync('git', ['add', '-A'], { cwd: localPath, encoding: 'utf-8', timeout: 15_000 })
+    const { stdout: status } = await execFileAsync('git', ['status', '--porcelain'], {
+      cwd: localPath, encoding: 'utf-8', timeout: 10_000,
+    })
+    if (!status.trim()) return false
 
     const commitMsg = `${title}\n\nCloses #${issueNumber}\n\nCo-Authored-By: Penny Orchestrator <noreply@penny.dev>`
-    execFileSync('git', ['commit', '-m', commitMsg], {
-      cwd: localPath, encoding: 'utf-8', timeout: 15_000, stdio: 'pipe',
+    await execFileAsync('git', ['commit', '-m', commitMsg], {
+      cwd: localPath, encoding: 'utf-8', timeout: 15_000,
     })
-    execFileSync('git', ['push', '-u', 'origin', branch], {
-      cwd: localPath, encoding: 'utf-8', timeout: 60_000, stdio: 'pipe',
+    await execFileAsync('git', ['push', '-u', 'origin', branch], {
+      cwd: localPath, encoding: 'utf-8', timeout: 60_000,
     })
     const prBody = `Closes #${issueNumber}\n\nAutomated implementation by Penny orchestrator (2-agent pipeline).`
-    execFileSync('gh', [
+    await execFileAsync('gh', [
       'pr', 'create',
       '--repo', `${config.owner}/${config.repo}`,
       '--head', branch,
       '--title', title,
       '--body', prBody,
-    ], { cwd: localPath, encoding: 'utf-8', timeout: 30_000, stdio: 'pipe' })
+    ], { cwd: localPath, encoding: 'utf-8', timeout: 30_000 })
     return true
   } catch (err) {
     console.error(`[github-pipeline] Failed to push/PR for ${branch}:`, err)
@@ -216,10 +244,11 @@ function pushBranchAndCreatePR(
   }
 }
 
-function cleanupWorktree(mainRepoPath: string, worktreePath: string): void {
+async function cleanupWorktree(mainRepoPath: string, worktreePath: string): Promise<void> {
+  mainRepoPath = expandHome(mainRepoPath)
   try {
-    execFileSync('git', ['worktree', 'remove', worktreePath, '--force'], {
-      cwd: mainRepoPath, encoding: 'utf-8', timeout: 30_000, stdio: 'pipe',
+    await execFileAsync('git', ['worktree', 'remove', worktreePath, '--force'], {
+      cwd: mainRepoPath, encoding: 'utf-8', timeout: 30_000,
     })
   } catch { /* best effort */ }
 }
@@ -228,20 +257,12 @@ function cleanupWorktree(mainRepoPath: string, worktreePath: string): void {
 
 function buildPlannerPrompt(issue: GHIssue, repoKey: string, answerContext?: string): string {
   const parts = [
-    `You are planning the implementation for GitHub issue ${repoKey}#${issue.number}.`,
-    '',
-    `## Issue: ${issue.title}`,
+    `Plan the implementation for ${repoKey}#${issue.number}: ${issue.title}`,
     '',
     issue.body || '(no description)',
     '',
-    '## Instructions',
-    '',
-    'Explore the codebase thoroughly, then produce a detailed, numbered implementation plan.',
-    'Include specific file paths, function names, and the exact changes needed.',
-    'The plan will be handed to a separate executor agent — be explicit enough that they can implement without guessing.',
-    '',
-    'If the issue is unclear or you need more information, output a single line starting with QUESTION: followed by your question.',
-    'Otherwise, output your implementation plan.',
+    'Output a numbered plan with exact file paths and changes. Be concise — the executor agent implements from your plan.',
+    'If unclear, output QUESTION: followed by your question.',
   ]
   if (answerContext) {
     parts.push('', '## Previous Question Context', '', answerContext)
@@ -285,18 +306,20 @@ async function runPlannerAgent(
 
   console.log(`[github-pipeline] Running planner for ${repoKey}#${tracked.number}`)
   const result = await runAgentHeadless('issue-planner', config.localPath, prompt, {
-    permissionMode: 'plan',
     timeoutMs: PLANNER_TIMEOUT_MS,
   })
 
   if (!result.success) {
-    tracked.lastError = result.error || 'Planner exited with error'
+    const errorDetail = [result.error, result.output?.slice(-300)].filter(Boolean).join('\n\n')
+    tracked.lastError = errorDetail || 'Planner exited with error'
+    console.error(`[github-pipeline] Planner failed for #${tracked.number}:`, errorDetail)
     return 'failed'
   }
 
   const output = result.output.trim()
   if (!output) {
     tracked.lastError = 'Planner produced empty output'
+    console.error(`[github-pipeline] Planner empty output for #${tracked.number}`)
     return 'failed'
   }
 
@@ -332,8 +355,10 @@ async function runExecutorAgent(
   })
 
   if (!result.success) {
-    tracked.lastError = result.error || result.output.slice(-500) || 'Executor exited with error'
+    const errorDetail = [result.error, result.output?.slice(-500)].filter(Boolean).join('\n\n')
+    tracked.lastError = errorDetail || 'Executor exited with error'
     tracked.executorAttempts += 1
+    console.error(`[github-pipeline] Executor failed for #${tracked.number} (attempt ${tracked.executorAttempts}):`, errorDetail)
     return 'failed'
   }
 
@@ -368,7 +393,7 @@ function saveState(): void {
 }
 
 /** Ingest a new issue into the 2-agent pipeline. Called from github-issues.ts pollOnce(). */
-export function ingestIssue(config: RepoConfig, issue: GHIssue): PipelineIssue {
+export async function ingestIssue(config: RepoConfig, issue: GHIssue): Promise<PipelineIssue> {
   const repoKey = `${config.owner}/${config.repo}`
 
   // Check for existing entry
@@ -395,11 +420,13 @@ export function ingestIssue(config: RepoConfig, issue: GHIssue): PipelineIssue {
   state.issues = state.issues.filter(i => !(i.repo === repoKey && i.number === issue.number))
   state.issues.push(entry)
 
-  // Swap label immediately
-  setLabel(config, issue.number, ['agent-ready'], 'agent-planning')
-  addComment(config, issue.number,
-    '🤖 **Picked up by Penny** (2-agent pipeline)\n\nPlanner agent is designing the approach...',
-  )
+  // Swap label (non-blocking, concurrent)
+  await Promise.allSettled([
+    setLabel(config, issue.number, ['agent-ready'], 'agent-planning'),
+    addComment(config, issue.number,
+      '🤖 **Picked up by Penny** (2-agent pipeline)\n\nPlanner agent is designing the approach...',
+    ),
+  ])
 
   saveState()
   console.log(`[github-pipeline] Ingested ${repoKey}#${issue.number}: "${issue.title}"`)
@@ -433,35 +460,49 @@ export async function drivePipeline(repos: RepoConfig[]): Promise<void> {
         if (result === 'done') {
           tracked.stage = 'executing'
           tracked.updatedAt = Date.now()
-          setLabel(config, tracked.number, ['agent-planning'], 'agent-executing')
-          addComment(config, tracked.number,
-            `📋 **Plan complete** — handing off to executor.\n\n<details><summary>Plan</summary>\n\n${tracked.plannerOutput?.slice(0, 3000) ?? ''}\n\n</details>`,
-          )
+          await Promise.allSettled([
+            setLabel(config, tracked.number, ['agent-planning'], 'agent-executing'),
+            addComment(config, tracked.number,
+              `📋 **Plan complete** — handing off to executor.\n\n<details><summary>Plan</summary>\n\n${tracked.plannerOutput?.slice(0, 3000) ?? ''}\n\n</details>`,
+            ),
+          ])
 
           // Create branch/worktree now
           const slug = tracked.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 40).replace(/-$/, '')
-          const wt = createIssueWorktree(config.localPath, tracked.number, slug)
+          const resolvedPath = expandHome(config.localPath)
+          console.log(`[github-pipeline] Creating branch for #${tracked.number} in ${resolvedPath} (raw: ${config.localPath})`)
+          const wt = await createIssueWorktree(resolvedPath, tracked.number, slug)
           if (wt) {
             tracked.branch = wt.branch
             tracked.worktreePath = wt.worktreePath
+            console.log(`[github-pipeline] Worktree created: ${wt.branch} at ${wt.worktreePath}`)
           } else {
-            tracked.branch = createIssueBranch(config.localPath, tracked.number, slug) ?? undefined
+            const branch = await createIssueBranch(resolvedPath, tracked.number, slug)
+            tracked.branch = branch ?? undefined
+            console.log(`[github-pipeline] Branch created: ${branch ?? 'FAILED'}`)
           }
         } else if (result === 'question') {
           tracked.stage = 'awaiting-answer'
           tracked.questionPostedAt = Date.now()
           tracked.updatedAt = Date.now()
-          setLabel(config, tracked.number, ['agent-planning'], 'agent-question')
-          addComment(config, tracked.number,
-            `❓ **Agent question:**\n\n${tracked.questionComment}\n\n_Remove the \`agent-question\` label when you've answered to resume planning._`,
-          )
+          await Promise.allSettled([
+            setLabel(config, tracked.number, ['agent-planning'], 'agent-question'),
+            addComment(config, tracked.number,
+              `❓ **Agent question:**\n\n${tracked.questionComment}\n\n_Remove the \`agent-question\` label when you've answered to resume planning._`,
+            ),
+          ])
         } else {
           tracked.stage = 'failed'
           tracked.updatedAt = Date.now()
-          setLabel(config, tracked.number, ['agent-planning'], 'agent-failed')
-          addComment(config, tracked.number,
-            `❌ **Planning failed**\n\n${tracked.lastError ?? 'Unknown error'}\n\nTo retry, remove \`agent-failed\` and add \`agent-ready\`.`,
-          )
+          const errorBody = tracked.lastError
+            ? `\`\`\`\n${tracked.lastError.slice(0, 1000)}\n\`\`\``
+            : 'Unknown error'
+          await Promise.allSettled([
+            setLabel(config, tracked.number, ['agent-planning'], 'agent-failed'),
+            addComment(config, tracked.number,
+              `❌ **Planning failed**\n\n${errorBody}\n\nTo retry, remove \`agent-failed\` and add \`agent-ready\`.`,
+            ),
+          ])
         }
       } catch (err) {
         console.error(`[github-pipeline] Planner error for #${tracked.number}:`, err)
@@ -476,17 +517,19 @@ export async function drivePipeline(repos: RepoConfig[]): Promise<void> {
       if (tracked.questionPostedAt && Date.now() - tracked.questionPostedAt > QUESTION_TIMEOUT_MS) {
         tracked.stage = 'failed'
         tracked.updatedAt = Date.now()
-        setLabel(config, tracked.number, ['agent-question'], 'agent-failed')
-        addComment(config, tracked.number, '⏰ **Question timed out** (7 days). To retry, remove `agent-failed` and add `agent-ready`.')
+        await Promise.allSettled([
+          setLabel(config, tracked.number, ['agent-question'], 'agent-failed'),
+          addComment(config, tracked.number, '⏰ **Question timed out** (7 days). To retry, remove `agent-failed` and add `agent-ready`.'),
+        ])
         saveState()
         continue
       }
 
-      if (!hasLabel(config, tracked.number, 'agent-question')) {
-        tracked.questionComment = fetchIssueComments(config, tracked.number)
+      if (!(await hasLabel(config, tracked.number, 'agent-question'))) {
+        tracked.questionComment = await fetchIssueComments(config, tracked.number)
         tracked.stage = 'planning'
         tracked.updatedAt = Date.now()
-        setLabel(config, tracked.number, [], 'agent-planning')
+        await setLabel(config, tracked.number, [], 'agent-planning')
         saveState()
       }
     }
@@ -496,8 +539,10 @@ export async function drivePipeline(repos: RepoConfig[]): Promise<void> {
       if (!tracked.branch) {
         tracked.stage = 'failed'
         tracked.updatedAt = Date.now()
-        setLabel(config, tracked.number, ['agent-executing'], 'agent-failed')
-        addComment(config, tracked.number, '❌ **Executor failed** — no branch was created.')
+        await Promise.allSettled([
+          setLabel(config, tracked.number, ['agent-executing'], 'agent-failed'),
+          addComment(config, tracked.number, '❌ **Executor failed** — no branch was created.'),
+        ])
         saveState()
         continue
       }
@@ -510,29 +555,36 @@ export async function drivePipeline(repos: RepoConfig[]): Promise<void> {
 
         if (result === 'done') {
           const gitCwd = tracked.worktreePath ?? config.localPath
-          const prCreated = pushBranchAndCreatePR(
+          const prCreated = await pushBranchAndCreatePR(
             config, gitCwd, tracked.branch, tracked.number,
             `[${tracked.repo.split('/')[1]}#${tracked.number}] ${tracked.title}`,
           )
-          if (tracked.worktreePath) cleanupWorktree(config.localPath, tracked.worktreePath)
+          if (tracked.worktreePath) await cleanupWorktree(config.localPath, tracked.worktreePath)
 
           tracked.stage = 'done'
           tracked.updatedAt = Date.now()
           const doneLabel = prCreated ? 'pr-ready' : 'agent-done'
-          setLabel(config, tracked.number, ['agent-executing'], doneLabel)
-          addComment(config, tracked.number,
-            `✅ **Implementation complete**${prCreated ? '\nA pull request has been created for review.' : ''}`,
-          )
+          await Promise.allSettled([
+            setLabel(config, tracked.number, ['agent-executing'], doneLabel),
+            addComment(config, tracked.number,
+              `✅ **Implementation complete**${prCreated ? '\nA pull request has been created for review.' : ''}`,
+            ),
+          ])
         } else if (tracked.executorAttempts < MAX_EXECUTOR_ATTEMPTS) {
           console.log(`[github-pipeline] Executor retry for #${tracked.number} (${tracked.executorAttempts}/${MAX_EXECUTOR_ATTEMPTS})`)
         } else {
-          if (tracked.worktreePath) cleanupWorktree(config.localPath, tracked.worktreePath)
+          if (tracked.worktreePath) await cleanupWorktree(config.localPath, tracked.worktreePath)
           tracked.stage = 'failed'
           tracked.updatedAt = Date.now()
-          setLabel(config, tracked.number, ['agent-executing'], 'agent-failed')
-          addComment(config, tracked.number,
-            `❌ **Executor failed** after ${MAX_EXECUTOR_ATTEMPTS} attempts.\n\n${tracked.lastError ?? ''}\n\nTo retry, remove \`agent-failed\` and add \`agent-ready\`.`,
-          )
+          const execErrorBody = tracked.lastError
+            ? `\`\`\`\n${tracked.lastError.slice(0, 1000)}\n\`\`\``
+            : ''
+          await Promise.allSettled([
+            setLabel(config, tracked.number, ['agent-executing'], 'agent-failed'),
+            addComment(config, tracked.number,
+              `❌ **Executor failed** after ${MAX_EXECUTOR_ATTEMPTS} attempts.\n\n${execErrorBody}\n\nTo retry, remove \`agent-failed\` and add \`agent-ready\`.`,
+            ),
+          ])
         }
       } catch (err) {
         console.error(`[github-pipeline] Executor error for #${tracked.number}:`, err)
@@ -549,8 +601,18 @@ export function getPipelineIssues(): PipelineIssue[] {
   return state.issues
 }
 
-/** Initialize — load persisted state. */
+/** Initialize — load persisted state and reset stale running flags. */
 export function initPipeline(): void {
   loadState()
+  // On startup, no agents are actually running — clear stale flags from previous process
+  let reset = 0
+  for (const issue of state.issues) {
+    if (issue.plannerRunning) { issue.plannerRunning = false; reset++ }
+    if (issue.executorRunning) { issue.executorRunning = false; reset++ }
+  }
+  if (reset > 0) {
+    saveState()
+    console.log(`[github-pipeline] Reset ${reset} stale running flag(s)`)
+  }
   console.log(`[github-pipeline] Loaded ${state.issues.length} pipeline issues`)
 }

@@ -512,6 +512,21 @@ export function retryTask(taskId: string): boolean {
   return true
 }
 
+export function pruneTaskQueue(): { removed: number; kept: number } {
+  const before = tasks.length
+  const activeStatuses = new Set(['queued', 'assigned', 'active'])
+  // Keep active tasks + the 20 most recent terminal tasks for history
+  const active = tasks.filter(t => activeStatuses.has(t.status))
+  const terminal = tasks
+    .filter(t => !activeStatuses.has(t.status))
+    .sort((a, b) => (b.completedAt ?? b.createdAt) - (a.completedAt ?? a.createdAt))
+    .slice(0, 20)
+  tasks.length = 0
+  tasks.push(...active, ...terminal)
+  saveTasks()
+  return { removed: before - tasks.length, kept: tasks.length }
+}
+
 // ── Agent Selection Algorithm ───────────────────────────────────────────────
 
 interface ScoredAgent {

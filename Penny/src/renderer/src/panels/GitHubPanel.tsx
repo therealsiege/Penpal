@@ -151,7 +151,11 @@ export function GitHubPanel() {
                         className={`w-full text-left p-3 rounded-lg border border-slate-700/40 ${col.color} hover:border-slate-600/60 transition-colors cursor-pointer`}
                       >
                         <div className="flex items-start justify-between gap-2 mb-1.5">
-                          <span className="text-xs text-slate-500 font-mono">#{card.issueNumber}</span>
+                          {card.issueNumber > 0 ? (
+                            <span className="text-xs text-cyan-500 font-mono">#{card.issueNumber}</span>
+                          ) : (
+                            <span className="text-xs text-slate-600 font-mono">task</span>
+                          )}
                           {priorityBadge(card.priority)}
                         </div>
                         <p className="text-sm text-slate-200 leading-snug mb-2 line-clamp-2">{card.title}</p>

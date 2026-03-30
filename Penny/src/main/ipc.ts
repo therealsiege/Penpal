@@ -27,6 +27,7 @@ import {
   broadcastToSessions,
   getOpenClawInfo,
   getITermStatus,
+  pruneStaleSessions,
 } from './sessions'
 import {
   getCursorAgentSessions,
@@ -117,6 +118,7 @@ import {
   getAllAgentCredits,
   setModelProvider,
   getModelProvider,
+  pruneTaskQueue,
   type AgentXP,
   type ModelProvider,
 } from './orchestrator'
@@ -1193,6 +1195,16 @@ export function registerIpcHandlers() {
   // ── iTerm2 / Session Health ──────────────────────────────────────────────
   ipcMain.handle('sessions:iterm-status', wrapHandler(() => getITermStatus()))
 
+  ipcMain.handle('sessions:prune', wrapHandler(async (maxIdleMinutes?: unknown) => {
+    const mins = typeof maxIdleMinutes === 'number' ? maxIdleMinutes : 60
+    const result = await pruneStaleSessions(mins)
+    const summary = result.killed.length > 0
+      ? `Pruned ${result.killed.length} stale session(s): ${result.killed.map(k => `PID ${k.pid} (${k.uptime})`).join(', ')}`
+      : `No stale sessions to prune (${result.skipped.length} checked, all active or recent).`
+    console.log(`[sessions:prune] ${summary}`)
+    return contextResponse(result, summary, [], ['sessions:list'])
+  }))
+
   // ── Opencode Sessions ──────────────────────────────────────────────────────
   ipcMain.handle('opencode:sessions', wrapHandler(async () => {
     const sessions = await getOpencodeSessions()
@@ -1291,6 +1303,12 @@ export function registerIpcHandlers() {
   ipcMain.handle('orchestrator:stats', wrapHandler(() => getOrchestratorStats()))
   ipcMain.handle('orchestrator:xp', wrapHandler(() => getAllAgentXP()))
   ipcMain.handle('orchestrator:credits', wrapHandler(() => getAllAgentCredits()))
+  ipcMain.handle('orchestrator:prune', wrapHandler(() => {
+    const result = pruneTaskQueue()
+    const summary = `Pruned ${result.removed} terminal tasks, kept ${result.kept} (active + 20 most recent).`
+    console.log(`[orchestrator:prune] ${summary}`)
+    return contextResponse(result, summary, [], ['orchestrator:queue'])
+  }))
   ipcMain.handle('orchestrator:set-provider', wrapHandler((provider: unknown) => {
     if (provider !== 'claude' && provider !== 'ollama') throw new Error('provider must be "claude" or "ollama"')
     setModelProvider(provider as ModelProvider)
