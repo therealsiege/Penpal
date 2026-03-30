@@ -153,3 +153,7 @@ new_entities.json
 
 # Forge build output
 forge-out/
+
+# Local agent / Penny worktrees (never commit)
+.claude/worktrees/
+.penny-worktrees/
