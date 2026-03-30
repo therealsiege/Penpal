@@ -13,6 +13,13 @@ import { ICON_FRAMES } from './office-asset-keys'
 
 export type QuestDifficulty = 'trivial' | 'normal' | 'hard' | 'epic' | 'legendary'
 
+export interface QuestStats {
+  totalCompleted: number
+  xpEarnedToday: number
+  averageDifficulty: number   // 1=trivial .. 5=legendary
+  longestStreak: number       // consecutive completed (non-failed) quests
+}
+
 export type QuestStatus = 'active' | 'completed' | 'failed'
 
 export interface Quest {
@@ -215,6 +222,46 @@ export class QuestSystem {
 
   getAgentActiveQuests(agentId: string): Quest[] {
     return this.getActiveQuests().filter(q => q.agentId === agentId)
+  }
+
+  // -------------------------------------------------------------------------
+  // Aggregate stats
+  // -------------------------------------------------------------------------
+
+  getQuestStats(): QuestStats {
+    const DIFF_SCORE: Record<QuestDifficulty, number> = {
+      trivial: 1, normal: 2, hard: 3, epic: 4, legendary: 5,
+    }
+
+    const completed = this._completedQuests.filter(q => q.status === 'completed')
+    const totalCompleted = completed.length
+
+    // XP earned today
+    const todayStart = new Date()
+    todayStart.setHours(0, 0, 0, 0)
+    const todayMs = todayStart.getTime()
+    const xpEarnedToday = completed
+      .filter(q => (q.completedAt ?? 0) >= todayMs)
+      .reduce((sum, q) => sum + q.xpReward, 0)
+
+    // Average difficulty
+    const averageDifficulty = totalCompleted > 0
+      ? completed.reduce((sum, q) => sum + (DIFF_SCORE[q.difficulty] ?? 2), 0) / totalCompleted
+      : 0
+
+    // Longest streak — _completedQuests is newest-first, reverse for chronological order
+    let longestStreak = 0
+    let currentStreak = 0
+    for (let i = this._completedQuests.length - 1; i >= 0; i--) {
+      if (this._completedQuests[i].status === 'completed') {
+        currentStreak++
+        if (currentStreak > longestStreak) longestStreak = currentStreak
+      } else {
+        currentStreak = 0
+      }
+    }
+
+    return { totalCompleted, xpEarnedToday, averageDifficulty, longestStreak }
   }
 
   // -------------------------------------------------------------------------

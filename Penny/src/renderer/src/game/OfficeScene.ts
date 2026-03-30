@@ -32,6 +32,7 @@ import { CelebrationManager, themeIconFrameForTheme, type CameraJuiceHint } from
 import { AgentMoodManager } from './agent-mood'
 import { InteractivePropsManager } from './interactive-props'
 import { SeasonHUD } from './season-hud'
+import { QuestPanel } from './quest-panel'
 import { questSystem } from './quest-system'
 import { creditManager } from './credits'
 import { leaderboardManager } from './leaderboard'
@@ -134,6 +135,8 @@ export class OfficeScene extends Phaser.Scene {
   private moodManager!: AgentMoodManager
   private propsManager!: InteractivePropsManager
   private seasonHud!: SeasonHUD
+  private questPanel!: QuestPanel
+  private lastQuestPanelUpdateAt = 0
   private lastMoodUpdateAt = 0
   private lastSeasonHudUpdateAt = 0
 
@@ -449,6 +452,7 @@ export class OfficeScene extends Phaser.Scene {
 
       if (this.ui) { this.ui.setViewSize(gameSize.width, gameSize.height) }
       if (this.seasonHud) { this.seasonHud.setViewSize(gameSize.width, gameSize.height) }
+      if (this.questPanel) { this.questPanel.setViewSize(gameSize.width, gameSize.height) }
 
       if (this.resizeTimer) clearTimeout(this.resizeTimer)
       this.resizeTimer = setTimeout(() => {
@@ -568,6 +572,13 @@ export class OfficeScene extends Phaser.Scene {
         this.seasonHud.toggleShop()
       })
 
+      // Q — toggle quest log panel
+      this.input.keyboard.on('keydown-Q', (e: KeyboardEvent) => {
+        if (shouldIgnoreKeyboardShortcuts(e)) return
+        e.preventDefault()
+        this.questPanel.toggleQuestLog()
+      })
+
       // Backtick — toggle debug overlay (dev only)
       this.input.keyboard.on('keydown-BACKTICK', (e: KeyboardEvent) => {
         if (shouldIgnoreKeyboardShortcuts(e)) return
@@ -654,6 +665,8 @@ export class OfficeScene extends Phaser.Scene {
     this.propsManager = new InteractivePropsManager(this)
     this.seasonHud = new SeasonHUD(this)
     this.seasonHud.init(this.viewWidth, this.viewHeight)
+    this.questPanel = new QuestPanel(this)
+    this.questPanel.init(this.viewWidth, this.viewHeight)
     soundEngine.setScene(this)
     soundEngine.wireEvents()
     achievements.load()
@@ -786,6 +799,15 @@ export class OfficeScene extends Phaser.Scene {
           soundEngine.levelUp()
           if (difficulty === 'epic' || difficulty === 'legendary') {
             this.officeCamera.focusAgentBriefly(agentId, this.rooms)
+          }
+          // Star-fly to quest panel if visible
+          if (this.questPanel.isVisible) {
+            const panelPos = this.questPanel.getPanelScreenPosition()
+            this.celebrations.starFlyToPanel(
+              wx, wy,
+              difficulty as 'trivial' | 'normal' | 'hard' | 'epic' | 'legendary',
+              panelPos.x, panelPos.y,
+            )
           }
           break
         }
@@ -1099,6 +1121,12 @@ export class OfficeScene extends Phaser.Scene {
     if (this.seasonHud && time - this.lastSeasonHudUpdateAt >= 3000) {
       this.lastSeasonHudUpdateAt = time
       this.seasonHud.update()
+    }
+
+    // Quest panel — update every 3s
+    if (this.questPanel && time - this.lastQuestPanelUpdateAt >= 3000) {
+      this.lastQuestPanelUpdateAt = time
+      this.questPanel.update()
     }
 
     // Performance auto-reducer — check avg FPS every 3s
@@ -1685,6 +1713,7 @@ export class OfficeScene extends Phaser.Scene {
     // UI subsystem cleanup (helpOverlay, debugOverlay, tooltips, hover ring, notifications)
     this.ui.destroy()
     this.seasonHud.destroy()
+    this.questPanel.destroy()
 
     if (this.roomRenderer) {
       for (const room of this.rooms.values()) {

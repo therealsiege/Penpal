@@ -102,6 +102,7 @@ export interface WorkstationSprite {
   /** Floating quest difficulty star above workstation */
   questIcon?: Phaser.GameObjects.Sprite
   questIconTween?: Phaser.Tweens.Tween
+  questIconPulseTween?: Phaser.Tweens.Tween
   /** Gold medal sprite for weekly MVP */
   mvpMedal?: Phaser.GameObjects.Sprite
   mvpMedalTween?: Phaser.Tweens.Tween
