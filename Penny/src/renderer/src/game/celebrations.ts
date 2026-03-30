@@ -1287,6 +1287,38 @@ export class CelebrationManager {
   }
 
   /**
+   * Fly a difficulty star from a world position to the quest panel (screen-space).
+   */
+  starFlyToPanel(
+    worldX: number, worldY: number,
+    difficulty: QuestDifficulty,
+    panelScreenX: number, panelScreenY: number,
+  ): void {
+    const cam = this._scene.cameras.main
+    const sx = (worldX - cam.scrollX) * cam.zoom
+    const sy = (worldY - cam.scrollY) * cam.zoom
+
+    const starFrame = DIFFICULTY_STAR_FRAME[difficulty] ?? ICON_FRAMES.STAR_GREY
+    const star = this._scene.add.sprite(sx, sy - 16, SPRITESHEET_KEYS.GAME_ICONS, starFrame)
+      .setScrollFactor(0)
+      .setDepth(10000)
+      .setAlpha(0.9)
+      .setScale(0.38)
+
+    this._scene.tweens.add({
+      targets: star,
+      x: panelScreenX,
+      y: panelScreenY,
+      scaleX: 0.18,
+      scaleY: 0.18,
+      alpha: 0,
+      duration: 600,
+      ease: 'Cubic.easeIn',
+      onComplete: () => star.destroy(),
+    })
+  }
+
+  /**
    * Brief gold sparkle burst on a workstation when the user approves a tool call.
    * 8-12 particles radiate outward with upward drift, shrink and fade over 500ms.
    */

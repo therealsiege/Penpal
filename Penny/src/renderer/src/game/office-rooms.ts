@@ -16,6 +16,7 @@ import {
 } from './office-constants'
 import { SPRITESHEET_KEYS, ICON_FRAMES, ITEM_FRAMES, EFFECT_ANIM_KEYS, LEGO_FRAMES } from './office-asset-keys'
 import { ROOM_HEADER_ITEM } from './workstation-creation'
+import { EventBus, EVENTS } from './events'
 
 // ---------------------------------------------------------------------------
 // Host-scene interface — only the properties/methods OfficeRooms needs
@@ -824,6 +825,14 @@ export class OfficeRooms {
       },
     ).setOrigin(0.5, 0.5).setName('headerText')
     room.container.add(headerText)
+
+    // Make header clickable — emit DESK_CLICKED with world coords so camera pans to room
+    headerText.setInteractive({ useHandCursor: true })
+    headerText.on('pointerdown', () => {
+      const worldX = room.container.x
+      const worldY = room.container.y
+      EventBus.emit(EVENTS.DESK_CLICKED, room.cwd, worldX, worldY)
+    })
 
     // Lego brick sprites behind the room label — colorful "built from bricks" decoration
     if (this.scene.textures.exists(SPRITESHEET_KEYS.LEGO_BAR)) {

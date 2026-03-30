@@ -1056,6 +1056,7 @@ export class WorkstationFactory {
     if (ws.taskCountBg)          { ws.taskCountBg.clear(); ws.taskCountBg.destroy() }
     if (ws.taskCountText)        ws.taskCountText.destroy()
     if (ws.questIconTween)       ws.questIconTween.destroy()
+    if (ws.questIconPulseTween)  ws.questIconPulseTween.destroy()
     if (ws.questIcon)            ws.questIcon.destroy()
     if (ws.mvpMedalTween)        ws.mvpMedalTween.destroy()
     if (ws.mvpMedal)             ws.mvpMedal.destroy()

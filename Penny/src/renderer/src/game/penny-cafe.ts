@@ -348,6 +348,20 @@ export class PennyCafe implements CoffeeRunHost, ChatHost {
     this.coffeeRunManager.cancelCoffeeRun(agentId)
   }
 
+  /** Pause cafe timers (scene sleep). */
+  pause(): void {
+    if (this.visitorTimer) this.visitorTimer.paused = true
+    if (this.steamTimer) this.steamTimer.paused = true
+    this.coffeeRunManager.pause()
+  }
+
+  /** Resume cafe timers (scene wake). */
+  resume(): void {
+    if (this.visitorTimer) this.visitorTimer.paused = false
+    if (this.steamTimer) this.steamTimer.paused = false
+    this.coffeeRunManager.resume()
+  }
+
   /** Destroy everything. */
   destroy(): void {
     this.coffeeRunManager.destroy()

@@ -119,7 +119,7 @@ declare global {
       slackStatus: () => Promise<{ running: boolean; configured: boolean }>
       slackStart: () => Promise<boolean>
       slackStop: () => Promise<void>
-      capabilitiesStatus: () => Promise<{ updatedAt: string; overall: string; items: Record<string, unknown> }>
+      capabilitiesStatus: () => Promise<{ updatedAt: string; overall: string; items: Record<string, string> }>
       // Veritas Control Plane
       veritasStatus: () => Promise<import('./types').VeritasServiceStatus>
       veritasStart: () => Promise<import('./types').VeritasServiceStatus>
