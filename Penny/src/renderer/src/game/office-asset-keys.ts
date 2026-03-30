@@ -357,6 +357,7 @@ export const ANIM_KEYS = Object.freeze({
 // ---------------------------------------------------------------------------
 
 export const SCENE_KEYS = Object.freeze({
+  BOOT:     'BootScene',
   OFFICE:   'OfficeScene',
   UI_SCENE: 'UIScene',
 } as const)
