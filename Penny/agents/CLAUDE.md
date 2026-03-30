@@ -520,13 +520,6 @@ broken
 ### Workflow: task (2026-03-30)
 - Task: task
 - Team: fullstack-dev / backend-arch / electron-dev
-- Result: PASS (1/2 iterations)
-- Key output: RESULT: PASS
-
-
-### Workflow: task (2026-03-30)
-- Task: task
-- Team: fullstack-dev / backend-arch / electron-dev
 - Result: FAIL (1/1 iterations)
 - Key output: RESULT: FAIL
 broken
@@ -537,6 +530,12 @@ broken
 - Result: PASS (1/1 iterations)
 - Key output: RESULT: PASS
 
+### Workflow: pod quality pass (2026-03-30)
+- Task: pod quality pass
+- Team: nextjs-frontend / ui-designer / electron-dev
+- Result: PASS (1/1 iterations)
+- Key output: RESULT: PASS
+
 ### Workflow: task (2026-03-30)
 - Task: task
 - Team: fullstack-dev / backend-arch / electron-dev
@@ -544,17 +543,12 @@ broken
 - Key output: RESULT: PASS
 
 
-### Workflow: multi candidate task (2026-03-30)
-- Task: multi candidate task
-- Team: solver-a / reviewer-b / executor-c
-- Result: PASS (1/1 iterations)
+### Workflow: task (2026-03-30)
+- Task: task
+- Team: fullstack-dev / backend-arch / electron-dev
+- Result: PASS (1/2 iterations)
 - Key output: RESULT: PASS
 
-### Workflow: pod quality pass (2026-03-30)
-- Task: pod quality pass
-- Team: nextjs-frontend / ui-designer / electron-dev
-- Result: PASS (1/1 iterations)
-- Key output: RESULT: PASS
 
 ### Workflow: rejected (2026-03-30)
 - Task: rejected
@@ -562,8 +556,8 @@ broken
 - Result: FAIL (1/2 iterations)
 - Key output: solver output
 
-### Workflow: invalid self eval task (2026-03-30)
-- Task: invalid self eval task
+### Workflow: multi candidate task (2026-03-30)
+- Task: multi candidate task
 - Team: solver-a / reviewer-b / executor-c
 - Result: PASS (1/1 iterations)
 - Key output: RESULT: PASS
@@ -573,6 +567,12 @@ broken
 - Team: fullstack-dev / backend-arch / electron-dev
 - Result: FAIL (1/2 iterations)
 - Key output: solver
+
+### Workflow: invalid self eval task (2026-03-30)
+- Task: invalid self eval task
+- Team: solver-a / reviewer-b / executor-c
+- Result: PASS (1/1 iterations)
+- Key output: RESULT: PASS
 
 ### Workflow: task (2026-03-30)
 - Task: task
