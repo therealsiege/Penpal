@@ -37,6 +37,10 @@ export class OfficeUI {
   private helpOverlay: Phaser.GameObjects.Container | null = null
   helpVisible = false
 
+  // Ops / capabilities board overlay
+  private opsOverlay: Phaser.GameObjects.Container | null = null
+  opsVisible = false
+
   // Debug overlay (backtick toggle)
   debugOverlayVisible = false
   private debugOverlayContainer: Phaser.GameObjects.Container | null = null
@@ -83,6 +87,13 @@ export class OfficeUI {
   }
 
   destroy(): void {
+    if (this.opsOverlay) {
+      this.scene.tweens.killTweensOf(this.opsOverlay)
+      this.opsOverlay.destroy()
+      this.opsOverlay = null
+    }
+    this.opsVisible = false
+
     if (this.helpOverlay) {
       this.scene.tweens.killTweensOf(this.helpOverlay)
       this.helpOverlay.destroy()
@@ -456,6 +467,7 @@ export class OfficeUI {
       ['H  /  ?', 'This help'],
       ['M',       'Toggle sound'],
       ['N',       'Cycle day/night'],
+      ['O',       'Ops board'],
       ['T',       'Toggle dark/light'],
       ['`',       'Debug overlay'],
     ]
@@ -520,6 +532,155 @@ export class OfficeUI {
     const overlay = this.helpOverlay
     this.helpOverlay = null
     // Fade out then destroy
+    this.scene.tweens.add({
+      targets: overlay,
+      alpha: 0,
+      duration: 150,
+      ease: 'Quad.easeIn',
+      onComplete: () => { try { overlay.destroy() } catch { /* already gone */ } },
+    })
+  }
+
+  // ---------------------------------------------------------------------------
+  // Ops / capabilities board overlay
+  // ---------------------------------------------------------------------------
+
+  showOpsBoardOverlay(rows: { id: string; title: string; status: string }[]): void {
+    // Refresh in-place if already showing
+    if (this.opsOverlay) {
+      this.scene.tweens.killTweensOf(this.opsOverlay)
+      this.opsOverlay.destroy()
+      this.opsOverlay = null
+    }
+    this.opsVisible = true
+
+    const { width, height } = this.scene.scale
+    const ROW_H = 28
+    const PW = 480
+    const PH = Math.max(120, 56 + rows.length * ROW_H)
+
+    const container = this.scene.add.container(0, 0)
+    container.setDepth(9998)
+    container.setScrollFactor(0)
+
+    // Backdrop
+    const backdrop = this.scene.add
+      .rectangle(width / 2, height / 2, width, height, 0x000000, 0.7)
+      .setScrollFactor(0)
+    container.add(backdrop)
+
+    // Panel background
+    const panelX = width / 2
+    const panelY = height / 2
+    const panelGfx = this.scene.add.graphics()
+    panelGfx.fillStyle(activeTheme.panelBg, 1)
+    panelGfx.fillRoundedRect(panelX - PW / 2, panelY - PH / 2, PW, PH, 10)
+    panelGfx.lineStyle(1, activeTheme.panelStroke, 1)
+    panelGfx.strokeRoundedRect(panelX - PW / 2, panelY - PH / 2, PW, PH, 10)
+    container.add(panelGfx)
+
+    // Title
+    container.add(
+      this.scene.add
+        .text(panelX, panelY - PH / 2 + 18, 'Ops Board', {
+          fontSize: '12px',
+          fontStyle: 'bold',
+          color: '#f1f5f9',
+          fontFamily: 'monospace',
+        })
+        .setOrigin(0.5, 0)
+        .setScrollFactor(0),
+    )
+
+    // Divider
+    const divider = this.scene.add.graphics()
+    divider.lineStyle(1, activeTheme.panelStroke, 0.6)
+    divider.lineBetween(panelX - PW / 2 + 16, panelY - PH / 2 + 36, panelX + PW / 2 - 16, panelY - PH / 2 + 36)
+    container.add(divider)
+
+    // Rows
+    const startY = panelY - PH / 2 + 46
+    const dotX = panelX - PW / 2 + 24
+    const titleX = panelX - PW / 2 + 40
+    const statusX = panelX + PW / 2 - 24
+
+    const STATUS_COLORS: Record<string, number> = {
+      ok: 0x34d399,
+      degraded: 0xfbbf24,
+      error: 0xef4444,
+      unknown: 0x5a6a7a,
+    }
+
+    if (rows.length === 0) {
+      container.add(
+        this.scene.add
+          .text(panelX, startY + 10, 'No capabilities registered', {
+            fontSize: '10px',
+            color: activeTheme.subtleText,
+            fontFamily: 'monospace',
+          })
+          .setOrigin(0.5, 0)
+          .setScrollFactor(0),
+      )
+    }
+
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i]
+      const rowY = startY + i * ROW_H
+
+      // Status dot
+      const dotColor = STATUS_COLORS[row.status] ?? STATUS_COLORS.unknown
+      const dot = this.scene.add.graphics()
+      dot.fillStyle(dotColor, 1)
+      dot.fillCircle(dotX, rowY + 8, 4)
+      container.add(dot)
+
+      // Title
+      container.add(
+        this.scene.add
+          .text(titleX, rowY, row.title, {
+            fontSize: '10px',
+            color: '#f1f5f9',
+            fontFamily: 'monospace',
+          })
+          .setScrollFactor(0),
+      )
+
+      // Status label
+      container.add(
+        this.scene.add
+          .text(statusX, rowY, row.status, {
+            fontSize: '10px',
+            color: dotColor === 0x5a6a7a ? activeTheme.subtleText : `#${dotColor.toString(16).padStart(6, '0')}`,
+            fontFamily: 'monospace',
+          })
+          .setOrigin(1, 0)
+          .setScrollFactor(0),
+      )
+    }
+
+    // Dismiss hint
+    container.add(
+      this.scene.add
+        .text(panelX, panelY + PH / 2 - 14, 'Press O or ESC to dismiss', {
+          fontSize: '9px',
+          color: '#3a4858',
+          fontFamily: 'monospace',
+        })
+        .setOrigin(0.5, 0.5)
+        .setScrollFactor(0),
+    )
+
+    container.setAlpha(0)
+    this.opsOverlay = container
+    this.scene.tweens.add({ targets: container, alpha: 1, duration: 200, ease: 'Quad.easeOut' })
+  }
+
+  hideOpsBoardOverlay(): void {
+    if (!this.opsOverlay) return
+    this.opsVisible = false
+    const overlay = this.opsOverlay
+    this.opsOverlay = null
     this.scene.tweens.add({
       targets: overlay,
       alpha: 0,
