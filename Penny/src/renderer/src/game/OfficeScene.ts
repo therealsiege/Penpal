@@ -503,9 +503,11 @@ export class OfficeScene extends Phaser.Scene {
         this.selection.confirmSelectedAgent()
       })
 
+      // ESC document order: ops board → help → focus → deselect
       this.input.keyboard.on('keydown-ESC', (e: KeyboardEvent) => {
         if (shouldIgnoreKeyboardShortcuts(e)) return
         e.preventDefault()
+        if (this.ui.opsVisible) { this.ui.hideOpsBoardOverlay(); return }
         if (this.ui.helpVisible) { this.ui.hideHelpOverlay(); return }
         if (this.selection.isFocused) { this.selection.exitFocusMode(); return }
         this.selection.deselectAgent()
@@ -629,6 +631,17 @@ export class OfficeScene extends Phaser.Scene {
           this.roomRenderer.refreshRoomHeaderText(room)
         }
         this.showToast(`Theme: ${nextName}`, 'info')
+      })
+
+      // O — toggle ops / capabilities board
+      this.input.keyboard.on('keydown-O', (e: KeyboardEvent) => {
+        if (shouldIgnoreKeyboardShortcuts(e)) return
+        e.preventDefault()
+        if (this.ui.opsVisible) {
+          this.ui.hideOpsBoardOverlay()
+        } else {
+          this.ui.showOpsBoardOverlay(this._capRows)
+        }
       })
     }
 
@@ -1394,6 +1407,17 @@ export class OfficeScene extends Phaser.Scene {
     this.pods.clearDirty()
     // Push updated pod count to CampusScene
     EventBus.emit(EVENTS.CAMPUS_COUNTS_UPDATED, this.agents.length, workflows.length)
+  }
+
+  /** Capabilities / ops board rows — pushed from CommandCenter polling */
+  private _capRows: { id: string; title: string; status: string }[] = []
+
+  setCapabilitiesBoard(rows: { id: string; title: string; status: string }[]): void {
+    this._capRows = rows
+    if (this.ui.opsVisible) {
+      // Refresh live
+      this.ui.showOpsBoardOverlay(rows)
+    }
   }
 
   /** Active orchestrator tasks — shows `[stage] title` below each assigned agent's name */
