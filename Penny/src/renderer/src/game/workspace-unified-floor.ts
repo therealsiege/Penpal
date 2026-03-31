@@ -51,24 +51,41 @@ export class WorkspaceUnifiedFloor {
     const hasLabTileset = this.scene.textures.exists(SPRITESHEET_KEYS.LAB_MAIN_TILESET)
     if (!hasLabTileset) return
 
-    const tileScale = 0.30
+    // ── Team area background: autotiled dark fill with transition edges ──
+    // Uses the same tileset as rooms but with dark fill interior and
+    // hex-to-dark transition tiles on the perimeter for a polished look.
+    const tileScale = 0.35
     const effectiveSize = LAB_TILE_SIZE * tileScale
-    const cols = Math.ceil(width / effectiveSize)
-    const rows = Math.ceil(height / effectiveSize)
+    const cols = Math.max(3, Math.floor(width / effectiveSize))
+    const rows = Math.max(3, Math.floor(height / effectiveSize))
 
-    // Tile hex floor sprites across the team area
     for (let row = 0; row < rows; row++) {
       for (let col = 0; col < cols; col++) {
-        const frame = (row + col) % 2 === 0
-          ? LAB_TILESET_FRAMES.HEX_FLOOR_A
-          : LAB_TILESET_FRAMES.HEX_FLOOR_B
         const tx = x + col * effectiveSize + effectiveSize / 2
         const ty = y + row * effectiveSize + effectiveSize / 2
         if (tx - effectiveSize / 2 > x + width || ty - effectiveSize / 2 > y + height) continue
 
+        const isTop = row === 0
+        const isBottom = row === rows - 1
+        const isLeft = col === 0
+        const isRight = col === cols - 1
+
+        let frame: number
+
+        // Transition tiles on perimeter — smooth hex→dark edges
+        if (isTop && isLeft)          frame = LAB_TILESET_FRAMES.TRANSITION_TL
+        else if (isTop && isRight)    frame = LAB_TILESET_FRAMES.TRANSITION_TR
+        else if (isBottom && isLeft)  frame = LAB_TILESET_FRAMES.TRANSITION_BL
+        else if (isBottom && isRight) frame = LAB_TILESET_FRAMES.TRANSITION_BR
+        else if (isTop)    frame = LAB_TILESET_FRAMES.TRANSITION_TOP
+        else if (isBottom) frame = LAB_TILESET_FRAMES.TRANSITION_BOTTOM
+        else if (isLeft)   frame = LAB_TILESET_FRAMES.TRANSITION_LEFT
+        else if (isRight)  frame = LAB_TILESET_FRAMES.TRANSITION_RIGHT
+        else               frame = LAB_TILESET_FRAMES.DARK_FILL
+
         const tile = this.scene.add.sprite(tx, ty, SPRITESHEET_KEYS.LAB_MAIN_TILESET, frame)
           .setScale(tileScale)
-          .setAlpha(0.18)
+          .setAlpha(0.65)
           .setDepth(-3)
         this.floorTiles.push(tile)
       }

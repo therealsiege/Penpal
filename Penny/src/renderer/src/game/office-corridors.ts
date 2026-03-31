@@ -2,7 +2,7 @@ import Phaser from 'phaser'
 import type { Room } from './office-types'
 import { activeTheme } from './office-theme'
 import { ROOM_GAP } from './office-constants'
-import { SPRITESHEET_KEYS, ICON_FRAMES, PIPE_FRAMES, CABLE_FRAMES } from './office-asset-keys'
+import { SPRITESHEET_KEYS, ICON_FRAMES, PIPE_FRAMES, CABLE_FRAMES, LAB_TILESET_FRAMES } from './office-asset-keys'
 
 // ---------------------------------------------------------------------------
 // Host interface — what OfficeCorridors needs from OfficeScene
@@ -292,6 +292,21 @@ export class OfficeCorridors {
 
         this.corridorSegments.push({ x1: room.x, y1: doorY, x2: room.x, y2: hallY, color: lineColor })
 
+        // ── Lab tileset junction tile at vertical-leg / hallway intersection ──
+        if (this.scene.textures.exists(SPRITESHEET_KEYS.LAB_MAIN_TILESET)) {
+          const crossFrame = (rowRooms.indexOf(room) % 2 === 0)
+            ? LAB_TILESET_FRAMES.CROSS_A
+            : LAB_TILESET_FRAMES.CROSS_B
+          const juncTile = this.scene.add.sprite(
+            room.x, hallY,
+            SPRITESHEET_KEYS.LAB_MAIN_TILESET, crossFrame,
+          )
+            .setScale(0.20)
+            .setAlpha(0.55)
+            .setDepth(-3.5)
+          this.pipeSprites.push(juncTile)
+        }
+
         const rawLabel = room.label || room.cwd.split('/').pop() || '?'
         const signLabel = rawLabel.length > 6 ? rawLabel.slice(0, 5) + '.' : rawLabel
         const signCharW = 4
@@ -314,6 +329,37 @@ export class OfficeCorridors {
         signText.setOrigin(0.5, 0.5)
         signText.setDepth(-1)
         this.corridorSignTexts.push(signText)
+      }
+
+      // ── Lab tileset floor texture along the horizontal hallway run ──
+      if (this.scene.textures.exists(SPRITESHEET_KEYS.LAB_MAIN_TILESET)) {
+        const TILE_SPACING = 45
+        const tileCount = Math.max(1, Math.floor(hallWidth / TILE_SPACING))
+        for (let ti = 0; ti < tileCount; ti++) {
+          const t = (ti + 0.5) / tileCount
+          const tx = minX + hallWidth * t
+          const floorTile = this.scene.add.sprite(
+            tx, hallY,
+            SPRITESHEET_KEYS.LAB_MAIN_TILESET, LAB_TILESET_FRAMES.DARK_FILL,
+          )
+            .setScale(0.15)
+            .setAlpha(0.5)
+            .setDepth(-4)
+          this.pipeSprites.push(floorTile)
+        }
+
+        // Central junction marker at hallway midpoint
+        if (hallWidth > 60) {
+          const midX = minX + hallWidth / 2
+          const centerTile = this.scene.add.sprite(
+            midX, hallY,
+            SPRITESHEET_KEYS.LAB_MAIN_TILESET, LAB_TILESET_FRAMES.CROSS_A,
+          )
+            .setScale(0.22)
+            .setAlpha(0.65)
+            .setDepth(-3)
+          this.pipeSprites.push(centerTile)
+        }
       }
     }
 

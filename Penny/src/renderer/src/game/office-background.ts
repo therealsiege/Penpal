@@ -3,9 +3,9 @@ import { computeRoomLayout, detectRoomType } from './office-layout'
 import type { Room, TeamAreaLayout } from './office-types'
 import type { AgentState } from '../types'
 import { activeTheme } from './office-theme'
-import { SPRITESHEET_KEYS, ICON_FRAMES } from './office-asset-keys'
+import { SPRITESHEET_KEYS, ICON_FRAMES, PIPE_FRAMES, CABLE_FRAMES } from './office-asset-keys'
 import {
-  ROOM_GAP,
+  ROOM_GAP, LAB_TILE_SIZE,
   TEAM_AREA_PAD_X, TEAM_AREA_PAD_Y, TEAM_AREA_GAP_X, TEAM_AREA_GAP_Y, TEAM_LABEL_H,
   COLOR_WALL,
   WORLD_MARGIN, LOD_L1_MAX,
@@ -92,6 +92,9 @@ export class OfficeBackground {
 
   // Team area labels
   private teamAreaLabels: (Phaser.GameObjects.Text | Phaser.GameObjects.Graphics)[] = []
+
+  // Pipe/cable sprites placed between rooms inside team areas
+  private teamPipeSprites: Phaser.GameObjects.GameObject[] = []
 
   // Sub-modules
   private terrain: OfficeTerrain
@@ -452,6 +455,9 @@ export class OfficeBackground {
     g.clear()
     for (const label of this.teamAreaLabels) label.destroy()
     this.teamAreaLabels = []
+    // Clean up pipe sprites from previous draw
+    for (const s of this.teamPipeSprites) s.destroy()
+    this.teamPipeSprites = []
     if (layouts.length === 0) {
       this.unifiedFloor.cleanup()
       return
@@ -465,31 +471,40 @@ export class OfficeBackground {
     const ICON_TYPES = ['code', 'gear', 'chart', 'folder'] as const
     type IconType = typeof ICON_TYPES[number]
 
+    // ── Unified facility bounding box encompassing ALL team areas ──
+    const allX = Math.min(...layouts.map(a => a.x)) - 20
+    const allY = Math.min(...layouts.map(a => a.y)) - 20
+    const allRight = Math.max(...layouts.map(a => a.x + a.width)) + 20
+    const allBottom = Math.max(...layouts.map(a => a.y + a.height)) + 20
+
+    // ONE facility outline around all teams
+    g.fillStyle(COLOR_WALL)
+    g.fillRoundedRect(allX - 6, allY - 6, (allRight - allX) + 12, (allBottom - allY) + 12, 8)
+    g.fillStyle(activeTheme.bg, 0.15)
+    g.fillRoundedRect(allX, allY, allRight - allX, allBottom - allY, 5)
+
+    // ONE unified floor spanning the entire facility
+    this.unifiedFloor.drawFloor(allX, allY, allRight - allX, allBottom - allY, 0x3b82f6)
+
+    // Windows along the top wall of the facility (for atmosphere glint effect)
+    const atmosphere = this.host.getAtmosphere()
+    const facilityWidth = allRight - allX
+    const winCount = Math.max(1, Math.floor(facilityWidth / 80))
+    const winSpacing = facilityWidth / (winCount + 1)
+    for (let wi = 0; wi < winCount; wi++) {
+      atmosphere.windowPositions.push({
+        x: allX + winSpacing * (wi + 1) - 8,
+        y: allY - 4,
+        w: 16,
+        h: 6,
+      })
+    }
+
     for (const area of layouts) {
       const color = this.host.getTeamColor(area.teamKey)
       const { x, y, width, height } = area
 
-      // Building walls + floor per team (each team is its own "building")
-      const BWALL = 4
-      g.fillStyle(COLOR_WALL)
-      g.fillRoundedRect(x - 6, y - 6, width + 12, height + 12, 6)
-      g.fillStyle(activeTheme.bg)
-      g.fillRoundedRect(x - 6 + BWALL, y - 6 + BWALL, width + 12 - BWALL * 2, height + 12 - BWALL * 2, 3)
-
-      // Windows along the top wall of each team building (for atmosphere glint effect)
-      const atmosphere = this.host.getAtmosphere()
-      const winCount = Math.max(1, Math.floor(width / 80))
-      const winSpacing = width / (winCount + 1)
-      for (let wi = 0; wi < winCount; wi++) {
-        atmosphere.windowPositions.push({
-          x: x + winSpacing * (wi + 1) - 8,
-          y: y - 4,
-          w: 16,
-          h: 6,
-        })
-      }
-
-      // Ceiling light per team building
+      // Ceiling light per team zone
       const lightX = x + width / 2
       const lightY = y + BANNER_H + 10
       const lightGfx = this.scene.add.graphics()
@@ -504,14 +519,7 @@ export class OfficeBackground {
       const lightContainer = this.scene.add.container(lightX, lightY, [lightGfx, lightMid, lightCenter]).setDepth(-1).setAlpha(0.5)
       atmosphere.ceilingLights.push(lightContainer)
 
-      // Lab hex tile floor for the team area interior
-      this.unifiedFloor.drawFloor(
-        x - 6 + BWALL, y - 6 + BWALL + BANNER_H,
-        width + 12 - BWALL * 2, height + 12 - BWALL * 2 - BANNER_H,
-        color,
-      )
-
-      // Gradient-style team overlay on top of the building floor
+      // Gradient-style team overlay on top of the unified floor
       g.fillStyle(color, 0.04)
       g.fillRoundedRect(x, y, width, height, 10)
       g.fillStyle(color, 0.06)
@@ -642,6 +650,104 @@ export class OfficeBackground {
       badgeTextObj.setPosition(badgeX + badgePadX, badgeY + badgePadY)
       this.teamAreaLabels.push(badgeTextObj)
     }
+
+    // ── Place pipe & cable sprites between rooms inside team areas ──
+    this.placeTeamPipes(layouts)
+  }
+
+  // ---------------------------------------------------------------------------
+  // placeTeamPipes — lay pipe/cable sprites in corridors between rooms
+  // ---------------------------------------------------------------------------
+
+  private placeTeamPipes(layouts: TeamAreaLayout[]): void {
+    if (!this.scene.textures.exists(SPRITESHEET_KEYS.LAB_PIPES)) return
+
+    const rooms = this.host.getRooms()
+    const PIPE_SCALE = 0.22
+    const PIPE_DEPTH = -2.7  // between unified floor (-3) and room walls (-2)
+    const PIPE_ALPHA = 0.55
+    const CABLE_SCALE = 0.18
+    const CABLE_ALPHA = 0.4
+    const PIPE_SPACING = 45
+
+    // Group rooms by team
+    const teamRooms = new Map<string, Room[]>()
+    for (const room of rooms.values()) {
+      const key = room.teamKey || room.cwd
+      if (!teamRooms.has(key)) teamRooms.set(key, [])
+      teamRooms.get(key)!.push(room)
+    }
+
+    for (const area of layouts) {
+      const areaRooms = teamRooms.get(area.teamKey)
+      if (!areaRooms || areaRooms.length < 2) continue
+
+      const color = this.host.getTeamColor(area.teamKey)
+
+      // Connect adjacent rooms with horizontal pipe runs
+      // Sort rooms by position to find neighbors
+      const sorted = [...areaRooms].sort((a, b) => {
+        const rowDiff = Math.round(a.y / 50) - Math.round(b.y / 50)
+        return rowDiff !== 0 ? rowDiff : a.x - b.x
+      })
+
+      for (let i = 0; i < sorted.length - 1; i++) {
+        const roomA = sorted[i]
+        const roomB = sorted[i + 1]
+
+        // Only connect rooms on the same approximate row
+        if (Math.abs(roomA.y - roomB.y) > roomA.height) continue
+
+        const gapX1 = roomA.x + roomA.width / 2
+        const gapX2 = roomB.x - roomB.width / 2
+        const gapLen = gapX2 - gapX1
+        if (gapLen < 10) continue
+
+        const midY = (roomA.y + roomB.y) / 2
+
+        // Horizontal pipe run through the gap
+        const numPipes = Math.max(1, Math.floor(gapLen / PIPE_SPACING))
+        for (let pi = 0; pi < numPipes; pi++) {
+          const t = (pi + 0.5) / numPipes
+          const px = gapX1 + gapLen * t
+          const pipe = this.scene.add.sprite(px, midY, SPRITESHEET_KEYS.LAB_PIPES, PIPE_FRAMES.HORIZ_ARROW)
+            .setScale(PIPE_SCALE)
+            .setAlpha(PIPE_ALPHA)
+            .setDepth(PIPE_DEPTH)
+            .setTint(color)
+          this.teamPipeSprites.push(pipe)
+        }
+
+        // Cable run offset below the pipe
+        if (this.scene.textures.exists(SPRITESHEET_KEYS.LAB_CABLES)) {
+          const cableCount = Math.max(1, Math.floor(gapLen / (PIPE_SPACING * 1.3)))
+          for (let ci = 0; ci < cableCount; ci++) {
+            const t = (ci + 0.5) / cableCount
+            const cx = gapX1 + gapLen * t
+            const cable = this.scene.add.sprite(cx, midY + 8, SPRITESHEET_KEYS.LAB_CABLES, CABLE_FRAMES.HORIZ_STRAIGHT)
+              .setScale(CABLE_SCALE)
+              .setAlpha(CABLE_ALPHA)
+              .setDepth(PIPE_DEPTH - 0.1)
+            this.teamPipeSprites.push(cable)
+          }
+        }
+
+        // Coupling flanges at the ends
+        const couplingL = this.scene.add.sprite(gapX1 + 4, midY, SPRITESHEET_KEYS.LAB_PIPES, PIPE_FRAMES.COUPLING_HORIZ)
+          .setScale(PIPE_SCALE * 0.8)
+          .setAlpha(PIPE_ALPHA * 0.7)
+          .setDepth(PIPE_DEPTH + 0.1)
+          .setTint(color)
+        this.teamPipeSprites.push(couplingL)
+
+        const couplingR = this.scene.add.sprite(gapX2 - 4, midY, SPRITESHEET_KEYS.LAB_PIPES, PIPE_FRAMES.COUPLING_HORIZ)
+          .setScale(PIPE_SCALE * 0.8)
+          .setAlpha(PIPE_ALPHA * 0.7)
+          .setDepth(PIPE_DEPTH + 0.1)
+          .setTint(color)
+        this.teamPipeSprites.push(couplingR)
+      }
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -749,6 +855,8 @@ export class OfficeBackground {
   destroy(): void {
     for (const label of this.teamAreaLabels) label.destroy()
     this.teamAreaLabels = []
+    for (const s of this.teamPipeSprites) s.destroy()
+    this.teamPipeSprites = []
     this.teamAreaGraphics?.destroy()
     this.teamAreaGraphics = null
 
