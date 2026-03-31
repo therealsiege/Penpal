@@ -133,234 +133,18 @@ export class OfficeCorridors {
       const JUNC_W = 8
       const CHEVRON_GAP = 40
 
-      // ── Sidewalk strip (wider paved area BEHIND the pipe) ──
-      const sidewalkW = HALL_H * 3
-      const swX = minX - LEG_W / 2
-      const swY = hallY - sidewalkW / 2
-      const swW = hallWidth + LEG_W
-      // Pavement fill
-      g.fillStyle(0x1e2836, 0.5)
-      g.fillRect(swX, swY, swW, sidewalkW)
-      // Curb edges along both long sides of sidewalk
-      g.lineStyle(1, 0x3a4a5a, 0.4)
-      g.beginPath()
-      g.moveTo(swX, swY)
-      g.lineTo(swX + swW, swY)
-      g.strokePath()
-      g.beginPath()
-      g.moveTo(swX, swY + sidewalkW)
-      g.lineTo(swX + swW, swY + sidewalkW)
-      g.strokePath()
+      // Lab mode: no sidewalk/pipe visuals — hazard tape + pipe sprites handle corridors.
+      // Only keep the data segment and subtle guide elements.
 
-      g.fillStyle(HALL_FLOOR, 0.72)
-      g.fillRect(minX - LEG_W / 2, hallY - HALL_H / 2, hallWidth + LEG_W, HALL_H)
-
-      g.fillStyle(HALL_STRIPE, 0.85)
-      g.fillRect(minX - LEG_W / 2, hallY - 1, hallWidth + LEG_W, 2)
-
-      g.fillStyle(HALL_EDGE, 0.9)
-      g.fillRect(minX - LEG_W / 2, hallY - HALL_H / 2, hallWidth + LEG_W, 1)
-      g.fillRect(minX - LEG_W / 2, hallY + HALL_H / 2 - 1, hallWidth + LEG_W, 1)
-
-      // ── Industrial pipe shading — 3D cylindrical effect ──
-      // Highlight stripe along top edge
-      g.fillStyle(0x5a6a7a, 0.25)
-      g.fillRect(minX - LEG_W / 2, hallY - HALL_H / 2 + 1, hallWidth + LEG_W, 3)
-      // Darker bottom edge
-      g.fillStyle(activeTheme.bg, 0.3)
-      g.fillRect(minX - LEG_W / 2, hallY + HALL_H / 2 - 4, hallWidth + LEG_W, 3)
-
-      // ── Rivets/bolts along main corridor runs (sprite-based) ──
-      for (let rx = minX; rx <= maxX; rx += 50) {
-        const rivetTop = this.scene.add.sprite(rx, hallY - HALL_H / 2 + 3, SPRITESHEET_KEYS.GAME_ICONS, ICON_FRAMES.CIRCLE_GREY)
-          .setScale(0.16).setAlpha(0.3).setDepth(-0.5).setTint(0x4a5a6a)
-        this.junctionSprites.push(rivetTop)
-        const rivetBot = this.scene.add.sprite(rx, hallY + HALL_H / 2 - 3, SPRITESHEET_KEYS.GAME_ICONS, ICON_FRAMES.CIRCLE_GREY)
-          .setScale(0.16).setAlpha(0.3).setDepth(-0.5).setTint(0x4a5a6a)
-        this.junctionSprites.push(rivetBot)
-      }
-
-      const chevronSize = 3
-      g.lineStyle(1, lineColor, 0.12)
-      const numChevrons = Math.floor(hallWidth / CHEVRON_GAP)
-      for (let ci = 0; ci <= numChevrons; ci++) {
-        const cx = minX + ci * CHEVRON_GAP
-
-        const uyMid = hallY - 3.5
-        g.beginPath()
-        g.moveTo(cx - chevronSize, uyMid - chevronSize)
-        g.lineTo(cx, uyMid)
-        g.lineTo(cx - chevronSize, uyMid + chevronSize)
-        g.strokePath()
-
-        const lyMid = hallY + 3.5
-        g.beginPath()
-        g.moveTo(cx + chevronSize, lyMid - chevronSize)
-        g.lineTo(cx, lyMid)
-        g.lineTo(cx + chevronSize, lyMid + chevronSize)
-        g.strokePath()
-      }
+      // Lab mode: skip old office-style rivets, chevrons, sidewalks, vertical legs.
+      // Only build corridor segment data for nav-mesh + hallway flow dots.
 
       for (const room of rowRooms) {
         const doorY = this.host.getRoomDoorY(room) - 4
-        const legTop = Math.min(doorY, hallY - HALL_H / 2)
-        const legBot = Math.max(doorY, hallY + HALL_H / 2)
-
-        if (legBot > legTop) {
-          // ── Vertical leg walkway strip ──
-          const vLegW = LEG_W * 3
-          g.fillStyle(0x1e2836, 0.5)
-          g.fillRect(room.x - vLegW / 2, legTop, vLegW, legBot - legTop)
-          // Curb edges
-          g.lineStyle(1, 0x3a4a5a, 0.4)
-          g.beginPath()
-          g.moveTo(room.x - vLegW / 2, legTop)
-          g.lineTo(room.x - vLegW / 2, legBot)
-          g.strokePath()
-          g.beginPath()
-          g.moveTo(room.x + vLegW / 2, legTop)
-          g.lineTo(room.x + vLegW / 2, legBot)
-          g.strokePath()
-
-          g.fillStyle(HALL_FLOOR, 0.72)
-          g.fillRect(room.x - LEG_W / 2, legTop, LEG_W, legBot - legTop)
-          g.fillStyle(HALL_EDGE, 0.9)
-          g.fillRect(room.x - LEG_W / 2, legTop, 1, legBot - legTop)
-          g.fillRect(room.x + LEG_W / 2 - 1, legTop, 1, legBot - legTop)
-          // ── Vertical leg pipe shading ──
-          g.fillStyle(0x5a6a7a, 0.25)
-          g.fillRect(room.x - LEG_W / 2 + 1, legTop, 3, legBot - legTop)
-          g.fillStyle(activeTheme.bg, 0.3)
-          g.fillRect(room.x + LEG_W / 2 - 4, legTop, 3, legBot - legTop)
-          // Rivets along vertical legs (sprite-based)
-          for (let ry = legTop; ry <= legBot; ry += 50) {
-            const rivetL = this.scene.add.sprite(room.x - LEG_W / 2 + 3, ry, SPRITESHEET_KEYS.GAME_ICONS, ICON_FRAMES.CIRCLE_GREY)
-              .setScale(0.16).setAlpha(0.3).setDepth(-0.5).setTint(0x4a5a6a)
-            this.junctionSprites.push(rivetL)
-            const rivetR = this.scene.add.sprite(room.x + LEG_W / 2 - 3, ry, SPRITESHEET_KEYS.GAME_ICONS, ICON_FRAMES.CIRCLE_GREY)
-              .setScale(0.16).setAlpha(0.3).setDepth(-0.5).setTint(0x4a5a6a)
-            this.junctionSprites.push(rivetR)
-          }
-        }
-
-        // ── Junction pad — brighter rectangle at intersection ──
-        g.fillStyle(0x2a3444, 0.35)
-        g.fillRect(room.x - 8, hallY - 8, 16, 16)
-
-        // ── Directional floor chevrons pointing from corridor toward room door ──
-        const chevDir = doorSide === 'top' ? -1 : 1
-        const chevBaseY = doorSide === 'top' ? hallY - HALL_H / 2 : hallY + HALL_H / 2
-        g.lineStyle(1, lineColor, 0.15)
-        for (let ci = 0; ci < 3; ci++) {
-          const cy = chevBaseY + chevDir * (4 + ci * 8)
-          const cSize = 3
-          g.beginPath()
-          g.moveTo(room.x - cSize, cy - chevDir * cSize)
-          g.lineTo(room.x, cy)
-          g.lineTo(room.x + cSize, cy - chevDir * cSize)
-          g.strokePath()
-        }
-
-        g.fillStyle(HALL_FLOOR, 0.88)
-        g.fillRect(room.x - JUNC_W / 2, hallY - HALL_H / 2, JUNC_W, HALL_H)
-        g.fillStyle(HALL_EDGE, 0.9)
-        g.fillRect(room.x - JUNC_W / 2, hallY - HALL_H / 2, JUNC_W, 1)
-        g.fillRect(room.x - JUNC_W / 2, hallY + HALL_H / 2 - 1, JUNC_W, 1)
-
-        // ── Pipe collar/flange at junction ──
-        g.fillStyle(0x4a5a6a, 0.3)
-        g.fillRect(room.x - (JUNC_W + 8) / 2, hallY - 3, JUNC_W + 8, 6)
-
-        // Junction status dot — sprite-based green circle instead of Graphics fillCircle
-        const juncDot = this.scene.add.sprite(room.x, hallY, SPRITESHEET_KEYS.GAME_ICONS, ICON_FRAMES.CIRCLE_GREEN)
-          .setScale(0.22)
-          .setAlpha(0.25)
-          .setDepth(-0.5)
-        this.junctionSprites.push(juncDot)
-
-        // Directional arrow sprite pointing from corridor toward the room door
-        const arrowY = doorSide === 'top'
-          ? hallY - HALL_H / 2 - 6
-          : hallY + HALL_H / 2 + 6
-        const arrowAngle = doorSide === 'top' ? -90 : 90
-        const arrowSprite = this.scene.add.sprite(room.x, arrowY, SPRITESHEET_KEYS.GAME_ICONS, ICON_FRAMES.ARROW_EAST)
-          .setScale(0.28)
-          .setAlpha(0.18)
-          .setAngle(arrowAngle)
-          .setDepth(-0.5)
-        this.junctionSprites.push(arrowSprite)
-
+        // Only push corridor segment data — no visual elements
         this.corridorSegments.push({ x1: room.x, y1: doorY, x2: room.x, y2: hallY, color: lineColor })
-
-        // ── Lab tileset junction tile at vertical-leg / hallway intersection ──
-        if (this.scene.textures.exists(SPRITESHEET_KEYS.LAB_MAIN_TILESET)) {
-          const crossFrame = (rowRooms.indexOf(room) % 2 === 0)
-            ? LAB_TILESET_FRAMES.CROSS_A
-            : LAB_TILESET_FRAMES.CROSS_B
-          const juncTile = this.scene.add.sprite(
-            room.x, hallY,
-            SPRITESHEET_KEYS.LAB_MAIN_TILESET, crossFrame,
-          )
-            .setScale(0.20)
-            .setAlpha(0.55)
-            .setDepth(-3.5)
-          this.pipeSprites.push(juncTile)
-        }
-
-        const rawLabel = room.label || room.cwd.split('/').pop() || '?'
-        const signLabel = rawLabel.length > 6 ? rawLabel.slice(0, 5) + '.' : rawLabel
-        const signCharW = 4
-        const signW = signLabel.length * signCharW + 6
-        const signH = 8
-        const signX = room.x - signW / 2
-        const signY = hallY - HALL_H / 2 - signH - 2
-
-        g.fillStyle(activeTheme.bg, 0.82)
-        g.fillRect(signX, signY, signW, signH)
-        g.lineStyle(1, lineColor, 0.28)
-        g.strokeRect(signX, signY, signW, signH)
-
-        const signText = this.scene.add.text(room.x, signY + signH / 2, signLabel, {
-          fontSize: '5px',
-          fontFamily: 'monospace',
-          color: '#8a96a4',
-          resolution: 2,
-        })
-        signText.setOrigin(0.5, 0.5)
-        signText.setDepth(-1)
-        this.corridorSignTexts.push(signText)
       }
 
-      // ── Lab tileset floor texture along the horizontal hallway run ──
-      if (this.scene.textures.exists(SPRITESHEET_KEYS.LAB_MAIN_TILESET)) {
-        const TILE_SPACING = 45
-        const tileCount = Math.max(1, Math.floor(hallWidth / TILE_SPACING))
-        for (let ti = 0; ti < tileCount; ti++) {
-          const t = (ti + 0.5) / tileCount
-          const tx = minX + hallWidth * t
-          const floorTile = this.scene.add.sprite(
-            tx, hallY,
-            SPRITESHEET_KEYS.LAB_MAIN_TILESET, LAB_TILESET_FRAMES.DARK_FILL,
-          )
-            .setScale(0.15)
-            .setAlpha(0.5)
-            .setDepth(-4)
-          this.pipeSprites.push(floorTile)
-        }
-
-        // Central junction marker at hallway midpoint
-        if (hallWidth > 60) {
-          const midX = minX + hallWidth / 2
-          const centerTile = this.scene.add.sprite(
-            midX, hallY,
-            SPRITESHEET_KEYS.LAB_MAIN_TILESET, LAB_TILESET_FRAMES.CROSS_A,
-          )
-            .setScale(0.22)
-            .setAlpha(0.65)
-            .setDepth(-3)
-          this.pipeSprites.push(centerTile)
-        }
-      }
     }
 
     // Inter-team corridors: connect adjacent team buildings on the same visual row
@@ -392,26 +176,7 @@ export class OfficeCorridors {
           )
           if (!alreadyConnected) {
             this.corridorSegments.push({ x1: fromX, y1: hallY, x2: toX, y2: hallY, color: activeTheme.wall })
-            const interW = toX - fromX
-            // ── Inter-team sidewalk strip ──
-            const interSWH = 8 * 3
-            g.fillStyle(0x1e2836, 0.5)
-            g.fillRect(fromX, hallY - interSWH / 2, interW, interSWH)
-            // Curb edges
-            g.lineStyle(1, 0x3a4a5a, 0.4)
-            g.beginPath()
-            g.moveTo(fromX, hallY - interSWH / 2)
-            g.lineTo(toX, hallY - interSWH / 2)
-            g.strokePath()
-            g.beginPath()
-            g.moveTo(fromX, hallY + interSWH / 2)
-            g.lineTo(toX, hallY + interSWH / 2)
-            g.strokePath()
-            // Draw the connector visually (pipe on top)
-            g.fillStyle(0x0f1520, 0.5)
-            g.fillRect(fromX, hallY - 4, interW, 8)
-            g.fillStyle(0x1a2535, 0.6)
-            g.fillRect(fromX, hallY - 1, interW, 2)
+            // Lab mode: no visual sidewalk/pipe — only segment data
           }
         }
         rowCenters.push({
@@ -443,21 +208,7 @@ export class OfficeCorridors {
       const lower = rowCenters[i + 1]
       const connX = Math.min(upper.minX, lower.minX)
       this.corridorSegments.push({ x1: connX, y1: upper.y, x2: connX, y2: lower.y, color: activeTheme.wall })
-      const connLen = lower.y - upper.y
-      // Sidewalk strip
-      const VERT_WALK_W = 24
-      g.fillStyle(0x1e2836, 0.7)
-      g.fillRect(connX - VERT_WALK_W / 2, upper.y, VERT_WALK_W, connLen)
-      // Curb edges
-      g.lineStyle(2, 0x3a4a5a, 0.6)
-      g.lineBetween(connX - VERT_WALK_W / 2, upper.y, connX - VERT_WALK_W / 2, lower.y)
-      g.lineBetween(connX + VERT_WALK_W / 2, upper.y, connX + VERT_WALK_W / 2, lower.y)
-      // Pipe on top
-      g.fillStyle(C_HALL_FLOOR, 0.5)
-      g.fillRect(connX - C_LEG_W / 2, upper.y, C_LEG_W, connLen)
-      g.fillStyle(C_HALL_EDGE, 0.9)
-      g.fillRect(connX - C_LEG_W / 2, upper.y, 1, connLen)
-      g.fillRect(connX + C_LEG_W / 2 - 1, upper.y, 1, connLen)
+      // Lab mode: segment data only — no visual sidewalk/pipe
     }
 
     // Connect service row (cafe) down to the first agent office row
@@ -469,56 +220,12 @@ export class OfficeCorridors {
 
       // Vertical corridor from cafe to agent row
       this.corridorSegments.push({ x1: connX, y1: serviceBottomY, x2: connX, y2: nearestRow.y, color: activeTheme.wall })
-      const cafeConnLen = nearestRow.y - serviceBottomY
-      if (cafeConnLen > 0) {
-        // Sidewalk strip
-        const CAFE_WALK_W = 32
-        g.fillStyle(0x1e2836, 0.75)
-        g.fillRect(connX - CAFE_WALK_W / 2, serviceBottomY, CAFE_WALK_W, cafeConnLen)
-        // Curb edges
-        g.lineStyle(2, 0x3a4a5a, 0.6)
-        g.lineBetween(connX - CAFE_WALK_W / 2, serviceBottomY, connX - CAFE_WALK_W / 2, nearestRow.y)
-        g.lineBetween(connX + CAFE_WALK_W / 2, serviceBottomY, connX + CAFE_WALK_W / 2, nearestRow.y)
-        // Pipe on top
-        g.fillStyle(C_HALL_FLOOR, 0.5)
-        g.fillRect(connX - C_LEG_W / 2, serviceBottomY, C_LEG_W, cafeConnLen)
-        g.fillStyle(C_HALL_EDGE, 0.9)
-        g.fillRect(connX - C_LEG_W / 2, serviceBottomY, 1, cafeConnLen)
-        g.fillRect(connX + C_LEG_W / 2 - 1, serviceBottomY, 1, cafeConnLen)
-        // Directional arrows pointing from cafe toward offices
-        g.lineStyle(2, 0x00ff88, 0.25)
-        for (let ay = serviceBottomY + 20; ay < nearestRow.y - 10; ay += 28) {
-          g.lineBetween(connX - 4, ay, connX, ay + 6)
-          g.lineBetween(connX + 4, ay, connX, ay + 6)
-        }
-        // "TO CAFE" label midway along the connector
-        const labelY = serviceBottomY + cafeConnLen / 2
-        const cafeLabel = this.scene.add.text(connX, labelY, '☕ CAFE', {
-          fontSize: '7px', fontFamily: 'monospace', color: '#00ff88', resolution: 2,
-        }).setOrigin(0.5).setAlpha(0.3).setDepth(-0.5)
-        this.corridorSignTexts.push(cafeLabel)
-      }
+      // Lab mode: segment data only — no visual sidewalk/pipe/arrows
 
       // Horizontal leg to connect to the nearest team
       if (Math.abs(connX - nearestRow.minX) > 10) {
         this.corridorSegments.push({ x1: connX, y1: nearestRow.y, x2: nearestRow.minX, y2: nearestRow.y, color: activeTheme.wall })
-        const hx1 = Math.min(connX, nearestRow.minX)
-        const hx2 = Math.max(connX, nearestRow.minX)
-        const hLen = hx2 - hx1
-        const HLEG_WALK_W = 24
-        // Sidewalk
-        g.fillStyle(0x1e2836, 0.65)
-        g.fillRect(hx1, nearestRow.y - HLEG_WALK_W / 2, hLen, HLEG_WALK_W)
-        // Curb edges
-        g.lineStyle(1, 0x3a4a5a, 0.4)
-        g.lineBetween(hx1, nearestRow.y - HLEG_WALK_W / 2, hx2, nearestRow.y - HLEG_WALK_W / 2)
-        g.lineBetween(hx1, nearestRow.y + HLEG_WALK_W / 2, hx2, nearestRow.y + HLEG_WALK_W / 2)
-        // Pipe on top
-        g.fillStyle(C_HALL_FLOOR, 0.5)
-        g.fillRect(hx1, nearestRow.y - C_HALL_H / 2, hLen, C_HALL_H)
-        g.fillStyle(C_HALL_EDGE, 0.9)
-        g.fillRect(hx1, nearestRow.y - C_HALL_H / 2, hLen, 1)
-        g.fillRect(hx1, nearestRow.y + C_HALL_H / 2 - 1, hLen, 1)
+        // Lab mode: segment data only
       }
     }
 

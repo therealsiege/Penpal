@@ -13,7 +13,7 @@ import { LAB_TILE_SIZE, LAB_EQUIP_ZONE_H } from './office-constants'
 
 export const LAB_TILE_SCALE = 0.50
 export const LAB_CELL_STEP = LAB_TILE_SIZE * LAB_TILE_SCALE  // 64px
-export const LAB_MAX_PROPS_PER_ROOM = 40
+export const LAB_MAX_PROPS_PER_ROOM = 80
 export const LAB_GLOW_COLOR = 0x00e5ff
 export const LAB_GLOW_MIN_SPACING = 2  // cells between glow lights
 
@@ -47,6 +47,7 @@ export interface SpritePlacement {
   alpha: number
   depth: number
   spritesheet: 'lab-props' | 'lab-main-tileset'
+  tint?: number  // optional color tint
 }
 
 export interface GlowPlacement {
@@ -164,43 +165,48 @@ export class CellGrid {
 // ---------------------------------------------------------------------------
 
 interface StationGroup {
-  base: { frame: number; scale: number }
-  overlays: Array<{ frame: number; scale: number; dx: number; dy: number; depth: number }>
+  base: { frame: number; scale: number; tint?: number }
+  overlays: Array<{ frame: number; scale: number; dx: number; dy: number; depth: number; tint?: number }>
   widthCells: number
   heightCells: number
   validZones: PlacementZone[]
   depth: number
 }
 
-// Console station: blank desk + screen overlay + small items
+// Scales are derived from original PNG dimensions so props look their intended
+// size relative to the 128px (rendered 64px) tile grid.
+// Formula: originalMaxDimension * 0.5 / 64. This restores natural proportions.
+// console_example_long (436px) → 3.0, large_tank (365px) → 2.5, generator (243px) → 2.0, etc.
+
+// Console station: blank desk + screen overlay + small items on top
 const CONSOLE_STATIONS: StationGroup[] = [
-  // Long console with screens and controls
+  // Long console with screens and controls — 436px original → scale 3.0
   {
-    base: { frame: LP.BLANK_CONSOLE_LONG, scale: 1.80 },
+    base: { frame: LP.BLANK_CONSOLE_LONG, scale: 3.0 },
     overlays: [
-      { frame: LP.CONSOLE_SCREEN_WAVE_01, scale: 0.40, dx: -20, dy: -8, depth: -1.3 },
-      { frame: LP.CONSOLE_SCREEN_LINES_01, scale: 0.35, dx: 15, dy: -8, depth: -1.3 },
-      { frame: LP.NUMB_PAD, scale: 0.30, dx: 30, dy: 5, depth: -1.3 },
-      { frame: LP.STOP_BUTTON, scale: 0.30, dx: -35, dy: 5, depth: -1.3 },
+      { frame: LP.CONSOLE_SCREEN_WAVE_01, scale: 1.2, dx: -40, dy: -12, depth: -1.3 },
+      { frame: LP.CONSOLE_SCREEN_LINES_01, scale: 1.1, dx: 25, dy: -12, depth: -1.3 },
+      { frame: LP.NUMB_PAD, scale: 0.8, dx: 55, dy: 8, depth: -1.3 },
+      { frame: LP.STOP_BUTTON, scale: 0.7, dx: -60, dy: 8, depth: -1.3 },
     ],
-    widthCells: 3, heightCells: 1, validZones: ['top-wall', 'bottom-wall'], depth: -1.5,
+    widthCells: 4, heightCells: 2, validZones: ['top-wall', 'bottom-wall'], depth: -1.5,
   },
-  // Short console with wave screen
+  // Short console with wave screen — ~250px original → scale 2.0
   {
-    base: { frame: LP.BLANK_CONSOLE_SHORT, scale: 1.50 },
+    base: { frame: LP.BLANK_CONSOLE_SHORT, scale: 2.0 },
     overlays: [
-      { frame: LP.CONSOLE_SCREEN_WAVE_03, scale: 0.35, dx: 0, dy: -5, depth: -1.3 },
-      { frame: LP.DIAL, scale: 0.25, dx: -12, dy: 8, depth: -1.3 },
-      { frame: LP.LED_ON, scale: 0.20, dx: 12, dy: 8, depth: -1.3 },
+      { frame: LP.CONSOLE_SCREEN_WAVE_03, scale: 1.0, dx: 0, dy: -6, depth: -1.3 },
+      { frame: LP.DIAL, scale: 0.7, dx: -16, dy: 12, depth: -1.3 },
+      { frame: LP.LED_ON, scale: 0.5, dx: 16, dy: 12, depth: -1.3 },
     ],
-    widthCells: 2, heightCells: 1, validZones: ['top-wall', 'left-wall', 'right-wall'], depth: -1.5,
+    widthCells: 2, heightCells: 2, validZones: ['top-wall', 'left-wall', 'right-wall'], depth: -1.5,
   },
-  // Corner console
+  // Corner console — ~200px original → scale 2.0
   {
-    base: { frame: LP.BLANK_CONSOLE_CORNER, scale: 1.50 },
+    base: { frame: LP.BLANK_CONSOLE_CORNER, scale: 2.0 },
     overlays: [
-      { frame: LP.CONSOLE_SCREEN_LINES_03, scale: 0.30, dx: 0, dy: -3, depth: -1.3 },
-      { frame: LP.JOYSTICK, scale: 0.25, dx: -8, dy: 10, depth: -1.3 },
+      { frame: LP.CONSOLE_SCREEN_LINES_03, scale: 0.9, dx: 0, dy: -5, depth: -1.3 },
+      { frame: LP.JOYSTICK, scale: 0.7, dx: -10, dy: 14, depth: -1.3 },
     ],
     widthCells: 2, heightCells: 2, validZones: ['corner'], depth: -1.5,
   },
@@ -208,147 +214,253 @@ const CONSOLE_STATIONS: StationGroup[] = [
 
 // Lab bench station: desk surface + glassware on top
 const LAB_BENCH_STATIONS: StationGroup[] = [
-  // Long bench with beakers and microscope
+  // Long desk (266px original) → scale 2.5, with beakers ON TOP
   {
-    base: { frame: LP.DESK_TOP_LONG, scale: 1.50 },
+    base: { frame: LP.DESK_TOP_LONG, scale: 2.5 },
     overlays: [
-      { frame: LP.BEAKER, scale: 0.30, dx: -18, dy: -3, depth: -1.3 },
-      { frame: LP.CONICAL_BEAKER, scale: 0.30, dx: -5, dy: -3, depth: -1.3 },
-      { frame: LP.TEST_TUBE_HOLDER, scale: 0.30, dx: 12, dy: -3, depth: -1.3 },
-      { frame: LP.PETRI_DISH, scale: 0.25, dx: 25, dy: 0, depth: -1.3 },
+      { frame: LP.BEAKER, scale: 0.8, dx: -30, dy: -8, depth: -1.3 },
+      { frame: LP.CONICAL_BEAKER, scale: 0.8, dx: 5, dy: -8, depth: -1.3 },
+      { frame: LP.TEST_TUBE_HOLDER, scale: 0.8, dx: 35, dy: -8, depth: -1.3 },
+      { frame: LP.MICROSCOPE, scale: 1.0, dx: -55, dy: -10, depth: -1.3 },
     ],
-    widthCells: 2, heightCells: 1, validZones: ['top-wall', 'bottom-wall'], depth: -1.5,
+    widthCells: 4, heightCells: 2, validZones: ['top-wall', 'bottom-wall'], depth: -1.5,
   },
-  // Short bench with sink items
+  // Short desk — scale 1.8
   {
-    base: { frame: LP.DESK_TOP_SHORT, scale: 1.20 },
+    base: { frame: LP.DESK_TOP_SHORT, scale: 1.8 },
     overlays: [
-      { frame: LP.CUP, scale: 0.25, dx: -8, dy: -2, depth: -1.3 },
-      { frame: LP.TUBE, scale: 0.25, dx: 8, dy: -2, depth: -1.3 },
+      { frame: LP.CUP, scale: 0.7, dx: -10, dy: -5, depth: -1.3 },
+      { frame: LP.TUBE, scale: 0.6, dx: 10, dy: -5, depth: -1.3 },
     ],
-    widthCells: 1, heightCells: 1, validZones: ['top-wall', 'left-wall', 'right-wall'], depth: -1.5,
+    widthCells: 2, heightCells: 1, validZones: ['top-wall', 'left-wall', 'right-wall'], depth: -1.5,
   },
 ]
 
-// Shared wall accent props — small fittings and indicators
+// Keyboard workstation — desk + keyboard + screen + pencil
+const KEYBOARD_STATIONS: StationGroup[] = [
+  {
+    base: { frame: LP.DESK_TOP_LONG, scale: 2.5 },
+    overlays: [
+      { frame: LP.KEYBOARD, scale: 1.0, dx: 0, dy: 5, depth: -1.3 },
+      { frame: LP.CONSOLE_SCREEN_WAVE_02, scale: 1.0, dx: -20, dy: -10, depth: -1.3 },
+      { frame: LP.CONSOLE_SCREEN_LINES_02, scale: 0.9, dx: 25, dy: -10, depth: -1.3 },
+      { frame: LP.PENCIL, scale: 0.5, dx: 45, dy: 5, depth: -1.3 },
+    ],
+    widthCells: 4, heightCells: 2, validZones: ['top-wall', 'bottom-wall'], depth: -1.5,
+  },
+  {
+    base: { frame: LP.DESK_TOP_SHORT, scale: 1.8 },
+    overlays: [
+      { frame: LP.KEYBOARD, scale: 0.8, dx: 0, dy: 4, depth: -1.3 },
+      { frame: LP.CONSOLE_SCREEN_WAVE_04, scale: 0.8, dx: 0, dy: -6, depth: -1.3 },
+    ],
+    widthCells: 2, heightCells: 2, validZones: ['top-wall', 'left-wall', 'right-wall'], depth: -1.5,
+  },
+]
+
+// Fan + housing combo
+const FAN_STATIONS: StationGroup[] = [
+  {
+    base: { frame: LP.FAN_UNIT_HOUSING, scale: 1.8 },
+    overlays: [
+      { frame: LP.FAN_UNIT_FAN, scale: 1.4, dx: 0, dy: 0, depth: -1.3 },
+      { frame: LP.GUAGE_NEEDLE, scale: 0.6, dx: 25, dy: -15, depth: -1.3 },
+    ],
+    widthCells: 2, heightCells: 2, validZones: ['left-wall', 'right-wall', 'bottom-wall'], depth: -1.5,
+  },
+]
+
+// Chemical bench with petri dishes and detailed glassware
+const CHEM_BENCH_STATIONS: StationGroup[] = [
+  {
+    base: { frame: LP.DESK_TOP_LONG, scale: 2.5 },
+    overlays: [
+      { frame: LP.PETRI_DISH, scale: 0.8, dx: -30, dy: -5, depth: -1.3 },
+      { frame: LP.CONICAL_BEAKER, scale: 0.8, dx: 0, dy: -8, depth: -1.3 },
+      { frame: LP.CUP_02, scale: 0.7, dx: 25, dy: -5, depth: -1.3 },
+      { frame: LP.CLIPBOARD_02, scale: 0.6, dx: 45, dy: 2, depth: -1.3 },
+    ],
+    widthCells: 4, heightCells: 2, validZones: ['top-wall', 'bottom-wall'], depth: -1.5,
+  },
+]
+
+// Laser emitter station
+const LASER_STATIONS: StationGroup[] = [
+  {
+    base: { frame: LP.LASER_HEAD, scale: 1.8 },
+    overlays: [
+      { frame: LP.LASER_OUTLET, scale: 1.2, dx: 30, dy: 0, depth: -1.3 },
+      { frame: LP.CONSOLE_LED_ON, scale: 0.7, dx: -20, dy: -10, depth: -1.3 },
+    ],
+    widthCells: 2, heightCells: 2, validZones: ['top-wall', 'center'], depth: -1.5,
+  },
+]
+
+// Tank/containment row — green-tinted tanks along walls
+const TANK_ROW_STATIONS: StationGroup[] = [
+  // Row of 3 tanks — large_tank (365px) → scale 2.5
+  {
+    base: { frame: LP.LARGE_TANK, scale: 2.5, tint: 0x44dd88 },
+    overlays: [
+      { frame: LP.LARGE_TANK, scale: 2.5, dx: 100, dy: 0, depth: -1.4, tint: 0x33cc77 },
+      { frame: LP.LARGE_TANK, scale: 2.5, dx: -100, dy: 0, depth: -1.4, tint: 0x55ee99 },
+      { frame: LP.GUAGE, scale: 0.8, dx: 50, dy: -40, depth: -1.3 },
+    ],
+    widthCells: 5, heightCells: 3, validZones: ['bottom-wall', 'left-wall', 'right-wall'], depth: -1.5,
+  },
+  // Power cells with dome — scale 1.8
+  {
+    base: { frame: LP.POWER_CELL, scale: 1.8, tint: 0x44ddaa },
+    overlays: [
+      { frame: LP.POWER_CELL, scale: 1.8, dx: 70, dy: 0, depth: -1.4, tint: 0x44ddaa },
+      { frame: LP.DOME, scale: 1.5, dx: -50, dy: -6, depth: -1.3, tint: 0x33cc88 },
+    ],
+    widthCells: 3, heightCells: 2, validZones: ['bottom-wall', 'right-wall'], depth: -1.5,
+  },
+]
+
+// Shared wall accent props — scaled up to be visible
 const SHARED_ACCENTS: PropBlueprint[] = [
-  // Warning signs
-  { frame: LP.WARNING_POWER,      widthCells: 1, heightCells: 1, validZones: ['corner'],      scale: 0.55, alpha: 0.92, depth: -1.4 },
-  { frame: LP.WARNING_BIOLOGICAL,  widthCells: 1, heightCells: 1, validZones: ['corner'],      scale: 0.55, alpha: 0.92, depth: -1.4 },
-  { frame: LP.WARNING_STRIPES,     widthCells: 1, heightCells: 1, validZones: ['corner'],      scale: 0.55, alpha: 0.90, depth: -1.4 },
-  { frame: LP.WARNING_DEATH,       widthCells: 1, heightCells: 1, validZones: ['corner'],      scale: 0.55, alpha: 0.90, depth: -1.4 },
-  { frame: LP.WARNING_WARNING,     widthCells: 1, heightCells: 1, validZones: ['corner'],      scale: 0.55, alpha: 0.90, depth: -1.4 },
-  // Wall fittings
-  { frame: LP.WALL_LIGHT,          widthCells: 1, heightCells: 1, validZones: ['left-wall', 'right-wall'], scale: 0.45, alpha: 0.92, depth: -1.3 },
-  { frame: LP.VENT_SLATS,          widthCells: 1, heightCells: 1, validZones: ['bottom-wall', 'top-wall'], scale: 0.55, alpha: 0.88, depth: -1.5 },
-  { frame: LP.VENT,                widthCells: 1, heightCells: 1, validZones: ['left-wall', 'right-wall'], scale: 0.50, alpha: 0.88, depth: -1.5 },
-  { frame: LP.SPEAKER,             widthCells: 1, heightCells: 1, validZones: ['corner'],      scale: 0.40, alpha: 0.85, depth: -1.5 },
-  { frame: LP.SPEAKER_02,          widthCells: 1, heightCells: 1, validZones: ['corner'],      scale: 0.40, alpha: 0.85, depth: -1.5 },
-  { frame: LP.RECTANGLE_PANEL,     widthCells: 1, heightCells: 1, validZones: ['left-wall', 'right-wall'], scale: 0.50, alpha: 0.88, depth: -1.4 },
-  { frame: LP.SMALL_RECTANGLE_PANEL, widthCells: 1, heightCells: 1, validZones: ['left-wall', 'right-wall'], scale: 0.40, alpha: 0.88, depth: -1.4 },
-  { frame: LP.OCTAGONAL_PANEL,     widthCells: 1, heightCells: 1, validZones: ['left-wall', 'right-wall'], scale: 0.50, alpha: 0.88, depth: -1.4 },
-  { frame: LP.CIRCULAR_PANEL,      widthCells: 1, heightCells: 1, validZones: ['left-wall'],   scale: 0.50, alpha: 0.88, depth: -1.4 },
+  // Warning signs — visible on walls
+  { frame: LP.WARNING_POWER,      widthCells: 1, heightCells: 1, validZones: ['corner'],      scale: 1.0, alpha: 0.92, depth: -1.4 },
+  { frame: LP.WARNING_BIOLOGICAL,  widthCells: 1, heightCells: 1, validZones: ['corner'],      scale: 1.0, alpha: 0.92, depth: -1.4 },
+  { frame: LP.WARNING_STRIPES,     widthCells: 1, heightCells: 1, validZones: ['corner'],      scale: 1.0, alpha: 0.90, depth: -1.4 },
+  { frame: LP.WARNING_DEATH,       widthCells: 1, heightCells: 1, validZones: ['corner'],      scale: 1.0, alpha: 0.90, depth: -1.4 },
+  { frame: LP.WARNING_WARNING,     widthCells: 1, heightCells: 1, validZones: ['corner'],      scale: 1.0, alpha: 0.90, depth: -1.4 },
+  // Wall fittings — properly sized
+  { frame: LP.WALL_LIGHT,          widthCells: 1, heightCells: 1, validZones: ['left-wall', 'right-wall'], scale: 0.8, alpha: 0.92, depth: -1.3 },
+  { frame: LP.VENT_SLATS,          widthCells: 1, heightCells: 1, validZones: ['bottom-wall', 'top-wall'], scale: 1.0, alpha: 0.88, depth: -1.5 },
+  { frame: LP.VENT,                widthCells: 1, heightCells: 1, validZones: ['left-wall', 'right-wall'], scale: 0.9, alpha: 0.88, depth: -1.5 },
+  { frame: LP.SPEAKER,             widthCells: 1, heightCells: 1, validZones: ['corner'],      scale: 0.7, alpha: 0.85, depth: -1.5 },
+  { frame: LP.SPEAKER_02,          widthCells: 1, heightCells: 1, validZones: ['corner'],      scale: 0.7, alpha: 0.85, depth: -1.5 },
+  { frame: LP.RECTANGLE_PANEL,     widthCells: 1, heightCells: 1, validZones: ['left-wall', 'right-wall'], scale: 0.9, alpha: 0.88, depth: -1.4 },
+  { frame: LP.SMALL_RECTANGLE_PANEL, widthCells: 1, heightCells: 1, validZones: ['left-wall', 'right-wall'], scale: 0.7, alpha: 0.88, depth: -1.4 },
+  { frame: LP.OCTAGONAL_PANEL,     widthCells: 1, heightCells: 1, validZones: ['left-wall', 'right-wall'], scale: 0.9, alpha: 0.88, depth: -1.4 },
+  { frame: LP.CIRCULAR_PANEL,      widthCells: 1, heightCells: 1, validZones: ['left-wall'],   scale: 0.9, alpha: 0.88, depth: -1.4 },
   // Floor detail
-  { frame: LP.CABLE_PIECE_01,     widthCells: 1, heightCells: 1, validZones: ['center'],      scale: 0.45, alpha: 0.80, depth: -1.7 },
-  { frame: LP.CABLE_PIECE_02,     widthCells: 1, heightCells: 1, validZones: ['center'],      scale: 0.40, alpha: 0.75, depth: -1.7 },
-  { frame: LP.CABLE_PIECE_03,     widthCells: 1, heightCells: 1, validZones: ['center'],      scale: 0.40, alpha: 0.75, depth: -1.7 },
-  { frame: LP.CABLE_COVER,         widthCells: 1, heightCells: 1, validZones: ['bottom-wall'], scale: 0.45, alpha: 0.85, depth: -1.6 },
-  { frame: LP.CABLE_COVER_WITH_RAMP, widthCells: 1, heightCells: 1, validZones: ['bottom-wall'], scale: 0.45, alpha: 0.85, depth: -1.6 },
-  { frame: LP.OCTOGON_PLATE,      widthCells: 1, heightCells: 1, validZones: ['center'],      scale: 0.50, alpha: 0.85, depth: -1.7 },
-  { frame: LP.OCTOGON_PLATE_SMALL, widthCells: 1, heightCells: 1, validZones: ['center'],     scale: 0.35, alpha: 0.82, depth: -1.7 },
-  { frame: LP.SUNKEN_VENT,         widthCells: 1, heightCells: 1, validZones: ['bottom-wall'], scale: 0.45, alpha: 0.85, depth: -1.6 },
+  { frame: LP.CABLE_PIECE_01,     widthCells: 1, heightCells: 1, validZones: ['center'],      scale: 0.8, alpha: 0.80, depth: -1.7 },
+  { frame: LP.CABLE_PIECE_02,     widthCells: 1, heightCells: 1, validZones: ['center'],      scale: 0.7, alpha: 0.75, depth: -1.7 },
+  { frame: LP.CABLE_PIECE_03,     widthCells: 1, heightCells: 1, validZones: ['center'],      scale: 0.7, alpha: 0.75, depth: -1.7 },
+  { frame: LP.CABLE_COVER,         widthCells: 1, heightCells: 1, validZones: ['bottom-wall'], scale: 0.8, alpha: 0.85, depth: -1.6 },
+  { frame: LP.CABLE_COVER_WITH_RAMP, widthCells: 1, heightCells: 1, validZones: ['bottom-wall'], scale: 0.8, alpha: 0.85, depth: -1.6 },
+  { frame: LP.OCTOGON_PLATE,      widthCells: 1, heightCells: 1, validZones: ['center'],      scale: 0.9, alpha: 0.85, depth: -1.7 },
+  { frame: LP.OCTOGON_PLATE_SMALL, widthCells: 1, heightCells: 1, validZones: ['center'],     scale: 0.6, alpha: 0.82, depth: -1.7 },
+  { frame: LP.SUNKEN_VENT,         widthCells: 1, heightCells: 1, validZones: ['bottom-wall'], scale: 0.8, alpha: 0.85, depth: -1.6 },
 ]
 
-// Zone blueprints — large standalone props placed individually
+// Zone blueprints — scales derived from original PNG dimensions.
+// Large items (consoles 436px, tanks 365px, generators 243px) → scale 2.0-3.0
+// Medium items (screens 191px, sinks, units) → scale 1.5-2.0
+// Small items (beaker 122px, stool, microscope) → scale 0.8-1.3
+// Tiny items (LEDs, buttons, clips) → scale 0.5-0.7
 const ZONE_BLUEPRINTS: Record<ZoneType, PropBlueprint[]> = {
   control: [
-    // Composed console_example pieces as standalone fallback
-    { frame: LP.CONSOLE_EXAMPLE_LONG,  widthCells: 3, heightCells: 1, validZones: ['top-wall', 'center'],    scale: 1.80, alpha: 0.95, depth: -1.5 },
-    { frame: LP.CONSOLE_EXAMPLE_SHORT, widthCells: 2, heightCells: 1, validZones: ['top-wall'],    scale: 1.40, alpha: 0.92, depth: -1.5 },
-    { frame: LP.CONSOLE_EXAMPLE_CORNER, widthCells: 2, heightCells: 2, validZones: ['corner'],     scale: 1.40, alpha: 0.92, depth: -1.5 },
-    // Screens
-    { frame: LP.FREE_STANDING_SCREEN,  widthCells: 1, heightCells: 1, validZones: ['right-wall', 'left-wall'],  scale: 0.90, alpha: 0.92, depth: -1.4 },
-    { frame: LP.MONITOR,               widthCells: 1, heightCells: 1, validZones: ['top-wall'],    scale: 0.70, alpha: 0.92, depth: -1.4 },
-    // Equipment units on walls
-    { frame: LP.UNIT_EXAMPLE_01,       widthCells: 1, heightCells: 2, validZones: ['left-wall', 'right-wall'], scale: 1.20, alpha: 0.92, depth: -1.5 },
-    { frame: LP.UNIT_EXAMPLE_04,       widthCells: 1, heightCells: 2, validZones: ['left-wall', 'right-wall'], scale: 1.20, alpha: 0.92, depth: -1.5 },
-    { frame: LP.UNIT_SQUARE,           widthCells: 1, heightCells: 1, validZones: ['left-wall', 'right-wall'], scale: 0.80, alpha: 0.90, depth: -1.5 },
-    // Small desk items
-    { frame: LP.STOOL,                 widthCells: 1, heightCells: 1, validZones: ['center'],      scale: 0.55, alpha: 0.85, depth: -1.6 },
-    { frame: LP.DESK_LAMP,             widthCells: 1, heightCells: 1, validZones: ['top-wall'],    scale: 0.45, alpha: 0.88, depth: -1.3 },
-    { frame: LP.CLIPBOARD,             widthCells: 1, heightCells: 1, validZones: ['bottom-wall'], scale: 0.30, alpha: 0.82, depth: -1.6 },
-    { frame: LP.PAPER_SHEET,           widthCells: 1, heightCells: 1, validZones: ['center'],      scale: 0.30, alpha: 0.80, depth: -1.7 },
+    // Pre-composed console panels — console_example_long is 436px original
+    { frame: LP.CONSOLE_EXAMPLE_LONG,  widthCells: 4, heightCells: 2, validZones: ['top-wall', 'center'],    scale: 3.0, alpha: 0.95, depth: -1.5 },
+    { frame: LP.CONSOLE_EXAMPLE_SHORT, widthCells: 2, heightCells: 2, validZones: ['top-wall'],    scale: 2.0, alpha: 0.95, depth: -1.5 },
+    { frame: LP.CONSOLE_EXAMPLE_CORNER, widthCells: 2, heightCells: 2, validZones: ['corner'],     scale: 2.0, alpha: 0.95, depth: -1.5 },
+    // Screens — free_standing_screen 191px → 1.5
+    { frame: LP.FREE_STANDING_SCREEN,  widthCells: 2, heightCells: 2, validZones: ['right-wall', 'left-wall'],  scale: 1.8, alpha: 0.92, depth: -1.4 },
+    { frame: LP.MONITOR,               widthCells: 2, heightCells: 1, validZones: ['top-wall'],    scale: 1.5, alpha: 0.92, depth: -1.4 },
+    // Equipment units — unit_example_01 230px → 1.8
+    { frame: LP.UNIT_EXAMPLE_01,       widthCells: 2, heightCells: 2, validZones: ['left-wall', 'right-wall'], scale: 1.8, alpha: 0.92, depth: -1.5 },
+    { frame: LP.UNIT_EXAMPLE_04,       widthCells: 2, heightCells: 2, validZones: ['left-wall', 'right-wall'], scale: 1.8, alpha: 0.92, depth: -1.5 },
+    { frame: LP.UNIT_SQUARE,           widthCells: 2, heightCells: 2, validZones: ['left-wall', 'right-wall'], scale: 1.6, alpha: 0.90, depth: -1.5 },
+    // Keyboard + desk items
+    { frame: LP.KEYBOARD,              widthCells: 1, heightCells: 1, validZones: ['top-wall', 'center'], scale: 1.2, alpha: 0.90, depth: -1.3 },
+    { frame: LP.DESK_DRAW,             widthCells: 2, heightCells: 1, validZones: ['bottom-wall'], scale: 1.5, alpha: 0.88, depth: -1.5 },
+    { frame: LP.STOOL,                 widthCells: 1, heightCells: 1, validZones: ['center'],      scale: 1.3, alpha: 0.85, depth: -1.6 },
+    { frame: LP.DESK_LAMP,             widthCells: 1, heightCells: 1, validZones: ['top-wall'],    scale: 1.0, alpha: 0.88, depth: -1.3 },
+    { frame: LP.CLIPBOARD,             widthCells: 1, heightCells: 1, validZones: ['bottom-wall'], scale: 0.8, alpha: 0.82, depth: -1.6 },
+    { frame: LP.PAPER_SHEET,           widthCells: 1, heightCells: 1, validZones: ['center'],      scale: 0.7, alpha: 0.80, depth: -1.7 },
+    { frame: LP.DIAL_02,               widthCells: 1, heightCells: 1, validZones: ['left-wall'],   scale: 0.8, alpha: 0.88, depth: -1.3 },
+    { frame: LP.SWITCH_DOWN,           widthCells: 1, heightCells: 1, validZones: ['right-wall'],  scale: 0.7, alpha: 0.88, depth: -1.3 },
   ],
 
   chemical: [
-    // Large centerpieces
-    { frame: LP.MICROSCOPE,            widthCells: 2, heightCells: 2, validZones: ['top-wall', 'center'],    scale: 1.60, alpha: 0.95, depth: -1.5 },
-    { frame: LP.CIRCULAR_SINK,         widthCells: 2, heightCells: 2, validZones: ['top-wall', 'center'],    scale: 1.50, alpha: 0.92, depth: -1.5 },
-    // Sink accessories (overlay-like but standalone)
-    { frame: LP.CIRCULAR_SINK_FAN,     widthCells: 1, heightCells: 1, validZones: ['top-wall'],    scale: 0.50, alpha: 0.88, depth: -1.3 },
-    { frame: LP.CIRCULAR_SINK_ITEM,    widthCells: 1, heightCells: 1, validZones: ['top-wall'],    scale: 0.45, alpha: 0.88, depth: -1.3 },
-    { frame: LP.CIRCULAR_SINK_LEVER,   widthCells: 1, heightCells: 1, validZones: ['top-wall'],    scale: 0.40, alpha: 0.88, depth: -1.3 },
-    // Storage
-    { frame: LP.SHELF,                 widthCells: 2, heightCells: 1, validZones: ['bottom-wall', 'left-wall'], scale: 1.20, alpha: 0.90, depth: -1.5 },
-    { frame: LP.DOME,                  widthCells: 2, heightCells: 2, validZones: ['left-wall', 'center'],   scale: 1.20, alpha: 0.90, depth: -1.5 },
+    // Centerpieces — microscope 108px → 1.3, circular_sink → 2.0
+    { frame: LP.MICROSCOPE,            widthCells: 1, heightCells: 2, validZones: ['top-wall', 'center'],    scale: 1.3, alpha: 0.95, depth: -1.5 },
+    { frame: LP.CIRCULAR_SINK,         widthCells: 2, heightCells: 2, validZones: ['top-wall', 'center'],    scale: 2.0, alpha: 0.95, depth: -1.5 },
+    // Sink accessories
+    { frame: LP.CIRCULAR_SINK_FAN,     widthCells: 1, heightCells: 1, validZones: ['top-wall'],    scale: 1.0, alpha: 0.90, depth: -1.3 },
+    { frame: LP.CIRCULAR_SINK_ITEM,    widthCells: 1, heightCells: 1, validZones: ['top-wall'],    scale: 0.9, alpha: 0.90, depth: -1.3 },
+    { frame: LP.CIRCULAR_SINK_LEVER,   widthCells: 1, heightCells: 1, validZones: ['top-wall'],    scale: 0.8, alpha: 0.90, depth: -1.3 },
+    // Storage — shelf 232px → 1.8
+    { frame: LP.SHELF,                 widthCells: 2, heightCells: 2, validZones: ['bottom-wall', 'left-wall'], scale: 1.8, alpha: 0.90, depth: -1.5 },
+    { frame: LP.DOME,                  widthCells: 2, heightCells: 2, validZones: ['left-wall', 'center'],   scale: 1.5, alpha: 0.90, depth: -1.5 },
     // Wall instruments
-    { frame: LP.SCALE,                 widthCells: 1, heightCells: 1, validZones: ['right-wall'],  scale: 0.70, alpha: 0.90, depth: -1.4 },
-    { frame: LP.SMALL_APPARATUS,       widthCells: 1, heightCells: 1, validZones: ['right-wall'],  scale: 0.60, alpha: 0.88, depth: -1.4 },
-    { frame: LP.GAS_VALVE_ON,          widthCells: 1, heightCells: 1, validZones: ['left-wall', 'right-wall'], scale: 0.40, alpha: 0.90, depth: -1.4 },
-    { frame: LP.CLAMP_DOUBLE,          widthCells: 1, heightCells: 1, validZones: ['right-wall'],  scale: 0.35, alpha: 0.88, depth: -1.4 },
-    { frame: LP.CLAMP_SINGLE,          widthCells: 1, heightCells: 1, validZones: ['left-wall'],   scale: 0.35, alpha: 0.88, depth: -1.4 },
+    { frame: LP.SCALE,                 widthCells: 1, heightCells: 2, validZones: ['right-wall'],  scale: 1.5, alpha: 0.90, depth: -1.4 },
+    { frame: LP.SMALL_APPARATUS,       widthCells: 1, heightCells: 1, validZones: ['right-wall'],  scale: 1.3, alpha: 0.88, depth: -1.4 },
+    { frame: LP.GAS_VALVE_ON,          widthCells: 1, heightCells: 1, validZones: ['left-wall', 'right-wall'], scale: 1.0, alpha: 0.90, depth: -1.4 },
+    { frame: LP.CLAMP_DOUBLE,          widthCells: 1, heightCells: 1, validZones: ['right-wall'],  scale: 0.8, alpha: 0.88, depth: -1.4 },
+    { frame: LP.CLAMP_SINGLE,          widthCells: 1, heightCells: 1, validZones: ['left-wall'],   scale: 0.8, alpha: 0.88, depth: -1.4 },
+    // Additional lab equipment
+    { frame: LP.PETRI_DISH,            widthCells: 1, heightCells: 1, validZones: ['top-wall', 'center'], scale: 1.0, alpha: 0.88, depth: -1.4 },
+    { frame: LP.CUP_02,               widthCells: 1, heightCells: 1, validZones: ['top-wall'],    scale: 0.8, alpha: 0.85, depth: -1.3 },
+    { frame: LP.CLIPBOARD_02,         widthCells: 1, heightCells: 1, validZones: ['bottom-wall'], scale: 0.8, alpha: 0.82, depth: -1.6 },
     // Floor scatter
-    { frame: LP.SPILT_TEST_TUBE,       widthCells: 1, heightCells: 1, validZones: ['center'],      scale: 0.30, alpha: 0.82, depth: -1.7 },
-    { frame: LP.PUDDLE,                widthCells: 1, heightCells: 1, validZones: ['center'],      scale: 0.45, alpha: 0.65, depth: -1.8 },
+    { frame: LP.SPILT_TEST_TUBE,       widthCells: 1, heightCells: 1, validZones: ['center'],      scale: 0.7, alpha: 0.82, depth: -1.7 },
+    { frame: LP.PUDDLE,                widthCells: 1, heightCells: 1, validZones: ['center'],      scale: 0.9, alpha: 0.65, depth: -1.8 },
   ],
 
   machinery: [
-    // Large centerpieces
-    { frame: LP.GENERATOR,             widthCells: 3, heightCells: 3, validZones: ['center', 'top-wall'],    scale: 2.20, alpha: 0.95, depth: -1.5 },
-    { frame: LP.LAB_MACHINE_01,        widthCells: 2, heightCells: 2, validZones: ['top-wall', 'center'],    scale: 1.80, alpha: 0.95, depth: -1.5 },
-    { frame: LP.LARGE_TANK,            widthCells: 2, heightCells: 2, validZones: ['left-wall', 'right-wall', 'center'], scale: 1.60, alpha: 0.92, depth: -1.5 },
-    // Equipment units — wall-mounted machinery
-    { frame: LP.UNIT_EXAMPLE_02,       widthCells: 1, heightCells: 2, validZones: ['right-wall'],  scale: 1.20, alpha: 0.92, depth: -1.5 },
-    { frame: LP.UNIT_EXAMPLE_03,       widthCells: 2, heightCells: 2, validZones: ['left-wall', 'top-wall'], scale: 1.40, alpha: 0.92, depth: -1.5 },
-    { frame: LP.UNIT_LARGE,            widthCells: 2, heightCells: 1, validZones: ['right-wall', 'bottom-wall'], scale: 1.20, alpha: 0.92, depth: -1.5 },
-    { frame: LP.UNIT_SMALL,            widthCells: 1, heightCells: 1, validZones: ['left-wall'],   scale: 0.85, alpha: 0.90, depth: -1.5 },
-    { frame: LP.FAN_UNIT_HOUSING,      widthCells: 1, heightCells: 1, validZones: ['left-wall', 'right-wall'], scale: 0.75, alpha: 0.90, depth: -1.4 },
-    { frame: LP.POWER_CELL,            widthCells: 1, heightCells: 1, validZones: ['bottom-wall'], scale: 0.60, alpha: 0.90, depth: -1.5 },
+    // Centerpieces — generator 243px → 2.5, lab_machine → 2.5
+    { frame: LP.GENERATOR,             widthCells: 3, heightCells: 3, validZones: ['center', 'top-wall'],    scale: 2.5, alpha: 0.95, depth: -1.5 },
+    { frame: LP.LAB_MACHINE_01,        widthCells: 3, heightCells: 3, validZones: ['top-wall', 'center'],    scale: 2.5, alpha: 0.95, depth: -1.5 },
+    { frame: LP.LARGE_TANK,            widthCells: 2, heightCells: 3, validZones: ['left-wall', 'right-wall', 'center'], scale: 2.5, alpha: 0.92, depth: -1.5 },
+    // Equipment units — 230px → 1.8-2.0
+    { frame: LP.UNIT_EXAMPLE_02,       widthCells: 2, heightCells: 2, validZones: ['right-wall'],  scale: 1.8, alpha: 0.92, depth: -1.5 },
+    { frame: LP.UNIT_EXAMPLE_03,       widthCells: 3, heightCells: 3, validZones: ['left-wall', 'top-wall'], scale: 2.0, alpha: 0.92, depth: -1.5 },
+    { frame: LP.UNIT_LARGE,            widthCells: 2, heightCells: 2, validZones: ['right-wall', 'bottom-wall'], scale: 1.8, alpha: 0.92, depth: -1.5 },
+    { frame: LP.UNIT_SMALL,            widthCells: 2, heightCells: 1, validZones: ['left-wall'],   scale: 1.5, alpha: 0.90, depth: -1.5 },
+    { frame: LP.FAN_UNIT_HOUSING,      widthCells: 2, heightCells: 1, validZones: ['left-wall', 'right-wall'], scale: 1.5, alpha: 0.90, depth: -1.4 },
+    { frame: LP.POWER_CELL,            widthCells: 2, heightCells: 1, validZones: ['bottom-wall'], scale: 1.5, alpha: 0.90, depth: -1.5 },
     // Pipe connectors
-    { frame: LP.PIPE_CONNECTOR_ARCHED, widthCells: 1, heightCells: 1, validZones: ['left-wall', 'right-wall'], scale: 0.45, alpha: 0.88, depth: -1.4 },
-    { frame: LP.PIPE_CONNECTOR_TO_SIDE, widthCells: 1, heightCells: 1, validZones: ['left-wall', 'right-wall'], scale: 0.45, alpha: 0.88, depth: -1.4 },
-    { frame: LP.PIPE_CONNECTOR_ANGLED_TO_SIDE, widthCells: 1, heightCells: 1, validZones: ['corner'], scale: 0.45, alpha: 0.88, depth: -1.4 },
+    { frame: LP.PIPE_CONNECTOR_ARCHED, widthCells: 1, heightCells: 1, validZones: ['left-wall', 'right-wall'], scale: 1.0, alpha: 0.88, depth: -1.4 },
+    { frame: LP.PIPE_CONNECTOR_TO_SIDE, widthCells: 1, heightCells: 1, validZones: ['left-wall', 'right-wall'], scale: 1.0, alpha: 0.88, depth: -1.4 },
+    { frame: LP.PIPE_CONNECTOR_ANGLED_TO_SIDE, widthCells: 1, heightCells: 1, validZones: ['corner'], scale: 1.0, alpha: 0.88, depth: -1.4 },
     // Controls
-    { frame: LP.STOP_BUTTON,           widthCells: 1, heightCells: 1, validZones: ['right-wall'],  scale: 0.35, alpha: 0.92, depth: -1.3 },
-    { frame: LP.STOP_BUTTON_02,        widthCells: 1, heightCells: 1, validZones: ['left-wall'],   scale: 0.35, alpha: 0.92, depth: -1.3 },
+    { frame: LP.STOP_BUTTON,           widthCells: 1, heightCells: 1, validZones: ['right-wall'],  scale: 0.8, alpha: 0.92, depth: -1.3 },
+    { frame: LP.STOP_BUTTON_02,        widthCells: 1, heightCells: 1, validZones: ['left-wall'],   scale: 0.8, alpha: 0.92, depth: -1.3 },
+    // Fan units — composed (housing + fan blade)
+    { frame: LP.FAN_UNIT_HOUSING,      widthCells: 2, heightCells: 1, validZones: ['left-wall', 'right-wall'], scale: 1.5, alpha: 0.90, depth: -1.4 },
+    { frame: LP.GUAGE_NEEDLE,          widthCells: 1, heightCells: 1, validZones: ['left-wall', 'right-wall'], scale: 0.8, alpha: 0.88, depth: -1.3 },
+    { frame: LP.LASER_HEAD,            widthCells: 1, heightCells: 1, validZones: ['top-wall'],    scale: 1.3, alpha: 0.92, depth: -1.4 },
+    { frame: LP.LASER_OUTLET,          widthCells: 1, heightCells: 1, validZones: ['top-wall'],    scale: 1.0, alpha: 0.88, depth: -1.4 },
     // Floor scatter
-    { frame: LP.SUNKEN_CELL,           widthCells: 1, heightCells: 1, validZones: ['center'],      scale: 0.50, alpha: 0.85, depth: -1.7 },
-    { frame: LP.NUT,                   widthCells: 1, heightCells: 1, validZones: ['center'],      scale: 0.30, alpha: 0.85, depth: -1.7 },
-    { frame: LP.FLOOR_SPIKE_DOWN,      widthCells: 1, heightCells: 1, validZones: ['center'],      scale: 0.45, alpha: 0.88, depth: -1.7 },
+    { frame: LP.SUNKEN_CELL,           widthCells: 1, heightCells: 1, validZones: ['center'],      scale: 1.0, alpha: 0.85, depth: -1.7 },
+    { frame: LP.NUT,                   widthCells: 1, heightCells: 1, validZones: ['center'],      scale: 0.6, alpha: 0.85, depth: -1.7 },
+    { frame: LP.FLOOR_SPIKE_DOWN,      widthCells: 1, heightCells: 1, validZones: ['center'],      scale: 0.9, alpha: 0.88, depth: -1.7 },
+    { frame: LP.FLOOR_SPIKE_UP,        widthCells: 1, heightCells: 1, validZones: ['center'],      scale: 0.9, alpha: 0.85, depth: -1.7 },
+    { frame: LP.SUNKEN_NUT,            widthCells: 1, heightCells: 1, validZones: ['center'],      scale: 0.7, alpha: 0.82, depth: -1.7 },
   ],
 
   pod: [
-    // Large pod structures
-    { frame: LP.POD,                   widthCells: 2, heightCells: 2, validZones: ['top-wall', 'center'],    scale: 1.60, alpha: 0.95, depth: -1.5 },
-    { frame: LP.BROKEN_POD,            widthCells: 2, heightCells: 2, validZones: ['top-wall', 'center'],    scale: 1.40, alpha: 0.88, depth: -1.5 },
-    { frame: LP.SLIDING_DOOR,          widthCells: 1, heightCells: 2, validZones: ['left-wall', 'right-wall'], scale: 1.00, alpha: 0.90, depth: -1.5 },
+    // Pods — pod 248px → 2.0
+    { frame: LP.POD,                   widthCells: 2, heightCells: 3, validZones: ['top-wall', 'center'],    scale: 2.0, alpha: 0.95, depth: -1.5 },
+    { frame: LP.BROKEN_POD,            widthCells: 2, heightCells: 3, validZones: ['top-wall', 'center'],    scale: 2.0, alpha: 0.88, depth: -1.5 },
+    { frame: LP.SLIDING_DOOR,          widthCells: 2, heightCells: 1, validZones: ['left-wall', 'right-wall'], scale: 1.5, alpha: 0.90, depth: -1.5 },
     // Skylights
-    { frame: LP.LARGE_SKYLIGHT,        widthCells: 2, heightCells: 1, validZones: ['center'],      scale: 1.00, alpha: 0.82, depth: -1.7 },
-    { frame: LP.SMALL_SKYLIGHT,        widthCells: 1, heightCells: 1, validZones: ['center'],      scale: 0.65, alpha: 0.82, depth: -1.7 },
-    // Storage and furniture
-    { frame: LP.CHEST_CLOSED,          widthCells: 1, heightCells: 1, validZones: ['bottom-wall'], scale: 0.60, alpha: 0.90, depth: -1.5 },
-    { frame: LP.CHEST_OPEN,            widthCells: 1, heightCells: 1, validZones: ['bottom-wall'], scale: 0.60, alpha: 0.88, depth: -1.5 },
-    { frame: LP.DESK_TOP_LONG,         widthCells: 2, heightCells: 1, validZones: ['bottom-wall'], scale: 1.20, alpha: 0.92, depth: -1.5 },
-    // Blocks for structure
-    { frame: LP.BLOCK_01,              widthCells: 1, heightCells: 1, validZones: ['corner'],      scale: 0.60, alpha: 0.88, depth: -1.6 },
-    { frame: LP.BLOCK_02,              widthCells: 1, heightCells: 1, validZones: ['corner'],      scale: 0.55, alpha: 0.85, depth: -1.6 },
-    { frame: LP.BLOCK_04,              widthCells: 1, heightCells: 1, validZones: ['corner'],      scale: 0.55, alpha: 0.85, depth: -1.6 },
+    { frame: LP.LARGE_SKYLIGHT,        widthCells: 2, heightCells: 2, validZones: ['center'],      scale: 1.8, alpha: 0.82, depth: -1.7 },
+    { frame: LP.SMALL_SKYLIGHT,        widthCells: 1, heightCells: 1, validZones: ['center'],      scale: 1.3, alpha: 0.82, depth: -1.7 },
+    // Storage — chest ~150px → 1.3
+    { frame: LP.CHEST_CLOSED,          widthCells: 2, heightCells: 1, validZones: ['bottom-wall'], scale: 1.5, alpha: 0.90, depth: -1.5 },
+    { frame: LP.CHEST_OPEN,            widthCells: 2, heightCells: 1, validZones: ['bottom-wall'], scale: 1.5, alpha: 0.88, depth: -1.5 },
+    { frame: LP.DESK_TOP_LONG,         widthCells: 3, heightCells: 1, validZones: ['bottom-wall'], scale: 2.0, alpha: 0.92, depth: -1.5 },
+    // Blocks
+    { frame: LP.BLOCK_01,              widthCells: 1, heightCells: 1, validZones: ['corner'],      scale: 1.3, alpha: 0.88, depth: -1.6 },
+    { frame: LP.BLOCK_02,              widthCells: 1, heightCells: 1, validZones: ['corner'],      scale: 1.3, alpha: 0.85, depth: -1.6 },
+    { frame: LP.BLOCK_04,              widthCells: 1, heightCells: 1, validZones: ['corner'],      scale: 1.3, alpha: 0.85, depth: -1.6 },
     // Wall fittings
-    { frame: LP.CONSOLE_LED_ON,        widthCells: 1, heightCells: 1, validZones: ['left-wall', 'right-wall'], scale: 0.30, alpha: 0.92, depth: -1.3 },
-    { frame: LP.CONSOLE_LED_OFF,       widthCells: 1, heightCells: 1, validZones: ['left-wall', 'right-wall'], scale: 0.30, alpha: 0.70, depth: -1.3 },
-    { frame: LP.TABLET,                widthCells: 1, heightCells: 1, validZones: ['bottom-wall'], scale: 0.35, alpha: 0.85, depth: -1.3 },
+    { frame: LP.CONSOLE_LED_ON,        widthCells: 1, heightCells: 1, validZones: ['left-wall', 'right-wall'], scale: 0.8, alpha: 0.92, depth: -1.3 },
+    { frame: LP.CONSOLE_LED_OFF,       widthCells: 1, heightCells: 1, validZones: ['left-wall', 'right-wall'], scale: 0.8, alpha: 0.70, depth: -1.3 },
+    { frame: LP.TABLET,                widthCells: 1, heightCells: 1, validZones: ['bottom-wall'], scale: 0.8, alpha: 0.85, depth: -1.3 },
+    { frame: LP.NARROW_SKYLIGHT,       widthCells: 1, heightCells: 1, validZones: ['center'],      scale: 1.3, alpha: 0.80, depth: -1.7 },
+    { frame: LP.DESK_DRAW,             widthCells: 2, heightCells: 1, validZones: ['bottom-wall'], scale: 1.3, alpha: 0.85, depth: -1.5 },
+    { frame: LP.KEYBOARD,              widthCells: 1, heightCells: 1, validZones: ['top-wall'],    scale: 1.0, alpha: 0.88, depth: -1.3 },
+    { frame: LP.PAPER_SHEET_02,        widthCells: 1, heightCells: 1, validZones: ['center'],      scale: 0.7, alpha: 0.75, depth: -1.7 },
     // Floor scatter
-    { frame: LP.FLOOR_SPIKE_DOWN,      widthCells: 1, heightCells: 1, validZones: ['center'],      scale: 0.45, alpha: 0.85, depth: -1.7 },
+    { frame: LP.FLOOR_SPIKE_DOWN,      widthCells: 1, heightCells: 1, validZones: ['center'],      scale: 0.9, alpha: 0.85, depth: -1.7 },
   ],
 }
 
@@ -364,7 +476,7 @@ function findPlacement(
 ): { col: number; row: number } | null {
   const { cols, rows } = grid
 
-  // Props start 1 cell from edge — equipment hugs walls like the reference image
+  // Props start 1 cell from edge — hug walls like the reference
   const INSET = 1
   const minC = INSET
   const maxC = cols - INSET
@@ -480,17 +592,31 @@ function placeStationGroups(
   hash: number,
   placements: SpritePlacement[],
 ): void {
-  // Pick station groups based on zone type
+  // Pick station groups based on zone type — use MORE prop variety
   const stations: StationGroup[] = []
-  if (zone === 'control' || zone === 'pod') {
+  if (zone === 'control') {
     stations.push(...CONSOLE_STATIONS)
+    stations.push(...KEYBOARD_STATIONS)  // keyboard workstations
+    stations.push(FAN_STATIONS[0])       // fan unit
+  }
+  if (zone === 'pod') {
+    stations.push(...CONSOLE_STATIONS)
+    stations.push(KEYBOARD_STATIONS[1])  // short keyboard desk
+    stations.push(...LASER_STATIONS)     // laser emitter
   }
   if (zone === 'chemical') {
     stations.push(...LAB_BENCH_STATIONS)
-    stations.push(CONSOLE_STATIONS[1]) // add a short console too
+    stations.push(...CHEM_BENCH_STATIONS)  // petri dishes, cups
+    stations.push(CONSOLE_STATIONS[1])
+    stations.push(TANK_ROW_STATIONS[1])
   }
   if (zone === 'machinery') {
-    stations.push(CONSOLE_STATIONS[0]) // control console in machinery room
+    stations.push(CONSOLE_STATIONS[0])
+    stations.push(KEYBOARD_STATIONS[0])    // keyboard workstation
+    stations.push(...TANK_ROW_STATIONS) // tanks along walls
+  }
+  if (zone === 'pod') {
+    stations.push(TANK_ROW_STATIONS[0]) // tank row in pod bay
   }
 
   for (let i = 0; i < stations.length && placements.length < LAB_MAX_PROPS_PER_ROOM - 3; i++) {
@@ -513,6 +639,7 @@ function placeStationGroups(
       frame: station.base.frame, x: px, y: py,
       scale: station.base.scale, alpha: 0.95, depth: station.depth,
       spritesheet: 'lab-props',
+      tint: station.base.tint,
     })
 
     // Place overlays on top of base
@@ -521,6 +648,7 @@ function placeStationGroups(
         frame: ov.frame, x: px + ov.dx, y: py + ov.dy,
         scale: ov.scale, alpha: 0.92, depth: ov.depth,
         spritesheet: 'lab-props',
+        tint: ov.tint,
       })
     }
   }
@@ -568,62 +696,59 @@ function placeProps(grid: CellGrid, zone: ZoneType, hash: number): SpritePlaceme
 // Creates the "control panels spanning full wall" look from the reference.
 // ---------------------------------------------------------------------------
 
-// Wall-run frames — items that look good lining walls at small scale
+// Wall-run frames — items that look good lining walls
 const WALL_RUN_FRAMES = [
   LP.CONSOLE_SCREEN,
   LP.MONITOR,
   LP.GUAGE,
   LP.DIAL,
+  LP.DIAL_02,
   LP.SWITCH_UP,
+  LP.SWITCH_DOWN,
   LP.GAS_VALVE_ON,
+  LP.GAS_VALVE_OFF,
   LP.OCTAGONAL_PANEL,
   LP.WALL_LIGHT,
+  LP.LED_ON,
+  LP.LED_OFF,
+  LP.GUAGE_NEEDLE,
+  LP.CONSOLE_SCREEN_WAVE_05,
+  LP.CONSOLE_SCREEN_LINES_04,
 ]
 
 function fillWallRuns(grid: CellGrid, hash: number, placements: SpritePlacement[]): void {
   const { cols, rows } = grid
-
-  // Fill every OTHER remaining floor cell along top wall — leave gaps for breathing room
-  const topRow = 1
   let frameIdx = hash % WALL_RUN_FRAMES.length
-  for (let c = 1; c < cols - 1; c += 2) {  // skip every other cell
-    if (placements.length >= LAB_MAX_PROPS_PER_ROOM) break
-    if (grid.get(c, topRow) !== 'floor') continue
 
-    grid.set(c, topRow, 'equipment')
-    const pos = grid.cellToPixel(c, topRow)
+  const addWallItem = (c: number, r: number, scale: number, alpha: number, depth: number) => {
+    if (placements.length >= LAB_MAX_PROPS_PER_ROOM) return
+    if (grid.get(c, r) !== 'floor') return
+    grid.set(c, r, 'equipment')
+    const pos = grid.cellToPixel(c, r)
     placements.push({
       frame: WALL_RUN_FRAMES[frameIdx % WALL_RUN_FRAMES.length],
       x: pos.x,
       y: pos.y,
-      scale: 0.55,
-      alpha: 0.88,
-      depth: -1.4,
+      scale,
+      alpha,
+      depth,
       spritesheet: 'lab-props',
     })
     frameIdx++
   }
 
-  // Fill every other cell along bottom wall
-  const botRow = rows - 2
-  if (botRow > topRow + 2) {
-    for (let c = 1; c < cols - 1; c += 2) {
-      if (placements.length >= LAB_MAX_PROPS_PER_ROOM) break
-      if (grid.get(c, botRow) !== 'floor') continue
-
-      grid.set(c, botRow, 'equipment')
-      const pos = grid.cellToPixel(c, botRow)
-      placements.push({
-        frame: WALL_RUN_FRAMES[frameIdx % WALL_RUN_FRAMES.length],
-        x: pos.x,
-        y: pos.y,
-        scale: 0.50,
-        alpha: 0.85,
-        depth: -1.5,
-        spritesheet: 'lab-props',
-      })
-      frameIdx++
-    }
+  // Fill ALL 4 inner wall edges with equipment — every cell (step=1)
+  // Top wall run (row 1)
+  for (let c = 1; c < cols - 1; c++) addWallItem(c, 1, 1.2, 0.90, -1.4)
+  // Bottom wall run (row rows-2)
+  if (rows > 4) {
+    for (let c = 1; c < cols - 1; c++) addWallItem(c, rows - 2, 1.1, 0.88, -1.5)
+  }
+  // Left wall run (col 1)
+  for (let r = 2; r < rows - 2; r++) addWallItem(1, r, 1.0, 0.85, -1.4)
+  // Right wall run (col cols-2)
+  if (cols > 4) {
+    for (let r = 2; r < rows - 2; r++) addWallItem(cols - 2, r, 1.0, 0.85, -1.4)
   }
 }
 
@@ -657,13 +782,13 @@ function placeGlowLights(grid: CellGrid, hash: number): GlowPlacement[] {
         placements.push({
           x: pos.x,
           y: pos.y,
-          outerRadius: 22,
-          midRadius: 13,
-          coreRadius: 7,
+          outerRadius: 32,
+          midRadius: 18,
+          coreRadius: 9,
           color: LAB_GLOW_COLOR,
-          outerAlpha: 0.15,
-          midAlpha: 0.32,
-          coreAlpha: 0.55,
+          outerAlpha: 0.20,
+          midAlpha: 0.45,
+          coreAlpha: 0.70,
         })
         placed = true
       }
@@ -676,9 +801,9 @@ function placeGlowLights(grid: CellGrid, hash: number): GlowPlacement[] {
           const pos = grid.cellToPixel(c, r)
           placements.push({
             x: pos.x, y: pos.y,
-            outerRadius: 22, midRadius: 13, coreRadius: 7,
+            outerRadius: 32, midRadius: 18, coreRadius: 9,
             color: LAB_GLOW_COLOR,
-            outerAlpha: 0.15, midAlpha: 0.32, coreAlpha: 0.55,
+            outerAlpha: 0.20, midAlpha: 0.45, coreAlpha: 0.70,
           })
           break
         }

@@ -34,7 +34,7 @@ export async function handleEnqueue(params: {
   const task = enqueueTask({
     title: params.title,
     description: params.description,
-    project: params.project || '~/sidekick',
+    project: params.project || 'atlas',
     priority,
     source: 'api',
   })

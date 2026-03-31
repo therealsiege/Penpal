@@ -123,6 +123,7 @@ import {
   type ModelProvider,
 } from './orchestrator'
 import { checkOllamaAvailable } from './ollama-client'
+import { resolveProjectPath } from './project-paths'
 import {
   getGithubIssuePollerStatus,
   pollGithubIssuesNow,
@@ -707,7 +708,7 @@ export function registerIpcHandlers() {
         skills: task.requiredSkills || [],
         allowedTools: [],
         subAgents: {},
-        defaultRepos: task.project ? [task.project] : [],
+        defaultRepos: task.project ? [resolveProjectPath(task.project)] : [],
         avatar: 'orchestrator',
         desk: { row: 0, col: 0 },
         autonomy: 'headless',
@@ -717,7 +718,7 @@ export function registerIpcHandlers() {
         status: 'active',
         needsInteraction: false,
         sessionMode: taskStage === 'planning' ? 'plan' : 'working',
-        cwd: task.project || undefined,
+        cwd: task.project ? resolveProjectPath(task.project) : undefined,
         isOrchestratorTask: true,
         taskStage,
         taskTitle: task.title,
@@ -1240,6 +1241,10 @@ export function registerIpcHandlers() {
       ['orchestrator:enqueue', 'orchestrator:retry-task', 'agents:statuses', 'pod:create'],
       { byPriority, byStatus, idleAgents, idleAgentIds, oldestQueuedAgeMs: oldestQueuedAge, oldestQueuedAgeBucket: ageBucket(oldestQueuedAge) },
     )
+  }))
+  ipcMain.handle('project:resolve-path', wrapHandler((raw: unknown) => {
+    if (typeof raw !== 'string') throw new Error('path must be a string')
+    return { resolved: resolveProjectPath(raw) }
   }))
   ipcMain.handle('orchestrator:enqueue', wrapHandler((
     title: unknown, description: unknown, project: unknown, priority: unknown, provider?: unknown,

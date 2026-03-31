@@ -1011,7 +1011,7 @@ function EnqueueModal({
 }) {
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
-  const [project, setProject] = useState('')
+  const [project, setProject] = useState('atlas')
   const [priority, setPriority] = useState('normal')
 
   return (
@@ -1034,7 +1034,7 @@ function EnqueueModal({
         <input
           value={project}
           onChange={e => setProject(e.target.value)}
-          placeholder="Project path (e.g. ~/sidekick)"
+          placeholder="atlas, sidekick, or absolute path (~/…)"
           className="w-full px-3 py-2 bg-[#141a22] border border-[#2a3440] rounded-lg text-sm text-[#c4ccd6] placeholder-[#2a3440] focus:outline-none focus:border-blue-500"
         />
         <select

@@ -89,6 +89,7 @@ export class OfficeBackground {
 
   // Graphics layers
   private teamAreaGraphics: Phaser.GameObjects.Graphics | null = null
+  private corridorGlowGraphics: Phaser.GameObjects.Graphics | null = null
 
   // Team area labels
   private teamAreaLabels: (Phaser.GameObjects.Text | Phaser.GameObjects.Graphics)[] = []
@@ -148,6 +149,7 @@ export class OfficeBackground {
     this.interior.init(officeGfx)
 
     this.teamAreaGraphics = this.scene.add.graphics().setDepth(-3)
+    this.corridorGlowGraphics = this.scene.add.graphics().setDepth(-1.2)
 
     const corridorGfx = this.scene.add.graphics().setDepth(-2)
     const floorArrowGfx = this.scene.add.graphics().setDepth(-1.5)
@@ -225,7 +227,7 @@ export class OfficeBackground {
     // ── Unified lab layout — all rooms as zones in one wide facility ──
     const viewWidth = this.host.getViewWidth()
     // Fill the full viewport width for a wide lab
-    const availableW = Math.max(viewWidth * 1.1, 800)
+    const availableW = Math.max(viewWidth * 1.4, 1200)
     const areaPadX = TEAM_AREA_PAD_X
     const areaPadY = TEAM_AREA_PAD_Y
     const areaGapX = TEAM_AREA_GAP_X
@@ -639,11 +641,10 @@ export class OfficeBackground {
       this.teamAreaLabels.push(badgeTextObj)
     }
 
-    // ── Corridor detail rendering (hazard stripes, glow lights, laser lines) ──
-    this.drawCorridorDetails(g)
-
-    // ── Place pipe & cable sprites between rooms inside team areas ──
-    this.placeTeamPipes(layouts)
+    // No corridor visual borders — the facility is ONE open space.
+    // Hazard tape + laser doors are on the facility perimeter (unified floor).
+    // Corridor glows cleared since no per-corridor details drawn.
+    if (this.corridorGlowGraphics) this.corridorGlowGraphics.clear()
   }
 
   // ---------------------------------------------------------------------------
@@ -651,6 +652,9 @@ export class OfficeBackground {
   // ---------------------------------------------------------------------------
 
   private drawCorridorDetails(g: Phaser.GameObjects.Graphics): void {
+    // Clear and use the glow overlay layer for cyan lights (above floor tiles)
+    const glowG = this.corridorGlowGraphics
+    if (glowG) glowG.clear()
     const rooms = this.host.getRooms()
     if (rooms.size < 2) return
 
@@ -662,6 +666,38 @@ export class OfficeBackground {
       return rowDiff !== 0 ? rowDiff : a.x - b.x
     })
 
+    // Alternating yellow/dark hazard tape helper — matches reference
+    const YELLOW = 0xfbbf24
+    const DARK = 0x1a1a2e
+    const SEG_LEN = 10
+    const STRIPE_W = 8
+    const ALPHA_Y = 0.80
+    const ALPHA_D = 0.60
+
+    const drawHazardH = (startX: number, endX: number, y: number) => {
+      let pos = startX
+      let isYellow = true
+      while (pos < endX) {
+        const len = Math.min(SEG_LEN, endX - pos)
+        g.fillStyle(isYellow ? YELLOW : DARK, isYellow ? ALPHA_Y : ALPHA_D)
+        g.fillRect(pos, y, len, STRIPE_W)
+        pos += SEG_LEN
+        isYellow = !isYellow
+      }
+    }
+
+    const drawHazardV = (x: number, startY: number, endY: number) => {
+      let pos = startY
+      let isYellow = true
+      while (pos < endY) {
+        const len = Math.min(SEG_LEN, endY - pos)
+        g.fillStyle(isYellow ? YELLOW : DARK, isYellow ? ALPHA_Y : ALPHA_D)
+        g.fillRect(x, pos, STRIPE_W, len)
+        pos += SEG_LEN
+        isYellow = !isYellow
+      }
+    }
+
     // ── Horizontally adjacent rooms (same row, gap between them) ──
     for (let i = 0; i < sorted.length - 1; i++) {
       const roomA = sorted[i]
@@ -672,39 +708,40 @@ export class OfficeBackground {
 
       const gapX1 = roomA.x + roomA.width / 2
       const gapX2 = roomB.x - roomB.width / 2
-      const gapLen = gapX2 - gapX1
-      if (gapLen < 10) continue
+      if (gapX2 - gapX1 < 10) continue
 
-      // Top/bottom Y extents from both rooms
+      // Full Y extents from both rooms
       const topY = Math.min(roomA.y - roomA.height / 2, roomB.y - roomB.height / 2)
       const bottomY = Math.max(roomA.y + roomA.height / 2, roomB.y + roomB.height / 2)
-      const midY = (roomA.y + roomB.y) / 2
 
-      // Yellow hazard dashed stripes — top edge
-      g.fillStyle(0xfbbf24, 0.60)
-      for (let dx = gapX1; dx < gapX2; dx += 14 + 3) {
-        g.fillRect(dx, topY, Math.min(14, gapX2 - dx), 5)
-      }
-      // Yellow hazard dashed stripes — bottom edge
-      for (let dx = gapX1; dx < gapX2; dx += 14 + 3) {
-        g.fillRect(dx, bottomY - 5, Math.min(14, gapX2 - dx), 5)
-      }
+      // Hazard tape on the RIGHT edge of roomA (full height)
+      const edgeAx = roomA.x + roomA.width / 2 - STRIPE_W
+      const edgeAyTop = roomA.y - roomA.height / 2
+      const edgeAyBot = roomA.y + roomA.height / 2
+      drawHazardV(edgeAx, edgeAyTop, edgeAyBot)
 
-      // Cyan glow circles at corridor center every ~80px
-      const corridorH = bottomY - topY
-      const cy = topY + corridorH / 2
-      for (let dx = gapX1 + 40; dx < gapX2 - 20; dx += 80) {
-        g.fillStyle(0x00e5ff, 0.12)
-        g.fillCircle(dx, cy, 18)
-        g.fillStyle(0x00e5ff, 0.25)
-        g.fillCircle(dx, cy, 10)
-        g.fillStyle(0x00e5ff, 0.45)
-        g.fillCircle(dx, cy, 5)
-      }
+      // Hazard tape on the LEFT edge of roomB (full height)
+      const edgeBx = roomB.x - roomB.width / 2
+      const edgeByTop = roomB.y - roomB.height / 2
+      const edgeByBot = roomB.y + roomB.height / 2
+      drawHazardV(edgeBx, edgeByTop, edgeByBot)
 
-      // Thin red laser line through corridor center
-      g.lineStyle(1.5, 0xff3333, 0.45)
-      g.lineBetween(gapX1, midY, gapX2, midY)
+      // Hazard tape across corridor gap — top and bottom
+      drawHazardH(gapX1, gapX2, topY)
+      drawHazardH(gapX1, gapX2, bottomY - STRIPE_W)
+
+      // Cyan glow circles at corridor center every ~60px
+      if (glowG) {
+        const cy = (roomA.y + roomB.y) / 2
+        for (let dx = gapX1 + 30; dx < gapX2 - 15; dx += 60) {
+          glowG.fillStyle(0x00e5ff, 0.18)
+          glowG.fillCircle(dx, cy, 24)
+          glowG.fillStyle(0x00e5ff, 0.35)
+          glowG.fillCircle(dx, cy, 14)
+          glowG.fillStyle(0x00e5ff, 0.60)
+          glowG.fillCircle(dx, cy, 6)
+        }
+      }
     }
 
     // ── Vertically adjacent rooms (X ranges overlap, Y gap > 20) ──
@@ -713,47 +750,46 @@ export class OfficeBackground {
         const roomA = sorted[i]
         const roomB = sorted[j]
 
-        // Check X overlap: rooms whose X ranges overlap significantly
         if (Math.abs(roomA.x - roomB.x) >= roomA.width * 0.8) continue
 
-        // Determine top/bottom room
         const topRoom = roomA.y < roomB.y ? roomA : roomB
         const bottomRoom = roomA.y < roomB.y ? roomB : roomA
 
         const gapY1 = topRoom.y + topRoom.height / 2
         const gapY2 = bottomRoom.y - bottomRoom.height / 2
-        const gapLen = gapY2 - gapY1
-        if (gapLen <= 20) continue
+        if (gapY2 - gapY1 <= 20) continue
 
-        // Left/right X extents from both rooms
         const leftX = Math.min(topRoom.x - topRoom.width / 2, bottomRoom.x - bottomRoom.width / 2)
         const rightX = Math.max(topRoom.x + topRoom.width / 2, bottomRoom.x + bottomRoom.width / 2)
-        const midX = (topRoom.x + bottomRoom.x) / 2
 
-        // Yellow hazard dashed stripes — left edge
-        g.fillStyle(0xfbbf24, 0.60)
-        for (let dy = gapY1; dy < gapY2; dy += 14 + 3) {
-          g.fillRect(leftX, dy, 5, Math.min(14, gapY2 - dy))
-        }
-        // Yellow hazard dashed stripes — right edge
-        for (let dy = gapY1; dy < gapY2; dy += 14 + 3) {
-          g.fillRect(rightX - 5, dy, 5, Math.min(14, gapY2 - dy))
-        }
+        // Hazard tape on the BOTTOM edge of topRoom (full width)
+        const edgeTy = topRoom.y + topRoom.height / 2 - STRIPE_W
+        const edgeTxL = topRoom.x - topRoom.width / 2
+        const edgeTxR = topRoom.x + topRoom.width / 2
+        drawHazardH(edgeTxL, edgeTxR, edgeTy)
 
-        // Cyan glow circles along vertical center every ~80px
-        const cx = leftX + (rightX - leftX) / 2
-        for (let dy = gapY1 + 40; dy < gapY2 - 20; dy += 80) {
-          g.fillStyle(0x00e5ff, 0.12)
-          g.fillCircle(cx, dy, 18)
-          g.fillStyle(0x00e5ff, 0.25)
-          g.fillCircle(cx, dy, 10)
-          g.fillStyle(0x00e5ff, 0.45)
-          g.fillCircle(cx, dy, 5)
-        }
+        // Hazard tape on the TOP edge of bottomRoom (full width)
+        const edgeBy = bottomRoom.y - bottomRoom.height / 2
+        const edgeBxL = bottomRoom.x - bottomRoom.width / 2
+        const edgeBxR = bottomRoom.x + bottomRoom.width / 2
+        drawHazardH(edgeBxL, edgeBxR, edgeBy)
 
-        // Thin red laser line through vertical corridor center
-        g.lineStyle(1.5, 0xff3333, 0.45)
-        g.lineBetween(midX, gapY1, midX, gapY2)
+        // Hazard tape across corridor gap — left and right
+        drawHazardV(leftX, gapY1, gapY2)
+        drawHazardV(rightX - STRIPE_W, gapY1, gapY2)
+
+        // Cyan glow circles along vertical center every ~60px
+        if (glowG) {
+          const cx = (topRoom.x + bottomRoom.x) / 2
+          for (let dy = gapY1 + 30; dy < gapY2 - 15; dy += 60) {
+            glowG.fillStyle(0x00e5ff, 0.18)
+            glowG.fillCircle(cx, dy, 24)
+            glowG.fillStyle(0x00e5ff, 0.35)
+            glowG.fillCircle(cx, dy, 14)
+            glowG.fillStyle(0x00e5ff, 0.60)
+            glowG.fillCircle(cx, dy, 6)
+          }
+        }
       }
     }
   }
@@ -766,89 +802,90 @@ export class OfficeBackground {
     if (!this.scene.textures.exists(SPRITESHEET_KEYS.LAB_PIPES)) return
 
     const rooms = this.host.getRooms()
-    const PIPE_SCALE = 0.22
-    const PIPE_DEPTH = -2.7  // between unified floor (-3) and room walls (-2)
-    const PIPE_ALPHA = 0.55
-    const CABLE_SCALE = 0.18
-    const CABLE_ALPHA = 0.4
-    const PIPE_SPACING = 45
+    const SCALE = 0.35
+    const DEPTH = -1.5
+    const ALPHA = 0.85
+    const STEP = 30
+    const TINT = 0x3b82f6  // blue pipe tint matching the reference
 
-    // Group rooms by team
-    const teamRooms = new Map<string, Room[]>()
-    for (const room of rooms.values()) {
-      const key = room.teamKey || room.cwd
-      if (!teamRooms.has(key)) teamRooms.set(key, [])
-      teamRooms.get(key)!.push(room)
+    const addPipe = (x: number, y: number, frame: number, tint = TINT) => {
+      const spr = this.scene.add.sprite(x, y, SPRITESHEET_KEYS.LAB_PIPES, frame)
+        .setScale(SCALE).setAlpha(ALPHA).setDepth(DEPTH).setTint(tint)
+      this.teamPipeSprites.push(spr)
     }
 
-    for (const area of layouts) {
-      const areaRooms = teamRooms.get(area.teamKey)
-      if (!areaRooms || areaRooms.length < 2) continue
+    // Collect all rooms
+    const allRooms = Array.from(rooms.values())
+    if (allRooms.length < 2) return
 
-      const color = this.host.getTeamColor(area.teamKey)
+    const sorted = [...allRooms].sort((a, b) => {
+      const rowDiff = Math.round(a.y / 100) - Math.round(b.y / 100)
+      return rowDiff !== 0 ? rowDiff : a.x - b.x
+    })
 
-      // Connect adjacent rooms with horizontal pipe runs
-      // Sort rooms by position to find neighbors
-      const sorted = [...areaRooms].sort((a, b) => {
-        const rowDiff = Math.round(a.y / 50) - Math.round(b.y / 50)
-        return rowDiff !== 0 ? rowDiff : a.x - b.x
-      })
+    // ── Horizontal corridor pipes between same-row rooms ──
+    for (let i = 0; i < sorted.length - 1; i++) {
+      const roomA = sorted[i]
+      const roomB = sorted[i + 1]
+      if (Math.abs(roomA.y - roomB.y) > roomA.height * 0.5) continue
 
-      for (let i = 0; i < sorted.length - 1; i++) {
+      const gapX1 = roomA.x + roomA.width / 2
+      const gapX2 = roomB.x - roomB.width / 2
+      if (gapX2 - gapX1 < 10) continue
+
+      const midY = (roomA.y + roomB.y) / 2
+
+      // Top pipe run through corridor
+      const pipeY1 = midY - 8
+      addPipe(gapX1, pipeY1, PIPE_FRAMES.CORNER_TL)
+      for (let x = gapX1 + STEP; x < gapX2 - STEP; x += STEP) {
+        const frame = ((x - gapX1) % (STEP * 4) < STEP) ? PIPE_FRAMES.HORIZ_ARROW : PIPE_FRAMES.HORIZ_TOP
+        addPipe(x, pipeY1, frame)
+      }
+      addPipe(gapX2 - STEP / 2, pipeY1, PIPE_FRAMES.CORNER_TR)
+      // Valve at midpoint
+      const valveX = (gapX1 + gapX2) / 2
+      addPipe(valveX, pipeY1, PIPE_FRAMES.VALVE, 0x44aaff)
+
+      // Bottom parallel pipe run
+      const pipeY2 = midY + 8
+      for (let x = gapX1 + STEP / 2; x < gapX2 - STEP / 2; x += STEP) {
+        addPipe(x, pipeY2, PIPE_FRAMES.HORIZ_TOP)
+      }
+    }
+
+    // ── Vertical corridor pipes between rows ──
+    for (let i = 0; i < sorted.length; i++) {
+      for (let j = i + 1; j < sorted.length; j++) {
         const roomA = sorted[i]
-        const roomB = sorted[i + 1]
+        const roomB = sorted[j]
 
-        // Only connect rooms on the same approximate row
-        if (Math.abs(roomA.y - roomB.y) > roomA.height) continue
+        // Must overlap in X and be in different rows
+        if (Math.abs(roomA.x - roomB.x) >= roomA.width * 0.6) continue
+        const topRoom = roomA.y < roomB.y ? roomA : roomB
+        const bottomRoom = roomA.y < roomB.y ? roomB : roomA
 
-        const gapX1 = roomA.x + roomA.width / 2
-        const gapX2 = roomB.x - roomB.width / 2
-        const gapLen = gapX2 - gapX1
-        if (gapLen < 10) continue
+        const gapY1 = topRoom.y + topRoom.height / 2
+        const gapY2 = bottomRoom.y - bottomRoom.height / 2
+        if (gapY2 - gapY1 < 15) continue
 
-        const midY = (roomA.y + roomB.y) / 2
+        const midX = (topRoom.x + bottomRoom.x) / 2
 
-        // Horizontal pipe run through the gap
-        const numPipes = Math.max(1, Math.floor(gapLen / PIPE_SPACING))
-        for (let pi = 0; pi < numPipes; pi++) {
-          const t = (pi + 0.5) / numPipes
-          const px = gapX1 + gapLen * t
-          const pipe = this.scene.add.sprite(px, midY, SPRITESHEET_KEYS.LAB_PIPES, PIPE_FRAMES.HORIZ_ARROW)
-            .setScale(PIPE_SCALE)
-            .setAlpha(PIPE_ALPHA)
-            .setDepth(PIPE_DEPTH)
-            .setTint(color)
-          this.teamPipeSprites.push(pipe)
+        // Left vertical pipe
+        const pipeX1 = midX - 8
+        addPipe(pipeX1, gapY1, PIPE_FRAMES.CAP_TOP)
+        for (let y = gapY1 + STEP; y < gapY2 - STEP; y += STEP) {
+          addPipe(pipeX1, y, PIPE_FRAMES.VERT_LEFT)
         }
+        // T-connector at midpoint
+        const tY = (gapY1 + gapY2) / 2
+        addPipe(pipeX1, tY, PIPE_FRAMES.T_RIGHT, 0x44aaff)
 
-        // Cable run offset below the pipe
-        if (this.scene.textures.exists(SPRITESHEET_KEYS.LAB_CABLES)) {
-          const cableCount = Math.max(1, Math.floor(gapLen / (PIPE_SPACING * 1.3)))
-          for (let ci = 0; ci < cableCount; ci++) {
-            const t = (ci + 0.5) / cableCount
-            const cx = gapX1 + gapLen * t
-            const cable = this.scene.add.sprite(cx, midY + 8, SPRITESHEET_KEYS.LAB_CABLES, CABLE_FRAMES.HORIZ_STRAIGHT)
-              .setScale(CABLE_SCALE)
-              .setAlpha(CABLE_ALPHA)
-              .setDepth(PIPE_DEPTH - 0.1)
-            this.teamPipeSprites.push(cable)
-          }
+        // Right parallel vertical pipe
+        const pipeX2 = midX + 8
+        for (let y = gapY1 + STEP / 2; y < gapY2 - STEP / 2; y += STEP) {
+          addPipe(pipeX2, y, PIPE_FRAMES.VERT_RIGHT)
         }
-
-        // Coupling flanges at the ends
-        const couplingL = this.scene.add.sprite(gapX1 + 4, midY, SPRITESHEET_KEYS.LAB_PIPES, PIPE_FRAMES.COUPLING_HORIZ)
-          .setScale(PIPE_SCALE * 0.8)
-          .setAlpha(PIPE_ALPHA * 0.7)
-          .setDepth(PIPE_DEPTH + 0.1)
-          .setTint(color)
-        this.teamPipeSprites.push(couplingL)
-
-        const couplingR = this.scene.add.sprite(gapX2 - 4, midY, SPRITESHEET_KEYS.LAB_PIPES, PIPE_FRAMES.COUPLING_HORIZ)
-          .setScale(PIPE_SCALE * 0.8)
-          .setAlpha(PIPE_ALPHA * 0.7)
-          .setDepth(PIPE_DEPTH + 0.1)
-          .setTint(color)
-        this.teamPipeSprites.push(couplingR)
       }
     }
   }
@@ -962,6 +999,8 @@ export class OfficeBackground {
     this.teamPipeSprites = []
     this.teamAreaGraphics?.destroy()
     this.teamAreaGraphics = null
+    this.corridorGlowGraphics?.destroy()
+    this.corridorGlowGraphics = null
 
     this.terrain.destroy()
     this.corridors.destroy()

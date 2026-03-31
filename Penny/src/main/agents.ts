@@ -84,14 +84,44 @@ export interface AgentState {
 
 // ── YAML Loader ─────────────────────────────────────────────────────────────
 
-const AGENTS_DIR = path.resolve(__dirname, '..', '..', 'agents')
-const AGENTS_YAML = path.join(AGENTS_DIR, 'agent-types.yaml')
+let cachedAgentsDir: string | null = null
+
+/** Resolves to the folder containing agent-types.yaml (dev: Penny/agents, packaged: app.asar/agents). */
+function getAgentsDir(): string {
+  if (cachedAgentsDir) return cachedAgentsDir
+  const fromMain = path.resolve(__dirname, '..', '..', 'agents')
+  const candidates: string[] = [fromMain]
+  try {
+    // Packaged app: configs live next to out/ inside app.asar; __dirname resolution can differ by install path.
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { app } = require('electron') as typeof import('electron')
+    if (app?.isPackaged && typeof app.getAppPath === 'function') {
+      candidates.unshift(path.join(app.getAppPath(), 'agents'))
+    }
+  } catch {
+    /* electron unavailable (e.g. some tests) */
+  }
+  for (const dir of candidates) {
+    if (fs.existsSync(path.join(dir, 'agent-types.yaml'))) {
+      cachedAgentsDir = dir
+      console.log(`[agents] Using agent config directory: ${dir}`)
+      return cachedAgentsDir
+    }
+  }
+  cachedAgentsDir = fromMain
+  return cachedAgentsDir
+}
+
+function getAgentTypesYamlPath(): string {
+  return path.join(getAgentsDir(), 'agent-types.yaml')
+}
 
 let agentConfigs: AgentConfig[] = []
 
 export function loadAgentConfigs(): AgentConfig[] {
   try {
-    const raw = fs.readFileSync(AGENTS_YAML, 'utf-8')
+    const yamlPath = getAgentTypesYamlPath()
+    const raw = fs.readFileSync(yamlPath, 'utf-8')
     const doc = yaml.load(raw) as { agents: Record<string, Record<string, unknown>> }
     agentConfigs = Object.entries(doc.agents).map(([id, cfg]) => {
       const persona = cfg.persona as Record<string, string> | undefined
@@ -118,7 +148,7 @@ export function loadAgentConfigs(): AgentConfig[] {
       }
     })
   } catch (err) {
-    console.error('Failed to load agent configs:', err)
+    console.error(`Failed to load agent configs from ${getAgentTypesYamlPath()}:`, err)
     agentConfigs = []
   }
   return agentConfigs
@@ -145,7 +175,7 @@ export interface PodPresetYaml {
 
 export function loadPodPresets(): PodPresetYaml[] {
   try {
-    const raw = fs.readFileSync(AGENTS_YAML, 'utf-8')
+    const raw = fs.readFileSync(getAgentTypesYamlPath(), 'utf-8')
     const doc = yaml.load(raw) as { pod_presets?: Record<string, Record<string, string>>; triplet_presets?: Record<string, Record<string, string>> }
     const presets = doc.pod_presets || doc.triplet_presets
     if (!presets) return []
@@ -164,7 +194,7 @@ export function loadPodPresets(): PodPresetYaml[] {
 // ── MCP Profile Resolution ──────────────────────────────────────────────────
 
 export function getMcpProfilePath(profileName: string): string {
-  return path.join(AGENTS_DIR, 'mcp-profiles', `${profileName}.json`)
+  return path.join(getAgentsDir(), 'mcp-profiles', `${profileName}.json`)
 }
 
 // ── CLI Command Builder ─────────────────────────────────────────────────────
@@ -212,7 +242,7 @@ export function buildAgentTaggedSystemPrompt(agentId: string, opts: BuildCliOpts
   // Headless agents get a lean prompt — skip shared memory and verbose persona
   let sharedMemoryNote = ''
   if (!opts.headless) {
-    const sharedMemoryPath = path.join(AGENTS_DIR, 'CLAUDE.md')
+    const sharedMemoryPath = path.join(getAgentsDir(), 'CLAUDE.md')
     if (fs.existsSync(sharedMemoryPath)) {
       try {
         const sharedContent = fs.readFileSync(sharedMemoryPath, 'utf-8')

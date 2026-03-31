@@ -135,17 +135,19 @@ export function computeRoomLayout(
   // -------------------------------------------------------------------------
 
   const wallBorder = (WALL_T + WALL_I + ROOM_PADDING) * 2
-  const LAB_SIDE_PAD = 60  // side margins for equipment within zone
+  const LAB_SIDE_PAD = 100  // side margins for equipment within zone
   const baseWidth =
     wallBorder + cols * WORKSTATION_W + LAB_SIDE_PAD
   const height =
     (WALL_T + WALL_I) * 2 + ROOM_HEADER_H + ROOM_PADDING * 2 + ROOM_TOP_EXTRA +
     LAB_EQUIP_ZONE_H +  // equipment shelf at top
-    rows * WORKSTATION_H + DOOR_CLEARANCE + 30  // compact bottom
+    rows * WORKSTATION_H + DOOR_CLEARANCE + 60  // extra bottom for equipment
 
-  // Zone width — compact, facility handles the outer walls
-  const MIN_ROOM_W = 300
+  // Zone width — big enough for properly-scaled lab props (consoles at 3x, tanks at 2.5x)
+  const MIN_ROOM_W = 520
+  const MIN_ROOM_H = 400
   const width = Math.max(MIN_ROOM_W, baseWidth + PROP_STRIP_W)
+  const finalHeight = Math.max(MIN_ROOM_H, height)
 
   // -------------------------------------------------------------------------
   // 2. Desk grid — mirrors layoutWorkstations positioning math
@@ -157,11 +159,11 @@ export function computeRoomLayout(
   // Desk area starts at top-left of the usable interior, relative to room center
   const deskAreaX = -width / 2 + WALL_T + WALL_I + ROOM_PADDING
   // Header bar is at the bottom of the room; desk area starts below equipment zone
-  const deskAreaY = -height / 2 + WALL_T + WALL_I + ROOM_PADDING + ROOM_TOP_EXTRA + LAB_EQUIP_ZONE_H + topDoorPad
+  const deskAreaY = -finalHeight / 2 + WALL_T + WALL_I + ROOM_PADDING + ROOM_TOP_EXTRA + LAB_EQUIP_ZONE_H + topDoorPad
 
   const usableW = baseWidth - wallBorder           // cols * WORKSTATION_W
   const usableH =
-    height -
+    finalHeight -
     (WALL_T + WALL_I) * 2 -
     ROOM_HEADER_H -
     ROOM_PADDING * 2 -
@@ -197,9 +199,9 @@ export function computeRoomLayout(
 
   // Strip left edge relative to room center
   const propAreaX = width / 2 - PROP_STRIP_W
-  const propAreaY = -height / 2 + WALL_T + WALL_I
+  const propAreaY = -finalHeight / 2 + WALL_T + WALL_I
 
-  const propAreaH = height - (WALL_T + WALL_I) * 2 - ROOM_HEADER_H
+  const propAreaH = finalHeight - (WALL_T + WALL_I) * 2 - ROOM_HEADER_H
 
   const propArea = {
     x:      propAreaX,
@@ -224,7 +226,7 @@ export function computeRoomLayout(
 
   return {
     width,
-    height,
+    height: finalHeight,
     deskPositions,
     propSlots,
     deskArea,

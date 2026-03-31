@@ -303,18 +303,18 @@ export class OfficeRooms {
       room.statusStrip = sg
     }
 
-    // Door panel
-    const doorFloorW = w
-    this.drawDoorPanel(room, doorFloorW, roomStyle.accent)
+    // No per-room door panels — laser doors are on the facility perimeter.
 
-    // Initialize sprite arrays (previously done by tileHexFloor, now needed here)
+    // Initialize sprite arrays
     if (!room.floorTileSprites) room.floorTileSprites = []
     if (!room.wallTileSprites) room.wallTileSprites = []
     if (!room.cornerTileSprites) room.cornerTileSprites = []
 
-    // ── Zone details — drawn on top of the unified facility floor ──
+    // ── Zone equipment — props placed on the shared facility floor ──
     this.placeLabEquipment(room, floorX, floorY, floorW, floorH)
-    this.placeHazardTrim(room, floorX, floorY, floorW, floorH)  // zone dividers
+
+    // No per-room hazard tape — corridor-level drawCorridorDetails() handles
+    // zone boundaries with alternating yellow/dark stripes at actual corridors.
 
     // Stash room index for downstream use
     ;(room as unknown as Record<string, unknown>)._roomIndex = roomIndex
@@ -493,11 +493,206 @@ export class OfficeRooms {
   }
 
   // -------------------------------------------------------------------------
-  // Hex floor tiling — sprite-based hex floor replacing procedural pattern
+  // Wall strip — draws TOP + BOTTOM wall rows with console equipment,
+  // plus partial LEFT/RIGHT edges. Rooms stay open/connected, not boxed.
   // -------------------------------------------------------------------------
 
+  private tileWallStrip(
+    room: Room,
+    floorX: number,
+    floorY: number,
+    floorW: number,
+    floorH: number,
+  ): void {
+    if (!this.scene.textures.exists(SPRITESHEET_KEYS.LAB_MAIN_TILESET)) return
+
+    const tileScale = 0.50
+    const step = LAB_TILE_SIZE * tileScale  // 64px
+    const cols = Math.max(4, Math.floor(floorW / step))
+    const rows = Math.max(4, Math.floor(floorH / step))
+    const hash = this.hashToken(room.cwd)
+
+    const gridW = cols * step
+    const gridH = rows * step
+    const offsetX = floorX + (floorW - gridW) / 2
+    const offsetY = floorY + (floorH - gridH) / 2
+
+    // Only draw rows 0-1 (top wall + console strip) and rows-2 to rows-1 (bottom console + wall),
+    // plus column 0 and cols-1 for partial side walls (only top/bottom 3 tiles each).
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        const isTopWall = r === 0
+        const isTopConsole = r === 1
+        const isBottomConsole = r === rows - 2
+        const isBottomWall = r === rows - 1
+        const isLeft = c === 0
+        const isRight = c === cols - 1
+
+        // Skip interior tiles — only draw the strip rows and partial sides
+        const isStripRow = isTopWall || isTopConsole || isBottomConsole || isBottomWall
+        const isSideEdge = (isLeft || isRight) && (r <= 2 || r >= rows - 3)
+        if (!isStripRow && !isSideEdge) continue
+
+        let frame: number
+
+        // ── Corners ──
+        if (isTopWall && isLeft)           frame = LAB_TILESET_FRAMES.CORNER_TL_THICK
+        else if (isTopWall && isRight)     frame = LAB_TILESET_FRAMES.CORNER_TR_THICK
+        else if (isBottomWall && isLeft)   frame = LAB_TILESET_FRAMES.CORNER_BL_THICK
+        else if (isBottomWall && isRight)  frame = LAB_TILESET_FRAMES.CORNER_BR_THICK
+        // ── Top wall ──
+        else if (isTopWall) {
+          const variant = (hash + c * 5) % 6
+          frame = variant < 2 ? LAB_TILESET_FRAMES.WALL_TOP_THICK : LAB_TILESET_FRAMES.WALL_TOP
+        }
+        // ── Bottom wall ──
+        else if (isBottomWall) {
+          const variant = (hash + c * 3) % 6
+          if (variant === 0) frame = LAB_TILESET_FRAMES.WALL_BOTTOM_WINDOW_A
+          else if (variant === 1) frame = LAB_TILESET_FRAMES.WALL_BOTTOM_THICK
+          else frame = LAB_TILESET_FRAMES.WALL_BOTTOM
+        }
+        // ── Side walls (partial — only near corners) ──
+        else if (isLeft)  frame = LAB_TILESET_FRAMES.WALL_LEFT
+        else if (isRight) frame = LAB_TILESET_FRAMES.WALL_RIGHT
+        // ── Top console/equipment row ──
+        else if (isTopConsole) {
+          const variant = (hash + c * 7) % 6
+          if (variant === 0)      frame = LAB_TILESET_FRAMES.CONSOLE_TOP
+          else if (variant === 1) frame = LAB_TILESET_FRAMES.CONSOLE_SMALL
+          else if (variant === 2) frame = LAB_TILESET_FRAMES.CONSOLE_BOT_LEFT
+          else                    frame = LAB_TILESET_FRAMES.HEX_FLOOR_A
+        }
+        // ── Bottom console/equipment row ──
+        else if (isBottomConsole) {
+          const variant = (hash + c * 11) % 6
+          if (variant === 0)      frame = LAB_TILESET_FRAMES.CONSOLE_SMALL
+          else if (variant === 1) frame = LAB_TILESET_FRAMES.WALL_BOTTOM_WINDOW_B
+          else if (variant === 2) frame = LAB_TILESET_FRAMES.CONSOLE_BOT_RIGHT
+          else                    frame = LAB_TILESET_FRAMES.HEX_FLOOR_A
+        }
+        // Shouldn't reach here, but fallback
+        else frame = LAB_TILESET_FRAMES.HEX_FLOOR_A
+
+        const tx = offsetX + c * step + step / 2
+        const ty = offsetY + r * step + step / 2
+
+        const tile = this.scene.add.sprite(tx, ty, SPRITESHEET_KEYS.LAB_MAIN_TILESET, frame)
+          .setScale(tileScale)
+          .setAlpha(0.95)
+          .setDepth(-2)
+        room.container.add(tile)
+        room.wallTileSprites!.push(tile)
+      }
+    }
+  }
+
   // -------------------------------------------------------------------------
-  // Autotile room — unified grid-based tilemap using correct frame assignments
+  // Room wall tiles — draws full wall edges + corners (legacy full-box)
+  // -------------------------------------------------------------------------
+
+  private tileRoomWalls(
+    room: Room,
+    floorX: number,
+    floorY: number,
+    floorW: number,
+    floorH: number,
+  ): void {
+    if (!this.scene.textures.exists(SPRITESHEET_KEYS.LAB_MAIN_TILESET)) return
+
+    const tileScale = 0.50
+    const step = LAB_TILE_SIZE * tileScale  // 64px
+    const cols = Math.max(4, Math.floor(floorW / step))
+    const rows = Math.max(4, Math.floor(floorH / step))
+    const hash = this.hashToken(room.cwd)
+
+    const gridW = cols * step
+    const gridH = rows * step
+    const offsetX = floorX + (floorW - gridW) / 2
+    const offsetY = floorY + (floorH - gridH) / 2
+
+    // Full autotile: thick walls + hex floor interior + console equipment.
+    // This matches the reference — rooms have visible hex floor pattern.
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        const isTop = r === 0
+        const isBottom = r === rows - 1
+        const isLeft = c === 0
+        const isRight = c === cols - 1
+
+        let frame: number
+
+        // ── Corners — all THICK for heavy walls ──
+        if (isTop && isLeft)          frame = LAB_TILESET_FRAMES.CORNER_TL_THICK
+        else if (isTop && isRight)    frame = LAB_TILESET_FRAMES.CORNER_TR_THICK
+        else if (isBottom && isLeft)  frame = LAB_TILESET_FRAMES.CORNER_BL_THICK
+        else if (isBottom && isRight) frame = LAB_TILESET_FRAMES.CORNER_BR_THICK
+        // ── Wall edges — THICK variants ──
+        else if (isTop)               frame = LAB_TILESET_FRAMES.WALL_TOP_THICK
+        else if (isBottom) {
+          const variant = (hash + c * 3) % 5
+          frame = variant < 2 ? LAB_TILESET_FRAMES.WALL_BOTTOM_WINDOW_A
+            : variant === 2 ? LAB_TILESET_FRAMES.WALL_BOTTOM_THICK
+            : LAB_TILESET_FRAMES.WALL_BOTTOM
+        }
+        else if (isLeft)              frame = LAB_TILESET_FRAMES.WALL_LEFT
+        else if (isRight)             frame = LAB_TILESET_FRAMES.WALL_RIGHT
+        // ── Inner wall row: console/equipment tiles ──
+        else if (r === 1) {
+          const variant = (hash + c * 7) % 5
+          if (variant === 0) frame = LAB_TILESET_FRAMES.CONSOLE_TOP
+          else if (variant === 1) frame = LAB_TILESET_FRAMES.CONSOLE_SMALL
+          else frame = LAB_TILESET_FRAMES.HEX_FLOOR_A
+        }
+        else if (r === rows - 2) {
+          const variant = (hash + c * 11) % 5
+          if (variant === 0) frame = LAB_TILESET_FRAMES.CONSOLE_SMALL
+          else if (variant === 1) frame = LAB_TILESET_FRAMES.WALL_BOTTOM_WINDOW_B
+          else frame = LAB_TILESET_FRAMES.HEX_FLOOR_A
+        }
+        else if (c === 1) {
+          const variant = (hash + r * 13) % 4
+          frame = variant === 0 ? LAB_TILESET_FRAMES.CONSOLE_LEFT : LAB_TILESET_FRAMES.HEX_FLOOR_A
+        }
+        else if (c === cols - 2) {
+          const variant = (hash + r * 17) % 4
+          frame = variant === 0 ? LAB_TILESET_FRAMES.CONSOLE_RIGHT : LAB_TILESET_FRAMES.HEX_FLOOR_A
+        }
+        // ── Interior hex floor — visible pattern like the reference ──
+        else {
+          const cellHash = (hash + r * 7 + c * 13) % 25
+          if (cellHash === 0 && r > 2 && c > 2 && r < rows - 3 && c < cols - 3) {
+            frame = LAB_TILESET_FRAMES.FLOOR_FEATURE  // reactor/light feature
+          } else {
+            const floorVariant = (hash * 3 + r * 11 + c * 17) % 15
+            if (floorVariant === 0)       frame = LAB_TILESET_FRAMES.HEX_FLOOR_B
+            else if (floorVariant === 1)  frame = LAB_TILESET_FRAMES.HEX_FLOOR_C
+            else if (floorVariant === 2)  frame = LAB_TILESET_FRAMES.HEX_FLOOR_D
+            else                          frame = LAB_TILESET_FRAMES.HEX_FLOOR_A
+          }
+        }
+
+        const tx = offsetX + c * step + step / 2
+        const ty = offsetY + r * step + step / 2
+
+        const tile = this.scene.add.sprite(tx, ty, SPRITESHEET_KEYS.LAB_MAIN_TILESET, frame)
+          .setScale(tileScale)
+          .setAlpha(0.95)
+          .setDepth(-2)
+        room.container.add(tile)
+
+        // Sort into appropriate arrays for LOD
+        if (isTop || isBottom || isLeft || isRight) {
+          room.wallTileSprites!.push(tile)
+        } else {
+          room.floorTileSprites!.push(tile)
+        }
+      }
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // Full autotile room (legacy — kept for reference)
   // -------------------------------------------------------------------------
 
   private tileHexFloor(
@@ -653,83 +848,102 @@ export class OfficeRooms {
 
     const h = this.hashToken(room.cwd)
 
-    // Helper to add a pipe sprite with consistent styling
+    // Pipe tint based on room hash — colored pipes like the reference
+    const pipeTints = [0x4a9eff, 0x3b82f6, 0x60a5fa, 0x38bdf8, 0x22d3ee]
+    const pipeTint = pipeTints[h % pipeTints.length]
+
+    // Helper to add a pipe sprite with consistent styling + color tint
     const addPipe = (
       x: number, y: number, frame: number,
       scale: number, alpha: number, depth: number,
     ): void => {
       const spr = this.scene.add.sprite(x, y, SPRITESHEET_KEYS.LAB_PIPES, frame)
-        .setScale(scale).setAlpha(alpha).setDepth(depth)
+        .setScale(scale).setAlpha(alpha).setDepth(depth).setTint(pipeTint)
       room.container.add(spr)
       room.wallTileSprites!.push(spr)
     }
 
-    // ── Interior pipe runs (scaled up for visibility) ──
-    const intScale = 0.28
-    const intStep = 30
-    const showLeftPipe = (h % 3) !== 2
-    const showBottomPipe = (h % 5) >= 2
+    // ── Interior pipe runs — prominent zone-edge pipes on ALL sides ──
+    const intScale = 0.35
+    const intStep = 35
+    const intAlpha = 0.80
+    const intDepth = -1.5
 
-    // Left edge interior pipe run (vertical)
-    if (showLeftPipe && floorH > 100) {
+    // Left edge — vertical pipe run
+    if (floorH > 100) {
       const pipeX = floorX + 14
-      const startY = floorY + 50
-      const endY = floorY + floorH - 50
-
-      // Top cap
-      addPipe(pipeX, startY, PIPE_FRAMES.CAP_TOP, intScale, 0.75, -1.5)
-
-      // Vertical segments
+      const startY = floorY + 30
+      const endY = floorY + floorH - 30
+      addPipe(pipeX, startY, PIPE_FRAMES.CAP_TOP, intScale, intAlpha, intDepth)
       for (let y = startY + intStep; y < endY - intStep; y += intStep) {
-        addPipe(pipeX, y, PIPE_FRAMES.VERT_LEFT, intScale, 0.75, -1.5)
+        const frame = ((h + Math.round(y)) % 6 === 0) ? PIPE_FRAMES.VERT_ARROW : PIPE_FRAMES.VERT_LEFT
+        addPipe(pipeX, y, frame, intScale, intAlpha, intDepth)
       }
-
-      // Valve near the middle
       const valveY = startY + Math.round((endY - startY) / 2)
-      addPipe(pipeX, valveY, PIPE_FRAMES.VALVE, intScale * 0.85, 0.70, -1.4)
+      addPipe(pipeX, valveY, PIPE_FRAMES.VALVE, intScale * 0.9, intAlpha, intDepth + 0.1)
     }
 
-    // Bottom edge interior pipe run (horizontal)
-    if (showBottomPipe && floorW > 120) {
-      const pipeY = floorY + floorH - 14
-      const startX = floorX + 50
-      const endX = floorX + floorW - 50
-      for (let x = startX; x < endX; x += intStep) {
-        addPipe(x, pipeY, PIPE_FRAMES.HORIZ_TOP, intScale, 0.70, -1.5)
+    // Right edge — vertical pipe run
+    if (floorH > 100) {
+      const pipeX = floorX + floorW - 14
+      const startY = floorY + 40
+      const endY = floorY + floorH - 40
+      addPipe(pipeX, startY, PIPE_FRAMES.CAP_TOP, intScale, intAlpha, intDepth)
+      for (let y = startY + intStep; y < endY - intStep; y += intStep) {
+        addPipe(pipeX, y, PIPE_FRAMES.VERT_RIGHT, intScale, intAlpha, intDepth)
       }
-      // Coupling at midpoint
-      const couplingX = startX + Math.round((endX - startX) / 2)
-      addPipe(couplingX, pipeY, PIPE_FRAMES.COUPLING_HORIZ, intScale * 0.85, 0.65, -1.4)
+      const tY = startY + Math.round((endY - startY) * 0.35)
+      addPipe(pipeX, tY, PIPE_FRAMES.T_LEFT, intScale, intAlpha, intDepth + 0.1)
     }
 
-    // ── Exterior pipe runs — prominent pipes OUTSIDE room walls ──
-    // Visible against team area background for a sci-fi lab aesthetic.
-    const extScale = 0.25
-    const extAlpha = 0.75
+    // Top edge — horizontal pipe run
+    if (floorW > 120) {
+      const pipeY = floorY + 14
+      const startX = floorX + 30
+      const endX = floorX + floorW - 30
+      addPipe(startX, pipeY, PIPE_FRAMES.CORNER_TL, intScale, intAlpha, intDepth)
+      for (let x = startX + intStep; x < endX - intStep; x += intStep) {
+        const frame = ((h + Math.round(x)) % 5 === 0) ? PIPE_FRAMES.HORIZ_ARROW : PIPE_FRAMES.HORIZ_TOP
+        addPipe(x, pipeY, frame, intScale, intAlpha, intDepth)
+      }
+      addPipe(endX - intStep, pipeY, PIPE_FRAMES.CORNER_TR, intScale, intAlpha, intDepth)
+      const couplingX = startX + Math.round((endX - startX) * 0.6)
+      addPipe(couplingX, pipeY, PIPE_FRAMES.COUPLING_HORIZ, intScale * 0.9, intAlpha * 0.9, intDepth + 0.1)
+    }
+
+    // Bottom edge — horizontal pipe run
+    if (floorW > 120) {
+      const pipeY = floorY + floorH - 14
+      const startX = floorX + 40
+      const endX = floorX + floorW - 40
+      for (let x = startX; x < endX; x += intStep) {
+        addPipe(x, pipeY, PIPE_FRAMES.HORIZ_TOP, intScale, intAlpha * 0.9, intDepth)
+      }
+      const couplingX = startX + Math.round((endX - startX) / 2)
+      addPipe(couplingX, pipeY, PIPE_FRAMES.COUPLING_HORIZ, intScale * 0.85, intAlpha * 0.85, intDepth + 0.1)
+    }
+
+    // ── Exterior pipe runs — prominent colored pipes OUTSIDE room zones ──
+    // These connect zones visually through the corridors.
+    const extScale = 0.40
+    const extAlpha = 0.88
     const extDepth = -1.8
     const extStep = 30
-    const extOffset = 12  // pixels outside room boundary
-
-    // Determine which exterior sides this room gets (1-2 runs per room)
-    const showTopExterior = (h % 7) < 4         // ~57% of rooms
-    const showRightExterior = (h % 11) < 6      // ~55% of rooms
+    const extOffset = 14  // pixels outside room boundary
 
     // ── Top exterior pipe run (horizontal, above room) ──
-    if (showTopExterior && floorW > 80) {
+    if (floorW > 80) {
       const pipeY = floorY - extOffset
       const startX = floorX
       const endX = floorX + floorW
       const segCount = Math.max(2, Math.floor((endX - startX) / extStep))
       const valveIdx = Math.floor(segCount / 2) + (h % 3) - 1
 
-      // Left corner elbow
       addPipe(startX, pipeY, PIPE_FRAMES.CORNER_TL, extScale, extAlpha, extDepth)
-
-      // Horizontal segments
       for (let i = 1; i < segCount - 1; i++) {
         const sx = startX + i * extStep
         if (i === valveIdx) {
-          addPipe(sx, pipeY, PIPE_FRAMES.VALVE, extScale * 0.9, extAlpha * 0.95, extDepth + 0.1)
+          addPipe(sx, pipeY, PIPE_FRAMES.VALVE, extScale * 0.9, extAlpha, extDepth + 0.1)
         } else if (i === 1 && segCount > 5) {
           addPipe(sx, pipeY, PIPE_FRAMES.T_DOWN, extScale, extAlpha, extDepth)
         } else {
@@ -737,35 +951,53 @@ export class OfficeRooms {
           addPipe(sx, pipeY, frame, extScale, extAlpha, extDepth)
         }
       }
-
-      // Right corner elbow
       addPipe(endX - extStep, pipeY, PIPE_FRAMES.CORNER_TR, extScale, extAlpha, extDepth)
     }
 
     // ── Right exterior pipe run (vertical, right of room) ──
-    if (showRightExterior && floorH > 80) {
+    if (floorH > 80) {
       const pipeX = floorX + floorW + extOffset
       const startY = floorY
       const endY = floorY + floorH
       const segCount = Math.max(2, Math.floor((endY - startY) / extStep))
       const valveIdx = Math.floor(segCount / 2) + ((h >> 4) % 3) - 1
 
-      // Top cap
       addPipe(pipeX, startY, PIPE_FRAMES.CAP_TOP, extScale, extAlpha, extDepth)
-
-      // Vertical segments
       for (let i = 1; i < segCount - 1; i++) {
         const sy = startY + i * extStep
         if (i === valveIdx) {
-          addPipe(pipeX, sy, PIPE_FRAMES.VALVE, extScale * 0.9, extAlpha * 0.95, extDepth + 0.1)
+          addPipe(pipeX, sy, PIPE_FRAMES.VALVE, extScale * 0.9, extAlpha, extDepth + 0.1)
         } else {
           const frame = (i % 5 === 0) ? PIPE_FRAMES.VERT_ARROW : PIPE_FRAMES.VERT_RIGHT
           addPipe(pipeX, sy, frame, extScale, extAlpha, extDepth)
         }
       }
-
-      // Bottom corner
       addPipe(pipeX, endY - extStep, PIPE_FRAMES.CORNER_BR, extScale, extAlpha, extDepth)
+    }
+
+    // ── Bottom exterior pipe run (horizontal, below room) ──
+    if (floorW > 80) {
+      const pipeY = floorY + floorH + extOffset
+      const startX = floorX + 20
+      const endX = floorX + floorW - 20
+      addPipe(startX, pipeY, PIPE_FRAMES.CORNER_BL, extScale, extAlpha * 0.9, extDepth)
+      for (let x = startX + extStep; x < endX - extStep; x += extStep) {
+        addPipe(x, pipeY, PIPE_FRAMES.HORIZ_TOP, extScale, extAlpha * 0.85, extDepth)
+      }
+      addPipe(endX - extStep, pipeY, PIPE_FRAMES.CORNER_BR, extScale, extAlpha * 0.9, extDepth)
+    }
+
+    // ── Left exterior pipe run (vertical, left of room) ──
+    if (floorH > 80) {
+      const pipeX = floorX - extOffset
+      const startY = floorY + 20
+      const endY = floorY + floorH - 20
+      addPipe(pipeX, startY, PIPE_FRAMES.CAP_TOP, extScale, extAlpha * 0.9, extDepth)
+      for (let y = startY + extStep; y < endY - extStep; y += extStep) {
+        addPipe(pipeX, y, PIPE_FRAMES.VERT_LEFT, extScale, extAlpha * 0.85, extDepth)
+      }
+      const tY = startY + Math.round((endY - startY) * 0.4)
+      addPipe(pipeX, tY, PIPE_FRAMES.T_RIGHT, extScale * 0.9, extAlpha * 0.9, extDepth + 0.1)
     }
   }
 
@@ -784,12 +1016,12 @@ export class OfficeRooms {
 
     const h = this.hashToken(room.cwd)
     let placed = 0
-    const MAX_CABLES = 10
+    const MAX_CABLES = 14
 
-    // Helper to add a cable sprite with consistent styling
+    // Helper to add a cable sprite — scaled up for visibility
     const addCable = (
       x: number, y: number, frame: number,
-      scale = 0.14, alpha = 0.45, depth = -1.3,
+      scale = 0.22, alpha = 0.65, depth = -1.3,
     ): void => {
       if (placed >= MAX_CABLES) return
       const cable = this.scene.add.sprite(x, y, SPRITESHEET_KEYS.LAB_CABLES, frame)
@@ -825,27 +1057,27 @@ export class OfficeRooms {
       for (let i = 0; i < count; i++) {
         const frame = rightWallFrames[(h + i) % rightWallFrames.length]
         const cy = startY + i * spacing
-        addCable(cableX, cy, frame, 0.14, 0.45, -1.3)
+        addCable(cableX, cy, frame, 0.22, 0.65, -1.3)
       }
     }
 
     // --- Top wall cable detail — horizontal run with curves ---
     if ((h % 3) !== 2 && floorW > 120) {
-      const cableY = floorY + 14
+      const cableY = floorY + 24
       const frame = topWallFrames[(h >> 2) % topWallFrames.length]
       const xPos = floorX + floorW * (0.35 + (h % 5) * 0.08)
-      addCable(xPos, cableY, frame, 0.13, 0.42, -1.3)
+      addCable(xPos, cableY, frame, 0.20, 0.60, -1.3)
     }
 
-    // --- Bottom wall interior cable run — 1 tile in from wall ---
+    // --- Bottom wall interior cable run ---
     if ((h % 5) < 3 && floorW > 130) {
-      const cableY = floorY + floorH - 20
-      const count = 2 + (h % 2) // 2 or 3 sprites
+      const cableY = floorY + floorH - 24
+      const count = 2 + (h % 2)
       const segW = (floorW - 80) / (count + 1)
       for (let i = 0; i < count; i++) {
         const frame = bottomWallFrames[(h + i * 3) % bottomWallFrames.length]
         const cx = floorX + 40 + segW * (i + 1)
-        addCable(cx, cableY, frame, 0.12, 0.40, -1.2)
+        addCable(cx, cableY, frame, 0.18, 0.55, -1.2)
       }
     }
 
@@ -876,7 +1108,7 @@ export class OfficeRooms {
     for (let i = 0; i < Math.min(dotCount, dotPositions.length); i++) {
       const [dx, dy] = dotPositions[i]
       const frame = dotFrames[(h + i) % dotFrames.length]
-      addCable(dx, dy, frame, 0.12, 0.50, -1.25)
+      addCable(dx, dy, frame, 0.18, 0.60, -1.25)
     }
   }
 
@@ -987,25 +1219,91 @@ export class OfficeRooms {
     for (const p of labResult.propPlacements) {
       const spr = this.scene.add.sprite(p.x, p.y, SPRITESHEET_KEYS.LAB_PROPS, p.frame)
         .setScale(p.scale).setAlpha(p.alpha).setDepth(p.depth)
+      if (p.tint) spr.setTint(p.tint)
       room.container.add(spr)
       room.wallTileSprites!.push(spr)
     }
 
-    // Place glow lights from engine output
-    const g = room.floorGraphics
-
+    // Place glow lights — inside container with high local depth.
+    // The reference shows prominent cyan pools on the hex floor.
+    // Using multiple layered circles with NORMAL blend (ADD doesn't work well in containers).
     for (const glow of labResult.glowPlacements) {
-      g.fillStyle(glow.color, glow.outerAlpha)
-      g.fillCircle(glow.x, glow.y, glow.outerRadius)
-      g.fillStyle(glow.color, glow.midAlpha)
-      g.fillCircle(glow.x, glow.y, glow.midRadius)
-      g.fillStyle(glow.color, glow.coreAlpha)
-      g.fillCircle(glow.x, glow.y, glow.coreRadius)
+      const glowG = this.scene.add.graphics()
+      // Depth 0.5 = above floor tiles (-2) and props (-1.x), below workstations
+      glowG.setDepth(0.5)
+      // Draw concentric circles — opaque enough to be clearly visible
+      glowG.fillStyle(glow.color, 0.12)
+      glowG.fillCircle(glow.x, glow.y, 36)
+      glowG.fillStyle(glow.color, 0.22)
+      glowG.fillCircle(glow.x, glow.y, 24)
+      glowG.fillStyle(glow.color, 0.40)
+      glowG.fillCircle(glow.x, glow.y, 14)
+      glowG.fillStyle(glow.color, 0.65)
+      glowG.fillCircle(glow.x, glow.y, 7)
+      glowG.fillStyle(0xffffff, 0.40)
+      glowG.fillCircle(glow.x, glow.y, 3)
+      room.container.add(glowG)
+      room.floorTileSprites!.push(glowG as unknown as Phaser.GameObjects.Sprite)
     }
   }
 
   // -------------------------------------------------------------------------
-  // Hazard trim — yellow stripe along room perimeter
+  // Zone boundary — subtle divider lines (replaces heavy hazard trim)
+  // -------------------------------------------------------------------------
+
+  private placeZoneBoundary(
+    room: Room,
+    floorX: number,
+    floorY: number,
+    floorW: number,
+    floorH: number,
+  ): void {
+    const g = room.floorGraphics
+    const x1 = floorX
+    const y1 = floorY
+    const x2 = floorX + floorW
+    const y2 = floorY + floorH
+
+    // Alternating yellow/dark hazard tape — matches reference's prominent zone dividers
+    const stripeW = 8       // tape width
+    const segLen = 10       // each colored segment length
+    const yellow = 0xfbbf24
+    const dark = 0x1a1a2e
+    const alphaY = 0.80
+    const alphaD = 0.60
+
+    // Helper: draw alternating yellow/dark segments along a line
+    const drawHazardLine = (
+      startX: number, startY: number,
+      horizontal: boolean, length: number,
+    ) => {
+      let pos = 0
+      let isYellow = true
+      while (pos < length) {
+        const len = Math.min(segLen, length - pos)
+        g.fillStyle(isYellow ? yellow : dark, isYellow ? alphaY : alphaD)
+        if (horizontal) {
+          g.fillRect(startX + pos, startY, len, stripeW)
+        } else {
+          g.fillRect(startX, startY + pos, stripeW, len)
+        }
+        pos += segLen
+        isYellow = !isYellow
+      }
+    }
+
+    // Top edge
+    drawHazardLine(x1, y1, true, x2 - x1)
+    // Bottom edge
+    drawHazardLine(x1, y2 - stripeW, true, x2 - x1)
+    // Left edge
+    drawHazardLine(x1, y1 + stripeW, false, y2 - y1 - stripeW * 2)
+    // Right edge
+    drawHazardLine(x2 - stripeW, y1 + stripeW, false, y2 - y1 - stripeW * 2)
+  }
+
+  // -------------------------------------------------------------------------
+  // Hazard trim — yellow stripe along room perimeter (legacy, no longer called)
   // -------------------------------------------------------------------------
 
   private placeHazardTrim(

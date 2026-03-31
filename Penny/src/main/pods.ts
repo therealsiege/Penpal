@@ -13,6 +13,7 @@ import { runAgentHeadless } from './sessions'
 import { getPhaseConfig, type PhaseConfig } from './pods/phase-config'
 import { podQualityCollector, type PodQualityEvent } from './evals/collectors/pod-quality'
 import { evalHarness } from './evals/harness'
+import { resolveProjectPath } from './project-paths'
 
 export type { PhaseConfig } from './pods/phase-config'
 
@@ -690,6 +691,23 @@ export function validatePodCwd(cwd: string): string | null {
   }
 }
 
+/** Prefer Atlas clone when present, then solver defaultRepos, then /tmp. */
+function pickPodDefaultCwd(solverId: string): string {
+  const solverCfg = getAgentConfig(solverId)
+  const ordered: string[] = ['atlas']
+  for (const r of solverCfg?.defaultRepos ?? []) {
+    if (!ordered.includes(r)) ordered.push(r)
+  }
+  for (const label of ordered) {
+    const p = resolveProjectPath(label)
+    if (validatePodCwd(p) === null) return p
+  }
+  for (const fb of ['/tmp', process.env.HOME || os.homedir()]) {
+    if (validatePodCwd(fb) === null) return fb
+  }
+  return '/tmp'
+}
+
 export function formatSelfFixMessage(wf: PodWorkflow, testError: string): string {
   const attemptNum = wf.selfFixAttempts + 1
   const diff = getWorkingTreeDiff(wf.cwd)
@@ -1170,10 +1188,9 @@ export function createPod(task: string, opts: CreatePodOpts = {}): PodWorkflow {
     )
   }
 
-  let cwd = opts.cwd
+  let cwd = opts.cwd ? resolveProjectPath(opts.cwd) : undefined
   if (!cwd) {
-    const solverCfg = getAgentConfig(solver)
-    cwd = solverCfg?.defaultRepos[0] || process.env.HOME || '/tmp'
+    cwd = pickPodDefaultCwd(solver)
   }
 
   const phaseConfig = getPhaseConfig(opts.priority)

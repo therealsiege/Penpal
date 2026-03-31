@@ -184,6 +184,44 @@ async function resolveRemoteDefaultBranch(repoPath: string): Promise<string> {
   return 'main'
 }
 
+/** Update remote refs; failures must not be swallowed (stale/missing refs cause "no branch"). */
+async function fetchOriginOrFail(repoPath: string): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await execFileAsync('git', ['fetch', 'origin', '--prune'], {
+      cwd: repoPath, encoding: 'utf-8', timeout: 120_000,
+    })
+    return { ok: true }
+  } catch (err) {
+    return { ok: false, error: formatGitError(err) }
+  }
+}
+
+/** Ensure refs/remotes/origin/<branch> exists after fetch (required for worktree add / checkout). */
+async function ensureOriginRemoteRef(
+  repoPath: string,
+  baseBranch: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const ref = `refs/remotes/origin/${baseBranch}`
+  try {
+    await execFileAsync('git', ['rev-parse', '--verify', ref], {
+      cwd: repoPath, encoding: 'utf-8', timeout: 5_000,
+    })
+    return { ok: true }
+  } catch {
+    try {
+      await execFileAsync('git', ['fetch', 'origin', baseBranch], {
+        cwd: repoPath, encoding: 'utf-8', timeout: 120_000,
+      })
+      await execFileAsync('git', ['rev-parse', '--verify', ref], {
+        cwd: repoPath, encoding: 'utf-8', timeout: 5_000,
+      })
+      return { ok: true }
+    } catch (err) {
+      return { ok: false, error: formatGitError(err) }
+    }
+  }
+}
+
 type IssueWorktreeOk = { ok: true; branch: string; worktreePath: string }
 type IssueWorktreeFail = { ok: false; error: string }
 
@@ -206,19 +244,29 @@ async function createIssueWorktree(
       }
     }
     fs.mkdirSync(worktreesRoot, { recursive: true })
-    await execFileAsync('git', ['fetch', 'origin', '--prune'], {
-      cwd: mainRepoPath, encoding: 'utf-8', timeout: 60_000,
-    }).catch(() => {})
-    await execFileAsync('git', ['fetch', 'origin'], {
-      cwd: mainRepoPath, encoding: 'utf-8', timeout: 120_000,
-    }).catch(() => {})
+    const fetchOk = await fetchOriginOrFail(mainRepoPath)
+    if (!fetchOk.ok) {
+      return {
+        ok: false,
+        error:
+          `git fetch origin failed:\n${fetchOk.error}\n\n` +
+          `Tip: ensure this clone can reach the remote (VPN, SSH key, or HTTPS credentials). ` +
+          `Run \`git fetch origin\` in ${mainRepoPath} from a terminal to verify.`,
+      }
+    }
 
     const baseBranch = await resolveRemoteDefaultBranch(mainRepoPath)
     console.log(`[github-pipeline] Resolved default base branch: ${baseBranch} (repo: ${mainRepoPath})`)
 
-    await execFileAsync('git', ['fetch', 'origin', baseBranch], {
-      cwd: mainRepoPath, encoding: 'utf-8', timeout: 60_000,
-    }).catch(() => {})
+    const refOk = await ensureOriginRemoteRef(mainRepoPath, baseBranch)
+    if (!refOk.ok) {
+      return {
+        ok: false,
+        error:
+          `Missing remote ref origin/${baseBranch}:\n${refOk.error}\n\n` +
+          `Tip: confirm the default branch name and that you can fetch it (\`git ls-remote origin\`).`,
+      }
+    }
 
     if (fs.existsSync(worktreePath)) {
       if (fs.existsSync(path.join(worktreePath, '.git'))) {
@@ -261,19 +309,29 @@ async function createIssueBranch(localPath: string, issueNumber: number, slug: s
         error: `Not a git repository (missing .git): ${localPath}. Fix REPOS localPath in github-issues config.`,
       }
     }
-    await execFileAsync('git', ['fetch', 'origin', '--prune'], {
-      cwd: localPath, encoding: 'utf-8', timeout: 60_000,
-    }).catch(() => {})
-    await execFileAsync('git', ['fetch', 'origin'], {
-      cwd: localPath, encoding: 'utf-8', timeout: 120_000,
-    }).catch(() => {})
+    const fetchOk = await fetchOriginOrFail(localPath)
+    if (!fetchOk.ok) {
+      return {
+        ok: false,
+        error:
+          `git fetch origin failed:\n${fetchOk.error}\n\n` +
+          `Tip: ensure this clone can reach the remote (VPN, SSH key, or HTTPS credentials). ` +
+          `Run \`git fetch origin\` in ${localPath} from a terminal to verify.`,
+      }
+    }
 
     const baseBranch = await resolveRemoteDefaultBranch(localPath)
     console.log(`[github-pipeline] Resolved default base branch: ${baseBranch} (repo: ${localPath})`)
 
-    await execFileAsync('git', ['fetch', 'origin', baseBranch], {
-      cwd: localPath, encoding: 'utf-8', timeout: 60_000,
-    }).catch(() => {})
+    const refOk = await ensureOriginRemoteRef(localPath, baseBranch)
+    if (!refOk.ok) {
+      return {
+        ok: false,
+        error:
+          `Missing remote ref origin/${baseBranch}:\n${refOk.error}\n\n` +
+          `Tip: confirm the default branch name and that you can fetch it (\`git ls-remote origin\`).`,
+      }
+    }
 
     // Delete stale branch from previous failed attempts
     await execFileAsync('git', ['branch', '-D', branch], {
