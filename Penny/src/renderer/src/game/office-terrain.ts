@@ -83,6 +83,13 @@ export class OfficeTerrain {
     for (const d of this.terrainDecos) { try { (d as { destroy(): void }).destroy() } catch { /* */ } }
     this.terrainDecos = []
 
+    // Lab skin — minimal dark facility exterior
+    const isLab = this.scene.textures.exists(SPRITESHEET_KEYS.LAB_PROPS)
+    if (isLab) {
+      this.drawLabExterior(worldW, worldH, g)
+      return
+    }
+
     // FF7 Midgar industrial theme — steel plates, mako glow, pipes, grating
 
     const PAD = 300
@@ -1179,6 +1186,136 @@ export class OfficeTerrain {
 
     // ── Seasonal decorations ──
     this.placeSeasonalDecorations(worldW, worldH, buildingRects, isOverlapping, rand)
+  }
+
+  // ---------------------------------------------------------------------------
+  // drawLabExterior — clean dark facility background for lab skin
+  // ---------------------------------------------------------------------------
+
+  private drawLabExterior(worldW: number, worldH: number, g: Phaser.GameObjects.Graphics): void {
+    this.reactorCenter = null
+
+    const PAD = 300
+    const x0 = -PAD
+    const y0 = -PAD
+    const w = worldW + PAD * 2
+    const h = worldH + PAD * 2
+
+    let seed = 42
+    const rand = (): number => { seed = (seed * 16807 + 11) % 2147483647; return (seed & 0x7fffffff) / 0x7fffffff }
+
+    // Building rects for collision avoidance
+    const rooms = this.host.getRooms()
+    const buildingRects: { x: number; y: number; w: number; h: number }[] = []
+    for (const room of rooms.values()) {
+      buildingRects.push({
+        x: room.x - room.width / 2 - 15,
+        y: room.y - room.height / 2 - 15,
+        w: room.width + 30,
+        h: room.height + 30,
+      })
+    }
+    const isOverlapping = (tx: number, ty: number, radius: number): boolean => {
+      for (const r of buildingRects) {
+        if (tx + radius > r.x && tx - radius < r.x + r.w && ty + radius > r.y && ty - radius < r.y + r.h) return true
+      }
+      return false
+    }
+
+    // ── 1. Base — deep navy facility floor ──
+    g.fillStyle(0x0d1b2a, 1)
+    g.fillRect(x0, y0, w, h)
+
+    // ── 2. Subtle structural panel grid — large dark panels ──
+    const panelW = 160 + Math.floor(rand() * 60)
+    const panelH = 140 + Math.floor(rand() * 50)
+    for (let py = y0; py < y0 + h; py += panelH) {
+      for (let px = x0; px < x0 + w; px += panelW) {
+        // Panel seam lines
+        g.lineStyle(1, 0x142238, 0.35)
+        g.lineBetween(px, y0, px, y0 + h)
+      }
+      g.lineStyle(1, 0x142238, 0.35)
+      g.lineBetween(x0, py, x0 + w, py)
+    }
+
+    // ── 3. Slight panel color variation ──
+    for (let py = y0; py < y0 + h; py += panelH) {
+      for (let px = x0; px < x0 + w; px += panelW) {
+        const r = rand()
+        if (r < 0.12) {
+          g.fillStyle(0x0f2035, 0.3)
+          g.fillRect(px + 1, py + 1, panelW - 2, panelH - 2)
+        } else if (r < 0.20) {
+          g.fillStyle(0x0a1520, 0.25)
+          g.fillRect(px + 1, py + 1, panelW - 2, panelH - 2)
+        }
+      }
+    }
+
+    // ── 4. Perimeter structure — facility walls ──
+    const perimX1 = x0 + 30
+    const perimY1 = y0 + 30
+    const perimX2 = x0 + w - 30
+    const perimY2 = y0 + h - 30
+    // Solid perimeter lines
+    g.lineStyle(2, 0x1a2d42, 0.5)
+    g.strokeRect(perimX1, perimY1, perimX2 - perimX1, perimY2 - perimY1)
+    // Corner reinforcement brackets
+    const corners = [
+      { x: perimX1, y: perimY1 },
+      { x: perimX2, y: perimY1 },
+      { x: perimX1, y: perimY2 },
+      { x: perimX2, y: perimY2 },
+    ]
+    for (const c of corners) {
+      g.fillStyle(0x1a2d42, 0.5)
+      g.fillRect(c.x - 4, c.y - 4, 8, 8)
+    }
+
+    // ── 5. Sparse structural conduits along edges ──
+    // Horizontal conduit below building area
+    const conduitY = worldH + 30
+    if (conduitY < y0 + h - 50) {
+      g.fillStyle(0x112030, 0.6)
+      g.fillRect(x0, conduitY - 3, w, 6)
+      g.lineStyle(0.5, 0x1a3050, 0.3)
+      g.lineBetween(x0, conduitY - 3, x0 + w, conduitY - 3)
+      g.lineBetween(x0, conduitY + 3, x0 + w, conduitY + 3)
+    }
+    // Vertical conduit right of building area
+    const conduitX = worldW + 30
+    if (conduitX < x0 + w - 50) {
+      g.fillStyle(0x112030, 0.6)
+      g.fillRect(conduitX - 3, y0, 6, h)
+      g.lineStyle(0.5, 0x1a3050, 0.3)
+      g.lineBetween(conduitX - 3, y0, conduitX - 3, y0 + h)
+      g.lineBetween(conduitX + 3, y0, conduitX + 3, y0 + h)
+    }
+
+    // ── 6. Floor markers — subtle directional indicators ──
+    for (let i = 0; i < 5; i++) {
+      const mx = WORLD_MARGIN + 80 + rand() * (worldW - WORLD_MARGIN * 2 - 160)
+      const my = WORLD_MARGIN + 80 + rand() * (worldH - WORLD_MARGIN * 2 - 160)
+      if (isOverlapping(mx, my, 20)) continue
+      // Small cross marker
+      g.lineStyle(1, 0x1a3050, 0.2)
+      g.lineBetween(mx - 6, my, mx + 6, my)
+      g.lineBetween(mx, my - 6, mx, my + 6)
+    }
+
+    // ── 7. Sparse vent grates ──
+    for (let i = 0; i < 3; i++) {
+      const gx = x0 + 120 + rand() * (w - 240)
+      const gy = y0 + 120 + rand() * (h - 240)
+      if (isOverlapping(gx, gy, 15)) continue
+      g.fillStyle(0x0f1f30, 0.4)
+      g.fillRoundedRect(gx - 14, gy - 8, 28, 16, 2)
+      g.lineStyle(1, 0x1a3050, 0.25)
+      for (let sl = -8; sl <= 8; sl += 4) {
+        g.lineBetween(gx + sl, gy - 5, gx + sl, gy + 5)
+      }
+    }
   }
 
   // ---------------------------------------------------------------------------

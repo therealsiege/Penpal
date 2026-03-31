@@ -279,22 +279,8 @@ export class WorkstationFactory {
     // ── Rank-gated desk items ─────────────────────────────────────────────
     // Desk accessories unlock as agents rank up. The cosmetic-tiers module
     // defines which items appear at each level.
+    // When lab props are loaded, skip all desk clutter — keep the lab clean.
     const agentLevel = agent.xp?.level ?? 1
-
-    // Desk lamp (unlocks at Associate / L4)
-    const lampBase = this.scene.add.rectangle(-34, WS_DESK_Y - 2, 6, 3, activeTheme.lampMetal)
-    wsContainer.add(lampBase)
-    const lampArm = this.scene.add.rectangle(-34, WS_DESK_Y - 8, 1.5, 10, activeTheme.lampMetal)
-    wsContainer.add(lampArm)
-    const lampShade = this.scene.add.triangle(-34, WS_DESK_Y - 14, -5, 6, 0, -2, 5, 6, activeTheme.lampShade, 0.8)
-    wsContainer.add(lampShade)
-    const lampLight = this.scene.add.triangle(-34, WS_DESK_Y - 4, -10, 18, 0, 0, 10, 18, activeTheme.lampShade, 0.04)
-    wsContainer.add(lampLight)
-    const lampVisible = isDeskItemUnlocked(agentLevel, 'lamp')
-    lampBase.setVisible(lampVisible)
-    lampArm.setVisible(lampVisible)
-    lampShade.setVisible(lampVisible)
-    lampLight.setVisible(lampVisible)
 
     // Desk accessories (deterministic per agent name)
     let nameHash = 0
@@ -303,145 +289,179 @@ export class WorkstationFactory {
     }
     nameHash = Math.abs(nameHash)
 
-    // Keyboard (unlocks at Associate / L3)
-    const kbVisible = isDeskItemUnlocked(agentLevel, 'keyboard')
-    const keyboard = this.scene.add.rectangle(0, WS_DESK_Y + 2, 18, 5, activeTheme.roomFloor).setAlpha(0.8).setVisible(kbVisible)
-    wsContainer.add(keyboard)
-    const kbLines = this.scene.add.graphics().setVisible(kbVisible)
-    kbLines.lineStyle(0.5, activeTheme.deskTop, 0.6)
-    for (let r = 0; r < 3; r++) kbLines.lineBetween(-7, WS_DESK_Y + r * 1.5, 7, WS_DESK_Y + r * 1.5)
-    wsContainer.add(kbLines)
-
-    // Desk communicator / phone (unlocks at Expert / L7)
-    const phoneVisible = isDeskItemUnlocked(agentLevel, 'phone')
-    const phoneBody = this.scene.add.rectangle(-30, WS_DESK_Y - 2, 4, 6, activeTheme.deskTop).setVisible(phoneVisible)
-    wsContainer.add(phoneBody)
-    const phoneScreen = this.scene.add.rectangle(-30, WS_DESK_Y - 5, 3, 2, activeTheme.roomFloor).setVisible(phoneVisible)
-    wsContainer.add(phoneScreen)
-    const phoneLight = this.scene.add.arc(-28, WS_DESK_Y - 6, 1.5, 0, 360, false, 0x00e5ff, 0).setVisible(phoneVisible)
-    wsContainer.add(phoneLight)
-
-    // Sticky note (unlocks at Associate / L3)
-    const stickyColors = [0x00e5ff, 0xd4a017, 0xd4a017, 0xa78bfa, 0x00ff88]
-    const stickyX = nameHash % 2 === 0 ? 20 : -20
-    const stickyVisible = isDeskItemUnlocked(agentLevel, 'sticky')
-    const sticky = this.scene.add.rectangle(stickyX, WS_DESK_Y - 6, 7, 6, stickyColors[nameHash % 5], 0.7).setVisible(stickyVisible)
-    wsContainer.add(sticky)
-
-    // Pencil holder (unlocks at Lead / L6)
+    // Variables declared outside the conditional so they exist for the rest of the function
+    let lampBase: Phaser.GameObjects.Rectangle | undefined
+    let lampArm: Phaser.GameObjects.Rectangle | undefined
+    let lampShade: Phaser.GameObjects.Triangle | undefined
+    let lampLight: Phaser.GameObjects.Triangle | undefined
+    let lampVisible = false
+    let keyboard: Phaser.GameObjects.Rectangle | undefined
+    let kbLines: Phaser.GameObjects.Graphics | undefined
+    let phoneBody: Phaser.GameObjects.Rectangle | undefined
+    let phoneScreen: Phaser.GameObjects.Rectangle | undefined
+    let phoneLight: Phaser.GameObjects.Arc | undefined
+    let sticky: Phaser.GameObjects.Rectangle | undefined
     const extraDecos: Phaser.GameObjects.GameObject[] = []
-    if (isDeskItemUnlocked(agentLevel, 'pencil_holder')) {
-      const phX = nameHash % 2 === 0 ? -20 : 20
-      const cup = this.scene.add.rectangle(phX, WS_DESK_Y - 5, 5, 7, activeTheme.deskTop, 0.7)
-      wsContainer.add(cup); extraDecos.push(cup)
-      const p1 = this.scene.add.rectangle(phX - 1, WS_DESK_Y - 10, 1, 6, 0xd4a017, 0.6).setAngle(-5)
-      wsContainer.add(p1); extraDecos.push(p1)
-      const p2 = this.scene.add.rectangle(phX + 1, WS_DESK_Y - 10, 1, 6, 0xef4444, 0.5).setAngle(7)
-      wsContainer.add(p2); extraDecos.push(p2)
-    }
-
-    // Desk plant (unlocks at Lead / L6)
     let deskPlantLeaf: Phaser.GameObjects.Sprite | Phaser.GameObjects.Arc | null = null
-    if (isDeskItemUnlocked(agentLevel, 'plant')) {
-      const plX = nameHash % 2 === 0 ? -16 : 16
-      const pot = this.scene.add.rectangle(plX, WS_DESK_Y - 2, 5, 4, activeTheme.deskTop, 0.7)
-      wsContainer.add(pot); extraDecos.push(pot)
-      const leaf = this.scene.add.sprite(plX, WS_DESK_Y - 6, SPRITESHEET_KEYS.GAME_ICONS, ICON_FRAMES.CIRCLE_GREEN)
-        .setScale(0.22).setAlpha(0.6).setOrigin(0.5) as unknown as Phaser.GameObjects.Sprite & { setFillStyle?: never }
-      wsContainer.add(leaf); extraDecos.push(leaf)
-      deskPlantLeaf = leaf
-    }
-
-    // Desk pet (unlocks at Senior / L5) — animated animal pet or composable monster fallback
     let deskPet: Phaser.GameObjects.Sprite | null = null
     let petEyes: Phaser.GameObjects.Sprite | null = null
     let petMouth: Phaser.GameObjects.Sprite | null = null
     let animalSpecies: string | undefined
-    if (isDeskItemUnlocked(agentLevel, 'pet')) {
-      const petX = 28
-      const hasAnimalPets = this.scene.textures.exists(SPRITESHEET_KEYS.ANIMAL_PETS)
+    let signatureItemSprite: Phaser.GameObjects.Sprite | null = null
+    let roomPropSprite: Phaser.GameObjects.Sprite | null = null
+    let ledGlow: Phaser.GameObjects.Graphics | undefined
 
-      if (hasAnimalPets) {
-        // Animated animal pet — deterministic species from name hash
-        const speciesIdx = nameHash % ANIMAL_COUNT
-        animalSpecies = ANIMAL_SPECIES[speciesIdx]
-        const animKey = `animal-idle-${animalSpecies}`
-        const startFrame = speciesIdx * ANIMAL_IDLE_FRAMES
-        deskPet = this.scene.add.sprite(petX, WS_DESK_Y - 8, SPRITESHEET_KEYS.ANIMAL_PETS, startFrame)
-          .setScale(0.22)
-          .setAlpha(0.9)
-        if (this.scene.anims.exists(animKey)) {
-          deskPet.play(animKey)
-        }
-        wsContainer.add(deskPet)
-        extraDecos.push(deskPet)
-      } else {
-        // Fallback: composable monster body sprite
-        const petFrame = nameHash % PET_COUNT
-        deskPet = this.scene.add.sprite(petX, WS_DESK_Y - 6, SPRITESHEET_KEYS.DESK_PETS, petFrame)
-          .setScale(0.42)
-          .setAlpha(0.9)
-        wsContainer.add(deskPet)
-        extraDecos.push(deskPet)
+    if (!labPropsLoaded) {
+      // --- Office mode: full desk accessory set ---
 
-        // Pet face — eyes and mouth overlaid on the body
-        if (this.scene.textures.exists(SPRITESHEET_KEYS.DESK_PET_FACES)) {
-          const eyeVariants = [PET_FACE_FRAMES.EYES_CUTE, PET_FACE_FRAMES.EYES_WIDE, PET_FACE_FRAMES.EYES_CUTE, PET_FACE_FRAMES.EYES_SLEEPY]
-          const mouthVariants = [PET_FACE_FRAMES.MOUTH_HAPPY, PET_FACE_FRAMES.MOUTH_O, PET_FACE_FRAMES.MOUTH_HAPPY, PET_FACE_FRAMES.MOUTH_GRIN]
-          const eyeFrame = eyeVariants[nameHash % eyeVariants.length]
-          const mouthFrame = mouthVariants[(nameHash >> 2) % mouthVariants.length]
+      // Desk lamp (unlocks at Associate / L4)
+      lampBase = this.scene.add.rectangle(-34, WS_DESK_Y - 2, 6, 3, activeTheme.lampMetal)
+      wsContainer.add(lampBase)
+      lampArm = this.scene.add.rectangle(-34, WS_DESK_Y - 8, 1.5, 10, activeTheme.lampMetal)
+      wsContainer.add(lampArm)
+      lampShade = this.scene.add.triangle(-34, WS_DESK_Y - 14, -5, 6, 0, -2, 5, 6, activeTheme.lampShade, 0.8)
+      wsContainer.add(lampShade)
+      lampLight = this.scene.add.triangle(-34, WS_DESK_Y - 4, -10, 18, 0, 0, 10, 18, activeTheme.lampShade, 0.04)
+      wsContainer.add(lampLight)
+      lampVisible = isDeskItemUnlocked(agentLevel, 'lamp')
+      lampBase.setVisible(lampVisible)
+      lampArm.setVisible(lampVisible)
+      lampShade.setVisible(lampVisible)
+      lampLight.setVisible(lampVisible)
 
-          petEyes = this.scene.add.sprite(petX, WS_DESK_Y - 8, SPRITESHEET_KEYS.DESK_PET_FACES, eyeFrame)
-            .setScale(0.65)
-            .setAlpha(0.95)
-          wsContainer.add(petEyes)
-          extraDecos.push(petEyes)
+      // Keyboard (unlocks at Associate / L3)
+      const kbVisible = isDeskItemUnlocked(agentLevel, 'keyboard')
+      keyboard = this.scene.add.rectangle(0, WS_DESK_Y + 2, 18, 5, activeTheme.roomFloor).setAlpha(0.8).setVisible(kbVisible)
+      wsContainer.add(keyboard)
+      kbLines = this.scene.add.graphics().setVisible(kbVisible)
+      kbLines.lineStyle(0.5, activeTheme.deskTop, 0.6)
+      for (let r = 0; r < 3; r++) kbLines.lineBetween(-7, WS_DESK_Y + r * 1.5, 7, WS_DESK_Y + r * 1.5)
+      wsContainer.add(kbLines)
 
-          petMouth = this.scene.add.sprite(petX, WS_DESK_Y - 5, SPRITESHEET_KEYS.DESK_PET_FACES, mouthFrame)
-            .setScale(0.65)
-            .setAlpha(0.95)
-          wsContainer.add(petMouth)
-          extraDecos.push(petMouth)
+      // Desk communicator / phone (unlocks at Expert / L7)
+      const phoneVisible = isDeskItemUnlocked(agentLevel, 'phone')
+      phoneBody = this.scene.add.rectangle(-30, WS_DESK_Y - 2, 4, 6, activeTheme.deskTop).setVisible(phoneVisible)
+      wsContainer.add(phoneBody)
+      phoneScreen = this.scene.add.rectangle(-30, WS_DESK_Y - 5, 3, 2, activeTheme.roomFloor).setVisible(phoneVisible)
+      wsContainer.add(phoneScreen)
+      phoneLight = this.scene.add.arc(-28, WS_DESK_Y - 6, 1.5, 0, 360, false, 0x00e5ff, 0).setVisible(phoneVisible)
+      wsContainer.add(phoneLight)
+
+      // Sticky note (unlocks at Associate / L3)
+      const stickyColors = [0x00e5ff, 0xd4a017, 0xd4a017, 0xa78bfa, 0x00ff88]
+      const stickyX = nameHash % 2 === 0 ? 20 : -20
+      const stickyVisible = isDeskItemUnlocked(agentLevel, 'sticky')
+      sticky = this.scene.add.rectangle(stickyX, WS_DESK_Y - 6, 7, 6, stickyColors[nameHash % 5], 0.7).setVisible(stickyVisible)
+      wsContainer.add(sticky)
+
+      // Pencil holder (unlocks at Lead / L6)
+      if (isDeskItemUnlocked(agentLevel, 'pencil_holder')) {
+        const phX = nameHash % 2 === 0 ? -20 : 20
+        const cup = this.scene.add.rectangle(phX, WS_DESK_Y - 5, 5, 7, activeTheme.deskTop, 0.7)
+        wsContainer.add(cup); extraDecos.push(cup)
+        const p1 = this.scene.add.rectangle(phX - 1, WS_DESK_Y - 10, 1, 6, 0xd4a017, 0.6).setAngle(-5)
+        wsContainer.add(p1); extraDecos.push(p1)
+        const p2 = this.scene.add.rectangle(phX + 1, WS_DESK_Y - 10, 1, 6, 0xef4444, 0.5).setAngle(7)
+        wsContainer.add(p2); extraDecos.push(p2)
+      }
+
+      // Desk plant (unlocks at Lead / L6)
+      if (isDeskItemUnlocked(agentLevel, 'plant')) {
+        const plX = nameHash % 2 === 0 ? -16 : 16
+        const pot = this.scene.add.rectangle(plX, WS_DESK_Y - 2, 5, 4, activeTheme.deskTop, 0.7)
+        wsContainer.add(pot); extraDecos.push(pot)
+        const leaf = this.scene.add.sprite(plX, WS_DESK_Y - 6, SPRITESHEET_KEYS.GAME_ICONS, ICON_FRAMES.CIRCLE_GREEN)
+          .setScale(0.22).setAlpha(0.6).setOrigin(0.5) as unknown as Phaser.GameObjects.Sprite & { setFillStyle?: never }
+        wsContainer.add(leaf); extraDecos.push(leaf)
+        deskPlantLeaf = leaf
+      }
+
+      // Desk pet (unlocks at Senior / L5) — animated animal pet or composable monster fallback
+      if (isDeskItemUnlocked(agentLevel, 'pet')) {
+        const petX = 28
+        const hasAnimalPets = this.scene.textures.exists(SPRITESHEET_KEYS.ANIMAL_PETS)
+
+        if (hasAnimalPets) {
+          // Animated animal pet — deterministic species from name hash
+          const speciesIdx = nameHash % ANIMAL_COUNT
+          animalSpecies = ANIMAL_SPECIES[speciesIdx]
+          const animKey = `animal-idle-${animalSpecies}`
+          const startFrame = speciesIdx * ANIMAL_IDLE_FRAMES
+          deskPet = this.scene.add.sprite(petX, WS_DESK_Y - 8, SPRITESHEET_KEYS.ANIMAL_PETS, startFrame)
+            .setScale(0.22)
+            .setAlpha(0.9)
+          if (this.scene.anims.exists(animKey)) {
+            deskPet.play(animKey)
+          }
+          wsContainer.add(deskPet)
+          extraDecos.push(deskPet)
+        } else {
+          // Fallback: composable monster body sprite
+          const petFrame = nameHash % PET_COUNT
+          deskPet = this.scene.add.sprite(petX, WS_DESK_Y - 6, SPRITESHEET_KEYS.DESK_PETS, petFrame)
+            .setScale(0.42)
+            .setAlpha(0.9)
+          wsContainer.add(deskPet)
+          extraDecos.push(deskPet)
+
+          // Pet face — eyes and mouth overlaid on the body
+          if (this.scene.textures.exists(SPRITESHEET_KEYS.DESK_PET_FACES)) {
+            const eyeVariants = [PET_FACE_FRAMES.EYES_CUTE, PET_FACE_FRAMES.EYES_WIDE, PET_FACE_FRAMES.EYES_CUTE, PET_FACE_FRAMES.EYES_SLEEPY]
+            const mouthVariants = [PET_FACE_FRAMES.MOUTH_HAPPY, PET_FACE_FRAMES.MOUTH_O, PET_FACE_FRAMES.MOUTH_HAPPY, PET_FACE_FRAMES.MOUTH_GRIN]
+            const eyeFrame = eyeVariants[nameHash % eyeVariants.length]
+            const mouthFrame = mouthVariants[(nameHash >> 2) % mouthVariants.length]
+
+            petEyes = this.scene.add.sprite(petX, WS_DESK_Y - 8, SPRITESHEET_KEYS.DESK_PET_FACES, eyeFrame)
+              .setScale(0.65)
+              .setAlpha(0.95)
+            wsContainer.add(petEyes)
+            extraDecos.push(petEyes)
+
+            petMouth = this.scene.add.sprite(petX, WS_DESK_Y - 5, SPRITESHEET_KEYS.DESK_PET_FACES, mouthFrame)
+              .setScale(0.65)
+              .setAlpha(0.95)
+            wsContainer.add(petMouth)
+            extraDecos.push(petMouth)
+          }
         }
       }
-    }
 
-    // Signature item — unique per-agent personality item on the desk surface
-    let signatureItemSprite: Phaser.GameObjects.Sprite | null = null
-    if (this.scene.textures.exists(SPRITESHEET_KEYS.GAME_ITEMS)) {
-      const sigFrame = getSignatureItem(nameHash)
-      // Place on the opposite side from the sticky note
-      const sigX = -28
-      signatureItemSprite = this.scene.add.sprite(sigX, WS_DESK_Y - 12, SPRITESHEET_KEYS.GAME_ITEMS, sigFrame)
-        .setScale(0.25)
-        .setAlpha(0.65)
-      wsContainer.add(signatureItemSprite)
-      extraDecos.push(signatureItemSprite)
-    }
+      // Signature item — unique per-agent personality item on the desk surface
+      if (this.scene.textures.exists(SPRITESHEET_KEYS.GAME_ITEMS)) {
+        const sigFrame = getSignatureItem(nameHash)
+        // Place on the opposite side from the sticky note
+        const sigX = -28
+        signatureItemSprite = this.scene.add.sprite(sigX, WS_DESK_Y - 12, SPRITESHEET_KEYS.GAME_ITEMS, sigFrame)
+          .setScale(0.25)
+          .setAlpha(0.65)
+        wsContainer.add(signatureItemSprite)
+        extraDecos.push(signatureItemSprite)
+      }
 
-    // Room-type themed prop — desk item varies by the room's project type
-    let roomPropSprite: Phaser.GameObjects.Sprite | null = null
-    if (this.scene.textures.exists(SPRITESHEET_KEYS.GAME_ITEMS)) {
-      const roomType = detectRoomType(room.cwd ?? '')
-      const roomItemFrame = getRoomTypeItem(roomType, nameHash)
-      roomPropSprite = this.scene.add.sprite(30, WS_DESK_Y - 4, SPRITESHEET_KEYS.GAME_ITEMS, roomItemFrame)
-        .setScale(0.25)
-        .setAlpha(0.7)
-      wsContainer.add(roomPropSprite)
-      extraDecos.push(roomPropSprite)
-    }
+      // Room-type themed prop — desk item varies by the room's project type
+      if (this.scene.textures.exists(SPRITESHEET_KEYS.GAME_ITEMS)) {
+        const roomType = detectRoomType(room.cwd ?? '')
+        const roomItemFrame = getRoomTypeItem(roomType, nameHash)
+        roomPropSprite = this.scene.add.sprite(30, WS_DESK_Y - 4, SPRITESHEET_KEYS.GAME_ITEMS, roomItemFrame)
+          .setScale(0.25)
+          .setAlpha(0.7)
+        wsContainer.add(roomPropSprite)
+        extraDecos.push(roomPropSprite)
+      }
 
-    // LED underglow strip — color based on rank
-    const ledGlow = this.scene.add.graphics()
-    const ledColor = isDeskItemUnlocked(agentLevel, 'rgb_underglow') ? getRankColor(agentLevel) : activeTheme.deskStrokeIdle
-    ledGlow.fillStyle(ledColor, isDeskItemUnlocked(agentLevel, 'rgb_underglow') ? 0.6 : 0.3)
-    ledGlow.fillRoundedRect(-34, WS_DESK_Y + 4, 68, 2, 1)
-    wsContainer.add(ledGlow)
+      // LED underglow strip — color based on rank
+      ledGlow = this.scene.add.graphics()
+      const ledColor = isDeskItemUnlocked(agentLevel, 'rgb_underglow') ? getRankColor(agentLevel) : activeTheme.deskStrokeIdle
+      ledGlow.fillStyle(ledColor, isDeskItemUnlocked(agentLevel, 'rgb_underglow') ? 0.6 : 0.3)
+      ledGlow.fillRoundedRect(-34, WS_DESK_Y + 4, 68, 2, 1)
+      wsContainer.add(ledGlow)
 
-    // Gold desk trim for Master+ (L8)
-    if (isDeskItemUnlocked(agentLevel, 'gold_trim')) {
-      deskBody.setStrokeStyle(1.5, 0xfbbf24, 0.7)
+      // Gold desk trim for Master+ (L8)
+      if (isDeskItemUnlocked(agentLevel, 'gold_trim')) {
+        deskBody.setStrokeStyle(1.5, 0xfbbf24, 0.7)
+      }
     }
+    // Lab mode: no desk accessories — clean lab workstation
 
     // Task completion counter — 14×8px pill at top-right of the desk surface.
     // bg rect at (26, WS_DESK_Y - 12); text centered inside at (33, WS_DESK_Y - 8).
@@ -463,9 +483,10 @@ export class WorkstationFactory {
 
     // LOD level 2+: shown at room-level zoom (sprite, desk body/top, monitor, chair are always visible at L2+;
     // these extras add context at the room-view scale without requiring full detail)
+    // Filter out undefined entries — lab mode omits desk accessories.
     const lodLevel2Objects: Phaser.GameObjects.GameObject[] = [
       keyboard, kbLines, sticky, evalGlow,
-    ]
+    ].filter((o): o is Phaser.GameObjects.GameObject => o != null)
     // LOD level 3 only: micro-accessories only visible at full detail zoom
     const lodLevel3Objects: Phaser.GameObjects.GameObject[] = [
       lampBase, lampArm, lampShade, lampLight,
@@ -473,7 +494,7 @@ export class WorkstationFactory {
       phoneBody, phoneScreen, phoneLight,
       taskCountBg, taskCountText,
       ...(monitorFrame ? [monitorFrame] : []),
-    ]
+    ].filter((o): o is Phaser.GameObjects.GameObject => o != null)
 
     // Ambient sound-wave indicator — concentric arcs to the left of the agent.
     // Drawn/cleared dynamically in updateAnimation; registered here so it

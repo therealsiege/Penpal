@@ -718,28 +718,27 @@ export class OfficeRooms {
     const hasLabTileset = this.scene.textures.exists(SPRITESHEET_KEYS.LAB_MAIN_TILESET)
 
     if (hasLabTileset) {
-      // Sprite-based hex floor — tile LAB_MAIN_TILESET frames 12-13 across the floor area.
-      // Scale tiles to ~0.30 so each 48px tile covers ~14px effective, creating a dense hex grid.
-      const tileScale = 0.30
-      const effectiveSize = LAB_TILE_SIZE * tileScale
-      const cols = Math.ceil(floorW / effectiveSize)
-      const rows = Math.ceil(floorH / effectiveSize)
+      // Sprite-based hex floor — tile LAB_MAIN_TILESET frames 12 & 13 in a checkerboard.
+      // 128px source tiles scaled to 0.28 => ~36px effective size per tile.
+      const tileScale = 0.28
+      const step = LAB_TILE_SIZE * tileScale   // ~36px
+      const cols = Math.ceil(floorW / step)
+      const rows = Math.ceil(floorH / step)
 
-      for (let row = 0; row < rows; row++) {
-        for (let col = 0; col < cols; col++) {
-          // Alternate between hex floor A and B for variety
-          const frame = (row + col) % 2 === 0
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          const frame = (r + c) % 2 === 0
             ? LAB_TILESET_FRAMES.HEX_FLOOR_A
             : LAB_TILESET_FRAMES.HEX_FLOOR_B
-          const tx = floorX + col * effectiveSize + effectiveSize / 2
-          const ty = floorY + row * effectiveSize + effectiveSize / 2
+          const tx = floorX + c * step + step / 2
+          const ty = floorY + r * step + step / 2
 
-          // Skip tiles that fall outside the floor area
-          if (tx - effectiveSize / 2 > floorX + floorW || ty - effectiveSize / 2 > floorY + floorH) continue
+          // Clip tiles outside the floor rectangle
+          if (tx - step / 2 > floorX + floorW || ty - step / 2 > floorY + floorH) continue
 
           const tile = this.scene.add.sprite(tx, ty, SPRITESHEET_KEYS.LAB_MAIN_TILESET, frame)
             .setScale(tileScale)
-            .setAlpha(0.35)
+            .setAlpha(0.7)
             .setDepth(-2.5)
           room.container.add(tile)
           room.floorTileSprites.push(tile)
@@ -814,62 +813,64 @@ export class OfficeRooms {
     const hasLabSmooth = this.scene.textures.exists(SPRITESHEET_KEYS.LAB_SMOOTH)
     if (!hasLabTileset) return
 
-    const tileScale = 0.30
-    const effectiveSize = LAB_TILE_SIZE * tileScale
+    // Wall tiles use the same 128px source at 0.28 scale => ~36px step
+    const tileScale = 0.28
+    const step = LAB_TILE_SIZE * tileScale  // ~36px
 
     // Top wall edge
-    for (let x = floorX; x < floorX + floorW; x += effectiveSize) {
+    for (let x = floorX; x < floorX + floorW; x += step) {
       const tile = this.scene.add.sprite(
-        x + effectiveSize / 2, floorY + effectiveSize / 2,
+        x + step / 2, floorY + step / 2,
         SPRITESHEET_KEYS.LAB_MAIN_TILESET, LAB_TILESET_FRAMES.WALL_TOP,
-      ).setScale(tileScale).setAlpha(0.45).setDepth(-2)
+      ).setScale(tileScale).setAlpha(0.8).setDepth(-2)
       room.container.add(tile)
       room.wallTileSprites.push(tile)
     }
 
     // Bottom wall edge
-    for (let x = floorX; x < floorX + floorW; x += effectiveSize) {
+    for (let x = floorX; x < floorX + floorW; x += step) {
       const tile = this.scene.add.sprite(
-        x + effectiveSize / 2, floorY + floorH - effectiveSize / 2,
+        x + step / 2, floorY + floorH - step / 2,
         SPRITESHEET_KEYS.LAB_MAIN_TILESET, LAB_TILESET_FRAMES.WALL_BOTTOM,
-      ).setScale(tileScale).setAlpha(0.45).setDepth(-2)
+      ).setScale(tileScale).setAlpha(0.8).setDepth(-2)
       room.container.add(tile)
       room.wallTileSprites.push(tile)
     }
 
-    // Left wall edge
-    for (let y = floorY + effectiveSize; y < floorY + floorH - effectiveSize; y += effectiveSize) {
+    // Left wall edge (skip first and last row covered by top/bottom)
+    for (let y = floorY + step; y < floorY + floorH - step; y += step) {
       const tile = this.scene.add.sprite(
-        floorX + effectiveSize / 2, y + effectiveSize / 2,
+        floorX + step / 2, y + step / 2,
         SPRITESHEET_KEYS.LAB_MAIN_TILESET, LAB_TILESET_FRAMES.WALL_LEFT,
-      ).setScale(tileScale).setAlpha(0.45).setDepth(-2)
+      ).setScale(tileScale).setAlpha(0.8).setDepth(-2)
       room.container.add(tile)
       room.wallTileSprites.push(tile)
     }
 
     // Right wall edge
-    for (let y = floorY + effectiveSize; y < floorY + floorH - effectiveSize; y += effectiveSize) {
+    for (let y = floorY + step; y < floorY + floorH - step; y += step) {
       const tile = this.scene.add.sprite(
-        floorX + floorW - effectiveSize / 2, y + effectiveSize / 2,
+        floorX + floorW - step / 2, y + step / 2,
         SPRITESHEET_KEYS.LAB_MAIN_TILESET, LAB_TILESET_FRAMES.WALL_RIGHT,
-      ).setScale(tileScale).setAlpha(0.45).setDepth(-2)
+      ).setScale(tileScale).setAlpha(0.8).setDepth(-2)
       room.container.add(tile)
       room.wallTileSprites.push(tile)
     }
 
-    // Smooth corner sprites at each corner
+    // Smooth corner sprites at each room corner (48px source, scaled to match ~36px step)
     if (hasLabSmooth) {
+      const cornerScale = step / 48  // ~0.75 so 48px corners match the 36px grid
       const corners = [
-        { x: floorX + effectiveSize / 2, y: floorY + effectiveSize / 2, frame: LAB_SMOOTH_FRAMES.OUTER_TL },
-        { x: floorX + floorW - effectiveSize / 2, y: floorY + effectiveSize / 2, frame: LAB_SMOOTH_FRAMES.OUTER_TR },
-        { x: floorX + effectiveSize / 2, y: floorY + floorH - effectiveSize / 2, frame: LAB_SMOOTH_FRAMES.OUTER_BL },
-        { x: floorX + floorW - effectiveSize / 2, y: floorY + floorH - effectiveSize / 2, frame: LAB_SMOOTH_FRAMES.OUTER_BR },
+        { x: floorX + step / 2, y: floorY + step / 2, frame: LAB_SMOOTH_FRAMES.OUTER_TL },
+        { x: floorX + floorW - step / 2, y: floorY + step / 2, frame: LAB_SMOOTH_FRAMES.OUTER_TR },
+        { x: floorX + step / 2, y: floorY + floorH - step / 2, frame: LAB_SMOOTH_FRAMES.OUTER_BL },
+        { x: floorX + floorW - step / 2, y: floorY + floorH - step / 2, frame: LAB_SMOOTH_FRAMES.OUTER_BR },
       ]
       for (const corner of corners) {
         const tile = this.scene.add.sprite(
           corner.x, corner.y,
           SPRITESHEET_KEYS.LAB_SMOOTH, corner.frame,
-        ).setScale(tileScale).setAlpha(0.50).setDepth(-2)
+        ).setScale(cornerScale).setAlpha(0.8).setDepth(-2)
         room.container.add(tile)
         room.cornerTileSprites.push(tile)
       }

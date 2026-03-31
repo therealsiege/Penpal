@@ -66,6 +66,14 @@ export const SPRITESHEET_KEYS = Object.freeze({
   MEDALS_HD: 'medals-hd',
   /** Lab props — 64x64 cells, 12 cols, 135 frames (alphabetical) */
   LAB_PROPS: 'lab-props',
+  /** Lab pipes — 128x128 cells, 7 cols × 5 rows (35 frames). Pipe straights, T-connectors, crosses, caps, valves */
+  LAB_PIPES: 'lab-pipes',
+  /** Lab cables — 128x128 cells, 7 cols × 9 rows (63 frames). Cable routing, connectors, plugs */
+  LAB_CABLES: 'lab-cables',
+  /** Lab main tileset — 128x128 cells, 8 cols × 9 rows (72 frames). Hex floors, wall edges, transitions */
+  LAB_MAIN_TILESET: 'lab-main-tileset',
+  /** Lab smooth corners — 48x48 cells, 8 cols × 1 row (8 frames). Corner/edge transition pieces */
+  LAB_SMOOTH: 'lab-smooth',
 } as const)
 
 // ---------------------------------------------------------------------------
@@ -318,16 +326,88 @@ export const LAB_TILESET_FRAMES = Object.freeze({
   WALL_RIGHT: 68,
 } as const)
 
-/** Smooth tileset (7 cols × 7 rows) — corner/edge transitions */
+/** Smooth tileset (8 cols × 1 row, 48x48 cells) — corner/edge transitions */
 export const LAB_SMOOTH_FRAMES = Object.freeze({
-  OUTER_TL: 12,
-  OUTER_TR: 13,
-  OUTER_BL: 7,
-  OUTER_BR: 8,
-  EDGE_TOP: 11,
-  EDGE_BOTTOM: 6,
-  EDGE_LEFT: 10,
-  EDGE_RIGHT: 9,
+  OUTER_TL: 0,
+  OUTER_TR: 1,
+  OUTER_BL: 2,
+  OUTER_BR: 3,
+  EDGE_TOP: 4,
+  EDGE_BOTTOM: 5,
+  EDGE_LEFT: 6,
+  EDGE_RIGHT: 7,
+} as const)
+
+// ---------------------------------------------------------------------------
+// Lab pipe frame indices (128x128 cells, 7 cols × 5 rows in LAB_PIPES spritesheet)
+// Frame layout identified from the sprite image (row-major, 0-indexed):
+//   Row 0: corner-TL, horiz-top, corner-TR, horiz-arrow, T-down, T-left, coupling-horiz
+//   Row 1: vert-left, cross, vert-right, vert-arrow-down, T-right, coupling-horiz-short, horiz-short
+//   Row 2: corner-BL, horiz-bottom, corner-BR, valve-wheel, vert-long, coupling-vert, vert-stub
+//   Row 3: cap-top, coupling-center, funnel, vert-mid, broken-A, broken-B, broken-C
+//   Row 4: broken-flat, broken-angled, broken-pieces, cap-bottom, leak-A, leak-B, leak-C
+// ---------------------------------------------------------------------------
+
+export const PIPE_FRAMES = Object.freeze({
+  // Corners (90-degree elbows)
+  CORNER_TL: 0,
+  CORNER_TR: 2,
+  CORNER_BL: 14,
+  CORNER_BR: 16,
+  // Straight segments
+  HORIZ_TOP: 1,       // horizontal straight (with edge detail on top)
+  HORIZ_ARROW: 3,     // horizontal with flow arrow
+  VERT_LEFT: 7,       // vertical straight (left-side detail)
+  VERT_RIGHT: 9,      // vertical straight (right-side detail)
+  VERT_ARROW: 10,     // vertical with flow arrow
+  VERT_LONG: 18,      // long vertical segment
+  HORIZ_SHORT: 13,    // short horizontal coupling
+  // T-connectors
+  T_DOWN: 4,          // T facing down
+  T_LEFT: 5,          // T facing left
+  T_RIGHT: 11,        // T facing right
+  // Cross connector
+  CROSS: 8,
+  // Accessories
+  VALVE: 17,          // valve wheel
+  COUPLING_HORIZ: 6,  // horizontal coupling/flange
+  COUPLING_VERT: 19,  // vertical coupling/flange
+  CAP_TOP: 21,        // pipe end cap (top)
+  FUNNEL: 23,         // funnel/reducer
+  // Damaged
+  BROKEN_A: 25,
+  BROKEN_FLAT: 28,
+} as const)
+
+// ---------------------------------------------------------------------------
+// Lab cable frame indices (128x128 cells, 7 cols × 9 rows in LAB_CABLES spritesheet)
+// ---------------------------------------------------------------------------
+
+export const CABLE_FRAMES = Object.freeze({
+  // Cable routing pieces (top rows)
+  LOOP_ROUND_A: 0,     // rounded loop
+  LOOP_ROUND_B: 1,     // rounded loop variant
+  RECT_LOOP: 2,        // rectangular cable loop
+  STUB_A: 3,           // short cable stub
+  STUB_B: 4,           // cable dot/connector
+  STUB_C: 5,           // cable dot small
+  STUB_D: 6,           // cable dot tiny
+  HORIZ_STRAIGHT: 7,   // horizontal cable run
+  RECT_PLATE: 8,       // rectangular plate/cover
+  VERT_PLATE: 9,       // vertical plate connector
+  CONNECTOR_A: 10,     // 4-dot connector panel
+  CONNECTOR_B: 11,     // 2-dot connector
+  DOT_SINGLE: 12,      // single cable dot
+  DOT_PAIR: 13,        // pair of dots
+  // Lower rows — more routing
+  KNOT_A: 42,          // cable knot
+  KNOT_TRIPLE: 43,     // triple knot
+  CURVE_A: 44,         // curved cable
+  CURVE_B: 45,         // curved cable variant
+  WAVE_A: 49,          // wavy cable
+  WAVE_B: 50,          // wavy cable variant
+  PLUG_A: 56,          // cable plug end
+  PLUG_B: 57,          // cable plug end variant
 } as const)
 
 // ---------------------------------------------------------------------------

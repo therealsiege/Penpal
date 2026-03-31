@@ -358,6 +358,26 @@ export class BootScene extends BaseScene {
       frameWidth: 64, frameHeight: 64,
     })
 
+    // Lab pipes — 128x128 cells, 7 cols × 5 rows (pipe runs, connectors, valves)
+    this.load.spritesheet(SPRITESHEET_KEYS.LAB_PIPES, './sprites/lab-pipes.png', {
+      frameWidth: 128, frameHeight: 128,
+    })
+
+    // Lab cables — 128x128 cells, 7 cols × 9 rows (cable routing, connectors, plugs)
+    this.load.spritesheet(SPRITESHEET_KEYS.LAB_CABLES, './sprites/lab-cables.png', {
+      frameWidth: 128, frameHeight: 128,
+    })
+
+    // Lab main tileset — 128x128 cells, 8 cols × 9 rows (hex floors, wall edges, transitions)
+    this.load.spritesheet(SPRITESHEET_KEYS.LAB_MAIN_TILESET, './sprites/lab-main-tileset.png', {
+      frameWidth: 128, frameHeight: 128,
+    })
+
+    // Lab smooth corners — 48x48 cells, 8 cols × 1 row (corner/edge transition pieces)
+    this.load.spritesheet(SPRITESHEET_KEYS.LAB_SMOOTH, './sprites/lab-smooth.png', {
+      frameWidth: 48, frameHeight: 48,
+    })
+
     // Kenney UI sound effects (OGG)
     this.load.audio(AUDIO_KEYS.CLICK_A, './sounds/click-a.ogg')
     this.load.audio(AUDIO_KEYS.CLICK_B, './sounds/click-b.ogg')
