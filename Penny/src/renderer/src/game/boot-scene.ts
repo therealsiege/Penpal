@@ -4,7 +4,7 @@ import {
   SCENE_KEYS, SPRITESHEET_KEYS, ANIM_KEYS, IMAGE_KEYS, AUDIO_KEYS,
   EFFECT_ANIM_KEYS, ANIMAL_IDLE_FRAMES, ANIMAL_SPECIES,
 } from './office-asset-keys'
-import { CHAR_FRAME_W, CHAR_FRAME_H, OFFICE_TILE_SIZE, ROOM_TILE_SIZE } from './office-constants'
+import { CHAR_FRAME_W, CHAR_FRAME_H, OFFICE_TILE_SIZE, ROOM_TILE_SIZE, LAB_TILE_SIZE } from './office-constants'
 
 // ---------------------------------------------------------------------------
 // BootScene — shared asset preloader
@@ -111,6 +111,10 @@ export class BootScene extends BaseScene {
       [SPRITESHEET_KEYS.MEDALS_HD]: 'HD Medals',
       [AUDIO_KEYS.CLICK_A]: 'SFX Click',
       [AUDIO_KEYS.TAP_A]: 'SFX Tap',
+      // Wave 8
+      [SPRITESHEET_KEYS.LAB_MAIN_TILESET]: 'Lab Tileset',
+      [SPRITESHEET_KEYS.LAB_SMOOTH]: 'Lab Smooth',
+      [SPRITESHEET_KEYS.LAB_PROPS]: 'Lab Props',
     }
 
     // Spritesheets worth showing a thumbnail preview for
@@ -346,6 +350,21 @@ export class BootScene extends BaseScene {
     // HD medals spritesheet — individual medal sprites at 43x82 cells
     this.load.spritesheet(SPRITESHEET_KEYS.MEDALS_HD, './sprites/medals-hd.png', {
       frameWidth: 43, frameHeight: 82,
+    })
+
+    // --- Wave 8: Lab Tileset ---
+
+    // Lab tileset — hex floor tiles, wall edges, corners (48x48 cells)
+    this.load.spritesheet(SPRITESHEET_KEYS.LAB_MAIN_TILESET, './sprites/lab-tileset.png', {
+      frameWidth: LAB_TILE_SIZE, frameHeight: LAB_TILE_SIZE,
+    })
+    // Lab smooth corners — outer and inner rounded transitions (48x48 cells)
+    this.load.spritesheet(SPRITESHEET_KEYS.LAB_SMOOTH, './sprites/lab-smooth.png', {
+      frameWidth: LAB_TILE_SIZE, frameHeight: LAB_TILE_SIZE,
+    })
+    // Lab props — vent grates, pipes, consoles, hazard stripes (48x48 cells)
+    this.load.spritesheet(SPRITESHEET_KEYS.LAB_PROPS, './sprites/lab-props.png', {
+      frameWidth: LAB_TILE_SIZE, frameHeight: LAB_TILE_SIZE,
     })
 
     // Kenney UI sound effects (OGG)
