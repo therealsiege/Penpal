@@ -14,9 +14,10 @@ import {
   COLOR_DOOR_FILL,
   ROOM_HEADER_H,
 } from './office-constants'
-import { SPRITESHEET_KEYS, ICON_FRAMES, ITEM_FRAMES, EFFECT_ANIM_KEYS, LEGO_FRAMES, LAB_TILESET_FRAMES, LAB_SMOOTH_FRAMES } from './office-asset-keys'
+import { SPRITESHEET_KEYS, ICON_FRAMES, ITEM_FRAMES, EFFECT_ANIM_KEYS, LEGO_FRAMES, LAB_TILESET_FRAMES, LAB_SMOOTH_FRAMES, PIPE_FRAMES, CABLE_FRAMES } from './office-asset-keys'
 import { LAB_TILE_SIZE } from './office-constants'
 import { ROOM_HEADER_ITEM } from './workstation-creation'
+import { LAB_PROP_FRAMES as LP } from './lab-prop-frames.generated'
 import { EventBus, EVENTS } from './events'
 
 // ---------------------------------------------------------------------------
@@ -240,172 +241,50 @@ export class OfficeRooms {
       room.heatOverlay.setSize(w, h)
     }
 
-    const WALL_T = 3          // thinner than outer building walls (5)
-    const WALL_I = 1
     // Directory-based theming — deterministic colors per room type
     const template = getTemplate(getRoomType(room.cwd))
     const roomStyle = {
-      wallOuter: 0x475569,
-      wallInner: 0x64748b,
-      floor: template.floorColor,
       floorGrid: template.rugColor,
       header: COLOR_HEADER_BG,
       accent: template.accentColor,
-      rug: template.rugColor,
     }
 
-    // Subtle drop shadow
-    g.fillStyle(0x000000, 0.15)
-    g.fillRoundedRect(-w / 2 + 3, -h / 2 + 3, w, h, 6)
+    // ── Room area bounds — tileset covers the entire room including walls ──
+    const floorX = -w / 2
+    const floorY = -h / 2
+    const floorW = w
+    const floorH = h - ROOM_HEADER_H
 
-    // Outer wall
-    g.fillStyle(roomStyle.wallOuter)
-    g.fillRoundedRect(-w / 2, -h / 2, w, h, 5)
-
-    // Inner wall highlight
-    g.fillStyle(roomStyle.wallInner)
-    g.fillRoundedRect(-w / 2 + WALL_T, -h / 2 + WALL_T, w - WALL_T * 2, h - WALL_T * 2, 3)
-
-    // Floor — header bar is at the BOTTOM (opposite the door/north side)
-    const floorX = -w / 2 + WALL_T + WALL_I
-    const floorY = -h / 2 + WALL_T + WALL_I
-    const floorW = w - (WALL_T + WALL_I) * 2
-    const floorH = h - (WALL_T + WALL_I) * 2 - ROOM_HEADER_H
-
-    g.fillStyle(roomStyle.floor)
-    g.fillRect(floorX, floorY, floorW, floorH)
-
-    // Hex floor tile rendering — uses LAB_MAIN_TILESET sprites if available,
-    // falls back to procedural diamond-plate pattern when textures not loaded.
+    // ── PRIMARY VISUAL: Autotiled lab room (floor + walls + corners + equipment) ──
     this.tileHexFloor(room, floorX, floorY, floorW, floorH, roomStyle)
 
-    // Rug — themed by directory type
-    const rugInsetX = 8
-    const rugInsetY = 10
-    g.fillStyle(roomStyle.rug, 0.12)
-    g.fillRoundedRect(
-      floorX + rugInsetX,
-      floorY + rugInsetY,
-      Math.max(floorW - rugInsetX * 2, 12),
-      Math.max(floorH - rugInsetY * 2, 12),
-      6,
-    )
-
-    // Rug interior pattern — varies by template type for visual variety
-    const rugX = floorX + rugInsetX
-    const rugY = floorY + rugInsetY
-    const rugW = Math.max(floorW - rugInsetX * 2, 12)
-    const rugH = Math.max(floorH - rugInsetY * 2, 12)
-    const rugStyle = this.hashToken(template.type) % 3
-    if (rugStyle === 0) {
-      // Diamond lattice
-      g.lineStyle(1, roomStyle.rug, 0.15)
-      g.strokeRect(rugX + 2, rugY + 2, rugW - 4, rugH - 4)
-      for (let dr = 0; dr < Math.ceil(rugH / 6); dr++) {
-        for (let dc = 0; dc < Math.ceil(rugW / 6); dc++) {
-          const a = (dr + dc) % 2 === 0 ? 0.08 : 0.12
-          g.fillStyle(roomStyle.rug, a)
-          const dx = rugX + dc * 6, dy = rugY + dr * 6
-          g.fillPoints([{x:dx,y:dy-3},{x:dx+3,y:dy},{x:dx,y:dy+3},{x:dx-3,y:dy}], true)
-        }
-      }
-    } else if (rugStyle === 1) {
-      // Horizontal stripe
-      for (let s = 0; s < Math.ceil(rugH / 4); s++) {
-        g.fillStyle(roomStyle.rug, s % 2 === 0 ? 0.08 : 0.14)
-        g.fillRect(rugX, rugY + s * 4, rugW, Math.min(4, rugH - s * 4))
-      }
-      g.lineStyle(1, roomStyle.rug, 0.1)
-      for (let fx = 0; fx < Math.floor(rugW / 4); fx++) {
-        const lx = rugX + fx * 4
-        g.lineBetween(lx, rugY, lx, rugY + 3)
-        g.lineBetween(lx, rugY + rugH - 3, lx, rugY + rugH)
-      }
-    } else {
-      // Concentric medallion with corner brackets
-      const mcx = rugX + rugW / 2, mcy = rugY + rugH / 2
-      const or2 = Math.min(rugW, rugH) * 0.3
-      g.fillStyle(roomStyle.rug, 0.1); g.fillCircle(mcx, mcy, or2)
-      g.fillStyle(roomStyle.rug, 0.06); g.fillCircle(mcx, mcy, or2 * 0.6)
-      g.lineStyle(1, roomStyle.rug, 0.2)
-      g.lineBetween(rugX+2,rugY+7,rugX+2,rugY+2); g.lineBetween(rugX+2,rugY+2,rugX+7,rugY+2)
-      g.lineBetween(rugX+rugW-7,rugY+2,rugX+rugW-2,rugY+2); g.lineBetween(rugX+rugW-2,rugY+2,rugX+rugW-2,rugY+7)
-      g.lineBetween(rugX+2,rugY+rugH-7,rugX+2,rugY+rugH-2); g.lineBetween(rugX+2,rugY+rugH-2,rugX+7,rugY+rugH-2)
-      g.lineBetween(rugX+rugW-7,rugY+rugH-2,rugX+rugW-2,rugY+rugH-2); g.lineBetween(rugX+rugW-2,rugY+rugH-2,rugX+rugW-2,rugY+rugH-7)
-    }
-
-    // Drop-ceiling grid in the header zone (subtle lines before the solid header paints over)
-    g.lineStyle(0.5, roomStyle.wallInner, 0.15)
-    const CEIL_GRID = 16
-    const headerAreaY = h / 2 - WALL_T - WALL_I - ROOM_HEADER_H
-    const headerAreaBottom = headerAreaY + ROOM_HEADER_H
-    for (let cy = headerAreaY; cy <= headerAreaBottom; cy += CEIL_GRID) {
-      g.lineBetween(floorX, cy, floorX + floorW, cy)
-    }
-    for (let cx = floorX; cx <= floorX + floorW; cx += CEIL_GRID) {
-      g.lineBetween(cx, headerAreaY, cx, headerAreaBottom)
-    }
-
-    // Header bar — gradient simulation via 3 overlapping rects (dark base to lighter top)
-    const hBarX = -w / 2 + WALL_T + WALL_I
-    const hBarY = h / 2 - WALL_T - WALL_I - ROOM_HEADER_H
+    // ── Header bar at the bottom of the room ──
+    const hBarX = -w / 2
+    const hBarY = h / 2 - ROOM_HEADER_H
     g.fillStyle(roomStyle.header, 1)
-    g.fillRect(hBarX, hBarY, floorW, ROOM_HEADER_H)
-    g.fillStyle(roomStyle.wallOuter, 0.12)
-    g.fillStyle(roomStyle.wallOuter, 0.12)
-    g.fillRect(hBarX, hBarY, floorW, Math.ceil(ROOM_HEADER_H * 0.6))
+    g.fillRect(hBarX, hBarY, w, ROOM_HEADER_H)
+    // Subtle gradient overlay on header
+    g.fillStyle(0x0a1628, 0.3)
+    g.fillRect(hBarX, hBarY, w, Math.ceil(ROOM_HEADER_H * 0.6))
     g.fillStyle(0xffffff, 0.06)
-    g.fillRect(hBarX, hBarY + ROOM_HEADER_H - 2, floorW, 2)
+    g.fillRect(hBarX, hBarY + ROOM_HEADER_H - 2, w, 2)
 
-    // Room icon — line-drawn icon left of the room label, slot driven by label hash
-    const iconSlot = this.hashToken(room.teamKey || room.label) % 3
-    const iconX = hBarX + 6
-    const iconY = hBarY + Math.floor(ROOM_HEADER_H / 2)
-    g.lineStyle(1.5, roomStyle.accent, 0.5)
-    if (iconSlot === 0) {
-      // Code brackets < >
-      g.lineBetween(iconX,     iconY - 3, iconX - 3, iconY)
-      g.lineBetween(iconX - 3, iconY,     iconX,     iconY + 3)
-      g.lineBetween(iconX + 5, iconY - 3, iconX + 8, iconY)
-      g.lineBetween(iconX + 8, iconY,     iconX + 5, iconY + 3)
-    } else if (iconSlot === 1) {
-      // Terminal prompt > _
-      g.lineBetween(iconX,     iconY - 3, iconX + 3, iconY)
-      g.lineBetween(iconX + 3, iconY,     iconX,     iconY + 3)
-      g.lineBetween(iconX + 5, iconY + 3, iconX + 9, iconY + 3)
-    } else {
-      // Folder icon
-      g.lineBetween(iconX,     iconY + 3, iconX,     iconY - 1)
-      g.lineBetween(iconX,     iconY - 1, iconX + 3, iconY - 1)
-      g.lineBetween(iconX + 3, iconY - 1, iconX + 4, iconY - 3)
-      g.lineBetween(iconX + 4, iconY - 3, iconX + 9, iconY - 3)
-      g.lineBetween(iconX + 9, iconY - 3, iconX + 9, iconY + 3)
-      g.lineBetween(iconX + 9, iconY + 3, iconX,     iconY + 3)
-    }
+    // Accent line above the header
+    g.lineStyle(2, roomStyle.accent, 0.72)
+    g.lineBetween(hBarX, hBarY, hBarX + w, hBarY)
 
-    // Room number plate on the left side of the header bar
+    // Room number plate
     const roomIndex = this.hashToken(room.teamKey || room.cwd || room.label) % 99
     const plateW = 16
     const plateH = 10
-    const plateX = -w / 2 + WALL_T + WALL_I + 4
+    const plateX = hBarX + 4
     const plateY = hBarY + (ROOM_HEADER_H - plateH) / 2
-    g.fillStyle(roomStyle.wallOuter, 0.5)
+    g.fillStyle(0x0d1b2a, 0.5)
     g.fillRoundedRect(plateX, plateY, plateW, plateH, 2)
     g.lineStyle(1, roomStyle.accent, 0.4)
     g.strokeRoundedRect(plateX, plateY, plateW, plateH, 2)
 
-    // Accent line above the header (separating floor from header at bottom)
-    g.lineStyle(2, roomStyle.accent, 0.72)
-    g.lineBetween(
-      -w / 2 + WALL_T + WALL_I,
-      hBarY,
-      w / 2 - WALL_T - WALL_I,
-      hBarY,
-    )
-
-    // Status strip — separate Graphics object just above the header bar.
-    // Recreated here so drawRoomBackground is idempotent on resize.
-    // updateRoomActivity drives tweened width and color.
+    // Status strip
     if (room.statusStrip) {
       if (room.statusStripTween) { room.statusStripTween.destroy(); room.statusStripTween = null }
       room.statusStrip.destroy()
@@ -414,112 +293,20 @@ export class OfficeRooms {
     {
       const sg = this.scene.add.graphics()
       sg.fillStyle(0x64748b, 0.4)
-      sg.fillRect(hBarX, hBarY - 3, floorW, 2)
+      sg.fillRect(hBarX, hBarY - 3, w, 2)
       room.container.add(sg)
       room.statusStrip = sg
     }
 
-    // Wall tile sprites along room perimeter — uses LAB_MAIN_TILESET if loaded.
-    // Adds sprite-based wall edges and LAB_SMOOTH corner pieces.
-    this.tileWallEdges(room, floorX, floorY, floorW, floorH)
+    // Door panel
+    const doorFloorW = w
+    this.drawDoorPanel(room, doorFloorW, roomStyle.accent)
 
-    // Baseboard molding — 2px strip along all 4 edges of the floor area
-    const baseH = 2
-    g.fillStyle(roomStyle.wallOuter, 0.3)
-    g.fillRect(floorX, floorY, floorW, baseH)
-    g.fillRect(floorX, floorY + floorH - baseH, floorW, baseH)
-    g.fillRect(floorX, floorY, baseH, floorH)
-    g.fillRect(floorX + floorW - baseH, floorY, baseH, floorH)
-
-    // Inner shadow strips along the top and left walls (0.08 to 0.02 alpha gradient)
-    g.fillStyle(0x000000, 0.08)
-    g.fillRect(floorX, floorY, floorW, 3)
-    g.fillRect(floorX, floorY, 3, floorH)
-    g.fillStyle(0x000000, 0.05)
-    g.fillRect(floorX, floorY + 1, floorW, 2)
-    g.fillRect(floorX + 1, floorY, 2, floorH)
-    g.fillStyle(0x000000, 0.02)
-    g.fillRect(floorX, floorY + 2, floorW, 1)
-    g.fillRect(floorX + 2, floorY, 1, floorH)
-
-    // Back-wall window (only for rooms with sufficient vertical space)
-    if (floorH > 140) {
-      const winW = 20
-      const winH = 8
-      const winX = floorX + (floorW - winW) / 2
-      const winY = floorY + 8
-      g.fillStyle(this.host.atmosphere.windowTintColor, this.host.atmosphere.windowTintAlpha * 1.5)
-      g.fillRect(winX, winY, winW, winH)
-
-      // ── Tiny scenic view through the window ──────────────────────────────
-      // Layers drawn bottom-to-top inside the window bounds so they composite
-      // naturally before the frame, mullions, and curtains are painted over.
-      if (this.host.atmosphere.currentTimePhase === 'day' || this.host.atmosphere.currentTimePhase === 'morning') {
-        // Pale blue sky wash across the full pane
-        g.fillStyle(0x7dd3fc, 0.06)
-        g.fillRect(winX, winY, winW, winH)
-        // Green hill — squat ellipse sitting just below the sill
-        g.fillStyle(0x166534, 0.08)
-        g.fillEllipse(winX + winW / 2, winY + winH + 1, winW * 0.9, 6)
-        // Tiny sun dot in the upper-right quadrant
-        g.fillStyle(0xfde68a, 0.10)
-        g.fillCircle(winX + winW - 3, winY + 2, 1)
-      } else if (this.host.atmosphere.currentTimePhase === 'night') {
-        // Dark sky wash
-        g.fillStyle(0x0f172a, 0.08)
-        g.fillRect(winX, winY, winW, winH)
-        // Three scattered star dots
-        g.fillStyle(0xffffff, 0.08)
-        g.fillCircle(winX + 4, winY + 2, 0.5)
-        g.fillCircle(winX + 11, winY + 1, 0.5)
-        g.fillCircle(winX + 16, winY + 3, 0.5)
-        // Tiny crescent moon — bright circle with a dark bite taken out
-        g.fillStyle(0xfef3c7, 0.08)
-        g.fillCircle(winX + 15, winY + 2, 1.5)
-        g.fillStyle(0x0f172a, 0.08)
-        g.fillCircle(winX + 16, winY + 2, 1.2)
-      } else {
-        // Evening — warm orange sky tint
-        g.fillStyle(0xf97316, 0.05)
-        g.fillRect(winX, winY, winW, winH)
-        // Dark silhouette hill at the base
-        g.fillStyle(0x1e293b, 0.06)
-        g.fillEllipse(winX + winW / 2, winY + winH + 1, winW * 0.9, 6)
-      }
-      // ─────────────────────────────────────────────────────────────────────
-
-      g.lineStyle(1, 0x475569, 0.8)
-      g.strokeRect(winX, winY, winW, winH)
-      g.lineStyle(1, 0x475569, 0.5)
-      g.lineBetween(winX + winW / 2, winY, winX + winW / 2, winY + winH)
-      g.lineBetween(winX, winY + winH / 2, winX + winW, winY + winH / 2)
-      g.fillStyle(this.host.atmosphere.windowTintColor, 0.04)
-      g.fillRect(winX - 4, winY + winH, winW + 8, 10)
-
-      // Curtain rod above window
-      g.lineStyle(1, 0x64748b, 0.3)
-      g.lineBetween(winX - 2, winY - 1, winX + winW + 2, winY - 1)
-
-      // Left curtain panel
-      g.fillStyle(0x475569, 0.4)
-      g.fillRect(winX, winY, 3, winH)
-
-      // Right curtain panel
-      g.fillRect(winX + winW - 3, winY, 3, winH)
-
-      // Venetian blind lines (very subtle horizontal lines across the window)
-      g.lineStyle(1, 0x475569, 0.1)
-      for (let bl = 0; bl < 3; bl++) {
-        const blindY = winY + 2 + bl * 2.5
-        g.lineBetween(winX, blindY, winX + winW, blindY)
-      }
-    }
-
-    // Door is now drawn in separate graphics objects so it can be animated.
-    this.drawDoorPanel(room, floorW, roomStyle.accent)
-
-    // Industrial detail overlays (vent grates, pipes, brackets)
-    this.drawIndustrialDetail(g, floorX, floorY, floorW, floorH, room.cwd)
+    // ── Lab detail layers — pipes, cables, props ──
+    this.tilePipeDetail(room, floorX, floorY, floorW, floorH)
+    this.tileCableDetail(room, floorX, floorY, floorW, floorH)
+    this.tileLabProps(room, floorX, floorY, floorW, floorH)
+    this.placeFloorGlowLights(room, floorX, floorY, floorW, floorH)
 
     // Stash room index for downstream use
     ;(room as unknown as Record<string, unknown>)._roomIndex = roomIndex
@@ -701,180 +488,124 @@ export class OfficeRooms {
   // Hex floor tiling — sprite-based hex floor replacing procedural pattern
   // -------------------------------------------------------------------------
 
+  // -------------------------------------------------------------------------
+  // Autotile room — unified grid-based tilemap using correct frame assignments
+  // -------------------------------------------------------------------------
+
   private tileHexFloor(
     room: Room,
     floorX: number,
     floorY: number,
     floorW: number,
     floorH: number,
-    roomStyle: { floorGrid: number },
+    _roomStyle: { floorGrid: number },
   ): void {
-    // Clean up previous floor tile sprites
-    if (room.floorTileSprites) {
-      for (const s of room.floorTileSprites) s.destroy()
-    }
+    // Clean up previous sprites
+    if (room.floorTileSprites) { for (const s of room.floorTileSprites) s.destroy() }
     room.floorTileSprites = []
+    if (room.wallTileSprites) { for (const s of room.wallTileSprites) s.destroy() }
+    room.wallTileSprites = []
+    if (room.cornerTileSprites) { for (const s of room.cornerTileSprites) s.destroy() }
+    room.cornerTileSprites = []
 
-    const hasLabTileset = this.scene.textures.exists(SPRITESHEET_KEYS.LAB_MAIN_TILESET)
+    if (!this.scene.textures.exists(SPRITESHEET_KEYS.LAB_MAIN_TILESET)) return
 
-    if (hasLabTileset) {
-      // Sprite-based hex floor — tile LAB_MAIN_TILESET frames 12 & 13 in a checkerboard.
-      // 128px source tiles scaled to 0.28 => ~36px effective size per tile.
-      const tileScale = 0.28
-      const step = LAB_TILE_SIZE * tileScale   // ~36px
-      const cols = Math.ceil(floorW / step)
-      const rows = Math.ceil(floorH / step)
+    // ── Autotile: single grid covering the entire floor area ──
+    // 128px tiles scaled to fit. Grid is fitted WITHIN room bounds
+    // (floor division) and centered so tiles don't overflow.
+    const tileScale = 0.35
+    const step = LAB_TILE_SIZE * tileScale  // ~45px
 
-      for (let r = 0; r < rows; r++) {
-        for (let c = 0; c < cols; c++) {
-          const frame = (r + c) % 2 === 0
-            ? LAB_TILESET_FRAMES.HEX_FLOOR_A
-            : LAB_TILESET_FRAMES.HEX_FLOOR_B
-          const tx = floorX + c * step + step / 2
-          const ty = floorY + r * step + step / 2
+    const cols = Math.max(4, Math.floor(floorW / step))
+    const rows = Math.max(4, Math.floor(floorH / step))
+    const hash = this.hashToken(room.cwd)
 
-          // Clip tiles outside the floor rectangle
-          if (tx - step / 2 > floorX + floorW || ty - step / 2 > floorY + floorH) continue
+    // Center the grid within the floor area
+    const gridW = cols * step
+    const gridH = rows * step
+    const offsetX = floorX + (floorW - gridW) / 2
+    const offsetY = floorY + (floorH - gridH) / 2
 
-          const tile = this.scene.add.sprite(tx, ty, SPRITESHEET_KEYS.LAB_MAIN_TILESET, frame)
-            .setScale(tileScale)
-            .setAlpha(0.7)
-            .setDepth(-2.5)
-          room.container.add(tile)
-          room.floorTileSprites.push(tile)
-        }
+    // Console equipment along inner wall edges (1 tile in from wall)
+    const consolePositions = new Set<string>()
+    if (cols > 4 && rows > 4) {
+      const cCount = Math.min(3, Math.floor((cols + rows) / 6))
+      for (let i = 0; i < cCount; i++) {
+        const ch = (hash + i * 17) % 4
+        if (ch === 0 && rows > 4)      consolePositions.add(`1,${2 + ((hash + i * 3) % Math.max(1, rows - 4))}`)
+        else if (ch === 1 && rows > 4)  consolePositions.add(`${cols - 2},${2 + ((hash + i * 7) % Math.max(1, rows - 4))}`)
+        else if (ch === 2 && cols > 4)  consolePositions.add(`${2 + ((hash + i * 5) % Math.max(1, cols - 4))},1`)
+        else if (ch === 3 && cols > 4)  consolePositions.add(`${2 + ((hash + i * 11) % Math.max(1, cols - 4))},${rows - 2}`)
       }
-    } else {
-      // Fallback: procedural diamond-plate pattern
-      const g = room.floorGraphics
-      const CELL = 12
-      const DS = 1.8
-      const cellCols = Math.ceil(floorW / CELL)
-      const cellRows = Math.ceil(floorH / CELL)
-      g.fillStyle(roomStyle.floorGrid, 0.18)
-      for (let cr = 0; cr < cellRows; cr++) {
-        for (let cc = 0; cc < cellCols; cc++) {
-          const cx = floorX + cc * CELL + CELL / 2
-          const cy = floorY + cr * CELL + CELL / 2
-          if (cx > floorX + floorW || cy > floorY + floorH) continue
-          const offsets = [
-            { dx: 0, dy: -3 }, { dx: 3, dy: 0 },
-            { dx: 0, dy: 3 }, { dx: -3, dy: 0 },
-          ]
-          for (const { dx, dy } of offsets) {
-            const rx = cx + dx, ry = cy + dy
-            g.fillPoints([
-              { x: rx, y: ry - DS }, { x: rx + DS, y: ry },
-              { x: rx, y: ry + DS }, { x: rx - DS, y: ry },
-            ], true)
+    }
+
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        const isTop = r === 0
+        const isBottom = r === rows - 1
+        const isLeft = c === 0
+        const isRight = c === cols - 1
+
+        let frame: number
+
+        // ── Corners ──
+        if (isTop && isLeft)          frame = LAB_TILESET_FRAMES.CORNER_TL
+        else if (isTop && isRight)    frame = LAB_TILESET_FRAMES.CORNER_TR
+        else if (isBottom && isLeft)  frame = LAB_TILESET_FRAMES.CORNER_BL
+        else if (isBottom && isRight) frame = LAB_TILESET_FRAMES.CORNER_BR
+        // ── Edges ──
+        else if (isTop)    frame = LAB_TILESET_FRAMES.WALL_TOP
+        else if (isBottom) {
+          // Occasional window accent on bottom wall
+          const bottomAccent = (hash + c * 3) % 6
+          if (bottomAccent === 0 && c > 0 && c < cols - 1) frame = LAB_TILESET_FRAMES.WALL_BOTTOM_WINDOW_A
+          else frame = LAB_TILESET_FRAMES.WALL_BOTTOM
+        }
+        else if (isLeft)   frame = LAB_TILESET_FRAMES.WALL_LEFT
+        else if (isRight)  frame = LAB_TILESET_FRAMES.WALL_RIGHT
+        // ── Console equipment ──
+        else if (consolePositions.has(`${c},${r}`)) {
+          if (c === 1)               frame = LAB_TILESET_FRAMES.CONSOLE_LEFT
+          else if (c === cols - 2)   frame = LAB_TILESET_FRAMES.CONSOLE_RIGHT
+          else if (r === 1)          frame = LAB_TILESET_FRAMES.CONSOLE_TOP
+          else                       frame = LAB_TILESET_FRAMES.CONSOLE_SMALL
+        }
+        // ── Interior floor ──
+        else {
+          const cellHash = (hash + r * 7 + c * 13) % 25
+          if (cellHash === 0 && r > 1 && c > 1 && r < rows - 2 && c < cols - 2) {
+            frame = LAB_TILESET_FRAMES.FLOOR_FEATURE
+          } else {
+            const floorVariant = (r + c + hash) % 5
+            if (floorVariant === 0)      frame = LAB_TILESET_FRAMES.HEX_FLOOR_B
+            else if (floorVariant === 3)  frame = LAB_TILESET_FRAMES.HEX_FLOOR_C
+            else                          frame = LAB_TILESET_FRAMES.HEX_FLOOR_A
           }
         }
-      }
-      // Steel plate joint grid lines
-      g.lineStyle(1.0, activeTheme.wallInner, 0.14)
-      for (let jy = floorY; jy <= floorY + floorH; jy += 48) {
-        g.lineBetween(floorX, jy, floorX + floorW, jy)
-      }
-      for (let jx = floorX; jx <= floorX + floorW; jx += 48) {
-        g.lineBetween(jx, floorY, jx, floorY + floorH)
-      }
-      // Bolt circles
-      g.fillStyle(0x4a5a6a, 0.25)
-      for (let by = floorY; by <= floorY + floorH; by += 48) {
-        for (let bx = floorX; bx <= floorX + floorW; bx += 48) {
-          g.fillCircle(bx, by, 2.0)
-        }
+
+        const tx = offsetX + c * step + step / 2
+        const ty = offsetY + r * step + step / 2
+
+        const tile = this.scene.add.sprite(tx, ty, SPRITESHEET_KEYS.LAB_MAIN_TILESET, frame)
+          .setScale(tileScale)
+          .setAlpha(0.90)
+          .setDepth(-2.5)
+        room.container.add(tile)
+        room.floorTileSprites!.push(tile)
       }
     }
   }
 
-  // -------------------------------------------------------------------------
-  // Wall edge tiling — sprite-based wall edges and smooth corners
-  // -------------------------------------------------------------------------
-
+  // tileWallEdges is now handled by the autotiler above — this is a no-op
+  // kept for call-site compatibility
   private tileWallEdges(
-    room: Room,
-    floorX: number,
-    floorY: number,
-    floorW: number,
-    floorH: number,
+    _room: Room,
+    _floorX: number,
+    _floorY: number,
+    _floorW: number,
+    _floorH: number,
   ): void {
-    // Clean up previous wall/corner sprites
-    if (room.wallTileSprites) {
-      for (const s of room.wallTileSprites) s.destroy()
-    }
-    room.wallTileSprites = []
-    if (room.cornerTileSprites) {
-      for (const s of room.cornerTileSprites) s.destroy()
-    }
-    room.cornerTileSprites = []
-
-    const hasLabTileset = this.scene.textures.exists(SPRITESHEET_KEYS.LAB_MAIN_TILESET)
-    const hasLabSmooth = this.scene.textures.exists(SPRITESHEET_KEYS.LAB_SMOOTH)
-    if (!hasLabTileset) return
-
-    // Wall tiles use the same 128px source at 0.28 scale => ~36px step
-    const tileScale = 0.28
-    const step = LAB_TILE_SIZE * tileScale  // ~36px
-
-    // Top wall edge
-    for (let x = floorX; x < floorX + floorW; x += step) {
-      const tile = this.scene.add.sprite(
-        x + step / 2, floorY + step / 2,
-        SPRITESHEET_KEYS.LAB_MAIN_TILESET, LAB_TILESET_FRAMES.WALL_TOP,
-      ).setScale(tileScale).setAlpha(0.8).setDepth(-2)
-      room.container.add(tile)
-      room.wallTileSprites.push(tile)
-    }
-
-    // Bottom wall edge
-    for (let x = floorX; x < floorX + floorW; x += step) {
-      const tile = this.scene.add.sprite(
-        x + step / 2, floorY + floorH - step / 2,
-        SPRITESHEET_KEYS.LAB_MAIN_TILESET, LAB_TILESET_FRAMES.WALL_BOTTOM,
-      ).setScale(tileScale).setAlpha(0.8).setDepth(-2)
-      room.container.add(tile)
-      room.wallTileSprites.push(tile)
-    }
-
-    // Left wall edge (skip first and last row covered by top/bottom)
-    for (let y = floorY + step; y < floorY + floorH - step; y += step) {
-      const tile = this.scene.add.sprite(
-        floorX + step / 2, y + step / 2,
-        SPRITESHEET_KEYS.LAB_MAIN_TILESET, LAB_TILESET_FRAMES.WALL_LEFT,
-      ).setScale(tileScale).setAlpha(0.8).setDepth(-2)
-      room.container.add(tile)
-      room.wallTileSprites.push(tile)
-    }
-
-    // Right wall edge
-    for (let y = floorY + step; y < floorY + floorH - step; y += step) {
-      const tile = this.scene.add.sprite(
-        floorX + floorW - step / 2, y + step / 2,
-        SPRITESHEET_KEYS.LAB_MAIN_TILESET, LAB_TILESET_FRAMES.WALL_RIGHT,
-      ).setScale(tileScale).setAlpha(0.8).setDepth(-2)
-      room.container.add(tile)
-      room.wallTileSprites.push(tile)
-    }
-
-    // Smooth corner sprites at each room corner (48px source, scaled to match ~36px step)
-    if (hasLabSmooth) {
-      const cornerScale = step / 48  // ~0.75 so 48px corners match the 36px grid
-      const corners = [
-        { x: floorX + step / 2, y: floorY + step / 2, frame: LAB_SMOOTH_FRAMES.OUTER_TL },
-        { x: floorX + floorW - step / 2, y: floorY + step / 2, frame: LAB_SMOOTH_FRAMES.OUTER_TR },
-        { x: floorX + step / 2, y: floorY + floorH - step / 2, frame: LAB_SMOOTH_FRAMES.OUTER_BL },
-        { x: floorX + floorW - step / 2, y: floorY + floorH - step / 2, frame: LAB_SMOOTH_FRAMES.OUTER_BR },
-      ]
-      for (const corner of corners) {
-        const tile = this.scene.add.sprite(
-          corner.x, corner.y,
-          SPRITESHEET_KEYS.LAB_SMOOTH, corner.frame,
-        ).setScale(cornerScale).setAlpha(0.8).setDepth(-2)
-        room.container.add(tile)
-        room.cornerTileSprites.push(tile)
-      }
-    }
+    // Wall edges + corners are now placed by tileHexFloor autotiler
   }
 
   // -------------------------------------------------------------------------
@@ -895,7 +626,382 @@ export class OfficeRooms {
   }
 
   // -------------------------------------------------------------------------
-  // Industrial detail — vent grates, pipes, brackets
+  // Pipe detail — decorative pipe sprites along room edges
+  // -------------------------------------------------------------------------
+
+  private tilePipeDetail(
+    room: Room,
+    floorX: number,
+    floorY: number,
+    floorW: number,
+    floorH: number,
+  ): void {
+    if (!this.scene.textures.exists(SPRITESHEET_KEYS.LAB_PIPES)) return
+
+    const h = this.hashToken(room.cwd)
+
+    // Helper to add a pipe sprite with consistent styling
+    const addPipe = (
+      x: number, y: number, frame: number,
+      scale: number, alpha: number, depth: number,
+    ): void => {
+      const spr = this.scene.add.sprite(x, y, SPRITESHEET_KEYS.LAB_PIPES, frame)
+        .setScale(scale).setAlpha(alpha).setDepth(depth)
+      room.container.add(spr)
+      room.wallTileSprites!.push(spr)
+    }
+
+    // ── Interior pipe runs (scaled up for visibility) ──
+    const intScale = 0.28
+    const intStep = 30
+    const showLeftPipe = (h % 3) !== 2
+    const showBottomPipe = (h % 5) >= 2
+
+    // Left edge interior pipe run (vertical)
+    if (showLeftPipe && floorH > 100) {
+      const pipeX = floorX + 14
+      const startY = floorY + 50
+      const endY = floorY + floorH - 50
+
+      // Top cap
+      addPipe(pipeX, startY, PIPE_FRAMES.CAP_TOP, intScale, 0.75, -1.5)
+
+      // Vertical segments
+      for (let y = startY + intStep; y < endY - intStep; y += intStep) {
+        addPipe(pipeX, y, PIPE_FRAMES.VERT_LEFT, intScale, 0.75, -1.5)
+      }
+
+      // Valve near the middle
+      const valveY = startY + Math.round((endY - startY) / 2)
+      addPipe(pipeX, valveY, PIPE_FRAMES.VALVE, intScale * 0.85, 0.70, -1.4)
+    }
+
+    // Bottom edge interior pipe run (horizontal)
+    if (showBottomPipe && floorW > 120) {
+      const pipeY = floorY + floorH - 14
+      const startX = floorX + 50
+      const endX = floorX + floorW - 50
+      for (let x = startX; x < endX; x += intStep) {
+        addPipe(x, pipeY, PIPE_FRAMES.HORIZ_TOP, intScale, 0.70, -1.5)
+      }
+      // Coupling at midpoint
+      const couplingX = startX + Math.round((endX - startX) / 2)
+      addPipe(couplingX, pipeY, PIPE_FRAMES.COUPLING_HORIZ, intScale * 0.85, 0.65, -1.4)
+    }
+
+    // ── Exterior pipe runs — prominent pipes OUTSIDE room walls ──
+    // Visible against team area background for a sci-fi lab aesthetic.
+    const extScale = 0.25
+    const extAlpha = 0.75
+    const extDepth = -1.8
+    const extStep = 30
+    const extOffset = 12  // pixels outside room boundary
+
+    // Determine which exterior sides this room gets (1-2 runs per room)
+    const showTopExterior = (h % 7) < 4         // ~57% of rooms
+    const showRightExterior = (h % 11) < 6      // ~55% of rooms
+
+    // ── Top exterior pipe run (horizontal, above room) ──
+    if (showTopExterior && floorW > 80) {
+      const pipeY = floorY - extOffset
+      const startX = floorX
+      const endX = floorX + floorW
+      const segCount = Math.max(2, Math.floor((endX - startX) / extStep))
+      const valveIdx = Math.floor(segCount / 2) + (h % 3) - 1
+
+      // Left corner elbow
+      addPipe(startX, pipeY, PIPE_FRAMES.CORNER_TL, extScale, extAlpha, extDepth)
+
+      // Horizontal segments
+      for (let i = 1; i < segCount - 1; i++) {
+        const sx = startX + i * extStep
+        if (i === valveIdx) {
+          addPipe(sx, pipeY, PIPE_FRAMES.VALVE, extScale * 0.9, extAlpha * 0.95, extDepth + 0.1)
+        } else if (i === 1 && segCount > 5) {
+          addPipe(sx, pipeY, PIPE_FRAMES.T_DOWN, extScale, extAlpha, extDepth)
+        } else {
+          const frame = (i % 4 === 0) ? PIPE_FRAMES.HORIZ_ARROW : PIPE_FRAMES.HORIZ_TOP
+          addPipe(sx, pipeY, frame, extScale, extAlpha, extDepth)
+        }
+      }
+
+      // Right corner elbow
+      addPipe(endX - extStep, pipeY, PIPE_FRAMES.CORNER_TR, extScale, extAlpha, extDepth)
+    }
+
+    // ── Right exterior pipe run (vertical, right of room) ──
+    if (showRightExterior && floorH > 80) {
+      const pipeX = floorX + floorW + extOffset
+      const startY = floorY
+      const endY = floorY + floorH
+      const segCount = Math.max(2, Math.floor((endY - startY) / extStep))
+      const valveIdx = Math.floor(segCount / 2) + ((h >> 4) % 3) - 1
+
+      // Top cap
+      addPipe(pipeX, startY, PIPE_FRAMES.CAP_TOP, extScale, extAlpha, extDepth)
+
+      // Vertical segments
+      for (let i = 1; i < segCount - 1; i++) {
+        const sy = startY + i * extStep
+        if (i === valveIdx) {
+          addPipe(pipeX, sy, PIPE_FRAMES.VALVE, extScale * 0.9, extAlpha * 0.95, extDepth + 0.1)
+        } else {
+          const frame = (i % 5 === 0) ? PIPE_FRAMES.VERT_ARROW : PIPE_FRAMES.VERT_RIGHT
+          addPipe(pipeX, sy, frame, extScale, extAlpha, extDepth)
+        }
+      }
+
+      // Bottom corner
+      addPipe(pipeX, endY - extStep, PIPE_FRAMES.CORNER_BR, extScale, extAlpha, extDepth)
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // Cable detail — decorative cable sprites along room walls
+  // -------------------------------------------------------------------------
+
+  private tileCableDetail(
+    room: Room,
+    floorX: number,
+    floorY: number,
+    floorW: number,
+    floorH: number,
+  ): void {
+    if (!this.scene.textures.exists(SPRITESHEET_KEYS.LAB_CABLES)) return
+
+    const h = this.hashToken(room.cwd)
+    let placed = 0
+    const MAX_CABLES = 10
+
+    // Helper to add a cable sprite with consistent styling
+    const addCable = (
+      x: number, y: number, frame: number,
+      scale = 0.14, alpha = 0.45, depth = -1.3,
+    ): void => {
+      if (placed >= MAX_CABLES) return
+      const cable = this.scene.add.sprite(x, y, SPRITESHEET_KEYS.LAB_CABLES, frame)
+        .setScale(scale).setAlpha(alpha).setDepth(depth)
+      room.container.add(cable)
+      room.wallTileSprites!.push(cable)
+      placed++
+    }
+
+    // Frame palette — broader selection for variety
+    const rightWallFrames = [
+      CABLE_FRAMES.LOOP_ROUND_A, CABLE_FRAMES.LOOP_ROUND_B,
+      CABLE_FRAMES.CONNECTOR_A, CABLE_FRAMES.STUB_A,
+      CABLE_FRAMES.KNOT_A, CABLE_FRAMES.RECT_PLATE,
+    ]
+    const topWallFrames = [
+      CABLE_FRAMES.HORIZ_STRAIGHT, CABLE_FRAMES.CURVE_A,
+      CABLE_FRAMES.CURVE_B, CABLE_FRAMES.WAVE_A,
+    ]
+    const bottomWallFrames = [
+      CABLE_FRAMES.CURVE_A, CABLE_FRAMES.LOOP_ROUND_B,
+      CABLE_FRAMES.WAVE_A, CABLE_FRAMES.STUB_B,
+      CABLE_FRAMES.KNOT_TRIPLE,
+    ]
+    const dotFrames = [CABLE_FRAMES.DOT_SINGLE, CABLE_FRAMES.DOT_PAIR]
+
+    // --- Right wall cable run — loops, connectors, knots ---
+    if ((h % 4) !== 3 && floorH > 100) {
+      const cableX = floorX + floorW - 16
+      const startY = floorY + 40
+      const spacing = 35
+      const count = Math.min(3, Math.floor((floorH - 80) / spacing))
+      for (let i = 0; i < count; i++) {
+        const frame = rightWallFrames[(h + i) % rightWallFrames.length]
+        const cy = startY + i * spacing
+        addCable(cableX, cy, frame, 0.14, 0.45, -1.3)
+      }
+    }
+
+    // --- Top wall cable detail — horizontal run with curves ---
+    if ((h % 3) !== 2 && floorW > 120) {
+      const cableY = floorY + 14
+      const frame = topWallFrames[(h >> 2) % topWallFrames.length]
+      const xPos = floorX + floorW * (0.35 + (h % 5) * 0.08)
+      addCable(xPos, cableY, frame, 0.13, 0.42, -1.3)
+    }
+
+    // --- Bottom wall interior cable run — 1 tile in from wall ---
+    if ((h % 5) < 3 && floorW > 130) {
+      const cableY = floorY + floorH - 20
+      const count = 2 + (h % 2) // 2 or 3 sprites
+      const segW = (floorW - 80) / (count + 1)
+      for (let i = 0; i < count; i++) {
+        const frame = bottomWallFrames[(h + i * 3) % bottomWallFrames.length]
+        const cx = floorX + 40 + segW * (i + 1)
+        addCable(cx, cableY, frame, 0.12, 0.40, -1.2)
+      }
+    }
+
+    // --- Connector dots along walls (2-3 positions) ---
+    const dotCount = 2 + ((h >> 3) % 2) // 2 or 3 dots
+    const dotPositions: Array<[number, number]> = []
+    // Top wall dot
+    if (floorW > 100) {
+      dotPositions.push([
+        floorX + 30 + (h % 7) * 12,
+        floorY + 12,
+      ])
+    }
+    // Right wall dot
+    if (floorH > 100) {
+      dotPositions.push([
+        floorX + floorW - 14,
+        floorY + floorH * 0.7 + (h % 3) * 8,
+      ])
+    }
+    // Bottom wall dot
+    if (floorW > 140) {
+      dotPositions.push([
+        floorX + floorW * 0.3 + (h % 4) * 10,
+        floorY + floorH - 12,
+      ])
+    }
+    for (let i = 0; i < Math.min(dotCount, dotPositions.length); i++) {
+      const [dx, dy] = dotPositions[i]
+      const frame = dotFrames[(h + i) % dotFrames.length]
+      addCable(dx, dy, frame, 0.12, 0.50, -1.25)
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // Lab props — small decorative sprites (warning signs, vents, panels)
+  // -------------------------------------------------------------------------
+
+  private tileLabProps(
+    room: Room,
+    floorX: number,
+    floorY: number,
+    floorW: number,
+    floorH: number,
+  ): void {
+    if (!this.scene.textures.exists(SPRITESHEET_KEYS.LAB_PROPS)) return
+
+    const h = this.hashToken(room.cwd)
+    const right = floorX + floorW
+    const bottom = floorY + floorH
+
+    // Pick a zone type per room — each has different prop placement
+    const zone = h % 4
+
+    const addProp = (frame: number, x: number, y: number, scale: number, alpha = 0.75) => {
+      const spr = this.scene.add.sprite(x, y, SPRITESHEET_KEYS.LAB_PROPS, frame)
+        .setScale(scale).setAlpha(alpha).setDepth(-1.5)
+      room.container.add(spr)
+      room.wallTileSprites!.push(spr)
+    }
+
+    if (zone === 0) {
+      // ── Control Room — consoles along top wall, keyboard, stool ──
+      const spacing = floorW / 3
+      addProp(LP.CONSOLE_EXAMPLE_LONG, floorX + spacing, floorY + 14, 0.35, 0.88)
+      addProp(LP.CONSOLE_EXAMPLE_SHORT, floorX + spacing * 2, floorY + 14, 0.35, 0.88)
+      addProp(LP.CONSOLE_SCREEN, floorX + spacing, floorY + 22, 0.30, 0.85)
+      addProp(LP.COMPUTER_KEYBOARD, right - floorW * 0.25, bottom - 14, 0.28, 0.82)
+      addProp(LP.WARNING_POWER, right - 16, floorY + 10, 0.25, 0.82)
+      if (floorW > 120) addProp(LP.CABLE_PIECE_01, floorX + 18, bottom - 12, 0.22, 0.80)
+    }
+
+    else if (zone === 1) {
+      // ── Chemical Station — sink, microscope, beakers ──
+      addProp(LP.CIRCULAR_SINK, floorX + floorW * 0.5, floorY + 16, 0.38, 0.88)
+      addProp(LP.MICROSCOPE, floorX + floorW * 0.25, floorY + 16, 0.32, 0.85)
+      addProp(LP.BEAKER, floorX + floorW * 0.72, floorY + 14, 0.28, 0.82)
+      addProp(LP.CONICAL_BEAKER, floorX + floorW * 0.80, floorY + 14, 0.28, 0.82)
+      addProp(LP.WARNING_BIOLOGICAL, floorX + 14, floorY + 10, 0.25, 0.82)
+      if (floorH > 100) addProp(LP.SHELF, floorX + floorW * 0.4, bottom - 14, 0.32, 0.82)
+    }
+
+    else if (zone === 2) {
+      // ── Machinery — generator centerpiece, power cells ──
+      const centers = [LP.GENERATOR, LP.LAB_MACHINE_01, LP.LARGE_TANK]
+      addProp(centers[h % centers.length], floorX + floorW * 0.5, floorY + 18, 0.45, 0.90)
+      addProp(LP.DOME, floorX + floorW * 0.2, floorY + 16, 0.35, 0.85)
+      const cellCount = floorW > 120 ? 3 : 2
+      const cellSpacing = floorW / (cellCount + 1)
+      for (let i = 0; i < cellCount; i++) {
+        addProp(LP.POWER_CELL, floorX + cellSpacing * (i + 1), bottom - 14, 0.30, 0.82)
+      }
+      addProp(LP.SUNKEN_VENT, floorX + 18, bottom - 12, 0.22, 0.80)
+      addProp(LP.WARNING_DEATH, floorX + floorW * 0.5 + 22, floorY + 10, 0.25, 0.82)
+    }
+
+    else {
+      // ── Pod Bay — pods along top, warning signs, sliding door ──
+      const podCount = floorW > 140 ? 3 : 2
+      const podSpacing = floorW / (podCount + 1)
+      for (let i = 0; i < podCount; i++) {
+        const broken = (h + i) % 5 === 0
+        addProp(broken ? LP.BROKEN_POD : LP.POD, floorX + podSpacing * (i + 1), floorY + 18, 0.36, broken ? 0.80 : 0.88)
+      }
+      addProp(LP.SLIDING_DOOR, floorX + 16, floorY + floorH * 0.5, 0.32, 0.82)
+      addProp(LP.WARNING_BIOLOGICAL, floorX + 14, floorY + 10, 0.25, 0.82)
+      addProp(LP.WARNING_STRIPES, right - 16, floorY + 10, 0.25, 0.82)
+      addProp(LP.WARNING_STRIPES, floorX + floorW * 0.3, bottom - 12, 0.25, 0.80)
+    }
+
+    // ── Shared detail — every room gets a couple of floor accents ──
+    // Cable cover near door
+    if ((h % 3) !== 2) addProp(LP.CABLE_COVER, floorX + floorW * 0.6, bottom - 12, 0.22, 0.80)
+    // Wall light on top wall
+    if ((h % 4) !== 3) addProp(LP.WALL_LIGHT, floorX + floorW * 0.85, floorY + 10, 0.25, 0.82)
+    // Vent near bottom edge
+    if ((h % 5) >= 2 && floorH > 80) addProp(LP.VENT_SLATS, floorX + 20, bottom - 16, 0.28, 0.80)
+  }
+
+  // -------------------------------------------------------------------------
+  // Floor glow lights — subtle cyan illumination on the hex floor
+  // -------------------------------------------------------------------------
+
+  private placeFloorGlowLights(
+    room: Room,
+    floorX: number,
+    floorY: number,
+    floorW: number,
+    floorH: number,
+  ): void {
+    const h = this.hashToken(room.cwd)
+
+    // 2 lights for small rooms, 3-4 for larger rooms
+    const lightCount = floorW > 150 ? (3 + (h % 2)) : 2
+
+    // Interior safe zone — at least 30% from edges
+    const marginX = floorW * 0.30
+    const marginY = floorH * 0.30
+    const innerW = floorW - marginX * 2
+    const innerH = floorH - marginY * 2
+    const innerX = floorX + marginX
+    const innerY = floorY + marginY
+
+    for (let i = 0; i < lightCount; i++) {
+      // Deterministic position within the interior
+      const seed = (h + i * 31) | 0
+      const fx = innerX + ((seed * 7 + i * 53) % 1000) / 1000 * innerW
+      const fy = innerY + ((seed * 13 + i * 97) % 1000) / 1000 * innerH
+
+      // Bloom halo — larger, more transparent background glow
+      const bloomRadius = 14 + (seed % 7)  // 14-20
+      const bloomAlpha = 0.04 + ((seed % 3) * 0.01)  // 0.04-0.06
+      const bloom = this.scene.add.circle(fx, fy, bloomRadius, 0x00e5ff, bloomAlpha)
+      bloom.setDepth(-2.0)
+      room.container.add(bloom)
+      room.wallTileSprites!.push(bloom as unknown as Phaser.GameObjects.Sprite)
+
+      // Core glow — smaller, brighter center
+      const coreRadius = 6 + (seed % 5)  // 6-10
+      const coreAlpha = 0.12 + ((seed % 4) * 0.02)  // 0.12-0.18
+      const core = this.scene.add.circle(fx, fy, coreRadius, 0x00e5ff, coreAlpha)
+      core.setDepth(-2.0)
+      room.container.add(core)
+      room.wallTileSprites!.push(core as unknown as Phaser.GameObjects.Sprite)
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // Industrial detail — vent grates, pipes, brackets (legacy procedural)
   // -------------------------------------------------------------------------
 
   private drawIndustrialDetail(

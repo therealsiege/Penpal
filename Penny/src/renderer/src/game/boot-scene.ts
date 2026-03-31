@@ -353,7 +353,7 @@ export class BootScene extends BaseScene {
       frameWidth: 43, frameHeight: 82,
     })
 
-    // Lab props spritesheet — 64x64 cells, 12 cols (issue #144)
+    // Lab props spritesheet — 64x64 cells, 12 cols × 12 rows (768×768, 135 frames)
     this.load.spritesheet(SPRITESHEET_KEYS.LAB_PROPS, './sprites/lab-props.png', {
       frameWidth: 64, frameHeight: 64,
     })

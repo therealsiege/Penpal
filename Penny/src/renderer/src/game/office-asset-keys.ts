@@ -315,15 +315,81 @@ export type LabPropFrame = typeof LAB_PROP_FRAMES[keyof typeof LAB_PROP_FRAMES]
 // Lab tileset frame indices (128x128 cells, alphabetical file order = frame index)
 // ---------------------------------------------------------------------------
 
-/** Main tileset (8 cols × 9 rows) — floor fills, wall edges, transitions */
+/** Main tileset (8 cols × 9 rows) — autotile frames for lab rooms.
+ *  Frame index = row * 8 + col (128×128 cells). */
 export const LAB_TILESET_FRAMES = Object.freeze({
-  HEX_FLOOR_A: 13,
-  HEX_FLOOR_B: 12,
-  OUTER_FILL: 35,
-  WALL_TOP: 69,
-  WALL_BOTTOM: 66,
-  WALL_LEFT: 67,
-  WALL_RIGHT: 68,
+  // ── Hex floor fills (tileable interior) ──
+  HEX_FLOOR_A: 9,       // row 1 col 1 — clean hex floor
+  HEX_FLOOR_B: 35,      // row 4 col 3 — hex floor variant
+  HEX_FLOOR_C: 64,      // row 8 col 0
+  HEX_FLOOR_D: 65,      // row 8 col 1
+
+  // ── Outer wall corners (hex floor inside, wall border outside) ──
+  CORNER_TL: 0,         // row 0 col 0 — wall on bottom+right
+  CORNER_TR: 2,         // row 0 col 2 — wall on bottom+left
+  CORNER_BL: 16,        // row 2 col 0 — wall on top+right
+  CORNER_BR: 18,        // row 2 col 2 — wall on top+left
+
+  // ── Wall edges (hex floor on interior side, wall on edge) ──
+  WALL_TOP: 1,          // row 0 col 1 — horizontal wall along top
+  WALL_BOTTOM: 17,      // row 2 col 1 — horizontal wall along bottom
+  WALL_LEFT: 8,         // row 1 col 0 — vertical wall on left
+  WALL_RIGHT: 11,       // row 1 col 3 — vertical wall on right
+
+  // ── Inner corners (for wall-to-wall concave corners) ──
+  INNER_TL: 15,         // row 1 col 7
+  INNER_TR: 14,         // row 1 col 6
+  INNER_BL: 7,          // row 0 col 7
+  INNER_BR: 6,          // row 0 col 6
+
+  // ── Dark void fill (exterior / outside rooms) ──
+  DARK_FILL: 12,        // row 1 col 4 — solid dark navy
+  OUTER_FILL: 12,       // alias for backwards compat
+
+  // ── Thick wall variants (inner pipe detail, for variety in larger rooms) ──
+  WALL_TOP_THICK: 4,    // row 0 col 4 — top wall with yellow stud border
+  WALL_BOTTOM_THICK: 20,// row 2 col 4 — bottom wall with yellow stud border
+  CORNER_TL_THICK: 3,   // row 0 col 3 — thick TL corner with inner pipe
+  CORNER_TR_THICK: 5,   // row 0 col 5 — thick TR corner with inner pipe
+  CORNER_BL_THICK: 19,  // row 2 col 3 — thick BL corner
+  CORNER_BR_THICK: 21,  // row 2 col 5 — thick BR corner
+
+  // ── Wall-with-window accent tiles (yellow panels in wall) ──
+  WALL_BOTTOM_WINDOW_A: 38, // row 4 col 6 — bottom wall with two yellow windows
+  WALL_BOTTOM_WINDOW_B: 39, // row 4 col 7 — bottom wall variant
+  WALL_BOTTOM_WINDOW_C: 46, // row 5 col 6 — bottom wall with windows
+  WALL_BOTTOM_WINDOW_D: 47, // row 5 col 7 — bottom wall variant
+
+  // ── Equipment / console on hex floor (decoration) ──
+  CONSOLE_SMALL: 43,    // row 5 col 3 — small console on floor
+  CONSOLE_TOP: 51,      // row 6 col 3 — console at top of tile
+  CONSOLE_RIGHT: 56,    // row 7 col 0 — console on right side
+  CONSOLE_LEFT: 57,     // row 7 col 1 — console on left side
+  CONSOLE_RIGHT_B: 58,  // row 7 col 2 — console right variant
+  CONSOLE_LEFT_B: 59,   // row 7 col 3 — console left variant
+  CONSOLE_BOT_RIGHT: 66,// row 8 col 2 — console bottom-right
+  CONSOLE_BOT_LEFT: 67, // row 8 col 3 — console bottom-left
+  FLOOR_FEATURE: 22,    // row 2 col 6 — reactor/light feature
+
+  // ── T-junction / corridor interface tiles ──
+  T_JUNCTION_LEFT: 52,  // row 6 col 4 — wall with corridor going left
+  T_JUNCTION_RIGHT: 53, // row 6 col 5 — wall with corridor going right
+  T_JUNCTION_BOT_A: 54, // row 6 col 6 — wall-floor transition with bottom detail
+  T_JUNCTION_BOT_B: 55, // row 6 col 7 — wall-floor transition variant
+
+  // ── Hex-to-dark smooth transitions ──
+  TRANSITION_TOP: 49,   // row 6 col 1 — dark bite along top
+  TRANSITION_BOTTOM: 33,// row 4 col 1 — dark bite along bottom
+  TRANSITION_LEFT: 42,  // row 5 col 2 — dark bite along left (note: hex right, dark left)
+  TRANSITION_RIGHT: 40, // row 5 col 0 — dark bite along right (note: hex left, dark right)
+  TRANSITION_TL: 50,    // row 6 col 2 — dark corner top-left
+  TRANSITION_TR: 48,    // row 6 col 0 — dark corner top-right
+  TRANSITION_BL: 34,    // row 4 col 2 — dark corner bottom-left
+  TRANSITION_BR: 32,    // row 4 col 0 — dark corner bottom-right
+
+  // ── Corridor crossings / junctions ──
+  CROSS_A: 24,          // row 3 col 0
+  CROSS_B: 25,          // row 3 col 1
 } as const)
 
 /** Smooth tileset (8 cols × 1 row, 48x48 cells) — corner/edge transitions */
