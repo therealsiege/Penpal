@@ -1073,8 +1073,10 @@ export class OfficeScene extends Phaser.Scene {
       this.lastLodLevel = lodLevel
       this.background.applyLodToWhiteboard(lodLevel)
       // Apply LOD to lab tile sprites in each room
-      for (const room of this.rooms.values()) {
-        this.officeRooms.applyLodToRoomTiles(room, lodLevel)
+      if (this.officeRooms) {
+        for (const room of this.rooms.values()) {
+          this.officeRooms.applyLodToRoomTiles(room, lodLevel)
+        }
       }
       this.ui.applyLod(lodLevel, this.rooms, null, [], [])
     }
