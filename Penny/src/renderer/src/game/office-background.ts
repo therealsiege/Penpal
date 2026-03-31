@@ -16,6 +16,8 @@ import { OfficeCorridors } from './office-corridors'
 import type { CorridorHostScene } from './office-corridors'
 import { OfficeInterior } from './office-interior'
 import type { InteriorHostScene } from './office-interior'
+import { WorkspaceUnifiedFloor } from './workspace-unified-floor'
+import type { UnifiedFloorHostScene } from './workspace-unified-floor'
 
 // Suppress unused import warnings for constants only referenced inside the
 // sub-modules (they are still re-exported conceptually via the barrel).
@@ -95,6 +97,7 @@ export class OfficeBackground {
   private terrain: OfficeTerrain
   private corridors: OfficeCorridors
   private interior: OfficeInterior
+  private unifiedFloor: WorkspaceUnifiedFloor
 
   constructor(scene: Phaser.Scene, host: BackgroundHostScene) {
     this.scene = scene
@@ -120,9 +123,14 @@ export class OfficeBackground {
       getAtmosphere: () => host.getAtmosphere(),
     }
 
+    const unifiedFloorHost: UnifiedFloorHostScene = {
+      getLastLodLevel: () => host.getLastLodLevel(),
+    }
+
     this.terrain = new OfficeTerrain(scene, terrainHost)
     this.corridors = new OfficeCorridors(scene, corridorHost)
     this.interior = new OfficeInterior(scene, interiorHost)
+    this.unifiedFloor = new WorkspaceUnifiedFloor(scene, unifiedFloorHost)
   }
 
   // ---------------------------------------------------------------------------
@@ -444,7 +452,13 @@ export class OfficeBackground {
     g.clear()
     for (const label of this.teamAreaLabels) label.destroy()
     this.teamAreaLabels = []
-    if (layouts.length === 0) return
+    if (layouts.length === 0) {
+      this.unifiedFloor.cleanup()
+      return
+    }
+
+    // Rebuild unified floor tiles for team areas
+    this.unifiedFloor.cleanup()
 
     const BANNER_H = 22
     const CORNER_LEN = 8
@@ -489,6 +503,13 @@ export class OfficeBackground {
         .setScale(0.06).setAlpha(0.25).setTint(0xffffff)
       const lightContainer = this.scene.add.container(lightX, lightY, [lightGfx, lightMid, lightCenter]).setDepth(-1).setAlpha(0.5)
       atmosphere.ceilingLights.push(lightContainer)
+
+      // Lab hex tile floor for the team area interior
+      this.unifiedFloor.drawFloor(
+        x - 6 + BWALL, y - 6 + BWALL + BANNER_H,
+        width + 12 - BWALL * 2, height + 12 - BWALL * 2 - BANNER_H,
+        color,
+      )
 
       // Gradient-style team overlay on top of the building floor
       g.fillStyle(color, 0.04)
@@ -649,6 +670,7 @@ export class OfficeBackground {
 
   applyLodToWhiteboard(lodLevel: number): void {
     this.interior.applyLodToWhiteboard(lodLevel)
+    this.unifiedFloor.applyLod(lodLevel)
   }
 
   tickReactorGlow(time: number): void {
@@ -733,5 +755,6 @@ export class OfficeBackground {
     this.terrain.destroy()
     this.corridors.destroy()
     this.interior.destroy()
+    this.unifiedFloor.destroy()
   }
 }

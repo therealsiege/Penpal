@@ -14,7 +14,8 @@ import {
   COLOR_DOOR_FILL,
   ROOM_HEADER_H,
 } from './office-constants'
-import { SPRITESHEET_KEYS, ICON_FRAMES, ITEM_FRAMES, EFFECT_ANIM_KEYS, LEGO_FRAMES } from './office-asset-keys'
+import { SPRITESHEET_KEYS, ICON_FRAMES, ITEM_FRAMES, EFFECT_ANIM_KEYS, LEGO_FRAMES, LAB_TILESET_FRAMES, LAB_SMOOTH_FRAMES } from './office-asset-keys'
+import { LAB_TILE_SIZE } from './office-constants'
 import { ROOM_HEADER_ITEM } from './workstation-creation'
 import { EventBus, EVENTS } from './events'
 
@@ -200,6 +201,14 @@ export class OfficeRooms {
       for (const s of room.floorTileSprites) s.destroy()
       room.floorTileSprites = []
     }
+    if (room.wallTileSprites) {
+      for (const s of room.wallTileSprites) s.destroy()
+      room.wallTileSprites = []
+    }
+    if (room.cornerTileSprites) {
+      for (const s of room.cornerTileSprites) s.destroy()
+      room.cornerTileSprites = []
+    }
     if (room.miniWhiteboard) {
       room.miniWhiteboard.destroy()
       room.miniWhiteboard = undefined
@@ -266,50 +275,9 @@ export class OfficeRooms {
     g.fillStyle(roomStyle.floor)
     g.fillRect(floorX, floorY, floorW, floorH)
 
-    // Diamond-plate steel grating pattern — raised diamond bumps in a cross layout
-    const CELL = 12
-    const DS = 1.8 // diamond half-size
-    const cellCols = Math.ceil(floorW / CELL)
-    const cellRows = Math.ceil(floorH / CELL)
-    g.fillStyle(roomStyle.floorGrid, 0.18)
-    for (let cr = 0; cr < cellRows; cr++) {
-      for (let cc = 0; cc < cellCols; cc++) {
-        const cx = floorX + cc * CELL + CELL / 2
-        const cy = floorY + cr * CELL + CELL / 2
-        if (cx > floorX + floorW || cy > floorY + floorH) continue
-        // 4 tiny rhombuses arranged in a cross pattern around cell center
-        const offsets = [
-          { dx: 0, dy: -3 },
-          { dx: 3, dy: 0 },
-          { dx: 0, dy: 3 },
-          { dx: -3, dy: 0 },
-        ]
-        for (const { dx, dy } of offsets) {
-          const rx = cx + dx, ry = cy + dy
-          g.fillPoints([
-            { x: rx, y: ry - DS },
-            { x: rx + DS, y: ry },
-            { x: rx, y: ry + DS },
-            { x: rx - DS, y: ry },
-          ], true)
-        }
-      }
-    }
-    // Steel plate joint grid lines every 48px
-    g.lineStyle(1.0, activeTheme.wallInner, 0.14)
-    for (let jy = floorY; jy <= floorY + floorH; jy += 48) {
-      g.lineBetween(floorX, jy, floorX + floorW, jy)
-    }
-    for (let jx = floorX; jx <= floorX + floorW; jx += 48) {
-      g.lineBetween(jx, floorY, jx, floorY + floorH)
-    }
-    // Bolt circles at plate corners
-    g.fillStyle(0x4a5a6a, 0.25)
-    for (let by = floorY; by <= floorY + floorH; by += 48) {
-      for (let bx = floorX; bx <= floorX + floorW; bx += 48) {
-        g.fillCircle(bx, by, 2.0)
-      }
-    }
+    // Hex floor tile rendering — uses LAB_MAIN_TILESET sprites if available,
+    // falls back to procedural diamond-plate pattern when textures not loaded.
+    this.tileHexFloor(room, floorX, floorY, floorW, floorH, roomStyle)
 
     // Rug — themed by directory type
     const rugInsetX = 8
@@ -450,6 +418,10 @@ export class OfficeRooms {
       room.container.add(sg)
       room.statusStrip = sg
     }
+
+    // Wall tile sprites along room perimeter — uses LAB_MAIN_TILESET if loaded.
+    // Adds sprite-based wall edges and LAB_SMOOTH corner pieces.
+    this.tileWallEdges(room, floorX, floorY, floorW, floorH)
 
     // Baseboard molding — 2px strip along all 4 edges of the floor area
     const baseH = 2
@@ -722,6 +694,202 @@ export class OfficeRooms {
         room.doorPulseTween = null
       }
       room.doorFrameGraphics.setAlpha(0.75)
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // Hex floor tiling — sprite-based hex floor replacing procedural pattern
+  // -------------------------------------------------------------------------
+
+  private tileHexFloor(
+    room: Room,
+    floorX: number,
+    floorY: number,
+    floorW: number,
+    floorH: number,
+    roomStyle: { floorGrid: number },
+  ): void {
+    // Clean up previous floor tile sprites
+    if (room.floorTileSprites) {
+      for (const s of room.floorTileSprites) s.destroy()
+    }
+    room.floorTileSprites = []
+
+    const hasLabTileset = this.scene.textures.exists(SPRITESHEET_KEYS.LAB_MAIN_TILESET)
+
+    if (hasLabTileset) {
+      // Sprite-based hex floor — tile LAB_MAIN_TILESET frames 12-13 across the floor area.
+      // Scale tiles to ~0.30 so each 48px tile covers ~14px effective, creating a dense hex grid.
+      const tileScale = 0.30
+      const effectiveSize = LAB_TILE_SIZE * tileScale
+      const cols = Math.ceil(floorW / effectiveSize)
+      const rows = Math.ceil(floorH / effectiveSize)
+
+      for (let row = 0; row < rows; row++) {
+        for (let col = 0; col < cols; col++) {
+          // Alternate between hex floor A and B for variety
+          const frame = (row + col) % 2 === 0
+            ? LAB_TILESET_FRAMES.HEX_FLOOR_A
+            : LAB_TILESET_FRAMES.HEX_FLOOR_B
+          const tx = floorX + col * effectiveSize + effectiveSize / 2
+          const ty = floorY + row * effectiveSize + effectiveSize / 2
+
+          // Skip tiles that fall outside the floor area
+          if (tx - effectiveSize / 2 > floorX + floorW || ty - effectiveSize / 2 > floorY + floorH) continue
+
+          const tile = this.scene.add.sprite(tx, ty, SPRITESHEET_KEYS.LAB_MAIN_TILESET, frame)
+            .setScale(tileScale)
+            .setAlpha(0.35)
+            .setDepth(-2.5)
+          room.container.add(tile)
+          room.floorTileSprites.push(tile)
+        }
+      }
+    } else {
+      // Fallback: procedural diamond-plate pattern
+      const g = room.floorGraphics
+      const CELL = 12
+      const DS = 1.8
+      const cellCols = Math.ceil(floorW / CELL)
+      const cellRows = Math.ceil(floorH / CELL)
+      g.fillStyle(roomStyle.floorGrid, 0.18)
+      for (let cr = 0; cr < cellRows; cr++) {
+        for (let cc = 0; cc < cellCols; cc++) {
+          const cx = floorX + cc * CELL + CELL / 2
+          const cy = floorY + cr * CELL + CELL / 2
+          if (cx > floorX + floorW || cy > floorY + floorH) continue
+          const offsets = [
+            { dx: 0, dy: -3 }, { dx: 3, dy: 0 },
+            { dx: 0, dy: 3 }, { dx: -3, dy: 0 },
+          ]
+          for (const { dx, dy } of offsets) {
+            const rx = cx + dx, ry = cy + dy
+            g.fillPoints([
+              { x: rx, y: ry - DS }, { x: rx + DS, y: ry },
+              { x: rx, y: ry + DS }, { x: rx - DS, y: ry },
+            ], true)
+          }
+        }
+      }
+      // Steel plate joint grid lines
+      g.lineStyle(1.0, activeTheme.wallInner, 0.14)
+      for (let jy = floorY; jy <= floorY + floorH; jy += 48) {
+        g.lineBetween(floorX, jy, floorX + floorW, jy)
+      }
+      for (let jx = floorX; jx <= floorX + floorW; jx += 48) {
+        g.lineBetween(jx, floorY, jx, floorY + floorH)
+      }
+      // Bolt circles
+      g.fillStyle(0x4a5a6a, 0.25)
+      for (let by = floorY; by <= floorY + floorH; by += 48) {
+        for (let bx = floorX; bx <= floorX + floorW; bx += 48) {
+          g.fillCircle(bx, by, 2.0)
+        }
+      }
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // Wall edge tiling — sprite-based wall edges and smooth corners
+  // -------------------------------------------------------------------------
+
+  private tileWallEdges(
+    room: Room,
+    floorX: number,
+    floorY: number,
+    floorW: number,
+    floorH: number,
+  ): void {
+    // Clean up previous wall/corner sprites
+    if (room.wallTileSprites) {
+      for (const s of room.wallTileSprites) s.destroy()
+    }
+    room.wallTileSprites = []
+    if (room.cornerTileSprites) {
+      for (const s of room.cornerTileSprites) s.destroy()
+    }
+    room.cornerTileSprites = []
+
+    const hasLabTileset = this.scene.textures.exists(SPRITESHEET_KEYS.LAB_MAIN_TILESET)
+    const hasLabSmooth = this.scene.textures.exists(SPRITESHEET_KEYS.LAB_SMOOTH)
+    if (!hasLabTileset) return
+
+    const tileScale = 0.30
+    const effectiveSize = LAB_TILE_SIZE * tileScale
+
+    // Top wall edge
+    for (let x = floorX; x < floorX + floorW; x += effectiveSize) {
+      const tile = this.scene.add.sprite(
+        x + effectiveSize / 2, floorY + effectiveSize / 2,
+        SPRITESHEET_KEYS.LAB_MAIN_TILESET, LAB_TILESET_FRAMES.WALL_TOP,
+      ).setScale(tileScale).setAlpha(0.45).setDepth(-2)
+      room.container.add(tile)
+      room.wallTileSprites.push(tile)
+    }
+
+    // Bottom wall edge
+    for (let x = floorX; x < floorX + floorW; x += effectiveSize) {
+      const tile = this.scene.add.sprite(
+        x + effectiveSize / 2, floorY + floorH - effectiveSize / 2,
+        SPRITESHEET_KEYS.LAB_MAIN_TILESET, LAB_TILESET_FRAMES.WALL_BOTTOM,
+      ).setScale(tileScale).setAlpha(0.45).setDepth(-2)
+      room.container.add(tile)
+      room.wallTileSprites.push(tile)
+    }
+
+    // Left wall edge
+    for (let y = floorY + effectiveSize; y < floorY + floorH - effectiveSize; y += effectiveSize) {
+      const tile = this.scene.add.sprite(
+        floorX + effectiveSize / 2, y + effectiveSize / 2,
+        SPRITESHEET_KEYS.LAB_MAIN_TILESET, LAB_TILESET_FRAMES.WALL_LEFT,
+      ).setScale(tileScale).setAlpha(0.45).setDepth(-2)
+      room.container.add(tile)
+      room.wallTileSprites.push(tile)
+    }
+
+    // Right wall edge
+    for (let y = floorY + effectiveSize; y < floorY + floorH - effectiveSize; y += effectiveSize) {
+      const tile = this.scene.add.sprite(
+        floorX + floorW - effectiveSize / 2, y + effectiveSize / 2,
+        SPRITESHEET_KEYS.LAB_MAIN_TILESET, LAB_TILESET_FRAMES.WALL_RIGHT,
+      ).setScale(tileScale).setAlpha(0.45).setDepth(-2)
+      room.container.add(tile)
+      room.wallTileSprites.push(tile)
+    }
+
+    // Smooth corner sprites at each corner
+    if (hasLabSmooth) {
+      const corners = [
+        { x: floorX + effectiveSize / 2, y: floorY + effectiveSize / 2, frame: LAB_SMOOTH_FRAMES.OUTER_TL },
+        { x: floorX + floorW - effectiveSize / 2, y: floorY + effectiveSize / 2, frame: LAB_SMOOTH_FRAMES.OUTER_TR },
+        { x: floorX + effectiveSize / 2, y: floorY + floorH - effectiveSize / 2, frame: LAB_SMOOTH_FRAMES.OUTER_BL },
+        { x: floorX + floorW - effectiveSize / 2, y: floorY + floorH - effectiveSize / 2, frame: LAB_SMOOTH_FRAMES.OUTER_BR },
+      ]
+      for (const corner of corners) {
+        const tile = this.scene.add.sprite(
+          corner.x, corner.y,
+          SPRITESHEET_KEYS.LAB_SMOOTH, corner.frame,
+        ).setScale(tileScale).setAlpha(0.50).setDepth(-2)
+        room.container.add(tile)
+        room.cornerTileSprites.push(tile)
+      }
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // LOD visibility for lab tile sprites
+  // -------------------------------------------------------------------------
+
+  applyLodToRoomTiles(room: Room, lodLevel: number): void {
+    const visible = lodLevel >= 2
+    if (room.floorTileSprites) {
+      for (const s of room.floorTileSprites) s.setVisible(visible)
+    }
+    if (room.wallTileSprites) {
+      for (const s of room.wallTileSprites) s.setVisible(visible)
+    }
+    if (room.cornerTileSprites) {
+      for (const s of room.cornerTileSprites) s.setVisible(visible)
     }
   }
 
