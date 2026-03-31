@@ -12,6 +12,7 @@ import {
   ROOM_TOP_EXTRA,
   ROOM_HEADER_H,
   MAX_AGENTS_PER_ROW,
+  LAB_EQUIP_ZONE_H,
 } from './office-constants'
 
 export { PropType }
@@ -134,14 +135,17 @@ export function computeRoomLayout(
   // -------------------------------------------------------------------------
 
   const wallBorder = (WALL_T + WALL_I + ROOM_PADDING) * 2
+  const LAB_SIDE_PAD = 60  // side margins for equipment within zone
   const baseWidth =
-    wallBorder + cols * WORKSTATION_W
+    wallBorder + cols * WORKSTATION_W + LAB_SIDE_PAD
   const height =
     (WALL_T + WALL_I) * 2 + ROOM_HEADER_H + ROOM_PADDING * 2 + ROOM_TOP_EXTRA +
-    rows * WORKSTATION_H + DOOR_CLEARANCE
+    LAB_EQUIP_ZONE_H +  // equipment shelf at top
+    rows * WORKSTATION_H + DOOR_CLEARANCE + 30  // compact bottom
 
-  // Total width adds the prop strip on the right
-  const width = baseWidth + PROP_STRIP_W
+  // Zone width — compact, facility handles the outer walls
+  const MIN_ROOM_W = 300
+  const width = Math.max(MIN_ROOM_W, baseWidth + PROP_STRIP_W)
 
   // -------------------------------------------------------------------------
   // 2. Desk grid — mirrors layoutWorkstations positioning math
@@ -152,8 +156,8 @@ export function computeRoomLayout(
 
   // Desk area starts at top-left of the usable interior, relative to room center
   const deskAreaX = -width / 2 + WALL_T + WALL_I + ROOM_PADDING
-  // Header bar is at the bottom of the room; desk area starts from top wall
-  const deskAreaY = -height / 2 + WALL_T + WALL_I + ROOM_PADDING + ROOM_TOP_EXTRA + topDoorPad
+  // Header bar is at the bottom of the room; desk area starts below equipment zone
+  const deskAreaY = -height / 2 + WALL_T + WALL_I + ROOM_PADDING + ROOM_TOP_EXTRA + LAB_EQUIP_ZONE_H + topDoorPad
 
   const usableW = baseWidth - wallBorder           // cols * WORKSTATION_W
   const usableH =

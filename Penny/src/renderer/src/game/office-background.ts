@@ -222,38 +222,26 @@ export class OfficeBackground {
       return
     }
 
-    // Team zoning
+    // ── Unified lab layout — all rooms as zones in one wide facility ──
     const viewWidth = this.host.getViewWidth()
-    const availableW = Math.max(viewWidth - WORLD_MARGIN * 2, 340)
+    // Fill the full viewport width for a wide lab
+    const availableW = Math.max(viewWidth * 1.1, 800)
     const areaPadX = TEAM_AREA_PAD_X
     const areaPadY = TEAM_AREA_PAD_Y
     const areaGapX = TEAM_AREA_GAP_X
     const areaGapY = TEAM_AREA_GAP_Y
     const teamLabelH = TEAM_LABEL_H
-    const teams = new Map<string, Room[]>()
-    for (const room of roomList) {
-      const key = room.teamKey || room.cwd
-      if (!teams.has(key)) teams.set(key, [])
-      teams.get(key)!.push(room)
-    }
-    const teamKeys = Array.from(teams.keys()).sort((a, b) => {
-      if (a === '__unassigned__') return 1
-      if (b === '__unassigned__') return -1
-      return a.localeCompare(b)
-    })
 
-    const teamCount = teamKeys.length
-    const maxRoomWidth = Math.max(...roomList.map(r => r.width))
-    const minTeamWidth = maxRoomWidth + areaPadX * 2
-    const colsByWidth =
-      availableW >= minTeamWidth * 3 + areaGapX * 2 ? 3 :
-      availableW >= minTeamWidth * 2 + areaGapX ? 2 : 1
-    const desiredCols = teamCount >= 6 ? 3 : teamCount >= 3 ? 2 : 1
-    const teamColumns = Math.max(1, Math.min(colsByWidth, desiredCols))
-    const preferredTeamWidth = Math.max(
-      minTeamWidth,
-      Math.floor((availableW - areaGapX * (teamColumns - 1)) / teamColumns),
-    )
+    // Merge ALL rooms into a single "lab" team so they pack into one facility
+    const teams = new Map<string, Room[]>()
+    const UNIFIED_KEY = '__lab__'
+    teams.set(UNIFIED_KEY, [...roomList].sort((a, b) => a.label.localeCompare(b.label)))
+
+    const teamKeys = [UNIFIED_KEY]
+
+    // Single team fills the full available width
+    const teamColumns = 1
+    const preferredTeamWidth = availableW
 
     const teamLayouts: TeamAreaLayout[] = []
     const teamDrafts: Array<{
@@ -300,7 +288,7 @@ export class OfficeBackground {
         Math.min(preferredTeamWidth, Math.max(contentW, teamMinWidth)),
       )
       const teamHeight = Math.max(115, areaPadY * 2 + teamLabelH + Math.max(contentH, 62))
-      const teamLabel = teamRooms[0]?.teamLabel ?? this.host.formatLabel(teamKey)
+      const teamLabel = teamKey === '__lab__' ? 'PENPAL LAB' : (teamRooms[0]?.teamLabel ?? this.host.formatLabel(teamKey))
       teamDrafts.push({
         teamKey,
         teamLabel,
