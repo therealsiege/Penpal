@@ -5,7 +5,7 @@
 // ---------------------------------------------------------------------------
 
 import Phaser from 'phaser'
-import { SPRITESHEET_KEYS, LAB_TILESET_FRAMES, LAB_PROPS_FRAMES } from './office-asset-keys'
+import { SPRITESHEET_KEYS, LAB_TILESET_FRAMES, LAB_PROP_FRAMES } from './office-asset-keys'
 import { LAB_TILE_SIZE } from './office-constants'
 import { activeTheme } from './office-theme'
 

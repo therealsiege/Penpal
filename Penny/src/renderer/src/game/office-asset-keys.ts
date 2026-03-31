@@ -64,8 +64,12 @@ export const SPRITESHEET_KEYS = Object.freeze({
   MONSTER_MOUTHS: 'monster-mouths',
   /** HD medals spritesheet — full medals.png sliced into individual frames */
   MEDALS_HD: 'medals-hd',
-  /** Lab props — 64x64 cells, 12 cols, 135 frames (alphabetical) */
+  /** Lab props — 64x64 cells, furniture sprites for workstation variants */
   LAB_PROPS: 'lab-props',
+  /** Lab tileset — 48x48 cells, wall/floor tiles (issue #143) */
+  LAB_MAIN_TILESET: 'lab-tileset',
+  /** Lab smooth corners — 48x48 cells, rounded corner transitions */
+  LAB_SMOOTH: 'lab-smooth',
 } as const)
 
 // ---------------------------------------------------------------------------
@@ -290,18 +294,81 @@ export const MEDAL_HD_FRAMES = Object.freeze({
 // ---------------------------------------------------------------------------
 
 export const LAB_PROP_FRAMES = Object.freeze({
-  STOOL:          109,  // stool.png
-  CONSOLE_SCREEN:  80,  // monitor.png (lab console screen)
-  CONSOLE_LINES_01: 33, // console_screen_lines_01.png
-  CONSOLE_WAVE_01:  39, // console_screen_wave_01.png
-  DESK_LAMP:       49,  // desk_lamp.png
-  DESK_TOP_LONG:   50,  // desk_top_long.png
-  DESK_TOP_SHORT:  51,  // desk_top_short.png
-  KEYBOARD:        66,  // keyboard.png
-  MONITOR:         80,  // monitor.png
+  // Core furniture (issue #144)
+  STOOL:             0,  // lab stool / chair replacement
+  CONSOLE_SCREEN:    1,  // console monitor / free-standing screen
+  DESK_LAMP:         2,  // desk lamp
+  KEYBOARD:          3,  // keyboard
+  DESK_TOP_LONG:     4,  // long desk surface
+  DESK_TOP_SHORT:    5,  // short desk surface
+  DESK_DRAW:         6,  // desk drawer prop
+  FREE_STANDING_SCREEN: 7, // alternate monitor style
+  // Lab signature items (issue #127)
+  MICROSCOPE:        8,  // lab microscope
+  BEAKER:            9,  // science beaker
+  PETRI_DISH:       10,  // petri dish
+  TABLET:           11,  // digital tablet
+  CLIPBOARD:        12,  // clipboard with paper
+  SCALE:            13,  // lab scale / balance
+  // Animation frames
+  CONSOLE_LINES_01: 14,  // console screen lines animation start
+  CONSOLE_WAVE_01:  15,  // console screen wave animation start
 } as const)
 
 export type LabPropFrame = typeof LAB_PROP_FRAMES[keyof typeof LAB_PROP_FRAMES]
+
+// ---------------------------------------------------------------------------
+// Lab tileset frame indices (48x48 cells in LAB_MAIN_TILESET spritesheet)
+// ---------------------------------------------------------------------------
+
+export const LAB_TILESET_FRAMES = Object.freeze({
+  WALL_TOP:      0,
+  WALL_RIGHT:    1,
+  WALL_BOTTOM:   2,
+  WALL_LEFT:     3,
+  CORNER_TL:     4,
+  CORNER_TR:     5,
+  CORNER_BL:     6,
+  CORNER_BR:     7,
+  INNER_TOP:     8,
+  INNER_RIGHT:   9,
+  INNER_BOTTOM: 10,
+  INNER_LEFT:   11,
+  HEX_FLOOR_A:  12,
+  HEX_FLOOR_B:  13,
+  PLAIN_FLOOR:  14,
+  GRATED_FLOOR: 15,
+} as const)
+
+// ---------------------------------------------------------------------------
+// Lab smooth corner frame indices (48x48 cells in LAB_SMOOTH spritesheet)
+// ---------------------------------------------------------------------------
+
+export const LAB_SMOOTH_FRAMES = Object.freeze({
+  OUTER_TL: 0,
+  OUTER_TR: 1,
+  OUTER_BL: 2,
+  OUTER_BR: 3,
+  INNER_TL: 4,
+  INNER_TR: 5,
+  INNER_BL: 6,
+  INNER_BR: 7,
+} as const)
+
+// ---------------------------------------------------------------------------
+// Lab environment props frame indices (48x48 cells in lab-env-props.png)
+// ---------------------------------------------------------------------------
+
+export const LAB_PROPS_FRAMES = Object.freeze({
+  VENT_GRATE:     0,
+  PIPE_SECTION:   1,
+  FLOOR_PANEL:    2,
+  HAZARD_STRIPE:  3,
+  CONSOLE_PANEL:  4,
+  CABLE_CONDUIT:  5,
+  WARNING_LIGHT:  6,
+  DRAINAGE_GRATE: 7,
+} as const)
 
 // ---------------------------------------------------------------------------
 // Audio keys — OGG sound effects

@@ -28,27 +28,44 @@ import {
 
 describe('LAB_PROP_FRAMES constants', () => {
   it('defines STOOL frame index', () => {
-    expect(LAB_PROP_FRAMES.STOOL).toBe(109)
+    expect(LAB_PROP_FRAMES.STOOL).toBe(0)
   })
 
   it('defines CONSOLE_SCREEN frame index', () => {
-    expect(LAB_PROP_FRAMES.CONSOLE_SCREEN).toBe(80)
+    expect(LAB_PROP_FRAMES.CONSOLE_SCREEN).toBe(1)
   })
 
   it('defines CONSOLE_LINES_01 for animation start frame', () => {
-    expect(LAB_PROP_FRAMES.CONSOLE_LINES_01).toBe(33)
+    expect(LAB_PROP_FRAMES.CONSOLE_LINES_01).toBe(14)
   })
 
   it('defines CONSOLE_WAVE_01 for animation start frame', () => {
-    expect(LAB_PROP_FRAMES.CONSOLE_WAVE_01).toBe(39)
+    expect(LAB_PROP_FRAMES.CONSOLE_WAVE_01).toBe(15)
   })
 
   it('defines KEYBOARD frame index', () => {
-    expect(LAB_PROP_FRAMES.KEYBOARD).toBe(66)
+    expect(LAB_PROP_FRAMES.KEYBOARD).toBe(3)
   })
 
   it('defines DESK_LAMP frame index', () => {
-    expect(LAB_PROP_FRAMES.DESK_LAMP).toBe(49)
+    expect(LAB_PROP_FRAMES.DESK_LAMP).toBe(2)
+  })
+
+  it('defines lab signature item frames (issue #127)', () => {
+    expect(LAB_PROP_FRAMES.MICROSCOPE).toBe(8)
+    expect(LAB_PROP_FRAMES.BEAKER).toBe(9)
+    expect(LAB_PROP_FRAMES.PETRI_DISH).toBe(10)
+    expect(LAB_PROP_FRAMES.TABLET).toBe(11)
+    expect(LAB_PROP_FRAMES.CLIPBOARD).toBe(12)
+    expect(LAB_PROP_FRAMES.SCALE).toBe(13)
+  })
+
+  it('defines DESK_DRAW frame index (issue #127)', () => {
+    expect(LAB_PROP_FRAMES.DESK_DRAW).toBe(6)
+  })
+
+  it('defines FREE_STANDING_SCREEN frame index (issue #127)', () => {
+    expect(LAB_PROP_FRAMES.FREE_STANDING_SCREEN).toBe(7)
   })
 
   it('is frozen (immutable)', () => {

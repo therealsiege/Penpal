@@ -753,7 +753,7 @@ async function main() {
   ]
   await buildStrip(smoothFrames, 'lab-smooth.png')
 
-  // LAB_PROPS — 8 frames
+  // LAB_ENV_PROPS — 8 frames (environmental props, separate from furniture)
   const propFrames = [
     makeVentGrate(),     // 0
     makePipeSection(),   // 1
@@ -764,7 +764,7 @@ async function main() {
     makeWarningLight(),  // 6
     makeDrainageGrate(), // 7
   ]
-  await buildStrip(propFrames, 'lab-props.png')
+  await buildStrip(propFrames, 'lab-env-props.png')
 
   console.log('\nDone.')
 }

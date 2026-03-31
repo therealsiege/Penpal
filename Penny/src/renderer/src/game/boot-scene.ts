@@ -115,7 +115,6 @@ export class BootScene extends BaseScene {
       // Wave 8
       [SPRITESHEET_KEYS.LAB_MAIN_TILESET]: 'Lab Tileset',
       [SPRITESHEET_KEYS.LAB_SMOOTH]: 'Lab Smooth',
-      [SPRITESHEET_KEYS.LAB_PROPS]: 'Lab Props',
     }
 
     // Spritesheets worth showing a thumbnail preview for
@@ -353,9 +352,19 @@ export class BootScene extends BaseScene {
       frameWidth: 43, frameHeight: 82,
     })
 
-    // Lab props spritesheet — 64x64 cells, 12 cols (issue #144)
-    this.load.spritesheet(SPRITESHEET_KEYS.LAB_PROPS, './sprites/lab-props.png', {
+    // Lab furniture spritesheet — 64x64 cells, workstation furniture variants (issue #127)
+    this.load.spritesheet(SPRITESHEET_KEYS.LAB_PROPS, './sprites/lab-furniture.png', {
       frameWidth: 64, frameHeight: 64,
+    })
+
+    // Lab tileset — 48x48 cells, wall/floor tiles (issue #143)
+    this.load.spritesheet(SPRITESHEET_KEYS.LAB_MAIN_TILESET, './sprites/lab-tileset.png', {
+      frameWidth: 48, frameHeight: 48,
+    })
+
+    // Lab smooth corners — 48x48 cells, rounded corner transitions (issue #143)
+    this.load.spritesheet(SPRITESHEET_KEYS.LAB_SMOOTH, './sprites/lab-smooth.png', {
+      frameWidth: 48, frameHeight: 48,
     })
 
     // Kenney UI sound effects (OGG)
