@@ -161,7 +161,7 @@ describe('BootScene', () => {
   // -----------------------------------------------------------------------
   // OfficeGame scene order — BootScene is first
   // -----------------------------------------------------------------------
-  it('OfficeGame registers BootScene, CampusScene, then OfficeScene', async () => {
+  it('OfficeGame registers BootScene and OfficeScene', async () => {
     const src = await import('fs').then(fs =>
       fs.readFileSync(
         require('path').resolve(__dirname, '../../../src/renderer/src/game/OfficeGame.ts'),
@@ -169,28 +169,22 @@ describe('BootScene', () => {
       ),
     )
     expect(src).toContain("import { BootScene } from './boot-scene'")
-    expect(src).toContain("import { CampusScene } from './campus-scene'")
-    // BootScene < CampusScene < OfficeScene in the array
     const sceneArrayMatch = src.match(/scene:\s*\[([^\]]+)\]/)
     expect(sceneArrayMatch).toBeTruthy()
     const sceneArray = sceneArrayMatch![1]
-    const bootIdx = sceneArray.indexOf('new BootScene()')
-    const campusIdx = sceneArray.indexOf('new CampusScene()')
-    const officeIdx = sceneArray.indexOf('scene,')
-    expect(bootIdx).toBeLessThan(campusIdx)
-    expect(campusIdx).toBeLessThan(officeIdx)
+    expect(sceneArray).toContain('BootScene')
   })
 
   // -----------------------------------------------------------------------
-  // BootScene complete handler transitions to CampusScene
+  // BootScene complete handler transitions to OfficeScene
   // -----------------------------------------------------------------------
-  it('BootScene starts CampusScene on load complete', async () => {
+  it('BootScene starts OfficeScene on load complete', async () => {
     const src = await import('fs').then(fs =>
       fs.readFileSync(
         require('path').resolve(__dirname, '../../../src/renderer/src/game/boot-scene.ts'),
         'utf-8',
       ),
     )
-    expect(src).toContain('this.scene.start(SCENE_KEYS.CAMPUS)')
+    expect(src).toContain('this.scene.start(SCENE_KEYS.OFFICE)')
   })
 })

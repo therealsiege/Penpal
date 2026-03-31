@@ -34,6 +34,8 @@ export interface PipelineIssue {
   updatedAt: number
   branch?: string
   worktreePath?: string
+  /** Set when worktree + fallback branch creation both fail (shown on "no branch" issue comment). */
+  branchCreationError?: string
   plannerOutput?: string
   questionComment?: string
   questionPostedAt?: number
@@ -127,11 +129,23 @@ function expandHome(p: string): string {
   return p
 }
 
+/** stderr/stdout from failed git child processes (execFile puts stderr on the error object). */
+function formatGitError(err: unknown): string {
+  if (err && typeof err === 'object') {
+    const e = err as { message?: string; stderr?: string; stdout?: string }
+    return [e.stderr?.trim(), e.stdout?.trim(), e.message?.trim()].filter(Boolean).join('\n') || String(err)
+  }
+  return String(err)
+}
+
+type IssueWorktreeOk = { ok: true; branch: string; worktreePath: string }
+type IssueWorktreeFail = { ok: false; error: string }
+
 async function createIssueWorktree(
   mainRepoPath: string,
   issueNumber: number,
   slug: string,
-): Promise<{ branch: string; worktreePath: string } | null> {
+): Promise<IssueWorktreeOk | IssueWorktreeFail> {
   mainRepoPath = expandHome(mainRepoPath)
   const branch = `issue-${issueNumber}-${slug}`
   const safeSlug = slug.replace(/[^a-z0-9-]/gi, '-').slice(0, 40).replace(/-$/, '') || 'issue'
@@ -140,6 +154,9 @@ async function createIssueWorktree(
 
   try {
     fs.mkdirSync(worktreesRoot, { recursive: true })
+    await execFileAsync('git', ['fetch', 'origin', '--prune'], {
+      cwd: mainRepoPath, encoding: 'utf-8', timeout: 60_000,
+    }).catch(() => {})
     await execFileAsync('git', ['fetch', 'origin', 'main'], {
       cwd: mainRepoPath, encoding: 'utf-8', timeout: 30_000,
     }).catch(() => execFileAsync('git', ['fetch', 'origin', 'master'], {
@@ -153,10 +170,18 @@ async function createIssueWorktree(
       baseBranch = stdout.trim().replace('refs/remotes/origin/', '')
     } catch { /* default to main */ }
 
-    if (fs.existsSync(path.join(worktreePath, '.git'))) {
-      await execFileAsync('git', ['worktree', 'remove', worktreePath, '--force'], {
-        cwd: mainRepoPath, encoding: 'utf-8', timeout: 30_000,
-      })
+    await execFileAsync('git', ['fetch', 'origin', baseBranch], {
+      cwd: mainRepoPath, encoding: 'utf-8', timeout: 30_000,
+    }).catch(() => {})
+
+    if (fs.existsSync(worktreePath)) {
+      if (fs.existsSync(path.join(worktreePath, '.git'))) {
+        await execFileAsync('git', ['worktree', 'remove', worktreePath, '--force'], {
+          cwd: mainRepoPath, encoding: 'utf-8', timeout: 30_000,
+        }).catch(() => {})
+      } else {
+        fs.rmSync(worktreePath, { recursive: true, force: true })
+      }
     }
 
     // Delete stale branch from previous failed attempts
@@ -164,21 +189,29 @@ async function createIssueWorktree(
       cwd: mainRepoPath, encoding: 'utf-8', timeout: 10_000,
     }).catch(() => { /* branch didn't exist — fine */ })
 
-    await execFileAsync('git', ['worktree', 'add', worktreePath, '-b', branch, `origin/${baseBranch}`], {
+    // --force: checkout branch even if already checked out in another worktree
+    await execFileAsync('git', ['worktree', 'add', '--force', '-b', branch, worktreePath, `origin/${baseBranch}`], {
       cwd: mainRepoPath, encoding: 'utf-8', timeout: 60_000,
     })
     console.log(`[github-pipeline] Worktree ${worktreePath} branch ${branch}`)
-    return { branch, worktreePath }
+    return { ok: true, branch, worktreePath }
   } catch (err) {
-    console.error(`[github-pipeline] Failed to create worktree:`, err)
-    return null
+    const msg = formatGitError(err)
+    console.error(`[github-pipeline] Failed to create worktree at ${worktreePath}:`, msg)
+    return { ok: false, error: msg }
   }
 }
 
-async function createIssueBranch(localPath: string, issueNumber: number, slug: string): Promise<string | null> {
+type IssueBranchOk = { ok: true; branch: string }
+type IssueBranchFail = { ok: false; error: string }
+
+async function createIssueBranch(localPath: string, issueNumber: number, slug: string): Promise<IssueBranchOk | IssueBranchFail> {
   localPath = expandHome(localPath)
   const branch = `issue-${issueNumber}-${slug}`
   try {
+    await execFileAsync('git', ['fetch', 'origin', '--prune'], {
+      cwd: localPath, encoding: 'utf-8', timeout: 60_000,
+    }).catch(() => {})
     await execFileAsync('git', ['fetch', 'origin', 'main'], {
       cwd: localPath, encoding: 'utf-8', timeout: 30_000,
     }).catch(() => execFileAsync('git', ['fetch', 'origin', 'master'], {
@@ -192,18 +225,24 @@ async function createIssueBranch(localPath: string, issueNumber: number, slug: s
       baseBranch = stdout.trim().replace('refs/remotes/origin/', '')
     } catch { /* */ }
 
+    await execFileAsync('git', ['fetch', 'origin', baseBranch], {
+      cwd: localPath, encoding: 'utf-8', timeout: 30_000,
+    }).catch(() => {})
+
     // Delete stale branch from previous failed attempts
     await execFileAsync('git', ['branch', '-D', branch], {
       cwd: localPath, encoding: 'utf-8', timeout: 10_000,
     }).catch(() => { /* branch didn't exist — fine */ })
 
-    await execFileAsync('git', ['checkout', '-b', branch, `origin/${baseBranch}`], {
+    // -B: create or reset issue branch to match remote base (handles leftover local branch)
+    await execFileAsync('git', ['checkout', '-B', branch, `origin/${baseBranch}`], {
       cwd: localPath, encoding: 'utf-8', timeout: 15_000,
     })
-    return branch
+    return { ok: true, branch }
   } catch (err) {
-    console.error(`[github-pipeline] Failed to create branch ${branch}:`, err)
-    return null
+    const msg = formatGitError(err)
+    console.error(`[github-pipeline] Failed to create branch ${branch} in ${localPath}:`, msg)
+    return { ok: false, error: msg }
   }
 }
 
@@ -239,7 +278,7 @@ async function pushBranchAndCreatePR(
     ], { cwd: localPath, encoding: 'utf-8', timeout: 30_000 })
     return true
   } catch (err) {
-    console.error(`[github-pipeline] Failed to push/PR for ${branch}:`, err)
+    console.error(`[github-pipeline] Failed to push/PR for ${branch}:`, formatGitError(err))
     return false
   }
 }
@@ -474,14 +513,22 @@ export async function drivePipeline(repos: RepoConfig[]): Promise<void> {
           const resolvedPath = expandHome(config.localPath)
           console.log(`[github-pipeline] Creating branch for #${tracked.number} in ${resolvedPath} (raw: ${config.localPath})`)
           const wt = await createIssueWorktree(resolvedPath, tracked.number, slug)
-          if (wt) {
+          if (wt.ok) {
             tracked.branch = wt.branch
             tracked.worktreePath = wt.worktreePath
+            tracked.branchCreationError = undefined
             console.log(`[github-pipeline] Worktree created: ${wt.branch} at ${wt.worktreePath}`)
           } else {
-            const branch = await createIssueBranch(resolvedPath, tracked.number, slug)
-            tracked.branch = branch ?? undefined
-            console.log(`[github-pipeline] Branch created: ${branch ?? 'FAILED'}`)
+            const br = await createIssueBranch(resolvedPath, tracked.number, slug)
+            if (br.ok) {
+              tracked.branch = br.branch
+              tracked.branchCreationError = undefined
+              console.log(`[github-pipeline] Branch created: ${br.branch}`)
+            } else {
+              tracked.branch = undefined
+              tracked.branchCreationError = `Worktree failed:\n${wt.error}\n\nFallback branch failed:\n${br.error}`
+              console.error(`[github-pipeline] Branch creation failed for #${tracked.number}:`, tracked.branchCreationError)
+            }
           }
         } else if (result === 'question') {
           tracked.stage = 'awaiting-answer'
@@ -541,9 +588,12 @@ export async function drivePipeline(repos: RepoConfig[]): Promise<void> {
       if (!tracked.branch) {
         tracked.stage = 'failed'
         tracked.updatedAt = Date.now()
+        const gitDetail = tracked.branchCreationError
+          ? `\n\n<details><summary>Git error (from Penny)</summary>\n\n\`\`\`\n${tracked.branchCreationError.slice(0, 3500)}\n\`\`\`\n\n</details>\n\n_Check the Electron **main process** console for \`[github-pipeline]\` / \`git\` lines if this persists._`
+          : ''
         await Promise.allSettled([
           setLabel(config, tracked.number, ['agent-executing'], 'agent-failed'),
-          addComment(config, tracked.number, '❌ **Executor failed** — no branch was created.'),
+          addComment(config, tracked.number, `❌ **Executor failed** — no branch was created.${gitDetail}`),
         ])
         saveState()
         continue

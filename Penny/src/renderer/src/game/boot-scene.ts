@@ -198,7 +198,7 @@ export class BootScene extends BaseScene {
           ease: 'Power2',
           onComplete: () => {
             allObjects.forEach(obj => obj.destroy())
-            this.scene.start(SCENE_KEYS.CAMPUS)
+            this.scene.start(SCENE_KEYS.OFFICE)
           },
         })
       })

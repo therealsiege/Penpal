@@ -304,6 +304,33 @@ export const LAB_PROP_FRAMES = Object.freeze({
 export type LabPropFrame = typeof LAB_PROP_FRAMES[keyof typeof LAB_PROP_FRAMES]
 
 // ---------------------------------------------------------------------------
+// Lab tileset frame indices (128x128 cells, alphabetical file order = frame index)
+// ---------------------------------------------------------------------------
+
+/** Main tileset (8 cols × 9 rows) — floor fills, wall edges, transitions */
+export const LAB_TILESET_FRAMES = Object.freeze({
+  HEX_FLOOR_A: 13,
+  HEX_FLOOR_B: 12,
+  OUTER_FILL: 35,
+  WALL_TOP: 69,
+  WALL_BOTTOM: 66,
+  WALL_LEFT: 67,
+  WALL_RIGHT: 68,
+} as const)
+
+/** Smooth tileset (7 cols × 7 rows) — corner/edge transitions */
+export const LAB_SMOOTH_FRAMES = Object.freeze({
+  OUTER_TL: 12,
+  OUTER_TR: 13,
+  OUTER_BL: 7,
+  OUTER_BR: 8,
+  EDGE_TOP: 11,
+  EDGE_BOTTOM: 6,
+  EDGE_LEFT: 10,
+  EDGE_RIGHT: 9,
+} as const)
+
+// ---------------------------------------------------------------------------
 // Audio keys — OGG sound effects
 // ---------------------------------------------------------------------------
 

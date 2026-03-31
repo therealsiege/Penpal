@@ -4,6 +4,8 @@ This file is shared across all agents in the Penny platform. Reference it for te
 
 ## Architecture
 
+- **Git**: Allowed for normal dev and for Penny automation (branches, commits, push on feature/issue branches). Do not treat the workspace as read-only unless the user asked for analysis-only.
+
 - **Electron Dashboard**: `Penny/` — React + Tailwind + Phaser game view
 - **Graph ETL + MCP**: `analytics/` — Memgraph + Qdrant knowledge graph
 - **Vault Root**: `~/sidekick/` (Obsidian vault)
@@ -607,6 +609,476 @@ broken
 - Team: solver-a / reviewer-b / executor-c
 - Result: PASS (1/1 iterations)
 - Key output: RESULT: PASS
+
+### Workflow: pod quality pass (2026-03-31)
+- Task: pod quality pass
+- Team: nextjs-frontend / ui-designer / electron-dev
+- Result: PASS (1/1 iterations)
+- Key output: RESULT: PASS
+
+### Workflow: multi candidate task (2026-03-31)
+- Task: multi candidate task
+- Team: solver-a / reviewer-b / executor-c
+- Result: PASS (1/1 iterations)
+- Key output: RESULT: PASS
+
+### Workflow: task (2026-03-31)
+- Task: task
+- Team: fullstack-dev / backend-arch / electron-dev
+- Result: PASS (1/2 iterations)
+- Key output: RESULT: PASS
+
+
+### Workflow: rejected (2026-03-31)
+- Task: rejected
+- Team: fullstack-dev / backend-arch / electron-dev
+- Result: FAIL (1/2 iterations)
+- Key output: solver output
+
+### Workflow: invalid self eval task (2026-03-31)
+- Task: invalid self eval task
+- Team: solver-a / reviewer-b / executor-c
+- Result: PASS (1/1 iterations)
+- Key output: RESULT: PASS
+
+### Workflow: task (2026-03-31)
+- Task: task
+- Team: fullstack-dev / backend-arch / electron-dev
+- Result: FAIL (1/2 iterations)
+- Key output: solver
+
+### Workflow: task (2026-03-31)
+- Task: task
+- Team: fullstack-dev / backend-arch / electron-dev
+- Result: PASS (2/2 iterations)
+- Key output: RESULT: PASS
+
+
+### Workflow: task (2026-03-31)
+- Task: task
+- Team: fullstack-dev / backend-arch / electron-dev
+- Result: PASS (1/1 iterations)
+- Key output: RESULT: PASS
+
+
+### Workflow: task (2026-03-31)
+- Task: task
+- Team: fullstack-dev / backend-arch / electron-dev
+- Result: PASS (1/3 iterations)
+- Self-fix attempts: 2
+- Key output: RESULT: PASS
+
+
+### Workflow: task (2026-03-31)
+- Task: task
+- Team: fullstack-dev / backend-arch / electron-dev
+- Result: PASS (1/2 iterations)
+- Self-fix attempts: 1
+- Key output: RESULT: PASS
+
+
+### Workflow: task (2026-03-31)
+- Task: task
+- Team: fullstack-dev / backend-arch / electron-dev
+- Result: PASS (2/2 iterations)
+- Key output: RESULT: PASS
+
+
+### Workflow: task (2026-03-31)
+- Task: task
+- Team: fullstack-dev / backend-arch / electron-dev
+- Result: FAIL (1/1 iterations)
+- Key output: RESULT: FAIL
+broken
+
+### Workflow: task (2026-03-31)
+- Task: task
+- Team: fullstack-dev / backend-arch / electron-dev
+- Result: PASS (1/2 iterations)
+- Key output: RESULT: PASS
+
+
+### Workflow: single candidate task (2026-03-31)
+- Task: single candidate task
+- Team: solver-a / reviewer-b / executor-c
+- Result: PASS (1/1 iterations)
+- Key output: RESULT: PASS
+
+### Workflow: pod quality pass (2026-03-31)
+- Task: pod quality pass
+- Team: nextjs-frontend / ui-designer / electron-dev
+- Result: PASS (1/1 iterations)
+- Key output: RESULT: PASS
+
+### Workflow: multi candidate task (2026-03-31)
+- Task: multi candidate task
+- Team: solver-a / reviewer-b / executor-c
+- Result: PASS (1/1 iterations)
+- Key output: RESULT: PASS
+
+### Workflow: task (2026-03-31)
+- Task: task
+- Team: fullstack-dev / backend-arch / electron-dev
+- Result: PASS (1/2 iterations)
+- Key output: RESULT: PASS
+
+
+### Workflow: rejected (2026-03-31)
+- Task: rejected
+- Team: fullstack-dev / backend-arch / electron-dev
+- Result: FAIL (1/2 iterations)
+- Key output: solver output
+
+### Workflow: invalid self eval task (2026-03-31)
+- Task: invalid self eval task
+- Team: solver-a / reviewer-b / executor-c
+- Result: PASS (1/1 iterations)
+- Key output: RESULT: PASS
+
+### Workflow: task (2026-03-31)
+- Task: task
+- Team: fullstack-dev / backend-arch / electron-dev
+- Result: FAIL (1/2 iterations)
+- Key output: solver
+
+### Workflow: task (2026-03-31)
+- Task: task
+- Team: fullstack-dev / backend-arch / electron-dev
+- Result: PASS (2/2 iterations)
+- Key output: RESULT: PASS
+
+
+### Workflow: task (2026-03-31)
+- Task: task
+- Team: fullstack-dev / backend-arch / electron-dev
+- Result: PASS (1/1 iterations)
+- Key output: RESULT: PASS
+
+
+### Workflow: task (2026-03-31)
+- Task: task
+- Team: fullstack-dev / backend-arch / electron-dev
+- Result: PASS (1/3 iterations)
+- Self-fix attempts: 2
+- Key output: RESULT: PASS
+
+
+### Workflow: task (2026-03-31)
+- Task: task
+- Team: fullstack-dev / backend-arch / electron-dev
+- Result: PASS (1/2 iterations)
+- Self-fix attempts: 1
+- Key output: RESULT: PASS
+
+
+### Workflow: task (2026-03-31)
+- Task: task
+- Team: fullstack-dev / backend-arch / electron-dev
+- Result: PASS (2/2 iterations)
+- Key output: RESULT: PASS
+
+
+### Workflow: task (2026-03-31)
+- Task: task
+- Team: fullstack-dev / backend-arch / electron-dev
+- Result: FAIL (1/1 iterations)
+- Key output: RESULT: FAIL
+broken
+
+### Workflow: task (2026-03-31)
+- Task: task
+- Team: fullstack-dev / backend-arch / electron-dev
+- Result: PASS (1/2 iterations)
+- Key output: RESULT: PASS
+
+
+### Workflow: single candidate task (2026-03-31)
+- Task: single candidate task
+- Team: solver-a / reviewer-b / executor-c
+- Result: PASS (1/1 iterations)
+- Key output: RESULT: PASS
+
+### Workflow: pod quality pass (2026-03-31)
+- Task: pod quality pass
+- Team: nextjs-frontend / ui-designer / electron-dev
+- Result: PASS (1/1 iterations)
+- Key output: RESULT: PASS
+
+### Workflow: task (2026-03-31)
+- Task: task
+- Team: fullstack-dev / backend-arch / electron-dev
+- Result: PASS (1/2 iterations)
+- Key output: RESULT: PASS
+
+
+### Workflow: multi candidate task (2026-03-31)
+- Task: multi candidate task
+- Team: solver-a / reviewer-b / executor-c
+- Result: PASS (1/1 iterations)
+- Key output: RESULT: PASS
+
+### Workflow: task (2026-03-31)
+- Task: task
+- Team: fullstack-dev / backend-arch / electron-dev
+- Result: FAIL (1/2 iterations)
+- Key output: solver
+
+### Workflow: rejected (2026-03-31)
+- Task: rejected
+- Team: fullstack-dev / backend-arch / electron-dev
+- Result: FAIL (1/2 iterations)
+- Key output: solver output
+
+### Workflow: invalid self eval task (2026-03-31)
+- Task: invalid self eval task
+- Team: solver-a / reviewer-b / executor-c
+- Result: PASS (1/1 iterations)
+- Key output: RESULT: PASS
+
+### Workflow: task (2026-03-31)
+- Task: task
+- Team: fullstack-dev / backend-arch / electron-dev
+- Result: PASS (2/2 iterations)
+- Key output: RESULT: PASS
+
+
+### Workflow: task (2026-03-31)
+- Task: task
+- Team: fullstack-dev / backend-arch / electron-dev
+- Result: PASS (1/1 iterations)
+- Key output: RESULT: PASS
+
+
+### Workflow: task (2026-03-31)
+- Task: task
+- Team: fullstack-dev / backend-arch / electron-dev
+- Result: PASS (1/3 iterations)
+- Self-fix attempts: 2
+- Key output: RESULT: PASS
+
+
+### Workflow: task (2026-03-31)
+- Task: task
+- Team: fullstack-dev / backend-arch / electron-dev
+- Result: PASS (1/2 iterations)
+- Self-fix attempts: 1
+- Key output: RESULT: PASS
+
+
+### Workflow: task (2026-03-31)
+- Task: task
+- Team: fullstack-dev / backend-arch / electron-dev
+- Result: PASS (2/2 iterations)
+- Key output: RESULT: PASS
+
+
+### Workflow: pod quality pass (2026-03-31)
+- Task: pod quality pass
+- Team: nextjs-frontend / ui-designer / electron-dev
+- Result: PASS (1/1 iterations)
+- Key output: RESULT: PASS
+
+### Workflow: task (2026-03-31)
+- Task: task
+- Team: fullstack-dev / backend-arch / electron-dev
+- Result: PASS (1/2 iterations)
+- Key output: RESULT: PASS
+
+
+### Workflow: task (2026-03-31)
+- Task: task
+- Team: fullstack-dev / backend-arch / electron-dev
+- Result: FAIL (1/1 iterations)
+- Key output: RESULT: FAIL
+broken
+
+### Workflow: single candidate task (2026-03-31)
+- Task: single candidate task
+- Team: solver-a / reviewer-b / executor-c
+- Result: PASS (1/1 iterations)
+- Key output: RESULT: PASS
+
+### Workflow: multi candidate task (2026-03-31)
+- Task: multi candidate task
+- Team: solver-a / reviewer-b / executor-c
+- Result: PASS (1/1 iterations)
+- Key output: RESULT: PASS
+
+### Workflow: task (2026-03-31)
+- Task: task
+- Team: fullstack-dev / backend-arch / electron-dev
+- Result: PASS (1/2 iterations)
+- Key output: RESULT: PASS
+
+
+### Workflow: rejected (2026-03-31)
+- Task: rejected
+- Team: fullstack-dev / backend-arch / electron-dev
+- Result: FAIL (1/2 iterations)
+- Key output: solver output
+
+### Workflow: task (2026-03-31)
+- Task: task
+- Team: fullstack-dev / backend-arch / electron-dev
+- Result: FAIL (1/2 iterations)
+- Key output: solver
+
+### Workflow: invalid self eval task (2026-03-31)
+- Task: invalid self eval task
+- Team: solver-a / reviewer-b / executor-c
+- Result: PASS (1/1 iterations)
+- Key output: RESULT: PASS
+
+### Workflow: task (2026-03-31)
+- Task: task
+- Team: fullstack-dev / backend-arch / electron-dev
+- Result: PASS (2/2 iterations)
+- Key output: RESULT: PASS
+
+
+### Workflow: task (2026-03-31)
+- Task: task
+- Team: fullstack-dev / backend-arch / electron-dev
+- Result: PASS (1/1 iterations)
+- Key output: RESULT: PASS
+
+
+### Workflow: task (2026-03-31)
+- Task: task
+- Team: fullstack-dev / backend-arch / electron-dev
+- Result: PASS (1/3 iterations)
+- Self-fix attempts: 2
+- Key output: RESULT: PASS
+
+
+### Workflow: task (2026-03-31)
+- Task: task
+- Team: fullstack-dev / backend-arch / electron-dev
+- Result: PASS (1/2 iterations)
+- Self-fix attempts: 1
+- Key output: RESULT: PASS
+
+
+### Workflow: task (2026-03-31)
+- Task: task
+- Team: fullstack-dev / backend-arch / electron-dev
+- Result: PASS (2/2 iterations)
+- Key output: RESULT: PASS
+
+
+### Workflow: task (2026-03-31)
+- Task: task
+- Team: fullstack-dev / backend-arch / electron-dev
+- Result: FAIL (1/1 iterations)
+- Key output: RESULT: FAIL
+broken
+
+### Workflow: single candidate task (2026-03-31)
+- Task: single candidate task
+- Team: solver-a / reviewer-b / executor-c
+- Result: PASS (1/1 iterations)
+- Key output: RESULT: PASS
+
+### Workflow: task (2026-03-31)
+- Task: task
+- Team: fullstack-dev / backend-arch / electron-dev
+- Result: PASS (1/2 iterations)
+- Key output: RESULT: PASS
+
+
+### Workflow: pod quality pass (2026-03-31)
+- Task: pod quality pass
+- Team: nextjs-frontend / ui-designer / electron-dev
+- Result: PASS (1/1 iterations)
+- Key output: RESULT: PASS
+
+### Workflow: task (2026-03-31)
+- Task: task
+- Team: fullstack-dev / backend-arch / electron-dev
+- Result: PASS (1/2 iterations)
+- Key output: RESULT: PASS
+
+
+### Workflow: multi candidate task (2026-03-31)
+- Task: multi candidate task
+- Team: solver-a / reviewer-b / executor-c
+- Result: PASS (1/1 iterations)
+- Key output: RESULT: PASS
+
+### Workflow: invalid self eval task (2026-03-31)
+- Task: invalid self eval task
+- Team: solver-a / reviewer-b / executor-c
+- Result: PASS (1/1 iterations)
+- Key output: RESULT: PASS
+
+### Workflow: rejected (2026-03-31)
+- Task: rejected
+- Team: fullstack-dev / backend-arch / electron-dev
+- Result: FAIL (1/2 iterations)
+- Key output: solver output
+
+### Workflow: task (2026-03-31)
+- Task: task
+- Team: fullstack-dev / backend-arch / electron-dev
+- Result: FAIL (1/2 iterations)
+- Key output: solver
+
+### Workflow: task (2026-03-31)
+- Task: task
+- Team: fullstack-dev / backend-arch / electron-dev
+- Result: PASS (2/2 iterations)
+- Key output: RESULT: PASS
+
+
+### Workflow: task (2026-03-31)
+- Task: task
+- Team: fullstack-dev / backend-arch / electron-dev
+- Result: PASS (1/1 iterations)
+- Key output: RESULT: PASS
+
+
+### Workflow: task (2026-03-31)
+- Task: task
+- Team: fullstack-dev / backend-arch / electron-dev
+- Result: PASS (1/3 iterations)
+- Self-fix attempts: 2
+- Key output: RESULT: PASS
+
+
+### Workflow: task (2026-03-31)
+- Task: task
+- Team: fullstack-dev / backend-arch / electron-dev
+- Result: PASS (1/2 iterations)
+- Self-fix attempts: 1
+- Key output: RESULT: PASS
+
+
+### Workflow: task (2026-03-31)
+- Task: task
+- Team: fullstack-dev / backend-arch / electron-dev
+- Result: PASS (2/2 iterations)
+- Key output: RESULT: PASS
+
+
+### Workflow: task (2026-03-31)
+- Task: task
+- Team: fullstack-dev / backend-arch / electron-dev
+- Result: FAIL (1/1 iterations)
+- Key output: RESULT: FAIL
+broken
+
+### Workflow: single candidate task (2026-03-31)
+- Task: single candidate task
+- Team: solver-a / reviewer-b / executor-c
+- Result: PASS (1/1 iterations)
+- Key output: RESULT: PASS
+
+### Workflow: task (2026-03-31)
+- Task: task
+- Team: fullstack-dev / backend-arch / electron-dev
+- Result: PASS (1/2 iterations)
+- Key output: RESULT: PASS
+
 
 ### Workflow: pod quality pass (2026-03-31)
 - Task: pod quality pass
