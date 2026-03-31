@@ -64,6 +64,8 @@ export const SPRITESHEET_KEYS = Object.freeze({
   MONSTER_MOUTHS: 'monster-mouths',
   /** HD medals spritesheet — full medals.png sliced into individual frames */
   MEDALS_HD: 'medals-hd',
+  /** Lab props — 64x64 cells, 12 cols, 135 frames (alphabetical) */
+  LAB_PROPS: 'lab-props',
 } as const)
 
 // ---------------------------------------------------------------------------
@@ -282,6 +284,24 @@ export const MEDAL_HD_FRAMES = Object.freeze({
   SILVER_WHITE: 8,
   BRONZE_WHITE: 9,
 } as const)
+
+// ---------------------------------------------------------------------------
+// Lab prop frame indices (64x64 cells in LAB_PROPS spritesheet, alphabetical)
+// ---------------------------------------------------------------------------
+
+export const LAB_PROP_FRAMES = Object.freeze({
+  STOOL:          109,  // stool.png
+  CONSOLE_SCREEN:  80,  // monitor.png (lab console screen)
+  CONSOLE_LINES_01: 33, // console_screen_lines_01.png
+  CONSOLE_WAVE_01:  39, // console_screen_wave_01.png
+  DESK_LAMP:       49,  // desk_lamp.png
+  DESK_TOP_LONG:   50,  // desk_top_long.png
+  DESK_TOP_SHORT:  51,  // desk_top_short.png
+  KEYBOARD:        66,  // keyboard.png
+  MONITOR:         80,  // monitor.png
+} as const)
+
+export type LabPropFrame = typeof LAB_PROP_FRAMES[keyof typeof LAB_PROP_FRAMES]
 
 // ---------------------------------------------------------------------------
 // Audio keys — OGG sound effects

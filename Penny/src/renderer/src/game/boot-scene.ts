@@ -109,6 +109,7 @@ export class BootScene extends BaseScene {
       [SPRITESHEET_KEYS.KENNEY_UI]: 'Kenney UI',
       [SPRITESHEET_KEYS.MONSTER_BODIES]: 'Monster Bodies',
       [SPRITESHEET_KEYS.MEDALS_HD]: 'HD Medals',
+      [SPRITESHEET_KEYS.LAB_PROPS]: 'Lab Props',
       [AUDIO_KEYS.CLICK_A]: 'SFX Click',
       [AUDIO_KEYS.TAP_A]: 'SFX Tap',
     }
@@ -346,6 +347,11 @@ export class BootScene extends BaseScene {
     // HD medals spritesheet — individual medal sprites at 43x82 cells
     this.load.spritesheet(SPRITESHEET_KEYS.MEDALS_HD, './sprites/medals-hd.png', {
       frameWidth: 43, frameHeight: 82,
+    })
+
+    // Lab props spritesheet — 64x64 cells, 12 cols (issue #144)
+    this.load.spritesheet(SPRITESHEET_KEYS.LAB_PROPS, './sprites/lab-props.png', {
+      frameWidth: 64, frameHeight: 64,
     })
 
     // Kenney UI sound effects (OGG)

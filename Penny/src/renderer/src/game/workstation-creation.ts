@@ -5,7 +5,7 @@
 // ---------------------------------------------------------------------------
 
 import Phaser from 'phaser'
-import { SPRITESHEET_KEYS, ICON_FRAMES, ITEM_FRAMES, STATUS_DOT_FRAMES, LEGO_FRAMES, PET_COUNT, PET_FACE_FRAMES, EFFECT_ANIM_KEYS, IMAGE_KEYS, ANIMAL_SPECIES, ANIMAL_COUNT, ANIMAL_IDLE_FRAMES, MEDAL_HD_FRAMES } from './office-asset-keys'
+import { SPRITESHEET_KEYS, ICON_FRAMES, ITEM_FRAMES, STATUS_DOT_FRAMES, LEGO_FRAMES, PET_COUNT, PET_FACE_FRAMES, EFFECT_ANIM_KEYS, IMAGE_KEYS, ANIMAL_SPECIES, ANIMAL_COUNT, ANIMAL_IDLE_FRAMES, MEDAL_HD_FRAMES, LAB_PROP_FRAMES } from './office-asset-keys'
 import { fadeInUp, fadeOutDown, pulse } from './juice-utils'
 import { AnimConfig } from './animation-config'
 import { EventBus, EVENTS } from './events'
@@ -28,6 +28,9 @@ import {
   WS_DOT_GAP,
   COLOR_DESK_BODY,
   COLOR_DESK_TOP,
+  COLOR_LAB_DESK_BODY,
+  COLOR_LAB_DESK_STROKE,
+  COLOR_LAB_DESK_STROKE_ALPHA,
   EVAL_GLOW_GREY,
   EVAL_GLOW_RADIUS,
   EVAL_GLOW_ALPHA_MIN,
@@ -145,8 +148,14 @@ export class WorkstationFactory {
     const wsContainer = this.scene.add.container(0, 0)
     room.container.add(wsContainer)
 
+    // Lab stool sprite (issue #144) — prefer LAB_PROPS sheet, fall back to office chair
+    const labPropsLoaded = this.scene.textures.exists(SPRITESHEET_KEYS.LAB_PROPS)
     let chairSprite: Phaser.GameObjects.Sprite | null = null
-    if (this.host.officeTilesLoaded) {
+    if (labPropsLoaded) {
+      chairSprite = this.scene.add.sprite(0, WS_CHAIR_Y + 4, SPRITESHEET_KEYS.LAB_PROPS, LAB_PROP_FRAMES.STOOL)
+      chairSprite.setScale(0.22).setAlpha(0.85)
+      wsContainer.add(chairSprite)
+    } else if (this.host.officeTilesLoaded) {
       chairSprite = this.scene.add.sprite(0, WS_CHAIR_Y + 4, SPRITESHEET_KEYS.OFFICE, FRAME_CHAIR_DARK)
       chairSprite.setScale(0.44).setAlpha(0.85)
       wsContainer.add(chairSprite)
@@ -159,10 +168,15 @@ export class WorkstationFactory {
       .setAlpha((EVAL_GLOW_ALPHA_MIN + EVAL_GLOW_ALPHA_MAX) / 2)
     wsContainer.add(evalGlow)
 
-    const deskBody = this.scene.add.rectangle(0, WS_DESK_Y, 80, 21, COLOR_DESK_BODY).setStrokeStyle(1, activeTheme.deskStrokeIdle, 0.5)
+    // Lab reskin (issue #144): darker desk body with cyan stroke when lab assets available
+    const deskFill   = labPropsLoaded ? COLOR_LAB_DESK_BODY : COLOR_DESK_BODY
+    const deskStroke = labPropsLoaded ? COLOR_LAB_DESK_STROKE : activeTheme.deskStrokeIdle
+    const deskStrokeAlpha = labPropsLoaded ? COLOR_LAB_DESK_STROKE_ALPHA : 0.5
+    const deskBody = this.scene.add.rectangle(0, WS_DESK_Y, 80, 21, deskFill).setStrokeStyle(1, deskStroke, deskStrokeAlpha)
     wsContainer.add(deskBody)
 
-    const deskTop = this.scene.add.rectangle(0, WS_DESK_Y - 8, 77, 3, COLOR_DESK_TOP)
+    const deskTopColor = labPropsLoaded ? COLOR_LAB_DESK_STROKE : COLOR_DESK_TOP
+    const deskTop = this.scene.add.rectangle(0, WS_DESK_Y - 8, 77, 3, deskTopColor)
     wsContainer.add(deskTop)
 
     let monitorSprite: Phaser.GameObjects.Sprite | null = null
@@ -170,9 +184,16 @@ export class WorkstationFactory {
     let screenLines: Phaser.GameObjects.Graphics | undefined
     let screenTween: Phaser.Tweens.Tween | undefined
     const screenState = { mode: 'idle' }
-    if (this.host.officeTilesLoaded) {
+    // Lab console screen (issue #144) — prefer LAB_PROPS, fall back to office monitor
+    const useLabMonitor = labPropsLoaded
+    if (useLabMonitor) {
+      monitorSprite = this.scene.add.sprite(0, WS_MONITOR_Y, SPRITESHEET_KEYS.LAB_PROPS, LAB_PROP_FRAMES.CONSOLE_SCREEN).setScale(0.22)
+      wsContainer.add(monitorSprite)
+    } else if (this.host.officeTilesLoaded) {
       monitorSprite = this.scene.add.sprite(0, WS_MONITOR_Y, SPRITESHEET_KEYS.OFFICE, FRAME_MONITOR).setScale(0.42)
       wsContainer.add(monitorSprite)
+    }
+    if (monitorSprite) {
       monitorGlowFx = monitorSprite.postFX.addGlow(0x0ea5e9, 0, 0, false, AnimConfig.monitor.glowQuality, AnimConfig.monitor.glowDistance)
       // Scrolling screen content lines
       screenLines = this.scene.add.graphics().setVisible(false)

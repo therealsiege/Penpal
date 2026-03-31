@@ -95,6 +95,11 @@ export const COLOR_LED_GREEN   = 0x34d399
 export const COLOR_LED_AMBER   = 0xfbbf24
 export const COLOR_LED_GRAY    = 0x64748b
 
+// Lab reskin desk colors (issue #144)
+export const COLOR_LAB_DESK_BODY   = 0x1a3a52
+export const COLOR_LAB_DESK_STROKE = 0x22d3ee
+export const COLOR_LAB_DESK_STROKE_ALPHA = 0.4
+
 export const WORLD_MARGIN   = 30
 
 // Camera & navigation constants
