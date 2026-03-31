@@ -13,11 +13,14 @@ import {
   COLOR_HEADER_BG,
   COLOR_DOOR_FILL,
   ROOM_HEADER_H,
+  LAB_EQUIP_ZONE_H,
 } from './office-constants'
 import { SPRITESHEET_KEYS, ICON_FRAMES, ITEM_FRAMES, EFFECT_ANIM_KEYS, LEGO_FRAMES, LAB_TILESET_FRAMES, LAB_SMOOTH_FRAMES, PIPE_FRAMES, CABLE_FRAMES } from './office-asset-keys'
 import { LAB_TILE_SIZE } from './office-constants'
 import { ROOM_HEADER_ITEM } from './workstation-creation'
 import { LAB_PROP_FRAMES as LP } from './lab-prop-frames.generated'
+import { computeLabLayout } from './lab-layout-engine'
+import { computeRoomLayout, detectRoomType } from './office-layout'
 import { EventBus, EVENTS } from './events'
 
 // ---------------------------------------------------------------------------
@@ -249,14 +252,16 @@ export class OfficeRooms {
       accent: template.accentColor,
     }
 
-    // ── Room area bounds — tileset covers the entire room including walls ──
+    // Clean up previous zone sprites
+    if (room.floorTileSprites) { for (const s of room.floorTileSprites) s.destroy(); room.floorTileSprites = [] }
+    if (room.wallTileSprites) { for (const s of room.wallTileSprites) s.destroy(); room.wallTileSprites = [] }
+    if (room.cornerTileSprites) { for (const s of room.cornerTileSprites) s.destroy(); room.cornerTileSprites = [] }
+
+    // ── Room area bounds — rooms are zones within the unified facility floor ──
     const floorX = -w / 2
     const floorY = -h / 2
     const floorW = w
     const floorH = h - ROOM_HEADER_H
-
-    // ── PRIMARY VISUAL: Autotiled lab room (floor + walls + corners + equipment) ──
-    this.tileHexFloor(room, floorX, floorY, floorW, floorH, roomStyle)
 
     // ── Header bar at the bottom of the room ──
     const hBarX = -w / 2
@@ -302,11 +307,14 @@ export class OfficeRooms {
     const doorFloorW = w
     this.drawDoorPanel(room, doorFloorW, roomStyle.accent)
 
-    // ── Lab detail layers — pipes, cables, props ──
-    this.tilePipeDetail(room, floorX, floorY, floorW, floorH)
-    this.tileCableDetail(room, floorX, floorY, floorW, floorH)
-    this.tileLabProps(room, floorX, floorY, floorW, floorH)
-    this.placeFloorGlowLights(room, floorX, floorY, floorW, floorH)
+    // Initialize sprite arrays (previously done by tileHexFloor, now needed here)
+    if (!room.floorTileSprites) room.floorTileSprites = []
+    if (!room.wallTileSprites) room.wallTileSprites = []
+    if (!room.cornerTileSprites) room.cornerTileSprites = []
+
+    // ── Zone details — drawn on top of the unified facility floor ──
+    this.placeLabEquipment(room, floorX, floorY, floorW, floorH)
+    this.placeHazardTrim(room, floorX, floorY, floorW, floorH)  // zone dividers
 
     // Stash room index for downstream use
     ;(room as unknown as Record<string, unknown>)._roomIndex = roomIndex
@@ -511,10 +519,9 @@ export class OfficeRooms {
     if (!this.scene.textures.exists(SPRITESHEET_KEYS.LAB_MAIN_TILESET)) return
 
     // ── Autotile: single grid covering the entire floor area ──
-    // 128px tiles scaled to fit. Grid is fitted WITHIN room bounds
-    // (floor division) and centered so tiles don't overflow.
-    const tileScale = 0.35
-    const step = LAB_TILE_SIZE * tileScale  // ~45px
+    // 128px tiles scaled to 0.50 (64px cells). Matches lab-layout-engine grid.
+    const tileScale = 0.50
+    const step = LAB_TILE_SIZE * tileScale  // 64px
 
     const cols = Math.max(4, Math.floor(floorW / step))
     const rows = Math.max(4, Math.floor(floorH / step))
@@ -548,17 +555,21 @@ export class OfficeRooms {
 
         let frame: number
 
-        // ── Corners ──
-        if (isTop && isLeft)          frame = LAB_TILESET_FRAMES.CORNER_TL
-        else if (isTop && isRight)    frame = LAB_TILESET_FRAMES.CORNER_TR
-        else if (isBottom && isLeft)  frame = LAB_TILESET_FRAMES.CORNER_BL
-        else if (isBottom && isRight) frame = LAB_TILESET_FRAMES.CORNER_BR
-        // ── Edges ──
-        else if (isTop)    frame = LAB_TILESET_FRAMES.WALL_TOP
+        // ── Corners — mix standard + thick variants ──
+        const useThickCorners = (hash % 3) !== 2  // ~67% of rooms get thick corners
+        if (isTop && isLeft)          frame = useThickCorners ? LAB_TILESET_FRAMES.CORNER_TL_THICK : LAB_TILESET_FRAMES.CORNER_TL
+        else if (isTop && isRight)    frame = useThickCorners ? LAB_TILESET_FRAMES.CORNER_TR_THICK : LAB_TILESET_FRAMES.CORNER_TR
+        else if (isBottom && isLeft)  frame = useThickCorners ? LAB_TILESET_FRAMES.CORNER_BL_THICK : LAB_TILESET_FRAMES.CORNER_BL
+        else if (isBottom && isRight) frame = useThickCorners ? LAB_TILESET_FRAMES.CORNER_BR_THICK : LAB_TILESET_FRAMES.CORNER_BR
+        // ── Edges — use thick variants for top/bottom to match reference ──
+        else if (isTop) {
+          const topVariant = (hash + c * 5) % 8
+          frame = topVariant < 3 ? LAB_TILESET_FRAMES.WALL_TOP_THICK : LAB_TILESET_FRAMES.WALL_TOP
+        }
         else if (isBottom) {
-          // Occasional window accent on bottom wall
           const bottomAccent = (hash + c * 3) % 6
           if (bottomAccent === 0 && c > 0 && c < cols - 1) frame = LAB_TILESET_FRAMES.WALL_BOTTOM_WINDOW_A
+          else if (bottomAccent === 1 && c > 0 && c < cols - 1) frame = LAB_TILESET_FRAMES.WALL_BOTTOM_THICK
           else frame = LAB_TILESET_FRAMES.WALL_BOTTOM
         }
         else if (isLeft)   frame = LAB_TILESET_FRAMES.WALL_LEFT
@@ -570,15 +581,17 @@ export class OfficeRooms {
           else if (r === 1)          frame = LAB_TILESET_FRAMES.CONSOLE_TOP
           else                       frame = LAB_TILESET_FRAMES.CONSOLE_SMALL
         }
-        // ── Interior floor ──
+        // ── Interior floor — mix variants for visual richness ──
         else {
           const cellHash = (hash + r * 7 + c * 13) % 25
           if (cellHash === 0 && r > 1 && c > 1 && r < rows - 2 && c < cols - 2) {
             frame = LAB_TILESET_FRAMES.FLOOR_FEATURE
           } else {
-            const floorVariant = (r + c + hash) % 5
-            if (floorVariant === 0)      frame = LAB_TILESET_FRAMES.HEX_FLOOR_B
-            else if (floorVariant === 3)  frame = LAB_TILESET_FRAMES.HEX_FLOOR_C
+            const floorVariant = (hash * 3 + r * 11 + c * 17) % 20
+            if (floorVariant === 0)       frame = LAB_TILESET_FRAMES.HEX_FLOOR_B
+            else if (floorVariant === 1)  frame = LAB_TILESET_FRAMES.HEX_FLOOR_C
+            else if (floorVariant === 2)  frame = LAB_TILESET_FRAMES.HEX_FLOOR_D
+            else if (floorVariant === 3)  frame = LAB_TILESET_FRAMES.HEX_FLOOR_B
             else                          frame = LAB_TILESET_FRAMES.HEX_FLOOR_A
           }
         }
@@ -953,52 +966,149 @@ export class OfficeRooms {
   }
 
   // -------------------------------------------------------------------------
-  // Floor glow lights — subtle cyan illumination on the hex floor
+  // Wall-hugging equipment — large lab props placed tight against walls
   // -------------------------------------------------------------------------
 
-  private placeFloorGlowLights(
+  private placeLabEquipment(
     room: Room,
     floorX: number,
     floorY: number,
     floorW: number,
     floorH: number,
   ): void {
+    if (!this.scene.textures.exists(SPRITESHEET_KEYS.LAB_PROPS)) return
+
     const h = this.hashToken(room.cwd)
+    const roomType = detectRoomType(room.cwd)
+    const layout = computeRoomLayout(room.agents.length, roomType, room.doorSide)
+    const labResult = computeLabLayout(floorX, floorY, floorW, floorH, h, layout.deskPositions)
 
-    // 2 lights for small rooms, 3-4 for larger rooms
-    const lightCount = floorW > 150 ? (3 + (h % 2)) : 2
+    // Place props from engine output
+    for (const p of labResult.propPlacements) {
+      const spr = this.scene.add.sprite(p.x, p.y, SPRITESHEET_KEYS.LAB_PROPS, p.frame)
+        .setScale(p.scale).setAlpha(p.alpha).setDepth(p.depth)
+      room.container.add(spr)
+      room.wallTileSprites!.push(spr)
+    }
 
-    // Interior safe zone — at least 30% from edges
-    const marginX = floorW * 0.30
-    const marginY = floorH * 0.30
-    const innerW = floorW - marginX * 2
-    const innerH = floorH - marginY * 2
-    const innerX = floorX + marginX
-    const innerY = floorY + marginY
-
-    for (let i = 0; i < lightCount; i++) {
-      // Deterministic position within the interior
-      const seed = (h + i * 31) | 0
-      const fx = innerX + ((seed * 7 + i * 53) % 1000) / 1000 * innerW
-      const fy = innerY + ((seed * 13 + i * 97) % 1000) / 1000 * innerH
-
-      // Bloom halo — larger, more transparent background glow
-      const bloomRadius = 14 + (seed % 7)  // 14-20
-      const bloomAlpha = 0.04 + ((seed % 3) * 0.01)  // 0.04-0.06
-      const bloom = this.scene.add.circle(fx, fy, bloomRadius, 0x00e5ff, bloomAlpha)
-      bloom.setDepth(-2.0)
-      room.container.add(bloom)
-      room.wallTileSprites!.push(bloom as unknown as Phaser.GameObjects.Sprite)
-
-      // Core glow — smaller, brighter center
-      const coreRadius = 6 + (seed % 5)  // 6-10
-      const coreAlpha = 0.12 + ((seed % 4) * 0.02)  // 0.12-0.18
-      const core = this.scene.add.circle(fx, fy, coreRadius, 0x00e5ff, coreAlpha)
-      core.setDepth(-2.0)
-      room.container.add(core)
-      room.wallTileSprites!.push(core as unknown as Phaser.GameObjects.Sprite)
+    // Place glow lights from engine output
+    const g = room.floorGraphics
+    for (const glow of labResult.glowPlacements) {
+      g.fillStyle(glow.color, glow.outerAlpha)
+      g.fillCircle(glow.x, glow.y, glow.outerRadius)
+      g.fillStyle(glow.color, glow.midAlpha)
+      g.fillCircle(glow.x, glow.y, glow.midRadius)
+      g.fillStyle(glow.color, glow.coreAlpha)
+      g.fillCircle(glow.x, glow.y, glow.coreRadius)
     }
   }
+
+  // -------------------------------------------------------------------------
+  // Hazard trim — yellow stripe along room perimeter
+  // -------------------------------------------------------------------------
+
+  private placeHazardTrim(
+    room: Room,
+    floorX: number,
+    floorY: number,
+    floorW: number,
+    floorH: number,
+  ): void {
+    const g = room.floorGraphics
+    const x1 = floorX
+    const y1 = floorY
+    const x2 = floorX + floorW
+    const y2 = floorY + floorH
+    const stripeH = 3
+
+    // Yellow hazard dashes along zone edges — with OPENINGS for doorways
+    const dashLen = 6
+    const gapLen = 3
+    const doorW = 50  // opening width for laser doors
+    const midX = (x1 + x2) / 2
+    const midY = (y1 + y2) / 2
+
+    g.fillStyle(0xfbbf24, 0.45)
+
+    // Top edge — opening in center
+    for (let dx = x1; dx < x2; dx += dashLen + gapLen) {
+      if (dx > midX - doorW / 2 && dx < midX + doorW / 2) continue  // door opening
+      const len = Math.min(dashLen, x2 - dx)
+      g.fillRect(dx, y1, len, stripeH)
+    }
+    // Bottom edge — opening in center
+    for (let dx = x1; dx < x2; dx += dashLen + gapLen) {
+      if (dx > midX - doorW / 2 && dx < midX + doorW / 2) continue
+      const len = Math.min(dashLen, x2 - dx)
+      g.fillRect(dx, y2 - stripeH, len, stripeH)
+    }
+    // Left edge — opening in center
+    for (let dy = y1; dy < y2; dy += dashLen + gapLen) {
+      if (dy > midY - doorW / 2 && dy < midY + doorW / 2) continue
+      const len = Math.min(dashLen, y2 - dy)
+      g.fillRect(x1, dy, stripeH, len)
+    }
+    // Right edge — opening in center
+    for (let dy = y1; dy < y2; dy += dashLen + gapLen) {
+      if (dy > midY - doorW / 2 && dy < midY + doorW / 2) continue
+      const len = Math.min(dashLen, y2 - dy)
+      g.fillRect(x2 - stripeH, dy, stripeH, len)
+    }
+
+    // ── Laser door props at each opening ──
+    if (this.scene.textures.exists(SPRITESHEET_KEYS.LAB_PROPS)) {
+      const doorScale = 0.70
+      const doorDepth = -1.2
+
+      // Top opening — laser beam
+      const topDoor = this.scene.add.sprite(0, y1, SPRITESHEET_KEYS.LAB_PROPS, LP.LASER_BEAM)
+        .setScale(doorScale).setAlpha(0.85).setDepth(doorDepth)
+      room.container.add(topDoor)
+      room.wallTileSprites!.push(topDoor)
+
+      // Bottom opening — laser beam
+      const botDoor = this.scene.add.sprite(0, y2, SPRITESHEET_KEYS.LAB_PROPS, LP.LASER_BEAM)
+        .setScale(doorScale).setAlpha(0.85).setDepth(doorDepth)
+      room.container.add(botDoor)
+      room.wallTileSprites!.push(botDoor)
+
+      // Left opening — laser beam (rotated)
+      const leftDoor = this.scene.add.sprite(x1, 0, SPRITESHEET_KEYS.LAB_PROPS, LP.LASER_BEAM)
+        .setScale(doorScale).setAlpha(0.85).setDepth(doorDepth).setAngle(90)
+      room.container.add(leftDoor)
+      room.wallTileSprites!.push(leftDoor)
+
+      // Right opening — laser beam (rotated)
+      const rightDoor = this.scene.add.sprite(x2, 0, SPRITESHEET_KEYS.LAB_PROPS, LP.LASER_BEAM)
+        .setScale(doorScale).setAlpha(0.85).setDepth(doorDepth).setAngle(90)
+      room.container.add(rightDoor)
+      room.wallTileSprites!.push(rightDoor)
+
+      // Laser emitters at each opening edge
+      const emitterScale = 0.45
+      // Top opening emitters
+      const topLeftEmit = this.scene.add.sprite(-doorW / 2, y1, SPRITESHEET_KEYS.LAB_PROPS, LP.LASER_HEAD)
+        .setScale(emitterScale).setAlpha(0.80).setDepth(doorDepth)
+      room.container.add(topLeftEmit)
+      room.wallTileSprites!.push(topLeftEmit)
+      const topRightEmit = this.scene.add.sprite(doorW / 2, y1, SPRITESHEET_KEYS.LAB_PROPS, LP.LASER_OUTLET)
+        .setScale(emitterScale).setAlpha(0.80).setDepth(doorDepth)
+      room.container.add(topRightEmit)
+      room.wallTileSprites!.push(topRightEmit)
+
+      // Bottom opening emitters
+      const botLeftEmit = this.scene.add.sprite(-doorW / 2, y2, SPRITESHEET_KEYS.LAB_PROPS, LP.LASER_HEAD)
+        .setScale(emitterScale).setAlpha(0.80).setDepth(doorDepth)
+      room.container.add(botLeftEmit)
+      room.wallTileSprites!.push(botLeftEmit)
+      const botRightEmit = this.scene.add.sprite(doorW / 2, y2, SPRITESHEET_KEYS.LAB_PROPS, LP.LASER_OUTLET)
+        .setScale(emitterScale).setAlpha(0.80).setDepth(doorDepth)
+      room.container.add(botRightEmit)
+      room.wallTileSprites!.push(botRightEmit)
+    }
+  }
+
+  // placeFloorGlowLights — now handled by lab-layout-engine via placeLabEquipment
 
   // -------------------------------------------------------------------------
   // Industrial detail — vent grates, pipes, brackets (legacy procedural)
@@ -1094,7 +1204,7 @@ export class OfficeRooms {
       headerY,
       this.host.formatLabel(room.label),
       {
-        fontSize: '20px', color: activeTheme.headerText,
+        fontSize: '24px', color: activeTheme.headerText,
         fontFamily: "'Monogram', system-ui, monospace", fontStyle: 'bold', align: 'center',
         resolution: 2,
       },
@@ -1140,11 +1250,11 @@ export class OfficeRooms {
     // Drop shadow for depth + subtle glow FX that pulses when room has agents
     headerText.postFX.addShadow(1, 1, 0.03, 0.6, 0x000000, 2)
     const template2 = getTemplate(getRoomType(room.cwd))
-    room.headerGlowFx = headerText.postFX.addGlow(template2.accentColor, 1, 0, false, 0.1, 10)
+    room.headerGlowFx = headerText.postFX.addGlow(template2.accentColor, 1, 0, false, 0.2, 10)
     if (room.agents.length > 0) {
       room.headerGlowTween = this.scene.tweens.addCounter({
-        from: 1,
-        to: 3,
+        from: 2,
+        to: 5,
         duration: 2000,
         yoyo: true,
         repeat: -1,
@@ -1229,7 +1339,7 @@ export class OfficeRooms {
       headerY,
       `${room.agents.length}`,
       {
-        fontSize: '11px',
+        fontSize: '13px',
         color: isActive ? activeTheme.accentText : isWaiting ? '#fbbf24' : '#3a4858',
         fontFamily: 'system-ui, monospace',
         backgroundColor: activeTheme.nameBg,

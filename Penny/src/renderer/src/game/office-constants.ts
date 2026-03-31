@@ -62,15 +62,16 @@ export const OFFICE_FRAME_PRINTER      = 126
 export const CHAR_SCALE      = 0.134
 export const WORKSTATION_W   = 90 // widened to fit all desk items without overlap
 export const WORKSTATION_H   = 77 // ~20% tighter office footprint
-export const ROOM_PADDING    = 12
+export const ROOM_PADDING    = 16
 export const ROOM_TOP_EXTRA  = 30   // extra top padding so thought bubbles clear room headers
+export const LAB_EQUIP_ZONE_H = 80  // equipment shelf at top of each zone
 export const ROOM_HEADER_H   = 20
-export const ROOM_GAP        = 36
+export const ROOM_GAP        = 4   // minimal gap — rooms share walls like one facility
 export const MAX_AGENTS_PER_ROW = 4
-export const TEAM_AREA_PAD_X = 24
-export const TEAM_AREA_PAD_Y = 24
-export const TEAM_AREA_GAP_X = 48
-export const TEAM_AREA_GAP_Y = 60
+export const TEAM_AREA_PAD_X = 8
+export const TEAM_AREA_PAD_Y = 8
+export const TEAM_AREA_GAP_X = 4   // teams butt up against each other
+export const TEAM_AREA_GAP_Y = 4
 export const TEAM_LABEL_H = 16
 
 export const WS_CHAIR_Y    = 6
@@ -104,9 +105,9 @@ export const COLOR_LAB_DESK_STROKE_ALPHA = 0.4
 export const WORLD_MARGIN   = 30
 
 // Camera & navigation constants
-export const ZOOM_MIN = 0.7
-export const ZOOM_MAX = 2.0
-export const ZOOM_FIT_MAX = 1.14
+export const ZOOM_MIN = 0.8
+export const ZOOM_MAX = 2.5
+export const ZOOM_FIT_MAX = 1.5
 export const ZOOM_LERP_SPEED = 0.08
 export const FOLLOW_LERP_SPEED = 0.06
 // LOD thresholds — zoom boundaries between 3 detail levels

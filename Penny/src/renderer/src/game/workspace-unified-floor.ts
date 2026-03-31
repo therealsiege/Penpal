@@ -1,13 +1,11 @@
 // ---------------------------------------------------------------------------
-// WorkspaceUnifiedFloor — Lab-themed hex tile floor for team area backgrounds
-// Replaces procedural floor rendering with LAB_MAIN_TILESET sprite tiles.
-// Retains hazard stripe perimeter and mako glow pool accents.
+// WorkspaceUnifiedFloor — Lab-themed hex tile floor for the ENTIRE facility.
+// Draws one big autotiled lab (walls + hex floor + corners) around all rooms.
 // ---------------------------------------------------------------------------
 
 import Phaser from 'phaser'
-import { SPRITESHEET_KEYS, LAB_TILESET_FRAMES } from './office-asset-keys'
+import { SPRITESHEET_KEYS, LAB_TILESET_FRAMES, PIPE_FRAMES } from './office-asset-keys'
 import { LAB_TILE_SIZE } from './office-constants'
-import { activeTheme } from './office-theme'
 
 // ---------------------------------------------------------------------------
 // Host interface
@@ -36,7 +34,7 @@ export class WorkspaceUnifiedFloor {
   }
 
   // -------------------------------------------------------------------------
-  // drawFloor — render hex tile floor for a team area bounding box
+  // drawFloor — render full autotiled lab for the entire facility bounding box
   // -------------------------------------------------------------------------
 
   drawFloor(
@@ -44,27 +42,30 @@ export class WorkspaceUnifiedFloor {
     y: number,
     width: number,
     height: number,
-    teamColor: number,
+    _teamColor: number,
   ): void {
     this.cleanup()
 
     const hasLabTileset = this.scene.textures.exists(SPRITESHEET_KEYS.LAB_MAIN_TILESET)
     if (!hasLabTileset) return
 
-    // ── Team area background: autotiled dark fill with transition edges ──
-    // Uses the same tileset as rooms but with dark fill interior and
-    // hex-to-dark transition tiles on the perimeter for a polished look.
-    const tileScale = 0.35
-    const effectiveSize = LAB_TILE_SIZE * tileScale
-    const cols = Math.max(3, Math.floor(width / effectiveSize))
-    const rows = Math.max(3, Math.floor(height / effectiveSize))
+    // ── Full autotiled hex floor with walls + corners ──
+    const tileScale = 0.50
+    const effectiveSize = LAB_TILE_SIZE * tileScale  // 64px cells
+    const cols = Math.max(4, Math.floor(width / effectiveSize))
+    const rows = Math.max(4, Math.floor(height / effectiveSize))
+
+    // Center the grid
+    const gridW = cols * effectiveSize
+    const gridH = rows * effectiveSize
+    const offsetX = x + (width - gridW) / 2
+    const offsetY = y + (height - gridH) / 2
+
+    // Simple hash for variety
+    const hash = Math.abs(Math.floor(x * 7 + y * 13)) | 0
 
     for (let row = 0; row < rows; row++) {
       for (let col = 0; col < cols; col++) {
-        const tx = x + col * effectiveSize + effectiveSize / 2
-        const ty = y + row * effectiveSize + effectiveSize / 2
-        if (tx - effectiveSize / 2 > x + width || ty - effectiveSize / 2 > y + height) continue
-
         const isTop = row === 0
         const isBottom = row === rows - 1
         const isLeft = col === 0
@@ -72,73 +73,159 @@ export class WorkspaceUnifiedFloor {
 
         let frame: number
 
-        // Transition tiles on perimeter — smooth hex→dark edges
-        if (isTop && isLeft)          frame = LAB_TILESET_FRAMES.TRANSITION_TL
-        else if (isTop && isRight)    frame = LAB_TILESET_FRAMES.TRANSITION_TR
-        else if (isBottom && isLeft)  frame = LAB_TILESET_FRAMES.TRANSITION_BL
-        else if (isBottom && isRight) frame = LAB_TILESET_FRAMES.TRANSITION_BR
-        else if (isTop)    frame = LAB_TILESET_FRAMES.TRANSITION_TOP
-        else if (isBottom) frame = LAB_TILESET_FRAMES.TRANSITION_BOTTOM
-        else if (isLeft)   frame = LAB_TILESET_FRAMES.TRANSITION_LEFT
-        else if (isRight)  frame = LAB_TILESET_FRAMES.TRANSITION_RIGHT
-        else               frame = LAB_TILESET_FRAMES.DARK_FILL
+        // ── Corners — thick variants for the facility walls ──
+        if (isTop && isLeft)          frame = LAB_TILESET_FRAMES.CORNER_TL_THICK
+        else if (isTop && isRight)    frame = LAB_TILESET_FRAMES.CORNER_TR_THICK
+        else if (isBottom && isLeft)  frame = LAB_TILESET_FRAMES.CORNER_BL_THICK
+        else if (isBottom && isRight) frame = LAB_TILESET_FRAMES.CORNER_BR_THICK
+        // ── Edges — thick walls for the outer facility boundary ──
+        else if (isTop) {
+          const accent = (hash + col * 5) % 6
+          frame = accent < 2 ? LAB_TILESET_FRAMES.WALL_TOP_THICK : LAB_TILESET_FRAMES.WALL_TOP
+        }
+        else if (isBottom) {
+          const accent = (hash + col * 3) % 8
+          if (accent === 0) frame = LAB_TILESET_FRAMES.WALL_BOTTOM_WINDOW_A
+          else if (accent === 1) frame = LAB_TILESET_FRAMES.WALL_BOTTOM_THICK
+          else frame = LAB_TILESET_FRAMES.WALL_BOTTOM
+        }
+        else if (isLeft)   frame = LAB_TILESET_FRAMES.WALL_LEFT
+        else if (isRight)  frame = LAB_TILESET_FRAMES.WALL_RIGHT
+        // ── Interior hex floor with variety ──
+        else {
+          const cellHash = (hash + row * 7 + col * 13) % 25
+          if (cellHash === 0 && row > 2 && col > 2 && row < rows - 3 && col < cols - 3) {
+            frame = LAB_TILESET_FRAMES.FLOOR_FEATURE
+          } else {
+            const floorVariant = (hash * 3 + row * 11 + col * 17) % 20
+            if (floorVariant === 0)       frame = LAB_TILESET_FRAMES.HEX_FLOOR_B
+            else if (floorVariant === 1)  frame = LAB_TILESET_FRAMES.HEX_FLOOR_C
+            else if (floorVariant === 2)  frame = LAB_TILESET_FRAMES.HEX_FLOOR_D
+            else if (floorVariant === 3)  frame = LAB_TILESET_FRAMES.HEX_FLOOR_B
+            else                          frame = LAB_TILESET_FRAMES.HEX_FLOOR_A
+          }
+        }
+
+        // ── Console equipment along inner wall edges (deterministic) ──
+        if (!isTop && !isBottom && !isLeft && !isRight) {
+          const isNearTop = row === 1
+          const isNearBottom = row === rows - 2
+          const isNearLeft = col === 1
+          const isNearRight = col === cols - 2
+          const consoleChance = (hash + row * 3 + col * 7) % 12
+
+          if (isNearTop && consoleChance === 0)          frame = LAB_TILESET_FRAMES.CONSOLE_TOP
+          else if (isNearBottom && consoleChance === 1)   frame = LAB_TILESET_FRAMES.CONSOLE_SMALL
+          else if (isNearLeft && consoleChance === 2)     frame = LAB_TILESET_FRAMES.CONSOLE_LEFT
+          else if (isNearRight && consoleChance === 3)    frame = LAB_TILESET_FRAMES.CONSOLE_RIGHT
+        }
+
+        const tx = offsetX + col * effectiveSize + effectiveSize / 2
+        const ty = offsetY + row * effectiveSize + effectiveSize / 2
 
         const tile = this.scene.add.sprite(tx, ty, SPRITESHEET_KEYS.LAB_MAIN_TILESET, frame)
           .setScale(tileScale)
-          .setAlpha(0.65)
+          .setAlpha(0.92)
           .setDepth(-3)
         this.floorTiles.push(tile)
       }
     }
 
-    // Hazard stripe perimeter — yellow/black chevrons along edges
-    this.hazardGraphics = this.scene.add.graphics().setDepth(-2.8)
-    const g = this.hazardGraphics
-    const chevronW = 12
-    const chevronH = 6
-    const yellow = 0xd4a017
-    const black = activeTheme.bg
-    const hazardAlpha = 0.18
+    // ── Exterior pipe runs along facility walls ──
+    if (this.scene.textures.exists(SPRITESHEET_KEYS.LAB_PIPES)) {
+      const pipeScale = 0.30
+      const pipeAlpha = 0.80
+      const pipeDepth = -2.8
+      const pipeStep = effectiveSize * 0.8  // slightly less than tile size for overlap
 
-    // Top edge
-    for (let hx = x + 4; hx < x + width - 4; hx += chevronW * 2) {
-      g.fillStyle(yellow, hazardAlpha)
-      g.fillRect(hx, y + 2, chevronW, chevronH)
-      g.fillStyle(black, hazardAlpha)
-      g.fillRect(hx + chevronW, y + 2, chevronW, chevronH)
-    }
-    // Bottom edge
-    for (let hx = x + 4; hx < x + width - 4; hx += chevronW * 2) {
-      g.fillStyle(yellow, hazardAlpha)
-      g.fillRect(hx, y + height - chevronH - 2, chevronW, chevronH)
-      g.fillStyle(black, hazardAlpha)
-      g.fillRect(hx + chevronW, y + height - chevronH - 2, chevronW, chevronH)
-    }
-    // Left edge
-    for (let hy = y + 12; hy < y + height - 12; hy += chevronW * 2) {
-      g.fillStyle(yellow, hazardAlpha)
-      g.fillRect(x + 2, hy, chevronH, chevronW)
-      g.fillStyle(black, hazardAlpha)
-      g.fillRect(x + 2, hy + chevronW, chevronH, chevronW)
-    }
-    // Right edge
-    for (let hy = y + 12; hy < y + height - 12; hy += chevronW * 2) {
-      g.fillStyle(yellow, hazardAlpha)
-      g.fillRect(x + width - chevronH - 2, hy, chevronH, chevronW)
-      g.fillStyle(black, hazardAlpha)
-      g.fillRect(x + width - chevronH - 2, hy + chevronW, chevronH, chevronW)
+      // Top exterior pipe run (horizontal, above facility)
+      const topPipeY = y - 10
+      for (let px = x + effectiveSize; px < x + width - effectiveSize; px += pipeStep) {
+        const frame = ((px / pipeStep | 0) % 5 === 0) ? PIPE_FRAMES.HORIZ_ARROW : PIPE_FRAMES.HORIZ_TOP
+        const pipe = this.scene.add.sprite(px, topPipeY, SPRITESHEET_KEYS.LAB_PIPES, frame)
+          .setScale(pipeScale).setAlpha(pipeAlpha).setDepth(pipeDepth)
+        this.floorTiles.push(pipe)
+      }
+      // Top pipe corners
+      const topLeftCorner = this.scene.add.sprite(x + effectiveSize * 0.5, topPipeY, SPRITESHEET_KEYS.LAB_PIPES, PIPE_FRAMES.CORNER_TL)
+        .setScale(pipeScale).setAlpha(pipeAlpha).setDepth(pipeDepth)
+      this.floorTiles.push(topLeftCorner)
+      const topRightCorner = this.scene.add.sprite(x + width - effectiveSize * 0.5, topPipeY, SPRITESHEET_KEYS.LAB_PIPES, PIPE_FRAMES.CORNER_TR)
+        .setScale(pipeScale).setAlpha(pipeAlpha).setDepth(pipeDepth)
+      this.floorTiles.push(topRightCorner)
+      // Valve on top pipe
+      const topValve = this.scene.add.sprite(x + width * 0.4, topPipeY, SPRITESHEET_KEYS.LAB_PIPES, PIPE_FRAMES.VALVE)
+        .setScale(pipeScale * 0.9).setAlpha(pipeAlpha * 0.95).setDepth(pipeDepth + 0.1)
+      this.floorTiles.push(topValve)
+
+      // Right exterior pipe run (vertical, right of facility)
+      const rightPipeX = x + width + 10
+      for (let py = y + effectiveSize; py < y + height - effectiveSize; py += pipeStep) {
+        const frame = ((py / pipeStep | 0) % 6 === 0) ? PIPE_FRAMES.VERT_ARROW : PIPE_FRAMES.VERT_RIGHT
+        const pipe = this.scene.add.sprite(rightPipeX, py, SPRITESHEET_KEYS.LAB_PIPES, frame)
+          .setScale(pipeScale).setAlpha(pipeAlpha).setDepth(pipeDepth)
+        this.floorTiles.push(pipe)
+      }
+      // T-connector on right pipe
+      const rightT = this.scene.add.sprite(rightPipeX, y + height * 0.5, SPRITESHEET_KEYS.LAB_PIPES, PIPE_FRAMES.T_LEFT)
+        .setScale(pipeScale).setAlpha(pipeAlpha).setDepth(pipeDepth)
+      this.floorTiles.push(rightT)
+      // Coupling on right pipe
+      const rightCoupling = this.scene.add.sprite(rightPipeX, y + height * 0.3, SPRITESHEET_KEYS.LAB_PIPES, PIPE_FRAMES.COUPLING_VERT)
+        .setScale(pipeScale * 0.85).setAlpha(pipeAlpha * 0.9).setDepth(pipeDepth + 0.1)
+      this.floorTiles.push(rightCoupling)
+
+      // Bottom exterior pipe run (horizontal, below facility)
+      const botPipeY = y + height + 10
+      for (let px = x + effectiveSize; px < x + width - effectiveSize; px += pipeStep) {
+        const frame = ((px / pipeStep | 0) % 4 === 0) ? PIPE_FRAMES.HORIZ_ARROW : PIPE_FRAMES.HORIZ_TOP
+        const pipe = this.scene.add.sprite(px, botPipeY, SPRITESHEET_KEYS.LAB_PIPES, frame)
+          .setScale(pipeScale).setAlpha(pipeAlpha).setDepth(pipeDepth)
+        this.floorTiles.push(pipe)
+      }
+      // Bottom corners connecting to right pipe
+      const botRightCorner = this.scene.add.sprite(x + width - effectiveSize * 0.5, botPipeY, SPRITESHEET_KEYS.LAB_PIPES, PIPE_FRAMES.CORNER_BR)
+        .setScale(pipeScale).setAlpha(pipeAlpha).setDepth(pipeDepth)
+      this.floorTiles.push(botRightCorner)
+      const botLeftCorner = this.scene.add.sprite(x + effectiveSize * 0.5, botPipeY, SPRITESHEET_KEYS.LAB_PIPES, PIPE_FRAMES.CORNER_BL)
+        .setScale(pipeScale).setAlpha(pipeAlpha).setDepth(pipeDepth)
+      this.floorTiles.push(botLeftCorner)
+      // Valve on bottom pipe
+      const botValve = this.scene.add.sprite(x + width * 0.6, botPipeY, SPRITESHEET_KEYS.LAB_PIPES, PIPE_FRAMES.VALVE)
+        .setScale(pipeScale * 0.9).setAlpha(pipeAlpha * 0.95).setDepth(pipeDepth + 0.1)
+      this.floorTiles.push(botValve)
+
+      // Left exterior pipe run (vertical, left of facility) — shorter run
+      const leftPipeX = x - 10
+      for (let py = y + effectiveSize * 2; py < y + height * 0.6; py += pipeStep) {
+        const pipe = this.scene.add.sprite(leftPipeX, py, SPRITESHEET_KEYS.LAB_PIPES, PIPE_FRAMES.VERT_LEFT)
+          .setScale(pipeScale).setAlpha(pipeAlpha).setDepth(pipeDepth)
+        this.floorTiles.push(pipe)
+      }
+      // Cap on left pipe
+      const leftCap = this.scene.add.sprite(leftPipeX, y + effectiveSize * 1.5, SPRITESHEET_KEYS.LAB_PIPES, PIPE_FRAMES.CAP_TOP)
+        .setScale(pipeScale).setAlpha(pipeAlpha).setDepth(pipeDepth)
+      this.floorTiles.push(leftCap)
     }
 
-    // Cyan/mako glow pools — subtle colored areas near team zone center
-    this.glowGraphics = this.scene.add.graphics().setDepth(-2.9)
+    // ── Cyan glow pools scattered across the facility ──
+    this.glowGraphics = this.scene.add.graphics().setDepth(-2.8)
     const gg = this.glowGraphics
-    const cx = x + width / 2
-    const cy = y + height / 2
-    gg.fillStyle(teamColor, 0.04)
-    gg.fillCircle(cx, cy, Math.min(width, height) * 0.3)
-    gg.fillStyle(0x00e5ff, 0.025)
-    gg.fillCircle(cx - width * 0.2, cy + height * 0.15, 30)
-    gg.fillCircle(cx + width * 0.25, cy - height * 0.1, 25)
+    const glowCount = Math.max(4, Math.floor((cols * rows) / 30))
+    for (let i = 0; i < glowCount; i++) {
+      const seed = (hash + i * 31) | 0
+      const gc = 2 + (seed % Math.max(1, cols - 4))
+      const gr = 2 + ((seed * 7) % Math.max(1, rows - 4))
+      const gx = offsetX + gc * effectiveSize + effectiveSize / 2
+      const gy = offsetY + gr * effectiveSize + effectiveSize / 2
+
+      gg.fillStyle(0x00e5ff, 0.06)
+      gg.fillCircle(gx, gy, 18)
+      gg.fillStyle(0x00e5ff, 0.14)
+      gg.fillCircle(gx, gy, 10)
+      gg.fillStyle(0x00e5ff, 0.28)
+      gg.fillCircle(gx, gy, 5)
+    }
   }
 
   // -------------------------------------------------------------------------
