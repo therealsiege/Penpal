@@ -492,6 +492,35 @@ agents:
     desk: { row: 3, col: 2 }
     autonomy: default
 
+  issue-validator:
+    name: "Issue Validator"
+    title: "GitHub Issue Validator"
+    pod_role: executor
+    persona:
+      backstory: "QA specialist who validates implementations with tests and screenshots."
+      style: "Thorough, visual verification"
+      catchphrase: ""
+    systemPrompt: >
+      You are a validation agent. Run existing tests, start the dev server, and use Playwright
+      to capture screenshots of key UI areas. Save all screenshots to .playwright-screenshots/
+      in the working directory. Report structured PASS/FAIL results with error details.
+    model: sonnet
+    mcpProfile: qa-executor
+    skills: []
+    allowedTools:
+      - "Bash(npm:*)"
+      - "Bash(npx:*)"
+      - "Bash(git:*)"
+      - Read
+      - Write
+      - Glob
+      - Grep
+      - mcp__playwright__*
+    defaultRepos: []
+    avatar: validator
+    desk: { row: 0, col: 0 }
+    autonomy: headless
+
   issue-planner:
     name: "Issue Planner"
     title: "GitHub Issue Planner"
