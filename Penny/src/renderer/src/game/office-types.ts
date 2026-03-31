@@ -236,6 +236,10 @@ export interface Room {
   badgeDotTween: Phaser.Tweens.Tween | null
   // Tiled floor texture sprites (very-low-alpha overlays from room-tiles spritesheet)
   floorTileSprites?: Phaser.GameObjects.Sprite[]
+  // Lab tileset wall edge sprites along room perimeter
+  wallTileSprites?: Phaser.GameObjects.Sprite[]
+  // Lab smooth corner sprites at room corners
+  cornerTileSprites?: Phaser.GameObjects.Sprite[]
   miniWhiteboard?: Phaser.GameObjects.Container
   miniWhiteboardTexts?: Phaser.GameObjects.Text[]
   doorSide: 'top' | 'bottom'

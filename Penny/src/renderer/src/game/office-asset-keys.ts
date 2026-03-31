@@ -64,6 +64,12 @@ export const SPRITESHEET_KEYS = Object.freeze({
   MONSTER_MOUTHS: 'monster-mouths',
   /** HD medals spritesheet — full medals.png sliced into individual frames */
   MEDALS_HD: 'medals-hd',
+  /** Lab tileset — 48x48 cells: wall edges (0-3), corners (4-7), inner edges (8-11), hex floor (12-13), plain floor (14), grated floor (15) */
+  LAB_MAIN_TILESET: 'lab-tileset',
+  /** Lab smooth corners — 48x48 cells: outer corners (0-3), inner corners (4-7) */
+  LAB_SMOOTH: 'lab-smooth',
+  /** Lab props — 48x48 cells: vent (0), pipe (1), floor panel (2), hazard stripe (3), console (4), cable (5), warning light (6), drain (7) */
+  LAB_PROPS: 'lab-props',
 } as const)
 
 // ---------------------------------------------------------------------------
@@ -281,6 +287,55 @@ export const MEDAL_HD_FRAMES = Object.freeze({
   GOLD_WHITE: 7,
   SILVER_WHITE: 8,
   BRONZE_WHITE: 9,
+} as const)
+
+// ---------------------------------------------------------------------------
+// Lab tileset frame indices (48x48 cells in LAB_MAIN_TILESET spritesheet)
+// ---------------------------------------------------------------------------
+
+export const LAB_TILESET_FRAMES = Object.freeze({
+  // Wall edges
+  WALL_TOP:     0,
+  WALL_RIGHT:   1,
+  WALL_BOTTOM:  2,
+  WALL_LEFT:    3,
+  // Wall corners
+  CORNER_TL:    4,
+  CORNER_TR:    5,
+  CORNER_BL:    6,
+  CORNER_BR:    7,
+  // Inner edges (thinner)
+  INNER_TOP:    8,
+  INNER_RIGHT:  9,
+  INNER_BOTTOM: 10,
+  INNER_LEFT:   11,
+  // Floor tiles
+  HEX_FLOOR_A:  12,
+  HEX_FLOOR_B:  13,
+  PLAIN_FLOOR:  14,
+  GRATED_FLOOR: 15,
+} as const)
+
+export const LAB_SMOOTH_FRAMES = Object.freeze({
+  OUTER_TL: 0,
+  OUTER_TR: 1,
+  OUTER_BL: 2,
+  OUTER_BR: 3,
+  INNER_TL: 4,
+  INNER_TR: 5,
+  INNER_BL: 6,
+  INNER_BR: 7,
+} as const)
+
+export const LAB_PROPS_FRAMES = Object.freeze({
+  VENT_GRATE:    0,
+  PIPE_SECTION:  1,
+  FLOOR_PANEL:   2,
+  HAZARD_STRIPE: 3,
+  CONSOLE_PANEL: 4,
+  CABLE_CONDUIT: 5,
+  WARNING_LIGHT: 6,
+  DRAINAGE_GRATE: 7,
 } as const)
 
 // ---------------------------------------------------------------------------
