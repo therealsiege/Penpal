@@ -29,6 +29,7 @@ export const FRAME_CHAIR_DARK   = 112
 export const FRAME_MONITOR      = 122
 
 export const ROOM_TILE_SIZE = 48
+export const LAB_TILE_SIZE  = 48
 
 // Office decoration frame indices
 export const OFFICE_FRAME_PLANT      = 68

@@ -4,7 +4,7 @@ import {
   SCENE_KEYS, SPRITESHEET_KEYS, ANIM_KEYS, IMAGE_KEYS, AUDIO_KEYS,
   EFFECT_ANIM_KEYS, ANIMAL_IDLE_FRAMES, ANIMAL_SPECIES,
 } from './office-asset-keys'
-import { CHAR_FRAME_W, CHAR_FRAME_H, OFFICE_TILE_SIZE, ROOM_TILE_SIZE } from './office-constants'
+import { CHAR_FRAME_W, CHAR_FRAME_H, OFFICE_TILE_SIZE, ROOM_TILE_SIZE, LAB_TILE_SIZE } from './office-constants'
 
 // ---------------------------------------------------------------------------
 // BootScene — shared asset preloader
@@ -112,6 +112,10 @@ export class BootScene extends BaseScene {
       [SPRITESHEET_KEYS.LAB_PROPS]: 'Lab Props',
       [AUDIO_KEYS.CLICK_A]: 'SFX Click',
       [AUDIO_KEYS.TAP_A]: 'SFX Tap',
+      // Wave 8
+      [SPRITESHEET_KEYS.LAB_MAIN_TILESET]: 'Lab Tileset',
+      [SPRITESHEET_KEYS.LAB_SMOOTH]: 'Lab Smooth',
+      [SPRITESHEET_KEYS.LAB_PROPS]: 'Lab Props',
     }
 
     // Spritesheets worth showing a thumbnail preview for
