@@ -591,6 +591,13 @@ broken
 ### Workflow: task (2026-03-31)
 - Task: task
 - Team: fullstack-dev / backend-arch / electron-dev
+- Result: FAIL (1/1 iterations)
+- Key output: RESULT: FAIL
+broken
+
+### Workflow: task (2026-03-31)
+- Task: task
+- Team: fullstack-dev / backend-arch / electron-dev
 - Result: PASS (1/2 iterations)
 - Key output: RESULT: PASS
 
@@ -600,13 +607,6 @@ broken
 - Team: solver-a / reviewer-b / executor-c
 - Result: PASS (1/1 iterations)
 - Key output: RESULT: PASS
-
-### Workflow: task (2026-03-31)
-- Task: task
-- Team: fullstack-dev / backend-arch / electron-dev
-- Result: FAIL (1/1 iterations)
-- Key output: RESULT: FAIL
-broken
 
 ### Workflow: pod quality pass (2026-03-31)
 - Task: pod quality pass
@@ -627,6 +627,12 @@ broken
 - Key output: RESULT: PASS
 
 
+### Workflow: rejected (2026-03-31)
+- Task: rejected
+- Team: fullstack-dev / backend-arch / electron-dev
+- Result: FAIL (1/2 iterations)
+- Key output: solver output
+
 ### Workflow: invalid self eval task (2026-03-31)
 - Task: invalid self eval task
 - Team: solver-a / reviewer-b / executor-c
@@ -638,12 +644,6 @@ broken
 - Team: fullstack-dev / backend-arch / electron-dev
 - Result: FAIL (1/2 iterations)
 - Key output: solver
-
-### Workflow: rejected (2026-03-31)
-- Task: rejected
-- Team: fullstack-dev / backend-arch / electron-dev
-- Result: FAIL (1/2 iterations)
-- Key output: solver output
 
 ### Workflow: task (2026-03-31)
 - Task: task
