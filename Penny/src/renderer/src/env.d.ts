@@ -158,6 +158,7 @@ declare global {
       orchestratorXP: () => Promise<Record<string, import('./types').AgentXP>>
       orchestratorSetProvider: (provider: string) => Promise<{ provider: string }>
       orchestratorGetProvider: () => Promise<{ provider: import('./types').ModelProvider; ollamaAvailable: boolean }>
+      projectResolvePath: (raw: string) => Promise<{ resolved: string }>
       // GitHub Issue Poller
       githubPollerStatus: () => Promise<{ running: boolean; repos: string[]; seenCount: number; lastPoll: number | null; pollIntervalMs: number }>
       githubPollNow: () => Promise<{ enqueued: number }>

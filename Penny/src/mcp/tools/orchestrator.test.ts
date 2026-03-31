@@ -83,7 +83,7 @@ describe('orchestrator:enqueue', () => {
     expect(result._meta.related_tools).toEqual(result.related_tools)
   })
 
-  it('defaults project to ~/sidekick when not provided', async () => {
+  it('defaults project to atlas when not provided', async () => {
     mockGetTaskQueue.mockReturnValue([])
     mockGetAgentHealthStatuses.mockResolvedValue([])
 
@@ -92,7 +92,7 @@ describe('orchestrator:enqueue', () => {
       description: 'Testing defaults',
     })
 
-    expect(result.data.project).toBe('~/sidekick')
+    expect(result.data.project).toBe('atlas')
     expect(result.data.priority).toBe('normal')
     expect(result._meta.suggestions).toEqual(result.suggestions)
   })

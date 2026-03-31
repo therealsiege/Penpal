@@ -26,6 +26,12 @@ import {
   type AgentConfig,
 } from './agents'
 import { checkOllamaAvailable, runOllama } from './ollama-client'
+import {
+  migratePersistedProject,
+  normalizeEnqueueProject,
+  resolveProjectPath,
+  pathsReferToSameRepo,
+} from './project-paths'
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
@@ -105,7 +111,14 @@ const PERSIST_PATH = path.join(DATA_DIR, 'task-queue.json')
 function loadTasks(): Task[] {
   try {
     if (fs.existsSync(PERSIST_PATH)) {
-      return JSON.parse(fs.readFileSync(PERSIST_PATH, 'utf-8'))
+      const raw = JSON.parse(fs.readFileSync(PERSIST_PATH, 'utf-8')) as Task[]
+      if (!Array.isArray(raw)) return []
+      for (const t of raw) {
+        if (t && typeof t.project === 'string') {
+          t.project = migratePersistedProject(t.project)
+        }
+      }
+      return raw
     }
   } catch (err) {
     console.error('[orchestrator] Failed to load tasks:', err)
@@ -309,14 +322,19 @@ function extractGithubBranchFromDescription(description: string): string | null 
   return m?.[1] ?? null
 }
 
+function taskWorkDir(task: Task): string {
+  return resolveProjectPath(task.project)
+}
+
 /** Strong git + cwd instructions for GitHub-ingested tasks (plan + execute). */
 function githubWorkflowForAgent(task: Task): string {
   if (task.source !== 'github') return ''
   const branch = extractGithubBranchFromDescription(task.description)
+  const cwd = taskWorkDir(task)
   return [
     '--- GITHUB REPOSITORY (CRITICAL) ---',
     `Use this directory as cwd for every shell command, read, and edit:`,
-    `  ${task.project}`,
+    `  ${cwd}`,
     '',
     'Before editing, run and respect: `pwd`, `git rev-parse --show-toplevel`, `git branch --show-current`, `git status`.',
     branch
@@ -335,7 +353,7 @@ function githubValidateContext(task: Task): string {
   if (task.source !== 'github') return ''
   return [
     '--- CONTEXT (GitHub task) ---',
-    `Target repo path: ${task.project}`,
+    `Target repo path: ${taskWorkDir(task)}`,
     'The executor should have committed locally; Penny will push/PR — you only PASS/FAIL the work.',
     '---',
     '',
@@ -350,7 +368,7 @@ function buildPlanPrompt(task: Task): string {
     '',
     `Task: ${task.title}`,
     `Description: ${task.description}`,
-    `Project: ${task.project}`,
+    `Project (cwd): ${taskWorkDir(task)}`,
     `Priority: ${task.priority}`,
     '',
     'Output a numbered step-by-step plan. Be specific about which files to touch and what changes to make.',
@@ -365,7 +383,7 @@ function buildExecutePrompt(task: Task, plan: string): string {
     '',
     `Task: ${task.title}`,
     `Description: ${task.description}`,
-    `Project: ${task.project}`,
+    `Project (cwd): ${taskWorkDir(task)}`,
     '',
     '--- PLAN ---',
     plan,
@@ -414,7 +432,7 @@ async function runStage(
 
   const phase =
     stage === 'planning' ? 'planning' : stage === 'executing' ? 'executing' : 'validating'
-  const result = await runAgentHeadless(agentId, task.project, prompt, {
+  const result = await runAgentHeadless(agentId, taskWorkDir(task), prompt, {
     permissionMode: stage === 'validating' ? 'plan' : undefined,
     timeoutMs: 1_800_000,
     phase,
@@ -458,7 +476,7 @@ export function enqueueTask(opts: {
     id: `task-${Date.now()}-${taskCounter}`,
     title: opts.title,
     description: opts.description,
-    project: opts.project,
+    project: normalizeEnqueueProject(opts.project),
     priority: opts.priority || 'normal',
     status: 'queued',
     requiredSkills: opts.requiredSkills || [],
@@ -553,7 +571,8 @@ function scoreAgent(task: Task, config: AgentConfig, session: ClaudeSession | un
   }
 
   // Project affinity: +50 if agent has this project in defaultRepos
-  if (config.defaultRepos.some(repo => repo === task.project || task.project.includes(repo))) {
+  const taskCwd = resolveProjectPath(task.project)
+  if (config.defaultRepos.some(repo => pathsReferToSameRepo(repo, taskCwd))) {
     score += 50
   }
 

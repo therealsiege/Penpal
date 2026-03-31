@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import type { PodWorkflow, PodPreset, PodStatus, AgentConfig, TaskPriority } from '../types'
 import { usePolling } from '../hooks/usePolling'
 
@@ -60,21 +60,15 @@ export function PodLauncherModal({
   const [customExecutor, setCustomExecutor] = useState('')
   const [solverCandidates, setSolverCandidates] = useState(1)
   const [priority, setPriority] = useState<TaskPriority>('normal')
-  const [cwd, setCwd] = useState('')
+  const [cwd, setCwd] = useState('atlas')
   const [customCwd, setCustomCwd] = useState('')
 
   const preset = presets.find(p => p.id === selectedPreset)
 
-  // Resolve available repos from the selected solver agent
+  // Resolve available repos from the selected solver agent (atlas + sidekick first — resolved in main)
   const solverAgent = agents.find(a => a.id === (customSolver || preset?.solver))
   const availableRepos = solverAgent?.defaultRepos ?? []
-
-  // Auto-select first repo if cwd not set
-  useEffect(() => {
-    if (!cwd && availableRepos.length > 0) {
-      setCwd(availableRepos[0])
-    }
-  }, [availableRepos, cwd])
+  const quickRepoChips = [...new Set(['atlas', 'sidekick', ...availableRepos])]
 
   const effectiveCwd = customCwd || cwd
 
@@ -175,23 +169,23 @@ export function PodLauncherModal({
         {/* Working directory */}
         <div className="mb-4">
           <p className="text-[11px] text-[#3a4858] uppercase tracking-wider mb-2">Working Directory</p>
-          {availableRepos.length > 0 && (
-            <div className="flex flex-wrap gap-1.5 mb-2">
-              {availableRepos.map(r => (
-                <button
-                  key={r}
-                  onClick={() => { setCwd(r); setCustomCwd('') }}
-                  className={`px-2.5 py-1 text-[11px] rounded-md border transition-colors ${
-                    cwd === r && !customCwd
-                      ? 'bg-blue-600/20 border-blue-500/30 text-blue-400'
-                      : 'bg-[#141a22] border-[#2a3440] text-[#5a6a7a] hover:text-[#c4ccd6]'
-                  }`}
-                >
-                  {r.split('/').pop()}
-                </button>
-              ))}
-            </div>
-          )}
+          <div className="flex flex-wrap gap-1.5 mb-2">
+            {quickRepoChips.map(r => (
+              <button
+                key={r}
+                type="button"
+                onClick={() => { setCwd(r); setCustomCwd('') }}
+                className={`px-2.5 py-1 text-[11px] rounded-md border transition-colors ${
+                  cwd === r && !customCwd
+                    ? 'bg-blue-600/20 border-blue-500/30 text-blue-400'
+                    : 'bg-[#141a22] border border-[#2a3440] text-[#5a6a7a] hover:text-[#c4ccd6]'
+                }`}
+                title={r}
+              >
+                {r.includes('/') ? (r.split('/').pop() ?? r) : r}
+              </button>
+            ))}
+          </div>
           <div className="flex gap-2">
             <div className="flex-1 bg-[#080a0e] border border-[#2a3440] rounded-md px-3 py-1.5 text-[11px] font-mono min-h-[28px] flex items-center">
               {effectiveCwd ? (

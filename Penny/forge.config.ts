@@ -149,15 +149,24 @@ const config: ForgeConfig = {
     icon: './resources/icon',
     // Only include built output and public assets (electron-vite builds to out/)
     // Use function to override .gitignore (root gitignore excludes 'out')
+    // Paths may be `/out/...` or `out/...` depending on platform — normalize before matching.
     ignore: (filePath: string) => {
       if (!filePath) return false;
-      // Always include these
-      if (filePath === '/package.json') return false;
-      if (filePath.startsWith('/out')) return false;
-      if (filePath.startsWith('/public')) return false;
-      if (filePath.startsWith('/node_modules')) return false;
+      const n = filePath.replace(/\\/g, '/')
+      const under = (dir: string) =>
+        n === dir ||
+        n === `/${dir}` ||
+        n.startsWith(`${dir}/`) ||
+        n.startsWith(`/${dir}/`)
+      // Always include these (return false = do not ignore)
+      if (n === 'package.json' || n === '/package.json') return false
+      if (under('out')) return false
+      if (under('public')) return false
+      if (under('node_modules')) return false
+      // Agent definitions + MCP profiles (required at runtime)
+      if (under('agents')) return false
       // Exclude everything else
-      return true;
+      return true
     },
     // osxSign/osxNotarize intentionally omitted — handled in postPackage hook
   },

@@ -123,6 +123,8 @@ contextBridge.exposeInMainWorld('api', {
   orchestratorXP: () => ipcRenderer.invoke('orchestrator:xp'),
   orchestratorSetProvider: (provider: string) => ipcRenderer.invoke('orchestrator:set-provider', provider),
   orchestratorGetProvider: () => ipcRenderer.invoke('orchestrator:get-provider'),
+  /** Resolve `atlas`, `sidekick`, ~/… to absolute cwd (same rules as orchestrator / pods). */
+  projectResolvePath: (raw: string) => ipcRenderer.invoke('project:resolve-path', raw),
   // GitHub Issue Poller
   githubPollerStatus: () => ipcRenderer.invoke('github:status'),
   githubPollNow: () => ipcRenderer.invoke('github:poll-now'),

@@ -183,6 +183,8 @@ Chain entries: `claude`, `cursor-agent`, `opencode`, `ollama` (or `local`). Exam
 
 **GitHub issue pipeline (`src/main/github-pipeline.ts`, `github-issues.ts`):** Branch and worktree creation run in the **Electron main process** (`git` via `child_process`), not inside Claude. If an issue comment says **“Executor failed — no branch was created,”** the failure is local Git (clone path, `git fetch`, default branch, permissions). The comment may include a **Git error** details block; for full output, watch the **main process** terminal (stdout/stderr) for lines prefixed with `[github-pipeline]` and `Failed to create worktree` / `Failed to create branch`. Repo `CLAUDE.md` does not affect that step; it only affects headless Claude when running planner/executor in the worktree.
 
+**Packaged app (`npm run make` / Forge):** `forge.config.ts` must include the **`agents/`** directory in the app bundle. If you see **`Unknown agent: issue-planner`** (or any agent id) only in the packaged build, the packager was excluding YAML configs — the `ignore` hook should list `/agents` (see `forge.config.ts`).
+
 ### Eval Spot-Check Queue
 
 Manual review queue for random agent output spot checks (`src/main/evals/judges/human-judge.ts`):

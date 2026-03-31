@@ -20,6 +20,7 @@ const execFileAsync = promisify(execFile)
 import { enqueueTask, getTaskQueue, getTask, type TaskPriority } from './orchestrator'
 import { ingestIssue, drivePipeline, initPipeline, getPipelineIssues } from './github-pipeline'
 import { atomicWrite } from './atomic-store'
+import { getAtlasRoot } from './project-paths'
 
 // ── Config ──────────────────────────────────────────────────────────────────
 
@@ -40,7 +41,7 @@ const REPOS: RepoConfig[] = [
     repo: 'atlas',
     label: 'agent-ready',
     workingLabel: 'agent-working',
-    localPath: path.resolve(process.env.HOME || '~', 'ComSci', 'Workspace', 'graphiteatlas', 'atlas'),
+    localPath: getAtlasRoot(),
     project: 'atlas',
   },
 ]
