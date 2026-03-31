@@ -138,6 +138,52 @@ function formatGitError(err: unknown): string {
   return String(err)
 }
 
+async function remoteTrackingBranchExists(repoPath: string, branch: string): Promise<boolean> {
+  try {
+    await execFileAsync('git', ['rev-parse', '--verify', `refs/remotes/origin/${branch}`], {
+      cwd: repoPath, encoding: 'utf-8', timeout: 5_000,
+    })
+    return true
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Resolve origin's default branch. Prefer Git's own pointers (origin/HEAD, ls-remote),
+ * then try common branch names. Stale clones may lack refs/remotes/origin/HEAD.
+ */
+async function resolveRemoteDefaultBranch(repoPath: string): Promise<string> {
+  try {
+    const { stdout } = await execFileAsync('git', ['symbolic-ref', 'refs/remotes/origin/HEAD'], {
+      cwd: repoPath, encoding: 'utf-8', timeout: 10_000,
+    })
+    const name = stdout.trim().replace(/^refs\/remotes\/origin\//, '')
+    if (name && await remoteTrackingBranchExists(repoPath, name)) return name
+  } catch { /* ignore */ }
+
+  try {
+    const { stdout } = await execFileAsync('git', ['ls-remote', '--symref', 'origin', 'HEAD'], {
+      cwd: repoPath, encoding: 'utf-8', timeout: 15_000,
+    })
+    const m = stdout.match(/ref:\s+refs\/heads\/(\S+)/)
+    if (m?.[1] && await remoteTrackingBranchExists(repoPath, m[1])) return m[1]
+  } catch { /* ignore */ }
+
+  try {
+    const { stdout } = await execFileAsync('git', ['remote', 'show', 'origin'], {
+      cwd: repoPath, encoding: 'utf-8', timeout: 15_000,
+    })
+    const m = stdout.match(/HEAD branch:\s*(\S+)/)
+    if (m?.[1] && await remoteTrackingBranchExists(repoPath, m[1])) return m[1]
+  } catch { /* ignore */ }
+
+  for (const b of ['main', 'master', 'dev', 'develop']) {
+    if (await remoteTrackingBranchExists(repoPath, b)) return b
+  }
+  return 'main'
+}
+
 type IssueWorktreeOk = { ok: true; branch: string; worktreePath: string }
 type IssueWorktreeFail = { ok: false; error: string }
 
@@ -153,25 +199,25 @@ async function createIssueWorktree(
   const worktreePath = path.join(worktreesRoot, `${issueNumber}-${safeSlug}`)
 
   try {
+    if (!fs.existsSync(path.join(mainRepoPath, '.git'))) {
+      return {
+        ok: false,
+        error: `Not a git repository (missing .git): ${mainRepoPath}. Fix REPOS localPath in github-issues config.`,
+      }
+    }
     fs.mkdirSync(worktreesRoot, { recursive: true })
     await execFileAsync('git', ['fetch', 'origin', '--prune'], {
       cwd: mainRepoPath, encoding: 'utf-8', timeout: 60_000,
     }).catch(() => {})
-    await execFileAsync('git', ['fetch', 'origin', 'main'], {
-      cwd: mainRepoPath, encoding: 'utf-8', timeout: 30_000,
-    }).catch(() => execFileAsync('git', ['fetch', 'origin', 'master'], {
-      cwd: mainRepoPath, encoding: 'utf-8', timeout: 30_000,
-    }).catch(() => {}))
-    let baseBranch = 'main'
-    try {
-      const { stdout } = await execFileAsync('git', ['symbolic-ref', 'refs/remotes/origin/HEAD'], {
-        cwd: mainRepoPath, encoding: 'utf-8', timeout: 10_000,
-      })
-      baseBranch = stdout.trim().replace('refs/remotes/origin/', '')
-    } catch { /* default to main */ }
+    await execFileAsync('git', ['fetch', 'origin'], {
+      cwd: mainRepoPath, encoding: 'utf-8', timeout: 120_000,
+    }).catch(() => {})
+
+    const baseBranch = await resolveRemoteDefaultBranch(mainRepoPath)
+    console.log(`[github-pipeline] Resolved default base branch: ${baseBranch} (repo: ${mainRepoPath})`)
 
     await execFileAsync('git', ['fetch', 'origin', baseBranch], {
-      cwd: mainRepoPath, encoding: 'utf-8', timeout: 30_000,
+      cwd: mainRepoPath, encoding: 'utf-8', timeout: 60_000,
     }).catch(() => {})
 
     if (fs.existsSync(worktreePath)) {
@@ -209,24 +255,24 @@ async function createIssueBranch(localPath: string, issueNumber: number, slug: s
   localPath = expandHome(localPath)
   const branch = `issue-${issueNumber}-${slug}`
   try {
+    if (!fs.existsSync(path.join(localPath, '.git'))) {
+      return {
+        ok: false,
+        error: `Not a git repository (missing .git): ${localPath}. Fix REPOS localPath in github-issues config.`,
+      }
+    }
     await execFileAsync('git', ['fetch', 'origin', '--prune'], {
       cwd: localPath, encoding: 'utf-8', timeout: 60_000,
     }).catch(() => {})
-    await execFileAsync('git', ['fetch', 'origin', 'main'], {
-      cwd: localPath, encoding: 'utf-8', timeout: 30_000,
-    }).catch(() => execFileAsync('git', ['fetch', 'origin', 'master'], {
-      cwd: localPath, encoding: 'utf-8', timeout: 30_000,
-    }).catch(() => {}))
-    let baseBranch = 'main'
-    try {
-      const { stdout } = await execFileAsync('git', ['symbolic-ref', 'refs/remotes/origin/HEAD'], {
-        cwd: localPath, encoding: 'utf-8', timeout: 10_000,
-      })
-      baseBranch = stdout.trim().replace('refs/remotes/origin/', '')
-    } catch { /* */ }
+    await execFileAsync('git', ['fetch', 'origin'], {
+      cwd: localPath, encoding: 'utf-8', timeout: 120_000,
+    }).catch(() => {})
+
+    const baseBranch = await resolveRemoteDefaultBranch(localPath)
+    console.log(`[github-pipeline] Resolved default base branch: ${baseBranch} (repo: ${localPath})`)
 
     await execFileAsync('git', ['fetch', 'origin', baseBranch], {
-      cwd: localPath, encoding: 'utf-8', timeout: 30_000,
+      cwd: localPath, encoding: 'utf-8', timeout: 60_000,
     }).catch(() => {})
 
     // Delete stale branch from previous failed attempts
@@ -269,10 +315,12 @@ async function pushBranchAndCreatePR(
       cwd: localPath, encoding: 'utf-8', timeout: 60_000,
     })
     const prBody = `Closes #${issueNumber}\n\nAutomated implementation by Penny orchestrator (2-agent pipeline).`
+    const prBase = await resolveRemoteDefaultBranch(localPath)
     await execFileAsync('gh', [
       'pr', 'create',
       '--repo', `${config.owner}/${config.repo}`,
       '--head', branch,
+      '--base', prBase,
       '--title', title,
       '--body', prBody,
     ], { cwd: localPath, encoding: 'utf-8', timeout: 30_000 })

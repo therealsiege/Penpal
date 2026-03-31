@@ -12,6 +12,11 @@ import {
   WORLD_MARGIN, ROOM_HEADER_H,
 } from './office-constants'
 
+/** Returns true when the lab prop spritesheet is loaded — signals lab skin mode */
+function isLabSkin(scene: Phaser.Scene): boolean {
+  return scene.textures.exists(SPRITESHEET_KEYS.LAB_PROPS)
+}
+
 // ---------------------------------------------------------------------------
 // Host interface — what OfficeInterior needs from OfficeScene
 // ---------------------------------------------------------------------------
@@ -153,6 +158,13 @@ export class OfficeInterior {
     if (atmosphere.wallClockContainer) { atmosphere.wallClockContainer.destroy(); (atmosphere as { wallClockContainer: Phaser.GameObjects.Container | null }).wallClockContainer = null }
     if (this.whiteboardContainer) { this.whiteboardContainer.destroy(); this.whiteboardContainer = null; this.whiteboardTexts = [] }
     if (atmosphere.exteriorLights) { atmosphere.exteriorLights.destroy(); (atmosphere as { exteriorLights: Phaser.GameObjects.Container | null }).exteriorLights = null }
+
+    // ── Lab skin: skip office decorations, whiteboard, hazard markings, seasonal ──
+    if (isLabSkin(this.scene)) {
+      this.drawLabInterior(bx, by, bw, bh, fx, fy, fw, fh, atmosphere)
+      return
+    }
+
     // ── Midgar-themed exterior decorations ──
     // Industrial props placed around the perimeter of the office complex.
     // Tinted dark/mako-green to match the reactor/steel-plate aesthetic.
@@ -472,6 +484,65 @@ export class OfficeInterior {
           g.fillRect(bx + lrand() * bw, leafBaseY + lrand() * 6, 2, 1)
         }
       }
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // drawLabInterior — minimal lab facility interior (no office decorations)
+  // ---------------------------------------------------------------------------
+
+  private drawLabInterior(
+    bx: number, by: number, bw: number, bh: number,
+    fx: number, fy: number, fw: number, fh: number,
+    atmosphere: ReturnType<InteriorHostScene['getAtmosphere']>,
+  ): void {
+    // Exterior lights are still needed for atmosphere transitions
+    {
+      const lightChildren: Phaser.GameObjects.GameObject[] = []
+      const phaseAlphaMap: Record<string, number> = {
+        morning: 0.02, day: 0.0, evening: 0.06, night: 0.12,
+      }
+      const initAlpha = phaseAlphaMap[atmosphere.currentTimePhase] ?? 0.0
+
+      // Flood lights at bottom
+      const floodCount = 4
+      const floodSpacing = bw / (floodCount + 1)
+      const floodY = by + bh
+      for (let fi = 0; fi < floodCount; fi++) {
+        const flx = bx + floodSpacing * (fi + 1)
+        const pool = this.scene.add.graphics()
+        pool.fillStyle(0x4a8aaa, 1) // cool blue-white for lab
+        pool.fillTriangle(-14, 0, 14, 0, 22, 32)
+        pool.fillTriangle(-14, 0, -22, 32, 22, 32)
+        pool.setPosition(flx, floodY)
+        pool.setAlpha(initAlpha * 0.35)
+        lightChildren.push(pool)
+        const halo = this.scene.add.sprite(flx, floodY - 2, SPRITESHEET_KEYS.GAME_ICONS, ICON_FRAMES.CIRCLE_YELLOW)
+          .setScale(0.55).setTint(0x4a8aaa).setAlpha(initAlpha * 0.25)
+        lightChildren.push(halo)
+        const bulb = this.scene.add.sprite(flx, floodY - 2, SPRITESHEET_KEYS.GAME_ICONS, ICON_FRAMES.CIRCLE_YELLOW)
+          .setScale(0.25).setTint(0x4a8aaa).setAlpha(initAlpha)
+        lightChildren.push(bulb)
+      }
+
+      // Wall sconces
+      const sconceY = by + bh * 0.72
+      for (const wallX of [bx, bx + bw]) {
+        const side = wallX === bx ? 1 : -1
+        const wallPool = this.scene.add.graphics()
+        wallPool.fillStyle(0x4a8aaa, 1)
+        wallPool.fillTriangle(0, -10, 0, 10, side * 24, 0)
+        wallPool.setPosition(wallX, sconceY)
+        wallPool.setAlpha(initAlpha * 0.3)
+        lightChildren.push(wallPool)
+        const sconce = this.scene.add.sprite(wallX, sconceY, SPRITESHEET_KEYS.GAME_ICONS, ICON_FRAMES.CIRCLE_YELLOW)
+          .setScale(0.25).setTint(0x4a8aaa).setAlpha(initAlpha)
+        lightChildren.push(sconce)
+      }
+
+      const extLights = this.scene.add.container(0, 0, lightChildren)
+      extLights.setDepth(-3.8)
+      ;(atmosphere as { exteriorLights: Phaser.GameObjects.Container | null }).exteriorLights = extLights
     }
   }
 
