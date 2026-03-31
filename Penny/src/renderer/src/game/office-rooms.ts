@@ -993,6 +993,7 @@ export class OfficeRooms {
 
     // Place glow lights from engine output
     const g = room.floorGraphics
+
     for (const glow of labResult.glowPlacements) {
       g.fillStyle(glow.color, glow.outerAlpha)
       g.fillCircle(glow.x, glow.y, glow.outerRadius)
@@ -1019,16 +1020,16 @@ export class OfficeRooms {
     const y1 = floorY
     const x2 = floorX + floorW
     const y2 = floorY + floorH
-    const stripeH = 3
+    const stripeH = 7
 
     // Yellow hazard dashes along zone edges — with OPENINGS for doorways
-    const dashLen = 6
+    const dashLen = 14
     const gapLen = 3
-    const doorW = 50  // opening width for laser doors
+    const doorW = 70  // opening width for laser doors
     const midX = (x1 + x2) / 2
     const midY = (y1 + y2) / 2
 
-    g.fillStyle(0xfbbf24, 0.45)
+    g.fillStyle(0xfbbf24, 0.70)
 
     // Top edge — opening in center
     for (let dx = x1; dx < x2; dx += dashLen + gapLen) {
@@ -1055,57 +1056,36 @@ export class OfficeRooms {
       g.fillRect(x2 - stripeH, dy, stripeH, len)
     }
 
-    // ── Laser door props at each opening ──
-    if (this.scene.textures.exists(SPRITESHEET_KEYS.LAB_PROPS)) {
-      const doorScale = 0.70
-      const doorDepth = -1.2
+    // ── Thin laser lines at each opening — drawn as graphics, not chunky sprites ──
+    const laserColor = 0xff3333
+    const laserAlpha = 0.70
+    const laserWidth = 2
 
-      // Top opening — laser beam
-      const topDoor = this.scene.add.sprite(0, y1, SPRITESHEET_KEYS.LAB_PROPS, LP.LASER_BEAM)
-        .setScale(doorScale).setAlpha(0.85).setDepth(doorDepth)
-      room.container.add(topDoor)
-      room.wallTileSprites!.push(topDoor)
+    // Top opening — thin horizontal red line
+    g.lineStyle(laserWidth, laserColor, laserAlpha)
+    g.lineBetween(midX - doorW / 2, y1 + stripeH / 2, midX + doorW / 2, y1 + stripeH / 2)
+    // Bottom opening
+    g.lineBetween(midX - doorW / 2, y2 - stripeH / 2, midX + doorW / 2, y2 - stripeH / 2)
+    // Left opening — thin vertical red line
+    g.lineBetween(x1 + stripeH / 2, midY - doorW / 2, x1 + stripeH / 2, midY + doorW / 2)
+    // Right opening
+    g.lineBetween(x2 - stripeH / 2, midY - doorW / 2, x2 - stripeH / 2, midY + doorW / 2)
 
-      // Bottom opening — laser beam
-      const botDoor = this.scene.add.sprite(0, y2, SPRITESHEET_KEYS.LAB_PROPS, LP.LASER_BEAM)
-        .setScale(doorScale).setAlpha(0.85).setDepth(doorDepth)
-      room.container.add(botDoor)
-      room.wallTileSprites!.push(botDoor)
-
-      // Left opening — laser beam (rotated)
-      const leftDoor = this.scene.add.sprite(x1, 0, SPRITESHEET_KEYS.LAB_PROPS, LP.LASER_BEAM)
-        .setScale(doorScale).setAlpha(0.85).setDepth(doorDepth).setAngle(90)
-      room.container.add(leftDoor)
-      room.wallTileSprites!.push(leftDoor)
-
-      // Right opening — laser beam (rotated)
-      const rightDoor = this.scene.add.sprite(x2, 0, SPRITESHEET_KEYS.LAB_PROPS, LP.LASER_BEAM)
-        .setScale(doorScale).setAlpha(0.85).setDepth(doorDepth).setAngle(90)
-      room.container.add(rightDoor)
-      room.wallTileSprites!.push(rightDoor)
-
-      // Laser emitters at each opening edge
-      const emitterScale = 0.45
-      // Top opening emitters
-      const topLeftEmit = this.scene.add.sprite(-doorW / 2, y1, SPRITESHEET_KEYS.LAB_PROPS, LP.LASER_HEAD)
-        .setScale(emitterScale).setAlpha(0.80).setDepth(doorDepth)
-      room.container.add(topLeftEmit)
-      room.wallTileSprites!.push(topLeftEmit)
-      const topRightEmit = this.scene.add.sprite(doorW / 2, y1, SPRITESHEET_KEYS.LAB_PROPS, LP.LASER_OUTLET)
-        .setScale(emitterScale).setAlpha(0.80).setDepth(doorDepth)
-      room.container.add(topRightEmit)
-      room.wallTileSprites!.push(topRightEmit)
-
-      // Bottom opening emitters
-      const botLeftEmit = this.scene.add.sprite(-doorW / 2, y2, SPRITESHEET_KEYS.LAB_PROPS, LP.LASER_HEAD)
-        .setScale(emitterScale).setAlpha(0.80).setDepth(doorDepth)
-      room.container.add(botLeftEmit)
-      room.wallTileSprites!.push(botLeftEmit)
-      const botRightEmit = this.scene.add.sprite(doorW / 2, y2, SPRITESHEET_KEYS.LAB_PROPS, LP.LASER_OUTLET)
-        .setScale(emitterScale).setAlpha(0.80).setDepth(doorDepth)
-      room.container.add(botRightEmit)
-      room.wallTileSprites!.push(botRightEmit)
-    }
+    // Small emitter dots at laser endpoints
+    const dotR = 3
+    g.fillStyle(laserColor, 0.85)
+    // Top
+    g.fillCircle(midX - doorW / 2, y1 + stripeH / 2, dotR)
+    g.fillCircle(midX + doorW / 2, y1 + stripeH / 2, dotR)
+    // Bottom
+    g.fillCircle(midX - doorW / 2, y2 - stripeH / 2, dotR)
+    g.fillCircle(midX + doorW / 2, y2 - stripeH / 2, dotR)
+    // Left
+    g.fillCircle(x1 + stripeH / 2, midY - doorW / 2, dotR)
+    g.fillCircle(x1 + stripeH / 2, midY + doorW / 2, dotR)
+    // Right
+    g.fillCircle(x2 - stripeH / 2, midY - doorW / 2, dotR)
+    g.fillCircle(x2 - stripeH / 2, midY + doorW / 2, dotR)
   }
 
   // placeFloorGlowLights — now handled by lab-layout-engine via placeLabEquipment

@@ -465,7 +465,7 @@ export class OfficeBackground {
     const allRight = Math.max(...layouts.map(a => a.x + a.width)) + 20
     const allBottom = Math.max(...layouts.map(a => a.y + a.height)) + 20
 
-    // ONE facility outline around all teams
+    // ONE facility outline around all teams — dark, thick walls
     g.fillStyle(COLOR_WALL)
     g.fillRoundedRect(allX - 6, allY - 6, (allRight - allX) + 12, (allBottom - allY) + 12, 8)
     g.fillStyle(activeTheme.bg, 0.15)
@@ -507,7 +507,7 @@ export class OfficeBackground {
       const lightContainer = this.scene.add.container(lightX, lightY, [lightGfx, lightMid, lightCenter]).setDepth(-1).setAlpha(0.5)
       atmosphere.ceilingLights.push(lightContainer)
 
-      // Gradient-style team overlay on top of the unified floor
+      // Subtle team color overlay — kept very dark to preserve moody atmosphere
       g.fillStyle(color, 0.04)
       g.fillRoundedRect(x, y, width, height, 10)
       g.fillStyle(color, 0.06)
@@ -639,8 +639,123 @@ export class OfficeBackground {
       this.teamAreaLabels.push(badgeTextObj)
     }
 
+    // ── Corridor detail rendering (hazard stripes, glow lights, laser lines) ──
+    this.drawCorridorDetails(g)
+
     // ── Place pipe & cable sprites between rooms inside team areas ──
     this.placeTeamPipes(layouts)
+  }
+
+  // ---------------------------------------------------------------------------
+  // drawCorridorDetails — hazard stripes, glow lights, laser lines between rooms
+  // ---------------------------------------------------------------------------
+
+  private drawCorridorDetails(g: Phaser.GameObjects.Graphics): void {
+    const rooms = this.host.getRooms()
+    if (rooms.size < 2) return
+
+    const roomList = Array.from(rooms.values())
+
+    // Sort rooms by row then x — same logic as placeTeamPipes
+    const sorted = [...roomList].sort((a, b) => {
+      const rowDiff = Math.round(a.y / 50) - Math.round(b.y / 50)
+      return rowDiff !== 0 ? rowDiff : a.x - b.x
+    })
+
+    // ── Horizontally adjacent rooms (same row, gap between them) ──
+    for (let i = 0; i < sorted.length - 1; i++) {
+      const roomA = sorted[i]
+      const roomB = sorted[i + 1]
+
+      // Only connect rooms on the same approximate row
+      if (Math.abs(roomA.y - roomB.y) > roomA.height) continue
+
+      const gapX1 = roomA.x + roomA.width / 2
+      const gapX2 = roomB.x - roomB.width / 2
+      const gapLen = gapX2 - gapX1
+      if (gapLen < 10) continue
+
+      // Top/bottom Y extents from both rooms
+      const topY = Math.min(roomA.y - roomA.height / 2, roomB.y - roomB.height / 2)
+      const bottomY = Math.max(roomA.y + roomA.height / 2, roomB.y + roomB.height / 2)
+      const midY = (roomA.y + roomB.y) / 2
+
+      // Yellow hazard dashed stripes — top edge
+      g.fillStyle(0xfbbf24, 0.60)
+      for (let dx = gapX1; dx < gapX2; dx += 14 + 3) {
+        g.fillRect(dx, topY, Math.min(14, gapX2 - dx), 5)
+      }
+      // Yellow hazard dashed stripes — bottom edge
+      for (let dx = gapX1; dx < gapX2; dx += 14 + 3) {
+        g.fillRect(dx, bottomY - 5, Math.min(14, gapX2 - dx), 5)
+      }
+
+      // Cyan glow circles at corridor center every ~80px
+      const corridorH = bottomY - topY
+      const cy = topY + corridorH / 2
+      for (let dx = gapX1 + 40; dx < gapX2 - 20; dx += 80) {
+        g.fillStyle(0x00e5ff, 0.12)
+        g.fillCircle(dx, cy, 18)
+        g.fillStyle(0x00e5ff, 0.25)
+        g.fillCircle(dx, cy, 10)
+        g.fillStyle(0x00e5ff, 0.45)
+        g.fillCircle(dx, cy, 5)
+      }
+
+      // Thin red laser line through corridor center
+      g.lineStyle(1.5, 0xff3333, 0.45)
+      g.lineBetween(gapX1, midY, gapX2, midY)
+    }
+
+    // ── Vertically adjacent rooms (X ranges overlap, Y gap > 20) ──
+    for (let i = 0; i < sorted.length; i++) {
+      for (let j = i + 1; j < sorted.length; j++) {
+        const roomA = sorted[i]
+        const roomB = sorted[j]
+
+        // Check X overlap: rooms whose X ranges overlap significantly
+        if (Math.abs(roomA.x - roomB.x) >= roomA.width * 0.8) continue
+
+        // Determine top/bottom room
+        const topRoom = roomA.y < roomB.y ? roomA : roomB
+        const bottomRoom = roomA.y < roomB.y ? roomB : roomA
+
+        const gapY1 = topRoom.y + topRoom.height / 2
+        const gapY2 = bottomRoom.y - bottomRoom.height / 2
+        const gapLen = gapY2 - gapY1
+        if (gapLen <= 20) continue
+
+        // Left/right X extents from both rooms
+        const leftX = Math.min(topRoom.x - topRoom.width / 2, bottomRoom.x - bottomRoom.width / 2)
+        const rightX = Math.max(topRoom.x + topRoom.width / 2, bottomRoom.x + bottomRoom.width / 2)
+        const midX = (topRoom.x + bottomRoom.x) / 2
+
+        // Yellow hazard dashed stripes — left edge
+        g.fillStyle(0xfbbf24, 0.60)
+        for (let dy = gapY1; dy < gapY2; dy += 14 + 3) {
+          g.fillRect(leftX, dy, 5, Math.min(14, gapY2 - dy))
+        }
+        // Yellow hazard dashed stripes — right edge
+        for (let dy = gapY1; dy < gapY2; dy += 14 + 3) {
+          g.fillRect(rightX - 5, dy, 5, Math.min(14, gapY2 - dy))
+        }
+
+        // Cyan glow circles along vertical center every ~80px
+        const cx = leftX + (rightX - leftX) / 2
+        for (let dy = gapY1 + 40; dy < gapY2 - 20; dy += 80) {
+          g.fillStyle(0x00e5ff, 0.12)
+          g.fillCircle(cx, dy, 18)
+          g.fillStyle(0x00e5ff, 0.25)
+          g.fillCircle(cx, dy, 10)
+          g.fillStyle(0x00e5ff, 0.45)
+          g.fillCircle(cx, dy, 5)
+        }
+
+        // Thin red laser line through vertical corridor center
+        g.lineStyle(1.5, 0xff3333, 0.45)
+        g.lineBetween(midX, gapY1, midX, gapY2)
+      }
+    }
   }
 
   // ---------------------------------------------------------------------------

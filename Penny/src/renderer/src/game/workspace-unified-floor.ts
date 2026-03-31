@@ -112,12 +112,15 @@ export class WorkspaceUnifiedFloor {
           const isNearBottom = row === rows - 2
           const isNearLeft = col === 1
           const isNearRight = col === cols - 2
-          const consoleChance = (hash + row * 3 + col * 7) % 12
+          const consoleChance = (hash + row * 3 + col * 7) % 5
 
           if (isNearTop && consoleChance === 0)          frame = LAB_TILESET_FRAMES.CONSOLE_TOP
+          else if (isNearTop && consoleChance === 4)     frame = LAB_TILESET_FRAMES.CONSOLE_BOT_LEFT
           else if (isNearBottom && consoleChance === 1)   frame = LAB_TILESET_FRAMES.CONSOLE_SMALL
           else if (isNearLeft && consoleChance === 2)     frame = LAB_TILESET_FRAMES.CONSOLE_LEFT
+          else if (isNearLeft && consoleChance === 4)     frame = LAB_TILESET_FRAMES.CONSOLE_LEFT_B
           else if (isNearRight && consoleChance === 3)    frame = LAB_TILESET_FRAMES.CONSOLE_RIGHT
+          else if (isNearRight && consoleChance === 4)    frame = LAB_TILESET_FRAMES.CONSOLE_RIGHT_B
         }
 
         const tx = offsetX + col * effectiveSize + effectiveSize / 2
@@ -211,7 +214,7 @@ export class WorkspaceUnifiedFloor {
     // ── Cyan glow pools scattered across the facility ──
     this.glowGraphics = this.scene.add.graphics().setDepth(-2.8)
     const gg = this.glowGraphics
-    const glowCount = Math.max(4, Math.floor((cols * rows) / 30))
+    const glowCount = Math.max(4, Math.floor((cols * rows) / 18))
     for (let i = 0; i < glowCount; i++) {
       const seed = (hash + i * 31) | 0
       const gc = 2 + (seed % Math.max(1, cols - 4))
@@ -219,12 +222,12 @@ export class WorkspaceUnifiedFloor {
       const gx = offsetX + gc * effectiveSize + effectiveSize / 2
       const gy = offsetY + gr * effectiveSize + effectiveSize / 2
 
-      gg.fillStyle(0x00e5ff, 0.06)
-      gg.fillCircle(gx, gy, 18)
-      gg.fillStyle(0x00e5ff, 0.14)
-      gg.fillCircle(gx, gy, 10)
+      gg.fillStyle(0x00e5ff, 0.12)
+      gg.fillCircle(gx, gy, 24)
       gg.fillStyle(0x00e5ff, 0.28)
-      gg.fillCircle(gx, gy, 5)
+      gg.fillCircle(gx, gy, 14)
+      gg.fillStyle(0x00e5ff, 0.50)
+      gg.fillCircle(gx, gy, 7)
     }
   }
 
