@@ -4,7 +4,7 @@
 // ---------------------------------------------------------------------------
 
 import Phaser from 'phaser'
-import { SPRITESHEET_KEYS, LAB_TILESET_FRAMES, PIPE_FRAMES } from './office-asset-keys'
+import { SPRITESHEET_KEYS, LAB_TILESET_FRAMES } from './office-asset-keys'
 import { LAB_TILE_SIZE } from './office-constants'
 
 // ---------------------------------------------------------------------------
@@ -13,6 +13,41 @@ import { LAB_TILE_SIZE } from './office-constants'
 
 export interface UnifiedFloorHostScene {
   getLastLodLevel(): number
+}
+
+/** World-space room floor footprints (e.g. from labRoomFloorWorldRect) for corridor strips between zones. */
+export interface UnifiedFloorDrawOpts {
+  roomFloorRects?: Array<{ x: number; y: number; width: number; height: number }>
+}
+
+function verticalCorridorGaps(
+  roomFloors: Array<{ x: number; y: number; width: number; height: number }>,
+): Array<{ minX: number; maxX: number }> {
+  if (roomFloors.length < 2) return []
+  const sorted = [...roomFloors].sort((a, b) => a.x - b.x)
+  const gaps: Array<{ minX: number; maxX: number }> = []
+  for (let i = 0; i < sorted.length - 1; i++) {
+    const a = sorted[i]
+    const b = sorted[i + 1]
+    const aRight = a.x + a.width
+    const bLeft = b.x
+    if (bLeft > aRight + 4) gaps.push({ minX: aRight, maxX: bLeft })
+  }
+  return gaps
+}
+
+function columnSpansCorridorGap(
+  cellLeft: number,
+  cellRight: number,
+  gaps: Array<{ minX: number; maxX: number }>,
+  minOverlap: number,
+): boolean {
+  for (const g of gaps) {
+    const lo = Math.max(cellLeft, g.minX)
+    const hi = Math.min(cellRight, g.maxX)
+    if (hi - lo >= minOverlap) return true
+  }
+  return false
 }
 
 // ---------------------------------------------------------------------------
@@ -43,6 +78,7 @@ export class WorkspaceUnifiedFloor {
     width: number,
     height: number,
     _teamColor: number,
+    opts?: UnifiedFloorDrawOpts,
   ): void {
     this.cleanup()
 
@@ -58,8 +94,11 @@ export class WorkspaceUnifiedFloor {
     // Center the grid
     const gridW = cols * effectiveSize
     const gridH = rows * effectiveSize
-    const offsetX = x + (width - gridW) / 2
-    const offsetY = y + (height - gridH) / 2
+    // Integer pixel alignment so wall tiles + hazard tape meet cleanly at outer corners.
+    const offsetX = Math.round(x + (width - gridW) / 2)
+    const offsetY = Math.round(y + (height - gridH) / 2)
+
+    const gapBands = opts?.roomFloorRects ? verticalCorridorGaps(opts.roomFloorRects) : []
 
     // Simple hash for variety
     const hash = Math.abs(Math.floor(x * 7 + y * 13)) | 0
@@ -71,6 +110,14 @@ export class WorkspaceUnifiedFloor {
         const isLeft = col === 0
         const isRight = col === cols - 1
 
+        const cellLeft = offsetX + col * effectiveSize
+        const cellRight = cellLeft + effectiveSize
+        const isCorridorCol =
+          gapBands.length > 0 &&
+          !isLeft &&
+          !isRight &&
+          columnSpansCorridorGap(cellLeft, cellRight, gapBands, 8)
+
         let frame: number
 
         // ── Corners — thick variants for the facility walls ──
@@ -78,51 +125,52 @@ export class WorkspaceUnifiedFloor {
         else if (isTop && isRight)    frame = LAB_TILESET_FRAMES.CORNER_TR_THICK
         else if (isBottom && isLeft)  frame = LAB_TILESET_FRAMES.CORNER_BL_THICK
         else if (isBottom && isRight) frame = LAB_TILESET_FRAMES.CORNER_BR_THICK
-        // ── Edges — thick walls for the outer facility boundary ──
-        else if (isTop) {
-          const accent = (hash + col * 5) % 6
-          frame = accent < 2 ? LAB_TILESET_FRAMES.WALL_TOP_THICK : LAB_TILESET_FRAMES.WALL_TOP
-        }
-        else if (isBottom) {
-          const accent = (hash + col * 3) % 8
+        // ── Inter-zone corridor (between room footprints) — vertical wall strip, not open hex ──
+        else if (isCorridorCol && isTop) frame = LAB_TILESET_FRAMES.WALL_TOP_THICK
+        else if (isCorridorCol && isBottom) {
+          const accent = (hash + col * 3) % 10
           if (accent === 0) frame = LAB_TILESET_FRAMES.WALL_BOTTOM_WINDOW_A
-          else if (accent === 1) frame = LAB_TILESET_FRAMES.WALL_BOTTOM_THICK
-          else frame = LAB_TILESET_FRAMES.WALL_BOTTOM
+          else frame = LAB_TILESET_FRAMES.WALL_BOTTOM_THICK
         }
-        else if (isLeft)   frame = LAB_TILESET_FRAMES.WALL_LEFT
-        else if (isRight)  frame = LAB_TILESET_FRAMES.WALL_RIGHT
-        // ── Interior hex floor with variety ──
-        else {
-          const cellHash = (hash + row * 7 + col * 13) % 25
-          if (cellHash === 0 && row > 2 && col > 2 && row < rows - 3 && col < cols - 3) {
+        else if (isCorridorCol) {
+          // Corridor spine: hex floor (walkable gap between zones). A full column of WALL_LEFT
+          // tiles read as a solid partition and fought the lab kit props visually.
+          const cellHash = (hash + row * 7 + col * 13) % 40
+          if (cellHash === 0 && row > 2 && row < rows - 3) {
             frame = LAB_TILESET_FRAMES.FLOOR_FEATURE
           } else {
-            const floorVariant = (hash * 3 + row * 11 + col * 17) % 20
+            const floorVariant = (hash * 3 + row * 11 + col * 17) % 24
             if (floorVariant === 0)       frame = LAB_TILESET_FRAMES.HEX_FLOOR_B
             else if (floorVariant === 1)  frame = LAB_TILESET_FRAMES.HEX_FLOOR_C
             else if (floorVariant === 2)  frame = LAB_TILESET_FRAMES.HEX_FLOOR_D
-            else if (floorVariant === 3)  frame = LAB_TILESET_FRAMES.HEX_FLOOR_B
             else                          frame = LAB_TILESET_FRAMES.HEX_FLOOR_A
           }
         }
-
-        // ── Dense console equipment along inner wall edges ──
-        // ~67% of inner wall cells get equipment (mod 3 instead of 5)
-        if (!isTop && !isBottom && !isLeft && !isRight) {
-          const isNearTop = row === 1
-          const isNearBottom = row === rows - 2
-          const isNearLeft = col === 1
-          const isNearRight = col === cols - 2
-          const cc = (hash + row * 3 + col * 7) % 3
-
-          if (isNearTop && cc === 0)        frame = LAB_TILESET_FRAMES.CONSOLE_TOP
-          else if (isNearTop && cc === 1)   frame = LAB_TILESET_FRAMES.CONSOLE_SMALL
-          else if (isNearBottom && cc === 0) frame = LAB_TILESET_FRAMES.CONSOLE_BOT_RIGHT
-          else if (isNearBottom && cc === 1) frame = LAB_TILESET_FRAMES.CONSOLE_BOT_LEFT
-          else if (isNearLeft && cc === 0)   frame = LAB_TILESET_FRAMES.CONSOLE_LEFT
-          else if (isNearLeft && cc === 1)   frame = LAB_TILESET_FRAMES.CONSOLE_LEFT_B
-          else if (isNearRight && cc === 0)  frame = LAB_TILESET_FRAMES.CONSOLE_RIGHT
-          else if (isNearRight && cc === 1)  frame = LAB_TILESET_FRAMES.CONSOLE_RIGHT_B
+        // ── Edges — thick walls for the outer facility boundary ──
+        // Top/bottom: thick hazard-stripe walls (Among Us–style lab reference)
+        else if (isTop) {
+          frame = LAB_TILESET_FRAMES.WALL_TOP_THICK
+        }
+        else if (isBottom) {
+          const accent = (hash + col * 3) % 10
+          if (accent === 0) frame = LAB_TILESET_FRAMES.WALL_BOTTOM_WINDOW_A
+          else frame = LAB_TILESET_FRAMES.WALL_BOTTOM_THICK
+        }
+        else if (isLeft)   frame = LAB_TILESET_FRAMES.WALL_LEFT
+        else if (isRight)  frame = LAB_TILESET_FRAMES.WALL_RIGHT
+        // ── Interior: hex floor tiles only. (Wall-console autotiles belong in a real
+        //    tile map; stamping CONSOLE_* on row/col 1 misaligns art. Room props handle equipment.)
+        else {
+          const cellHash = (hash + row * 7 + col * 13) % 40
+          if (cellHash === 0 && row > 2 && col > 2 && row < rows - 3 && col < cols - 3) {
+            frame = LAB_TILESET_FRAMES.FLOOR_FEATURE
+          } else {
+            const floorVariant = (hash * 3 + row * 11 + col * 17) % 24
+            if (floorVariant === 0)       frame = LAB_TILESET_FRAMES.HEX_FLOOR_B
+            else if (floorVariant === 1)  frame = LAB_TILESET_FRAMES.HEX_FLOOR_C
+            else if (floorVariant === 2)  frame = LAB_TILESET_FRAMES.HEX_FLOOR_D
+            else                          frame = LAB_TILESET_FRAMES.HEX_FLOOR_A
+          }
         }
 
         const tx = offsetX + col * effectiveSize + effectiveSize / 2
@@ -130,99 +178,16 @@ export class WorkspaceUnifiedFloor {
 
         const tile = this.scene.add.sprite(tx, ty, SPRITESHEET_KEYS.LAB_MAIN_TILESET, frame)
           .setScale(tileScale)
-          .setAlpha(0.92)
+          .setAlpha(1)
           .setDepth(-3)
         this.floorTiles.push(tile)
       }
     }
 
-    // ── Exterior pipe runs along facility walls ──
-    if (this.scene.textures.exists(SPRITESHEET_KEYS.LAB_PIPES)) {
-      const pipeScale = 0.40
-      const pipeAlpha = 0.88
-      const pipeDepth = -2.5
-      const pipeTint = 0x3b82f6  // blue tint matching corridors
-      const pipeStep = effectiveSize * 0.7
-
-      // Top exterior pipe run (horizontal, above facility)
-      const topPipeY = y - 10
-      for (let px = x + effectiveSize; px < x + width - effectiveSize; px += pipeStep) {
-        const frame = ((px / pipeStep | 0) % 5 === 0) ? PIPE_FRAMES.HORIZ_ARROW : PIPE_FRAMES.HORIZ_TOP
-        const pipe = this.scene.add.sprite(px, topPipeY, SPRITESHEET_KEYS.LAB_PIPES, frame)
-          .setScale(pipeScale).setAlpha(pipeAlpha).setDepth(pipeDepth).setTint(pipeTint)
-        this.floorTiles.push(pipe)
-      }
-      // Top pipe corners
-      const topLeftCorner = this.scene.add.sprite(x + effectiveSize * 0.5, topPipeY, SPRITESHEET_KEYS.LAB_PIPES, PIPE_FRAMES.CORNER_TL)
-        .setScale(pipeScale).setAlpha(pipeAlpha).setDepth(pipeDepth).setTint(pipeTint)
-      this.floorTiles.push(topLeftCorner)
-      const topRightCorner = this.scene.add.sprite(x + width - effectiveSize * 0.5, topPipeY, SPRITESHEET_KEYS.LAB_PIPES, PIPE_FRAMES.CORNER_TR)
-        .setScale(pipeScale).setAlpha(pipeAlpha).setDepth(pipeDepth).setTint(pipeTint)
-      this.floorTiles.push(topRightCorner)
-      // Valve on top pipe
-      const topValve = this.scene.add.sprite(x + width * 0.4, topPipeY, SPRITESHEET_KEYS.LAB_PIPES, PIPE_FRAMES.VALVE)
-        .setScale(pipeScale * 0.9).setAlpha(pipeAlpha * 0.95).setDepth(pipeDepth + 0.1).setTint(0x44aaff)
-      this.floorTiles.push(topValve)
-
-      // Right exterior pipe run (vertical, right of facility)
-      const rightPipeX = x + width + 10
-      for (let py = y + effectiveSize; py < y + height - effectiveSize; py += pipeStep) {
-        const frame = ((py / pipeStep | 0) % 6 === 0) ? PIPE_FRAMES.VERT_ARROW : PIPE_FRAMES.VERT_RIGHT
-        const pipe = this.scene.add.sprite(rightPipeX, py, SPRITESHEET_KEYS.LAB_PIPES, frame)
-          .setScale(pipeScale).setAlpha(pipeAlpha).setDepth(pipeDepth).setTint(pipeTint)
-        this.floorTiles.push(pipe)
-      }
-      // T-connector on right pipe
-      const rightT = this.scene.add.sprite(rightPipeX, y + height * 0.5, SPRITESHEET_KEYS.LAB_PIPES, PIPE_FRAMES.T_LEFT)
-        .setScale(pipeScale).setAlpha(pipeAlpha).setDepth(pipeDepth).setTint(pipeTint)
-      this.floorTiles.push(rightT)
-      // Coupling on right pipe
-      const rightCoupling = this.scene.add.sprite(rightPipeX, y + height * 0.3, SPRITESHEET_KEYS.LAB_PIPES, PIPE_FRAMES.COUPLING_VERT)
-        .setScale(pipeScale * 0.85).setAlpha(pipeAlpha * 0.9).setDepth(pipeDepth + 0.1).setTint(pipeTint)
-      this.floorTiles.push(rightCoupling)
-
-      // Bottom exterior pipe run (horizontal, below facility)
-      const botPipeY = y + height + 10
-      for (let px = x + effectiveSize; px < x + width - effectiveSize; px += pipeStep) {
-        const frame = ((px / pipeStep | 0) % 4 === 0) ? PIPE_FRAMES.HORIZ_ARROW : PIPE_FRAMES.HORIZ_TOP
-        const pipe = this.scene.add.sprite(px, botPipeY, SPRITESHEET_KEYS.LAB_PIPES, frame)
-          .setScale(pipeScale).setAlpha(pipeAlpha).setDepth(pipeDepth).setTint(pipeTint)
-        this.floorTiles.push(pipe)
-      }
-      // Bottom corners
-      const botRightCorner = this.scene.add.sprite(x + width - effectiveSize * 0.5, botPipeY, SPRITESHEET_KEYS.LAB_PIPES, PIPE_FRAMES.CORNER_BR)
-        .setScale(pipeScale).setAlpha(pipeAlpha).setDepth(pipeDepth).setTint(pipeTint)
-      this.floorTiles.push(botRightCorner)
-      const botLeftCorner = this.scene.add.sprite(x + effectiveSize * 0.5, botPipeY, SPRITESHEET_KEYS.LAB_PIPES, PIPE_FRAMES.CORNER_BL)
-        .setScale(pipeScale).setAlpha(pipeAlpha).setDepth(pipeDepth).setTint(pipeTint)
-      this.floorTiles.push(botLeftCorner)
-      // Valve on bottom pipe
-      const botValve = this.scene.add.sprite(x + width * 0.6, botPipeY, SPRITESHEET_KEYS.LAB_PIPES, PIPE_FRAMES.VALVE)
-        .setScale(pipeScale * 0.9).setAlpha(pipeAlpha * 0.95).setDepth(pipeDepth + 0.1).setTint(0x44aaff)
-      this.floorTiles.push(botValve)
-
-      // Left exterior pipe run (vertical, left of facility) — full length
-      const leftPipeX = x - 10
-      for (let py = y + effectiveSize; py < y + height - effectiveSize; py += pipeStep) {
-        const frame = ((py / pipeStep | 0) % 5 === 0) ? PIPE_FRAMES.VERT_ARROW : PIPE_FRAMES.VERT_LEFT
-        const pipe = this.scene.add.sprite(leftPipeX, py, SPRITESHEET_KEYS.LAB_PIPES, frame)
-          .setScale(pipeScale).setAlpha(pipeAlpha).setDepth(pipeDepth).setTint(pipeTint)
-        this.floorTiles.push(pipe)
-      }
-      // Cap on left pipe
-      const leftCap = this.scene.add.sprite(leftPipeX, y + effectiveSize * 0.5, SPRITESHEET_KEYS.LAB_PIPES, PIPE_FRAMES.CAP_TOP)
-        .setScale(pipeScale).setAlpha(pipeAlpha).setDepth(pipeDepth).setTint(pipeTint)
-      this.floorTiles.push(leftCap)
-      // T-connector on left pipe
-      const leftT = this.scene.add.sprite(leftPipeX, y + height * 0.5, SPRITESHEET_KEYS.LAB_PIPES, PIPE_FRAMES.T_RIGHT)
-        .setScale(pipeScale).setAlpha(pipeAlpha).setDepth(pipeDepth).setTint(pipeTint)
-      this.floorTiles.push(leftT)
-    }
-
-    // ── Cyan glow pools scattered across the facility — bright like reference ──
+    // ── Subtle floor ambience — few soft pools (was overcrowded vs room props)
     this.glowGraphics = this.scene.add.graphics().setDepth(-2.5)
     const gg = this.glowGraphics
-    const glowCount = Math.max(6, Math.floor((cols * rows) / 12))
+    const glowCount = Math.min(4, Math.max(2, Math.floor((cols * rows) / 45)))
     for (let i = 0; i < glowCount; i++) {
       const seed = (hash + i * 31) | 0
       const gc = 2 + (seed % Math.max(1, cols - 4))
@@ -230,14 +195,12 @@ export class WorkspaceUnifiedFloor {
       const gx = offsetX + gc * effectiveSize + effectiveSize / 2
       const gy = offsetY + gr * effectiveSize + effectiveSize / 2
 
-      gg.fillStyle(0x00e5ff, 0.15)
-      gg.fillCircle(gx, gy, 32)
-      gg.fillStyle(0x00e5ff, 0.35)
-      gg.fillCircle(gx, gy, 18)
-      gg.fillStyle(0x00e5ff, 0.60)
-      gg.fillCircle(gx, gy, 9)
-      gg.fillStyle(0xffffff, 0.30)
-      gg.fillCircle(gx, gy, 4)
+      gg.fillStyle(0x38bdf8, 0.09)
+      gg.fillCircle(gx, gy, 42)
+      gg.fillStyle(0x22d3ee, 0.14)
+      gg.fillCircle(gx, gy, 24)
+      gg.fillStyle(0x7dd3fc, 0.2)
+      gg.fillCircle(gx, gy, 11)
     }
 
     // ── Hazard tape along inner perimeter + laser door openings ──
@@ -251,8 +214,9 @@ export class WorkspaceUnifiedFloor {
     const DARK = 0x1a1a2e
     const SEG = 10
     const TAPE_W = 8
-    const AY = 0.80  // yellow alpha
-    const AD = 0.60  // dark alpha
+    // Subdued vs outer tile hazard — reads as trim, not a second heavy border.
+    const AY = 0.44
+    const AD = 0.33
 
     // Laser door config — deterministic positions via hash
     const DOOR_GAP = 50  // px gap for laser door opening

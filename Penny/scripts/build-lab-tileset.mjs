@@ -16,15 +16,7 @@
  *   Frame 0-3:   Outer rounded corners (TL, TR, BL, BR)
  *   Frame 4-7:   Inner rounded corners (TL, TR, BL, BR)
  *
- * lab-props.png   — 48x48 cells, 8 frames (single row):
- *   Frame 0: Vent grate
- *   Frame 1: Pipe section
- *   Frame 2: Floor panel
- *   Frame 3: Hazard stripe
- *   Frame 4: Console panel
- *   Frame 5: Cable conduit
- *   Frame 6: Warning light
- *   Frame 7: Drainage grate
+ * lab-props.png is built separately: node scripts/build-lab-props.mjs (Phaser.Resources/lab/props/SVGS).
  *
  * @module build-lab-tileset
  */
@@ -753,20 +745,7 @@ async function main() {
   ]
   await buildStrip(smoothFrames, 'lab-smooth.png')
 
-  // LAB_PROPS — 8 frames
-  const propFrames = [
-    makeVentGrate(),     // 0
-    makePipeSection(),   // 1
-    makeFloorPanel(),    // 2
-    makeHazardStripe(),  // 3
-    makeConsolePanel(),  // 4
-    makeCableConduit(),  // 5
-    makeWarningLight(),  // 6
-    makeDrainageGrate(), // 7
-  ]
-  await buildStrip(propFrames, 'lab-props.png')
-
-  console.log('\nDone.')
+  console.log('\nDone. (lab-props.png: run scripts/build-lab-props.mjs)')
 }
 
 main().catch((err) => {

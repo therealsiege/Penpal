@@ -95,6 +95,11 @@ export interface WorkstationHost {
   getNavMesh(): import('./nav-mesh').NavMesh
   /** Active orchestrator task for this agent (if any) */
   getOrchestratorTaskForAgent(agentId: string): OrchestratorTaskOfficeInfo | undefined
+  /**
+   * When true, lab room wall/equipment props are authored on `labFacilityPropsLayer` — keep each
+   * workstation minimal so agent desks don’t duplicate the same console kit as room decor.
+   */
+  usesFacilityLabStrategicProps?(): boolean
 }
 
 // ---------------------------------------------------------------------------

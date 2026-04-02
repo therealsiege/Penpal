@@ -18,7 +18,6 @@ import { OfficeInterior } from './office-interior'
 import type { InteriorHostScene } from './office-interior'
 import { WorkspaceUnifiedFloor } from './workspace-unified-floor'
 import type { UnifiedFloorHostScene } from './workspace-unified-floor'
-
 // Suppress unused import warnings for constants only referenced inside the
 // sub-modules (they are still re-exported conceptually via the barrel).
 void LOD_L1_MAX
@@ -75,6 +74,15 @@ export interface BackgroundHostScene {
   // Cafe floor mask management
   getCafeFloorMask(): Phaser.GameObjects.Graphics | null
   setCafeFloorMask(g: Phaser.GameObjects.Graphics | null): void
+
+  /** One world-space pass for lab strategic props across all rooms (after positions are final). */
+  rebuildLabFacilityProps(): void
+
+  /**
+   * World rect of the unified lab hex slab (same bbox passed to WorkspaceUnifiedFloor.drawFloor).
+   * Used to snap per-room strategic grids to the same cell centers as visible floor tiles.
+   */
+  setLabHexSlabRect(rect: { x: number; y: number; width: number; height: number } | null): void
 }
 
 // ---------------------------------------------------------------------------
@@ -221,6 +229,7 @@ export class OfficeBackground {
       )
       this.host.updateCameraBounds()
       this.host.rebuildNavMesh()
+      this.host.rebuildLabFacilityProps()
       return
     }
 
@@ -237,6 +246,11 @@ export class OfficeBackground {
     // Merge ALL rooms into a single "lab" team so they pack into one facility
     const teams = new Map<string, Room[]>()
     const UNIFIED_KEY = '__lab__'
+    // Rooms are still created with cwd-derived team keys; align to unified key so corridor
+    // pipe/cable decals and other __lab__ gating match the single-facility layout.
+    for (const room of roomList) {
+      room.teamKey = UNIFIED_KEY
+    }
     teams.set(UNIFIED_KEY, [...roomList].sort((a, b) => a.label.localeCompare(b.label)))
 
     const teamKeys = [UNIFIED_KEY]
@@ -433,6 +447,7 @@ export class OfficeBackground {
     this.corridors.drawHallwayIndicators(this.scene.time.now)
 
     this.host.updateCameraBounds()
+    this.host.rebuildLabFacilityProps()
   }
 
   // ---------------------------------------------------------------------------
@@ -449,6 +464,7 @@ export class OfficeBackground {
     for (const s of this.teamPipeSprites) s.destroy()
     this.teamPipeSprites = []
     if (layouts.length === 0) {
+      this.host.setLabHexSlabRect(null)
       this.unifiedFloor.cleanup()
       return
     }
@@ -467,13 +483,21 @@ export class OfficeBackground {
     const allRight = Math.max(...layouts.map(a => a.x + a.width)) + 20
     const allBottom = Math.max(...layouts.map(a => a.y + a.height)) + 20
 
+    this.host.setLabHexSlabRect({
+      x: allX,
+      y: allY,
+      width: allRight - allX,
+      height: allBottom - allY,
+    })
+
     // ONE facility outline around all teams — dark, thick walls
     g.fillStyle(COLOR_WALL)
     g.fillRoundedRect(allX - 6, allY - 6, (allRight - allX) + 12, (allBottom - allY) + 12, 8)
     g.fillStyle(activeTheme.bg, 0.15)
     g.fillRoundedRect(allX, allY, allRight - allX, allBottom - allY, 5)
 
-    // ONE unified floor spanning the entire facility
+    // ONE unified floor — continuous hex across the whole PENPAL slab (no inter-zone wall column
+    // or hazard stripe running down the middle between atlas/sidekick).
     this.unifiedFloor.drawFloor(allX, allY, allRight - allX, allBottom - allY, 0x3b82f6)
 
     // Windows along the top wall of the facility (for atmosphere glint effect)
@@ -502,10 +526,10 @@ export class OfficeBackground {
       lightGfx.fillCircle(0, 0, 20)
       // Mid glow ring — sprite circle
       const lightMid = this.scene.add.sprite(0, 0, SPRITESHEET_KEYS.GAME_ICONS, ICON_FRAMES.CIRCLE_GREY)
-        .setScale(0.12).setAlpha(0.12).setTint(0xcbd5e1)
+        .setScale(0.12).setAlpha(0.18).setTint(0x22d3ee)
       // Center bright dot — sprite circle
       const lightCenter = this.scene.add.sprite(0, 0, SPRITESHEET_KEYS.GAME_ICONS, ICON_FRAMES.CIRCLE_GREY)
-        .setScale(0.06).setAlpha(0.25).setTint(0xffffff)
+        .setScale(0.06).setAlpha(0.32).setTint(0xa5f3fc)
       const lightContainer = this.scene.add.container(lightX, lightY, [lightGfx, lightMid, lightCenter]).setDepth(-1).setAlpha(0.5)
       atmosphere.ceilingLights.push(lightContainer)
 

@@ -31,6 +31,7 @@ const SCRIPTS = [
   'build-kenney-ui.mjs',
   'build-monster-parts.mjs',
   'build-medals-hd.mjs',
+  'build-lab-props.mjs',
 ]
 
 let passed = 0

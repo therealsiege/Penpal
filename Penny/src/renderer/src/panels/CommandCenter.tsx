@@ -1924,10 +1924,13 @@ export function CommandCenter(props: CommandCenterProps) {
       {/* ------------------------------------------------------------------ */}
       <div className="flex-1 flex flex-col min-h-0 overflow-hidden p-2.5 pt-2">
         <div className="flex-1 min-h-0 relative overflow-hidden rounded-[14px]">
-          {/* Faint background image behind the Phaser canvas */}
+          {/* Void behind canvas — navy wash + faint texture (Among Us–style lab mood) */}
           <div
-            className="absolute inset-0 bg-cover bg-center bg-no-repeat opacity-[0.15]"
-            style={{ backgroundImage: 'url(office-bg.jpg)' }}
+            className="absolute inset-0 bg-cover bg-center bg-no-repeat opacity-[0.08]"
+            style={{
+              backgroundImage:
+                'linear-gradient(165deg, #0a1628 0%, #06080c 45%, #0c1a2e 100%), url(office-bg.jpg)',
+            }}
           />
           <div
             ref={gameContainerRef}

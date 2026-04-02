@@ -12,6 +12,7 @@
 //   window.PH.scenario('busy-office')         — run a preset scenario
 //   window.PH.celebrate('rankUp', agentId)    — fire celebration effect
 //   window.PH.setTimeOfDay('night')           — switch atmosphere phase
+//   window.PH.labDecoration()                 — lab JSON version + facility props layer (not fixtures)
 //
 // Mount by calling mountHarness(scene) from within OfficeScene or App.tsx:
 //   import { mountHarness } from './game/test-harness'
@@ -19,6 +20,7 @@
 // ---------------------------------------------------------------------------
 
 import Phaser from 'phaser'
+import type { OfficeScene } from './OfficeScene'
 import type { AgentState, AgentStatus, SessionMode, InteractionType, AgentXP, AgentConfig } from '../types'
 import { XP_RANKS } from '../types'
 import { EventBus } from './events'
@@ -230,6 +232,16 @@ export class PennyHarness {
     return Object.getOwnPropertyNames(proto)
       .filter(k => k !== 'constructor' && typeof (this as unknown as Record<string, unknown>)[k] === 'function')
       .sort()
+  }
+
+  /** Prints strategic layout JSON version, pipeline id, and facility lab layer state (see `lab-decoration.ts`). */
+  labDecoration(): void {
+    const scene = this.scene as OfficeScene
+    if (typeof scene.getLabDecorationDebugInfo !== 'function') {
+      console.warn('[PH] labDecoration: getLabDecorationDebugInfo not available on this scene')
+      return
+    }
+    console.log('[PH] Lab decoration', scene.getLabDecorationDebugInfo())
   }
 
   getAgentsSummary(): { id: string; name: string; sessionMode?: SessionMode }[] {
@@ -778,12 +790,16 @@ export class PennyHarness {
       `  PH.refresh()                   Force rebuild all workstation tweens\n\n` +
       `%cScenarios\n%c` +
       `  PH.scenario(name)              busy-office|celebration|blocked|stress-test\n\n` +
+      `%cLab decoration\n%c` +
+      `  PH.labDecoration()             Strategic JSON version, pipeline id, facility props layer\n\n` +
       `%cMisc\n%c` +
       `  PH.help()                      Show this help\n` +
       `  window.__PENNY_HARNESS__       Direct reference to PennyHarness instance\n` +
       `  window.__PENNY_SCENE__         Direct reference to OfficeScene (set externally)\n`,
       'background:#1e293b;color:#38bdf8;font-weight:bold;padding:4px 8px;border-radius:4px',
       '',
+      'color:#f59e0b;font-weight:bold',
+      'color:#94a3b8',
       'color:#f59e0b;font-weight:bold',
       'color:#94a3b8',
       'color:#f59e0b;font-weight:bold',

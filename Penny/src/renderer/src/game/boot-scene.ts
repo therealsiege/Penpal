@@ -3,6 +3,7 @@ import { activeTheme } from './office-theme'
 import {
   SCENE_KEYS, SPRITESHEET_KEYS, ANIM_KEYS, IMAGE_KEYS, AUDIO_KEYS,
   EFFECT_ANIM_KEYS, ANIMAL_IDLE_FRAMES, ANIMAL_SPECIES,
+  LAB_ANIM_KEYS, LAB_PROP_FRAMES,
 } from './office-asset-keys'
 import { CHAR_FRAME_W, CHAR_FRAME_H, OFFICE_TILE_SIZE, ROOM_TILE_SIZE, LAB_TILE_SIZE } from './office-constants'
 
@@ -115,7 +116,6 @@ export class BootScene extends BaseScene {
       // Wave 8
       [SPRITESHEET_KEYS.LAB_MAIN_TILESET]: 'Lab Tileset',
       [SPRITESHEET_KEYS.LAB_SMOOTH]: 'Lab Smooth',
-      [SPRITESHEET_KEYS.LAB_PROPS]: 'Lab Props',
     }
 
     // Spritesheets worth showing a thumbnail preview for
@@ -353,7 +353,7 @@ export class BootScene extends BaseScene {
       frameWidth: 43, frameHeight: 82,
     })
 
-    // Lab props spritesheet — 64x64 cells, 12 cols × 12 rows (768×768, 135 frames)
+    // Lab props spritesheet — 64x64 cells, 12 cols (built from Phaser.Resources/lab/props/SVGS)
     this.load.spritesheet(SPRITESHEET_KEYS.LAB_PROPS, './sprites/lab-props.png', {
       frameWidth: 64, frameHeight: 64,
     })
@@ -463,6 +463,33 @@ export class BootScene extends BaseScene {
             repeat: 0,
           })
         }
+      }
+    }
+
+    // Lab console screen loops (LAB_PROPS frame strips)
+    if (this.textures.exists(SPRITESHEET_KEYS.LAB_PROPS)) {
+      const LP = LAB_PROP_FRAMES
+      if (!this.anims.exists(LAB_ANIM_KEYS.CONSOLE_WAVE)) {
+        this.anims.create({
+          key: LAB_ANIM_KEYS.CONSOLE_WAVE,
+          frames: this.anims.generateFrameNumbers(SPRITESHEET_KEYS.LAB_PROPS, {
+            start: LP.CONSOLE_SCREEN_WAVE_01,
+            end: LP.CONSOLE_SCREEN_WAVE_06,
+          }),
+          frameRate: 8,
+          repeat: -1,
+        })
+      }
+      if (!this.anims.exists(LAB_ANIM_KEYS.CONSOLE_LINES)) {
+        this.anims.create({
+          key: LAB_ANIM_KEYS.CONSOLE_LINES,
+          frames: this.anims.generateFrameNumbers(SPRITESHEET_KEYS.LAB_PROPS, {
+            start: LP.CONSOLE_SCREEN_LINES_01,
+            end: LP.CONSOLE_SCREEN_LINES_06,
+          }),
+          frameRate: 8,
+          repeat: -1,
+        })
       }
     }
   }

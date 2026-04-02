@@ -18,7 +18,15 @@ import {
   getPropsForRoomType,
   PROP_STRIP_W,
 } from '../../../src/renderer/src/game/office-layout'
-import { MAX_AGENTS_PER_ROW, WORKSTATION_H, WORKSTATION_W } from '../../../src/renderer/src/game/office-constants'
+import {
+  LAB_EQUIP_ZONE_H,
+  MAX_AGENTS_PER_ROW,
+  ROOM_HEADER_H,
+  ROOM_PADDING,
+  ROOM_TOP_EXTRA,
+  WORKSTATION_H,
+  WORKSTATION_W,
+} from '../../../src/renderer/src/game/office-constants'
 import { getTeamInfo } from '../../../src/renderer/src/game/office-helpers'
 import { RoomVisibilityManager } from '../../../src/renderer/src/game/room-visibility'
 import { OfficeRooms, type RoomsHostScene } from '../../../src/renderer/src/game/office-rooms'
@@ -155,12 +163,23 @@ describe('computeRoomLayout (calcRoomSize parity for standard cwd)', () => {
     expect(rows).toBe(13)
     expect(layout.deskPositions.length).toBe(n)
     expect(layout.deskPositions.length).toBe(52)
-    const wallBorder = (8 + 4 + 12) * 2
-    const baseWidth = wallBorder + cols * WORKSTATION_W
-    expect(layout.width).toBe(baseWidth + PROP_STRIP_W)
-    const expectedH =
-      (8 + 4) * 2 + 20 + 12 * 2 + 30 + rows * WORKSTATION_H + 30
-    expect(layout.height).toBeCloseTo(expectedH, 5)
+    const WALL_T = 8
+    const WALL_I = 4
+    const DOOR_CLEARANCE = 30
+    const LAB_SIDE_PAD = 140
+    const wallBorder = (WALL_T + WALL_I + ROOM_PADDING) * 2
+    const baseWidth = wallBorder + cols * WORKSTATION_W + LAB_SIDE_PAD
+    expect(layout.width).toBe(Math.max(600, baseWidth + PROP_STRIP_W))
+    const rawHeight =
+      (WALL_T + WALL_I) * 2 +
+      ROOM_HEADER_H +
+      ROOM_PADDING * 2 +
+      ROOM_TOP_EXTRA +
+      LAB_EQUIP_ZONE_H +
+      rows * WORKSTATION_H +
+      DOOR_CLEARANCE +
+      60
+    expect(layout.height).toBe(Math.max(460, rawHeight))
   })
 
   it('deskArea size matches cols*cellW and rows*cellH', () => {
@@ -192,6 +211,14 @@ describe('workstation grid geometry', () => {
   })
 })
 
+describe('qa-lab / mobile-lab south desk band', () => {
+  it('single-row desks sit lower than standard (south walk band, not vertical center of floor)', () => {
+    const qa = computeRoomLayout(1, 'qa-lab', 'bottom')
+    const std = computeRoomLayout(1, 'standard', 'bottom')
+    expect(qa.deskPositions[0]!.y).toBeGreaterThan(std.deskPositions[0]!.y)
+  })
+})
+
 describe('detectRoomType and props', () => {
   const cases: [string, string][] = [
     ['/Users/acme/Penny/src/renderer/foo', 'design-studio'],
@@ -201,6 +228,8 @@ describe('detectRoomType and props', () => {
     ['/site/docs/blog', 'creative-suite'],
     ['/infra/docker/ci', 'ops-center'],
     ['/packages/test/qa', 'qa-lab'],
+    ['/org/atlas', 'qa-lab'],
+    ['/Users/me/sidekick/Penny', 'qa-lab'],
     ['/unknown/vanilla/repo', 'standard'],
   ]
 
@@ -244,6 +273,7 @@ describe('OfficeRooms.updateRoom', () => {
       updateRoomActivity: vi.fn(),
       destroyWorkstation: vi.fn(),
       formatLabel: (s) => s,
+      usesFacilityLabStrategicProps: () => false,
     }
 
     const rooms = new OfficeRooms(scene, host)
@@ -291,6 +321,7 @@ describe('OfficeRooms.updateRoom', () => {
       updateRoomActivity: vi.fn(),
       destroyWorkstation: vi.fn(),
       formatLabel: (s) => s,
+      usesFacilityLabStrategicProps: () => false,
     }
     const rooms = new OfficeRooms(scene, host)
     const setScale = vi.fn()

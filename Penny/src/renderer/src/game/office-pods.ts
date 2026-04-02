@@ -78,6 +78,19 @@ export class OfficePods {
     this.lastDrawAt = t
   }
 
+  /** L1 overview — remove pod lines/dots so the lab floor reads clearly (same idea as MCP lines). */
+  clearPodLineVisuals(): void {
+    this.podGraphics?.clear()
+    for (const s of this.endpointSprites) s.destroy()
+    this.endpointSprites = []
+    for (const s of this.pulseSprites) s.destroy()
+    this.pulseSprites = []
+  }
+
+  clearRivalryVisuals(): void {
+    this.rivalryGraphics?.clear()
+  }
+
   hasAnimatedPods(): boolean {
     return this.podLines.some(t => this.isPodAnimatedStatus(t.status))
   }

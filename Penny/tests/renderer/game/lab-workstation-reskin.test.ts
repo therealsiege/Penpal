@@ -28,27 +28,27 @@ import {
 
 describe('LAB_PROP_FRAMES constants', () => {
   it('defines STOOL frame index', () => {
-    expect(LAB_PROP_FRAMES.STOOL).toBe(109)
+    expect(LAB_PROP_FRAMES.STOOL).toBe(106)
   })
 
   it('defines CONSOLE_SCREEN frame index', () => {
-    expect(LAB_PROP_FRAMES.CONSOLE_SCREEN).toBe(80)
+    expect(LAB_PROP_FRAMES.CONSOLE_SCREEN).toBe(44)
   })
 
-  it('defines CONSOLE_LINES_01 for animation start frame', () => {
-    expect(LAB_PROP_FRAMES.CONSOLE_LINES_01).toBe(33)
+  it('defines CONSOLE_SCREEN_LINES_01 for animation start frame', () => {
+    expect(LAB_PROP_FRAMES.CONSOLE_SCREEN_LINES_01).toBe(32)
   })
 
-  it('defines CONSOLE_WAVE_01 for animation start frame', () => {
-    expect(LAB_PROP_FRAMES.CONSOLE_WAVE_01).toBe(39)
+  it('defines CONSOLE_SCREEN_WAVE_01 for animation start frame', () => {
+    expect(LAB_PROP_FRAMES.CONSOLE_SCREEN_WAVE_01).toBe(38)
   })
 
   it('defines KEYBOARD frame index', () => {
-    expect(LAB_PROP_FRAMES.KEYBOARD).toBe(66)
+    expect(LAB_PROP_FRAMES.KEYBOARD).toBe(64)
   })
 
   it('defines DESK_LAMP frame index', () => {
-    expect(LAB_PROP_FRAMES.DESK_LAMP).toBe(49)
+    expect(LAB_PROP_FRAMES.DESK_LAMP).toBe(48)
   })
 
   it('is frozen (immutable)', () => {
@@ -287,7 +287,7 @@ describe('WorkstationFactory — lab reskin sprite selection', () => {
     const consoleSprite = spriteLog.find(s => s.sheet === SPRITESHEET_KEYS.LAB_PROPS && s.frame === LAB_PROP_FRAMES.CONSOLE_SCREEN)
     expect(consoleSprite).toBeDefined()
     expect(consoleSprite!.y).toBe(WS_MONITOR_Y)
-    expect(consoleSprite!.scale).toBe(0.22)
+    expect(consoleSprite!.scale).toBe(0.26)
   })
 
   it('falls back to office chair when lab textures are NOT loaded', async () => {
@@ -342,9 +342,9 @@ describe('WorkstationFactory — lab reskin sprite selection', () => {
 
     factory.create(makeRoom(), makeAgent('a6'))
 
-    // The first rectangle call at WS_DESK_Y with 80x21 dimensions is the desk body
+    // Lab desk body: wider/taller than default office desk
     const rectCalls = (scene.add.rectangle as ReturnType<typeof vi.fn>).mock.calls
-    const deskBodyCall = rectCalls.find((c: number[]) => c[0] === 0 && c[1] === WS_DESK_Y && c[2] === 80 && c[3] === 21)
+    const deskBodyCall = rectCalls.find((c: number[]) => c[0] === 0 && c[1] === WS_DESK_Y && c[2] === 112 && c[3] === 24)
     expect(deskBodyCall).toBeDefined()
     // The fill color should be COLOR_LAB_DESK_BODY
     expect(deskBodyCall![4]).toBe(COLOR_LAB_DESK_BODY)

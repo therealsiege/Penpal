@@ -121,7 +121,7 @@ test.describe('PH profile', () => {
 test.describe('PH documentation surface', () => {
   test('listCommands includes new APIs', async () => {
     const cmds = await ctx.window.evaluate(() => (window as any).PH.listCommands() as string[])
-    for (const c of ['loadFixture', 'record', 'stopRecording', 'replay', 'profile', 'getAgentsSummary', 'fixtureNames']) {
+    for (const c of ['loadFixture', 'record', 'stopRecording', 'replay', 'profile', 'getAgentsSummary', 'fixtureNames', 'labDecoration']) {
       expect(cmds).toContain(c)
     }
   })
