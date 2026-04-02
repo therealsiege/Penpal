@@ -93,9 +93,13 @@ const ROOM_TYPE_KEYWORDS: [string[], string][] = [
  * Derives a room type string from a filesystem cwd path by matching path
  * segments against keyword lists. Returns 'standard' when no match is found.
  */
+/** PENPAL multi-zone cwd slugs — use qa-lab layout (wider desk margins) so agents don’t sit under facility wall props. */
+const PENPAL_ZONE_SEGMENTS = new Set(['atlas', 'sidekick', 'espiral', 'openloop'])
+
 export function detectRoomType(cwd: string): string {
   const lower = cwd.toLowerCase()
   const segments = lower.split(/[\\/]/)
+  if (segments.some(seg => PENPAL_ZONE_SEGMENTS.has(seg))) return 'qa-lab'
   for (const [keywords, type] of ROOM_TYPE_KEYWORDS) {
     for (const kw of keywords) {
       if (segments.some((seg) => seg.includes(kw))) return type
@@ -130,22 +134,27 @@ export function computeRoomLayout(
   const cols = Math.min(n, MAX_AGENTS_PER_ROW)
   const rows = Math.ceil(n / cols)
 
+  const labDeskBreathing =
+    roomType === 'qa-lab' || roomType === 'mobile-lab'
+      ? { sidePadExtra: 80, deskGridSouthPx: 24 }
+      : { sidePadExtra: 0, deskGridSouthPx: 0 }
+
   // -------------------------------------------------------------------------
   // 1. Base room dimensions (same formula as calcRoomSize, minus prop strip)
   // -------------------------------------------------------------------------
 
   const wallBorder = (WALL_T + WALL_I + ROOM_PADDING) * 2
-  const LAB_SIDE_PAD = 100  // side margins for equipment within zone
+  const LAB_SIDE_PAD = 140  // side margins — space for wall props + wide lab desks
   const baseWidth =
-    wallBorder + cols * WORKSTATION_W + LAB_SIDE_PAD
+    wallBorder + cols * WORKSTATION_W + LAB_SIDE_PAD + labDeskBreathing.sidePadExtra
   const height =
     (WALL_T + WALL_I) * 2 + ROOM_HEADER_H + ROOM_PADDING * 2 + ROOM_TOP_EXTRA +
     LAB_EQUIP_ZONE_H +  // equipment shelf at top
     rows * WORKSTATION_H + DOOR_CLEARANCE + 60  // extra bottom for equipment
 
   // Zone width — big enough for properly-scaled lab props (consoles at 3x, tanks at 2.5x)
-  const MIN_ROOM_W = 520
-  const MIN_ROOM_H = 400
+  const MIN_ROOM_W = 600
+  const MIN_ROOM_H = 460
   const width = Math.max(MIN_ROOM_W, baseWidth + PROP_STRIP_W)
   const finalHeight = Math.max(MIN_ROOM_H, height)
 
@@ -159,7 +168,15 @@ export function computeRoomLayout(
   // Desk area starts at top-left of the usable interior, relative to room center
   const deskAreaX = -width / 2 + WALL_T + WALL_I + ROOM_PADDING
   // Header bar is at the bottom of the room; desk area starts below equipment zone
-  const deskAreaY = -finalHeight / 2 + WALL_T + WALL_I + ROOM_PADDING + ROOM_TOP_EXTRA + LAB_EQUIP_ZONE_H + topDoorPad
+  const deskAreaY =
+    -finalHeight / 2 +
+    WALL_T +
+    WALL_I +
+    ROOM_PADDING +
+    ROOM_TOP_EXTRA +
+    LAB_EQUIP_ZONE_H +
+    topDoorPad +
+    labDeskBreathing.deskGridSouthPx
 
   const usableW = baseWidth - wallBorder           // cols * WORKSTATION_W
   const usableH =
@@ -175,15 +192,22 @@ export function computeRoomLayout(
   const cellH = usableH / rows
   const flipRows = doorSide === 'top'
 
+  /** PENPAL / qa-lab single row: one tall cell used to mean “desk in the sky”. Pin row to south walk band. */
+  const southBandSingleRow =
+    (roomType === 'qa-lab' || roomType === 'mobile-lab') && rows === 1
+  const southRowCenterY =
+    deskAreaY + usableH - WORKSTATION_H * 0.5 - 28
+
   const deskPositions: { x: number; y: number }[] = []
   for (let i = 0; i < n; i++) {
     const col = i % cols
     const row = Math.floor(i / cols)
     const effectiveRow = flipRows ? rows - 1 - row : row
-    deskPositions.push({
-      x: deskAreaX + col * cellW + cellW / 2,
-      y: deskAreaY + effectiveRow * cellH + cellH / 2,
-    })
+    const x = deskAreaX + col * cellW + cellW / 2
+    const y = southBandSingleRow
+      ? southRowCenterY
+      : deskAreaY + effectiveRow * cellH + cellH / 2
+    deskPositions.push({ x, y })
   }
 
   const deskArea = {

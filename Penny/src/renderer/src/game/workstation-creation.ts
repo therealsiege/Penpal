@@ -163,20 +163,26 @@ export class WorkstationFactory {
       wsContainer.add(this.scene.add.rectangle(0, WS_CHAIR_Y, 18, 13, activeTheme.deskBody).setStrokeStyle(1, activeTheme.deskTop, 0.6))
     }
 
-    // Eval glow arc — rendered behind desk via painter's order
+    const facilityStrategic = this.host.usesFacilityLabStrategicProps?.() === true
+
+    // Eval glow arc — rendered behind desk via painter's order (dim on facility lab — reads as stray floor discs)
     const evalGlow = this.scene.add.arc(0, WS_DESK_Y, EVAL_GLOW_RADIUS, 0, 360, false, EVAL_GLOW_GREY, 1)
-      .setAlpha((EVAL_GLOW_ALPHA_MIN + EVAL_GLOW_ALPHA_MAX) / 2)
+    const evalGlowMin = facilityStrategic ? EVAL_GLOW_ALPHA_MIN * 0.28 : EVAL_GLOW_ALPHA_MIN
+    const evalGlowMax = facilityStrategic ? EVAL_GLOW_ALPHA_MAX * 0.28 : EVAL_GLOW_ALPHA_MAX
+    evalGlow.setAlpha((evalGlowMin + evalGlowMax) / 2)
     wsContainer.add(evalGlow)
 
-    // Lab reskin (issue #144): darker desk body with cyan stroke when lab assets available
+    // Lab reskin: wider surface + cyan stroke (fits keyboard, lamp, papers like ref lab packs)
+    const deskW = labPropsLoaded ? 112 : 80
+    const deskH = labPropsLoaded ? 24 : 21
     const deskFill   = labPropsLoaded ? COLOR_LAB_DESK_BODY : COLOR_DESK_BODY
     const deskStroke = labPropsLoaded ? COLOR_LAB_DESK_STROKE : activeTheme.deskStrokeIdle
     const deskStrokeAlpha = labPropsLoaded ? COLOR_LAB_DESK_STROKE_ALPHA : 0.5
-    const deskBody = this.scene.add.rectangle(0, WS_DESK_Y, 80, 21, deskFill).setStrokeStyle(1, deskStroke, deskStrokeAlpha)
+    const deskBody = this.scene.add.rectangle(0, WS_DESK_Y, deskW, deskH, deskFill).setStrokeStyle(1, deskStroke, deskStrokeAlpha)
     wsContainer.add(deskBody)
 
     const deskTopColor = labPropsLoaded ? COLOR_LAB_DESK_STROKE : COLOR_DESK_TOP
-    const deskTop = this.scene.add.rectangle(0, WS_DESK_Y - 8, 77, 3, deskTopColor)
+    const deskTop = this.scene.add.rectangle(0, WS_DESK_Y - 8, deskW - 5, 3, deskTopColor)
     wsContainer.add(deskTop)
 
     let monitorSprite: Phaser.GameObjects.Sprite | null = null
@@ -184,19 +190,37 @@ export class WorkstationFactory {
     let screenLines: Phaser.GameObjects.Graphics | undefined
     let screenTween: Phaser.Tweens.Tween | undefined
     const screenState = { mode: 'idle' }
-    // Lab console screen (issue #144) — prefer LAB_PROPS, fall back to office monitor
-    const useLabMonitor = labPropsLoaded
-    if (useLabMonitor) {
-      monitorSprite = this.scene.add.sprite(0, WS_MONITOR_Y, SPRITESHEET_KEYS.LAB_PROPS, LAB_PROP_FRAMES.CONSOLE_SCREEN).setScale(0.22)
+
+    // Facility lab: wall consoles live on labFacilityPropsLayer — avoid duplicating CONSOLE_SCREEN + aux props on every desk.
+    if (labPropsLoaded && facilityStrategic) {
+      if (this.host.officeTilesLoaded) {
+        monitorSprite = this.scene.add.sprite(0, WS_MONITOR_Y, SPRITESHEET_KEYS.OFFICE, FRAME_MONITOR)
+          .setScale(0.38)
+          .setDepth(4)
+        wsContainer.add(monitorSprite)
+      } else {
+        monitorSprite = this.scene.add.sprite(0, WS_MONITOR_Y, SPRITESHEET_KEYS.LAB_PROPS, LAB_PROP_FRAMES.MONITOR)
+          .setScale(0.22)
+          .setDepth(4)
+          .setAlpha(0.9)
+        wsContainer.add(monitorSprite)
+      }
+      if (monitorSprite) {
+        monitorGlowFx = monitorSprite.postFX.addGlow(0x64748b, 0, 0, false, AnimConfig.monitor.glowQuality, AnimConfig.monitor.glowDistance * 0.55)
+      }
+    } else if (labPropsLoaded) {
+      monitorSprite = this.scene.add.sprite(0, WS_MONITOR_Y, SPRITESHEET_KEYS.LAB_PROPS, LAB_PROP_FRAMES.CONSOLE_SCREEN)
+        .setScale(0.26)
+        .setDepth(4)
       wsContainer.add(monitorSprite)
     } else if (this.host.officeTilesLoaded) {
       monitorSprite = this.scene.add.sprite(0, WS_MONITOR_Y, SPRITESHEET_KEYS.OFFICE, FRAME_MONITOR).setScale(0.42)
       wsContainer.add(monitorSprite)
     }
-    if (monitorSprite) {
+    if (monitorSprite && labPropsLoaded && !facilityStrategic) {
       monitorGlowFx = monitorSprite.postFX.addGlow(0x0ea5e9, 0, 0, false, AnimConfig.monitor.glowQuality, AnimConfig.monitor.glowDistance)
       // Scrolling screen content lines
-      screenLines = this.scene.add.graphics().setVisible(false)
+      screenLines = this.scene.add.graphics().setVisible(false).setDepth(4.5)
       wsContainer.add(screenLines)
       const LINE_COLORS_WORK = [0x0ea5e9, 0x34d399]
       const LINE_COLORS_PLAN = [0xa78bfa, 0xc4b5fd]
@@ -254,15 +278,18 @@ export class WorkstationFactory {
         },
       })
       screenTween.pause()
-    } else {
+    } else if (!monitorSprite) {
       wsContainer.add(this.scene.add.rectangle(0, WS_MONITOR_Y, 16, 13, activeTheme.roomFloor).setStrokeStyle(1, activeTheme.deskTop, 0.8))
+    }
+    if (monitorSprite && !labPropsLoaded && this.host.officeTilesLoaded) {
+      monitorGlowFx = monitorSprite.postFX.addGlow(0x0ea5e9, 0, 0, false, AnimConfig.monitor.glowQuality, AnimConfig.monitor.glowDistance)
     }
 
     // Monitor screen frame overlay — sprite-based outline on the monitor screen area
     let monitorFrame: Phaser.GameObjects.Image | undefined
     if (monitorSprite && this.scene.textures.exists(IMAGE_KEYS.PANEL_OUTLINE)) {
       monitorFrame = this.scene.add.image(0, WS_MONITOR_Y, IMAGE_KEYS.PANEL_OUTLINE)
-        .setDisplaySize(14, 10).setAlpha(0.15).setTint(0x0ea5e9).setOrigin(0.5)
+        .setDisplaySize(14, 10).setAlpha(0.15).setTint(0x0ea5e9).setOrigin(0.5).setDepth(4.6)
       wsContainer.add(monitorFrame)
     }
 
@@ -271,15 +298,14 @@ export class WorkstationFactory {
       fontSize: '4px',
       fontFamily: 'monospace',
       color: '#5a6a7a',
-      wordWrap: { width: 14, useAdvancedWrap: false },
+      wordWrap: { width: labPropsLoaded ? 18 : 14, useAdvancedWrap: false },
       resolution: 3,
-    }).setOrigin(0.5, 0).setAlpha(0.7).setVisible(false)
+    }).setOrigin(0.5, 0).setAlpha(0.7).setVisible(false).setDepth(4.7)
     wsContainer.add(monitorText)
 
     // ── Rank-gated desk items ─────────────────────────────────────────────
-    // Desk accessories unlock as agents rank up. The cosmetic-tiers module
-    // defines which items appear at each level.
-    // When lab props are loaded, skip all desk clutter — keep the lab clean.
+    // Office mode: unlock cosmetics by level. Lab mode: always show a full
+    // control-desk prop spread (same sheet as room consoles — vector lab style).
     const agentLevel = agent.xp?.level ?? 1
 
     // Desk accessories (deterministic per agent name)
@@ -460,20 +486,59 @@ export class WorkstationFactory {
       if (isDeskItemUnlocked(agentLevel, 'gold_trim')) {
         deskBody.setStrokeStyle(1.5, 0xfbbf24, 0.7)
       }
+    } else if (labPropsLoaded && facilityStrategic) {
+      ledGlow = this.scene.add.graphics()
+      ledGlow.fillStyle(0x22d3ee, 0.22)
+      ledGlow.fillRoundedRect(-deskW / 2 + 4, WS_DESK_Y + 6, deskW - 8, 2.5, 1)
+      wsContainer.add(ledGlow)
+    } else {
+      // Lab mode — cluttered analyst / operator desk (props from LAB_PROPS)
+      const LP = LAB_PROP_FRAMES
+      const addLabProp = (frame: number, x: number, y: number, scale: number, alpha = 0.9, depth = 2) => {
+        const s = this.scene.add.sprite(x, y, SPRITESHEET_KEYS.LAB_PROPS, frame)
+          .setScale(scale).setAlpha(alpha).setDepth(depth)
+        wsContainer.add(s)
+        extraDecos.push(s)
+      }
+
+      addLabProp(LP.DESK_LAMP, -deskW * 0.38, WS_DESK_Y - 11, 0.17, 0.9, 2)
+      const kbFrame = nameHash % 2 === 0 ? LP.KEYBOARD : LP.COMPUTER_KEYBOARD
+      // Slightly forward on desk + lower depth than main monitor so keys don’t paint over the bezel
+      addLabProp(kbFrame, 2, WS_DESK_Y + 8, kbFrame === LP.KEYBOARD ? 0.16 : 0.14, 0.9, 1.2)
+
+      const auxScreens = [LP.CONSOLE_SCREEN_WAVE_02, LP.CONSOLE_SCREEN_LINES_02, LP.CONSOLE_SCREEN_WAVE_05]
+      addLabProp(auxScreens[nameHash % auxScreens.length]!, 24, WS_MONITOR_Y - 1, 0.14, 0.9, 3)
+      addLabProp(LP.MONITOR, -22, WS_MONITOR_Y + 2, 0.14, 0.9, 3)
+
+      addLabProp(LP.CUP, deskW * 0.33, WS_DESK_Y - 6, 0.15, 0.9, 2)
+      addLabProp(LP.PENCIL, -deskW * 0.28, WS_DESK_Y - 10, 0.12, 0.9, 2)
+      addLabProp(LP.CLIPBOARD, -deskW * 0.36, WS_DESK_Y - 16, 0.15, 0.9, 2)
+      addLabProp(LP.PAPER_SHEET, deskW * 0.26, WS_DESK_Y - 8, 0.12, 0.9, 2)
+      addLabProp(LP.NUMB_PAD, -16, WS_DESK_Y + 2, 0.13, 0.9, 2)
+      addLabProp(LP.DIAL, deskW * 0.37, WS_DESK_Y - 12, 0.12, 0.9, 2)
+      addLabProp(LP.LED_ON, -10, WS_MONITOR_Y + 6, 0.1, 0.95, 2)
+
+      if (nameHash % 2 === 0) addLabProp(LP.TABLET, 14, WS_DESK_Y - 5, 0.13, 0.9, 2)
+      if (nameHash % 3 === 0) addLabProp(LP.CUP_02, deskW * 0.22, WS_DESK_Y - 4, 0.13, 0.9, 2)
+      if (nameHash % 4 === 0) addLabProp(LP.STOP_BUTTON, deskW * 0.42, WS_DESK_Y - 3, 0.11, 0.9, 2)
+
+      ledGlow = this.scene.add.graphics()
+      ledGlow.fillStyle(0x22d3ee, 0.28)
+      ledGlow.fillRoundedRect(-deskW / 2 + 4, WS_DESK_Y + 6, deskW - 8, 2.5, 1)
+      wsContainer.add(ledGlow)
     }
-    // Lab mode: no desk accessories — clean lab workstation
 
     // Task completion counter — 14×8px pill at top-right of the desk surface.
-    // bg rect at (26, WS_DESK_Y - 12); text centered inside at (33, WS_DESK_Y - 8).
+    // Pill anchored to right side of desk (position scales with deskW).
     // Color tiers: 0 = hidden, 1-4 = gray, 5-9 = blue, 10+ = gold.
     const taskCountBg = this.scene.add.graphics()
     taskCountBg.fillStyle(activeTheme.bg, 0.6)
     taskCountBg.fillRoundedRect(0, 0, 14, 8, 2)
-    taskCountBg.setPosition(26, WS_DESK_Y - 12)
+    taskCountBg.setPosition(Math.round(deskW * 0.42), WS_DESK_Y - 12)
     taskCountBg.setAlpha(0)        // hidden until first task completes
     wsContainer.add(taskCountBg)
 
-    const taskCountText = this.scene.add.text(33, WS_DESK_Y - 8, '0', {
+    const taskCountText = this.scene.add.text(Math.round(deskW * 0.42) + 7, WS_DESK_Y - 8, '0', {
       fontSize: '5px',
       fontFamily: 'system-ui, monospace',
       color: '#5a6a7a',
@@ -509,7 +574,7 @@ export class WorkstationFactory {
     // showing the agent's recent activity pattern (last 20 ticks).
     // Redrawn in updateWorkstation whenever the activity value changes.
     const sparklineGfx = this.scene.add.graphics()
-    sparklineGfx.setPosition(18, WS_DESK_Y - 12)
+    sparklineGfx.setPosition(Math.round(deskW * 0.22), WS_DESK_Y - 12)
     wsContainer.add(sparklineGfx)
     lodLevel3Objects.push(sparklineGfx)
 
@@ -835,10 +900,10 @@ export class WorkstationFactory {
       contextRotMonitorBaseX: monitorSprite?.x ?? 0,
     }
 
-    // Eval glow breathing pulse tween
+    // Eval glow breathing pulse tween (must match facility dim range or the pulse undoes base alpha)
     ws.evalGlowTween = this.scene.tweens.add({
       targets: evalGlow,
-      alpha: { from: EVAL_GLOW_ALPHA_MIN, to: EVAL_GLOW_ALPHA_MAX },
+      alpha: { from: evalGlowMin, to: evalGlowMax },
       duration: EVAL_GLOW_PULSE_DURATION,
       yoyo: true,
       repeat: -1,
@@ -1027,13 +1092,18 @@ export class WorkstationFactory {
       ws.container.setDepth(cy + room.y)
     })
 
-    // Spawn in-room props if not already placed
-    if (!room.propsPlaced && this.host.propsManager) {
+    // Spawn in-room props if not already placed (skip right-strip clutter when JSON facility kit already fills the room)
+    const skipInteractiveStrip =
+      this.host.usesFacilityLabStrategicProps?.() === true &&
+      (roomType === 'qa-lab' || roomType === 'mobile-lab')
+    if (!room.propsPlaced && this.host.propsManager && !skipInteractiveStrip) {
       room.propsPlaced = true
       for (const slot of layout.propSlots) {
         const prop = this.host.propsManager.addProp({ type: slot.type, x: slot.x, y: slot.y })
         if (prop) room.container.add(prop.container)
       }
+    } else if (skipInteractiveStrip) {
+      room.propsPlaced = true
     }
   }
 

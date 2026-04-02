@@ -6,6 +6,7 @@
 
 import { LAB_PROP_FRAMES as LP } from './lab-prop-frames.generated'
 import { LAB_TILE_SIZE, LAB_EQUIP_ZONE_H } from './office-constants'
+import { computeStrategicReferencePlacements, type StrategicFloorClipRect } from './lab-strategic-layout'
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -13,8 +14,9 @@ import { LAB_TILE_SIZE, LAB_EQUIP_ZONE_H } from './office-constants'
 
 export const LAB_TILE_SCALE = 0.50
 export const LAB_CELL_STEP = LAB_TILE_SIZE * LAB_TILE_SCALE  // 64px
-export const LAB_MAX_PROPS_PER_ROOM = 80
-export const LAB_GLOW_COLOR = 0x00e5ff
+/** Cap after strategic anchors + optional sparse wall fill */
+export const LAB_MAX_PROPS_PER_ROOM = 24
+export const LAB_GLOW_COLOR = 0x22d3ee
 export const LAB_GLOW_MIN_SPACING = 2  // cells between glow lights
 
 // ---------------------------------------------------------------------------
@@ -48,6 +50,8 @@ export interface SpritePlacement {
   depth: number
   spritesheet: 'lab-props' | 'lab-main-tileset'
   tint?: number  // optional color tint
+  /** Degrees — diagonal benches, rotated consoles */
+  angle?: number
 }
 
 export interface GlowPlacement {
@@ -156,7 +160,13 @@ export class CellGrid {
 }
 
 // ---------------------------------------------------------------------------
-// Prop blueprints per zone type — using the FULL 135-frame prop library
+// Prop blueprints per zone type — using the FULL prop library.
+// Kit grouping (SVG folder / basename families in Phaser.Resources/lab/props/SVGS):
+//   console_* / blank_console_* / console_screen_* — control surfaces; keep one primary screen per desk.
+//   circular_sink* — chemical station; place as a set near top/bottom wall.
+//   laser_* — doorway / hazard line; pair head + outlet.
+//   warning_* — corners and edges only, one per corner where possible.
+//   unit_* / power_cell / pipe_* — machinery walls; generator + lab_machine + large_tank are centerpieces.
 // ---------------------------------------------------------------------------
 
 // ---------------------------------------------------------------------------
@@ -258,33 +268,7 @@ const KEYBOARD_STATIONS: StationGroup[] = [
   },
 ]
 
-// Fan + housing combo
-const FAN_STATIONS: StationGroup[] = [
-  {
-    base: { frame: LP.FAN_UNIT_HOUSING, scale: 1.8 },
-    overlays: [
-      { frame: LP.FAN_UNIT_FAN, scale: 1.4, dx: 0, dy: 0, depth: -1.3 },
-      { frame: LP.GUAGE_NEEDLE, scale: 0.6, dx: 25, dy: -15, depth: -1.3 },
-    ],
-    widthCells: 2, heightCells: 2, validZones: ['left-wall', 'right-wall', 'bottom-wall'], depth: -1.5,
-  },
-]
-
-// Chemical bench with petri dishes and detailed glassware
-const CHEM_BENCH_STATIONS: StationGroup[] = [
-  {
-    base: { frame: LP.DESK_TOP_LONG, scale: 2.5 },
-    overlays: [
-      { frame: LP.PETRI_DISH, scale: 0.8, dx: -30, dy: -5, depth: -1.3 },
-      { frame: LP.CONICAL_BEAKER, scale: 0.8, dx: 0, dy: -8, depth: -1.3 },
-      { frame: LP.CUP_02, scale: 0.7, dx: 25, dy: -5, depth: -1.3 },
-      { frame: LP.CLIPBOARD_02, scale: 0.6, dx: 45, dy: 2, depth: -1.3 },
-    ],
-    widthCells: 4, heightCells: 2, validZones: ['top-wall', 'bottom-wall'], depth: -1.5,
-  },
-]
-
-// Laser emitter station
+// Laser emitter station (wall-mounted — not room center)
 const LASER_STATIONS: StationGroup[] = [
   {
     base: { frame: LP.LASER_HEAD, scale: 1.8 },
@@ -292,30 +276,7 @@ const LASER_STATIONS: StationGroup[] = [
       { frame: LP.LASER_OUTLET, scale: 1.2, dx: 30, dy: 0, depth: -1.3 },
       { frame: LP.CONSOLE_LED_ON, scale: 0.7, dx: -20, dy: -10, depth: -1.3 },
     ],
-    widthCells: 2, heightCells: 2, validZones: ['top-wall', 'center'], depth: -1.5,
-  },
-]
-
-// Tank/containment row — green-tinted tanks along walls
-const TANK_ROW_STATIONS: StationGroup[] = [
-  // Row of 3 tanks — large_tank (365px) → scale 2.5
-  {
-    base: { frame: LP.LARGE_TANK, scale: 2.5, tint: 0x44dd88 },
-    overlays: [
-      { frame: LP.LARGE_TANK, scale: 2.5, dx: 100, dy: 0, depth: -1.4, tint: 0x33cc77 },
-      { frame: LP.LARGE_TANK, scale: 2.5, dx: -100, dy: 0, depth: -1.4, tint: 0x55ee99 },
-      { frame: LP.GUAGE, scale: 0.8, dx: 50, dy: -40, depth: -1.3 },
-    ],
-    widthCells: 5, heightCells: 3, validZones: ['bottom-wall', 'left-wall', 'right-wall'], depth: -1.5,
-  },
-  // Power cells with dome — scale 1.8
-  {
-    base: { frame: LP.POWER_CELL, scale: 1.8, tint: 0x44ddaa },
-    overlays: [
-      { frame: LP.POWER_CELL, scale: 1.8, dx: 70, dy: 0, depth: -1.4, tint: 0x44ddaa },
-      { frame: LP.DOME, scale: 1.5, dx: -50, dy: -6, depth: -1.3, tint: 0x33cc88 },
-    ],
-    widthCells: 3, heightCells: 2, validZones: ['bottom-wall', 'right-wall'], depth: -1.5,
+    widthCells: 2, heightCells: 2, validZones: ['top-wall', 'left-wall', 'right-wall'], depth: -1.5,
   },
 ]
 
@@ -356,7 +317,7 @@ const SHARED_ACCENTS: PropBlueprint[] = [
 const ZONE_BLUEPRINTS: Record<ZoneType, PropBlueprint[]> = {
   control: [
     // Pre-composed console panels — console_example_long is 436px original
-    { frame: LP.CONSOLE_EXAMPLE_LONG,  widthCells: 4, heightCells: 2, validZones: ['top-wall', 'center'],    scale: 3.0, alpha: 0.95, depth: -1.5 },
+    { frame: LP.CONSOLE_EXAMPLE_LONG,  widthCells: 4, heightCells: 2, validZones: ['top-wall', 'bottom-wall'], scale: 3.0, alpha: 0.95, depth: -1.5 },
     { frame: LP.CONSOLE_EXAMPLE_SHORT, widthCells: 2, heightCells: 2, validZones: ['top-wall'],    scale: 2.0, alpha: 0.95, depth: -1.5 },
     { frame: LP.CONSOLE_EXAMPLE_CORNER, widthCells: 2, heightCells: 2, validZones: ['corner'],     scale: 2.0, alpha: 0.95, depth: -1.5 },
     // Screens — free_standing_screen 191px → 1.5
@@ -367,7 +328,7 @@ const ZONE_BLUEPRINTS: Record<ZoneType, PropBlueprint[]> = {
     { frame: LP.UNIT_EXAMPLE_04,       widthCells: 2, heightCells: 2, validZones: ['left-wall', 'right-wall'], scale: 1.8, alpha: 0.92, depth: -1.5 },
     { frame: LP.UNIT_SQUARE,           widthCells: 2, heightCells: 2, validZones: ['left-wall', 'right-wall'], scale: 1.6, alpha: 0.90, depth: -1.5 },
     // Keyboard + desk items
-    { frame: LP.KEYBOARD,              widthCells: 1, heightCells: 1, validZones: ['top-wall', 'center'], scale: 1.2, alpha: 0.90, depth: -1.3 },
+    { frame: LP.KEYBOARD,              widthCells: 1, heightCells: 1, validZones: ['top-wall', 'bottom-wall'], scale: 1.2, alpha: 0.90, depth: -1.3 },
     { frame: LP.DESK_DRAW,             widthCells: 2, heightCells: 1, validZones: ['bottom-wall'], scale: 1.5, alpha: 0.88, depth: -1.5 },
     { frame: LP.STOOL,                 widthCells: 1, heightCells: 1, validZones: ['center'],      scale: 1.3, alpha: 0.85, depth: -1.6 },
     { frame: LP.DESK_LAMP,             widthCells: 1, heightCells: 1, validZones: ['top-wall'],    scale: 1.0, alpha: 0.88, depth: -1.3 },
@@ -379,8 +340,8 @@ const ZONE_BLUEPRINTS: Record<ZoneType, PropBlueprint[]> = {
 
   chemical: [
     // Centerpieces — microscope 108px → 1.3, circular_sink → 2.0
-    { frame: LP.MICROSCOPE,            widthCells: 1, heightCells: 2, validZones: ['top-wall', 'center'],    scale: 1.3, alpha: 0.95, depth: -1.5 },
-    { frame: LP.CIRCULAR_SINK,         widthCells: 2, heightCells: 2, validZones: ['top-wall', 'center'],    scale: 2.0, alpha: 0.95, depth: -1.5 },
+    { frame: LP.MICROSCOPE,            widthCells: 1, heightCells: 2, validZones: ['top-wall', 'bottom-wall'], scale: 1.3, alpha: 0.95, depth: -1.5 },
+    { frame: LP.CIRCULAR_SINK,         widthCells: 2, heightCells: 2, validZones: ['top-wall', 'bottom-wall'], scale: 2.0, alpha: 0.95, depth: -1.5 },
     // Sink accessories
     { frame: LP.CIRCULAR_SINK_FAN,     widthCells: 1, heightCells: 1, validZones: ['top-wall'],    scale: 1.0, alpha: 0.90, depth: -1.3 },
     { frame: LP.CIRCULAR_SINK_ITEM,    widthCells: 1, heightCells: 1, validZones: ['top-wall'],    scale: 0.9, alpha: 0.90, depth: -1.3 },
@@ -395,7 +356,7 @@ const ZONE_BLUEPRINTS: Record<ZoneType, PropBlueprint[]> = {
     { frame: LP.CLAMP_DOUBLE,          widthCells: 1, heightCells: 1, validZones: ['right-wall'],  scale: 0.8, alpha: 0.88, depth: -1.4 },
     { frame: LP.CLAMP_SINGLE,          widthCells: 1, heightCells: 1, validZones: ['left-wall'],   scale: 0.8, alpha: 0.88, depth: -1.4 },
     // Additional lab equipment
-    { frame: LP.PETRI_DISH,            widthCells: 1, heightCells: 1, validZones: ['top-wall', 'center'], scale: 1.0, alpha: 0.88, depth: -1.4 },
+    { frame: LP.PETRI_DISH,            widthCells: 1, heightCells: 1, validZones: ['top-wall', 'bottom-wall'], scale: 1.0, alpha: 0.88, depth: -1.4 },
     { frame: LP.CUP_02,               widthCells: 1, heightCells: 1, validZones: ['top-wall'],    scale: 0.8, alpha: 0.85, depth: -1.3 },
     { frame: LP.CLIPBOARD_02,         widthCells: 1, heightCells: 1, validZones: ['bottom-wall'], scale: 0.8, alpha: 0.82, depth: -1.6 },
     // Floor scatter
@@ -405,15 +366,14 @@ const ZONE_BLUEPRINTS: Record<ZoneType, PropBlueprint[]> = {
 
   machinery: [
     // Centerpieces — generator 243px → 2.5, lab_machine → 2.5
-    { frame: LP.GENERATOR,             widthCells: 3, heightCells: 3, validZones: ['center', 'top-wall'],    scale: 2.5, alpha: 0.95, depth: -1.5 },
-    { frame: LP.LAB_MACHINE_01,        widthCells: 3, heightCells: 3, validZones: ['top-wall', 'center'],    scale: 2.5, alpha: 0.95, depth: -1.5 },
-    { frame: LP.LARGE_TANK,            widthCells: 2, heightCells: 3, validZones: ['left-wall', 'right-wall', 'center'], scale: 2.5, alpha: 0.92, depth: -1.5 },
+    { frame: LP.GENERATOR,             widthCells: 3, heightCells: 3, validZones: ['center'],            scale: 2.5, alpha: 0.95, depth: -1.5 },
+    { frame: LP.LAB_MACHINE_01,        widthCells: 3, heightCells: 3, validZones: ['center'],            scale: 2.5, alpha: 0.95, depth: -1.5 },
+    { frame: LP.LARGE_TANK,            widthCells: 2, heightCells: 3, validZones: ['left-wall', 'right-wall'], scale: 2.5, alpha: 0.92, depth: -1.5 },
     // Equipment units — 230px → 1.8-2.0
     { frame: LP.UNIT_EXAMPLE_02,       widthCells: 2, heightCells: 2, validZones: ['right-wall'],  scale: 1.8, alpha: 0.92, depth: -1.5 },
     { frame: LP.UNIT_EXAMPLE_03,       widthCells: 3, heightCells: 3, validZones: ['left-wall', 'top-wall'], scale: 2.0, alpha: 0.92, depth: -1.5 },
     { frame: LP.UNIT_LARGE,            widthCells: 2, heightCells: 2, validZones: ['right-wall', 'bottom-wall'], scale: 1.8, alpha: 0.92, depth: -1.5 },
     { frame: LP.UNIT_SMALL,            widthCells: 2, heightCells: 1, validZones: ['left-wall'],   scale: 1.5, alpha: 0.90, depth: -1.5 },
-    { frame: LP.FAN_UNIT_HOUSING,      widthCells: 2, heightCells: 1, validZones: ['left-wall', 'right-wall'], scale: 1.5, alpha: 0.90, depth: -1.4 },
     { frame: LP.POWER_CELL,            widthCells: 2, heightCells: 1, validZones: ['bottom-wall'], scale: 1.5, alpha: 0.90, depth: -1.5 },
     // Pipe connectors
     { frame: LP.PIPE_CONNECTOR_ARCHED, widthCells: 1, heightCells: 1, validZones: ['left-wall', 'right-wall'], scale: 1.0, alpha: 0.88, depth: -1.4 },
@@ -422,7 +382,7 @@ const ZONE_BLUEPRINTS: Record<ZoneType, PropBlueprint[]> = {
     // Controls
     { frame: LP.STOP_BUTTON,           widthCells: 1, heightCells: 1, validZones: ['right-wall'],  scale: 0.8, alpha: 0.92, depth: -1.3 },
     { frame: LP.STOP_BUTTON_02,        widthCells: 1, heightCells: 1, validZones: ['left-wall'],   scale: 0.8, alpha: 0.92, depth: -1.3 },
-    // Fan units — composed (housing + fan blade)
+    // Fan wall unit (single entry — was duplicated)
     { frame: LP.FAN_UNIT_HOUSING,      widthCells: 2, heightCells: 1, validZones: ['left-wall', 'right-wall'], scale: 1.5, alpha: 0.90, depth: -1.4 },
     { frame: LP.GUAGE_NEEDLE,          widthCells: 1, heightCells: 1, validZones: ['left-wall', 'right-wall'], scale: 0.8, alpha: 0.88, depth: -1.3 },
     { frame: LP.LASER_HEAD,            widthCells: 1, heightCells: 1, validZones: ['top-wall'],    scale: 1.3, alpha: 0.92, depth: -1.4 },
@@ -437,12 +397,12 @@ const ZONE_BLUEPRINTS: Record<ZoneType, PropBlueprint[]> = {
 
   pod: [
     // Pods — pod 248px → 2.0
-    { frame: LP.POD,                   widthCells: 2, heightCells: 3, validZones: ['top-wall', 'center'],    scale: 2.0, alpha: 0.95, depth: -1.5 },
-    { frame: LP.BROKEN_POD,            widthCells: 2, heightCells: 3, validZones: ['top-wall', 'center'],    scale: 2.0, alpha: 0.88, depth: -1.5 },
+    { frame: LP.POD,                   widthCells: 2, heightCells: 3, validZones: ['top-wall'],            scale: 2.0, alpha: 0.95, depth: -1.5 },
+    { frame: LP.BROKEN_POD,            widthCells: 2, heightCells: 3, validZones: ['top-wall'],            scale: 2.0, alpha: 0.88, depth: -1.5 },
     { frame: LP.SLIDING_DOOR,          widthCells: 2, heightCells: 1, validZones: ['left-wall', 'right-wall'], scale: 1.5, alpha: 0.90, depth: -1.5 },
     // Skylights
-    { frame: LP.LARGE_SKYLIGHT,        widthCells: 2, heightCells: 2, validZones: ['center'],      scale: 1.8, alpha: 0.82, depth: -1.7 },
-    { frame: LP.SMALL_SKYLIGHT,        widthCells: 1, heightCells: 1, validZones: ['center'],      scale: 1.3, alpha: 0.82, depth: -1.7 },
+    { frame: LP.LARGE_SKYLIGHT,        widthCells: 2, heightCells: 2, validZones: ['top-wall'],      scale: 1.8, alpha: 0.82, depth: -1.6 },
+    { frame: LP.SMALL_SKYLIGHT,        widthCells: 1, heightCells: 1, validZones: ['top-wall'],      scale: 1.3, alpha: 0.82, depth: -1.6 },
     // Storage — chest ~150px → 1.3
     { frame: LP.CHEST_CLOSED,          widthCells: 2, heightCells: 1, validZones: ['bottom-wall'], scale: 1.5, alpha: 0.90, depth: -1.5 },
     { frame: LP.CHEST_OPEN,            widthCells: 2, heightCells: 1, validZones: ['bottom-wall'], scale: 1.5, alpha: 0.88, depth: -1.5 },
@@ -455,7 +415,7 @@ const ZONE_BLUEPRINTS: Record<ZoneType, PropBlueprint[]> = {
     { frame: LP.CONSOLE_LED_ON,        widthCells: 1, heightCells: 1, validZones: ['left-wall', 'right-wall'], scale: 0.8, alpha: 0.92, depth: -1.3 },
     { frame: LP.CONSOLE_LED_OFF,       widthCells: 1, heightCells: 1, validZones: ['left-wall', 'right-wall'], scale: 0.8, alpha: 0.70, depth: -1.3 },
     { frame: LP.TABLET,                widthCells: 1, heightCells: 1, validZones: ['bottom-wall'], scale: 0.8, alpha: 0.85, depth: -1.3 },
-    { frame: LP.NARROW_SKYLIGHT,       widthCells: 1, heightCells: 1, validZones: ['center'],      scale: 1.3, alpha: 0.80, depth: -1.7 },
+    { frame: LP.NARROW_SKYLIGHT,       widthCells: 1, heightCells: 1, validZones: ['top-wall'],      scale: 1.3, alpha: 0.80, depth: -1.6 },
     { frame: LP.DESK_DRAW,             widthCells: 2, heightCells: 1, validZones: ['bottom-wall'], scale: 1.3, alpha: 0.85, depth: -1.5 },
     { frame: LP.KEYBOARD,              widthCells: 1, heightCells: 1, validZones: ['top-wall'],    scale: 1.0, alpha: 0.88, depth: -1.3 },
     { frame: LP.PAPER_SHEET_02,        widthCells: 1, heightCells: 1, validZones: ['center'],      scale: 0.7, alpha: 0.75, depth: -1.7 },
@@ -592,34 +552,27 @@ function placeStationGroups(
   hash: number,
   placements: SpritePlacement[],
 ): void {
-  // Pick station groups based on zone type — use MORE prop variety
+  // At most two composed stations per zone — avoids stacking consoles + tanks + fans
+  // that fight for the same walls and blow the prop budget.
   const stations: StationGroup[] = []
-  if (zone === 'control') {
-    stations.push(...CONSOLE_STATIONS)
-    stations.push(...KEYBOARD_STATIONS)  // keyboard workstations
-    stations.push(FAN_STATIONS[0])       // fan unit
-  }
-  if (zone === 'pod') {
-    stations.push(...CONSOLE_STATIONS)
-    stations.push(KEYBOARD_STATIONS[1])  // short keyboard desk
-    stations.push(...LASER_STATIONS)     // laser emitter
-  }
-  if (zone === 'chemical') {
-    stations.push(...LAB_BENCH_STATIONS)
-    stations.push(...CHEM_BENCH_STATIONS)  // petri dishes, cups
-    stations.push(CONSOLE_STATIONS[1])
-    stations.push(TANK_ROW_STATIONS[1])
-  }
-  if (zone === 'machinery') {
-    stations.push(CONSOLE_STATIONS[0])
-    stations.push(KEYBOARD_STATIONS[0])    // keyboard workstation
-    stations.push(...TANK_ROW_STATIONS) // tanks along walls
-  }
-  if (zone === 'pod') {
-    stations.push(TANK_ROW_STATIONS[0]) // tank row in pod bay
+  switch (zone) {
+    case 'control':
+      stations.push(CONSOLE_STATIONS[hash % CONSOLE_STATIONS.length]!, KEYBOARD_STATIONS[0]!)
+      break
+    case 'pod':
+      stations.push(KEYBOARD_STATIONS[1]!, LASER_STATIONS[0]!)
+      break
+    case 'chemical':
+      stations.push(LAB_BENCH_STATIONS[0]!, CONSOLE_STATIONS[1]!)
+      break
+    case 'machinery':
+      stations.push(CONSOLE_STATIONS[0]!, KEYBOARD_STATIONS[0]!)
+      break
+    default:
+      break
   }
 
-  for (let i = 0; i < stations.length && placements.length < LAB_MAX_PROPS_PER_ROOM - 3; i++) {
+  for (let i = 0; i < stations.length && placements.length < LAB_MAX_PROPS_PER_ROOM - 4; i++) {
     const station = stations[i]
     // Use findPlacement with a virtual blueprint
     const virtualBp: PropBlueprint = {
@@ -654,28 +607,75 @@ function placeStationGroups(
   }
 }
 
-function placeProps(grid: CellGrid, zone: ZoneType, hash: number): SpritePlacement[] {
+function maskGridToFloorClips(grid: CellGrid, clips: StrategicFloorClipRect[]): void {
+  if (clips.length === 0) return
+  for (let r = 0; r < grid.rows; r++) {
+    for (let c = 0; c < grid.cols; c++) {
+      const t = grid.get(c, r)
+      if (t === 'desk') continue
+      const p = grid.cellToPixel(c, r)
+      let inside = false
+      for (const b of clips) {
+        if (p.x >= b.x && p.x < b.x + b.width && p.y >= b.y && p.y < b.y + b.height) {
+          inside = true
+          break
+        }
+      }
+      if (!inside) grid.set(c, r, 'wall')
+    }
+  }
+}
+
+function markStrategicOccupancy(grid: CellGrid, wx: number, wy: number, radiusCells: number): void {
+  const { col, row } = grid.pixelToCell(wx, wy)
+  for (let dr = -radiusCells; dr <= radiusCells; dr++) {
+    for (let dc = -radiusCells; dc <= radiusCells; dc++) {
+      if (Math.abs(dc) + Math.abs(dr) > radiusCells + 1) continue
+      const c = col + dc
+      const r = row + dr
+      if (grid.get(c, r) === 'floor') grid.set(c, r, 'equipment')
+    }
+  }
+}
+
+function stripCenterZones(bp: PropBlueprint): PropBlueprint | null {
+  const vz = bp.validZones.filter((z) => z !== 'center')
+  if (vz.length === 0) return null
+  return { ...bp, validZones: vz as PropBlueprint['validZones'] }
+}
+
+function placeProps(
+  grid: CellGrid,
+  zone: ZoneType,
+  hash: number,
+  opts?: { skipStationGroups?: boolean; maxLooseProps?: number; wallsOnly?: boolean },
+): SpritePlacement[] {
   const placements: SpritePlacement[] = []
 
-  // 1. Place composed station groups FIRST (consoles, lab benches)
-  placeStationGroups(grid, zone, hash, placements)
-
-  // 2. Then place individual zone props + shared accents
-  const blueprints = ZONE_BLUEPRINTS[zone]
-  const allBlueprints = [...blueprints, ...SHARED_ACCENTS]
-
-  // Shuffle shared accents deterministically
-  const sharedStart = blueprints.length
-  for (let i = allBlueprints.length - 1; i > sharedStart; i--) {
-    const j = sharedStart + ((hash + i * 31) % (i - sharedStart + 1))
-    ;[allBlueprints[i], allBlueprints[j]] = [allBlueprints[j], allBlueprints[i]]
+  if (!opts?.skipStationGroups) {
+    placeStationGroups(grid, zone, hash, placements)
   }
 
-  for (let i = 0; i < allBlueprints.length && placements.length < LAB_MAX_PROPS_PER_ROOM; i++) {
+  const blueprints = ZONE_BLUEPRINTS[zone]
+  const sharedPick = [...SHARED_ACCENTS]
+  for (let i = sharedPick.length - 1; i > 0; i--) {
+    const j = (hash + i * 47) % (i + 1)
+    ;[sharedPick[i], sharedPick[j]] = [sharedPick[j], sharedPick[i]]
+  }
+  const accentCap = opts?.skipStationGroups ? 2 : 5
+  let allBlueprints: PropBlueprint[] = [...blueprints, ...sharedPick.slice(0, accentCap)]
+  if (opts?.wallsOnly) {
+    allBlueprints = allBlueprints.map(stripCenterZones).filter((x): x is PropBlueprint => x != null)
+  }
+
+  const MAX_LOOSE_PROPS = opts?.maxLooseProps ?? 9
+  let loosePlaced = 0
+  for (let i = 0; i < allBlueprints.length && placements.length < LAB_MAX_PROPS_PER_ROOM && loosePlaced < MAX_LOOSE_PROPS; i++) {
     const bp = allBlueprints[i]
     const pos = findPlacement(grid, bp, hash, i)
     if (!pos) continue
 
+    loosePlaced++
     grid.markArea(pos.col, pos.row, bp.widthCells, bp.heightCells, 'equipment')
     const topLeft = grid.cellToPixel(pos.col, pos.row)
     const px = topLeft.x + (bp.widthCells - 1) * grid.step / 2
@@ -689,67 +689,6 @@ function placeProps(grid: CellGrid, zone: ZoneType, hash: number): SpritePlaceme
   }
 
   return placements
-}
-
-// ---------------------------------------------------------------------------
-// Wall-run fill — pack remaining wall cells with consecutive console sprites
-// Creates the "control panels spanning full wall" look from the reference.
-// ---------------------------------------------------------------------------
-
-// Wall-run frames — items that look good lining walls
-const WALL_RUN_FRAMES = [
-  LP.CONSOLE_SCREEN,
-  LP.MONITOR,
-  LP.GUAGE,
-  LP.DIAL,
-  LP.DIAL_02,
-  LP.SWITCH_UP,
-  LP.SWITCH_DOWN,
-  LP.GAS_VALVE_ON,
-  LP.GAS_VALVE_OFF,
-  LP.OCTAGONAL_PANEL,
-  LP.WALL_LIGHT,
-  LP.LED_ON,
-  LP.LED_OFF,
-  LP.GUAGE_NEEDLE,
-  LP.CONSOLE_SCREEN_WAVE_05,
-  LP.CONSOLE_SCREEN_LINES_04,
-]
-
-function fillWallRuns(grid: CellGrid, hash: number, placements: SpritePlacement[]): void {
-  const { cols, rows } = grid
-  let frameIdx = hash % WALL_RUN_FRAMES.length
-
-  const addWallItem = (c: number, r: number, scale: number, alpha: number, depth: number) => {
-    if (placements.length >= LAB_MAX_PROPS_PER_ROOM) return
-    if (grid.get(c, r) !== 'floor') return
-    grid.set(c, r, 'equipment')
-    const pos = grid.cellToPixel(c, r)
-    placements.push({
-      frame: WALL_RUN_FRAMES[frameIdx % WALL_RUN_FRAMES.length],
-      x: pos.x,
-      y: pos.y,
-      scale,
-      alpha,
-      depth,
-      spritesheet: 'lab-props',
-    })
-    frameIdx++
-  }
-
-  // Fill ALL 4 inner wall edges with equipment — every cell (step=1)
-  // Top wall run (row 1)
-  for (let c = 1; c < cols - 1; c++) addWallItem(c, 1, 1.2, 0.90, -1.4)
-  // Bottom wall run (row rows-2)
-  if (rows > 4) {
-    for (let c = 1; c < cols - 1; c++) addWallItem(c, rows - 2, 1.1, 0.88, -1.5)
-  }
-  // Left wall run (col 1)
-  for (let r = 2; r < rows - 2; r++) addWallItem(1, r, 1.0, 0.85, -1.4)
-  // Right wall run (col cols-2)
-  if (cols > 4) {
-    for (let r = 2; r < rows - 2; r++) addWallItem(cols - 2, r, 1.0, 0.85, -1.4)
-  }
 }
 
 function placeGlowLights(grid: CellGrid, hash: number): GlowPlacement[] {
@@ -818,6 +757,24 @@ function placeGlowLights(grid: CellGrid, hash: number): GlowPlacement[] {
 // Main entry point
 // ---------------------------------------------------------------------------
 
+export interface ComputeLabLayoutOptions {
+  /**
+   * 'room' — default: strategic JSON + grid pass for this floor rect (single-room or legacy).
+   * 'none' — return empty placements: `OfficeScene.rebuildLabFacilityProps` already ran
+   * `computeLabLayout` per room into `labFacilityPropsLayer`; `placeLabEquipment` must not duplicate.
+   */
+  strategicMode?: 'room' | 'none'
+  /** Real room floor tiles in world space — excludes inter-zone corridor inside the union AABB. */
+  floorClipRects?: StrategicFloorClipRect[]
+  /** Right-hand lab wing: mirror `mirrorForEastWing` JSON anchors across room midline (outer wall). */
+  strategicWing?: 'west' | 'east'
+  /**
+   * When set, snap the room’s centered hex origin to this slab’s lattice (matches WorkspaceUnifiedFloor
+   * `Math.round` origin). Fixes facility props floating off visible cell centers vs a single unified floor.
+   */
+  hexSlabWorldRect?: { x: number; y: number; width: number; height: number }
+}
+
 export function computeLabLayout(
   floorX: number,
   floorY: number,
@@ -825,25 +782,90 @@ export function computeLabLayout(
   floorH: number,
   hash: number,
   deskPositions: { x: number; y: number }[],
+  deskWorkspace?: { x: number; y: number; width: number; height: number },
+  opts?: ComputeLabLayoutOptions,
 ): LabLayoutResult {
+  const strategicMode = opts?.strategicMode ?? 'room'
+
+  if (strategicMode === 'none') {
+    return { propPlacements: [], glowPlacements: [] }
+  }
+
   const step = LAB_CELL_STEP
   const cols = Math.max(4, Math.floor(floorW / step))
   const rows = Math.max(4, Math.floor(floorH / step))
 
-  // Center grid within floor area (same as tileHexFloor)
+  // Center grid within floor area (same as tileHexFloor + WorkspaceUnifiedFloor)
   const gridW = cols * step
   const gridH = rows * step
-  const offsetX = floorX + (floorW - gridW) / 2
-  const offsetY = floorY + (floorH - gridH) / 2
+  let offsetX = Math.round(floorX + (floorW - gridW) / 2)
+  let offsetY = Math.round(floorY + (floorH - gridH) / 2)
+
+  const slab = opts?.hexSlabWorldRect
+  if (slab != null) {
+    const slabCols = Math.max(4, Math.floor(slab.width / step))
+    const slabRows = Math.max(4, Math.floor(slab.height / step))
+    const sgw = slabCols * step
+    const sgh = slabRows * step
+    const slabOx = Math.round(slab.x + (slab.width - sgw) / 2)
+    const slabOy = Math.round(slab.y + (slab.height - sgh) / 2)
+    offsetX = slabOx + Math.round((offsetX - slabOx) / step) * step
+    offsetY = slabOy + Math.round((offsetY - slabOy) / step) * step
+  }
 
   const grid = new CellGrid(cols, rows, offsetX, offsetY, step)
   grid.markWalls()
   grid.markDesks(deskPositions)
+  const clipRects = opts?.floorClipRects
+  if (clipRects && clipRects.length > 0) {
+    maskGridToFloorClips(grid, clipRects)
+  }
 
   const zone = ZONE_TYPES[hash % 4]
-  const propPlacements = placeProps(grid, zone, hash)
-  fillWallRuns(grid, hash, propPlacements)
-  const glowPlacements = placeGlowLights(grid, hash)
+
+  // Strategic props use the same centered hex footprint as wall tiles (not the raw floor AABB margin).
+  const strategic = computeStrategicReferencePlacements(
+    offsetX, offsetY, gridW, gridH, deskPositions, hash, deskWorkspace, clipRects,
+    opts?.strategicWing,
+  )
+  const propPlacements: SpritePlacement[] = strategic.map(s => ({
+    frame: s.frame,
+    x: s.x,
+    y: s.y,
+    scale: s.scale,
+    alpha: s.alpha,
+    depth: s.depth,
+    spritesheet: s.spritesheet,
+    tint: s.tint,
+    angle: s.angle,
+  }))
+  for (const s of strategic) {
+    // Large sprites (scale ~3) span several grid cells; radius 2 left loose props overlapping art.
+    markStrategicOccupancy(grid, s.x, s.y, 3)
+  }
+
+  const strategicCount = strategic.length
+  const useStrategic = strategicCount > 0
+  const clippedFacility = clipRects != null && clipRects.length > 0
+  // Facility merge passes floorClipRects per room: never add loose wall props (keyboards, duplicate
+  // corner consoles) on top of JSON strategic art — v10+ silhouette stays authoritative.
+  const maxLoose =
+    !useStrategic ? 6
+    : clippedFacility && useStrategic ? 0
+    : strategicCount >= 6 ? 0
+      : Math.max(2, 7 - strategicCount)
+  propPlacements.push(
+    ...placeProps(grid, zone, hash, {
+      skipStationGroups: useStrategic,
+      maxLooseProps: maxLoose,
+      wallsOnly: true,
+    }),
+  )
+
+  const glowPlacements =
+    useStrategic && (strategicCount >= 6 || (clippedFacility && strategicCount > 0))
+      ? []
+      : placeGlowLights(grid, hash)
 
   return { propPlacements, glowPlacements }
 }

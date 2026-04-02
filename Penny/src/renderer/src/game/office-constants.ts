@@ -60,13 +60,14 @@ export const OFFICE_FRAME_PRINTER      = 126
 // ---------------------------------------------------------------------------
 
 export const CHAR_SCALE      = 0.134
-export const WORKSTATION_W   = 90 // widened to fit all desk items without overlap
-export const WORKSTATION_H   = 77 // ~20% tighter office footprint
-export const ROOM_PADDING    = 16
-export const ROOM_TOP_EXTRA  = 30   // extra top padding so thought bubbles clear room headers
-export const LAB_EQUIP_ZONE_H = 80  // equipment shelf at top of each zone
+/** Desk grid cell size — roomier for lab-style cluttered desks + walking space */
+export const WORKSTATION_W   = 112
+export const WORKSTATION_H   = 92
+export const ROOM_PADDING    = 20
+export const ROOM_TOP_EXTRA  = 34   // extra top padding so thought bubbles clear room headers
+export const LAB_EQUIP_ZONE_H = 88  // equipment shelf at top of each zone
 export const ROOM_HEADER_H   = 20
-export const ROOM_GAP        = 30  // corridor space between zones — tight for connected feel
+export const ROOM_GAP        = 44  // corridor space between zones (lab floor breathing room)
 export const MAX_AGENTS_PER_ROW = 4
 export const TEAM_AREA_PAD_X = 8
 export const TEAM_AREA_PAD_Y = 8
@@ -86,7 +87,8 @@ export const IDLE_WALK_RANGE_X = 20
 
 // Colors
 export const COLOR_BG          = 0x111827
-export const COLOR_WALL        = 0x334155
+/** Facility shell — deep navy to match vector sci‑fi lab reference */
+export const COLOR_WALL        = 0x1a2744
 export const COLOR_DESK_BODY   = 0x475569
 export const COLOR_DESK_TOP    = 0x64748b
 export const COLOR_HEADER_BG   = 0x0f172a

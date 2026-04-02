@@ -15,6 +15,7 @@
     "test:watch": "vitest",
     "test:e2e": "npx playwright test --project=e2e",
     "test:e2e:headed": "npx playwright test --headed --project=e2e",
+    "test:e2e:lab-layout": "npx playwright test tests/lab-layout-visual.spec.ts --project=e2e",
     "test:visual": "npx playwright test --project=visual",
     "test:visual:update": "VISUAL_UPDATE=1 npx playwright test --project=visual",
     "mcp:start": "npx tsx src/mcp/index.ts",

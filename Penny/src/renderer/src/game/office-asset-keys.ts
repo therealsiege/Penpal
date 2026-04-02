@@ -64,7 +64,7 @@ export const SPRITESHEET_KEYS = Object.freeze({
   MONSTER_MOUTHS: 'monster-mouths',
   /** HD medals spritesheet — full medals.png sliced into individual frames */
   MEDALS_HD: 'medals-hd',
-  /** Lab props — 64x64 cells, 12 cols, 135 frames (alphabetical) */
+  /** Lab props — 64x64 cells, 12 cols; built from Phaser.Resources/lab/props/SVGS */
   LAB_PROPS: 'lab-props',
   /** Lab pipes — 128x128 cells, 7 cols × 5 rows (35 frames). Pipe straights, T-connectors, crosses, caps, valves */
   LAB_PIPES: 'lab-pipes',
@@ -294,22 +294,22 @@ export const MEDAL_HD_FRAMES = Object.freeze({
 } as const)
 
 // ---------------------------------------------------------------------------
-// Lab prop frame indices (64x64 cells in LAB_PROPS spritesheet, alphabetical)
+// Lab prop frame indices (64x64 cells in LAB_PROPS — generated from repo SVGS)
 // ---------------------------------------------------------------------------
 
-export const LAB_PROP_FRAMES = Object.freeze({
-  STOOL:          109,  // stool.png
-  CONSOLE_SCREEN:  80,  // monitor.png (lab console screen)
-  CONSOLE_LINES_01: 33, // console_screen_lines_01.png
-  CONSOLE_WAVE_01:  39, // console_screen_wave_01.png
-  DESK_LAMP:       49,  // desk_lamp.png
-  DESK_TOP_LONG:   50,  // desk_top_long.png
-  DESK_TOP_SHORT:  51,  // desk_top_short.png
-  KEYBOARD:        66,  // keyboard.png
-  MONITOR:         80,  // monitor.png
-} as const)
+export { LAB_PROP_FRAMES, type LabPropFrameKey } from './lab-prop-frames.generated'
 
-export type LabPropFrame = typeof LAB_PROP_FRAMES[keyof typeof LAB_PROP_FRAMES]
+export type LabPropFrame =
+  (typeof import('./lab-prop-frames.generated').LAB_PROP_FRAMES)[keyof typeof import('./lab-prop-frames.generated').LAB_PROP_FRAMES]
+
+// ---------------------------------------------------------------------------
+// Lab prop sprite animations (frames live on LAB_PROPS)
+// ---------------------------------------------------------------------------
+
+export const LAB_ANIM_KEYS = Object.freeze({
+  CONSOLE_WAVE: 'lab-console-wave',
+  CONSOLE_LINES: 'lab-console-lines',
+} as const)
 
 // ---------------------------------------------------------------------------
 // Lab tileset frame indices (128x128 cells, alphabetical file order = frame index)

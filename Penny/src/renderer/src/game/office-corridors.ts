@@ -48,6 +48,8 @@ export class OfficeCorridors {
   private endpointArrows: Phaser.GameObjects.Sprite[] = []
   /** Pipe, cable, and hazard stripe sprites placed along corridor paths */
   private pipeSprites: Phaser.GameObjects.GameObject[] = []
+  /** PENPAL unified lab — skip corridor pipe/cable decals (zone seams). */
+  private suppressCorridorPipeDecals = false
 
   lastFloorArrowAt = 0
 
@@ -81,6 +83,7 @@ export class OfficeCorridors {
     if (!g) return
     g.clear()
     this.corridorSegments = []
+    this.suppressCorridorPipeDecals = false
 
     for (const t of this.corridorSignTexts) t.destroy()
     this.corridorSignTexts = []
@@ -93,6 +96,9 @@ export class OfficeCorridors {
       this.hallwayIndicatorGraphics?.clear()
       return
     }
+
+    this.suppressCorridorPipeDecals =
+      roomList.length > 0 && roomList.every(r => r.teamKey === '__lab__')
 
     const rows = new Map<string, { teamKey: string; rowTop: number; rooms: Room[] }>()
     for (const room of roomList) {
@@ -267,6 +273,7 @@ export class OfficeCorridors {
 
     // Guard: if the spritesheets aren't loaded yet, bail silently
     if (!this.scene.textures.exists(SPRITESHEET_KEYS.LAB_PIPES)) return
+    if (this.suppressCorridorPipeDecals) return
 
     const PIPE_SCALE = 0.25        // 128 * 0.25 = 32px effective
     const CABLE_SCALE = 0.22       // slightly smaller cables

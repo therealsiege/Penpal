@@ -34,6 +34,8 @@ export interface RoomsHostScene {
   updateRoomActivity(room: Room): void
   destroyWorkstation(ws: import('./office-types').WorkstationSprite): void
   formatLabel(label: string): string
+  /** When lab props use a single facility-level layer, skip per-room strategic placement. */
+  usesFacilityLabStrategicProps(): boolean
 }
 
 // ---------------------------------------------------------------------------
@@ -91,7 +93,8 @@ export class OfficeRooms {
     const ledWallT = 6
     const ledWallI = 2
     const ledX = -width / 2 + ledWallT + ledWallI + 10
-    const ledY = height / 2 - ledWallT - ledWallI - ROOM_HEADER_H / 2
+    // Header bar is the bottom strip [h/2 - ROOM_HEADER_H, h/2]; keep LED on that bar, not in the floor band.
+    const ledY = height / 2 - ROOM_HEADER_H / 2
     const statusLedGlow = this.scene.add
       .sprite(ledX, ledY, SPRITESHEET_KEYS.GAME_ICONS, ICON_FRAMES.CIRCLE_GREY)
       .setScale(0.25)
@@ -1199,6 +1202,8 @@ export class OfficeRooms {
 
   // -------------------------------------------------------------------------
   // Wall-hugging equipment — large lab props placed tight against walls
+  // When LAB_PROPS is loaded for PENPAL, strategic JSON lives on labFacilityPropsLayer only
+  // (strategicMode 'none' here — see lab-decoration.ts).
   // -------------------------------------------------------------------------
 
   private placeLabEquipment(
@@ -1213,12 +1218,16 @@ export class OfficeRooms {
     const h = this.hashToken(room.cwd)
     const roomType = detectRoomType(room.cwd)
     const layout = computeRoomLayout(room.agents.length, roomType, room.doorSide)
-    const labResult = computeLabLayout(floorX, floorY, floorW, floorH, h, layout.deskPositions)
+    const labResult = computeLabLayout(
+      floorX, floorY, floorW, floorH, h, layout.deskPositions, layout.deskArea,
+      this.host.usesFacilityLabStrategicProps() ? { strategicMode: 'none' } : undefined,
+    )
 
     // Place props from engine output
     for (const p of labResult.propPlacements) {
       const spr = this.scene.add.sprite(p.x, p.y, SPRITESHEET_KEYS.LAB_PROPS, p.frame)
         .setScale(p.scale).setAlpha(p.alpha).setDepth(p.depth)
+      if (p.angle != null) spr.setAngle(p.angle)
       if (p.tint) spr.setTint(p.tint)
       room.container.add(spr)
       room.wallTileSprites!.push(spr)
@@ -1473,9 +1482,9 @@ export class OfficeRooms {
       room.headerLegoBricks = undefined
     }
 
-    const WALL_T = 8
-    const WALL_I = 4
-    const headerY = room.height / 2 - WALL_T - WALL_I - ROOM_HEADER_H / 2
+    const headerY = room.height / 2 - ROOM_HEADER_H / 2
+    const WALL_T = 3
+    const WALL_I = 1
 
     const headerText = this.scene.add.text(
       0,
@@ -1559,7 +1568,7 @@ export class OfficeRooms {
 
     // Bloom accent line beneath the header — draw a wider, low-alpha duplicate for glow effect
     {
-      const accentLineY = room.height / 2 - WALL_T - WALL_I - ROOM_HEADER_H
+      const accentLineY = room.height / 2 - ROOM_HEADER_H
       const template = getTemplate(getRoomType(room.cwd))
       const lineX1 = -room.width / 2 + 3 + 1  // WALL_T=3, WALL_I=1 from drawRoomBackground
       const lineX2 = room.width / 2 - 3 - 1
@@ -1651,10 +1660,8 @@ export class OfficeRooms {
 
     if (room.agents.length === 0) return
 
-    const WALL_T = 8
-    const WALL_I = 4
-    const baseY = headerY ?? (room.height / 2 - WALL_T - WALL_I - ROOM_HEADER_H / 2)
-    const dotY = baseY + 10  // below the header text line
+    const baseY = headerY ?? (room.height / 2 - ROOM_HEADER_H / 2)
+    const dotY = baseY + 7  // stay inside thin header bar
     const dotSpacing = 5
     const dotScale = 0.12
     const maxDots = 8

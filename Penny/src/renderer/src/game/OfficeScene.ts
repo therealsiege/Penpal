@@ -25,6 +25,13 @@ import {
 } from './office-helpers'
 
 import { SPRITESHEET_KEYS, SCENE_KEYS } from './office-asset-keys'
+import { computeLabLayout, type SpritePlacement } from './lab-layout-engine'
+import {
+  labRoomFloorWorldRect,
+  collectFacilityDeskPositionsWorld,
+  hashFacilityLabProps,
+} from './lab-facility-geometry'
+import { LAB_DECORATION_PIPELINE_ID, LAB_STRATEGIC_LAYOUT_LINKS, LAB_STRATEGIC_LAYOUT_VERSION } from './lab-decoration'
 import { RoomVisibilityManager } from './room-visibility'
 import { soundEngine } from './sound-engine'
 import { achievements } from './achievements'
@@ -116,6 +123,10 @@ export class OfficeScene extends Phaser.Scene {
   private _defaultCamZoom = 1
   /** Current LOD level: 1=overview, 2=room, 3=full detail. Initialized to 3 so first frame always applies the correct state. */
   private lastLodLevel = 3
+  /** World-space lab strategic props + glow (one pass for the whole facility row). */
+  private labFacilityPropsLayer: Phaser.GameObjects.Container | null = null
+  /** Matches WorkspaceUnifiedFloor.drawFloor bbox — snap per-room strategic hex to these cell centers. */
+  private labHexSlabRect: { x: number; y: number; width: number; height: number } | null = null
   // Room rendering subsystem (extracted to OfficeRooms)
   private roomRenderer!: OfficeRooms
   // Workstation lifecycle subsystem (extracted to OfficeWorkstations)
@@ -316,6 +327,8 @@ export class OfficeScene extends Phaser.Scene {
       getCafe: () => this.cafe,
       getCafeFloorMask: () => this.cafeFloorMask,
       setCafeFloorMask: (g) => { this.cafeFloorMask = g },
+      rebuildLabFacilityProps: () => this.rebuildLabFacilityProps(),
+      setLabHexSlabRect: (r) => { this.labHexSlabRect = r },
     })
     this.background.init()
 
@@ -328,7 +341,8 @@ export class OfficeScene extends Phaser.Scene {
     this.mcp.init()
 
     // Ground plane — semi-transparent so the HTML background image bleeds through.
-    this.add.rectangle(0, 0, 16000, 16000, COLOR_BG, 0.92)
+    // Keep a touch lighter than full-opacity so lab hex + props stay readable at overview zoom.
+    this.add.rectangle(0, 0, 16000, 16000, COLOR_BG, 0.78)
       .setOrigin(0.5, 0.5).setDepth(-12).setScrollFactor(0)
 
     // Sky gradient — deepest visible layer, behind stars and clouds
@@ -657,8 +671,8 @@ export class OfficeScene extends Phaser.Scene {
       })
     }
 
-    // Vignette: subtle screen-space edge shading
-    this.vignetteFx = this.cameras.main.postFX.addVignette(0.5, 0.5, 0.85, 0.35)
+    // Vignette — subtle edge framing only (strong strength + tight radius read as “too dark” on wide labs)
+    this.vignetteFx = this.cameras.main.postFX.addVignette(0.5, 0.5, 0.9, 0.22)
 
     // Screen-space UI overlays: toasts, tooltip, hover ring, help, debug, LOD label, status bar
     this.ui = new OfficeUI(this)
@@ -1003,6 +1017,7 @@ export class OfficeScene extends Phaser.Scene {
         updateRoomActivity: (room) => this.background.updateRoomActivity(room),
         destroyWorkstation: (ws) => { this.ensureWsManager(); this.wsManager.destroyWorkstation(ws) },
         formatLabel: (label) => formatLabel(label),
+        usesFacilityLabStrategicProps: () => this.textures.exists(SPRITESHEET_KEYS.LAB_PROPS),
       })
     }
   }
@@ -1040,7 +1055,90 @@ export class OfficeScene extends Phaser.Scene {
         propsManager: scene.propsManager,
         getNavMesh: () => scene.navMesh,
         getOrchestratorTaskForAgent: (id) => scene.orchestratorTasksByAgent.get(id),
+        usesFacilityLabStrategicProps: () => scene.textures.exists(SPRITESHEET_KEYS.LAB_PROPS),
       })
+    }
+  }
+
+  private applyLabFacilityPropsLod(lodLevel: number): void {
+    if (!this.labFacilityPropsLayer) return
+    this.labFacilityPropsLayer.setVisible(lodLevel >= 2)
+  }
+
+  /**
+   * Rebuilds world-space lab props with one layout pass per lab room (merged into one layer).
+   * Per-room `placeLabEquipment` skips strategic placement when LAB_PROPS is loaded.
+   */
+  private rebuildLabFacilityProps(): void {
+    if (this.labFacilityPropsLayer) {
+      this.labFacilityPropsLayer.destroy(true)
+      this.labFacilityPropsLayer = null
+    }
+    if (!this.textures.exists(SPRITESHEET_KEYS.LAB_PROPS)) return
+
+    const roomList = [...this.rooms.values()]
+    if (roomList.length === 0) return
+
+    // One layout pass per lab room: strategic anchors use floor fractions, so a single union
+    // bbox stacks the whole reference kit into one coordinate space and causes corridor overlap.
+    const propPlacements: SpritePlacement[] = []
+    const sortedRooms = [...roomList].sort(
+      (a, b) => labRoomFloorWorldRect(a).x - labRoomFloorWorldRect(b).x,
+    )
+    // One hash for the whole facility so JSON layout (stasis, etc.) does not vary per room cwd.
+    const facilityHash = hashFacilityLabProps(sortedRooms)
+    for (let i = 0; i < sortedRooms.length; i++) {
+      const room = sortedRooms[i]!
+      const floorRect = labRoomFloorWorldRect(room)
+      const desks = collectFacilityDeskPositionsWorld([room])
+      const hash = facilityHash
+      const strategicWing: 'west' | 'east' =
+        sortedRooms.length >= 2 && i === sortedRooms.length - 1 ? 'east' : 'west'
+      const slice = computeLabLayout(
+        floorRect.x, floorRect.y, floorRect.width, floorRect.height,
+        hash, desks, undefined,
+        {
+          floorClipRects: [floorRect],
+          strategicWing,
+          hexSlabWorldRect: this.labHexSlabRect ?? undefined,
+        },
+      )
+      propPlacements.push(...slice.propPlacements)
+    }
+
+    // Above room floor / heat (-2…0.5) but workstations use depth ≈ cy+room.y (hundreds),
+    // so props still sort under desks — avoids fighting interior floor tiles.
+    const layer = this.add.container(0, 0).setDepth(1.2)
+    for (const p of propPlacements) {
+      const spr = this.add.sprite(p.x, p.y, SPRITESHEET_KEYS.LAB_PROPS, p.frame)
+        .setScale(p.scale)
+        .setAlpha(p.alpha)
+        .setDepth(p.depth)
+      if (p.angle != null) spr.setAngle(p.angle)
+      if (p.tint) spr.setTint(p.tint)
+      layer.add(spr)
+    }
+    // No merged glow discs — they read as extra floor noise next to hex + hazard trim.
+    this.labFacilityPropsLayer = layer
+    this.applyLabFacilityPropsLod(this.lastLodLevel)
+  }
+
+  /** DevTools / PH: see `lab-decoration.ts` — JSON version, pipeline id, facility layer vs per-room pass. */
+  getLabDecorationDebugInfo(): Record<string, unknown> {
+    const layer = this.labFacilityPropsLayer
+    const list = layer?.list ?? []
+    const labProps = this.textures.exists(SPRITESHEET_KEYS.LAB_PROPS)
+    return {
+      pipelineId: LAB_DECORATION_PIPELINE_ID,
+      strategicLayoutJsonVersion: LAB_STRATEGIC_LAYOUT_VERSION,
+      strategicLayoutLinks: LAB_STRATEGIC_LAYOUT_LINKS,
+      labPropsTextureLoaded: labProps,
+      facilityLayerChildCount: list.length,
+      facilityLayerVisible: layer?.visible ?? false,
+      roomCount: this.rooms.size,
+      perRoomStrategicPropsSkipped: labProps,
+      hint:
+        'When labPropsTextureLoaded, placeLabEquipment passes strategicMode none — JSON props exist only on labFacilityPropsLayer.',
     }
   }
 
@@ -1073,15 +1171,27 @@ export class OfficeScene extends Phaser.Scene {
       this.lastLodLevel = lodLevel
       this.background.applyLodToWhiteboard(lodLevel)
       // Apply LOD to lab tile sprites in each room
-      if (this.officeRooms) {
+      if (this.roomRenderer) {
         for (const room of this.rooms.values()) {
-          this.officeRooms.applyLodToRoomTiles(room, lodLevel)
+          this.roomRenderer.applyLodToRoomTiles(room, lodLevel)
         }
       }
+      this.applyLabFacilityPropsLod(lodLevel)
       this.ui.applyLod(lodLevel, this.rooms, null, [], [])
+      if (lodLevel < 2) {
+        this.pods.clearPodLineVisuals()
+        this.pods.clearRivalryVisuals()
+      } else {
+        this.pods.markDirty()
+      }
     }
 
-    if (this.pods.podLines.length > 0 && (this.pods.isDirty() || this.pods.hasAnimatedPods()) && time - this.pods.getLastDrawAt() >= POD_REFRESH_MS) {
+    if (
+      lodLevel >= 2 &&
+      this.pods.podLines.length > 0 &&
+      (this.pods.isDirty() || this.pods.hasAnimatedPods()) &&
+      time - this.pods.getLastDrawAt() >= POD_REFRESH_MS
+    ) {
       this.pods.drawPodLines(time, this.rooms)
       this.pods.setLastDrawAt(time)
       this.pods.clearDirty()
@@ -1096,7 +1206,7 @@ export class OfficeScene extends Phaser.Scene {
     if (lodLevel < 2 && this.mcp) this.mcp.setVisible(false)
     else if (lodLevel >= 2 && this.mcp) this.mcp.setVisible(true)
     // Rivalry connecting lines — electric blue dashes between rival agents (every 2.5s)
-    if (this.pods.hasRivalries() && time - this.pods.getLastRivalryDrawAt() >= 2500) {
+    if (lodLevel >= 2 && this.pods.hasRivalries() && time - this.pods.getLastRivalryDrawAt() >= 2500) {
       this.pods.drawRivalryLines(time, this.rooms)
     }
     if (this.background.getCorridorSegments().length > 0 && time - this.lastHallwayPulseAt >= 90) {
@@ -1428,9 +1538,14 @@ export class OfficeScene extends Phaser.Scene {
   setPodWorkflows(workflows: PodLineInfo[]): void {
     if (!this.pods) return
     this.pods.setPodLines(workflows)
-    this.pods.drawPodLines(this.time.now, this.rooms)
-    this.pods.setLastDrawAt(this.time.now)
-    this.pods.clearDirty()
+    if (this.lastLodLevel >= 2) {
+      this.pods.drawPodLines(this.time.now, this.rooms)
+      this.pods.setLastDrawAt(this.time.now)
+      this.pods.clearDirty()
+    } else {
+      this.pods.clearPodLineVisuals()
+      this.pods.markDirty()
+    }
     // Push updated pod count to CampusScene
     EventBus.emit(EVENTS.CAMPUS_COUNTS_UPDATED, this.agents.length, workflows.length)
   }
@@ -1550,9 +1665,13 @@ export class OfficeScene extends Phaser.Scene {
       }
     }
     this.pods.markDirty()
-    this.pods.drawPodLines(this.time.now, this.rooms)
-    this.pods.setLastDrawAt(this.time.now)
-    this.pods.clearDirty()
+    if (this.lastLodLevel >= 2) {
+      this.pods.drawPodLines(this.time.now, this.rooms)
+      this.pods.setLastDrawAt(this.time.now)
+      this.pods.clearDirty()
+    } else {
+      this.pods.clearPodLineVisuals()
+    }
     this.mcp.markDirty()
   }
 
