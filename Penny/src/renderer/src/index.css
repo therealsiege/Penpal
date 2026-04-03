@@ -18,19 +18,77 @@
   --editor-font-family: ui-monospace, 'SF Mono', 'Cascadia Code', 'Fira Code', Menlo, monospace;
   --editor-font-size: 16px;
   --editor-line-height: 1.6;
-  /* PenPal shell — sidebar + chrome (use for one-off inline styles when needed) */
-  --penpal-bg-deep: #080a0e;
-  --penpal-bg-panel: #0c1018;
-  --penpal-accent: #00ff88;
-  --penpal-accent-soft: rgba(0, 255, 136, 0.14);
-  --penpal-border: #1e2838;
-  --penpal-muted: #5a6a7a;
+
+  /* ── Theme color tokens (dark default) ───────────────────────────────────── */
+  /* Backgrounds (darkest → lightest) */
+  --c-bg-deep:       #070a0f;
+  --c-bg-app:        #080a0e;
+  --c-bg-chrome:     #0a0e14;
+  --c-bg-surface:    #0c1018;
+  --c-bg-elevated:   #141a22;
+  --c-bg-hover:      #1a2430;
+  --c-bg-inset:      #0d121a;
+
+  /* Borders */
+  --c-border-subtle: #1e2830;
+  --c-border:        #2a3440;
+  --c-border-hover:  #3a4858;
+
+  /* Text */
+  --c-text-bright:   #e2e8f0;
+  --c-text-heading:  #dce4ec;
+  --c-text-primary:  #c4ccd6;
+  --c-text-secondary:#8a96a4;
+  --c-text-muted:    #5a6a7a;
+  --c-text-faint:    #4a5c6e;
+  --c-text-dim:      #6a7a8c;
+
+  /* Accents */
+  --c-accent:        #00ff88;
+  --c-accent-blue:   #00e5ff;
+  --c-accent-soft:   rgba(0, 255, 136, 0.14);
+  --c-accent-gold:   #e8b84b;
+
+  /* Legacy aliases */
+  --penpal-bg-deep: var(--c-bg-app);
+  --penpal-bg-panel: var(--c-bg-surface);
+  --penpal-accent: var(--c-accent);
+  --penpal-accent-soft: var(--c-accent-soft);
+  --penpal-border: var(--c-border-subtle);
+  --penpal-muted: var(--c-text-muted);
+}
+
+.light-theme {
+  --c-bg-deep:       #ede7dc;
+  --c-bg-app:        #f5f0e8;
+  --c-bg-chrome:     #f2ede4;
+  --c-bg-surface:    #faf7f2;
+  --c-bg-elevated:   #ebe4d8;
+  --c-bg-hover:      #e2dbd0;
+  --c-bg-inset:      #f0ebe2;
+
+  --c-border-subtle: #e0d8cc;
+  --c-border:        #d4cfc6;
+  --c-border-hover:  #c0b8aa;
+
+  --c-text-bright:   #1e1a16;
+  --c-text-heading:  #2a2420;
+  --c-text-primary:  #3d3229;
+  --c-text-secondary:#6e5f50;
+  --c-text-muted:    #8b7e6e;
+  --c-text-faint:    #a09585;
+  --c-text-dim:      #7a6e5e;
+
+  --c-accent:        #2a8c8c;
+  --c-accent-blue:   #2a7a7a;
+  --c-accent-soft:   rgba(42, 140, 140, 0.14);
+  --c-accent-gold:   #c48a3f;
 }
 
 html, body {
   margin: 0;
-  background: #020617;
-  color: #c4ccd6;
+  background: var(--c-bg-deep);
+  color: var(--c-text-primary);
   font-family: var(--ui-font-family);
   font-size: var(--ui-font-size);
   -webkit-font-smoothing: antialiased;
@@ -102,7 +160,7 @@ html.penpal-no-vignette body::before {
 }
 
 ::-webkit-scrollbar-track {
-  background: #020617;
+  background: var(--c-bg-deep);
 }
 
 ::-webkit-scrollbar-thumb {
@@ -501,15 +559,15 @@ html.penpal-no-vignette body::before {
   background:
     radial-gradient(ellipse 95% 48% at 50% -18%, rgba(0, 255, 136, 0.085), transparent 58%),
     radial-gradient(ellipse 55% 35% at 100% 100%, rgba(0, 229, 255, 0.045), transparent 52%),
-    linear-gradient(168deg, #04070c 0%, #080b10 36%, #05070b 100%);
+    linear-gradient(168deg, var(--c-bg-deep) 0%, var(--c-bg-app) 36%, var(--c-bg-deep) 100%);
 }
 
 /* Office panel status strip — HUD-style bar */
 .office-status-hud {
   background:
-    linear-gradient(90deg, rgba(0, 255, 136, 0.04) 0%, transparent 38%, rgba(0, 229, 255, 0.03) 100%),
-    linear-gradient(180deg, #0c1118 0%, #0a0e14 55%, #090d12 100%);
-  border-bottom: 1px solid rgba(30, 40, 56, 0.95);
+    linear-gradient(90deg, color-mix(in srgb, var(--c-accent) 4%, transparent) 0%, transparent 38%, color-mix(in srgb, var(--c-accent-blue) 3%, transparent) 100%),
+    linear-gradient(180deg, var(--c-bg-surface) 0%, var(--c-bg-chrome) 55%, var(--c-bg-inset) 100%);
+  border-bottom: 1px solid color-mix(in srgb, var(--c-border-subtle) 95%, transparent);
   box-shadow:
     inset 0 -1px 0 0 rgba(0, 255, 136, 0.09),
     inset 0 1px 0 0 rgba(255, 255, 255, 0.035);
@@ -581,36 +639,36 @@ html.penpal-no-vignette body::before {
 
 /* ── Vault Markdown Preview ─────────────────────────────────────────────── */
 
-.vault-markdown { color: #b0bcc8; }
+.vault-markdown { color: var(--c-text-primary); }
 
-.vault-markdown h1 { font-size: 1.6em; font-weight: 700; margin: 1.4em 0 0.6em; color: #dce4ec; letter-spacing: -0.02em; border-bottom: 1px solid #1a2030; padding-bottom: 0.3em; }
-.vault-markdown h2 { font-size: 1.35em; font-weight: 600; margin: 1.2em 0 0.5em; color: #c4ccd6; letter-spacing: -0.01em; }
-.vault-markdown h3 { font-size: 1.15em; font-weight: 600; margin: 1em 0 0.4em; color: #a0aab4; }
-.vault-markdown h4, .vault-markdown h5, .vault-markdown h6 { font-size: 1em; font-weight: 600; margin: 0.8em 0 0.3em; color: #8a96a4; }
+.vault-markdown h1 { font-size: 1.6em; font-weight: 700; margin: 1.4em 0 0.6em; color: var(--c-text-heading); letter-spacing: -0.02em; border-bottom: 1px solid var(--c-border-subtle); padding-bottom: 0.3em; }
+.vault-markdown h2 { font-size: 1.35em; font-weight: 600; margin: 1.2em 0 0.5em; color: var(--c-text-primary); letter-spacing: -0.01em; }
+.vault-markdown h3 { font-size: 1.15em; font-weight: 600; margin: 1em 0 0.4em; color: var(--c-text-secondary); }
+.vault-markdown h4, .vault-markdown h5, .vault-markdown h6 { font-size: 1em; font-weight: 600; margin: 0.8em 0 0.3em; color: var(--c-text-secondary); }
 
 .vault-markdown p { margin: 0.8em 0; line-height: 1.75; }
 .vault-markdown ul, .vault-markdown ol { margin: 0.6em 0; padding-left: 1.8em; }
 .vault-markdown li { margin: 0.25em 0; line-height: 1.7; }
 .vault-markdown li > ul, .vault-markdown li > ol { margin: 0.2em 0; }
-.vault-markdown li::marker { color: #3a4858; }
+.vault-markdown li::marker { color: var(--c-border-hover); }
 
-.vault-markdown a { color: #60a5fa; text-decoration: underline; text-underline-offset: 2px; transition: color 0.15s; }
-.vault-markdown a:hover { color: #93c5fd; }
-.vault-markdown strong { color: #dce4ec; }
-.vault-markdown em { color: #8a96a4; font-style: italic; }
+.vault-markdown a { color: var(--c-accent-blue); text-decoration: underline; text-underline-offset: 2px; transition: color 0.15s; }
+.vault-markdown a:hover { color: var(--c-accent); }
+.vault-markdown strong { color: var(--c-text-heading); }
+.vault-markdown em { color: var(--c-text-secondary); font-style: italic; }
 
 .vault-markdown code {
-  background: rgba(10, 14, 20, 0.6);
+  background: color-mix(in srgb, var(--c-bg-chrome) 60%, transparent);
   padding: 0.15em 0.4em;
   border-radius: 4px;
   font-size: 0.85em;
-  color: #00e5ff;
-  border: 1px solid rgba(42, 52, 64, 0.3);
+  color: var(--c-accent-blue);
+  border: 1px solid color-mix(in srgb, var(--c-border) 30%, transparent);
 }
 
 .vault-markdown pre {
-  background: rgba(6, 8, 12, 0.9);
-  border: 1px solid rgba(42, 52, 64, 0.4);
+  background: color-mix(in srgb, var(--c-bg-deep) 90%, transparent);
+  border: 1px solid color-mix(in srgb, var(--c-border) 40%, transparent);
   border-radius: 8px;
   padding: 1em 1.2em;
   overflow-x: auto;
@@ -621,17 +679,17 @@ html.penpal-no-vignette body::before {
   background: none;
   padding: 0;
   border: none;
-  color: #8a96a4;
+  color: var(--c-text-secondary);
   font-size: 0.82em;
   line-height: 1.6;
 }
 
 .vault-markdown blockquote {
-  border-left: 3px solid #00e5ff40;
+  border-left: 3px solid color-mix(in srgb, var(--c-accent-blue) 25%, transparent);
   padding: 0.4em 0 0.4em 1em;
   margin: 1em 0;
-  color: #8a96a4;
-  background: rgba(0, 229, 255, 0.02);
+  color: var(--c-text-secondary);
+  background: color-mix(in srgb, var(--c-accent-blue) 2%, transparent);
   border-radius: 0 6px 6px 0;
 }
 
@@ -661,23 +719,23 @@ html.penpal-no-vignette body::before {
 
 .vault-markdown td {
   padding: 0.45em 0.8em;
-  border: 1px solid #1a2030;
+  border: 1px solid var(--c-border-subtle);
 }
 
 .vault-markdown tr:hover td {
-  background: rgba(10, 14, 20, 0.3);
+  background: color-mix(in srgb, var(--c-bg-chrome) 30%, transparent);
 }
 
 .vault-markdown img {
   max-width: 100%;
   border-radius: 6px;
   margin: 1em 0;
-  border: 1px solid rgba(42, 52, 64, 0.3);
+  border: 1px solid color-mix(in srgb, var(--c-border) 30%, transparent);
 }
 
 .vault-markdown input[type="checkbox"] {
   margin-right: 0.4em;
-  accent-color: #00e5ff;
+  accent-color: var(--c-accent-blue);
 }
 
 /* Task list style — remove bullet when checkbox is present */
@@ -690,25 +748,25 @@ html.penpal-no-vignette body::before {
 
 .light-theme,
 .light-theme body {
-  background: #f8fafc;
-  color: #1e293b;
+  background: var(--c-bg-app);
+  color: var(--c-text-primary);
 }
 
 .light-theme ::-webkit-scrollbar-track {
-  background: #f1f5f9;
+  background: var(--c-bg-elevated);
 }
 
 .light-theme ::-webkit-scrollbar-thumb {
-  background: #94a3b8;
+  background: var(--c-text-muted);
 }
 
-.light-theme .vault-markdown h1 { color: #1e293b; }
-.light-theme .vault-markdown h2 { color: #334155; }
-.light-theme .vault-markdown h3 { color: #475569; }
-.light-theme .vault-markdown code { background: rgba(226, 232, 240, 0.6); color: #1e40af; }
-.light-theme .vault-markdown pre { background: #f1f5f9; border-color: #e2e8f0; }
-.light-theme .vault-markdown pre code { color: #334155; }
-.light-theme .vault-markdown blockquote { border-left-color: #cbd5e1; color: #475569; }
+.light-theme .vault-markdown h1 { color: var(--c-text-primary); }
+.light-theme .vault-markdown h2 { color: var(--c-text-secondary); }
+.light-theme .vault-markdown h3 { color: var(--c-text-muted); }
+.light-theme .vault-markdown code { background: color-mix(in srgb, var(--c-border) 50%, transparent); color: var(--c-accent); }
+.light-theme .vault-markdown pre { background: var(--c-bg-elevated); border-color: var(--c-border); }
+.light-theme .vault-markdown pre code { color: var(--c-text-secondary); }
+.light-theme .vault-markdown blockquote { border-left-color: var(--c-border); color: var(--c-text-muted); }
 
 /* ── Neon theme ────────────────────────────────────────────────────────────── */
 

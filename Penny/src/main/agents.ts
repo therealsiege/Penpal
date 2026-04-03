@@ -119,10 +119,16 @@ function getAgentTypesYamlPath(): string {
 let agentConfigs: AgentConfig[] = []
 
 export function loadAgentConfigs(): AgentConfig[] {
+  const yamlPath = getAgentTypesYamlPath()
+  console.log(`[agents] Loading agent configs from ${yamlPath}`)
   try {
-    const yamlPath = getAgentTypesYamlPath()
     const raw = fs.readFileSync(yamlPath, 'utf-8')
     const doc = yaml.load(raw) as { agents: Record<string, Record<string, unknown>> }
+    if (!doc?.agents || typeof doc.agents !== 'object') {
+      console.error(`[agents] YAML parsed but doc.agents is missing or not an object. Keys: ${Object.keys(doc ?? {})}`)
+      agentConfigs = []
+      return agentConfigs
+    }
     agentConfigs = Object.entries(doc.agents).map(([id, cfg]) => {
       const persona = cfg.persona as Record<string, string> | undefined
       return {
@@ -147,8 +153,9 @@ export function loadAgentConfigs(): AgentConfig[] {
         autonomy: (cfg.autonomy as string) || 'default',
       }
     })
+    console.log(`[agents] Loaded ${agentConfigs.length} agents: ${agentConfigs.map(a => a.id).join(', ')}`)
   } catch (err) {
-    console.error(`Failed to load agent configs from ${getAgentTypesYamlPath()}:`, err)
+    console.error(`[agents] Failed to load agent configs from ${yamlPath}:`, err)
     agentConfigs = []
   }
   return agentConfigs
@@ -160,7 +167,12 @@ export function getAgentConfigs(): AgentConfig[] {
 }
 
 export function getAgentConfig(agentId: string): AgentConfig | undefined {
-  return getAgentConfigs().find(a => a.id === agentId)
+  const configs = getAgentConfigs()
+  const found = configs.find(a => a.id === agentId)
+  if (!found) {
+    console.error(`[agents] getAgentConfig('${agentId}') not found. Loaded ${configs.length} agents: [${configs.map(a => a.id).join(', ')}]`)
+  }
+  return found
 }
 
 // ── YAML Preset Loader (Fix 14) ─────────────────────────────────────────────

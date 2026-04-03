@@ -1,7 +1,7 @@
 /**
  * OfficeScene Color Theme System
  *
- * Two themes: Dark (FF7 Midgar industrial) and Light (bright office).
+ * Two themes: Dark (deep industrial) and Light (warm studio).
  * Press T in-game to toggle.
  *
  * Usage:
@@ -76,7 +76,7 @@ export interface OfficeTheme {
 }
 
 export const THEMES: Record<ThemeName, OfficeTheme> = {
-  // ---- DARK (FF7 Midgar industrial palette) ----
+  // ---- DARK (deep industrial palette) ----
   dark: {
     bg: 0x0a1628,
     roomFloor: 0x141a22,
@@ -125,53 +125,53 @@ export const THEMES: Record<ThemeName, OfficeTheme> = {
     shadowDark: 0x0a0e14,
   },
 
-  // ---- LIGHT (bright office) ----
+  // ---- LIGHT (warm studio — cream, teal, coffee tones) ----
   light: {
-    bg: 0xf1f5f9,
-    roomFloor: 0xe2e8f0,
-    roomFloor2: 0xd4dae3,
-    wall: 0x94a3b8,
-    wallInner: 0xcbd5e1,
-    deskBody: 0x9ca3af,
-    deskTop: 0xb0b8c4,
-    headerBg: 0xf8fafc,
-    doorFrame: 0x2563eb,
-    officeFloor: 0xe8ecf1,
-    officeGrid: 0xcbd5e1,
-    rugFill: 0xc7d8f0,
-    rugStroke: 0x93b4e8,
-    headerText: '#1e293b',
-    badgeText: '#475569',
-    badgeBg: '#e2e8f0',
-    nameText: '#1e293b',
-    nameBg: '#ffffffcc',
-    tooltipBg: 0xffffff,
-    tooltipStroke: 0xcbd5e1,
-    tooltipText: '#1e293b',
-    panelBg: 0xffffff,
-    panelStroke: 0xcbd5e1,
-    separator: 0xd4dae3,
-    accentText: '#2563eb',
-    subtleText: '#64748b',
-    monitorGlowActive: 0x2563eb,
-    monitorGlowIdle: 0xcbd5e1,
-    thoughtDefault: 0x94a3b8,
-    thoughtWorking: 0x16a34a,
-    thoughtPlan: 0x7c3aed,
-    thoughtAcceptEdits: 0x2563eb,
-    deskStrokeIdle: 0x94a3b8,
-    deskStrokeWorking: 0x16a34a,
-    deskStrokeWaiting: 0xd97706,
-    deskStrokeHover: 0x2563eb,
-    particleColors: [0x2563eb, 0x16a34a, 0x475569],
-    screenLineColors: [0x2563eb, 0x16a34a],
-    lampMetal: 0x64748b,
-    lampShade: 0xf59e0b,
-    mugBody: 0x7c3aed,
-    mugHandle: 0x6d28d9,
-    fogColor: 0xcbd5e1,
-    ventFill: 0xd4dae3,
-    shadowDark: 0xe2e8f0,
+    bg: 0xf5f0e8,
+    roomFloor: 0xebe4d8,
+    roomFloor2: 0xe0d8cc,
+    wall: 0x8b9ea8,
+    wallInner: 0xd4cfc6,
+    deskBody: 0xb8a88e,
+    deskTop: 0xc8bca6,
+    headerBg: 0xf8f4ee,
+    doorFrame: 0x2a8c8c,
+    officeFloor: 0xeee8de,
+    officeGrid: 0xddd5c8,
+    rugFill: 0xd8cfc0,
+    rugStroke: 0x5b9ea0,
+    headerText: '#3d3229',
+    badgeText: '#2a7a7a',
+    badgeBg: '#ebe4d8',
+    nameText: '#3d3229',
+    nameBg: '#f8f4eecc',
+    tooltipBg: 0xfaf7f2,
+    tooltipStroke: 0xd4cfc6,
+    tooltipText: '#3d3229',
+    panelBg: 0xfaf7f2,
+    panelStroke: 0xd4cfc6,
+    separator: 0xe0d8cc,
+    accentText: '#2a8c8c',
+    subtleText: '#8b7e6e',
+    monitorGlowActive: 0x2a8c8c,
+    monitorGlowIdle: 0xd4cfc6,
+    thoughtDefault: 0xa89888,
+    thoughtWorking: 0x2a8c8c,
+    thoughtPlan: 0x8b6bb0,
+    thoughtAcceptEdits: 0x5b9ea0,
+    deskStrokeIdle: 0xa89888,
+    deskStrokeWorking: 0x2a8c8c,
+    deskStrokeWaiting: 0xc48a3f,
+    deskStrokeHover: 0x5b9ea0,
+    particleColors: [0x5b9ea0, 0x8bb0a0, 0xc8bca6],
+    screenLineColors: [0x5b9ea0, 0x2a8c8c],
+    lampMetal: 0x8b7e6e,
+    lampShade: 0xc48a3f,
+    mugBody: 0xd4c4a8,
+    mugHandle: 0xb8a88e,
+    fogColor: 0xddd5c8,
+    ventFill: 0xe0d8cc,
+    shadowDark: 0xebe4d8,
   },
 
 }

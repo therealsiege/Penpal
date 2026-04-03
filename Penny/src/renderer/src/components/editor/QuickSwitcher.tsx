@@ -68,7 +68,7 @@ export function QuickSwitcher({ onSelect, onClose }: QuickSwitcherProps) {
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center pt-[15vh] bg-black/55 backdrop-blur-[2px]" onClick={onClose}>
       <div
-        className="bg-gradient-to-b from-[#0c1018] to-[#080b10] border border-[#2a3440] rounded-xl shadow-2xl w-[500px] max-h-[400px] overflow-hidden ring-1 ring-[#00ff88]/10"
+        className="bg-gradient-to-b from-[var(--c-bg-surface)] to-[var(--c-bg-app)] border border-[var(--c-border)] rounded-xl shadow-2xl w-[500px] max-h-[400px] overflow-hidden ring-1 ring-[color-mix(in_srgb,var(--c-accent)_10%,transparent)]"
         onClick={e => e.stopPropagation()}
       >
         <input
@@ -77,7 +77,7 @@ export function QuickSwitcher({ onSelect, onClose }: QuickSwitcherProps) {
           onChange={e => setQuery(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder="Open file..."
-          className="w-full bg-transparent text-[#dce4ec] text-sm px-4 py-3 outline-none border-b border-[#2a3440] placeholder-[#4a5c6e] focus:ring-2 focus:ring-inset focus:ring-[#00ff88]/25"
+          className="w-full bg-transparent text-[var(--c-text-heading)] text-sm px-4 py-3 outline-none border-b border-[var(--c-border)] placeholder-[var(--c-text-faint)] focus:ring-2 focus:ring-inset focus:ring-[color-mix(in_srgb,var(--c-accent)_25%,transparent)]"
         />
         <div className="overflow-y-auto max-h-[320px] scrollbar-penpal">
           {results.map((entry, i) => {
@@ -87,16 +87,16 @@ export function QuickSwitcher({ onSelect, onClose }: QuickSwitcherProps) {
                 key={entry.path}
                 onClick={() => { onSelect(entry.path); onClose() }}
                 className={`flex items-center justify-between px-4 py-2 cursor-pointer text-xs ${
-                  i === selectedIdx ? 'bg-[#00ff88]/12 text-[#00e5ff]' : 'text-[#8a96a4] hover:bg-[#141a22]/60'
+                  i === selectedIdx ? 'bg-[color-mix(in_srgb,var(--c-accent)_12%,transparent)] text-[var(--c-accent-blue)]' : 'text-[var(--c-text-secondary)] hover:bg-[color-mix(in_srgb,var(--c-bg-elevated)_60%,transparent)]'
                 }`}
               >
                 <span className="truncate font-medium">{entry.title || entry.name}</span>
-                {folder && <span className="text-[#4a5c6e] text-[10px] truncate ml-2 shrink-0">{folder}</span>}
+                {folder && <span className="text-[var(--c-text-faint)] text-[10px] truncate ml-2 shrink-0">{folder}</span>}
               </div>
             )
           })}
           {results.length === 0 && query && (
-            <div className="px-4 py-6 text-center text-[#4a5c6e] text-xs">No files found</div>
+            <div className="px-4 py-6 text-center text-[var(--c-text-faint)] text-xs">No files found</div>
           )}
         </div>
       </div>

@@ -147,9 +147,9 @@ export function BriefingModal({ onClose }: BriefingModalProps) {
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 backdrop-blur-[2px] animate-backdrop-fade-in"
       onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
     >
-      <div className="bg-[#0c1018] border border-[#2a3440] rounded-xl shadow-2xl w-[820px] max-h-[80vh] overflow-hidden flex flex-col animate-modal-scale-in">
+      <div className="bg-[var(--c-bg-surface)] border border-[var(--c-border)] rounded-xl shadow-2xl w-[820px] max-h-[80vh] overflow-hidden flex flex-col animate-modal-scale-in">
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-[#2a3440]">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--c-border)]">
           <div className="flex items-center gap-3">
             <div className="w-2.5 h-2.5 rounded-full bg-blue-400" />
             <h2 className="text-sm font-semibold text-white">Mission Control</h2>
@@ -157,7 +157,7 @@ export function BriefingModal({ onClose }: BriefingModalProps) {
               BRIEFING
             </span>
             {briefingDate && (
-              <span className="text-xs text-[#3a4858] ml-2">{briefingDate}</span>
+              <span className="text-xs text-[var(--c-border-hover)] ml-2">{briefingDate}</span>
             )}
           </div>
           <div className="flex items-center gap-2">
@@ -184,7 +184,7 @@ export function BriefingModal({ onClose }: BriefingModalProps) {
             </button>
             <button
               onClick={onClose}
-              className="text-[#3a4858] hover:text-white transition-colors text-lg leading-none px-1"
+              className="text-[var(--c-border-hover)] hover:text-white transition-colors text-lg leading-none px-1"
             >
               &times;
             </button>
@@ -194,21 +194,21 @@ export function BriefingModal({ onClose }: BriefingModalProps) {
         {/* Body */}
         <div className="flex-1 overflow-hidden flex min-h-0">
           {/* Sidebar — past briefings */}
-          <div className="w-[180px] border-r border-[#2a3440] overflow-auto shrink-0">
-            <div className="px-3 py-2 border-b border-[#2a3440]">
-              <p className="text-xs text-[#3a4858] uppercase font-medium">History</p>
+          <div className="w-[180px] border-r border-[var(--c-border)] overflow-auto shrink-0">
+            <div className="px-3 py-2 border-b border-[var(--c-border)]">
+              <p className="text-xs text-[var(--c-border-hover)] uppercase font-medium">History</p>
             </div>
             {allDates.length === 0 && !loading && (
-              <p className="text-xs text-[#2a3440] px-3 py-2">No briefings yet</p>
+              <p className="text-xs text-[var(--c-border)] px-3 py-2">No briefings yet</p>
             )}
             {allDates.map(date => (
               <button
                 key={date}
                 onClick={() => loadBriefing(date)}
-                className={`stagger-item w-full text-left px-3 py-2 text-xs hover:bg-[#141a22]/60 transition-colors border-b border-[#2a3440]/50 ${
+                className={`stagger-item w-full text-left px-3 py-2 text-xs hover:bg-[color-mix(in_srgb,var(--c-bg-elevated)_60%,transparent)] transition-colors border-b border-[color-mix(in_srgb,var(--c-border)_50%,transparent)] ${
                   briefingDate === date
-                    ? 'bg-[#141a22]/80 text-blue-400 border-l-2 border-blue-500'
-                    : 'text-[#5a6a7a]'
+                    ? 'bg-[color-mix(in_srgb,var(--c-bg-elevated)_80%,transparent)] text-blue-400 border-l-2 border-blue-500'
+                    : 'text-[var(--c-text-muted)]'
                 }`}
               >
                 {date}
@@ -220,16 +220,16 @@ export function BriefingModal({ onClose }: BriefingModalProps) {
           <div className="flex-1 overflow-auto px-5 py-4">
             {loading && (
               <div className="flex flex-col gap-3 pt-2">
-                <div className="animate-shimmer h-3 w-full bg-[#141a22]/50 rounded" />
-                <div className="animate-shimmer h-3 w-4/5 bg-[#141a22]/50 rounded" />
-                <div className="animate-shimmer h-3 w-3/5 bg-[#141a22]/50 rounded" />
+                <div className="animate-shimmer h-3 w-full bg-[color-mix(in_srgb,var(--c-bg-elevated)_50%,transparent)] rounded" />
+                <div className="animate-shimmer h-3 w-4/5 bg-[color-mix(in_srgb,var(--c-bg-elevated)_50%,transparent)] rounded" />
+                <div className="animate-shimmer h-3 w-3/5 bg-[color-mix(in_srgb,var(--c-bg-elevated)_50%,transparent)] rounded" />
               </div>
             )}
             {!loading && !content && (
               <div className="flex flex-col items-center justify-center h-full gap-4">
                 <div className="text-center">
-                  <p className="text-[#5a6a7a] text-sm font-medium mb-1">No briefings found</p>
-                  <p className="text-[#2a3440] text-xs">Generate your first daily briefing to get started.</p>
+                  <p className="text-[var(--c-text-muted)] text-sm font-medium mb-1">No briefings found</p>
+                  <p className="text-[var(--c-border)] text-xs">Generate your first daily briefing to get started.</p>
                 </div>
                 <button
                   onClick={generateNow}
@@ -252,13 +252,13 @@ export function BriefingModal({ onClose }: BriefingModalProps) {
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between px-5 py-3 border-t border-[#2a3440]">
-          <p className="text-xs text-[#2a3440]">
+        <div className="flex items-center justify-between px-5 py-3 border-t border-[var(--c-border)]">
+          <p className="text-xs text-[var(--c-border)]">
             {allDates.length} briefing{allDates.length !== 1 ? 's' : ''} available
           </p>
           <button
             onClick={loadLatest}
-            className="px-3 py-1 text-xs bg-[#141a22] hover:bg-[#2a3440] rounded border border-[#2a3440] text-[#8a96a4] transition-colors"
+            className="px-3 py-1 text-xs bg-[var(--c-bg-elevated)] hover:bg-[var(--c-border)] rounded border border-[var(--c-border)] text-[var(--c-text-secondary)] transition-colors"
           >
             Refresh
           </button>
@@ -286,17 +286,17 @@ export function BriefingModal({ onClose }: BriefingModalProps) {
         }
         .md-content .md-link { text-decoration: underline; text-underline-offset: 2px; }
 
-        /* Dark theme (always active) */
-        .md-content h1 { color: #f1f5f9; }
-        .md-content h2 { color: #e2e8f0; }
-        .md-content h3 { color: #cbd5e1; }
-        .md-content p, .md-content li { color: #94a3b8; }
-        .md-content hr { border-top: 1px solid #334155; }
-        .md-content strong { color: #e2e8f0; }
-        .md-content em { color: #a5b4c8; }
-        .md-content .md-inline-code { background: #1e293b; color: #93c5fd; }
-        .md-content .md-code-block { background: #0f172a; border: 1px solid #1e293b; color: #93c5fd; }
-        .md-content .md-link { color: #60a5fa; }
+        /* Theme-aware markdown */
+        .md-content h1 { color: var(--c-text-bright); }
+        .md-content h2 { color: var(--c-text-heading); }
+        .md-content h3 { color: var(--c-text-primary); }
+        .md-content p, .md-content li { color: var(--c-text-secondary); }
+        .md-content hr { border-top: 1px solid var(--c-border); }
+        .md-content strong { color: var(--c-text-bright); }
+        .md-content em { color: var(--c-text-primary); }
+        .md-content .md-inline-code { background: var(--c-bg-elevated); color: var(--c-accent-blue); }
+        .md-content .md-code-block { background: var(--c-bg-chrome); border: 1px solid var(--c-border); color: var(--c-accent-blue); }
+        .md-content .md-link { color: var(--c-accent-blue); }
         .md-content .md-wikilink { color: #a78bfa; }
       `}</style>
     </div>

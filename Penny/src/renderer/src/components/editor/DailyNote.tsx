@@ -49,7 +49,7 @@ tags: [daily]
   return (
     <button
       onClick={handleCreate}
-      className="text-xs text-[#5a6a7a] hover:text-[#c4ccd6] px-2 py-1 rounded bg-[#141a22]/40 transition-colors"
+      className="text-xs text-[var(--c-text-muted)] hover:text-[var(--c-text-primary)] px-2 py-1 rounded bg-[color-mix(in_srgb,var(--c-bg-elevated)_40%,transparent)] transition-colors"
       title="Open today's daily note"
     >
       Today

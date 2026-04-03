@@ -43,7 +43,7 @@ export function TasksPanel() {
   }, [])
 
   const columns = [
-    { key: 'queued', label: 'Queued', statuses: ['queued'], dot: 'bg-[#3a4858]' },
+    { key: 'queued', label: 'Queued', statuses: ['queued'], dot: 'bg-[var(--c-border-hover)]' },
     { key: 'active', label: 'In Progress', statuses: ['assigned', 'active'], dot: 'bg-amber-400' },
     { key: 'done', label: 'Done', statuses: ['completed'], dot: 'bg-emerald-400' },
     { key: 'failed', label: 'Failed', statuses: ['failed', 'cancelled'], dot: 'bg-red-400' },
@@ -57,29 +57,29 @@ export function TasksPanel() {
         style={{ backgroundImage: 'url(tasks-bg.jpeg)' }}
       />
       {/* Dark overlay for readability */}
-      <div className="absolute inset-0 bg-[#080a0e]/[0.94]" />
-    <div className="relative h-full flex flex-col text-[#c4ccd6]">
+      <div className="absolute inset-0 bg-[color-mix(in_srgb,var(--c-bg-app)_94%,transparent)]" />
+    <div className="relative h-full flex flex-col text-[var(--c-text-primary)]">
       {/* Header */}
-      <div className="shrink-0 px-6 pt-6 pb-4 border-b border-[#2a3440]/60">
+      <div className="shrink-0 px-6 pt-6 pb-4 border-b border-[color-mix(in_srgb,var(--c-border)_60%,transparent)]">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-[#00e5ff]">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-[var(--c-accent-blue)]">
               <path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22" />
             </svg>
             <h1 className="text-lg font-semibold">Tasks</h1>
-            <span className="text-sm text-[#3a4858]">{cards.length} issues</span>
+            <span className="text-sm text-[var(--c-border-hover)]">{cards.length} issues</span>
           </div>
           <div className="flex items-center gap-3">
             <span className={`text-[11px] px-2 py-0.5 rounded-full border ${
               pollerRunning
                 ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
-                : 'bg-[#2a3440]/50 text-[#3a4858] border-[#2a3440]/30'
+                : 'bg-[color-mix(in_srgb,var(--c-border)_50%,transparent)] text-[var(--c-border-hover)] border-[color-mix(in_srgb,var(--c-border)_30%,transparent)]'
             }`}>
               {pollerRunning ? 'Polling' : 'Stopped'}
             </span>
             <button
               onClick={async () => { await window.api.githubPollNow(); setTimeout(refresh, 1500) }}
-              className="px-3 py-1.5 text-xs rounded-md bg-[#141a22] hover:bg-[#2a3440] border border-[#2a3440]/60 transition-colors"
+              className="px-3 py-1.5 text-xs rounded-md bg-[var(--c-bg-elevated)] hover:bg-[var(--c-border)] border border-[color-mix(in_srgb,var(--c-border)_60%,transparent)] transition-colors"
             >
               Poll Now
             </button>
@@ -88,13 +88,13 @@ export function TasksPanel() {
 
         {/* Watched repos */}
         <div className="flex items-center gap-2 mt-3 flex-wrap">
-          <span className="text-[11px] text-[#3a4858] uppercase tracking-wider">Watching:</span>
+          <span className="text-[11px] text-[var(--c-border-hover)] uppercase tracking-wider">Watching:</span>
           {repos.map(r => (
-            <span key={`${r.owner}/${r.repo}`} className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-[#141a22]/60 border border-[#2a3440]/40 text-xs text-[#8a96a4]">
+            <span key={`${r.owner}/${r.repo}`} className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-[color-mix(in_srgb,var(--c-bg-elevated)_60%,transparent)] border border-[color-mix(in_srgb,var(--c-border)_40%,transparent)] text-xs text-[var(--c-text-secondary)]">
               {r.owner}/{r.repo}
               <button
                 onClick={async () => { await window.api.githubRemoveRepo(r.owner, r.repo); refresh() }}
-                className="text-[#2a3440] hover:text-red-400 text-[10px] leading-none ml-0.5"
+                className="text-[var(--c-border)] hover:text-red-400 text-[10px] leading-none ml-0.5"
                 title="Stop watching"
               >
                 x
@@ -103,7 +103,7 @@ export function TasksPanel() {
           ))}
           <button
             onClick={() => setShowAddRepo(true)}
-            className="px-2 py-0.5 text-xs rounded-md bg-[#141a22] text-[#00e5ff] border border-[#2a3440] hover:bg-[#1e2830] transition-colors"
+            className="px-2 py-0.5 text-xs rounded-md bg-[var(--c-bg-elevated)] text-[var(--c-accent-blue)] border border-[var(--c-border)] hover:bg-[var(--c-border-subtle)] transition-colors"
           >
             + Add Repo
           </button>
@@ -113,12 +113,12 @@ export function TasksPanel() {
       {/* Kanban board */}
       <div className="flex-1 overflow-x-auto overflow-y-hidden p-4">
         {cards.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full text-[#3a4858] gap-2">
-            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-[#2a3440]">
+          <div className="flex flex-col items-center justify-center h-full text-[var(--c-border-hover)] gap-2">
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-[var(--c-border)]">
               <path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22" />
             </svg>
             <p className="text-sm">No issues tracked yet</p>
-            <p className="text-xs text-[#2a3440]">Label issues with <code className="px-1.5 py-0.5 bg-[#141a22] rounded text-[#00e5ff]">agent-ready</code> to queue them</p>
+            <p className="text-xs text-[var(--c-border)]">Label issues with <code className="px-1.5 py-0.5 bg-[var(--c-bg-elevated)] rounded text-[var(--c-accent-blue)]">agent-ready</code> to queue them</p>
           </div>
         ) : (
           <div className="flex gap-3 h-full min-w-max">
@@ -128,14 +128,14 @@ export function TasksPanel() {
                 <div key={col.key} className="w-64 flex flex-col shrink-0">
                   <div className="flex items-center gap-2 px-3 py-2 mb-2">
                     <span className={`w-2 h-2 rounded-full ${col.dot}`} />
-                    <span className="text-sm font-medium text-[#8a96a4]">{col.label}</span>
-                    <span className="text-xs text-[#3a4858] ml-auto">{colCards.length}</span>
+                    <span className="text-sm font-medium text-[var(--c-text-secondary)]">{col.label}</span>
+                    <span className="text-xs text-[var(--c-border-hover)] ml-auto">{colCards.length}</span>
                   </div>
                   <div className="flex-1 overflow-y-auto space-y-2 px-1">
                     {colCards.map(card => (
                       <div
                         key={card.taskId}
-                        className="bg-[#141a22]/60 border border-[#2a3440]/40 rounded-lg p-3 space-y-1.5 hover:border-[#2a3440]/60 transition-colors"
+                        className="bg-[color-mix(in_srgb,var(--c-bg-elevated)_60%,transparent)] border border-[color-mix(in_srgb,var(--c-border)_40%,transparent)] rounded-lg p-3 space-y-1.5 hover:border-[color-mix(in_srgb,var(--c-border)_60%,transparent)] transition-colors"
                       >
                         <div className="flex items-start justify-between gap-2">
                           <a
@@ -148,18 +148,18 @@ export function TasksPanel() {
                           <span className={`text-[10px] px-1.5 py-0.5 rounded border ${
                             card.priority === 'critical' ? 'bg-red-500/20 text-red-300 border-red-500/30' :
                             card.priority === 'high' ? 'bg-orange-500/20 text-orange-300 border-orange-500/30' :
-                            'bg-[#3a4858]/20 text-[#8a96a4] border-[#2a3440]/30'
+                            'bg-[color-mix(in_srgb,var(--c-border-hover)_20%,transparent)] text-[var(--c-text-secondary)] border-[color-mix(in_srgb,var(--c-border)_30%,transparent)]'
                           }`}>
                             {card.priority}
                           </span>
                         </div>
-                        <p className="text-sm text-[#c4ccd6] leading-snug line-clamp-2">{card.title}</p>
-                        <div className="flex items-center justify-between text-[11px] text-[#3a4858]">
+                        <p className="text-sm text-[var(--c-text-primary)] leading-snug line-clamp-2">{card.title}</p>
+                        <div className="flex items-center justify-between text-[11px] text-[var(--c-border-hover)]">
                           <span className="truncate max-w-[120px]">{card.repo}</span>
                           <span>{tasksTimeAgo(card.ingestedAt)}</span>
                         </div>
                         {card.assignedAgent && (
-                          <div className="text-[11px] text-[#00e5ff]/70 truncate">{card.assignedAgent}</div>
+                          <div className="text-[11px] text-[color-mix(in_srgb,var(--c-accent-blue)_70%,transparent)] truncate">{card.assignedAgent}</div>
                         )}
                         <div className="flex gap-1 pt-1">
                           {(card.taskStatus === 'queued' || card.taskStatus === 'assigned' || card.taskStatus === 'active') && (
@@ -218,37 +218,37 @@ function AddRepoModal({ onSubmit, onClose }: {
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50">
-      <div className="bg-[#0c1018] border border-[#2a3440] rounded-xl w-[440px] p-5 space-y-4">
-        <h3 className="text-lg font-semibold text-[#c4ccd6]">Watch Repository</h3>
+      <div className="bg-[var(--c-bg-surface)] border border-[var(--c-border)] rounded-xl w-[440px] p-5 space-y-4">
+        <h3 className="text-lg font-semibold text-[var(--c-text-primary)]">Watch Repository</h3>
         <div>
-          <label className="text-xs text-[#5a6a7a] mb-1 block">Repository (URL or owner/repo)</label>
+          <label className="text-xs text-[var(--c-text-muted)] mb-1 block">Repository (URL or owner/repo)</label>
           <input
             value={repoUrl}
             onChange={e => setRepoUrl(e.target.value)}
             placeholder="e.g. graphiteatlas/atlas or https://github.com/org/repo"
-            className="w-full px-3 py-2 bg-[#141a22] border border-[#2a3440] rounded-lg text-sm text-[#c4ccd6] placeholder-[#2a3440] focus:outline-none focus:border-[#00e5ff]"
+            className="w-full px-3 py-2 bg-[var(--c-bg-elevated)] border border-[var(--c-border)] rounded-lg text-sm text-[var(--c-text-primary)] placeholder-[var(--c-border)] focus:outline-none focus:border-[var(--c-accent-blue)]"
           />
           {owner && repo && (
-            <p className="text-xs text-[#00e5ff] mt-1">{owner}/{repo}</p>
+            <p className="text-xs text-[var(--c-accent-blue)] mt-1">{owner}/{repo}</p>
           )}
         </div>
         <div>
-          <label className="text-xs text-[#5a6a7a] mb-1 block">Local clone path (for agent cwd)</label>
+          <label className="text-xs text-[var(--c-text-muted)] mb-1 block">Local clone path (for agent cwd)</label>
           <input
             value={localPath}
             onChange={e => setLocalPath(e.target.value)}
             placeholder="e.g. ~/ComSci/Workspace/org/repo"
-            className="w-full px-3 py-2 bg-[#141a22] border border-[#2a3440] rounded-lg text-sm text-[#c4ccd6] placeholder-[#2a3440] focus:outline-none focus:border-[#00e5ff]"
+            className="w-full px-3 py-2 bg-[var(--c-bg-elevated)] border border-[var(--c-border)] rounded-lg text-sm text-[var(--c-text-primary)] placeholder-[var(--c-border)] focus:outline-none focus:border-[var(--c-accent-blue)]"
           />
         </div>
         <div className="flex justify-end gap-2 pt-2">
-          <button onClick={onClose} className="px-4 py-2 text-sm text-[#5a6a7a] hover:text-[#c4ccd6]">
+          <button onClick={onClose} className="px-4 py-2 text-sm text-[var(--c-text-muted)] hover:text-[var(--c-text-primary)]">
             Cancel
           </button>
           <button
             onClick={() => { if (owner && repo && localPath.trim()) onSubmit(owner, repo, localPath.trim()) }}
             disabled={!owner || !repo || !localPath.trim()}
-            className="px-4 py-2 text-sm bg-[#00ff88] hover:bg-[#00cc6e] disabled:opacity-30 text-[#0a0e14] font-medium rounded-lg"
+            className="px-4 py-2 text-sm bg-[var(--c-accent)] hover:bg-[#00cc6e] disabled:opacity-30 text-[var(--c-bg-chrome)] font-medium rounded-lg"
           >
             Watch
           </button>
@@ -408,11 +408,11 @@ function OrchestratorContent({ onClose }: { onClose?: () => void }) {
   return (
     <>
       {/* Header */}
-      <div className="flex items-center justify-between px-5 py-4 border-b border-[#2a3440] shrink-0">
+      <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--c-border)] shrink-0">
         <div className="flex items-center gap-3">
-          <span className="text-lg font-semibold text-[#c4ccd6]">Tasks</span>
+          <span className="text-lg font-semibold text-[var(--c-text-primary)]">Tasks</span>
           {tab !== 'veritas' && stats && (
-            <div className="flex items-center gap-3 text-xs text-[#5a6a7a]">
+            <div className="flex items-center gap-3 text-xs text-[var(--c-text-muted)]">
               <span>{stats.queueDepth} queued</span>
               <span>{stats.activeTasks} active</span>
               <span className="text-emerald-400">{stats.completedToday} done today</span>
@@ -422,7 +422,7 @@ function OrchestratorContent({ onClose }: { onClose?: () => void }) {
             </div>
           )}
           {tab === 'github' && githubCards.length > 0 && (
-            <div className="flex items-center gap-3 text-xs text-[#5a6a7a]">
+            <div className="flex items-center gap-3 text-xs text-[var(--c-text-muted)]">
               <span>{githubCards.filter(c => c.taskStatus === 'queued').length} queued</span>
               <span>{githubCards.filter(c => c.taskStatus === 'active' || c.taskStatus === 'assigned').length} active</span>
               <span className="text-emerald-400">{githubCards.filter(c => c.taskStatus === 'completed').length} done</span>
@@ -432,7 +432,7 @@ function OrchestratorContent({ onClose }: { onClose?: () => void }) {
             </div>
           )}
           {tab === 'veritas' && veritasCounts && (
-            <div className="flex items-center gap-3 text-xs text-[#5a6a7a]">
+            <div className="flex items-center gap-3 text-xs text-[var(--c-text-muted)]">
               <span>{veritasCounts.todo} todo</span>
               <span>{veritasCounts['in-progress']} in progress</span>
               <span>{veritasCounts.blocked} blocked</span>
@@ -458,7 +458,7 @@ function OrchestratorContent({ onClose }: { onClose?: () => void }) {
           {onClose && (
             <button
               onClick={onClose}
-              className="text-[#3a4858] hover:text-[#8a96a4] text-xl leading-none"
+              className="text-[var(--c-border-hover)] hover:text-[var(--c-text-secondary)] text-xl leading-none"
             >
               x
             </button>
@@ -487,7 +487,7 @@ function OrchestratorContent({ onClose }: { onClose?: () => void }) {
           <div className="flex items-center gap-2">
             <button
               onClick={() => { void window.api.veritasOpen() }}
-              className="px-3 py-1 bg-[#2a3440] hover:bg-[#2a3440] text-[#c4ccd6] text-xs rounded-md"
+              className="px-3 py-1 bg-[var(--c-border)] hover:bg-[var(--c-border)] text-[var(--c-text-primary)] text-xs rounded-md"
             >
               Open Board
             </button>
@@ -504,7 +504,7 @@ function OrchestratorContent({ onClose }: { onClose?: () => void }) {
             <span className={`text-[10px] px-2 py-0.5 rounded-full border ${
               githubPollerRunning
                 ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
-                : 'bg-[#2a3440]/50 text-[#3a4858] border-[#2a3440]/30'
+                : 'bg-[color-mix(in_srgb,var(--c-border)_50%,transparent)] text-[var(--c-border-hover)] border-[color-mix(in_srgb,var(--c-border)_30%,transparent)]'
             }`}>
               {githubPollerRunning ? 'Polling' : 'Stopped'}
             </span>
@@ -513,7 +513,7 @@ function OrchestratorContent({ onClose }: { onClose?: () => void }) {
                 await window.api.githubPollNow()
                 await loadGithubData()
               }}
-              className="px-3 py-1 bg-[#2a3440] hover:bg-[#2a3440] text-[#c4ccd6] text-xs rounded-md"
+              className="px-3 py-1 bg-[var(--c-border)] hover:bg-[var(--c-border)] text-[var(--c-text-primary)] text-xs rounded-md"
             >
               Poll Now
             </button>
@@ -573,7 +573,7 @@ export function OrchestratorModal({ onClose }: { onClose: () => void }) {
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 backdrop-blur-[2px] animate-backdrop-fade-in"
       data-disable-office-hotkeys="true"
     >
-      <div className="bg-[#0c1018] border border-[#2a3440] rounded-xl w-[900px] max-h-[84vh] flex flex-col shadow-2xl animate-modal-scale-in">
+      <div className="bg-[var(--c-bg-surface)] border border-[var(--c-border)] rounded-xl w-[900px] max-h-[84vh] flex flex-col shadow-2xl animate-modal-scale-in">
         <OrchestratorContent onClose={onClose} />
       </div>
     </div>
@@ -587,9 +587,9 @@ function TaskQueueView({ tasks, onRefresh }: { tasks: Task[]; onRefresh: () => v
     return (
       <div className="space-y-2">
         {[1, 2, 3].map(n => (
-          <div key={n} className="animate-shimmer h-14 rounded-lg bg-[#141a22]/50 border border-[#2a3440]/50" />
+          <div key={n} className="animate-shimmer h-14 rounded-lg bg-[color-mix(in_srgb,var(--c-bg-elevated)_50%,transparent)] border border-[color-mix(in_srgb,var(--c-border)_50%,transparent)]" />
         ))}
-        <div className="text-center text-[#3a4858] py-4 text-xs">
+        <div className="text-center text-[var(--c-border-hover)] py-4 text-xs">
           No tasks in queue. Create one with the + button or use <code>!task</code> in Slack.
         </div>
       </div>
@@ -616,14 +616,14 @@ function TaskRow({ task, onRefresh }: { task: Task; onRefresh: () => void }) {
     active: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30',
     completed: 'bg-green-500/20 text-green-400 border-green-500/30',
     failed: 'bg-red-500/20 text-red-400 border-red-500/30',
-    cancelled: 'bg-[#3a4858]/20 text-[#5a6a7a] border-[#2a3440]/30',
+    cancelled: 'bg-[color-mix(in_srgb,var(--c-border-hover)_20%,transparent)] text-[var(--c-text-muted)] border-[color-mix(in_srgb,var(--c-border)_30%,transparent)]',
   }
 
   const priorityColors: Record<string, string> = {
     critical: 'text-red-400',
     high: 'text-orange-400',
-    normal: 'text-[#8a96a4]',
-    low: 'text-[#3a4858]',
+    normal: 'text-[var(--c-text-secondary)]',
+    low: 'text-[var(--c-border-hover)]',
   }
 
   const age = formatAge(task.createdAt)
@@ -631,21 +631,21 @@ function TaskRow({ task, onRefresh }: { task: Task; onRefresh: () => void }) {
   const hasStages = task.stageResults && task.stageResults.length > 0
 
   return (
-    <div className="bg-[#141a22]/50 border border-[#2a3440]/50 rounded-lg">
+    <div className="bg-[color-mix(in_srgb,var(--c-bg-elevated)_50%,transparent)] border border-[color-mix(in_srgb,var(--c-border)_50%,transparent)] rounded-lg">
       <div className="flex items-center gap-3 p-3">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
             <span className={`text-[11px] font-medium ${priorityColors[task.priority]}`}>
               {task.priority.toUpperCase()}
             </span>
-            <span className="text-sm text-[#c4ccd6] truncate">{task.title}</span>
+            <span className="text-sm text-[var(--c-text-primary)] truncate">{task.title}</span>
             {task.provider === 'ollama' && (
               <span className="text-[9px] px-1.5 py-0.5 rounded bg-purple-600/20 text-purple-400 border border-purple-500/30">
                 ollama
               </span>
             )}
           </div>
-          <div className="flex items-center gap-2 mt-1 text-xs text-[#3a4858]">
+          <div className="flex items-center gap-2 mt-1 text-xs text-[var(--c-border-hover)]">
             <span>{age}</span>
             <span>via {task.source}</span>
             {task.assignedAgent && <span>{'-> '}{task.assignedAgent}</span>}
@@ -665,7 +665,7 @@ function TaskRow({ task, onRefresh }: { task: Task; onRefresh: () => void }) {
           {hasStages && (
             <button
               onClick={() => setExpanded(!expanded)}
-              className="px-2 py-1 text-[10px] bg-[#2a3440]/50 text-[#5a6a7a] hover:bg-[#2a3440] rounded"
+              className="px-2 py-1 text-[10px] bg-[color-mix(in_srgb,var(--c-border)_50%,transparent)] text-[var(--c-text-muted)] hover:bg-[var(--c-border)] rounded"
             >
               {expanded ? 'Hide' : 'Detail'}
             </button>
@@ -691,7 +691,7 @@ function TaskRow({ task, onRefresh }: { task: Task; onRefresh: () => void }) {
 
       {/* Expanded stage detail */}
       {expanded && hasStages && (
-        <div className="px-3 pb-3 space-y-2 border-t border-[#2a3440]/30 pt-2 animate-fade-slide-down">
+        <div className="px-3 pb-3 space-y-2 border-t border-[color-mix(in_srgb,var(--c-border)_30%,transparent)] pt-2 animate-fade-slide-down">
           {task.stageResults!.map((sr, i) => (
             <StageResultRow key={i} result={sr} />
           ))}
@@ -732,14 +732,14 @@ function StageDots({
                 ? '(c)'
                 : ''
 
-        let dotClass = 'bg-[#2a3440] text-[#3a4858]'
+        let dotClass = 'bg-[var(--c-border)] text-[var(--c-border-hover)]'
         if (isDone) dotClass = 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40'
         else if (isFailed) dotClass = 'bg-red-500/20 text-red-400 border-red-500/40'
         else if (isActive) dotClass = 'bg-blue-500/20 text-blue-400 border-blue-500/40 animate-breathe-glow'
 
         return (
           <div key={stage} className="flex items-center">
-            {idx > 0 && <div className="w-2 h-px bg-[#2a3440] mx-0.5" />}
+            {idx > 0 && <div className="w-2 h-px bg-[var(--c-border)] mx-0.5" />}
             <span
               className={`px-1.5 py-0.5 rounded text-[9px] font-medium border ${dotClass}`}
               title={result ? `${stage}: ${result.success ? 'PASS' : 'FAIL'} (${Math.round(result.durationMs / 1000)}s, ${result.provider})` : stage}
@@ -761,7 +761,7 @@ function StageResultRow({ result }: { result: StageResult }) {
         <span className={`font-medium ${result.success ? 'text-emerald-400' : 'text-red-400'}`}>
           {STAGE_LABELS[result.stage] || result.stage}
         </span>
-        <span className="text-[#3a4858]">{Math.round(result.durationMs / 1000)}s</span>
+        <span className="text-[var(--c-border-hover)]">{Math.round(result.durationMs / 1000)}s</span>
         <span className={`px-1 rounded text-[9px] ${
           result.provider === 'ollama'
             ? 'bg-purple-600/20 text-purple-400'
@@ -777,7 +777,7 @@ function StageResultRow({ result }: { result: StageResult }) {
           {result.success ? 'PASS' : 'FAIL'}
         </span>
       </div>
-      <pre className="text-[#5a6a7a] whitespace-pre-wrap text-[10px] max-h-24 overflow-y-auto bg-[#0c1018]/50 rounded px-2 py-1">
+      <pre className="text-[var(--c-text-muted)] whitespace-pre-wrap text-[10px] max-h-24 overflow-y-auto bg-[color-mix(in_srgb,var(--c-bg-surface)_50%,transparent)] rounded px-2 py-1">
         {result.output.slice(0, 500) || '(no output)'}
       </pre>
     </div>
@@ -788,7 +788,7 @@ function StageResultRow({ result }: { result: StageResult }) {
 
 function AgentHealthView({ health, onRefresh }: { health: AgentHealthStatus[]; onRefresh: () => void }) {
   if (health.length === 0) {
-    return <div className="text-center text-[#3a4858] py-12">No agents configured.</div>
+    return <div className="text-center text-[var(--c-border-hover)] py-12">No agents configured.</div>
   }
 
   return (
@@ -806,15 +806,15 @@ function AgentHealthRow({ agent, onRefresh }: { agent: AgentHealthStatus; onRefr
   const statusDot = {
     healthy: 'bg-emerald-400',
     warning: 'bg-yellow-400',
-    dead: 'bg-[#2a3440]',
+    dead: 'bg-[var(--c-border)]',
   }[agent.status]
 
   return (
-    <div className="flex items-center gap-3 p-3 bg-[#141a22]/50 border border-[#2a3440]/50 rounded-lg">
+    <div className="flex items-center gap-3 p-3 bg-[color-mix(in_srgb,var(--c-bg-elevated)_50%,transparent)] border border-[color-mix(in_srgb,var(--c-border)_50%,transparent)] rounded-lg">
       <div className={`w-2.5 h-2.5 rounded-full ${statusDot}`} />
       <div className="flex-1 min-w-0">
-        <div className="text-sm text-[#c4ccd6]">{agent.name}</div>
-        <div className="flex items-center gap-3 mt-0.5 text-xs text-[#3a4858]">
+        <div className="text-sm text-[var(--c-text-primary)]">{agent.name}</div>
+        <div className="flex items-center gap-3 mt-0.5 text-xs text-[var(--c-border-hover)]">
           {agent.alive && (
             <>
               <span>PID {agent.pid}</span>
@@ -866,15 +866,15 @@ function VeritasBoardView({
 }) {
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between p-3 bg-[#141a22]/40 border border-[#2a3440]/40 rounded-lg">
+      <div className="flex items-center justify-between p-3 bg-[color-mix(in_srgb,var(--c-bg-elevated)_40%,transparent)] border border-[color-mix(in_srgb,var(--c-border)_40%,transparent)] rounded-lg">
         <div>
-          <p className="text-sm text-[#c4ccd6]">Veritas API</p>
-          <p className="text-xs text-[#3a4858]">
+          <p className="text-sm text-[var(--c-text-primary)]">Veritas API</p>
+          <p className="text-xs text-[var(--c-border-hover)]">
             {status?.apiUrl || 'Unknown URL'}
           </p>
         </div>
         <div className="flex items-center gap-3 text-xs">
-          <span className={status?.running ? 'text-emerald-400' : 'text-[#3a4858]'}>
+          <span className={status?.running ? 'text-emerald-400' : 'text-[var(--c-border-hover)]'}>
             Service: {status?.running ? 'running' : 'stopped'}
           </span>
           <span className={status?.apiReachable ? 'text-emerald-400' : 'text-amber-400'}>
@@ -882,7 +882,7 @@ function VeritasBoardView({
           </span>
           <button
             onClick={onRefresh}
-            className="px-2 py-1 bg-[#2a3440] hover:bg-[#2a3440] text-[#c4ccd6] rounded"
+            className="px-2 py-1 bg-[var(--c-border)] hover:bg-[var(--c-border)] text-[var(--c-text-primary)] rounded"
           >
             Refresh
           </button>
@@ -907,9 +907,9 @@ function VeritasBoardView({
       )}
 
       {loading && tasks.length === 0 ? (
-        <div className="text-center text-[#3a4858] py-12">Loading Veritas tasks...</div>
+        <div className="text-center text-[var(--c-border-hover)] py-12">Loading Veritas tasks...</div>
       ) : tasks.length === 0 ? (
-        <div className="text-center text-[#3a4858] py-12">
+        <div className="text-center text-[var(--c-border-hover)] py-12">
           No Veritas tasks found. Create one with the button above.
         </div>
       ) : (
@@ -931,9 +931,9 @@ function VeritasBoardView({
 
 function VeritasCountCard({ label, value }: { label: string; value: number }) {
   return (
-    <div className="rounded border border-[#2a3440]/40 bg-[#141a22]/30 px-2 py-1.5">
-      <p className="text-[10px] uppercase tracking-wide text-[#3a4858]">{label}</p>
-      <p className="text-sm text-[#c4ccd6] font-semibold">{value}</p>
+    <div className="rounded border border-[color-mix(in_srgb,var(--c-border)_40%,transparent)] bg-[color-mix(in_srgb,var(--c-bg-elevated)_30%,transparent)] px-2 py-1.5">
+      <p className="text-[10px] uppercase tracking-wide text-[var(--c-border-hover)]">{label}</p>
+      <p className="text-sm text-[var(--c-text-primary)] font-semibold">{value}</p>
     </div>
   )
 }
@@ -948,28 +948,28 @@ function VeritasTaskRow({
   onUpdateStatus: (taskId: string, status: VeritasTaskStatus) => Promise<void>
 }) {
   const statusColors: Record<VeritasTaskStatus, string> = {
-    todo: 'bg-[#3a4858]/20 text-[#8a96a4] border-[#2a3440]/30',
+    todo: 'bg-[color-mix(in_srgb,var(--c-border-hover)_20%,transparent)] text-[var(--c-text-secondary)] border-[color-mix(in_srgb,var(--c-border)_30%,transparent)]',
     'in-progress': 'bg-blue-500/20 text-blue-300 border-blue-500/30',
     blocked: 'bg-amber-500/20 text-amber-300 border-amber-500/30',
     done: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30',
   }
 
   const priorityColors: Record<VeritasTaskPriority, string> = {
-    low: 'text-[#5a6a7a]',
-    medium: 'text-[#c4ccd6]',
+    low: 'text-[var(--c-text-muted)]',
+    medium: 'text-[var(--c-text-primary)]',
     high: 'text-orange-300',
   }
 
   return (
-    <div className="flex items-center gap-3 p-3 bg-[#141a22]/50 border border-[#2a3440]/50 rounded-lg">
+    <div className="flex items-center gap-3 p-3 bg-[color-mix(in_srgb,var(--c-bg-elevated)_50%,transparent)] border border-[color-mix(in_srgb,var(--c-border)_50%,transparent)] rounded-lg">
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
           <span className={`text-[11px] font-medium ${priorityColors[task.priority]}`}>
             {task.priority.toUpperCase()}
           </span>
-          <span className="text-sm text-[#c4ccd6] truncate">{task.title}</span>
+          <span className="text-sm text-[var(--c-text-primary)] truncate">{task.title}</span>
         </div>
-        <div className="flex items-center gap-2 mt-1 text-xs text-[#3a4858]">
+        <div className="flex items-center gap-2 mt-1 text-xs text-[var(--c-border-hover)]">
           <span>{formatAge(task.updated || task.created || '')}</span>
           <span>{task.id}</span>
           {task.project && <span>{task.project}</span>}
@@ -988,7 +988,7 @@ function VeritasTaskRow({
         value={task.status}
         onChange={e => { void onUpdateStatus(task.id, e.target.value as VeritasTaskStatus) }}
         disabled={updating}
-        className="bg-[#141a22] border border-[#2a3440] rounded px-2 py-1 text-xs text-[#c4ccd6] disabled:opacity-50"
+        className="bg-[var(--c-bg-elevated)] border border-[var(--c-border)] rounded px-2 py-1 text-xs text-[var(--c-text-primary)] disabled:opacity-50"
         title="Update Veritas task status"
       >
         <option value="todo">todo</option>
@@ -1016,31 +1016,31 @@ function EnqueueModal({
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50">
-      <div className="bg-[#0c1018] border border-[#2a3440] rounded-xl w-[480px] p-5 space-y-4">
-        <h3 className="text-lg font-semibold text-[#c4ccd6]">New Task</h3>
+      <div className="bg-[var(--c-bg-surface)] border border-[var(--c-border)] rounded-xl w-[480px] p-5 space-y-4">
+        <h3 className="text-lg font-semibold text-[var(--c-text-primary)]">New Task</h3>
         <input
           value={title}
           onChange={e => setTitle(e.target.value)}
           placeholder="Task title"
-          className="w-full px-3 py-2 bg-[#141a22] border border-[#2a3440] rounded-lg text-sm text-[#c4ccd6] placeholder-[#2a3440] focus:outline-none focus:border-blue-500"
+          className="w-full px-3 py-2 bg-[var(--c-bg-elevated)] border border-[var(--c-border)] rounded-lg text-sm text-[var(--c-text-primary)] placeholder-[var(--c-border)] focus:outline-none focus:border-blue-500"
         />
         <textarea
           value={description}
           onChange={e => setDescription(e.target.value)}
           placeholder="Full task description (sent to the agent)"
           rows={4}
-          className="w-full px-3 py-2 bg-[#141a22] border border-[#2a3440] rounded-lg text-sm text-[#c4ccd6] placeholder-[#2a3440] focus:outline-none focus:border-blue-500 resize-none"
+          className="w-full px-3 py-2 bg-[var(--c-bg-elevated)] border border-[var(--c-border)] rounded-lg text-sm text-[var(--c-text-primary)] placeholder-[var(--c-border)] focus:outline-none focus:border-blue-500 resize-none"
         />
         <input
           value={project}
           onChange={e => setProject(e.target.value)}
           placeholder="atlas, sidekick, or absolute path (~/…)"
-          className="w-full px-3 py-2 bg-[#141a22] border border-[#2a3440] rounded-lg text-sm text-[#c4ccd6] placeholder-[#2a3440] focus:outline-none focus:border-blue-500"
+          className="w-full px-3 py-2 bg-[var(--c-bg-elevated)] border border-[var(--c-border)] rounded-lg text-sm text-[var(--c-text-primary)] placeholder-[var(--c-border)] focus:outline-none focus:border-blue-500"
         />
         <select
           value={priority}
           onChange={e => setPriority(e.target.value)}
-          className="w-full px-3 py-2 bg-[#141a22] border border-[#2a3440] rounded-lg text-sm text-[#c4ccd6] focus:outline-none focus:border-blue-500"
+          className="w-full px-3 py-2 bg-[var(--c-bg-elevated)] border border-[var(--c-border)] rounded-lg text-sm text-[var(--c-text-primary)] focus:outline-none focus:border-blue-500"
         >
           <option value="critical">Critical</option>
           <option value="high">High</option>
@@ -1050,7 +1050,7 @@ function EnqueueModal({
         <div className="flex justify-end gap-2">
           <button
             onClick={onClose}
-            className="px-4 py-2 text-sm text-[#5a6a7a] hover:text-[#c4ccd6]"
+            className="px-4 py-2 text-sm text-[var(--c-text-muted)] hover:text-[var(--c-text-primary)]"
           >
             Cancel
           </button>
@@ -1087,31 +1087,31 @@ function VeritasCreateTaskModal({
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50">
-      <div className="bg-[#0c1018] border border-[#2a3440] rounded-xl w-[520px] p-5 space-y-4">
-        <h3 className="text-lg font-semibold text-[#c4ccd6]">New Veritas Task</h3>
+      <div className="bg-[var(--c-bg-surface)] border border-[var(--c-border)] rounded-xl w-[520px] p-5 space-y-4">
+        <h3 className="text-lg font-semibold text-[var(--c-text-primary)]">New Veritas Task</h3>
         <input
           value={title}
           onChange={e => setTitle(e.target.value)}
           placeholder="Task title"
-          className="w-full px-3 py-2 bg-[#141a22] border border-[#2a3440] rounded-lg text-sm text-[#c4ccd6] placeholder-[#2a3440] focus:outline-none focus:border-violet-500"
+          className="w-full px-3 py-2 bg-[var(--c-bg-elevated)] border border-[var(--c-border)] rounded-lg text-sm text-[var(--c-text-primary)] placeholder-[var(--c-border)] focus:outline-none focus:border-violet-500"
         />
         <textarea
           value={description}
           onChange={e => setDescription(e.target.value)}
           placeholder="Description (optional)"
           rows={4}
-          className="w-full px-3 py-2 bg-[#141a22] border border-[#2a3440] rounded-lg text-sm text-[#c4ccd6] placeholder-[#2a3440] focus:outline-none focus:border-violet-500 resize-none"
+          className="w-full px-3 py-2 bg-[var(--c-bg-elevated)] border border-[var(--c-border)] rounded-lg text-sm text-[var(--c-text-primary)] placeholder-[var(--c-border)] focus:outline-none focus:border-violet-500 resize-none"
         />
         <input
           value={project}
           onChange={e => setProject(e.target.value)}
           placeholder="Project (optional)"
-          className="w-full px-3 py-2 bg-[#141a22] border border-[#2a3440] rounded-lg text-sm text-[#c4ccd6] placeholder-[#2a3440] focus:outline-none focus:border-violet-500"
+          className="w-full px-3 py-2 bg-[var(--c-bg-elevated)] border border-[var(--c-border)] rounded-lg text-sm text-[var(--c-text-primary)] placeholder-[var(--c-border)] focus:outline-none focus:border-violet-500"
         />
         <select
           value={priority}
           onChange={e => setPriority(e.target.value as VeritasTaskPriority)}
-          className="w-full px-3 py-2 bg-[#141a22] border border-[#2a3440] rounded-lg text-sm text-[#c4ccd6] focus:outline-none focus:border-violet-500"
+          className="w-full px-3 py-2 bg-[var(--c-bg-elevated)] border border-[var(--c-border)] rounded-lg text-sm text-[var(--c-text-primary)] focus:outline-none focus:border-violet-500"
         >
           <option value="low">Low</option>
           <option value="medium">Medium</option>
@@ -1121,7 +1121,7 @@ function VeritasCreateTaskModal({
           <button
             onClick={onClose}
             disabled={submitting}
-            className="px-4 py-2 text-sm text-[#5a6a7a] hover:text-[#c4ccd6] disabled:opacity-50"
+            className="px-4 py-2 text-sm text-[var(--c-text-muted)] hover:text-[var(--c-text-primary)] disabled:opacity-50"
           >
             Cancel
           </button>
@@ -1158,12 +1158,12 @@ const KANBAN_COLUMNS: { key: string; label: string; statuses: string[]; color: s
 function GitHubKanbanView({ cards, onRefresh }: { cards: GitHubIssueCard[]; onRefresh: () => void }) {
   if (cards.length === 0) {
     return (
-      <div className="text-center text-[#3a4858] py-12 space-y-2">
+      <div className="text-center text-[var(--c-border-hover)] py-12 space-y-2">
         <p className="text-sm">No GitHub issues ingested yet.</p>
-        <p className="text-xs">Label issues with <code className="px-1.5 py-0.5 bg-[#141a22] rounded text-emerald-400">agent-ready</code> on GitHub to queue them.</p>
+        <p className="text-xs">Label issues with <code className="px-1.5 py-0.5 bg-[var(--c-bg-elevated)] rounded text-emerald-400">agent-ready</code> on GitHub to queue them.</p>
         <button
           onClick={async () => { await window.api.githubPollNow(); onRefresh() }}
-          className="mt-3 px-3 py-1.5 bg-[#2a3440] hover:bg-[#2a3440] text-[#c4ccd6] text-xs rounded-md"
+          className="mt-3 px-3 py-1.5 bg-[var(--c-border)] hover:bg-[var(--c-border)] text-[var(--c-text-primary)] text-xs rounded-md"
         >
           Poll Now
         </button>
@@ -1179,10 +1179,10 @@ function GitHubKanbanView({ cards, onRefresh }: { cards: GitHubIssueCard[]; onRe
   return (
     <div className="grid grid-cols-4 gap-3 min-h-[300px]">
       {columns.map(col => (
-        <div key={col.key} className={`rounded-lg border ${col.color} bg-[#141a22]/20 flex flex-col`}>
-          <div className="px-3 py-2 border-b border-[#2a3440]/30 flex items-center justify-between">
-            <span className="text-xs font-medium text-[#8a96a4]">{col.label}</span>
-            <span className="text-[10px] text-[#3a4858] bg-[#141a22] px-1.5 py-0.5 rounded-full">
+        <div key={col.key} className={`rounded-lg border ${col.color} bg-[color-mix(in_srgb,var(--c-bg-elevated)_20%,transparent)] flex flex-col`}>
+          <div className="px-3 py-2 border-b border-[color-mix(in_srgb,var(--c-border)_30%,transparent)] flex items-center justify-between">
+            <span className="text-xs font-medium text-[var(--c-text-secondary)]">{col.label}</span>
+            <span className="text-[10px] text-[var(--c-border-hover)] bg-[var(--c-bg-elevated)] px-1.5 py-0.5 rounded-full">
               {col.cards.length}
             </span>
           </div>
@@ -1201,8 +1201,8 @@ function GitHubIssueCardItem({ card, onRefresh }: { card: GitHubIssueCard; onRef
   const priorityDot: Record<string, string> = {
     critical: 'bg-red-400',
     high: 'bg-orange-400',
-    normal: 'bg-[#3a4858]',
-    low: 'bg-[#2a3440]',
+    normal: 'bg-[var(--c-border-hover)]',
+    low: 'bg-[var(--c-border)]',
   }
 
   const stageLabel = card.taskStage && card.taskStage !== 'queued' && card.taskStage !== 'done'
@@ -1210,10 +1210,10 @@ function GitHubIssueCardItem({ card, onRefresh }: { card: GitHubIssueCard; onRef
     : null
 
   return (
-    <div className="bg-[#141a22]/60 border border-[#2a3440]/40 rounded-md p-2.5 space-y-1.5 hover:border-[#2a3440]/60 transition-colors">
+    <div className="bg-[color-mix(in_srgb,var(--c-bg-elevated)_60%,transparent)] border border-[color-mix(in_srgb,var(--c-border)_40%,transparent)] rounded-md p-2.5 space-y-1.5 hover:border-[color-mix(in_srgb,var(--c-border)_60%,transparent)] transition-colors">
       <div className="flex items-start gap-1.5">
-        <div className={`w-1.5 h-1.5 rounded-full mt-1.5 flex-shrink-0 ${priorityDot[card.priority] || 'bg-[#3a4858]'}`} />
-        <span className="text-xs text-[#c4ccd6] leading-tight line-clamp-2">{card.title}</span>
+        <div className={`w-1.5 h-1.5 rounded-full mt-1.5 flex-shrink-0 ${priorityDot[card.priority] || 'bg-[var(--c-border-hover)]'}`} />
+        <span className="text-xs text-[var(--c-text-primary)] leading-tight line-clamp-2">{card.title}</span>
       </div>
       <div className="flex items-center gap-1.5 flex-wrap">
         <a
@@ -1224,19 +1224,19 @@ function GitHubIssueCardItem({ card, onRefresh }: { card: GitHubIssueCard; onRef
         >
           #{card.issueNumber}
         </a>
-        <span className="text-[10px] text-[#2a3440]">{card.repo.split('/')[1]}</span>
+        <span className="text-[10px] text-[var(--c-border)]">{card.repo.split('/')[1]}</span>
         {stageLabel && (
           <span className="text-[9px] px-1 py-0.5 rounded bg-blue-500/15 text-blue-400 border border-blue-500/20">
             {stageLabel}
           </span>
         )}
         {card.assignedAgent && (
-          <span className="text-[10px] text-[#3a4858] truncate max-w-[80px]" title={card.assignedAgent}>
+          <span className="text-[10px] text-[var(--c-border-hover)] truncate max-w-[80px]" title={card.assignedAgent}>
             {card.assignedAgent}
           </span>
         )}
       </div>
-      <div className="text-[10px] text-[#2a3440]">{formatAge(card.ingestedAt)}</div>
+      <div className="text-[10px] text-[var(--c-border)]">{formatAge(card.ingestedAt)}</div>
       {(card.taskStatus === 'queued' || card.taskStatus === 'assigned' || card.taskStatus === 'active') && (
         <button
           onClick={async () => { await window.api.orchestratorCancelTask(card.taskId); onRefresh() }}
@@ -1265,8 +1265,8 @@ function TabButton({ active, onClick, children }: { active: boolean; onClick: ()
       onClick={onClick}
       className={`px-3 py-1.5 text-xs rounded-md transition-all duration-150 ${
         active
-          ? 'bg-[#2a3440] text-[#c4ccd6]'
-          : 'text-[#5a6a7a] hover:text-[#c4ccd6] hover:bg-[#141a22]'
+          ? 'bg-[var(--c-border)] text-[var(--c-text-primary)]'
+          : 'text-[var(--c-text-muted)] hover:text-[var(--c-text-primary)] hover:bg-[var(--c-bg-elevated)]'
       }`}
     >
       {children}

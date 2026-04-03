@@ -133,23 +133,23 @@ function ClipCard({ clip, playing, onPlay, showCategory }: ClipCardProps) {
         'group relative flex flex-col gap-2 px-3.5 py-3 rounded-xl text-sm text-left min-h-[5.5rem]',
         'border transition-all duration-200',
         'hover:scale-[1.02] hover:-translate-y-0.5 active:scale-[0.98]',
-        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00ff88]/40 focus-visible:ring-offset-2 focus-visible:ring-offset-[#080a0e]',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color-mix(in_srgb,var(--c-accent)_40%,transparent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--c-bg-app)]',
         playing
           ? [
               'bg-[linear-gradient(145deg,rgba(0,255,136,0.14)_0%,rgba(12,18,26,0.95)_55%,rgba(8,12,18,0.98)_100%)]',
-              'border-[#00ff88]/45 text-[#e8f8f0]',
+              'border-[color-mix(in_srgb,var(--c-accent)_45%,transparent)] text-[#e8f8f0]',
               'shadow-[0_0_32px_-10px_rgba(0,255,136,0.45),inset_0_1px_0_0_rgba(255,255,255,0.06)]',
             ].join(' ')
           : [
               'bg-[linear-gradient(165deg,rgba(12,18,26,0.92)_0%,rgba(8,11,16,0.96)_100%)]',
-              'border-[#2a3440]/90 text-[#c4ccd6]',
-              'hover:border-[#00ff88]/25 hover:shadow-[0_12px_40px_-24px_rgba(0,0,0,0.55)]',
+              'border-[color-mix(in_srgb,var(--c-border)_90%,transparent)] text-[var(--c-text-primary)]',
+              'hover:border-[color-mix(in_srgb,var(--c-accent)_25%,transparent)] hover:shadow-[0_12px_40px_-24px_rgba(0,0,0,0.55)]',
             ].join(' '),
       ].join(' ')}
     >
       {playing && (
         <span
-          className="absolute top-2.5 right-2.5 w-2 h-2 rounded-full bg-[#00ff88] shadow-[0_0_10px_rgba(0,255,136,0.7)] animate-pulse"
+          className="absolute top-2.5 right-2.5 w-2 h-2 rounded-full bg-[var(--c-accent)] shadow-[0_0_10px_rgba(0,255,136,0.7)] animate-pulse"
           aria-hidden="true"
         />
       )}
@@ -159,7 +159,7 @@ function ClipCard({ clip, playing, onPlay, showCategory }: ClipCardProps) {
       </div>
 
       {showCategory && cat && (
-        <span className="text-[9px] uppercase tracking-[0.14em] text-[#5a6a7a] font-bold w-fit">
+        <span className="text-[9px] uppercase tracking-[0.14em] text-[var(--c-text-muted)] font-bold w-fit">
           {cat}
         </span>
       )}
@@ -167,13 +167,13 @@ function ClipCard({ clip, playing, onPlay, showCategory }: ClipCardProps) {
       <span
         className={[
           'mt-auto flex items-center gap-2',
-          playing ? 'text-[#00e5ff]' : 'text-[#4a5c6e] group-hover:text-[#00ff88]/70',
+          playing ? 'text-[var(--c-accent-blue)]' : 'text-[var(--c-text-faint)] group-hover:text-[color-mix(in_srgb,var(--c-accent)_70%,transparent)]',
           'transition-colors duration-200',
         ].join(' ')}
       >
         <Waveform playing={playing} />
         {playing && (
-          <span className="text-[10px] font-semibold tracking-wide uppercase text-[#00ff88]">
+          <span className="text-[10px] font-semibold tracking-wide uppercase text-[var(--c-accent)]">
             Live
           </span>
         )}
@@ -194,10 +194,10 @@ interface CategorySectionProps {
 function CategorySection({ category, clips, playingIds, onPlay }: CategorySectionProps) {
   return (
     <section aria-label={`${category} sounds`}>
-      <h2 className="animate-fade-slide-down flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.16em] text-[#5a6a7a] mb-2.5 px-0.5">
-        <span className="h-px w-8 shrink-0 bg-gradient-to-r from-[#00ff88]/35 to-transparent rounded-full" aria-hidden />
+      <h2 className="animate-fade-slide-down flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.16em] text-[var(--c-text-muted)] mb-2.5 px-0.5">
+        <span className="h-px w-8 shrink-0 bg-gradient-to-r from-[color-mix(in_srgb,var(--c-accent)_35%,transparent)] to-transparent rounded-full" aria-hidden />
         {category}
-        <span className="text-[#3a4858] font-mono tabular-nums font-semibold normal-case tracking-normal">
+        <span className="text-[var(--c-border-hover)] font-mono tabular-nums font-semibold normal-case tracking-normal">
           {clips.length}
         </span>
       </h2>
@@ -219,9 +219,9 @@ function CategorySection({ category, clips, playingIds, onPlay }: CategorySectio
 
 function EmptyState({ directory }: { directory: string }) {
   return (
-    <div className="animate-card-enter flex flex-col items-center justify-center gap-4 py-20 border border-dashed border-[#2a3440]/80 rounded-xl text-center bg-[#0c1018]/40 px-6">
+    <div className="animate-card-enter flex flex-col items-center justify-center gap-4 py-20 border border-dashed border-[color-mix(in_srgb,var(--c-border)_80%,transparent)] rounded-xl text-center bg-[color-mix(in_srgb,var(--c-bg-surface)_40%,transparent)] px-6">
       <svg
-        className="w-12 h-12 text-[#3a4858]"
+        className="w-12 h-12 text-[var(--c-border-hover)]"
         viewBox="0 0 24 24"
         fill="none"
         stroke="currentColor"
@@ -235,10 +235,10 @@ function EmptyState({ directory }: { directory: string }) {
         <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
       </svg>
       <div className="space-y-1 max-w-md">
-        <p className="text-[#c4ccd6] font-medium">No sound effects found</p>
-        <p className="text-[#5a6a7a] text-xs leading-relaxed">
-          Drop <code className="text-[#00e5ff]">.mp3</code> files into{' '}
-          <code className="text-[#8a96a4] break-all">{directory || 'sound-effects/'}</code>
+        <p className="text-[var(--c-text-primary)] font-medium">No sound effects found</p>
+        <p className="text-[var(--c-text-muted)] text-xs leading-relaxed">
+          Drop <code className="text-[var(--c-accent-blue)]">.mp3</code> files into{' '}
+          <code className="text-[var(--c-text-secondary)] break-all">{directory || 'sound-effects/'}</code>
         </p>
       </div>
     </div>
@@ -413,35 +413,35 @@ export function SoundboardPanel() {
     <PanelBackground>
       <div className="relative z-[1] h-full flex flex-col overflow-hidden min-h-0">
         {/* Header strip */}
-        <div className="office-status-hud shrink-0 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between px-5 py-3 border-b border-[#1e2838] backdrop-blur-[2px]">
+        <div className="office-status-hud shrink-0 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between px-5 py-3 border-b border-[var(--c-border-subtle)] backdrop-blur-[2px]">
           <div className="min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
-              <h1 className="text-base font-semibold text-[#dce4ec] tracking-tight">Soundboard</h1>
+              <h1 className="text-base font-semibold text-[var(--c-text-heading)] tracking-tight">Soundboard</h1>
               {playingIds.size > 0 && (
-                <span className="inline-flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#00ff88] bg-[#00ff88]/10 border border-[#00ff88]/25 rounded-full px-2 py-0.5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-[#00ff88] shadow-[0_0_8px_rgba(0,255,136,0.6)] animate-pulse" />
+                <span className="inline-flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--c-accent)] bg-[color-mix(in_srgb,var(--c-accent)_10%,transparent)] border border-[color-mix(in_srgb,var(--c-accent)_25%,transparent)] rounded-full px-2 py-0.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[var(--c-accent)] shadow-[0_0_8px_rgba(0,255,136,0.6)] animate-pulse" />
                   {playingIds.size} active
                 </span>
               )}
             </div>
-            <p className="text-[11px] text-[#5a6a7a] mt-0.5 truncate">
+            <p className="text-[11px] text-[var(--c-text-muted)] mt-0.5 truncate">
               {allClips.length} clip{allClips.length !== 1 ? 's' : ''}
               {listing?.directory && (
                 <>
                   {' · '}
-                  <span className="font-mono text-[#4a5c6e]" title={listing.directory}>
+                  <span className="font-mono text-[var(--c-text-faint)]" title={listing.directory}>
                     {listing.directory.split('/').slice(-2).join('/')}
                   </span>
                 </>
               )}
               {listing?.source && (
-                <span className="text-[#3a4858]"> · {sourceLabel(listing.source)}</span>
+                <span className="text-[var(--c-border-hover)]"> · {sourceLabel(listing.source)}</span>
               )}
             </p>
           </div>
 
           <div className="flex flex-wrap items-center gap-2 shrink-0">
-            <label className="flex items-center gap-2 text-[11px] text-[#6a7a8c] cursor-pointer">
+            <label className="flex items-center gap-2 text-[11px] text-[var(--c-text-dim)] cursor-pointer">
               <span className="whitespace-nowrap hidden sm:inline">Volume</span>
               <input
                 type="range"
@@ -449,19 +449,19 @@ export function SoundboardPanel() {
                 max={100}
                 value={Math.round(volume * 100)}
                 onChange={e => setVolume(Number(e.target.value) / 100)}
-                className="w-24 sm:w-28 h-1 accent-[#00ff88] bg-[#141a22] rounded-full"
+                className="w-24 sm:w-28 h-1 accent-[var(--c-accent)] bg-[var(--c-bg-elevated)] rounded-full"
                 aria-valuemin={0}
                 aria-valuemax={100}
                 aria-valuenow={Math.round(volume * 100)}
                 aria-label="Soundboard volume"
               />
-              <span className="tabular-nums text-[#4a5c6e] w-8 text-right">{Math.round(volume * 100)}%</span>
+              <span className="tabular-nums text-[var(--c-text-faint)] w-8 text-right">{Math.round(volume * 100)}%</span>
             </label>
             <button
               type="button"
               onClick={() => void loadListing()}
               disabled={loading}
-              className="px-3 py-1.5 rounded-lg text-xs font-medium text-[#8a96a4] bg-[#141a22] border border-[#2a3440] hover:border-[#00ff88]/25 hover:text-[#c4ccd6] transition-colors disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00ff88]/35"
+              className="px-3 py-1.5 rounded-lg text-xs font-medium text-[var(--c-text-secondary)] bg-[var(--c-bg-elevated)] border border-[var(--c-border)] hover:border-[color-mix(in_srgb,var(--c-accent)_25%,transparent)] hover:text-[var(--c-text-primary)] transition-colors disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color-mix(in_srgb,var(--c-accent)_35%,transparent)]"
             >
               {loading ? 'Refreshing…' : 'Refresh'}
             </button>
@@ -483,7 +483,7 @@ export function SoundboardPanel() {
               <div className="space-y-2">
                 <div className="relative">
                   <svg
-                    className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#4a5c6e] pointer-events-none"
+                    className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[var(--c-text-faint)] pointer-events-none"
                     viewBox="0 0 24 24"
                     fill="none"
                     stroke="currentColor"
@@ -502,15 +502,15 @@ export function SoundboardPanel() {
                     aria-label="Search sound clips"
                     className={[
                       'w-full pl-9 pr-3 py-2.5 rounded-xl text-sm',
-                      'bg-[#0a0e14]/90 border border-[#2a3440]/90',
-                      'text-[#dce4ec] placeholder:text-[#4a5c6e]',
-                      'focus:outline-none focus:ring-2 focus:ring-[#00ff88]/30 focus:border-[#00ff88]/35',
+                      'bg-[color-mix(in_srgb,var(--c-bg-chrome)_90%,transparent)] border border-[color-mix(in_srgb,var(--c-border)_90%,transparent)]',
+                      'text-[var(--c-text-heading)] placeholder:text-[var(--c-text-faint)]',
+                      'focus:outline-none focus:ring-2 focus:ring-[color-mix(in_srgb,var(--c-accent)_30%,transparent)] focus:border-[color-mix(in_srgb,var(--c-accent)_35%,transparent)]',
                       'transition-all duration-200',
                     ].join(' ')}
                   />
                 </div>
-                <p className="text-[10px] text-[#3a4858] pl-0.5">
-                  Press <kbd className="px-1 py-0.5 rounded bg-[#141a22] border border-[#2a3440] font-mono text-[#5a6a7a]">/</kbd>
+                <p className="text-[10px] text-[var(--c-border-hover)] pl-0.5">
+                  Press <kbd className="px-1 py-0.5 rounded bg-[var(--c-bg-elevated)] border border-[var(--c-border)] font-mono text-[var(--c-text-muted)]">/</kbd>
                   {' '}to focus search
                 </p>
               </div>
@@ -526,8 +526,8 @@ export function SoundboardPanel() {
                   className={[
                     'text-[11px] font-semibold uppercase tracking-wide px-2.5 py-1 rounded-lg border transition-colors',
                     categoryFilter === null
-                      ? 'bg-[#00ff88]/12 text-[#00e5ff] border-[#00ff88]/35'
-                      : 'bg-[#141a22]/80 text-[#6a7a8c] border-[#2a3440] hover:border-[#00ff88]/20',
+                      ? 'bg-[color-mix(in_srgb,var(--c-accent)_12%,transparent)] text-[var(--c-accent-blue)] border-[color-mix(in_srgb,var(--c-accent)_35%,transparent)]'
+                      : 'bg-[color-mix(in_srgb,var(--c-bg-elevated)_80%,transparent)] text-[var(--c-text-dim)] border-[var(--c-border)] hover:border-[color-mix(in_srgb,var(--c-accent)_20%,transparent)]',
                   ].join(' ')}
                 >
                   All
@@ -542,8 +542,8 @@ export function SoundboardPanel() {
                     className={[
                       'text-[11px] font-semibold px-2.5 py-1 rounded-lg border transition-colors',
                       categoryFilter === cat
-                        ? 'bg-[#00ff88]/12 text-[#00e5ff] border-[#00ff88]/35'
-                        : 'bg-[#141a22]/80 text-[#8a96a4] border-[#2a3440] hover:border-[#00ff88]/20',
+                        ? 'bg-[color-mix(in_srgb,var(--c-accent)_12%,transparent)] text-[var(--c-accent-blue)] border-[color-mix(in_srgb,var(--c-accent)_35%,transparent)]'
+                        : 'bg-[color-mix(in_srgb,var(--c-bg-elevated)_80%,transparent)] text-[var(--c-text-secondary)] border-[var(--c-border)] hover:border-[color-mix(in_srgb,var(--c-accent)_20%,transparent)]',
                     ].join(' ')}
                   >
                     {cat}

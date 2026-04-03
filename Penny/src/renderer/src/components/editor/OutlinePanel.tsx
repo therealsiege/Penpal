@@ -41,13 +41,13 @@ export function OutlinePanel() {
 
   if (!activeTab) {
     return (
-      <div className="p-3 text-xs text-[#4a5c6e]">No file open</div>
+      <div className="p-3 text-xs text-[var(--c-text-faint)]">No file open</div>
     )
   }
 
   if (headings.length === 0) {
     return (
-      <div className="p-3 text-xs text-[#4a5c6e]">No headings found</div>
+      <div className="p-3 text-xs text-[var(--c-text-faint)]">No headings found</div>
     )
   }
 
@@ -56,14 +56,14 @@ export function OutlinePanel() {
       {headings.map((h, i) => (
         <div
           key={i}
-          className="px-3 py-1 text-sm text-[#8a96a4] hover:text-[#dce4ec] hover:bg-[#141a22]/40 cursor-pointer transition-colors truncate"
+          className="px-3 py-1 text-sm text-[var(--c-text-secondary)] hover:text-[var(--c-text-heading)] hover:bg-[color-mix(in_srgb,var(--c-bg-elevated)_40%,transparent)] cursor-pointer transition-colors truncate"
           style={{ paddingLeft: `${(h.level - 1) * 12 + 12}px` }}
           title={h.text}
           onClick={() => {
             document.dispatchEvent(new CustomEvent('outline-scroll', { detail: { line: h.line } }))
           }}
         >
-          <span className={h.level === 1 ? 'font-semibold text-[#c4ccd6]' : ''}>
+          <span className={h.level === 1 ? 'font-semibold text-[var(--c-text-primary)]' : ''}>
             {h.text}
           </span>
         </div>

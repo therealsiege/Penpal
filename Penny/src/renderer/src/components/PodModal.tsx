@@ -6,7 +6,7 @@ import { usePolling } from '../hooks/usePolling'
 
 function statusColor(status: PodStatus): string {
   switch (status) {
-    case 'pending': return 'text-[#5a6a7a] bg-[#3a4858]/10 border-[#2a3440]/20'
+    case 'pending': return 'text-[var(--c-text-muted)] bg-[color-mix(in_srgb,var(--c-border-hover)_10%,transparent)] border-[color-mix(in_srgb,var(--c-border)_20%,transparent)]'
     case 'solving': return 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20'
     case 'reviewing': return 'text-blue-400 bg-blue-500/10 border-blue-500/20'
     case 'executing': return 'text-orange-400 bg-orange-500/10 border-orange-500/20'
@@ -22,7 +22,7 @@ function roleStatusDot(status: string): string {
     case 'active': return 'bg-emerald-400 animate-breathe-glow'
     case 'complete': return 'bg-emerald-400'
     case 'failed': return 'bg-red-400'
-    default: return 'bg-[#3a4858]'
+    default: return 'bg-[var(--c-border-hover)]'
   }
 }
 
@@ -88,18 +88,18 @@ export function PodLauncherModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 backdrop-blur-[2px] animate-backdrop-fade-in" onClick={onClose}>
-      <div className="bg-[#0c1018] border border-[#2a3440] rounded-xl p-5 w-[560px] shadow-2xl max-h-[85vh] overflow-y-auto animate-modal-scale-in" onClick={e => e.stopPropagation()}>
+      <div className="bg-[var(--c-bg-surface)] border border-[var(--c-border)] rounded-xl p-5 w-[560px] shadow-2xl max-h-[85vh] overflow-y-auto animate-modal-scale-in" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-4">
           <div>
             <h3 className="text-[15px] font-bold text-white">Launch Pod Workflow</h3>
-            <p className="text-[12px] text-[#3a4858] mt-0.5">Solver + Reviewer + Executor</p>
+            <p className="text-[12px] text-[var(--c-border-hover)] mt-0.5">Solver + Reviewer + Executor</p>
           </div>
-          <button onClick={onClose} className="text-[#3a4858] hover:text-[#8a96a4] text-lg">x</button>
+          <button onClick={onClose} className="text-[var(--c-border-hover)] hover:text-[var(--c-text-secondary)] text-lg">x</button>
         </div>
 
         {/* Preset selector */}
         <div className="mb-4">
-          <p className="text-[11px] text-[#3a4858] uppercase tracking-wider mb-2">Team Preset</p>
+          <p className="text-[11px] text-[var(--c-border-hover)] uppercase tracking-wider mb-2">Team Preset</p>
           <div className="flex flex-wrap gap-2">
             {presets.map(p => (
               <button
@@ -108,7 +108,7 @@ export function PodLauncherModal({
                 className={`stagger-item px-3 py-1.5 text-[12px] rounded-md border transition-colors ${
                   selectedPreset === p.id
                     ? 'bg-blue-600/20 border-blue-500/40 text-blue-400'
-                    : 'bg-[#141a22] border-[#2a3440] text-[#5a6a7a] hover:text-[#c4ccd6]'
+                    : 'bg-[var(--c-bg-elevated)] border-[var(--c-border)] text-[var(--c-text-muted)] hover:text-[var(--c-text-primary)]'
                 }`}
               >
                 {p.id.replace(/-/g, ' ')}
@@ -116,46 +116,46 @@ export function PodLauncherModal({
             ))}
           </div>
           {preset && (
-            <p className="text-[11px] text-[#3a4858] mt-1.5">{preset.description}</p>
+            <p className="text-[11px] text-[var(--c-border-hover)] mt-1.5">{preset.description}</p>
           )}
         </div>
 
         {/* Team visualization */}
         {preset && (
-          <div className="mb-4 bg-[#141a22]/30 rounded-lg p-3 border border-[#2a3440]/30">
+          <div className="mb-4 bg-[color-mix(in_srgb,var(--c-bg-elevated)_30%,transparent)] rounded-lg p-3 border border-[color-mix(in_srgb,var(--c-border)_30%,transparent)]">
             <div className="flex items-center justify-between gap-2">
               <div className="flex-1 text-center">
-                <p className="text-[10px] text-[#3a4858] uppercase">{roleIcon('solver')} Solver</p>
+                <p className="text-[10px] text-[var(--c-border-hover)] uppercase">{roleIcon('solver')} Solver</p>
                 <select
                   value={customSolver || preset.solver}
                   onChange={e => setCustomSolver(e.target.value === preset.solver ? '' : e.target.value)}
-                  className="mt-1 w-full bg-[#0c1018] border border-[#2a3440] rounded px-2 py-1 text-[11px] text-[#8a96a4]"
+                  className="mt-1 w-full bg-[var(--c-bg-surface)] border border-[var(--c-border)] rounded px-2 py-1 text-[11px] text-[var(--c-text-secondary)]"
                 >
                   {agents.map(a => (
                     <option key={a.id} value={a.id}>{a.name}</option>
                   ))}
                 </select>
               </div>
-              <span className="text-[#2a3440] text-lg mt-3">&rarr;</span>
+              <span className="text-[var(--c-border)] text-lg mt-3">&rarr;</span>
               <div className="flex-1 text-center">
-                <p className="text-[10px] text-[#3a4858] uppercase">{roleIcon('reviewer')} Reviewer</p>
+                <p className="text-[10px] text-[var(--c-border-hover)] uppercase">{roleIcon('reviewer')} Reviewer</p>
                 <select
                   value={customReviewer || preset.reviewer}
                   onChange={e => setCustomReviewer(e.target.value === preset.reviewer ? '' : e.target.value)}
-                  className="mt-1 w-full bg-[#0c1018] border border-[#2a3440] rounded px-2 py-1 text-[11px] text-[#8a96a4]"
+                  className="mt-1 w-full bg-[var(--c-bg-surface)] border border-[var(--c-border)] rounded px-2 py-1 text-[11px] text-[var(--c-text-secondary)]"
                 >
                   {agents.map(a => (
                     <option key={a.id} value={a.id}>{a.name}</option>
                   ))}
                 </select>
               </div>
-              <span className="text-[#2a3440] text-lg mt-3">&rarr;</span>
+              <span className="text-[var(--c-border)] text-lg mt-3">&rarr;</span>
               <div className="flex-1 text-center">
-                <p className="text-[10px] text-[#3a4858] uppercase">{roleIcon('executor')} Executor</p>
+                <p className="text-[10px] text-[var(--c-border-hover)] uppercase">{roleIcon('executor')} Executor</p>
                 <select
                   value={customExecutor || preset.executor}
                   onChange={e => setCustomExecutor(e.target.value === preset.executor ? '' : e.target.value)}
-                  className="mt-1 w-full bg-[#0c1018] border border-[#2a3440] rounded px-2 py-1 text-[11px] text-[#8a96a4]"
+                  className="mt-1 w-full bg-[var(--c-bg-surface)] border border-[var(--c-border)] rounded px-2 py-1 text-[11px] text-[var(--c-text-secondary)]"
                 >
                   {agents.map(a => (
                     <option key={a.id} value={a.id}>{a.name}</option>
@@ -168,7 +168,7 @@ export function PodLauncherModal({
 
         {/* Working directory */}
         <div className="mb-4">
-          <p className="text-[11px] text-[#3a4858] uppercase tracking-wider mb-2">Working Directory</p>
+          <p className="text-[11px] text-[var(--c-border-hover)] uppercase tracking-wider mb-2">Working Directory</p>
           <div className="flex flex-wrap gap-1.5 mb-2">
             {quickRepoChips.map(r => (
               <button
@@ -178,7 +178,7 @@ export function PodLauncherModal({
                 className={`px-2.5 py-1 text-[11px] rounded-md border transition-colors ${
                   cwd === r && !customCwd
                     ? 'bg-blue-600/20 border-blue-500/30 text-blue-400'
-                    : 'bg-[#141a22] border border-[#2a3440] text-[#5a6a7a] hover:text-[#c4ccd6]'
+                    : 'bg-[var(--c-bg-elevated)] border border-[var(--c-border)] text-[var(--c-text-muted)] hover:text-[var(--c-text-primary)]'
                 }`}
                 title={r}
               >
@@ -187,11 +187,11 @@ export function PodLauncherModal({
             ))}
           </div>
           <div className="flex gap-2">
-            <div className="flex-1 bg-[#080a0e] border border-[#2a3440] rounded-md px-3 py-1.5 text-[11px] font-mono min-h-[28px] flex items-center">
+            <div className="flex-1 bg-[var(--c-bg-app)] border border-[var(--c-border)] rounded-md px-3 py-1.5 text-[11px] font-mono min-h-[28px] flex items-center">
               {effectiveCwd ? (
-                <span className="text-[#c4ccd6] truncate">{effectiveCwd}</span>
+                <span className="text-[var(--c-text-primary)] truncate">{effectiveCwd}</span>
               ) : (
-                <span className="text-[#2a3440]">No directory selected</span>
+                <span className="text-[var(--c-border)]">No directory selected</span>
               )}
             </div>
             <button
@@ -202,7 +202,7 @@ export function PodLauncherModal({
                   setCwd(picked)
                 }
               }}
-              className="flex-none px-3 py-1.5 text-[11px] bg-[#141a22] hover:bg-[#2a3440] border border-[#2a3440] rounded-md text-[#8a96a4] transition-colors font-medium"
+              className="flex-none px-3 py-1.5 text-[11px] bg-[var(--c-bg-elevated)] hover:bg-[var(--c-border)] border border-[var(--c-border)] rounded-md text-[var(--c-text-secondary)] transition-colors font-medium"
             >
               Browse...
             </button>
@@ -211,26 +211,26 @@ export function PodLauncherModal({
 
         {/* Task input */}
         <div className="mb-4">
-          <p className="text-[11px] text-[#3a4858] uppercase tracking-wider mb-2">Task Description</p>
+          <p className="text-[11px] text-[var(--c-border-hover)] uppercase tracking-wider mb-2">Task Description</p>
           <textarea
             value={task}
             onChange={e => setTask(e.target.value)}
             placeholder="Describe what to build..."
             rows={4}
-            className="w-full bg-[#080a0e] border border-[#2a3440] rounded-md px-3 py-2 text-[12px] text-[#c4ccd6] placeholder-[#2a3440] focus:outline-none focus:border-[#2a3440] font-mono resize-none"
+            className="w-full bg-[var(--c-bg-app)] border border-[var(--c-border)] rounded-md px-3 py-2 text-[12px] text-[var(--c-text-primary)] placeholder-[var(--c-border)] focus:outline-none focus:border-[var(--c-border)] font-mono resize-none"
           />
         </div>
 
         {/* Task priority (compute allocation) */}
         <div className="mb-4">
-          <label htmlFor="pod-launch-priority" className="text-[11px] text-[#3a4858] uppercase tracking-wider mb-2 block">
+          <label htmlFor="pod-launch-priority" className="text-[11px] text-[var(--c-border-hover)] uppercase tracking-wider mb-2 block">
             Task priority
           </label>
           <select
             id="pod-launch-priority"
             value={priority}
             onChange={e => setPriority(e.target.value as TaskPriority)}
-            className="w-full max-w-xs bg-[#0c1018] border border-[#2a3440] rounded-md px-3 py-2 text-[12px] text-[#c4ccd6] focus:outline-none focus:border-[#3a4858]"
+            className="w-full max-w-xs bg-[var(--c-bg-surface)] border border-[var(--c-border)] rounded-md px-3 py-2 text-[12px] text-[var(--c-text-primary)] focus:outline-none focus:border-[var(--c-border-hover)]"
           >
             <option value="critical">Critical — best-of-3, self-eval, more self-fixes</option>
             <option value="high">High — best-of-2, self-eval</option>
@@ -241,7 +241,7 @@ export function PodLauncherModal({
 
         {/* Max iterations */}
         <div className="mb-4 flex items-center gap-3">
-          <p className="text-[11px] text-[#3a4858] uppercase tracking-wider">Max Iterations</p>
+          <p className="text-[11px] text-[var(--c-border-hover)] uppercase tracking-wider">Max Iterations</p>
           <div className="flex gap-1">
             {[1, 2, 3, 4, 5].map(n => (
               <button
@@ -250,7 +250,7 @@ export function PodLauncherModal({
                 className={`w-8 h-8 text-[12px] rounded border transition-colors ${
                   maxIterations === n
                     ? 'bg-blue-600/20 border-blue-500/40 text-blue-400 font-bold'
-                    : 'bg-[#141a22] border-[#2a3440] text-[#3a4858] hover:text-[#8a96a4]'
+                    : 'bg-[var(--c-bg-elevated)] border-[var(--c-border)] text-[var(--c-border-hover)] hover:text-[var(--c-text-secondary)]'
                 }`}
               >
                 {n}
@@ -261,7 +261,7 @@ export function PodLauncherModal({
 
         {/* Solver candidates (best-of-N) */}
         <div className="mb-4 flex items-center gap-3">
-          <p className="text-[11px] text-[#3a4858] uppercase tracking-wider">Solver Candidates</p>
+          <p className="text-[11px] text-[var(--c-border-hover)] uppercase tracking-wider">Solver Candidates</p>
           <div className="flex gap-1">
             {[1, 2, 3, 4, 5].map(n => (
               <button
@@ -270,7 +270,7 @@ export function PodLauncherModal({
                 className={`w-8 h-8 text-[12px] rounded border transition-colors ${
                   solverCandidates === n
                     ? 'bg-purple-600/20 border-purple-500/40 text-purple-400 font-bold'
-                    : 'bg-[#141a22] border-[#2a3440] text-[#3a4858] hover:text-[#8a96a4]'
+                    : 'bg-[var(--c-bg-elevated)] border-[var(--c-border)] text-[var(--c-border-hover)] hover:text-[var(--c-text-secondary)]'
                 }`}
               >
                 {n}
@@ -278,7 +278,7 @@ export function PodLauncherModal({
             ))}
           </div>
           {solverCandidates > 1 && (
-            <span className="text-[10px] text-[#3a4858]">Best-of-{solverCandidates}</span>
+            <span className="text-[10px] text-[var(--c-border-hover)]">Best-of-{solverCandidates}</span>
           )}
         </div>
 
@@ -286,7 +286,7 @@ export function PodLauncherModal({
         <div className="flex gap-2 justify-end">
           <button
             onClick={onClose}
-            className="px-3 py-1.5 text-[12px] bg-[#141a22] hover:bg-[#2a3440] rounded-md border border-[#2a3440] text-[#5a6a7a] transition-colors"
+            className="px-3 py-1.5 text-[12px] bg-[var(--c-bg-elevated)] hover:bg-[var(--c-border)] rounded-md border border-[var(--c-border)] text-[var(--c-text-muted)] transition-colors"
           >
             Cancel
           </button>
@@ -329,7 +329,7 @@ export function PodStatusModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 backdrop-blur-[2px] animate-backdrop-fade-in" onClick={onClose}>
-      <div className="bg-[#0c1018] border border-[#2a3440] rounded-xl p-5 w-[680px] shadow-2xl max-h-[85vh] overflow-y-auto animate-modal-scale-in" onClick={e => e.stopPropagation()}>
+      <div className="bg-[var(--c-bg-surface)] border border-[var(--c-border)] rounded-xl p-5 w-[680px] shadow-2xl max-h-[85vh] overflow-y-auto animate-modal-scale-in" onClick={e => e.stopPropagation()}>
         {/* Header */}
         <div className="flex items-center justify-between mb-4">
           <div>
@@ -338,19 +338,19 @@ export function PodStatusModal({
               <span className={`text-[11px] px-2 py-0.5 rounded border font-medium ${statusColor(wf.status)}`}>
                 {wf.status}
               </span>
-              <span className={`text-[11px] text-[#3a4858]${isActive ? ' animate-breathe-glow' : ''}`}>
+              <span className={`text-[11px] text-[var(--c-border-hover)]${isActive ? ' animate-breathe-glow' : ''}`}>
                 Iteration {wf.iteration}/{wf.maxIterations}
               </span>
             </div>
           </div>
-          <button onClick={onClose} className="text-[#3a4858] hover:text-[#8a96a4] text-lg">x</button>
+          <button onClick={onClose} className="text-[var(--c-border-hover)] hover:text-[var(--c-text-secondary)] text-lg">x</button>
         </div>
 
         {/* Task + cwd */}
-        <div className="bg-[#141a22]/30 rounded-lg px-3 py-2 mb-4 border border-[#2a3440]/30">
-          <p className="text-[10px] text-[#3a4858] uppercase tracking-wider mb-1">Task</p>
-          <p className="text-[12px] text-[#8a96a4]">{wf.task}</p>
-          <p className="text-[10px] text-[#2a3440] font-mono mt-1">{wf.cwd}</p>
+        <div className="bg-[color-mix(in_srgb,var(--c-bg-elevated)_30%,transparent)] rounded-lg px-3 py-2 mb-4 border border-[color-mix(in_srgb,var(--c-border)_30%,transparent)]">
+          <p className="text-[10px] text-[var(--c-border-hover)] uppercase tracking-wider mb-1">Task</p>
+          <p className="text-[12px] text-[var(--c-text-secondary)]">{wf.task}</p>
+          <p className="text-[10px] text-[var(--c-border)] font-mono mt-1">{wf.cwd}</p>
         </div>
 
         {/* Three-column layout */}
@@ -386,11 +386,11 @@ export function PodStatusModal({
 
         {/* Timeline */}
         <div className="mb-4">
-          <p className="text-[10px] text-[#3a4858] uppercase tracking-wider mb-2">Timeline</p>
+          <p className="text-[10px] text-[var(--c-border-hover)] uppercase tracking-wider mb-2">Timeline</p>
           <div className="flex flex-col gap-1">
             {wf.stageHistory.map((entry, i) => (
               <div key={i} className="stagger-item flex items-center gap-2">
-                <span className="text-[10px] text-[#2a3440] font-mono w-16">{formatTime(entry.enteredAt)}</span>
+                <span className="text-[10px] text-[var(--c-border)] font-mono w-16">{formatTime(entry.enteredAt)}</span>
                 <span className={`text-[11px] px-1.5 py-0.5 rounded border ${statusColor(entry.stage)}`}>
                   {entry.stage}
                 </span>
@@ -434,7 +434,7 @@ export function PodStatusModal({
           )}
           <button
             onClick={onClose}
-            className="px-3 py-1.5 text-[12px] bg-[#141a22] hover:bg-[#2a3440] rounded-md border border-[#2a3440] text-[#5a6a7a] transition-colors"
+            className="px-3 py-1.5 text-[12px] bg-[var(--c-bg-elevated)] hover:bg-[var(--c-border)] rounded-md border border-[var(--c-border)] text-[var(--c-text-muted)] transition-colors"
           >
             Close
           </button>
@@ -467,20 +467,20 @@ function RoleColumn({
     <div className={`rounded-lg border p-3 transition-all ${
       isCurrentStage
         ? 'border-blue-500/40 bg-blue-900/10'
-        : 'border-[#2a3440]/30 bg-[#141a22]/20'
+        : 'border-[color-mix(in_srgb,var(--c-border)_30%,transparent)] bg-[color-mix(in_srgb,var(--c-bg-elevated)_20%,transparent)]'
     }`}>
       {/* Header */}
       <div className="flex items-center gap-2 mb-2">
         <span className="text-sm">{roleIcon(role)}</span>
-        <span className="text-[11px] font-semibold text-[#8a96a4] uppercase">{label}</span>
+        <span className="text-[11px] font-semibold text-[var(--c-text-secondary)] uppercase">{label}</span>
         <span className={`ml-auto w-2 h-2 rounded-full ${roleStatusDot(status)}`} />
       </div>
 
       {/* Agent name */}
-      <p className="text-[11px] text-[#3a4858] mb-1">{agentId}</p>
+      <p className="text-[11px] text-[var(--c-border-hover)] mb-1">{agentId}</p>
 
       {/* Status */}
-      <p className="text-[10px] text-[#2a3440] uppercase mb-2">{status}</p>
+      <p className="text-[10px] text-[var(--c-border)] uppercase mb-2">{status}</p>
 
       {/* Output preview */}
       {output && (
@@ -492,8 +492,8 @@ function RoleColumn({
             {expanded ? 'Collapse' : 'View Output'}
           </button>
           {expanded && (
-            <div className="mt-1 bg-[#080a0e] rounded px-2 py-1.5 max-h-32 overflow-y-auto">
-              <pre className="text-[10px] text-[#5a6a7a] whitespace-pre-wrap break-words font-mono">
+            <div className="mt-1 bg-[var(--c-bg-app)] rounded px-2 py-1.5 max-h-32 overflow-y-auto">
+              <pre className="text-[10px] text-[var(--c-text-muted)] whitespace-pre-wrap break-words font-mono">
                 {output}
               </pre>
             </div>
@@ -522,39 +522,39 @@ export function PodListModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 backdrop-blur-[2px] animate-backdrop-fade-in" onClick={onClose}>
-      <div className="bg-[#0c1018] border border-[#2a3440] rounded-xl p-5 w-[520px] shadow-2xl max-h-[70vh] overflow-y-auto animate-modal-scale-in" onClick={e => e.stopPropagation()}>
+      <div className="bg-[var(--c-bg-surface)] border border-[var(--c-border)] rounded-xl p-5 w-[520px] shadow-2xl max-h-[70vh] overflow-y-auto animate-modal-scale-in" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-[15px] font-bold text-white">Pod Workflows</h3>
-          <button onClick={onClose} className="text-[#3a4858] hover:text-[#8a96a4] text-lg">x</button>
+          <button onClick={onClose} className="text-[var(--c-border-hover)] hover:text-[var(--c-text-secondary)] text-lg">x</button>
         </div>
 
         {list.length === 0 ? (
-          <p className="text-[12px] text-[#3a4858] text-center py-8">No workflows yet. Launch one to get started.</p>
+          <p className="text-[12px] text-[var(--c-border-hover)] text-center py-8">No workflows yet. Launch one to get started.</p>
         ) : (
           <div className="flex flex-col gap-2">
             {list.map(wf => (
               <button
                 key={wf.id}
                 onClick={() => onSelect(wf)}
-                className="stagger-item text-left p-3 bg-[#141a22]/40 hover:bg-[#141a22] border border-[#2a3440]/40 hover:border-[#2a3440] rounded-lg transition-colors"
+                className="stagger-item text-left p-3 bg-[color-mix(in_srgb,var(--c-bg-elevated)_40%,transparent)] hover:bg-[var(--c-bg-elevated)] border border-[color-mix(in_srgb,var(--c-border)_40%,transparent)] hover:border-[var(--c-border)] rounded-lg transition-colors"
               >
                 <div className="flex items-center gap-2">
                   <span className={`text-[11px] px-1.5 py-0.5 rounded border font-medium ${statusColor(wf.status)}`}>
                     {wf.status}
                   </span>
-                  <span className="text-[12px] font-semibold text-[#c4ccd6] truncate flex-1">{wf.name}</span>
-                  <span className="text-[10px] text-[#2a3440]">
+                  <span className="text-[12px] font-semibold text-[var(--c-text-primary)] truncate flex-1">{wf.name}</span>
+                  <span className="text-[10px] text-[var(--c-border)]">
                     {wf.iteration}/{wf.maxIterations}
                   </span>
                 </div>
-                <p className="text-[11px] text-[#3a4858] mt-1 truncate">{wf.task}</p>
-                <div className="flex items-center gap-3 mt-1 text-[10px] text-[#2a3440]">
+                <p className="text-[11px] text-[var(--c-border-hover)] mt-1 truncate">{wf.task}</p>
+                <div className="flex items-center gap-3 mt-1 text-[10px] text-[var(--c-border)]">
                   <span>{roleIcon('solver')} {wf.solver.agentId}</span>
                   <span>{roleIcon('reviewer')} {wf.reviewer.agentId}</span>
                   <span>{roleIcon('executor')} {wf.executor.agentId}</span>
                 </div>
                 {wf.cwd && (
-                  <p className="text-[10px] text-[#2a3440] font-mono mt-0.5 truncate">
+                  <p className="text-[10px] text-[var(--c-border)] font-mono mt-0.5 truncate">
                     {wf.cwd.split('/').slice(-2).join('/')}
                   </p>
                 )}

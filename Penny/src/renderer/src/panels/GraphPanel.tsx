@@ -80,9 +80,9 @@ export function GraphPanel({ onOpenFile }: { onOpenFile?: (path: string) => void
     : graphData
 
   return (
-    <div className="h-full flex flex-col overflow-hidden bg-slate-950">
+    <div className="h-full flex flex-col overflow-hidden bg-[var(--c-bg-deep)]">
       {/* Controls */}
-      <div className="shrink-0 flex items-center gap-2 px-3 py-2 border-b border-slate-800/60 bg-slate-900/40">
+      <div className="shrink-0 flex items-center gap-2 px-3 py-2 border-b border-[var(--c-border-subtle)]/60 bg-[var(--c-bg-surface)]/40">
         <div className="drag-region flex-1 h-2" />
         <div className="flex items-center gap-1">
           {(['tag', 'full', 'local'] as const).map(s => (
@@ -92,7 +92,7 @@ export function GraphPanel({ onOpenFile }: { onOpenFile?: (path: string) => void
               className={`px-2 py-0.5 text-[10px] rounded transition-all duration-150 capitalize ${
                 scope === s
                   ? 'bg-blue-600/30 text-blue-300 scale-[1.02]'
-                  : 'text-slate-500 hover:text-slate-300 hover:scale-[1.02]'
+                  : 'text-[var(--c-text-muted)] hover:text-[var(--c-text-primary)] hover:scale-[1.02]'
               }`}
             >
               {s}
@@ -103,9 +103,9 @@ export function GraphPanel({ onOpenFile }: { onOpenFile?: (path: string) => void
           value={search}
           onChange={e => setSearch(e.target.value)}
           placeholder="Filter nodes..."
-          className="bg-slate-900 text-slate-200 text-xs px-2 py-1 rounded border border-slate-700/50 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30 transition-all duration-200 w-36"
+          className="bg-[var(--c-bg-surface)] text-[var(--c-text-heading)] text-xs px-2 py-1 rounded border border-[var(--c-border)]/50 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30 transition-all duration-200 w-36"
         />
-        <div className="text-[10px] text-slate-600 tabular-nums">
+        <div className="text-[10px] text-[var(--c-text-faint)] tabular-nums">
           {graphData.links.length} edges
         </div>
       </div>
@@ -115,12 +115,12 @@ export function GraphPanel({ onOpenFile }: { onOpenFile?: (path: string) => void
         {loading ? (
           <div className="flex flex-col items-center justify-center h-full gap-3">
             <div className="w-12 h-12 rounded-full border-2 border-blue-500/30 border-t-blue-500 animate-spin-smooth" />
-            <span className="text-[11px] text-slate-500">Loading graph...</span>
+            <span className="text-[11px] text-[var(--c-text-muted)]">Loading graph...</span>
           </div>
         ) : graphData.nodes.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full gap-3 animate-card-enter">
             <svg
-              className="w-16 h-16 text-slate-700/50"
+              className="w-16 h-16 text-[var(--c-text-faint)]/50"
               viewBox="0 0 24 24"
               fill="none"
               stroke="currentColor"
@@ -136,8 +136,8 @@ export function GraphPanel({ onOpenFile }: { onOpenFile?: (path: string) => void
               <line x1="18" y1="7" x2="13" y2="17" />
             </svg>
             <div className="text-center">
-              <p className="text-sm text-slate-500 font-medium">No graph data</p>
-              <p className="text-[10px] text-slate-600 mt-0.5">Is Memgraph running?</p>
+              <p className="text-sm text-[var(--c-text-muted)] font-medium">No graph data</p>
+              <p className="text-[10px] text-[var(--c-text-faint)] mt-0.5">Is Memgraph running?</p>
             </div>
           </div>
         ) : (
@@ -178,7 +178,7 @@ export function GraphPanel({ onOpenFile }: { onOpenFile?: (path: string) => void
             </div>
             {/* Node count badge */}
             <div className="absolute top-3 right-3 animate-fade-slide-down">
-              <span className="text-[10px] text-slate-400 bg-slate-900/80 border border-slate-700/50 rounded-full px-2.5 py-0.5">
+              <span className="text-[10px] text-[var(--c-text-secondary)] bg-[var(--c-bg-surface)]/80 border border-[var(--c-border)]/50 rounded-full px-2.5 py-0.5">
                 {graphData.nodes.length} nodes
               </span>
             </div>
@@ -186,10 +186,10 @@ export function GraphPanel({ onOpenFile }: { onOpenFile?: (path: string) => void
         )}
 
         {/* Legend */}
-        <div className="absolute bottom-3 left-3 bg-slate-900/80 rounded border border-slate-800/60 px-2 py-1.5">
+        <div className="absolute bottom-3 left-3 bg-[var(--c-bg-surface)]/80 rounded border border-[var(--c-border-subtle)]/60 px-2 py-1.5">
           <div className="flex flex-wrap gap-x-3 gap-y-0.5">
             {Object.entries(NODE_COLORS).slice(0, 6).map(([type, color]) => (
-              <div key={type} className="flex items-center gap-1 text-[9px] text-slate-400">
+              <div key={type} className="flex items-center gap-1 text-[9px] text-[var(--c-text-secondary)]">
                 <span className="w-2 h-2 rounded-full inline-block" style={{ backgroundColor: color }} />
                 {type}
               </div>

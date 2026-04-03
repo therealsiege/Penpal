@@ -221,11 +221,11 @@ export function DataPanel() {
   return (
     <div className="relative h-full overflow-hidden">
       <div className="absolute inset-0 bg-cover bg-center bg-no-repeat" style={{ backgroundImage: 'url(data-bg.jpg)' }} />
-      <div className="absolute inset-0 bg-[#080a0e]/[0.94]" />
+      <div className="absolute inset-0 bg-[color-mix(in_srgb,var(--c-bg-app)_94%,transparent)]" />
     <div className="relative h-full flex flex-col overflow-hidden">
       {/* Header */}
-      <div className="shrink-0 px-6 pt-5 pb-3 border-b border-[#2a3440]">
-        <h1 className="text-lg font-semibold text-slate-100">Data Pipeline</h1>
+      <div className="shrink-0 px-6 pt-5 pb-3 border-b border-[var(--c-border)]">
+        <h1 className="text-lg font-semibold text-[var(--c-text-bright)]">Data Pipeline</h1>
         <p className="text-xs text-[#5a6878] mt-0.5">Run ETL, ingestion, and enrichment scripts</p>
       </div>
 
@@ -234,8 +234,8 @@ export function DataPanel() {
         {Object.entries(groups).map(([groupName, cards]) => (
           <div key={groupName}>
             <div className="flex items-center gap-2 mb-3">
-              <span className="text-[#00ff88]">{GROUP_ICONS[groupName]}</span>
-              <h2 className="text-sm font-medium text-[#8a96a4] uppercase tracking-wider">{groupName}</h2>
+              <span className="text-[var(--c-accent)]">{GROUP_ICONS[groupName]}</span>
+              <h2 className="text-sm font-medium text-[var(--c-text-secondary)] uppercase tracking-wider">{groupName}</h2>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
               {cards.map(card => {
@@ -244,7 +244,7 @@ export function DataPanel() {
                 const isExpanded = expandedRun && run && expandedRun === run.runId
 
                 return (
-                  <div key={card.id} className="bg-[#0c1018]/90 border border-[#2a3440] rounded-lg overflow-hidden flex flex-col h-full min-h-0">
+                  <div key={card.id} className="bg-[color-mix(in_srgb,var(--c-bg-surface)_90%,transparent)] border border-[var(--c-border)] rounded-lg overflow-hidden flex flex-col h-full min-h-0">
                     <div className="px-4 py-3 flex flex-col gap-3 flex-1 min-h-0">
                       <div className="flex items-start gap-3">
                         {/* Status indicator */}
@@ -252,7 +252,7 @@ export function DataPanel() {
                           {isRunning ? (
                             <Spinner />
                           ) : run?.status === 'done' ? (
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#00ff88" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--c-accent)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                               <polyline points="20 6 9 17 4 12" />
                             </svg>
                           ) : run?.status === 'error' ? (
@@ -261,28 +261,28 @@ export function DataPanel() {
                               <line x1="6" y1="6" x2="18" y2="18" />
                             </svg>
                           ) : (
-                            <div className="w-4 h-4 rounded-full border-2 border-[#2a3440]" />
+                            <div className="w-4 h-4 rounded-full border-2 border-[var(--c-border)]" />
                           )}
                         </div>
 
                         {/* Card info */}
                         <div className="flex-1 min-w-0">
-                          <div className="text-sm font-medium text-slate-200">{card.label}</div>
+                          <div className="text-sm font-medium text-[var(--c-text-heading)]">{card.label}</div>
                           <div className="text-xs text-[#5a6878] mt-0.5 leading-snug">{card.description}</div>
                           {run?.durationMs != null && (
-                            <div className="text-xs text-[#3a4858] mt-0.5">
+                            <div className="text-xs text-[var(--c-border-hover)] mt-0.5">
                               Completed in {formatDuration(run.durationMs)}
                             </div>
                           )}
                         </div>
                       </div>
 
-                      <div className="flex flex-wrap items-center justify-end gap-2 mt-auto pt-1 border-t border-[#2a3440]/60">
+                      <div className="flex flex-wrap items-center justify-end gap-2 mt-auto pt-1 border-t border-[color-mix(in_srgb,var(--c-border)_60%,transparent)]">
                         {/* Directory picker */}
                         {card.needsDirectory && (
                           <button
                             onClick={() => handlePickDir(card.id)}
-                            className="shrink-0 text-xs text-[#5a6878] hover:text-[#00ff88] border border-[#2a3440] hover:border-[#00ff88]/30 rounded px-2 py-1 transition-colors"
+                            className="shrink-0 text-xs text-[#5a6878] hover:text-[var(--c-accent)] border border-[var(--c-border)] hover:border-[color-mix(in_srgb,var(--c-accent)_30%,transparent)] rounded px-2 py-1 transition-colors"
                             title={selectedDirs[card.id] || 'Choose root directory'}
                           >
                             {selectedDirs[card.id]
@@ -297,7 +297,7 @@ export function DataPanel() {
                             <button
                               type="button"
                               onClick={() => run && setExpandedRun(isExpanded ? null : run.runId)}
-                              className="text-xs text-[#5a6878] hover:text-slate-300 transition-colors"
+                              className="text-xs text-[#5a6878] hover:text-[var(--c-text-primary)] transition-colors"
                             >
                               {isExpanded ? 'Hide' : 'Logs'}
                             </button>
@@ -315,7 +315,7 @@ export function DataPanel() {
                               <button
                                 type="button"
                                 onClick={() => setExpandedRun(isExpanded ? null : run.runId)}
-                                className="text-xs text-[#5a6878] hover:text-slate-300 transition-colors"
+                                className="text-xs text-[#5a6878] hover:text-[var(--c-text-primary)] transition-colors"
                               >
                                 {isExpanded ? 'Hide' : 'Logs'}
                               </button>
@@ -323,7 +323,7 @@ export function DataPanel() {
                             <button
                               type="button"
                               onClick={() => handleRun(card)}
-                              className="shrink-0 text-xs font-medium text-[#00ff88] bg-[#00ff88]/10 hover:bg-[#00ff88]/20 border border-[#00ff88]/20 hover:border-[#00ff88]/40 rounded px-3 py-1.5 transition-colors"
+                              className="shrink-0 text-xs font-medium text-[var(--c-accent)] bg-[color-mix(in_srgb,var(--c-accent)_10%,transparent)] hover:bg-[color-mix(in_srgb,var(--c-accent)_20%,transparent)] border border-[color-mix(in_srgb,var(--c-accent)_20%,transparent)] hover:border-[color-mix(in_srgb,var(--c-accent)_40%,transparent)] rounded px-3 py-1.5 transition-colors"
                             >
                               Run
                             </button>
@@ -334,9 +334,9 @@ export function DataPanel() {
 
                     {/* Log output */}
                     {isExpanded && run && (
-                      <div className="border-t border-[#2a3440] bg-[#060810]/90 px-4 py-2 max-h-64 overflow-y-auto font-mono text-[11px] leading-relaxed text-[#6a7888]">
+                      <div className="border-t border-[var(--c-border)] bg-[color-mix(in_srgb,var(--c-bg-deep)_90%,transparent)] px-4 py-2 max-h-64 overflow-y-auto font-mono text-[11px] leading-relaxed text-[#6a7888]">
                         {run.lines.length === 0 && run.status === 'running' && (
-                          <div className="text-[#3a4858] italic">Waiting for output...</div>
+                          <div className="text-[var(--c-border-hover)] italic">Waiting for output...</div>
                         )}
                         {run.lines.map((line, i) => (
                           <div key={i} className={line.includes('ERR') || line.includes('Error') ? 'text-[#ff4444]/80' : ''}>
@@ -356,13 +356,13 @@ export function DataPanel() {
         {/* Briefing Schedule */}
         <div>
           <div className="flex items-center gap-2 mb-3">
-            <span className="text-[#00ff88]">{GROUP_ICONS['Briefing']}</span>
-            <h2 className="text-sm font-medium text-[#8a96a4] uppercase tracking-wider">Briefing</h2>
+            <span className="text-[var(--c-accent)]">{GROUP_ICONS['Briefing']}</span>
+            <h2 className="text-sm font-medium text-[var(--c-text-secondary)] uppercase tracking-wider">Briefing</h2>
           </div>
-          <div className="bg-[#0c1018]/90 border border-[#2a3440] rounded-lg px-4 py-3">
+          <div className="bg-[color-mix(in_srgb,var(--c-bg-surface)_90%,transparent)] border border-[var(--c-border)] rounded-lg px-4 py-3">
             <div className="flex items-center gap-3">
               <div className="flex-1">
-                <div className="text-sm font-medium text-slate-200">Configure Briefing Schedule</div>
+                <div className="text-sm font-medium text-[var(--c-text-heading)]">Configure Briefing Schedule</div>
                 <div className="text-xs text-[#5a6878] mt-0.5">
                   Set when the daily intelligence briefing generates
                 </div>
@@ -371,13 +371,13 @@ export function DataPanel() {
                 <button
                   onClick={handleScheduleToggle}
                   className={`shrink-0 w-10 h-5 rounded-full transition-colors relative ${
-                    briefingSchedule.enabled ? 'bg-[#00ff88]/30' : 'bg-[#2a3440]'
+                    briefingSchedule.enabled ? 'bg-[color-mix(in_srgb,var(--c-accent)_30%,transparent)]' : 'bg-[var(--c-border)]'
                   }`}
                 >
                   <span
                     className={`absolute top-0.5 w-4 h-4 rounded-full transition-all ${
                       briefingSchedule.enabled
-                        ? 'left-5 bg-[#00ff88]'
+                        ? 'left-5 bg-[var(--c-accent)]'
                         : 'left-0.5 bg-[#5a6878]'
                     }`}
                   />
@@ -391,10 +391,10 @@ export function DataPanel() {
                   type="text"
                   value={briefingSchedule.cron}
                   onChange={(e) => handleCronChange(e.target.value)}
-                  className="flex-1 bg-[#060810] border border-[#2a3440] rounded px-2 py-1 text-xs text-slate-300 font-mono focus:outline-none focus:border-[#00ff88]/40"
+                  className="flex-1 bg-[var(--c-bg-deep)] border border-[var(--c-border)] rounded px-2 py-1 text-xs text-[var(--c-text-primary)] font-mono focus:outline-none focus:border-[color-mix(in_srgb,var(--c-accent)_40%,transparent)]"
                   placeholder="30 6 * * 1-5"
                 />
-                <span className="text-[10px] text-[#3a4858]">
+                <span className="text-[10px] text-[var(--c-border-hover)]">
                   {briefingSchedule.enabled ? 'Active' : 'Disabled'}
                 </span>
               </div>

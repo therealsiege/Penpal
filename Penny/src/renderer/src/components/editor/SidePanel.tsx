@@ -8,17 +8,17 @@ export function SidePanel() {
   const [activeTab, setActiveTab] = useState<SidePanelTab>('outline')
 
   return (
-    <div className="h-full flex flex-col border-l border-[#2a3440]/60 bg-[#06080c]/50">
+    <div className="h-full flex flex-col border-l border-[color-mix(in_srgb,var(--c-border)_60%,transparent)] bg-[color-mix(in_srgb,var(--c-bg-deep)_50%,transparent)]">
       {/* Tab switcher */}
-      <div className="shrink-0 flex border-b border-[#2a3440]/60">
+      <div className="shrink-0 flex border-b border-[color-mix(in_srgb,var(--c-border)_60%,transparent)]">
         {(['outline', 'backlinks'] as const).map(tab => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
             className={`flex-1 px-2 py-1.5 text-xs capitalize transition-colors ${
               activeTab === tab
-                ? 'text-[#00e5ff] border-b border-[#00ff88]/60'
-                : 'text-[#5a6a7a] hover:text-[#c4ccd6]'
+                ? 'text-[var(--c-accent-blue)] border-b border-[color-mix(in_srgb,var(--c-accent)_60%,transparent)]'
+                : 'text-[var(--c-text-muted)] hover:text-[var(--c-text-primary)]'
             }`}
           >
             {tab}
@@ -61,15 +61,15 @@ function BacklinksContent() {
   }, [activePath])
 
   if (!activePath) {
-    return <div className="p-3 text-xs text-[#4a5c6e]">No file open</div>
+    return <div className="p-3 text-xs text-[var(--c-text-faint)]">No file open</div>
   }
 
   if (loading) {
-    return <div className="p-3 text-xs text-[#5a6a7a] animate-pulse">Loading backlinks...</div>
+    return <div className="p-3 text-xs text-[var(--c-text-muted)] animate-pulse">Loading backlinks...</div>
   }
 
   if (backlinks.length === 0) {
-    return <div className="p-3 text-xs text-[#4a5c6e]">No backlinks found</div>
+    return <div className="p-3 text-xs text-[var(--c-text-faint)]">No backlinks found</div>
   }
 
   return (
@@ -77,13 +77,13 @@ function BacklinksContent() {
       {backlinks.map(bl => (
         <div
           key={bl.path}
-          className="px-3 py-1.5 cursor-pointer hover:bg-[#141a22]/50 transition-colors border-b border-[#2a3440]/30"
+          className="px-3 py-1.5 cursor-pointer hover:bg-[color-mix(in_srgb,var(--c-bg-elevated)_50%,transparent)] transition-colors border-b border-[color-mix(in_srgb,var(--c-border)_30%,transparent)]"
           title={bl.path}
         >
-          <div className="text-sm text-[#c4ccd6] truncate">
+          <div className="text-sm text-[var(--c-text-primary)] truncate">
             {bl.title || bl.path.split('/').pop()?.replace(/\.md$/, '') || bl.path}
           </div>
-          <div className="text-[10px] text-[#4a5c6e] truncate">{bl.path}</div>
+          <div className="text-[10px] text-[var(--c-text-faint)] truncate">{bl.path}</div>
         </div>
       ))}
     </div>

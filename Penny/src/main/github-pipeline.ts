@@ -63,7 +63,7 @@ interface GHIssue {
 
 const QUESTION_TIMEOUT_MS = 7 * 24 * 60 * 60 * 1000 // 7 days
 const PLANNER_TIMEOUT_MS = 900_000  // 15 min
-const EXECUTOR_TIMEOUT_MS = 1_800_000 // 30 min
+const EXECUTOR_TIMEOUT_MS = 900_000 // 15 min
 const MAX_EXECUTOR_ATTEMPTS = 3
 
 // ── Label helpers ────────────────────────────────────────────────────────────

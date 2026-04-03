@@ -221,10 +221,10 @@ export function CommandPalette({ actions }: Props) {
         role="dialog"
         aria-modal="true"
         aria-label="Command palette"
-        className={`cp-shell fixed top-[15%] left-1/2 -translate-x-1/2 w-[min(520px,calc(100vw-2rem))] bg-gradient-to-b from-[#0d121a] via-[#0a0e14] to-[#080b10] border border-[#2a3440]/95 rounded-[14px] z-[201] overflow-hidden ring-1 ring-[#00ff88]/12 outline-none ${modalClass}`}
+        className={`cp-shell fixed top-[15%] left-1/2 -translate-x-1/2 w-[min(520px,calc(100vw-2rem))] bg-gradient-to-b from-[var(--c-bg-inset)] via-[var(--c-bg-chrome)] to-[var(--c-bg-app)] border border-[color-mix(in_srgb,var(--c-border)_95%,transparent)] rounded-[14px] z-[201] overflow-hidden ring-1 ring-[color-mix(in_srgb,var(--c-accent)_12%,transparent)] outline-none ${modalClass}`}
       >
-        <div className="border-b border-[#1e2838] px-4 py-3 flex items-center gap-3 bg-[#0a0e14]/50">
-          <span className="text-[#4a5c6e] text-sm select-none" aria-hidden>&#8984;</span>
+        <div className="border-b border-[var(--c-border-subtle)] px-4 py-3 flex items-center gap-3 bg-[color-mix(in_srgb,var(--c-bg-chrome)_50%,transparent)]">
+          <span className="text-[var(--c-text-faint)] text-sm select-none" aria-hidden>&#8984;</span>
           <input
             ref={inputRef}
             type="text"
@@ -240,14 +240,14 @@ export function CommandPalette({ actions }: Props) {
             onFocus={() => setInputFocused(true)}
             onBlur={() => setInputFocused(false)}
             className={[
-              'flex-1 bg-transparent text-sm text-[#c4ccd6] placeholder-[#3a4858]',
+              'flex-1 bg-transparent text-sm text-[var(--c-text-primary)] placeholder-[var(--c-border-hover)]',
               'focus:outline-none rounded-lg px-2 py-1 transition-all duration-150',
               inputFocused
-                ? 'ring-2 ring-[#00ff88]/35'
-                : 'ring-2 ring-transparent hover:ring-[#2a3440]/80',
+                ? 'ring-2 ring-[color-mix(in_srgb,var(--c-accent)_35%,transparent)]'
+                : 'ring-2 ring-transparent hover:ring-[color-mix(in_srgb,var(--c-border)_80%,transparent)]',
             ].join(' ')}
           />
-          <kbd className="text-[10px] text-[#5a6a7a] bg-[#141a22] px-1.5 py-1 rounded-md border border-[#2a3440] font-mono select-none" aria-hidden>
+          <kbd className="text-[10px] text-[var(--c-text-muted)] bg-[var(--c-bg-elevated)] px-1.5 py-1 rounded-md border border-[var(--c-border)] font-mono select-none" aria-hidden>
             ESC
           </kbd>
         </div>
@@ -259,13 +259,13 @@ export function CommandPalette({ actions }: Props) {
           className="max-h-[400px] overflow-y-auto py-2 scrollbar-penpal"
         >
           {filtered.length === 0 ? (
-            <p className="text-xs text-[#3a4858] px-4 py-6 text-center" role="status">
+            <p className="text-xs text-[var(--c-border-hover)] px-4 py-6 text-center" role="status">
               No matching commands
             </p>
           ) : (
             Array.from(groups.entries()).map(([category, items]) => (
               <div key={category}>
-                <p className="text-[10px] font-semibold text-[#3a4858] uppercase tracking-[0.16em] px-4 py-1.5 select-none" aria-hidden>
+                <p className="text-[10px] font-semibold text-[var(--c-border-hover)] uppercase tracking-[0.16em] px-4 py-1.5 select-none" aria-hidden>
                   {category}
                 </p>
                 {items.map(item => {
@@ -286,22 +286,22 @@ export function CommandPalette({ actions }: Props) {
                         'flex items-center justify-between px-4 py-2',
                         'transition-colors duration-100',
                         isSelected
-                          ? 'cp-border-pulse bg-[#00ff88]/10 text-[#e8f4ef]'
-                          : 'border-l-2 border-transparent text-[#8a96a4] hover:bg-[#141a22] hover:text-[#c4ccd6]',
-                        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#00ff88]/35',
+                          ? 'cp-border-pulse bg-[color-mix(in_srgb,var(--c-accent)_10%,transparent)] text-[#e8f4ef]'
+                          : 'border-l-2 border-transparent text-[var(--c-text-secondary)] hover:bg-[var(--c-bg-elevated)] hover:text-[var(--c-text-primary)]',
+                        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[color-mix(in_srgb,var(--c-accent)_35%,transparent)]',
                       ].join(' ')}
                       style={{ animationDelay: staggerDelay(idx) }}
                     >
                       <span className="flex items-center gap-0 min-w-0">
                         <span className="text-sm truncate">{item.label}</span>
                         {item.description && (
-                          <span className="text-xs text-[#3a4858] ml-2 truncate">
+                          <span className="text-xs text-[var(--c-border-hover)] ml-2 truncate">
                             {item.description}
                           </span>
                         )}
                       </span>
                       {item.shortcut && (
-                        <kbd className="ml-3 shrink-0 text-xs text-[#3a4858] bg-[#141a22] px-1.5 py-0.5 rounded border border-[#2a3440]">
+                        <kbd className="ml-3 shrink-0 text-xs text-[var(--c-border-hover)] bg-[var(--c-bg-elevated)] px-1.5 py-0.5 rounded border border-[var(--c-border)]">
                           {item.shortcut}
                         </kbd>
                       )}

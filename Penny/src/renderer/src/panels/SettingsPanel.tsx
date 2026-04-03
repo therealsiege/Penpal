@@ -44,13 +44,13 @@ const THEME_PALETTES: Record<ThemeName, {
   },
   light: {
     label: 'Light',
-    bg: '#f8fafc',
-    room: '#e2e8f0',
-    accent: '#2563eb',
-    dot1: '#3b82f6',
-    dot2: '#6366f1',
-    dot3: '#0ea5e9',
-    textColor: '#1e293b',
+    bg: '#f5f0e8',
+    room: '#ebe4d8',
+    accent: '#2a8c8c',
+    dot1: '#5b9ea0',
+    dot2: '#8b6bb0',
+    dot3: '#c48a3f',
+    textColor: '#3d3229',
   },
 }
 
@@ -86,16 +86,16 @@ function NumberStepper({ value, onChange, min, max, step = 1, label }: {
 }) {
   return (
     <div className="flex items-center justify-between">
-      <span className="text-sm text-[#c4ccd6]">{label}</span>
+      <span className="text-sm text-[var(--c-text-primary)]">{label}</span>
       <div className="flex items-center gap-2">
         <button
           onClick={() => onChange(Math.max(min, +(value - step).toFixed(1)))}
-          className="w-7 h-7 rounded bg-[#141a22] hover:bg-[#1a2430] text-[#c4ccd6] text-sm flex items-center justify-center transition-colors"
+          className="w-7 h-7 rounded bg-[var(--c-bg-elevated)] hover:bg-[var(--c-bg-hover)] text-[var(--c-text-primary)] text-sm flex items-center justify-center transition-colors"
         >-</button>
-        <span className="text-sm text-[#dce4ec] w-10 text-center tabular-nums">{value}</span>
+        <span className="text-sm text-[var(--c-text-heading)] w-10 text-center tabular-nums">{value}</span>
         <button
           onClick={() => onChange(Math.min(max, +(value + step).toFixed(1)))}
-          className="w-7 h-7 rounded bg-[#141a22] hover:bg-[#1a2430] text-[#c4ccd6] text-sm flex items-center justify-center transition-colors"
+          className="w-7 h-7 rounded bg-[var(--c-bg-elevated)] hover:bg-[var(--c-bg-hover)] text-[var(--c-text-primary)] text-sm flex items-center justify-center transition-colors"
         >+</button>
       </div>
     </div>
@@ -110,11 +110,11 @@ function FontSelect({ value, onChange, options, label }: {
 }) {
   return (
     <div className="flex items-center justify-between">
-      <span className="text-sm text-[#c4ccd6]">{label}</span>
+      <span className="text-sm text-[var(--c-text-primary)]">{label}</span>
       <select
         value={value}
         onChange={e => onChange(e.target.value)}
-        className="bg-[#141a22] border border-[#2a3440] rounded px-2 py-1.5 text-sm text-[#c4ccd6] outline-none focus:border-[#00ff88]/45 max-w-[200px]"
+        className="bg-[var(--c-bg-elevated)] border border-[var(--c-border)] rounded px-2 py-1.5 text-sm text-[var(--c-text-primary)] outline-none focus:border-[color-mix(in_srgb,var(--c-accent)_45%,transparent)] max-w-[200px]"
       >
         {options.map(o => (
           <option key={o.value} value={o.value}>{o.label}</option>
@@ -138,10 +138,10 @@ function ThemeCard({ themeName, isActive, onSelect }: {
       className={[
         'stagger-item relative rounded-lg overflow-hidden cursor-pointer outline-none',
         'hover:scale-[1.02] transition-all duration-150',
-        'focus-visible:ring-2 focus-visible:ring-[#00ff88]/50',
+        'focus-visible:ring-2 focus-visible:ring-[color-mix(in_srgb,var(--c-accent)_50%,transparent)]',
         isActive
-          ? 'ring-2 ring-[#00ff88] ring-offset-2 ring-offset-[#080a0e]'
-          : 'ring-1 ring-[#2a3440] hover:ring-[#3a4858]',
+          ? 'ring-2 ring-[var(--c-accent)] ring-offset-2 ring-offset-[var(--c-bg-app)]'
+          : 'ring-1 ring-[var(--c-border)] hover:ring-[var(--c-border-hover)]',
       ].join(' ')}
       style={{ width: 120, height: 80, background: p.bg, flexShrink: 0 }}
     >
@@ -177,7 +177,7 @@ function ThemeCard({ themeName, isActive, onSelect }: {
             width: 16,
             height: 16,
             borderRadius: '50%',
-            background: '#00ff88',
+            background: 'var(--c-accent)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -217,8 +217,8 @@ function ToggleSwitch({ enabled, onToggle, label, description }: {
   return (
     <div className="flex items-center justify-between">
       <div>
-        <p className="text-sm text-[#c4ccd6]">{label}</p>
-        {description && <p className="text-xs text-[#5a6a7a] mt-0.5">{description}</p>}
+        <p className="text-sm text-[var(--c-text-primary)]">{label}</p>
+        {description && <p className="text-xs text-[var(--c-text-muted)] mt-0.5">{description}</p>}
       </div>
       <button
         role="switch"
@@ -227,8 +227,8 @@ function ToggleSwitch({ enabled, onToggle, label, description }: {
         onClick={onToggle}
         className={[
           'relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors duration-150 outline-none',
-          'focus-visible:ring-2 focus-visible:ring-[#00ff88]/45 focus-visible:ring-offset-2 focus-visible:ring-offset-[#080a0e]',
-          enabled ? 'bg-[#00a868]' : 'bg-[#2a3440]',
+          'focus-visible:ring-2 focus-visible:ring-[color-mix(in_srgb,var(--c-accent)_45%,transparent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--c-bg-app)]',
+          enabled ? 'bg-[#00a868]' : 'bg-[var(--c-border)]',
         ].join(' ')}
       >
         <span
@@ -270,16 +270,16 @@ export function SettingsPanel() {
     <PanelBackground>
     <div className="h-full overflow-y-auto relative z-[1]">
       <div className="max-w-xl mx-auto py-8 px-6">
-        <h1 className="text-lg font-semibold text-[#dce4ec] mb-6">Settings</h1>
+        <h1 className="text-lg font-semibold text-[var(--c-text-heading)] mb-6">Settings</h1>
 
         {/* Appearance — Theme picker */}
         <section className="mb-8">
-          <h2 className="text-xs font-semibold text-[#5a6a7a] uppercase tracking-wider mb-4">Appearance</h2>
-          <div className="space-y-5 bg-[#0c1018]/85 rounded-lg p-4 border border-[#2a3440]/90">
+          <h2 className="text-xs font-semibold text-[var(--c-text-muted)] uppercase tracking-wider mb-4">Appearance</h2>
+          <div className="space-y-5 bg-[color-mix(in_srgb,var(--c-bg-surface)_85%,transparent)] rounded-lg p-4 border border-[color-mix(in_srgb,var(--c-border)_90%,transparent)]">
 
             {/* Theme preview cards */}
             <div>
-              <p className="text-sm text-[#c4ccd6] mb-3">Theme</p>
+              <p className="text-sm text-[var(--c-text-primary)] mb-3">Theme</p>
               <div className="flex items-center gap-3 flex-wrap">
                 {(['dark', 'light'] as ThemeName[]).map(t => (
                   <ThemeCard
@@ -293,10 +293,10 @@ export function SettingsPanel() {
             </div>
 
             <NumberStepper label="Zoom Level" value={+(zoom * 100).toFixed(0)} onChange={v => setZoom(v / 100)} min={70} max={200} step={10} />
-            <div className="text-xs text-[#4a5c6e]">Tip: Use Cmd+= / Cmd+- in the Vault to zoom quickly</div>
+            <div className="text-xs text-[var(--c-text-faint)]">Tip: Use Cmd+= / Cmd+- in the Vault to zoom quickly</div>
 
-            <div className="pt-2 border-t border-[#2a3440]/80 space-y-4">
-              <p className="text-sm text-[#c4ccd6]">Shell effects</p>
+            <div className="pt-2 border-t border-[color-mix(in_srgb,var(--c-border)_80%,transparent)] space-y-4">
+              <p className="text-sm text-[var(--c-text-primary)]">Shell effects</p>
               <ToggleSwitch
                 label="Scanline overlay"
                 description="Subtle horizontal lines across the window (retro CRT look)"
@@ -315,8 +315,8 @@ export function SettingsPanel() {
 
         {/* Animation toggles */}
         <section className="mb-8">
-          <h2 className="text-xs font-semibold text-[#5a6a7a] uppercase tracking-wider mb-4">Animations</h2>
-          <div className="space-y-4 bg-[#0c1018]/85 rounded-lg p-4 border border-[#2a3440]/90">
+          <h2 className="text-xs font-semibold text-[var(--c-text-muted)] uppercase tracking-wider mb-4">Animations</h2>
+          <div className="space-y-4 bg-[color-mix(in_srgb,var(--c-bg-surface)_85%,transparent)] rounded-lg p-4 border border-[color-mix(in_srgb,var(--c-border)_90%,transparent)]">
             <ToggleSwitch
               label="Ambient particles"
               description="Floating particle effects in the background"
@@ -340,12 +340,12 @@ export function SettingsPanel() {
 
         {/* UI Font */}
         <section className="mb-8">
-          <h2 className="text-xs font-semibold text-[#5a6a7a] uppercase tracking-wider mb-4">Interface Font</h2>
-          <div className="space-y-4 bg-[#0c1018]/85 rounded-lg p-4 border border-[#2a3440]/90">
+          <h2 className="text-xs font-semibold text-[var(--c-text-muted)] uppercase tracking-wider mb-4">Interface Font</h2>
+          <div className="space-y-4 bg-[color-mix(in_srgb,var(--c-bg-surface)_85%,transparent)] rounded-lg p-4 border border-[color-mix(in_srgb,var(--c-border)_90%,transparent)]">
             <FontSelect label="Font Family" value={uiFontFamily} onChange={setUiFontFamily} options={FONT_OPTIONS} />
             <NumberStepper label="Font Size" value={uiFontSize} onChange={setUiFontSize} min={10} max={24} />
-            <div className="mt-3 p-3 rounded bg-[#141a22]/60 border border-[#2a3440]/90">
-              <p className="text-[#8a96a4]" style={{ fontFamily: uiFontFamily, fontSize: `${uiFontSize}px` }}>
+            <div className="mt-3 p-3 rounded bg-[color-mix(in_srgb,var(--c-bg-elevated)_60%,transparent)] border border-[color-mix(in_srgb,var(--c-border)_90%,transparent)]">
+              <p className="text-[var(--c-text-secondary)]" style={{ fontFamily: uiFontFamily, fontSize: `${uiFontSize}px` }}>
                 The quick brown fox jumps over the lazy dog.
               </p>
             </div>
@@ -354,13 +354,13 @@ export function SettingsPanel() {
 
         {/* Editor Font */}
         <section className="mb-8">
-          <h2 className="text-xs font-semibold text-[#5a6a7a] uppercase tracking-wider mb-4">Editor Font</h2>
-          <div className="space-y-4 bg-[#0c1018]/85 rounded-lg p-4 border border-[#2a3440]/90">
+          <h2 className="text-xs font-semibold text-[var(--c-text-muted)] uppercase tracking-wider mb-4">Editor Font</h2>
+          <div className="space-y-4 bg-[color-mix(in_srgb,var(--c-bg-surface)_85%,transparent)] rounded-lg p-4 border border-[color-mix(in_srgb,var(--c-border)_90%,transparent)]">
             <FontSelect label="Font Family" value={editorFontFamily} onChange={setEditorFontFamily} options={MONO_FONT_OPTIONS} />
             <NumberStepper label="Font Size" value={editorFontSize} onChange={setEditorFontSize} min={10} max={28} />
             <NumberStepper label="Line Height" value={editorLineHeight} onChange={setEditorLineHeight} min={1.0} max={2.5} step={0.1} />
-            <div className="mt-3 p-3 rounded bg-[#141a22]/60 border border-[#2a3440]/90 overflow-hidden">
-              <pre className="text-[#8a96a4]" style={{ fontFamily: editorFontFamily, fontSize: `${editorFontSize}px`, lineHeight: editorLineHeight }}>
+            <div className="mt-3 p-3 rounded bg-[color-mix(in_srgb,var(--c-bg-elevated)_60%,transparent)] border border-[color-mix(in_srgb,var(--c-border)_90%,transparent)] overflow-hidden">
+              <pre className="text-[var(--c-text-secondary)]" style={{ fontFamily: editorFontFamily, fontSize: `${editorFontSize}px`, lineHeight: editorLineHeight }}>
 {`# Heading
 The quick brown fox jumps
 over the lazy dog.
@@ -374,9 +374,9 @@ over the lazy dog.
 
         {/* About */}
         <section className="mb-4">
-          <div className="animate-card-enter bg-[#0c1018]/85 rounded-lg p-5 border border-[#2a3440]/90 flex flex-col items-center gap-1.5 text-center">
+          <div className="animate-card-enter bg-[color-mix(in_srgb,var(--c-bg-surface)_85%,transparent)] rounded-lg p-5 border border-[color-mix(in_srgb,var(--c-border)_90%,transparent)] flex flex-col items-center gap-1.5 text-center">
             <div className="flex items-center gap-2">
-              <span className="text-sm font-semibold text-[#dce4ec]">Penny v0.1.0</span>
+              <span className="text-sm font-semibold text-[var(--c-text-heading)]">Penny v0.1.0</span>
               <svg
                 aria-hidden="true"
                 width="14"
@@ -391,7 +391,7 @@ over the lazy dog.
                 />
               </svg>
             </div>
-            <p className="text-xs text-[#5a6a7a]">Built with Electron + Phaser + React</p>
+            <p className="text-xs text-[var(--c-text-muted)]">Built with Electron + Phaser + React</p>
           </div>
         </section>
 
