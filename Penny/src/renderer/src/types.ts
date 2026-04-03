@@ -531,6 +531,17 @@ export interface GitHubIssueCard {
   url: string
 }
 
+/** Main-process GitHub issue poller status (githubPollerStatus IPC). */
+export interface GithubPollerStatus {
+  running: boolean
+  /** True while a poll fetch is in flight (interval or Poll Now). */
+  polling: boolean
+  repos: string[]
+  seenCount: number
+  lastPoll: number | null
+  pollIntervalMs: number
+}
+
 export interface VeritasServiceStatus {
   configured: boolean
   composeFile: string

@@ -227,8 +227,8 @@ export function DataPanel() {
     <div className="relative h-full flex flex-col overflow-hidden">
       {/* Header */}
       <div className="shrink-0 px-6 pt-5 pb-3 border-b border-[var(--c-border)]">
-        <h1 className="text-lg font-semibold text-[var(--c-text-bright)]">Data Pipeline</h1>
-        <p className="text-xs text-[#5a6878] mt-0.5">Run ETL, ingestion, and enrichment scripts</p>
+        <h1 className="text-[length:calc(22px*var(--penny-ui-nav-scale))] font-semibold text-[var(--c-text-bright)] tracking-tight">Data Pipeline</h1>
+        <p className="text-[length:calc(15px*var(--penny-ui-nav-scale))] text-[var(--c-text-secondary)] mt-1">Run ETL, ingestion, and enrichment scripts</p>
       </div>
 
       {/* Scrollable content */}
@@ -237,7 +237,7 @@ export function DataPanel() {
           <div key={groupName}>
             <div className="flex items-center gap-2 mb-3">
               <span className="text-[var(--c-accent)]">{GROUP_ICONS[groupName]}</span>
-              <h2 className="text-sm font-medium text-[var(--c-text-secondary)] uppercase tracking-wider">{groupName}</h2>
+              <h2 className="text-[length:calc(14px*var(--penny-ui-nav-scale))] font-semibold text-[var(--c-text-secondary)] uppercase tracking-wider">{groupName}</h2>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
               {cards.map(card => {
@@ -269,10 +269,10 @@ export function DataPanel() {
 
                         {/* Card info */}
                         <div className="flex-1 min-w-0">
-                          <div className="text-sm font-medium text-[var(--c-text-heading)]">{card.label}</div>
-                          <div className="text-xs text-[#5a6878] mt-0.5 leading-snug">{card.description}</div>
+                          <div className="text-[length:calc(16px*var(--penny-ui-nav-scale))] font-semibold text-[var(--c-text-heading)]">{card.label}</div>
+                          <div className="text-[length:calc(14px*var(--penny-ui-nav-scale))] text-[var(--c-text-secondary)] mt-1 leading-relaxed">{card.description}</div>
                           {run?.durationMs != null && (
-                            <div className="text-xs text-[var(--c-border-hover)] mt-0.5">
+                            <div className="text-[length:calc(13px*var(--penny-ui-nav-scale))] text-[var(--c-border-hover)] mt-0.5">
                               Completed in {formatDuration(run.durationMs)}
                             </div>
                           )}
@@ -284,7 +284,7 @@ export function DataPanel() {
                         {card.needsDirectory && (
                           <button
                             onClick={() => handlePickDir(card.id)}
-                            className="shrink-0 text-xs text-[#5a6878] hover:text-[var(--c-accent)] border border-[var(--c-border)] hover:border-[color-mix(in_srgb,var(--c-accent)_30%,transparent)] rounded px-2 py-1 transition-colors"
+                            className="shrink-0 text-[length:calc(13px*var(--penny-ui-nav-scale))] text-[var(--c-text-secondary)] hover:text-[var(--c-accent)] border border-[var(--c-border)] hover:border-[color-mix(in_srgb,var(--c-accent)_30%,transparent)] rounded-md px-2.5 py-1.5 transition-colors"
                             title={selectedDirs[card.id] || 'Choose root directory'}
                           >
                             {selectedDirs[card.id]
@@ -299,14 +299,14 @@ export function DataPanel() {
                             <button
                               type="button"
                               onClick={() => run && setExpandedRun(isExpanded ? null : run.runId)}
-                              className="text-xs text-[#5a6878] hover:text-[var(--c-text-primary)] transition-colors"
+                              className="text-[length:calc(13px*var(--penny-ui-nav-scale))] text-[var(--c-text-secondary)] hover:text-[var(--c-text-primary)] transition-colors"
                             >
                               {isExpanded ? 'Hide' : 'Logs'}
                             </button>
                             <button
                               type="button"
                               onClick={() => run && handleCancel(run.runId)}
-                              className="text-xs text-[#ff4444]/70 hover:text-[#ff4444] transition-colors"
+                              className="text-[length:calc(13px*var(--penny-ui-nav-scale))] text-[#ff4444]/70 hover:text-[#ff4444] transition-colors"
                             >
                               Cancel
                             </button>
@@ -317,7 +317,7 @@ export function DataPanel() {
                               <button
                                 type="button"
                                 onClick={() => setExpandedRun(isExpanded ? null : run.runId)}
-                                className="text-xs text-[#5a6878] hover:text-[var(--c-text-primary)] transition-colors"
+                                className="text-[length:calc(13px*var(--penny-ui-nav-scale))] text-[var(--c-text-secondary)] hover:text-[var(--c-text-primary)] transition-colors"
                               >
                                 {isExpanded ? 'Hide' : 'Logs'}
                               </button>
@@ -325,7 +325,7 @@ export function DataPanel() {
                             <button
                               type="button"
                               onClick={() => handleRun(card)}
-                              className="shrink-0 text-xs font-medium text-[var(--c-accent)] bg-[color-mix(in_srgb,var(--c-accent)_10%,transparent)] hover:bg-[color-mix(in_srgb,var(--c-accent)_20%,transparent)] border border-[color-mix(in_srgb,var(--c-accent)_20%,transparent)] hover:border-[color-mix(in_srgb,var(--c-accent)_40%,transparent)] rounded px-3 py-1.5 transition-colors"
+                              className="shrink-0 text-[length:calc(14px*var(--penny-ui-nav-scale))] font-semibold text-[var(--c-accent)] bg-[color-mix(in_srgb,var(--c-accent)_10%,transparent)] hover:bg-[color-mix(in_srgb,var(--c-accent)_20%,transparent)] border border-[color-mix(in_srgb,var(--c-accent)_20%,transparent)] hover:border-[color-mix(in_srgb,var(--c-accent)_40%,transparent)] rounded-md px-3 py-2 transition-colors"
                             >
                               Run
                             </button>
@@ -336,7 +336,7 @@ export function DataPanel() {
 
                     {/* Log output */}
                     {isExpanded && run && (
-                      <div className="border-t border-[var(--c-border)] bg-[color-mix(in_srgb,var(--c-bg-deep)_90%,transparent)] px-4 py-2 max-h-64 overflow-y-auto font-mono text-[11px] leading-relaxed text-[#6a7888]">
+                      <div className="border-t border-[var(--c-border)] bg-[color-mix(in_srgb,var(--c-bg-deep)_90%,transparent)] px-4 py-2 max-h-64 overflow-y-auto font-mono text-[length:calc(13px*var(--penny-ui-nav-scale))] leading-relaxed text-[var(--c-text-muted)]">
                         {run.lines.length === 0 && run.status === 'running' && (
                           <div className="text-[var(--c-border-hover)] italic">Waiting for output...</div>
                         )}
@@ -359,13 +359,13 @@ export function DataPanel() {
         <div>
           <div className="flex items-center gap-2 mb-3">
             <span className="text-[var(--c-accent)]">{GROUP_ICONS['Briefing']}</span>
-            <h2 className="text-sm font-medium text-[var(--c-text-secondary)] uppercase tracking-wider">Briefing</h2>
+            <h2 className="text-[length:calc(14px*var(--penny-ui-nav-scale))] font-semibold text-[var(--c-text-secondary)] uppercase tracking-wider">Briefing</h2>
           </div>
           <div className="bg-[color-mix(in_srgb,var(--c-bg-surface)_90%,transparent)] border border-[var(--c-border)] rounded-lg px-4 py-3">
             <div className="flex items-center gap-3">
               <div className="flex-1">
-                <div className="text-sm font-medium text-[var(--c-text-heading)]">Configure Briefing Schedule</div>
-                <div className="text-xs text-[#5a6878] mt-0.5">
+                <div className="text-[length:calc(16px*var(--penny-ui-nav-scale))] font-semibold text-[var(--c-text-heading)]">Configure Briefing Schedule</div>
+                <div className="text-[length:calc(14px*var(--penny-ui-nav-scale))] text-[var(--c-text-secondary)] mt-1">
                   Set when the daily intelligence briefing generates
                 </div>
               </div>
@@ -388,15 +388,15 @@ export function DataPanel() {
             </div>
             {briefingSchedule && (
               <div className="mt-3 flex items-center gap-2">
-                <label className="text-xs text-[#5a6878]">Cron:</label>
+                <label className="text-[length:calc(14px*var(--penny-ui-nav-scale))] text-[var(--c-text-secondary)] shrink-0">Cron:</label>
                 <input
                   type="text"
                   value={briefingSchedule.cron}
                   onChange={(e) => handleCronChange(e.target.value)}
-                  className="flex-1 bg-[var(--c-bg-deep)] border border-[var(--c-border)] rounded px-2 py-1 text-xs text-[var(--c-text-primary)] font-mono focus:outline-none focus:border-[color-mix(in_srgb,var(--c-accent)_40%,transparent)]"
+                  className="flex-1 bg-[var(--c-bg-deep)] border border-[var(--c-border)] rounded-md px-3 py-2 text-[length:calc(14px*var(--penny-ui-nav-scale))] text-[var(--c-text-primary)] font-mono focus:outline-none focus:border-[color-mix(in_srgb,var(--c-accent)_40%,transparent)]"
                   placeholder="30 6 * * 1-5"
                 />
-                <span className="text-[10px] text-[var(--c-border-hover)]">
+                <span className="text-[length:calc(12px*var(--penny-ui-nav-scale))] text-[var(--c-border-hover)]">
                   {briefingSchedule.enabled ? 'Active' : 'Disabled'}
                 </span>
               </div>

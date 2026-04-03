@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useAppearanceStore, type ThemeName } from '../stores/appearance-store'
+import { useAppearanceStore, type ThemePreference } from '../stores/appearance-store'
 import { PanelBackground } from '../components/PanelBackground'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -22,7 +22,7 @@ const MONO_FONT_OPTIONS = [
 ]
 
 // Theme palette definitions — used both in cards and for visual identity
-const THEME_PALETTES: Record<ThemeName, {
+const THEME_PALETTES: Record<ThemePreference, {
   label: string
   bg: string
   room: string
@@ -31,6 +31,7 @@ const THEME_PALETTES: Record<ThemeName, {
   dot2: string
   dot3: string
   textColor: string
+  icon?: 'system'
 }> = {
   dark: {
     label: 'Dark',
@@ -51,6 +52,17 @@ const THEME_PALETTES: Record<ThemeName, {
     dot2: '#8b6bb0',
     dot3: '#c48a3f',
     textColor: '#3d3229',
+  },
+  system: {
+    label: 'System',
+    bg: 'linear-gradient(135deg, #020617 50%, #f5f0e8 50%)',
+    room: 'linear-gradient(135deg, #0f172a 50%, #ebe4d8 50%)',
+    accent: '#7c3aed',
+    dot1: '#3b82f6',
+    dot2: '#7c3aed',
+    dot3: '#5b9ea0',
+    textColor: '#94a3b8',
+    icon: 'system',
   },
 }
 
@@ -125,7 +137,7 @@ function FontSelect({ value, onChange, options, label }: {
 }
 
 function ThemeCard({ themeName, isActive, onSelect }: {
-  themeName: ThemeName
+  themeName: ThemePreference
   isActive: boolean
   onSelect: () => void
 }) {
@@ -158,6 +170,16 @@ function ThemeCard({ themeName, isActive, onSelect }: {
           border: `1px solid ${p.accent}22`,
         }}
       />
+      {/* System icon overlay */}
+      {p.icon === 'system' && (
+        <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -55%)', opacity: 0.5 }}>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
+            <line x1="8" y1="21" x2="16" y2="21" />
+            <line x1="12" y1="17" x2="12" y2="21" />
+          </svg>
+        </div>
+      )}
       {/* Accent dots */}
       <div style={{ position: 'absolute', bottom: 8, left: 12, display: 'flex', gap: 4 }}>
         {[p.dot1, p.dot2, p.dot3].map((color, i) => (
@@ -247,7 +269,7 @@ function ToggleSwitch({ enabled, onToggle, label, description }: {
 
 export function SettingsPanel() {
   const {
-    theme, setTheme,
+    themePreference, setTheme,
     uiFontFamily, setUiFontFamily, uiFontSize, setUiFontSize,
     editorFontFamily, setEditorFontFamily, editorFontSize, setEditorFontSize,
     editorLineHeight, setEditorLineHeight,
@@ -281,11 +303,11 @@ export function SettingsPanel() {
             <div>
               <p className="text-sm text-[var(--c-text-primary)] mb-3">Theme</p>
               <div className="flex items-center gap-3 flex-wrap">
-                {(['dark', 'light'] as ThemeName[]).map(t => (
+                {(['dark', 'light', 'system'] as ThemePreference[]).map(t => (
                   <ThemeCard
                     key={t}
                     themeName={t}
-                    isActive={theme === t}
+                    isActive={themePreference === t}
                     onSelect={() => setTheme(t)}
                   />
                 ))}

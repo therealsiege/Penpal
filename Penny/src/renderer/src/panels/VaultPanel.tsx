@@ -17,7 +17,7 @@ import { useAppearanceStore } from '../stores/appearance-store'
 const VAULT_SIDEBAR_BASE = 280
 const VAULT_SIDEBAR_MIN_BASE = 180
 const VAULT_SIDEBAR_MAX_BASE = 500
-const SHELL_RAIL_BASE_PX = 188
+const SHELL_RAIL_BASE_PX = 168
 /** Past scaled shell rail; keeps splitter drag aligned with `--penny-ui-nav-scale` */
 const VAULT_SPLITTER_LEADING_CHROME_PX = 18
 
@@ -243,7 +243,7 @@ export function VaultPanel() {
               <button
                 key={mode}
                 onClick={() => setLeftSidebarMode(mode)}
-                className={`flex-1 px-2 py-1.5 text-[length:calc(15px*var(--penny-ui-nav-scale))] capitalize transition-colors ${
+                className={`flex-1 px-2 py-1.5 text-[length:calc(12.75px*var(--penny-ui-nav-scale))] capitalize transition-colors ${
                   leftSidebarMode === mode
                     ? 'text-[var(--c-accent-blue)] bg-[color-mix(in_srgb,var(--c-bg-elevated)_40%,transparent)]'
                     : 'text-[var(--c-border-hover)] hover:text-[var(--c-text-secondary)]'

@@ -412,6 +412,20 @@ async function pollOnce(): Promise<number> {
   return enqueued
 }
 
+/** Serialize polls and expose in-flight state for UI (Ready vs Polling). */
+let pollInFlight = false
+let activePoll: Promise<number> | null = null
+
+async function executePollOnce(): Promise<number> {
+  if (activePoll != null) return activePoll
+  pollInFlight = true
+  activePoll = pollOnce().finally(() => {
+    pollInFlight = false
+    activePoll = null
+  })
+  return activePoll
+}
+
 // ── Task sync loop — update labels based on orchestrator task status ─────────
 
 async function syncTaskStatuses(): Promise<void> {
@@ -503,9 +517,9 @@ export function startGithubIssuePoller(): void {
   }
 
   // Initial poll on startup (delayed 5s)
-  setTimeout(() => { pollOnce().catch(console.error) }, 5_000)
+  setTimeout(() => { executePollOnce().catch(console.error) }, 5_000)
 
-  pollTimer = setInterval(() => { pollOnce().catch(console.error) }, POLL_INTERVAL)
+  pollTimer = setInterval(() => { executePollOnce().catch(console.error) }, POLL_INTERVAL)
 
   // Task status → label sync loop + 2-agent pipeline driver
   const repoConfigs = REPOS.map(r => ({ owner: r.owner, repo: r.repo, localPath: r.localPath }))
@@ -523,7 +537,7 @@ export function stopGithubIssuePoller(): void {
 
 /** Force a poll right now (used from dashboard). */
 export async function pollGithubIssuesNow(): Promise<{ enqueued: number }> {
-  return { enqueued: await pollOnce() }
+  return { enqueued: await executePollOnce() }
 }
 
 /** Consolidate tracked issues — remove duplicates, keep most recent entry per issue. */
@@ -558,6 +572,7 @@ export function consolidateTrackedIssues(): { removed: number } {
 /** Get status for the dashboard. */
 export function getGithubIssuePollerStatus(): {
   running: boolean
+  polling: boolean
   repos: string[]
   seenCount: number
   lastPoll: number | null
@@ -565,6 +580,7 @@ export function getGithubIssuePollerStatus(): {
 } {
   return {
     running: pollTimer !== null,
+    polling: pollInFlight,
     repos: REPOS.map(r => `${r.owner}/${r.repo}`),
     seenCount: trackedIssues.length,
     lastPoll: trackedIssues.length > 0

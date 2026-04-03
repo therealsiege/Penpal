@@ -1781,25 +1781,6 @@ export function CommandCenter(props: CommandCenterProps) {
     }
   }, [agentStatuses, allConfigs, isCursorState, opencodeSessions, smokeCheckRunning, toast])
 
-  // --- Health dot ---
-  const healthColor =
-    health?.overall === 'healthy'
-      ? 'bg-emerald-400'
-      : health?.overall === 'degraded'
-        ? 'bg-amber-400'
-        : health?.overall === 'down'
-          ? 'bg-red-400'
-          : 'bg-[var(--c-text-faint)]'
-
-  const healthLabel =
-    health?.overall === 'healthy'
-      ? 'Healthy'
-      : health?.overall === 'degraded'
-        ? 'Degraded'
-        : health?.overall === 'down'
-          ? 'Down'
-          : 'Unknown'
-
   // ---------------------------------------------------------------------------
   // Render
   // ---------------------------------------------------------------------------
@@ -1842,10 +1823,15 @@ export function CommandCenter(props: CommandCenterProps) {
             {clock}
           </span>
 
-          <span className="flex items-center gap-2 text-[11px] text-[var(--c-text-dim)] px-2 py-0.5 rounded-lg border border-transparent hover:border-[color-mix(in_srgb,var(--c-border)_60%,transparent)] hover:bg-[color-mix(in_srgb,var(--c-bg-chrome)_50%,transparent)] transition-colors" title={healthLabel}>
-            <span className={`h-2 w-2 rounded-full shrink-0 ring-2 ring-black/30 ${healthColor} ${health?.overall === 'healthy' ? 'shadow-[0_0_10px_rgba(52,211,153,0.65)]' : ''}`} />
-            <span className="hidden md:inline font-medium">{healthLabel}</span>
-          </span>
+          {health?.overall === 'down' && (
+            <span
+              className="flex items-center gap-2 text-[11px] text-red-300 px-2 py-0.5 rounded-lg border border-red-500/25 bg-red-500/10"
+              title="Infrastructure health check reports a failure"
+            >
+              <span className="h-2 w-2 rounded-full shrink-0 bg-red-400" />
+              <span className="hidden md:inline font-medium">Down</span>
+            </span>
+          )}
         </div>
 
         {/* Right side */}

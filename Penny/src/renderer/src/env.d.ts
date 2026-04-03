@@ -160,7 +160,7 @@ declare global {
       orchestratorGetProvider: () => Promise<{ provider: import('./types').ModelProvider; ollamaAvailable: boolean }>
       projectResolvePath: (raw: string) => Promise<{ resolved: string }>
       // GitHub Issue Poller
-      githubPollerStatus: () => Promise<{ running: boolean; repos: string[]; seenCount: number; lastPoll: number | null; pollIntervalMs: number }>
+      githubPollerStatus: () => Promise<import('./types').GithubPollerStatus>
       githubPollNow: () => Promise<{ enqueued: number }>
       githubSeenIssues: () => Promise<{ number: number; repo: string; taskId: string; ingestedAt: number }[]>
       githubIssueCards: () => Promise<import('./types').GitHubIssueCard[]>
