@@ -128,8 +128,8 @@ function AppContent() {
     },
     {
       id: 'open-tasks',
-      label: 'Open Tasks',
-      description: 'Open orchestrator and Veritas board tasks',
+      label: 'Open Dispatch',
+      description: 'Open orchestrator queue, Veritas board, and GitHub issues',
       category: 'Navigation',
       action: () => setShowTasksModal(true),
     },

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useAppearanceStore } from '../stores/appearance-store'
 import type {
   Task,
@@ -13,47 +13,67 @@ import type {
   StageResult,
   TaskStage,
   GitHubIssueCard,
+  GithubPollerStatus,
 } from '../types'
+import { GithubPollStatusBadge, SourcesModal } from './SourcesModal'
+
+// ── GitHub issue board — lanes by pod / pipeline stage (not a separate “Queued” column)
+// ---------------------------------------------------------------------------
+
+type PodLaneId = 'question' | 'planning' | 'executing' | 'validating' | 'done' | 'failed'
+
+const POD_LANES: { key: PodLaneId; label: string; dot: string }[] = [
+  { key: 'question', label: 'Question', dot: 'bg-sky-400' },
+  { key: 'planning', label: 'Planning', dot: 'bg-amber-400' },
+  { key: 'executing', label: 'Executing', dot: 'bg-blue-400' },
+  { key: 'validating', label: 'Validating', dot: 'bg-violet-400' },
+  { key: 'done', label: 'Done', dot: 'bg-emerald-400' },
+  { key: 'failed', label: 'Failed', dot: 'bg-red-400' },
+]
+
+function cardPodLane(card: GitHubIssueCard): PodLaneId {
+  const status = card.taskStatus
+  const stage = (card.taskStage || '').toLowerCase()
+
+  if (status === 'failed' || status === 'cancelled' || stage === 'failed') return 'failed'
+  if (status === 'completed' || stage === 'done') return 'done'
+  if (stage === 'validating') return 'validating'
+  if (stage === 'executing') return 'executing'
+  if (stage === 'planning') return 'planning'
+  if (stage === 'awaiting-answer' || stage === 'queued') return 'question'
+  if (status === 'queued' || status === 'assigned' || status === 'active') return 'question'
+  return 'question'
+}
 
 // ── OrchestratorModal ───────────────────────────────────────────────────────
 
-/** Standalone Tasks panel — GitHub Dispatch board with repo management. */
+/** Standalone Dispatch panel — GitHub issue board with repo management. */
 export function TasksPanel() {
   const uiTheme = useAppearanceStore((s) => s.theme)
   const [cards, setCards] = useState<GitHubIssueCard[]>([])
-  const [repos, setRepos] = useState<{ owner: string; repo: string; localPath: string }[]>([])
-  const [pollerRunning, setPollerRunning] = useState(false)
-  const [showAddRepo, setShowAddRepo] = useState(false)
+  const [githubPollerStatus, setGithubPollerStatus] = useState<GithubPollerStatus | null>(null)
+  const [showSources, setShowSources] = useState(false)
 
   async function refresh() {
     try {
-      const [c, s, r] = await Promise.all([
+      const [c, s] = await Promise.all([
         window.api.githubIssueCards(),
         window.api.githubPollerStatus(),
-        window.api.githubListRepos(),
       ])
       if (Array.isArray(c)) setCards(c)
-      if (s && typeof s.running === 'boolean') setPollerRunning(s.running)
-      if (Array.isArray(r)) setRepos(r)
+      if (s && typeof s.running === 'boolean' && typeof s.polling === 'boolean') setGithubPollerStatus(s)
     } catch { /* */ }
   }
 
   useEffect(() => {
-    refresh()
-    const interval = setInterval(refresh, 5000)
+    void refresh()
+    const interval = setInterval(() => { void refresh() }, 2000)
     return () => clearInterval(interval)
   }, [])
 
-  const columns = [
-    { key: 'queued', label: 'Queued', statuses: ['queued'], dot: 'bg-[var(--c-border-hover)]' },
-    { key: 'active', label: 'In Progress', statuses: ['assigned', 'active'], dot: 'bg-amber-400' },
-    { key: 'done', label: 'Done', statuses: ['completed'], dot: 'bg-emerald-400' },
-    { key: 'failed', label: 'Failed', statuses: ['failed', 'cancelled'], dot: 'bg-red-400' },
-  ]
-
   return (
     <div className="relative h-full overflow-hidden">
-      {/* Tasks background image */}
+      {/* Dispatch panel background */}
       <div
         className="absolute inset-0 bg-cover bg-center bg-no-repeat"
         style={{ backgroundImage: uiTheme === 'light' ? 'url(light-1.jpg)' : 'url(tasks-bg.jpeg)' }}
@@ -68,47 +88,29 @@ export function TasksPanel() {
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-[calc(22px*var(--penny-ui-nav-scale))] h-[calc(22px*var(--penny-ui-nav-scale))] shrink-0 text-[var(--c-accent-blue)]">
               <path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22" />
             </svg>
-            <h1 className="text-[length:var(--penny-task-fs-18)] font-semibold">Tasks</h1>
+            <h1 className="text-[length:var(--penny-task-fs-18)] font-semibold">Dispatch</h1>
             <span className="text-[length:var(--penny-task-fs-14)] text-[var(--c-border-hover)]">{cards.length} issues</span>
           </div>
           <div className="flex items-center gap-3">
-            <span className={`text-[length:var(--penny-task-fs-11)] px-2 py-0.5 rounded-full border ${
-              pollerRunning
-                ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
-                : 'bg-[color-mix(in_srgb,var(--c-border)_50%,transparent)] text-[var(--c-border-hover)] border-[color-mix(in_srgb,var(--c-border)_30%,transparent)]'
-            }`}>
-              {pollerRunning ? 'Polling' : 'Stopped'}
-            </span>
+            <GithubPollStatusBadge status={githubPollerStatus} />
             <button
-              onClick={async () => { await window.api.githubPollNow(); setTimeout(refresh, 1500) }}
+              type="button"
+              onClick={() => setShowSources(true)}
+              className="px-3 py-1.5 text-[length:var(--penny-task-fs-12)] rounded-md bg-[var(--c-bg-elevated)] hover:bg-[var(--c-border)] border border-[color-mix(in_srgb,var(--c-border)_60%,transparent)] transition-colors"
+            >
+              Sources
+            </button>
+            <button
+              type="button"
+              onClick={async () => {
+                await window.api.githubPollNow()
+                void refresh()
+              }}
               className="px-3 py-1.5 text-[length:var(--penny-task-fs-12)] rounded-md bg-[var(--c-bg-elevated)] hover:bg-[var(--c-border)] border border-[color-mix(in_srgb,var(--c-border)_60%,transparent)] transition-colors"
             >
               Poll Now
             </button>
           </div>
-        </div>
-
-        {/* Watched repos */}
-        <div className="flex items-center gap-2 mt-3 flex-wrap">
-          <span className="text-[length:var(--penny-task-fs-11)] text-[var(--c-border-hover)] uppercase tracking-wider">Watching:</span>
-          {repos.map(r => (
-            <span key={`${r.owner}/${r.repo}`} className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-[color-mix(in_srgb,var(--c-bg-elevated)_60%,transparent)] border border-[color-mix(in_srgb,var(--c-border)_40%,transparent)] text-[length:var(--penny-task-fs-12)] text-[var(--c-text-secondary)]">
-              {r.owner}/{r.repo}
-              <button
-                onClick={async () => { await window.api.githubRemoveRepo(r.owner, r.repo); refresh() }}
-                className="text-[var(--c-border)] hover:text-red-400 text-[length:var(--penny-task-fs-10)] leading-none ml-0.5"
-                title="Stop watching"
-              >
-                x
-              </button>
-            </span>
-          ))}
-          <button
-            onClick={() => setShowAddRepo(true)}
-            className="px-2 py-0.5 text-[length:var(--penny-task-fs-12)] rounded-md bg-[var(--c-bg-elevated)] text-[var(--c-accent-blue)] border border-[var(--c-border)] hover:bg-[var(--c-border-subtle)] transition-colors"
-          >
-            + Add Repo
-          </button>
         </div>
       </div>
 
@@ -123,15 +125,15 @@ export function TasksPanel() {
             <p className="text-[length:var(--penny-task-fs-12)] text-[var(--c-border)]">Label issues with <code className="px-1.5 py-0.5 bg-[var(--c-bg-elevated)] rounded text-[var(--c-accent-blue)]">agent-ready</code> to queue them</p>
           </div>
         ) : (
-          <div className="flex gap-3 h-full min-w-max">
-            {columns.map(col => {
-              const colCards = cards.filter(c => col.statuses.includes(c.taskStatus))
+          <div className="flex gap-2 h-full min-w-0 overflow-x-auto pb-1">
+            {POD_LANES.map(col => {
+              const colCards = cards.filter(c => cardPodLane(c) === col.key)
               return (
-                <div key={col.key} className="w-[calc(16rem*var(--penny-ui-nav-scale))] min-w-[12rem] flex flex-col shrink-0">
-                  <div className="flex items-center gap-2 px-3 py-2 mb-2">
-                    <span className={`w-2 h-2 rounded-full ${col.dot}`} />
-                    <span className="text-[length:var(--penny-task-fs-14)] font-medium text-[var(--c-text-secondary)]">{col.label}</span>
-                    <span className="text-[length:var(--penny-task-fs-12)] text-[var(--c-border-hover)] ml-auto">{colCards.length}</span>
+                <div key={col.key} className="w-[min(13rem,calc(11rem*var(--penny-ui-nav-scale)))] shrink-0 flex flex-col">
+                  <div className="flex items-center gap-2 px-2 py-2 mb-2">
+                    <span className={`w-2 h-2 rounded-full shrink-0 ${col.dot}`} />
+                    <span className="text-[length:var(--penny-task-fs-14)] font-medium text-[var(--c-text-secondary)] truncate">{col.label}</span>
+                    <span className="text-[length:var(--penny-task-fs-12)] text-[var(--c-border-hover)] ml-auto tabular-nums">{colCards.length}</span>
                   </div>
                   <div className="flex-1 overflow-y-auto space-y-2 px-1">
                     {colCards.map(card => (
@@ -191,71 +193,8 @@ export function TasksPanel() {
         )}
       </div>
 
-      {/* Add Repo Modal */}
-      {showAddRepo && (
-        <AddRepoModal
-          onSubmit={async (owner, repo, localPath) => {
-            await window.api.githubAddRepo(owner, repo, localPath)
-            setShowAddRepo(false)
-            refresh()
-          }}
-          onClose={() => setShowAddRepo(false)}
-        />
-      )}
+      <SourcesModal open={showSources} onClose={() => setShowSources(false)} onReposChanged={() => { void refresh() }} />
     </div>
-    </div>
-  )
-}
-
-function AddRepoModal({ onSubmit, onClose }: {
-  onSubmit: (owner: string, repo: string, localPath: string) => void
-  onClose: () => void
-}) {
-  const [repoUrl, setRepoUrl] = useState('')
-  const [localPath, setLocalPath] = useState('')
-
-  const parsed = repoUrl.match(/github\.com\/([^/]+)\/([^/\s]+)/) || repoUrl.match(/^([^/\s]+)\/([^/\s]+)$/)
-  const owner = parsed?.[1] || ''
-  const repo = parsed?.[2]?.replace(/\.git$/, '') || ''
-
-  return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50">
-      <div className="bg-[var(--c-bg-surface)] border border-[var(--c-border)] rounded-xl w-[440px] p-5 space-y-4">
-        <h3 className="text-[length:var(--penny-task-fs-18)] font-semibold text-[var(--c-text-primary)]">Watch Repository</h3>
-        <div>
-          <label className="text-[length:var(--penny-task-fs-12)] text-[var(--c-text-muted)] mb-1 block">Repository (URL or owner/repo)</label>
-          <input
-            value={repoUrl}
-            onChange={e => setRepoUrl(e.target.value)}
-            placeholder="e.g. graphiteatlas/atlas or https://github.com/org/repo"
-            className="w-full px-3 py-2 bg-[var(--c-bg-elevated)] border border-[var(--c-border)] rounded-lg text-[length:var(--penny-task-fs-14)] text-[var(--c-text-primary)] placeholder-[var(--c-border)] focus:outline-none focus:border-[var(--c-accent-blue)]"
-          />
-          {owner && repo && (
-            <p className="text-[length:var(--penny-task-fs-12)] text-[var(--c-accent-blue)] mt-1">{owner}/{repo}</p>
-          )}
-        </div>
-        <div>
-          <label className="text-[length:var(--penny-task-fs-12)] text-[var(--c-text-muted)] mb-1 block">Local clone path (for agent cwd)</label>
-          <input
-            value={localPath}
-            onChange={e => setLocalPath(e.target.value)}
-            placeholder="e.g. ~/ComSci/Workspace/org/repo"
-            className="w-full px-3 py-2 bg-[var(--c-bg-elevated)] border border-[var(--c-border)] rounded-lg text-[length:var(--penny-task-fs-14)] text-[var(--c-text-primary)] placeholder-[var(--c-border)] focus:outline-none focus:border-[var(--c-accent-blue)]"
-          />
-        </div>
-        <div className="flex justify-end gap-2 pt-2">
-          <button onClick={onClose} className="px-4 py-2 text-[length:var(--penny-task-fs-14)] text-[var(--c-text-muted)] hover:text-[var(--c-text-primary)]">
-            Cancel
-          </button>
-          <button
-            onClick={() => { if (owner && repo && localPath.trim()) onSubmit(owner, repo, localPath.trim()) }}
-            disabled={!owner || !repo || !localPath.trim()}
-            className="px-4 py-2 text-[length:var(--penny-task-fs-14)] bg-[var(--c-accent)] hover:bg-[#00cc6e] disabled:opacity-30 text-[var(--c-bg-chrome)] font-medium rounded-lg"
-          >
-            Watch
-          </button>
-        </div>
-      </div>
     </div>
   )
 }
@@ -282,10 +221,11 @@ function OrchestratorContent({ onClose }: { onClose?: () => void }) {
   const [veritasLoading, setVeritasLoading] = useState(false)
   const [updatingVeritasTaskId, setUpdatingVeritasTaskId] = useState<string | null>(null)
   const [githubCards, setGithubCards] = useState<GitHubIssueCard[]>([])
-  const [githubPollerRunning, setGithubPollerRunning] = useState(false)
+  const [githubPollerStatus, setGithubPollerStatus] = useState<GithubPollerStatus | null>(null)
   const [tab, setTab] = useState<'queue' | 'health' | 'veritas' | 'github'>('queue')
   const [showEnqueue, setShowEnqueue] = useState(false)
   const [showVeritasCreate, setShowVeritasCreate] = useState(false)
+  const [showSources, setShowSources] = useState(false)
   const [provider, setProvider] = useState<ModelProvider>('claude')
   const [ollamaAvailable, setOllamaAvailable] = useState(false)
 
@@ -352,16 +292,24 @@ function OrchestratorContent({ onClose }: { onClose?: () => void }) {
     }
   }
 
-  async function loadGithubData() {
+  const loadGithubData = useCallback(async () => {
     try {
       const [cards, status] = await Promise.all([
         window.api.githubIssueCards(),
         window.api.githubPollerStatus(),
       ])
       if (Array.isArray(cards)) setGithubCards(cards)
-      if (status && typeof status.running === 'boolean') setGithubPollerRunning(status.running)
+      if (status && typeof status.running === 'boolean' && typeof status.polling === 'boolean') {
+        setGithubPollerStatus(status)
+      }
     } catch { /* keep last known */ }
-  }
+  }, [])
+
+  useEffect(() => {
+    if (tab !== 'github') return
+    const id = window.setInterval(() => { void loadGithubData() }, 2000)
+    return () => clearInterval(id)
+  }, [tab, loadGithubData])
 
   async function loadData() {
     await Promise.all([
@@ -412,7 +360,7 @@ function OrchestratorContent({ onClose }: { onClose?: () => void }) {
       {/* Header */}
       <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--c-border)] shrink-0">
         <div className="flex items-center gap-3">
-          <span className="text-[length:var(--penny-task-fs-18)] font-semibold text-[var(--c-text-primary)]">Tasks</span>
+          <span className="text-[length:var(--penny-task-fs-18)] font-semibold text-[var(--c-text-primary)]">Dispatch</span>
           {tab !== 'veritas' && stats && (
             <div className="flex items-center gap-3 text-[length:var(--penny-task-fs-12)] text-[var(--c-text-muted)]">
               <span>{stats.queueDepth} queued</span>
@@ -424,12 +372,15 @@ function OrchestratorContent({ onClose }: { onClose?: () => void }) {
             </div>
           )}
           {tab === 'github' && githubCards.length > 0 && (
-            <div className="flex items-center gap-3 text-[length:var(--penny-task-fs-12)] text-[var(--c-text-muted)]">
-              <span>{githubCards.filter(c => c.taskStatus === 'queued').length} queued</span>
-              <span>{githubCards.filter(c => c.taskStatus === 'active' || c.taskStatus === 'assigned').length} active</span>
-              <span className="text-emerald-400">{githubCards.filter(c => c.taskStatus === 'completed').length} done</span>
-              {githubCards.filter(c => c.taskStatus === 'failed').length > 0 && (
-                <span className="text-red-400">{githubCards.filter(c => c.taskStatus === 'failed').length} failed</span>
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[length:var(--penny-task-fs-12)] text-[var(--c-text-muted)]">
+              <span>{githubCards.length} issues</span>
+              <span className="text-sky-400/90">{githubCards.filter(c => cardPodLane(c) === 'question').length} question</span>
+              <span className="text-amber-400/90">{githubCards.filter(c => cardPodLane(c) === 'planning').length} planning</span>
+              <span className="text-blue-400/90">{githubCards.filter(c => cardPodLane(c) === 'executing').length} executing</span>
+              <span className="text-violet-400/90">{githubCards.filter(c => cardPodLane(c) === 'validating').length} validating</span>
+              <span className="text-emerald-400">{githubCards.filter(c => cardPodLane(c) === 'done').length} done</span>
+              {githubCards.filter(c => cardPodLane(c) === 'failed').length > 0 && (
+                <span className="text-red-400">{githubCards.filter(c => cardPodLane(c) === 'failed').length} failed</span>
               )}
             </div>
           )}
@@ -503,14 +454,16 @@ function OrchestratorContent({ onClose }: { onClose?: () => void }) {
         )}
         {tab === 'github' && (
           <div className="flex items-center gap-2">
-            <span className={`text-[length:var(--penny-task-fs-10)] px-2 py-0.5 rounded-full border ${
-              githubPollerRunning
-                ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
-                : 'bg-[color-mix(in_srgb,var(--c-border)_50%,transparent)] text-[var(--c-border-hover)] border-[color-mix(in_srgb,var(--c-border)_30%,transparent)]'
-            }`}>
-              {githubPollerRunning ? 'Polling' : 'Stopped'}
-            </span>
+            <GithubPollStatusBadge status={githubPollerStatus} className="text-[length:var(--penny-task-fs-10)]" />
             <button
+              type="button"
+              onClick={() => setShowSources(true)}
+              className="px-3 py-1 bg-[var(--c-border)] hover:bg-[var(--c-border)] text-[var(--c-text-primary)] text-[length:var(--penny-task-fs-12)] rounded-md"
+            >
+              Sources
+            </button>
+            <button
+              type="button"
               onClick={async () => {
                 await window.api.githubPollNow()
                 await loadGithubData()
@@ -564,6 +517,12 @@ function OrchestratorContent({ onClose }: { onClose?: () => void }) {
           onClose={() => setShowVeritasCreate(false)}
         />
       )}
+
+      <SourcesModal
+        open={showSources}
+        onClose={() => setShowSources(false)}
+        onReposChanged={() => { void loadGithubData() }}
+      />
     </>
   )
 }
@@ -1150,12 +1109,14 @@ function VeritasCreateTaskModal({
 
 // ── GitHub Kanban View ──────────────────────────────────────────────────
 
-const KANBAN_COLUMNS: { key: string; label: string; statuses: string[]; color: string }[] = [
-  { key: 'queued', label: 'Queued', statuses: ['queued'], color: 'border-yellow-500/40' },
-  { key: 'active', label: 'In Progress', statuses: ['assigned', 'active'], color: 'border-blue-500/40' },
-  { key: 'done', label: 'Done', statuses: ['completed'], color: 'border-emerald-500/40' },
-  { key: 'failed', label: 'Failed', statuses: ['failed', 'cancelled'], color: 'border-red-500/40' },
-]
+const LANE_BORDER: Record<PodLaneId, string> = {
+  question: 'border-sky-500/35',
+  planning: 'border-amber-500/35',
+  executing: 'border-blue-500/35',
+  validating: 'border-violet-500/35',
+  done: 'border-emerald-500/35',
+  failed: 'border-red-500/35',
+}
 
 function GitHubKanbanView({ cards, onRefresh }: { cards: GitHubIssueCard[]; onRefresh: () => void }) {
   if (cards.length === 0) {
@@ -1173,28 +1134,32 @@ function GitHubKanbanView({ cards, onRefresh }: { cards: GitHubIssueCard[]; onRe
     )
   }
 
-  const columns = KANBAN_COLUMNS.map(col => ({
-    ...col,
-    cards: cards.filter(c => col.statuses.includes(c.taskStatus)),
-  }))
-
   return (
-    <div className="grid grid-cols-4 gap-3 min-h-[300px]">
-      {columns.map(col => (
-        <div key={col.key} className={`rounded-lg border ${col.color} bg-[color-mix(in_srgb,var(--c-bg-elevated)_20%,transparent)] flex flex-col`}>
-          <div className="px-3 py-2 border-b border-[color-mix(in_srgb,var(--c-border)_30%,transparent)] flex items-center justify-between">
-            <span className="text-[length:var(--penny-task-fs-12)] font-medium text-[var(--c-text-secondary)]">{col.label}</span>
-            <span className="text-[length:var(--penny-task-fs-10)] text-[var(--c-border-hover)] bg-[var(--c-bg-elevated)] px-1.5 py-0.5 rounded-full">
-              {col.cards.length}
-            </span>
+    <div className="flex gap-2 overflow-x-auto pb-1 min-h-[300px]">
+      {POD_LANES.map(col => {
+        const laneCards = cards.filter(c => cardPodLane(c) === col.key)
+        return (
+          <div
+            key={col.key}
+            className={`w-[min(13rem,calc(11rem*var(--penny-ui-nav-scale)))] shrink-0 rounded-lg border ${LANE_BORDER[col.key]} bg-[color-mix(in_srgb,var(--c-bg-elevated)_20%,transparent)] flex flex-col`}
+          >
+            <div className="px-2 py-2 border-b border-[color-mix(in_srgb,var(--c-border)_30%,transparent)] flex items-center justify-between gap-1">
+              <span className="flex items-center gap-1.5 min-w-0">
+                <span className={`w-2 h-2 rounded-full shrink-0 ${col.dot}`} />
+                <span className="text-[length:var(--penny-task-fs-12)] font-medium text-[var(--c-text-secondary)] truncate">{col.label}</span>
+              </span>
+              <span className="text-[length:var(--penny-task-fs-10)] text-[var(--c-border-hover)] bg-[var(--c-bg-elevated)] px-1.5 py-0.5 rounded-full tabular-nums shrink-0">
+                {laneCards.length}
+              </span>
+            </div>
+            <div className="flex-1 overflow-y-auto p-2 space-y-2 min-h-0">
+              {laneCards.map(card => (
+                <GitHubIssueCardItem key={card.taskId} card={card} onRefresh={onRefresh} />
+              ))}
+            </div>
           </div>
-          <div className="flex-1 overflow-y-auto p-2 space-y-2">
-            {col.cards.map(card => (
-              <GitHubIssueCardItem key={card.taskId} card={card} onRefresh={onRefresh} />
-            ))}
-          </div>
-        </div>
-      ))}
+        )
+      })}
     </div>
   )
 }

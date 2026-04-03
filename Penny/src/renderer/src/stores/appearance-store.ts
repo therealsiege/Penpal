@@ -1,9 +1,15 @@
 import { create } from 'zustand'
 
-export type ThemeName = 'dark' | 'light'
+/** What the user picks — 'system' defers to the OS. */
+export type ThemePreference = 'dark' | 'light' | 'system'
+/** The resolved value that actually drives CSS / components. */
+export type ResolvedTheme = 'dark' | 'light'
 
 export interface AppearanceState {
-  theme: ThemeName
+  /** User's preference (persisted). */
+  themePreference: ThemePreference
+  /** Resolved theme after applying OS preference. Always 'dark' | 'light'. */
+  theme: ResolvedTheme
   uiFontFamily: string
   uiFontSize: number
   editorFontFamily: string
@@ -15,7 +21,7 @@ export interface AppearanceState {
   /** CRT-style edge darkening + color wash (body::before). */
   crtVignette: boolean
 
-  setTheme: (theme: ThemeName) => void
+  setTheme: (pref: ThemePreference) => void
   toggleTheme: () => void
   setUiFontFamily: (f: string) => void
   setUiFontSize: (s: number) => void
@@ -32,6 +38,14 @@ export interface AppearanceState {
 
 const STORAGE_KEY = 'sidekick-appearance'
 
+function getSystemTheme(): ResolvedTheme {
+  return window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark'
+}
+
+function resolveTheme(pref: ThemePreference): ResolvedTheme {
+  return pref === 'system' ? getSystemTheme() : pref
+}
+
 function loadPersisted(): Partial<AppearanceState> {
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
@@ -43,7 +57,7 @@ function loadPersisted(): Partial<AppearanceState> {
 function persist(state: AppearanceState) {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify({
-      theme: state.theme,
+      themePreference: state.themePreference,
       uiFontFamily: state.uiFontFamily,
       uiFontSize: state.uiFontSize,
       editorFontFamily: state.editorFontFamily,
@@ -69,22 +83,26 @@ function applyToDOM(state: AppearanceState) {
   root.style.setProperty('--zoom', `${state.zoom}`)
 }
 
-const saved = loadPersisted()
+const saved = loadPersisted() as Record<string, unknown>
+
+// Migrate legacy 'theme' key → 'themePreference'
+const savedPref: ThemePreference = (() => {
+  const p = saved.themePreference ?? saved.theme
+  if (p === 'dark' || p === 'light' || p === 'system') return p as ThemePreference
+  return 'dark'
+})()
 
 const defaults = {
-  theme: (['dark', 'light'].includes(saved.theme as string) ? saved.theme as ThemeName : 'dark'),
-  uiFontFamily: saved.uiFontFamily || "-apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif",
+  themePreference: savedPref,
+  theme: resolveTheme(savedPref),
+  uiFontFamily: (saved.uiFontFamily as string) || "-apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif",
   uiFontSize: typeof saved.uiFontSize === 'number' ? saved.uiFontSize : 17,
-  editorFontFamily: saved.editorFontFamily || "ui-monospace, 'SF Mono', 'Cascadia Code', 'Fira Code', Menlo, monospace",
+  editorFontFamily: (saved.editorFontFamily as string) || "ui-monospace, 'SF Mono', 'Cascadia Code', 'Fira Code', Menlo, monospace",
   editorFontSize: typeof saved.editorFontSize === 'number' ? saved.editorFontSize : 17,
-  editorLineHeight: saved.editorLineHeight || 1.6,
-  zoom: saved.zoom || 1.0,
-  scanlinesOverlay: typeof (saved as { scanlinesOverlay?: boolean }).scanlinesOverlay === 'boolean'
-    ? (saved as { scanlinesOverlay: boolean }).scanlinesOverlay
-    : true,
-  crtVignette: typeof (saved as { crtVignette?: boolean }).crtVignette === 'boolean'
-    ? (saved as { crtVignette: boolean }).crtVignette
-    : true,
+  editorLineHeight: (saved.editorLineHeight as number) || 1.6,
+  zoom: (saved.zoom as number) || 1.0,
+  scanlinesOverlay: typeof saved.scanlinesOverlay === 'boolean' ? saved.scanlinesOverlay : true,
+  crtVignette: typeof saved.crtVignette === 'boolean' ? saved.crtVignette : true,
 }
 
 const ZOOM_STEP = 0.1
@@ -95,6 +113,19 @@ export const useAppearanceStore = create<AppearanceState>((set, get) => {
   // Apply defaults on load
   setTimeout(() => applyToDOM(get()), 0)
 
+  // Watch OS theme changes — only matters when preference is 'system'
+  const mql = window.matchMedia('(prefers-color-scheme: light)')
+  mql.addEventListener('change', () => {
+    const s = get()
+    if (s.themePreference === 'system') {
+      const resolved = getSystemTheme()
+      if (s.theme !== resolved) {
+        set({ theme: resolved })
+        applyToDOM({ ...s, theme: resolved })
+      }
+    }
+  })
+
   const update = (partial: Partial<AppearanceState>) => {
     set(partial)
     const next = get()
@@ -104,8 +135,12 @@ export const useAppearanceStore = create<AppearanceState>((set, get) => {
 
   return {
     ...defaults,
-    setTheme: (theme) => update({ theme }),
-    toggleTheme: () => update({ theme: get().theme === 'dark' ? 'light' : 'dark' }),
+    setTheme: (pref) => update({ themePreference: pref, theme: resolveTheme(pref) }),
+    toggleTheme: () => {
+      const cur = get().themePreference
+      const next: ThemePreference = cur === 'dark' ? 'light' : cur === 'light' ? 'system' : 'dark'
+      update({ themePreference: next, theme: resolveTheme(next) })
+    },
     setUiFontFamily: (uiFontFamily) => update({ uiFontFamily }),
     setUiFontSize: (uiFontSize) => update({ uiFontSize: Math.max(10, Math.min(24, uiFontSize)) }),
     setEditorFontFamily: (editorFontFamily) => update({ editorFontFamily }),

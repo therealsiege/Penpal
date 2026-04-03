@@ -1,13 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import type { GitHubIssueCard } from '../types'
-
-interface PollerStatus {
-  running: boolean
-  repos: string[]
-  seenCount: number
-  lastPoll: number | null
-  pollIntervalMs: number
-}
+import type { GitHubIssueCard, GithubPollerStatus } from '../types'
 
 const COLUMNS = [
   { key: 'queued', label: 'Queued', color: 'bg-[var(--c-bg-hover)]', dot: 'bg-slate-400' },
@@ -53,7 +45,7 @@ function timeAgo(ts: number): string {
 
 export function GitHubPanel() {
   const [cards, setCards] = useState<GitHubIssueCard[]>([])
-  const [status, setStatus] = useState<PollerStatus | null>(null)
+  const [status, setStatus] = useState<GithubPollerStatus | null>(null)
   const [loading, setLoading] = useState(true)
 
   const refresh = useCallback(async () => {
@@ -70,7 +62,7 @@ export function GitHubPanel() {
 
   useEffect(() => {
     refresh()
-    const interval = setInterval(refresh, 5000)
+    const interval = setInterval(refresh, 2000)
     return () => clearInterval(interval)
   }, [refresh])
 
@@ -103,8 +95,15 @@ export function GitHubPanel() {
           <div className="flex items-center gap-3">
             {status && (
               <div className="flex items-center gap-2 text-xs text-[var(--c-text-muted)]">
-                <span className={`w-2 h-2 rounded-full ${status.running ? 'bg-emerald-400' : 'bg-slate-600'}`} />
-                {status.repos.join(', ') || 'No repos'}
+                <span
+                  className={`w-2 h-2 rounded-full shrink-0 ${
+                    status.polling ? 'bg-amber-400 animate-pulse' : status.running ? 'bg-emerald-400' : 'bg-slate-600'
+                  }`}
+                />
+                <span className="tabular-nums">
+                  {status.polling ? 'Polling' : status.running ? 'Ready' : 'Stopped'}
+                </span>
+                <span className="truncate max-w-[200px]">{status.repos.join(', ') || 'No repos'}</span>
               </div>
             )}
             <button

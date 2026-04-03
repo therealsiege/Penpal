@@ -15,9 +15,10 @@
 :root {
   /* Primary nav rail + vault chrome; single dial for comfortable defaults */
   --penny-ui-nav-scale: 2.125;
-  --penny-shell-rail-width: calc(188px * var(--penny-ui-nav-scale));
+  /* Narrower than 188px — sidebar was a bit wide */
+  --penny-shell-rail-width: calc(168px * var(--penny-ui-nav-scale));
 
-  /* Tasks panel + orchestrator modal (same scale as nav/vault) */
+  /* Dispatch / orchestrator modal typography (same scale as nav/vault) */
   --penny-task-fs-9: calc(9px * var(--penny-ui-nav-scale));
   --penny-task-fs-10: calc(10px * var(--penny-ui-nav-scale));
   --penny-task-fs-11: calc(11px * var(--penny-ui-nav-scale));
@@ -586,21 +587,9 @@ html.penpal-no-vignette body::before {
     inset 0 1px 0 0 rgba(255, 255, 255, 0.035);
 }
 
-/* Sidebar: ambient light (no extra DOM) */
 .shell-sidebar {
   position: relative;
   isolation: isolate;
-}
-.shell-sidebar::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  z-index: 0;
-  background:
-    radial-gradient(ellipse 100% 55% at 50% -25%, rgba(0, 255, 136, 0.11), transparent 52%),
-    radial-gradient(ellipse 70% 50% at 100% 100%, rgba(232, 184, 75, 0.06), transparent 45%),
-    linear-gradient(165deg, rgba(12, 16, 24, 0.4) 0%, transparent 45%);
 }
 
 /* Main column: hairline glow where it meets the rail */
