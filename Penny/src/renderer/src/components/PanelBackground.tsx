@@ -10,7 +10,7 @@ export function PanelBackground({ children }: { children: React.ReactNode }) {
       {/* Background image */}
       <div
         className="absolute inset-0 bg-cover bg-center bg-no-repeat"
-        style={{ backgroundImage: isLight ? 'url(vault-bg.jpg)' : 'url(midgar-bg.jpg)' }}
+        style={{ backgroundImage: isLight ? 'url(light-2.jpg)' : 'url(midgar-bg.jpg)' }}
       />
       {/* Overlay */}
       <div

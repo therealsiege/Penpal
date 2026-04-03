@@ -238,8 +238,8 @@ export function EditorPane() {
     return (
       <div className="flex items-center justify-center h-full text-[var(--c-text-faint)]">
         <div className="text-center">
-          <div className="text-2xl mb-2">Select a file</div>
-          <div className="text-sm text-[var(--c-text-muted)]">Click to preview, double-click to edit</div>
+          <div className="mb-2 text-[length:calc(1.5rem*var(--penny-ui-nav-scale))] font-semibold tracking-tight">Select a file</div>
+          <div className="text-[length:calc(14px*var(--penny-ui-nav-scale))] text-[var(--c-text-muted)]">Click to preview, double-click to edit</div>
         </div>
       </div>
     )

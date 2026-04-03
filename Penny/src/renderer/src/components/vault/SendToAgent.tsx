@@ -80,9 +80,9 @@ export function SendToAgent({ selectedFiles }: SendToAgentProps) {
       <button
         onClick={() => setOpen(!open)}
         disabled={sending}
-        className="px-3 py-1.5 bg-blue-600/20 border border-blue-600/40 text-blue-300 rounded text-xs hover:bg-blue-600/30 transition-colors flex items-center gap-1.5 disabled:opacity-50"
+        className="px-3 py-1.5 bg-blue-600/20 border border-blue-600/40 text-blue-300 rounded text-[length:calc(12px*var(--penny-ui-nav-scale))] hover:bg-blue-600/30 transition-colors flex items-center gap-1.5 disabled:opacity-50"
       >
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <svg className="w-[calc(12px*var(--penny-ui-nav-scale))] h-[calc(12px*var(--penny-ui-nav-scale))] shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <line x1="22" y1="2" x2="11" y2="13" />
           <polygon points="22 2 15 22 11 13 2 9 22 2" />
         </svg>
@@ -92,7 +92,7 @@ export function SendToAgent({ selectedFiles }: SendToAgentProps) {
       {open && (
         <div className="absolute bottom-full right-0 mb-1 w-64 bg-[var(--c-bg-surface)] border border-[color-mix(in_srgb,var(--c-border)_50%,transparent)] rounded shadow-xl z-50 max-h-64 overflow-y-auto">
           {activeAgents.length === 0 && (
-            <div className="px-3 py-2 text-xs text-[var(--c-border)]">No agents with active sessions</div>
+            <div className="px-3 py-2 text-[length:calc(12px*var(--penny-ui-nav-scale))] text-[var(--c-border)]">No agents with active sessions</div>
           )}
           {activeAgents.map(agent => (
             <button
@@ -105,10 +105,10 @@ export function SendToAgent({ selectedFiles }: SendToAgentProps) {
                 agent.status === 'active' ? 'bg-green-400' : 'bg-yellow-400'
               }`} />
               <div className="min-w-0 flex-1">
-                <div className="text-xs text-[var(--c-text-secondary)] truncate">{agent.config.name}</div>
-                <div className="text-[10px] text-[var(--c-border)] truncate">{agent.cwd?.split('/').pop()}</div>
+                <div className="text-[length:calc(12px*var(--penny-ui-nav-scale))] text-[var(--c-text-secondary)] truncate">{agent.config.name}</div>
+                <div className="text-[length:calc(10px*var(--penny-ui-nav-scale))] text-[var(--c-border)] truncate">{agent.cwd?.split('/').pop()}</div>
               </div>
-              <span className="text-[10px] text-[var(--c-border)] shrink-0">{agent.status}</span>
+              <span className="text-[length:calc(10px*var(--penny-ui-nav-scale))] text-[var(--c-border)] shrink-0">{agent.status}</span>
             </button>
           ))}
         </div>

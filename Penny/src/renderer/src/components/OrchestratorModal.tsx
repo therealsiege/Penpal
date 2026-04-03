@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useAppearanceStore } from '../stores/appearance-store'
 import type {
   Task,
   AgentHealthStatus,
@@ -18,6 +19,7 @@ import type {
 
 /** Standalone Tasks panel — GitHub Dispatch board with repo management. */
 export function TasksPanel() {
+  const uiTheme = useAppearanceStore((s) => s.theme)
   const [cards, setCards] = useState<GitHubIssueCard[]>([])
   const [repos, setRepos] = useState<{ owner: string; repo: string; localPath: string }[]>([])
   const [pollerRunning, setPollerRunning] = useState(false)
@@ -54,7 +56,7 @@ export function TasksPanel() {
       {/* Tasks background image */}
       <div
         className="absolute inset-0 bg-cover bg-center bg-no-repeat"
-        style={{ backgroundImage: 'url(tasks-bg.jpeg)' }}
+        style={{ backgroundImage: uiTheme === 'light' ? 'url(light-1.jpg)' : 'url(tasks-bg.jpeg)' }}
       />
       {/* Dark overlay for readability */}
       <div className="absolute inset-0 bg-[color-mix(in_srgb,var(--c-bg-app)_94%,transparent)]" />
@@ -63,14 +65,14 @@ export function TasksPanel() {
       <div className="shrink-0 px-6 pt-6 pb-4 border-b border-[color-mix(in_srgb,var(--c-border)_60%,transparent)]">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-[var(--c-accent-blue)]">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-[calc(22px*var(--penny-ui-nav-scale))] h-[calc(22px*var(--penny-ui-nav-scale))] shrink-0 text-[var(--c-accent-blue)]">
               <path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22" />
             </svg>
-            <h1 className="text-lg font-semibold">Tasks</h1>
-            <span className="text-sm text-[var(--c-border-hover)]">{cards.length} issues</span>
+            <h1 className="text-[length:var(--penny-task-fs-18)] font-semibold">Tasks</h1>
+            <span className="text-[length:var(--penny-task-fs-14)] text-[var(--c-border-hover)]">{cards.length} issues</span>
           </div>
           <div className="flex items-center gap-3">
-            <span className={`text-[11px] px-2 py-0.5 rounded-full border ${
+            <span className={`text-[length:var(--penny-task-fs-11)] px-2 py-0.5 rounded-full border ${
               pollerRunning
                 ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
                 : 'bg-[color-mix(in_srgb,var(--c-border)_50%,transparent)] text-[var(--c-border-hover)] border-[color-mix(in_srgb,var(--c-border)_30%,transparent)]'
@@ -79,7 +81,7 @@ export function TasksPanel() {
             </span>
             <button
               onClick={async () => { await window.api.githubPollNow(); setTimeout(refresh, 1500) }}
-              className="px-3 py-1.5 text-xs rounded-md bg-[var(--c-bg-elevated)] hover:bg-[var(--c-border)] border border-[color-mix(in_srgb,var(--c-border)_60%,transparent)] transition-colors"
+              className="px-3 py-1.5 text-[length:var(--penny-task-fs-12)] rounded-md bg-[var(--c-bg-elevated)] hover:bg-[var(--c-border)] border border-[color-mix(in_srgb,var(--c-border)_60%,transparent)] transition-colors"
             >
               Poll Now
             </button>
@@ -88,13 +90,13 @@ export function TasksPanel() {
 
         {/* Watched repos */}
         <div className="flex items-center gap-2 mt-3 flex-wrap">
-          <span className="text-[11px] text-[var(--c-border-hover)] uppercase tracking-wider">Watching:</span>
+          <span className="text-[length:var(--penny-task-fs-11)] text-[var(--c-border-hover)] uppercase tracking-wider">Watching:</span>
           {repos.map(r => (
-            <span key={`${r.owner}/${r.repo}`} className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-[color-mix(in_srgb,var(--c-bg-elevated)_60%,transparent)] border border-[color-mix(in_srgb,var(--c-border)_40%,transparent)] text-xs text-[var(--c-text-secondary)]">
+            <span key={`${r.owner}/${r.repo}`} className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-[color-mix(in_srgb,var(--c-bg-elevated)_60%,transparent)] border border-[color-mix(in_srgb,var(--c-border)_40%,transparent)] text-[length:var(--penny-task-fs-12)] text-[var(--c-text-secondary)]">
               {r.owner}/{r.repo}
               <button
                 onClick={async () => { await window.api.githubRemoveRepo(r.owner, r.repo); refresh() }}
-                className="text-[var(--c-border)] hover:text-red-400 text-[10px] leading-none ml-0.5"
+                className="text-[var(--c-border)] hover:text-red-400 text-[length:var(--penny-task-fs-10)] leading-none ml-0.5"
                 title="Stop watching"
               >
                 x
@@ -103,7 +105,7 @@ export function TasksPanel() {
           ))}
           <button
             onClick={() => setShowAddRepo(true)}
-            className="px-2 py-0.5 text-xs rounded-md bg-[var(--c-bg-elevated)] text-[var(--c-accent-blue)] border border-[var(--c-border)] hover:bg-[var(--c-border-subtle)] transition-colors"
+            className="px-2 py-0.5 text-[length:var(--penny-task-fs-12)] rounded-md bg-[var(--c-bg-elevated)] text-[var(--c-accent-blue)] border border-[var(--c-border)] hover:bg-[var(--c-border-subtle)] transition-colors"
           >
             + Add Repo
           </button>
@@ -114,22 +116,22 @@ export function TasksPanel() {
       <div className="flex-1 overflow-x-auto overflow-y-hidden p-4">
         {cards.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-[var(--c-border-hover)] gap-2">
-            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-[var(--c-border)]">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-[calc(48px*var(--penny-ui-nav-scale))] h-[calc(48px*var(--penny-ui-nav-scale))] text-[var(--c-border)]">
               <path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22" />
             </svg>
-            <p className="text-sm">No issues tracked yet</p>
-            <p className="text-xs text-[var(--c-border)]">Label issues with <code className="px-1.5 py-0.5 bg-[var(--c-bg-elevated)] rounded text-[var(--c-accent-blue)]">agent-ready</code> to queue them</p>
+            <p className="text-[length:var(--penny-task-fs-14)]">No issues tracked yet</p>
+            <p className="text-[length:var(--penny-task-fs-12)] text-[var(--c-border)]">Label issues with <code className="px-1.5 py-0.5 bg-[var(--c-bg-elevated)] rounded text-[var(--c-accent-blue)]">agent-ready</code> to queue them</p>
           </div>
         ) : (
           <div className="flex gap-3 h-full min-w-max">
             {columns.map(col => {
               const colCards = cards.filter(c => col.statuses.includes(c.taskStatus))
               return (
-                <div key={col.key} className="w-64 flex flex-col shrink-0">
+                <div key={col.key} className="w-[calc(16rem*var(--penny-ui-nav-scale))] min-w-[12rem] flex flex-col shrink-0">
                   <div className="flex items-center gap-2 px-3 py-2 mb-2">
                     <span className={`w-2 h-2 rounded-full ${col.dot}`} />
-                    <span className="text-sm font-medium text-[var(--c-text-secondary)]">{col.label}</span>
-                    <span className="text-xs text-[var(--c-border-hover)] ml-auto">{colCards.length}</span>
+                    <span className="text-[length:var(--penny-task-fs-14)] font-medium text-[var(--c-text-secondary)]">{col.label}</span>
+                    <span className="text-[length:var(--penny-task-fs-12)] text-[var(--c-border-hover)] ml-auto">{colCards.length}</span>
                   </div>
                   <div className="flex-1 overflow-y-auto space-y-2 px-1">
                     {colCards.map(card => (
@@ -141,11 +143,11 @@ export function TasksPanel() {
                           <a
                             href={card.url}
                             onClick={e => { e.preventDefault(); window.open(card.url, '_blank') }}
-                            className="text-xs text-blue-400 hover:text-blue-300 font-mono"
+                            className="text-[length:var(--penny-task-fs-12)] text-blue-400 hover:text-blue-300 font-mono"
                           >
                             #{card.issueNumber}
                           </a>
-                          <span className={`text-[10px] px-1.5 py-0.5 rounded border ${
+                          <span className={`text-[length:var(--penny-task-fs-10)] px-1.5 py-0.5 rounded border ${
                             card.priority === 'critical' ? 'bg-red-500/20 text-red-300 border-red-500/30' :
                             card.priority === 'high' ? 'bg-orange-500/20 text-orange-300 border-orange-500/30' :
                             'bg-[color-mix(in_srgb,var(--c-border-hover)_20%,transparent)] text-[var(--c-text-secondary)] border-[color-mix(in_srgb,var(--c-border)_30%,transparent)]'
@@ -153,19 +155,19 @@ export function TasksPanel() {
                             {card.priority}
                           </span>
                         </div>
-                        <p className="text-sm text-[var(--c-text-primary)] leading-snug line-clamp-2">{card.title}</p>
-                        <div className="flex items-center justify-between text-[11px] text-[var(--c-border-hover)]">
-                          <span className="truncate max-w-[120px]">{card.repo}</span>
+                        <p className="text-[length:var(--penny-task-fs-14)] text-[var(--c-text-primary)] leading-snug line-clamp-2">{card.title}</p>
+                        <div className="flex items-center justify-between text-[length:var(--penny-task-fs-11)] text-[var(--c-border-hover)]">
+                          <span className="truncate max-w-[calc(120px*var(--penny-ui-nav-scale))]">{card.repo}</span>
                           <span>{tasksTimeAgo(card.ingestedAt)}</span>
                         </div>
                         {card.assignedAgent && (
-                          <div className="text-[11px] text-[color-mix(in_srgb,var(--c-accent-blue)_70%,transparent)] truncate">{card.assignedAgent}</div>
+                          <div className="text-[length:var(--penny-task-fs-11)] text-[color-mix(in_srgb,var(--c-accent-blue)_70%,transparent)] truncate">{card.assignedAgent}</div>
                         )}
                         <div className="flex gap-1 pt-1">
                           {(card.taskStatus === 'queued' || card.taskStatus === 'assigned' || card.taskStatus === 'active') && (
                             <button
                               onClick={async () => { await window.api.orchestratorCancelTask(card.taskId); refresh() }}
-                              className="text-[10px] text-red-400/60 hover:text-red-400"
+                              className="text-[length:var(--penny-task-fs-10)] text-red-400/60 hover:text-red-400"
                             >
                               Cancel
                             </button>
@@ -173,7 +175,7 @@ export function TasksPanel() {
                           {card.taskStatus === 'failed' && (
                             <button
                               onClick={async () => { await window.api.orchestratorRetryTask(card.taskId); refresh() }}
-                              className="text-[10px] text-blue-400/60 hover:text-blue-400"
+                              className="text-[length:var(--penny-task-fs-10)] text-blue-400/60 hover:text-blue-400"
                             >
                               Retry
                             </button>
@@ -219,36 +221,36 @@ function AddRepoModal({ onSubmit, onClose }: {
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50">
       <div className="bg-[var(--c-bg-surface)] border border-[var(--c-border)] rounded-xl w-[440px] p-5 space-y-4">
-        <h3 className="text-lg font-semibold text-[var(--c-text-primary)]">Watch Repository</h3>
+        <h3 className="text-[length:var(--penny-task-fs-18)] font-semibold text-[var(--c-text-primary)]">Watch Repository</h3>
         <div>
-          <label className="text-xs text-[var(--c-text-muted)] mb-1 block">Repository (URL or owner/repo)</label>
+          <label className="text-[length:var(--penny-task-fs-12)] text-[var(--c-text-muted)] mb-1 block">Repository (URL or owner/repo)</label>
           <input
             value={repoUrl}
             onChange={e => setRepoUrl(e.target.value)}
             placeholder="e.g. graphiteatlas/atlas or https://github.com/org/repo"
-            className="w-full px-3 py-2 bg-[var(--c-bg-elevated)] border border-[var(--c-border)] rounded-lg text-sm text-[var(--c-text-primary)] placeholder-[var(--c-border)] focus:outline-none focus:border-[var(--c-accent-blue)]"
+            className="w-full px-3 py-2 bg-[var(--c-bg-elevated)] border border-[var(--c-border)] rounded-lg text-[length:var(--penny-task-fs-14)] text-[var(--c-text-primary)] placeholder-[var(--c-border)] focus:outline-none focus:border-[var(--c-accent-blue)]"
           />
           {owner && repo && (
-            <p className="text-xs text-[var(--c-accent-blue)] mt-1">{owner}/{repo}</p>
+            <p className="text-[length:var(--penny-task-fs-12)] text-[var(--c-accent-blue)] mt-1">{owner}/{repo}</p>
           )}
         </div>
         <div>
-          <label className="text-xs text-[var(--c-text-muted)] mb-1 block">Local clone path (for agent cwd)</label>
+          <label className="text-[length:var(--penny-task-fs-12)] text-[var(--c-text-muted)] mb-1 block">Local clone path (for agent cwd)</label>
           <input
             value={localPath}
             onChange={e => setLocalPath(e.target.value)}
             placeholder="e.g. ~/ComSci/Workspace/org/repo"
-            className="w-full px-3 py-2 bg-[var(--c-bg-elevated)] border border-[var(--c-border)] rounded-lg text-sm text-[var(--c-text-primary)] placeholder-[var(--c-border)] focus:outline-none focus:border-[var(--c-accent-blue)]"
+            className="w-full px-3 py-2 bg-[var(--c-bg-elevated)] border border-[var(--c-border)] rounded-lg text-[length:var(--penny-task-fs-14)] text-[var(--c-text-primary)] placeholder-[var(--c-border)] focus:outline-none focus:border-[var(--c-accent-blue)]"
           />
         </div>
         <div className="flex justify-end gap-2 pt-2">
-          <button onClick={onClose} className="px-4 py-2 text-sm text-[var(--c-text-muted)] hover:text-[var(--c-text-primary)]">
+          <button onClick={onClose} className="px-4 py-2 text-[length:var(--penny-task-fs-14)] text-[var(--c-text-muted)] hover:text-[var(--c-text-primary)]">
             Cancel
           </button>
           <button
             onClick={() => { if (owner && repo && localPath.trim()) onSubmit(owner, repo, localPath.trim()) }}
             disabled={!owner || !repo || !localPath.trim()}
-            className="px-4 py-2 text-sm bg-[var(--c-accent)] hover:bg-[#00cc6e] disabled:opacity-30 text-[var(--c-bg-chrome)] font-medium rounded-lg"
+            className="px-4 py-2 text-[length:var(--penny-task-fs-14)] bg-[var(--c-accent)] hover:bg-[#00cc6e] disabled:opacity-30 text-[var(--c-bg-chrome)] font-medium rounded-lg"
           >
             Watch
           </button>
@@ -410,9 +412,9 @@ function OrchestratorContent({ onClose }: { onClose?: () => void }) {
       {/* Header */}
       <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--c-border)] shrink-0">
         <div className="flex items-center gap-3">
-          <span className="text-lg font-semibold text-[var(--c-text-primary)]">Tasks</span>
+          <span className="text-[length:var(--penny-task-fs-18)] font-semibold text-[var(--c-text-primary)]">Tasks</span>
           {tab !== 'veritas' && stats && (
-            <div className="flex items-center gap-3 text-xs text-[var(--c-text-muted)]">
+            <div className="flex items-center gap-3 text-[length:var(--penny-task-fs-12)] text-[var(--c-text-muted)]">
               <span>{stats.queueDepth} queued</span>
               <span>{stats.activeTasks} active</span>
               <span className="text-emerald-400">{stats.completedToday} done today</span>
@@ -422,7 +424,7 @@ function OrchestratorContent({ onClose }: { onClose?: () => void }) {
             </div>
           )}
           {tab === 'github' && githubCards.length > 0 && (
-            <div className="flex items-center gap-3 text-xs text-[var(--c-text-muted)]">
+            <div className="flex items-center gap-3 text-[length:var(--penny-task-fs-12)] text-[var(--c-text-muted)]">
               <span>{githubCards.filter(c => c.taskStatus === 'queued').length} queued</span>
               <span>{githubCards.filter(c => c.taskStatus === 'active' || c.taskStatus === 'assigned').length} active</span>
               <span className="text-emerald-400">{githubCards.filter(c => c.taskStatus === 'completed').length} done</span>
@@ -432,7 +434,7 @@ function OrchestratorContent({ onClose }: { onClose?: () => void }) {
             </div>
           )}
           {tab === 'veritas' && veritasCounts && (
-            <div className="flex items-center gap-3 text-xs text-[var(--c-text-muted)]">
+            <div className="flex items-center gap-3 text-[length:var(--penny-task-fs-12)] text-[var(--c-text-muted)]">
               <span>{veritasCounts.todo} todo</span>
               <span>{veritasCounts['in-progress']} in progress</span>
               <span>{veritasCounts.blocked} blocked</span>
@@ -443,7 +445,7 @@ function OrchestratorContent({ onClose }: { onClose?: () => void }) {
         <div className="flex items-center gap-2">
           <button
             onClick={toggleProvider}
-            className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition-all duration-200 ${
+            className={`px-2.5 py-1 rounded-md text-[length:var(--penny-task-fs-11)] font-medium transition-all duration-200 ${
               provider === 'claude'
                 ? 'bg-blue-600/20 text-blue-400 border border-blue-500/30 hover:bg-blue-600/30'
                 : 'bg-purple-600/20 text-purple-400 border border-purple-500/30 hover:bg-purple-600/30'
@@ -458,7 +460,7 @@ function OrchestratorContent({ onClose }: { onClose?: () => void }) {
           {onClose && (
             <button
               onClick={onClose}
-              className="text-[var(--c-border-hover)] hover:text-[var(--c-text-secondary)] text-xl leading-none"
+              className="text-[var(--c-border-hover)] hover:text-[var(--c-text-secondary)] text-[length:var(--penny-task-fs-20)] leading-none"
             >
               x
             </button>
@@ -478,7 +480,7 @@ function OrchestratorContent({ onClose }: { onClose?: () => void }) {
         {tab === 'queue' && (
           <button
             onClick={() => setShowEnqueue(true)}
-            className="px-3 py-1 bg-blue-600 hover:bg-blue-500 text-white text-xs rounded-md"
+            className="px-3 py-1 bg-blue-600 hover:bg-blue-500 text-white text-[length:var(--penny-task-fs-12)] rounded-md"
           >
             + New Task
           </button>
@@ -487,13 +489,13 @@ function OrchestratorContent({ onClose }: { onClose?: () => void }) {
           <div className="flex items-center gap-2">
             <button
               onClick={() => { void window.api.veritasOpen() }}
-              className="px-3 py-1 bg-[var(--c-border)] hover:bg-[var(--c-border)] text-[var(--c-text-primary)] text-xs rounded-md"
+              className="px-3 py-1 bg-[var(--c-border)] hover:bg-[var(--c-border)] text-[var(--c-text-primary)] text-[length:var(--penny-task-fs-12)] rounded-md"
             >
               Open Board
             </button>
             <button
               onClick={() => setShowVeritasCreate(true)}
-              className="px-3 py-1 bg-violet-600 hover:bg-violet-500 text-white text-xs rounded-md"
+              className="px-3 py-1 bg-violet-600 hover:bg-violet-500 text-white text-[length:var(--penny-task-fs-12)] rounded-md"
             >
               + New Veritas Task
             </button>
@@ -501,7 +503,7 @@ function OrchestratorContent({ onClose }: { onClose?: () => void }) {
         )}
         {tab === 'github' && (
           <div className="flex items-center gap-2">
-            <span className={`text-[10px] px-2 py-0.5 rounded-full border ${
+            <span className={`text-[length:var(--penny-task-fs-10)] px-2 py-0.5 rounded-full border ${
               githubPollerRunning
                 ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
                 : 'bg-[color-mix(in_srgb,var(--c-border)_50%,transparent)] text-[var(--c-border-hover)] border-[color-mix(in_srgb,var(--c-border)_30%,transparent)]'
@@ -513,7 +515,7 @@ function OrchestratorContent({ onClose }: { onClose?: () => void }) {
                 await window.api.githubPollNow()
                 await loadGithubData()
               }}
-              className="px-3 py-1 bg-[var(--c-border)] hover:bg-[var(--c-border)] text-[var(--c-text-primary)] text-xs rounded-md"
+              className="px-3 py-1 bg-[var(--c-border)] hover:bg-[var(--c-border)] text-[var(--c-text-primary)] text-[length:var(--penny-task-fs-12)] rounded-md"
             >
               Poll Now
             </button>
@@ -573,7 +575,7 @@ export function OrchestratorModal({ onClose }: { onClose: () => void }) {
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 backdrop-blur-[2px] animate-backdrop-fade-in"
       data-disable-office-hotkeys="true"
     >
-      <div className="bg-[var(--c-bg-surface)] border border-[var(--c-border)] rounded-xl w-[900px] max-h-[84vh] flex flex-col shadow-2xl animate-modal-scale-in">
+      <div className="bg-[var(--c-bg-surface)] border border-[var(--c-border)] rounded-xl w-[min(96vw,calc(900px+120px*var(--penny-ui-nav-scale)))] max-h-[84vh] flex flex-col shadow-2xl animate-modal-scale-in">
         <OrchestratorContent onClose={onClose} />
       </div>
     </div>
@@ -589,7 +591,7 @@ function TaskQueueView({ tasks, onRefresh }: { tasks: Task[]; onRefresh: () => v
         {[1, 2, 3].map(n => (
           <div key={n} className="animate-shimmer h-14 rounded-lg bg-[color-mix(in_srgb,var(--c-bg-elevated)_50%,transparent)] border border-[color-mix(in_srgb,var(--c-border)_50%,transparent)]" />
         ))}
-        <div className="text-center text-[var(--c-border-hover)] py-4 text-xs">
+        <div className="text-center text-[var(--c-border-hover)] py-4 text-[length:var(--penny-task-fs-12)]">
           No tasks in queue. Create one with the + button or use <code>!task</code> in Slack.
         </div>
       </div>
@@ -635,17 +637,17 @@ function TaskRow({ task, onRefresh }: { task: Task; onRefresh: () => void }) {
       <div className="flex items-center gap-3 p-3">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
-            <span className={`text-[11px] font-medium ${priorityColors[task.priority]}`}>
+            <span className={`text-[length:var(--penny-task-fs-11)] font-medium ${priorityColors[task.priority]}`}>
               {task.priority.toUpperCase()}
             </span>
-            <span className="text-sm text-[var(--c-text-primary)] truncate">{task.title}</span>
+            <span className="text-[length:var(--penny-task-fs-14)] text-[var(--c-text-primary)] truncate">{task.title}</span>
             {task.provider === 'ollama' && (
-              <span className="text-[9px] px-1.5 py-0.5 rounded bg-purple-600/20 text-purple-400 border border-purple-500/30">
+              <span className="text-[length:var(--penny-task-fs-9)] px-1.5 py-0.5 rounded bg-purple-600/20 text-purple-400 border border-purple-500/30">
                 ollama
               </span>
             )}
           </div>
-          <div className="flex items-center gap-2 mt-1 text-xs text-[var(--c-border-hover)]">
+          <div className="flex items-center gap-2 mt-1 text-[length:var(--penny-task-fs-12)] text-[var(--c-border-hover)]">
             <span>{age}</span>
             <span>via {task.source}</span>
             {task.assignedAgent && <span>{'-> '}{task.assignedAgent}</span>}
@@ -658,14 +660,14 @@ function TaskRow({ task, onRefresh }: { task: Task; onRefresh: () => void }) {
           <StageDots currentStage={task.currentStage} stageResults={task.stageResults} />
         )}
 
-        <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium border ${statusColors[task.status]}`}>
+        <span className={`px-2 py-0.5 rounded-full text-[length:var(--penny-task-fs-10)] font-medium border ${statusColors[task.status]}`}>
           {task.status}
         </span>
         <div className="flex items-center gap-1">
           {hasStages && (
             <button
               onClick={() => setExpanded(!expanded)}
-              className="px-2 py-1 text-[10px] bg-[color-mix(in_srgb,var(--c-border)_50%,transparent)] text-[var(--c-text-muted)] hover:bg-[var(--c-border)] rounded"
+              className="px-2 py-1 text-[length:var(--penny-task-fs-10)] bg-[color-mix(in_srgb,var(--c-border)_50%,transparent)] text-[var(--c-text-muted)] hover:bg-[var(--c-border)] rounded"
             >
               {expanded ? 'Hide' : 'Detail'}
             </button>
@@ -673,7 +675,7 @@ function TaskRow({ task, onRefresh }: { task: Task; onRefresh: () => void }) {
           {task.status === 'failed' && (
             <button
               onClick={async () => { await window.api.orchestratorRetryTask(task.id); onRefresh() }}
-              className="px-2 py-1 text-[10px] bg-blue-600/20 text-blue-400 hover:bg-blue-600/40 rounded"
+              className="px-2 py-1 text-[length:var(--penny-task-fs-10)] bg-blue-600/20 text-blue-400 hover:bg-blue-600/40 rounded"
             >
               Retry
             </button>
@@ -681,7 +683,7 @@ function TaskRow({ task, onRefresh }: { task: Task; onRefresh: () => void }) {
           {(task.status === 'queued' || task.status === 'assigned' || task.status === 'active') && (
             <button
               onClick={async () => { await window.api.orchestratorCancelTask(task.id); onRefresh() }}
-              className="px-2 py-1 text-[10px] bg-red-600/20 text-red-400 hover:bg-red-600/40 rounded"
+              className="px-2 py-1 text-[length:var(--penny-task-fs-10)] bg-red-600/20 text-red-400 hover:bg-red-600/40 rounded"
             >
               Cancel
             </button>
@@ -741,7 +743,7 @@ function StageDots({
           <div key={stage} className="flex items-center">
             {idx > 0 && <div className="w-2 h-px bg-[var(--c-border)] mx-0.5" />}
             <span
-              className={`px-1.5 py-0.5 rounded text-[9px] font-medium border ${dotClass}`}
+              className={`px-1.5 py-0.5 rounded text-[length:var(--penny-task-fs-9)] font-medium border ${dotClass}`}
               title={result ? `${stage}: ${result.success ? 'PASS' : 'FAIL'} (${Math.round(result.durationMs / 1000)}s, ${result.provider})` : stage}
             >
               {STAGE_LABELS[stage]}
@@ -756,13 +758,13 @@ function StageDots({
 
 function StageResultRow({ result }: { result: StageResult }) {
   return (
-    <div className="text-xs">
+    <div className="text-[length:var(--penny-task-fs-12)]">
       <div className="flex items-center gap-2 mb-1">
         <span className={`font-medium ${result.success ? 'text-emerald-400' : 'text-red-400'}`}>
           {STAGE_LABELS[result.stage] || result.stage}
         </span>
         <span className="text-[var(--c-border-hover)]">{Math.round(result.durationMs / 1000)}s</span>
-        <span className={`px-1 rounded text-[9px] ${
+        <span className={`px-1 rounded text-[length:var(--penny-task-fs-9)] ${
           result.provider === 'ollama'
             ? 'bg-purple-600/20 text-purple-400'
             : result.provider === 'opencode'
@@ -777,7 +779,7 @@ function StageResultRow({ result }: { result: StageResult }) {
           {result.success ? 'PASS' : 'FAIL'}
         </span>
       </div>
-      <pre className="text-[var(--c-text-muted)] whitespace-pre-wrap text-[10px] max-h-24 overflow-y-auto bg-[color-mix(in_srgb,var(--c-bg-surface)_50%,transparent)] rounded px-2 py-1">
+      <pre className="text-[var(--c-text-muted)] whitespace-pre-wrap text-[length:var(--penny-task-fs-10)] max-h-24 overflow-y-auto bg-[color-mix(in_srgb,var(--c-bg-surface)_50%,transparent)] rounded px-2 py-1">
         {result.output.slice(0, 500) || '(no output)'}
       </pre>
     </div>
@@ -788,7 +790,7 @@ function StageResultRow({ result }: { result: StageResult }) {
 
 function AgentHealthView({ health, onRefresh }: { health: AgentHealthStatus[]; onRefresh: () => void }) {
   if (health.length === 0) {
-    return <div className="text-center text-[var(--c-border-hover)] py-12">No agents configured.</div>
+    return <div className="text-center text-[length:var(--penny-task-fs-14)] text-[var(--c-border-hover)] py-12">No agents configured.</div>
   }
 
   return (
@@ -813,8 +815,8 @@ function AgentHealthRow({ agent, onRefresh }: { agent: AgentHealthStatus; onRefr
     <div className="flex items-center gap-3 p-3 bg-[color-mix(in_srgb,var(--c-bg-elevated)_50%,transparent)] border border-[color-mix(in_srgb,var(--c-border)_50%,transparent)] rounded-lg">
       <div className={`w-2.5 h-2.5 rounded-full ${statusDot}`} />
       <div className="flex-1 min-w-0">
-        <div className="text-sm text-[var(--c-text-primary)]">{agent.name}</div>
-        <div className="flex items-center gap-3 mt-0.5 text-xs text-[var(--c-border-hover)]">
+        <div className="text-[length:var(--penny-task-fs-14)] text-[var(--c-text-primary)]">{agent.name}</div>
+        <div className="flex items-center gap-3 mt-0.5 text-[length:var(--penny-task-fs-12)] text-[var(--c-border-hover)]">
           {agent.alive && (
             <>
               <span>PID {agent.pid}</span>
@@ -834,7 +836,7 @@ function AgentHealthRow({ agent, onRefresh }: { agent: AgentHealthStatus; onRefr
       {agent.alive && (
         <button
           onClick={async () => { await window.api.orchestratorShutdownAgent(agent.agentId); onRefresh() }}
-          className="px-2 py-1 text-[10px] bg-red-600/20 text-red-400 hover:bg-red-600/40 rounded"
+          className="px-2 py-1 text-[length:var(--penny-task-fs-10)] bg-red-600/20 text-red-400 hover:bg-red-600/40 rounded"
         >
           Shutdown
         </button>
@@ -868,12 +870,12 @@ function VeritasBoardView({
     <div className="space-y-3">
       <div className="flex items-center justify-between p-3 bg-[color-mix(in_srgb,var(--c-bg-elevated)_40%,transparent)] border border-[color-mix(in_srgb,var(--c-border)_40%,transparent)] rounded-lg">
         <div>
-          <p className="text-sm text-[var(--c-text-primary)]">Veritas API</p>
-          <p className="text-xs text-[var(--c-border-hover)]">
+          <p className="text-[length:var(--penny-task-fs-14)] text-[var(--c-text-primary)]">Veritas API</p>
+          <p className="text-[length:var(--penny-task-fs-12)] text-[var(--c-border-hover)]">
             {status?.apiUrl || 'Unknown URL'}
           </p>
         </div>
-        <div className="flex items-center gap-3 text-xs">
+        <div className="flex items-center gap-3 text-[length:var(--penny-task-fs-12)]">
           <span className={status?.running ? 'text-emerald-400' : 'text-[var(--c-border-hover)]'}>
             Service: {status?.running ? 'running' : 'stopped'}
           </span>
@@ -890,7 +892,7 @@ function VeritasBoardView({
       </div>
 
       {counts && (
-        <div className="grid grid-cols-6 gap-2 text-xs">
+        <div className="grid grid-cols-6 gap-2 text-[length:var(--penny-task-fs-12)]">
           <VeritasCountCard label="Backlog" value={counts.backlog} />
           <VeritasCountCard label="Todo" value={counts.todo} />
           <VeritasCountCard label="In Progress" value={counts['in-progress']} />
@@ -901,15 +903,15 @@ function VeritasBoardView({
       )}
 
       {error && (
-        <div className="text-xs text-red-300 bg-red-500/10 border border-red-500/20 rounded px-3 py-2">
+        <div className="text-[length:var(--penny-task-fs-12)] text-red-300 bg-red-500/10 border border-red-500/20 rounded px-3 py-2">
           {error}
         </div>
       )}
 
       {loading && tasks.length === 0 ? (
-        <div className="text-center text-[var(--c-border-hover)] py-12">Loading Veritas tasks...</div>
+        <div className="text-center text-[length:var(--penny-task-fs-14)] text-[var(--c-border-hover)] py-12">Loading Veritas tasks...</div>
       ) : tasks.length === 0 ? (
-        <div className="text-center text-[var(--c-border-hover)] py-12">
+        <div className="text-center text-[length:var(--penny-task-fs-14)] text-[var(--c-border-hover)] py-12">
           No Veritas tasks found. Create one with the button above.
         </div>
       ) : (
@@ -932,8 +934,8 @@ function VeritasBoardView({
 function VeritasCountCard({ label, value }: { label: string; value: number }) {
   return (
     <div className="rounded border border-[color-mix(in_srgb,var(--c-border)_40%,transparent)] bg-[color-mix(in_srgb,var(--c-bg-elevated)_30%,transparent)] px-2 py-1.5">
-      <p className="text-[10px] uppercase tracking-wide text-[var(--c-border-hover)]">{label}</p>
-      <p className="text-sm text-[var(--c-text-primary)] font-semibold">{value}</p>
+      <p className="text-[length:var(--penny-task-fs-10)] uppercase tracking-wide text-[var(--c-border-hover)]">{label}</p>
+      <p className="text-[length:var(--penny-task-fs-14)] text-[var(--c-text-primary)] font-semibold">{value}</p>
     </div>
   )
 }
@@ -964,12 +966,12 @@ function VeritasTaskRow({
     <div className="flex items-center gap-3 p-3 bg-[color-mix(in_srgb,var(--c-bg-elevated)_50%,transparent)] border border-[color-mix(in_srgb,var(--c-border)_50%,transparent)] rounded-lg">
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
-          <span className={`text-[11px] font-medium ${priorityColors[task.priority]}`}>
+          <span className={`text-[length:var(--penny-task-fs-11)] font-medium ${priorityColors[task.priority]}`}>
             {task.priority.toUpperCase()}
           </span>
-          <span className="text-sm text-[var(--c-text-primary)] truncate">{task.title}</span>
+          <span className="text-[length:var(--penny-task-fs-14)] text-[var(--c-text-primary)] truncate">{task.title}</span>
         </div>
-        <div className="flex items-center gap-2 mt-1 text-xs text-[var(--c-border-hover)]">
+        <div className="flex items-center gap-2 mt-1 text-[length:var(--penny-task-fs-12)] text-[var(--c-border-hover)]">
           <span>{formatAge(task.updated || task.created || '')}</span>
           <span>{task.id}</span>
           {task.project && <span>{task.project}</span>}
@@ -980,7 +982,7 @@ function VeritasTaskRow({
         </div>
       </div>
 
-      <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium border ${statusColors[task.status]}`}>
+      <span className={`px-2 py-0.5 rounded-full text-[length:var(--penny-task-fs-10)] font-medium border ${statusColors[task.status]}`}>
         {task.status}
       </span>
 
@@ -988,7 +990,7 @@ function VeritasTaskRow({
         value={task.status}
         onChange={e => { void onUpdateStatus(task.id, e.target.value as VeritasTaskStatus) }}
         disabled={updating}
-        className="bg-[var(--c-bg-elevated)] border border-[var(--c-border)] rounded px-2 py-1 text-xs text-[var(--c-text-primary)] disabled:opacity-50"
+        className="bg-[var(--c-bg-elevated)] border border-[var(--c-border)] rounded px-2 py-1 text-[length:var(--penny-task-fs-12)] text-[var(--c-text-primary)] disabled:opacity-50"
         title="Update Veritas task status"
       >
         <option value="todo">todo</option>
@@ -1017,30 +1019,30 @@ function EnqueueModal({
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50">
       <div className="bg-[var(--c-bg-surface)] border border-[var(--c-border)] rounded-xl w-[480px] p-5 space-y-4">
-        <h3 className="text-lg font-semibold text-[var(--c-text-primary)]">New Task</h3>
+        <h3 className="text-[length:var(--penny-task-fs-18)] font-semibold text-[var(--c-text-primary)]">New Task</h3>
         <input
           value={title}
           onChange={e => setTitle(e.target.value)}
           placeholder="Task title"
-          className="w-full px-3 py-2 bg-[var(--c-bg-elevated)] border border-[var(--c-border)] rounded-lg text-sm text-[var(--c-text-primary)] placeholder-[var(--c-border)] focus:outline-none focus:border-blue-500"
+          className="w-full px-3 py-2 bg-[var(--c-bg-elevated)] border border-[var(--c-border)] rounded-lg text-[length:var(--penny-task-fs-14)] text-[var(--c-text-primary)] placeholder-[var(--c-border)] focus:outline-none focus:border-blue-500"
         />
         <textarea
           value={description}
           onChange={e => setDescription(e.target.value)}
           placeholder="Full task description (sent to the agent)"
           rows={4}
-          className="w-full px-3 py-2 bg-[var(--c-bg-elevated)] border border-[var(--c-border)] rounded-lg text-sm text-[var(--c-text-primary)] placeholder-[var(--c-border)] focus:outline-none focus:border-blue-500 resize-none"
+          className="w-full px-3 py-2 bg-[var(--c-bg-elevated)] border border-[var(--c-border)] rounded-lg text-[length:var(--penny-task-fs-14)] text-[var(--c-text-primary)] placeholder-[var(--c-border)] focus:outline-none focus:border-blue-500 resize-none"
         />
         <input
           value={project}
           onChange={e => setProject(e.target.value)}
           placeholder="atlas, sidekick, or absolute path (~/…)"
-          className="w-full px-3 py-2 bg-[var(--c-bg-elevated)] border border-[var(--c-border)] rounded-lg text-sm text-[var(--c-text-primary)] placeholder-[var(--c-border)] focus:outline-none focus:border-blue-500"
+          className="w-full px-3 py-2 bg-[var(--c-bg-elevated)] border border-[var(--c-border)] rounded-lg text-[length:var(--penny-task-fs-14)] text-[var(--c-text-primary)] placeholder-[var(--c-border)] focus:outline-none focus:border-blue-500"
         />
         <select
           value={priority}
           onChange={e => setPriority(e.target.value)}
-          className="w-full px-3 py-2 bg-[var(--c-bg-elevated)] border border-[var(--c-border)] rounded-lg text-sm text-[var(--c-text-primary)] focus:outline-none focus:border-blue-500"
+          className="w-full px-3 py-2 bg-[var(--c-bg-elevated)] border border-[var(--c-border)] rounded-lg text-[length:var(--penny-task-fs-14)] text-[var(--c-text-primary)] focus:outline-none focus:border-blue-500"
         >
           <option value="critical">Critical</option>
           <option value="high">High</option>
@@ -1050,7 +1052,7 @@ function EnqueueModal({
         <div className="flex justify-end gap-2">
           <button
             onClick={onClose}
-            className="px-4 py-2 text-sm text-[var(--c-text-muted)] hover:text-[var(--c-text-primary)]"
+            className="px-4 py-2 text-[length:var(--penny-task-fs-14)] text-[var(--c-text-muted)] hover:text-[var(--c-text-primary)]"
           >
             Cancel
           </button>
@@ -1060,7 +1062,7 @@ function EnqueueModal({
               onSubmit(title, description, project, priority)
             }}
             disabled={!title.trim() || !description.trim() || !project.trim()}
-            className="px-4 py-2 text-sm bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white rounded-lg"
+            className="px-4 py-2 text-[length:var(--penny-task-fs-14)] bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white rounded-lg"
           >
             Enqueue
           </button>
@@ -1088,30 +1090,30 @@ function VeritasCreateTaskModal({
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50">
       <div className="bg-[var(--c-bg-surface)] border border-[var(--c-border)] rounded-xl w-[520px] p-5 space-y-4">
-        <h3 className="text-lg font-semibold text-[var(--c-text-primary)]">New Veritas Task</h3>
+        <h3 className="text-[length:var(--penny-task-fs-18)] font-semibold text-[var(--c-text-primary)]">New Veritas Task</h3>
         <input
           value={title}
           onChange={e => setTitle(e.target.value)}
           placeholder="Task title"
-          className="w-full px-3 py-2 bg-[var(--c-bg-elevated)] border border-[var(--c-border)] rounded-lg text-sm text-[var(--c-text-primary)] placeholder-[var(--c-border)] focus:outline-none focus:border-violet-500"
+          className="w-full px-3 py-2 bg-[var(--c-bg-elevated)] border border-[var(--c-border)] rounded-lg text-[length:var(--penny-task-fs-14)] text-[var(--c-text-primary)] placeholder-[var(--c-border)] focus:outline-none focus:border-violet-500"
         />
         <textarea
           value={description}
           onChange={e => setDescription(e.target.value)}
           placeholder="Description (optional)"
           rows={4}
-          className="w-full px-3 py-2 bg-[var(--c-bg-elevated)] border border-[var(--c-border)] rounded-lg text-sm text-[var(--c-text-primary)] placeholder-[var(--c-border)] focus:outline-none focus:border-violet-500 resize-none"
+          className="w-full px-3 py-2 bg-[var(--c-bg-elevated)] border border-[var(--c-border)] rounded-lg text-[length:var(--penny-task-fs-14)] text-[var(--c-text-primary)] placeholder-[var(--c-border)] focus:outline-none focus:border-violet-500 resize-none"
         />
         <input
           value={project}
           onChange={e => setProject(e.target.value)}
           placeholder="Project (optional)"
-          className="w-full px-3 py-2 bg-[var(--c-bg-elevated)] border border-[var(--c-border)] rounded-lg text-sm text-[var(--c-text-primary)] placeholder-[var(--c-border)] focus:outline-none focus:border-violet-500"
+          className="w-full px-3 py-2 bg-[var(--c-bg-elevated)] border border-[var(--c-border)] rounded-lg text-[length:var(--penny-task-fs-14)] text-[var(--c-text-primary)] placeholder-[var(--c-border)] focus:outline-none focus:border-violet-500"
         />
         <select
           value={priority}
           onChange={e => setPriority(e.target.value as VeritasTaskPriority)}
-          className="w-full px-3 py-2 bg-[var(--c-bg-elevated)] border border-[var(--c-border)] rounded-lg text-sm text-[var(--c-text-primary)] focus:outline-none focus:border-violet-500"
+          className="w-full px-3 py-2 bg-[var(--c-bg-elevated)] border border-[var(--c-border)] rounded-lg text-[length:var(--penny-task-fs-14)] text-[var(--c-text-primary)] focus:outline-none focus:border-violet-500"
         >
           <option value="low">Low</option>
           <option value="medium">Medium</option>
@@ -1121,7 +1123,7 @@ function VeritasCreateTaskModal({
           <button
             onClick={onClose}
             disabled={submitting}
-            className="px-4 py-2 text-sm text-[var(--c-text-muted)] hover:text-[var(--c-text-primary)] disabled:opacity-50"
+            className="px-4 py-2 text-[length:var(--penny-task-fs-14)] text-[var(--c-text-muted)] hover:text-[var(--c-text-primary)] disabled:opacity-50"
           >
             Cancel
           </button>
@@ -1136,7 +1138,7 @@ function VeritasCreateTaskModal({
               }
             }}
             disabled={!title.trim() || submitting}
-            className="px-4 py-2 text-sm bg-violet-600 hover:bg-violet-500 disabled:opacity-40 text-white rounded-lg"
+            className="px-4 py-2 text-[length:var(--penny-task-fs-14)] bg-violet-600 hover:bg-violet-500 disabled:opacity-40 text-white rounded-lg"
           >
             {submitting ? 'Creating...' : 'Create in Veritas'}
           </button>
@@ -1159,11 +1161,11 @@ function GitHubKanbanView({ cards, onRefresh }: { cards: GitHubIssueCard[]; onRe
   if (cards.length === 0) {
     return (
       <div className="text-center text-[var(--c-border-hover)] py-12 space-y-2">
-        <p className="text-sm">No GitHub issues ingested yet.</p>
-        <p className="text-xs">Label issues with <code className="px-1.5 py-0.5 bg-[var(--c-bg-elevated)] rounded text-emerald-400">agent-ready</code> on GitHub to queue them.</p>
+        <p className="text-[length:var(--penny-task-fs-14)]">No GitHub issues ingested yet.</p>
+        <p className="text-[length:var(--penny-task-fs-12)]">Label issues with <code className="px-1.5 py-0.5 bg-[var(--c-bg-elevated)] rounded text-emerald-400">agent-ready</code> on GitHub to queue them.</p>
         <button
           onClick={async () => { await window.api.githubPollNow(); onRefresh() }}
-          className="mt-3 px-3 py-1.5 bg-[var(--c-border)] hover:bg-[var(--c-border)] text-[var(--c-text-primary)] text-xs rounded-md"
+          className="mt-3 px-3 py-1.5 bg-[var(--c-border)] hover:bg-[var(--c-border)] text-[var(--c-text-primary)] text-[length:var(--penny-task-fs-12)] rounded-md"
         >
           Poll Now
         </button>
@@ -1181,8 +1183,8 @@ function GitHubKanbanView({ cards, onRefresh }: { cards: GitHubIssueCard[]; onRe
       {columns.map(col => (
         <div key={col.key} className={`rounded-lg border ${col.color} bg-[color-mix(in_srgb,var(--c-bg-elevated)_20%,transparent)] flex flex-col`}>
           <div className="px-3 py-2 border-b border-[color-mix(in_srgb,var(--c-border)_30%,transparent)] flex items-center justify-between">
-            <span className="text-xs font-medium text-[var(--c-text-secondary)]">{col.label}</span>
-            <span className="text-[10px] text-[var(--c-border-hover)] bg-[var(--c-bg-elevated)] px-1.5 py-0.5 rounded-full">
+            <span className="text-[length:var(--penny-task-fs-12)] font-medium text-[var(--c-text-secondary)]">{col.label}</span>
+            <span className="text-[length:var(--penny-task-fs-10)] text-[var(--c-border-hover)] bg-[var(--c-bg-elevated)] px-1.5 py-0.5 rounded-full">
               {col.cards.length}
             </span>
           </div>
@@ -1213,34 +1215,34 @@ function GitHubIssueCardItem({ card, onRefresh }: { card: GitHubIssueCard; onRef
     <div className="bg-[color-mix(in_srgb,var(--c-bg-elevated)_60%,transparent)] border border-[color-mix(in_srgb,var(--c-border)_40%,transparent)] rounded-md p-2.5 space-y-1.5 hover:border-[color-mix(in_srgb,var(--c-border)_60%,transparent)] transition-colors">
       <div className="flex items-start gap-1.5">
         <div className={`w-1.5 h-1.5 rounded-full mt-1.5 flex-shrink-0 ${priorityDot[card.priority] || 'bg-[var(--c-border-hover)]'}`} />
-        <span className="text-xs text-[var(--c-text-primary)] leading-tight line-clamp-2">{card.title}</span>
+        <span className="text-[length:var(--penny-task-fs-12)] text-[var(--c-text-primary)] leading-tight line-clamp-2">{card.title}</span>
       </div>
       <div className="flex items-center gap-1.5 flex-wrap">
         <a
           href={card.url}
           onClick={(e) => { e.preventDefault(); void window.api.openDownloads() }}
-          className="text-[10px] text-blue-400 hover:text-blue-300 font-mono"
+          className="text-[length:var(--penny-task-fs-10)] text-blue-400 hover:text-blue-300 font-mono"
           title={card.url}
         >
           #{card.issueNumber}
         </a>
-        <span className="text-[10px] text-[var(--c-border)]">{card.repo.split('/')[1]}</span>
+        <span className="text-[length:var(--penny-task-fs-10)] text-[var(--c-border)]">{card.repo.split('/')[1]}</span>
         {stageLabel && (
-          <span className="text-[9px] px-1 py-0.5 rounded bg-blue-500/15 text-blue-400 border border-blue-500/20">
+          <span className="text-[length:var(--penny-task-fs-9)] px-1 py-0.5 rounded bg-blue-500/15 text-blue-400 border border-blue-500/20">
             {stageLabel}
           </span>
         )}
         {card.assignedAgent && (
-          <span className="text-[10px] text-[var(--c-border-hover)] truncate max-w-[80px]" title={card.assignedAgent}>
+          <span className="text-[length:var(--penny-task-fs-10)] text-[var(--c-border-hover)] truncate max-w-[calc(80px*var(--penny-ui-nav-scale))]" title={card.assignedAgent}>
             {card.assignedAgent}
           </span>
         )}
       </div>
-      <div className="text-[10px] text-[var(--c-border)]">{formatAge(card.ingestedAt)}</div>
+      <div className="text-[length:var(--penny-task-fs-10)] text-[var(--c-border)]">{formatAge(card.ingestedAt)}</div>
       {(card.taskStatus === 'queued' || card.taskStatus === 'assigned' || card.taskStatus === 'active') && (
         <button
           onClick={async () => { await window.api.orchestratorCancelTask(card.taskId); onRefresh() }}
-          className="text-[9px] text-red-400/60 hover:text-red-400 transition-colors"
+          className="text-[length:var(--penny-task-fs-9)] text-red-400/60 hover:text-red-400 transition-colors"
         >
           Cancel
         </button>
@@ -1248,7 +1250,7 @@ function GitHubIssueCardItem({ card, onRefresh }: { card: GitHubIssueCard; onRef
       {card.taskStatus === 'failed' && (
         <button
           onClick={async () => { await window.api.orchestratorRetryTask(card.taskId); onRefresh() }}
-          className="text-[9px] text-blue-400/60 hover:text-blue-400 transition-colors"
+          className="text-[length:var(--penny-task-fs-9)] text-blue-400/60 hover:text-blue-400 transition-colors"
         >
           Retry
         </button>
@@ -1263,7 +1265,7 @@ function TabButton({ active, onClick, children }: { active: boolean; onClick: ()
   return (
     <button
       onClick={onClick}
-      className={`px-3 py-1.5 text-xs rounded-md transition-all duration-150 ${
+      className={`px-3 py-1.5 text-[length:var(--penny-task-fs-12)] rounded-md transition-all duration-150 ${
         active
           ? 'bg-[var(--c-border)] text-[var(--c-text-primary)]'
           : 'text-[var(--c-text-muted)] hover:text-[var(--c-text-primary)] hover:bg-[var(--c-bg-elevated)]'

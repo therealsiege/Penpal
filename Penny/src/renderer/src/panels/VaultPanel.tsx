@@ -13,12 +13,28 @@ import { useEditorStore } from '../stores/editor-store'
 import { useVaultIndex } from '../stores/vault-index'
 import { useAppearanceStore } from '../stores/appearance-store'
 
+/** Default vault tree width before × `--penny-ui-nav-scale` (wider so names don’t clip) */
+const VAULT_SIDEBAR_BASE = 280
+const VAULT_SIDEBAR_MIN_BASE = 180
+const VAULT_SIDEBAR_MAX_BASE = 500
+const SHELL_RAIL_BASE_PX = 188
+/** Past scaled shell rail; keeps splitter drag aligned with `--penny-ui-nav-scale` */
+const VAULT_SPLITTER_LEADING_CHROME_PX = 18
+
+function readPennyUiNavScale(): number {
+  const raw = getComputedStyle(document.documentElement).getPropertyValue('--penny-ui-nav-scale').trim()
+  const n = parseFloat(raw)
+  return Number.isFinite(n) && n > 0 ? n : 2.125
+}
+
 export function VaultPanel() {
   const [previewPath, setPreviewPath] = useState<string | null>(null)
   const [selectedFiles, setSelectedFiles] = useState<Set<string>>(new Set())
   const [activeTag, setActiveTag] = useState<string | null>(null)
   const [filterPaths, setFilterPaths] = useState<Set<string> | null>(null)
-  const [sidebarWidth, setSidebarWidth] = useState(260)
+  const [sidebarWidth, setSidebarWidth] = useState(() =>
+    Math.round(VAULT_SIDEBAR_BASE * readPennyUiNavScale()),
+  )
   const [resizing, setResizing] = useState(false)
   const [showQuickSwitcher, setShowQuickSwitcher] = useState(false)
   const [showRightSidebar, setShowRightSidebar] = useState(false)
@@ -115,8 +131,11 @@ export function VaultPanel() {
   useEffect(() => {
     if (!resizing) return
     const handleMouseMove = (e: MouseEvent) => {
-      const newWidth = Math.max(180, Math.min(500, e.clientX - 140))
-      setSidebarWidth(newWidth)
+      const s = readPennyUiNavScale()
+      const railOffset = Math.round(SHELL_RAIL_BASE_PX * s + VAULT_SPLITTER_LEADING_CHROME_PX)
+      const minW = Math.round(VAULT_SIDEBAR_MIN_BASE * s)
+      const maxW = Math.round(VAULT_SIDEBAR_MAX_BASE * s)
+      setSidebarWidth(Math.max(minW, Math.min(maxW, e.clientX - railOffset)))
     }
     const handleMouseUp = () => setResizing(false)
     document.addEventListener('mousemove', handleMouseMove)
@@ -127,7 +146,7 @@ export function VaultPanel() {
     }
   }, [resizing])
 
-  const { zoom, zoomIn, zoomOut, zoomReset } = useAppearanceStore()
+  const { zoom, zoomIn, zoomOut, zoomReset, theme } = useAppearanceStore()
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -171,7 +190,7 @@ export function VaultPanel() {
 
   return (
     <div className="relative h-full overflow-hidden">
-      <div className="absolute inset-0 bg-cover bg-center bg-no-repeat" style={{ backgroundImage: 'url(vault-bg.jpg)' }} />
+      <div className="absolute inset-0 bg-cover bg-center bg-no-repeat" style={{ backgroundImage: theme === 'light' ? 'url(light-2.jpg)' : 'url(vault-bg.jpg)' }} />
       <div className="absolute inset-0 bg-[color-mix(in_srgb,var(--c-bg-app)_94%,transparent)]" />
     <div className="relative flex flex-col h-full vault-zoom vault-panel z-[1]" style={{ zoom }}>
       {/* Quick Switcher overlay */}
@@ -187,7 +206,7 @@ export function VaultPanel() {
         <div className="drag-region flex-1 h-2" />
         <button
           onClick={() => setShowQuickSwitcher(true)}
-          className="text-[15px] text-[var(--c-border-hover)] hover:text-[var(--c-text-secondary)] px-2.5 py-1.5 rounded bg-[color-mix(in_srgb,var(--c-bg-elevated)_40%,transparent)] transition-colors"
+          className="text-[length:calc(15px*var(--penny-ui-nav-scale))] text-[var(--c-border-hover)] hover:text-[var(--c-text-secondary)] px-2.5 py-1.5 rounded bg-[color-mix(in_srgb,var(--c-bg-elevated)_40%,transparent)] transition-colors"
           title="Quick Open (Cmd+P)"
         >
           Open...
@@ -202,7 +221,7 @@ export function VaultPanel() {
         <TagFilter activeTag={activeTag} onSelectTag={setActiveTag} />
         <button
           onClick={() => setShowRightSidebar(s => !s)}
-          className={`text-[15px] px-2.5 py-1.5 rounded transition-colors ${
+          className={`text-[length:calc(15px*var(--penny-ui-nav-scale))] px-2.5 py-1.5 rounded transition-colors ${
             showRightSidebar ? 'bg-[color-mix(in_srgb,var(--c-accent)_12%,transparent)] text-[var(--c-accent-blue)]' : 'text-[var(--c-border-hover)] hover:text-[var(--c-text-secondary)] bg-[color-mix(in_srgb,var(--c-bg-elevated)_40%,transparent)]'
           }`}
           title="Toggle Outline (Cmd+\\)"
@@ -224,7 +243,7 @@ export function VaultPanel() {
               <button
                 key={mode}
                 onClick={() => setLeftSidebarMode(mode)}
-                className={`flex-1 px-2 py-1.5 text-[15px] capitalize transition-colors ${
+                className={`flex-1 px-2 py-1.5 text-[length:calc(15px*var(--penny-ui-nav-scale))] capitalize transition-colors ${
                   leftSidebarMode === mode
                     ? 'text-[var(--c-accent-blue)] bg-[color-mix(in_srgb,var(--c-bg-elevated)_40%,transparent)]'
                     : 'text-[var(--c-border-hover)] hover:text-[var(--c-text-secondary)]'
@@ -265,7 +284,7 @@ export function VaultPanel() {
 
         {/* Right sidebar (outline/backlinks) */}
         {showRightSidebar && (
-          <div className="shrink-0 w-[200px]">
+          <div className="shrink-0 w-[length:calc(200px*var(--penny-ui-nav-scale))]">
             <SidePanel />
           </div>
         )}
@@ -273,7 +292,7 @@ export function VaultPanel() {
 
       {/* Bottom bar */}
       <div className="shrink-0 flex items-center justify-between px-3 py-2 border-t border-[color-mix(in_srgb,var(--c-border)_60%,transparent)] bg-[color-mix(in_srgb,var(--c-bg-surface)_40%,transparent)]">
-        <div className="text-[15px] text-[var(--c-border-hover)]">
+        <div className="text-[length:calc(15px*var(--penny-ui-nav-scale))] text-[var(--c-border-hover)]">
           {selectedFiles.size > 0
             ? `${selectedFiles.size} file${selectedFiles.size > 1 ? 's' : ''} selected`
             : tabs.length > 0
@@ -291,9 +310,9 @@ export function VaultPanel() {
         <div className="flex items-center gap-1">
           <SendToAgent selectedFiles={selectedFiles} />
           <span className="mx-2 w-px h-4 bg-[color-mix(in_srgb,var(--c-bg-elevated)_60%,transparent)]" />
-          <button onClick={zoomOut} className="w-7 h-7 rounded text-[var(--c-border-hover)] hover:text-[var(--c-text-secondary)] hover:bg-[color-mix(in_srgb,var(--c-bg-elevated)_60%,transparent)] flex items-center justify-center text-[15px] transition-colors" title="Zoom Out (Cmd+-)">-</button>
-          <button onClick={zoomReset} className="px-1.5 h-7 rounded text-[var(--c-border-hover)] hover:text-[var(--c-text-secondary)] hover:bg-[color-mix(in_srgb,var(--c-bg-elevated)_60%,transparent)] text-xs tabular-nums transition-colors" title="Reset Zoom (Cmd+0)">{Math.round(zoom * 100)}%</button>
-          <button onClick={zoomIn} className="w-7 h-7 rounded text-[var(--c-border-hover)] hover:text-[var(--c-text-secondary)] hover:bg-[color-mix(in_srgb,var(--c-bg-elevated)_60%,transparent)] flex items-center justify-center text-[15px] transition-colors" title="Zoom In (Cmd+=)">+</button>
+          <button onClick={zoomOut} className="w-7 h-7 rounded text-[var(--c-border-hover)] hover:text-[var(--c-text-secondary)] hover:bg-[color-mix(in_srgb,var(--c-bg-elevated)_60%,transparent)] flex items-center justify-center text-[length:calc(15px*var(--penny-ui-nav-scale))] transition-colors" title="Zoom Out (Cmd+-)">-</button>
+          <button onClick={zoomReset} className="px-1.5 h-7 rounded text-[var(--c-border-hover)] hover:text-[var(--c-text-secondary)] hover:bg-[color-mix(in_srgb,var(--c-bg-elevated)_60%,transparent)] text-[length:calc(12px*var(--penny-ui-nav-scale))] tabular-nums transition-colors" title="Reset Zoom (Cmd+0)">{Math.round(zoom * 100)}%</button>
+          <button onClick={zoomIn} className="w-7 h-7 rounded text-[var(--c-border-hover)] hover:text-[var(--c-text-secondary)] hover:bg-[color-mix(in_srgb,var(--c-bg-elevated)_60%,transparent)] flex items-center justify-center text-[length:calc(15px*var(--penny-ui-nav-scale))] transition-colors" title="Zoom In (Cmd+=)">+</button>
         </div>
       </div>
     </div>

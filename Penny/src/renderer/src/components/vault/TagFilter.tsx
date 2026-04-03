@@ -37,7 +37,7 @@ export function TagFilter({ activeTag, onSelectTag }: TagFilterProps) {
     <div className="relative" ref={ref}>
       <button
         onClick={() => setOpen(!open)}
-        className={`px-2 py-1.5 rounded text-xs border transition-colors flex items-center gap-1 ${
+        className={`px-2 py-1.5 rounded text-[length:calc(12px*var(--penny-ui-nav-scale))] border transition-colors flex items-center gap-1 ${
           activeTag
             ? 'bg-blue-600/20 border-blue-600/40 text-blue-300'
             : 'bg-[color-mix(in_srgb,var(--c-bg-elevated)_60%,transparent)] border-[color-mix(in_srgb,var(--c-border)_50%,transparent)] text-[var(--c-text-muted)] hover:text-[var(--c-text-secondary)]'
@@ -64,10 +64,10 @@ export function TagFilter({ activeTag, onSelectTag }: TagFilterProps) {
       {open && (
         <div className="absolute top-full right-0 mt-1 w-56 bg-[var(--c-bg-surface)] border border-[color-mix(in_srgb,var(--c-border)_50%,transparent)] rounded shadow-xl z-50 max-h-64 overflow-y-auto">
           {!loaded && (
-            <div className="px-3 py-2 text-xs text-[var(--c-border-hover)]">Loading tags...</div>
+            <div className="px-3 py-2 text-[length:calc(12px*var(--penny-ui-nav-scale))] text-[var(--c-border-hover)]">Loading tags...</div>
           )}
           {loaded && tags.length === 0 && (
-            <div className="px-3 py-2 text-xs text-[var(--c-border)]">No tags found</div>
+            <div className="px-3 py-2 text-[length:calc(12px*var(--penny-ui-nav-scale))] text-[var(--c-border)]">No tags found</div>
           )}
           {tags.map(t => (
             <button
@@ -80,8 +80,8 @@ export function TagFilter({ activeTag, onSelectTag }: TagFilterProps) {
                 t.name === activeTag ? 'text-blue-300' : 'text-[var(--c-text-muted)]'
               }`}
             >
-              <span className="text-xs truncate">#{t.name}</span>
-              <span className="text-[10px] text-[var(--c-border)] shrink-0 ml-2">{t.count}</span>
+              <span className="text-[length:calc(12px*var(--penny-ui-nav-scale))] truncate">#{t.name}</span>
+              <span className="text-[length:calc(10px*var(--penny-ui-nav-scale))] text-[var(--c-border)] shrink-0 ml-2">{t.count}</span>
             </button>
           ))}
         </div>

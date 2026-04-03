@@ -49,7 +49,7 @@ export function VaultSearch({ onSelectResult, onSearchActive }: VaultSearchProps
     <div className="relative flex-1">
       <div className="relative">
         <svg
-          className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[var(--c-border-hover)]"
+          className="absolute left-2.5 top-1/2 -translate-y-1/2 w-[calc(14px*var(--penny-ui-nav-scale))] h-[calc(14px*var(--penny-ui-nav-scale))] text-[var(--c-border-hover)]"
           viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
           strokeLinecap="round" strokeLinejoin="round"
         >
@@ -62,12 +62,12 @@ export function VaultSearch({ onSelectResult, onSearchActive }: VaultSearchProps
           onChange={e => handleChange(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder="Search vault..."
-          className="w-full pl-8 pr-8 py-1.5 bg-[color-mix(in_srgb,var(--c-bg-elevated)_60%,transparent)] border border-[color-mix(in_srgb,var(--c-border)_50%,transparent)] rounded text-xs text-[var(--c-text-primary)] placeholder-[var(--c-border)] focus:outline-none focus:border-blue-600/50"
+          className="w-full pl-8 pr-8 py-1.5 bg-[color-mix(in_srgb,var(--c-bg-elevated)_60%,transparent)] border border-[color-mix(in_srgb,var(--c-border)_50%,transparent)] rounded text-[length:calc(12px*var(--penny-ui-nav-scale))] text-[var(--c-text-primary)] placeholder-[var(--c-border)] focus:outline-none focus:border-blue-600/50"
         />
         {query && (
           <button
             onClick={handleClear}
-            className="absolute right-2 top-1/2 -translate-y-1/2 text-[var(--c-border-hover)] hover:text-[var(--c-text-secondary)] text-xs"
+            className="absolute right-2 top-1/2 -translate-y-1/2 text-[var(--c-border-hover)] hover:text-[var(--c-text-secondary)] text-[length:calc(12px*var(--penny-ui-nav-scale))]"
           >
             x
           </button>
@@ -78,7 +78,7 @@ export function VaultSearch({ onSelectResult, onSearchActive }: VaultSearchProps
       {(results.length > 0 || (searching && query.length >= 2)) && (
         <div className="absolute top-full left-0 right-0 mt-1 bg-[var(--c-bg-surface)] border border-[color-mix(in_srgb,var(--c-border)_50%,transparent)] rounded shadow-xl z-50 max-h-80 overflow-y-auto">
           {searching && (
-            <div className="px-3 py-2 text-xs text-[var(--c-border-hover)]">Searching...</div>
+            <div className="px-3 py-2 text-[length:calc(12px*var(--penny-ui-nav-scale))] text-[var(--c-border-hover)]">Searching...</div>
           )}
           {results.map((r, i) => (
             <button
@@ -89,14 +89,14 @@ export function VaultSearch({ onSelectResult, onSearchActive }: VaultSearchProps
               }}
               className="w-full text-left px-3 py-1.5 hover:bg-[color-mix(in_srgb,var(--c-bg-elevated)_60%,transparent)] transition-colors block"
             >
-              <div className="text-xs text-[var(--c-text-secondary)] truncate">{r.path}</div>
+              <div className="text-[length:calc(12px*var(--penny-ui-nav-scale))] text-[var(--c-text-secondary)] truncate">{r.path}</div>
               {r.text && (
-                <div className="text-[10px] text-[var(--c-border-hover)] truncate mt-0.5">{r.text}</div>
+                <div className="text-[length:calc(10px*var(--penny-ui-nav-scale))] text-[var(--c-border-hover)] truncate mt-0.5">{r.text}</div>
               )}
             </button>
           ))}
           {!searching && results.length === 0 && query.length >= 2 && (
-            <div className="px-3 py-2 text-xs text-[var(--c-border)]">No results</div>
+            <div className="px-3 py-2 text-[length:calc(12px*var(--penny-ui-nav-scale))] text-[var(--c-border)]">No results</div>
           )}
         </div>
       )}
