@@ -242,6 +242,8 @@ export interface BuildCliOpts {
   dispatch?: boolean
   headless?: boolean
   permissionMode?: string
+  /** Override the agent's default model (e.g. 'opus', 'sonnet', 'haiku'). */
+  modelOverride?: string
 }
 
 /** System prompt + agent tag (same text Claude Code receives via --append-system-prompt). */
@@ -412,6 +414,7 @@ export function buildAgentHeadlessInvocation(
       headless: true,
       permissionMode: opts.permissionMode,
       dispatch: opts.dispatch,
+      modelOverride: opts.modelOverride,
     })
     return { command: 'claude', args: [...cliArgs, '--', userPrompt], cwd: resolvedCwd }
   }
@@ -422,7 +425,7 @@ export function buildAgentHeadlessInvocation(
   if (runner === 'opencode') {
     const agent = getAgentConfig(agentId)
     if (!agent) throw new Error(`Unknown agent: ${agentId}`)
-    const model = mapModelToOpenCodeModel(agent.model)
+    const model = mapModelToOpenCodeModel(opts.modelOverride || agent.model)
     const args: string[] = ['run', '-m', model]
     const attach = process.env.PENNY_OPENCODE_ATTACH?.trim() || process.env.OPENCODE_RUN_ATTACH?.trim()
     if (attach) {
@@ -455,7 +458,7 @@ export function buildAgentCliArgs(agentId: string, cwd: string, opts: BuildCliOp
   }
 
   args.push('--append-system-prompt', taggedPrompt)
-  args.push('--model', agent.model)
+  args.push('--model', opts.modelOverride || agent.model)
 
   // Permission handling: explicit override > headless default > dispatch > agent config
   if (opts.permissionMode) {

@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { useAppearanceStore } from '../stores/appearance-store'
 
 interface ScriptCard {
   id: string
@@ -112,6 +113,7 @@ function Spinner() {
 }
 
 export function DataPanel() {
+  const uiTheme = useAppearanceStore((s) => s.theme)
   const [runs, setRuns] = useState<Map<string, RunState>>(new Map())
   const [expandedRun, setExpandedRun] = useState<string | null>(null)
   const [selectedDirs, setSelectedDirs] = useState<Record<string, string>>({})
@@ -220,7 +222,7 @@ export function DataPanel() {
 
   return (
     <div className="relative h-full overflow-hidden">
-      <div className="absolute inset-0 bg-cover bg-center bg-no-repeat" style={{ backgroundImage: 'url(data-bg.jpg)' }} />
+      <div className="absolute inset-0 bg-cover bg-center bg-no-repeat" style={{ backgroundImage: uiTheme === 'light' ? 'url(light-2.jpg)' : 'url(data-bg.jpg)' }} />
       <div className="absolute inset-0 bg-[color-mix(in_srgb,var(--c-bg-app)_94%,transparent)]" />
     <div className="relative h-full flex flex-col overflow-hidden">
       {/* Header */}

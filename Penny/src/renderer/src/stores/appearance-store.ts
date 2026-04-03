@@ -74,9 +74,9 @@ const saved = loadPersisted()
 const defaults = {
   theme: (['dark', 'light'].includes(saved.theme as string) ? saved.theme as ThemeName : 'dark'),
   uiFontFamily: saved.uiFontFamily || "-apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif",
-  uiFontSize: saved.uiFontSize || 15,
+  uiFontSize: typeof saved.uiFontSize === 'number' ? saved.uiFontSize : 17,
   editorFontFamily: saved.editorFontFamily || "ui-monospace, 'SF Mono', 'Cascadia Code', 'Fira Code', Menlo, monospace",
-  editorFontSize: saved.editorFontSize || 15,
+  editorFontSize: typeof saved.editorFontSize === 'number' ? saved.editorFontSize : 17,
   editorLineHeight: saved.editorLineHeight || 1.6,
   zoom: saved.zoom || 1.0,
   scanlinesOverlay: typeof (saved as { scanlinesOverlay?: boolean }).scanlinesOverlay === 'boolean'

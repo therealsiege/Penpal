@@ -18,6 +18,7 @@ import os from 'os'
 const execFileAsync = promisify(execFile)
 import { runAgentHeadless } from './sessions'
 import { atomicWrite } from './atomic-store'
+import { postPipelineNotification, dmOwner } from './slack-bridge'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -30,6 +31,7 @@ export interface PipelineIssue {
   body: string
   stage: PipelineStage
   priority: string
+  size: TShirtSize
   ingestedAt: number
   updatedAt: number
   branch?: string
@@ -59,11 +61,66 @@ interface GHIssue {
   labels: { name: string }[]
 }
 
+// ── T-shirt sizing ──────────────────────────────────────────────────────────
+
+export type TShirtSize = 'S' | 'M' | 'L' | 'XL'
+
+interface SizeProfile {
+  plannerModel: string
+  executorModel: string
+  plannerTimeoutMs: number
+  executorTimeoutMs: number
+  maxAttempts: number
+}
+
+const SIZE_PROFILES: Record<TShirtSize, SizeProfile> = {
+  S: {
+    plannerModel: 'haiku',
+    executorModel: 'sonnet',
+    plannerTimeoutMs: 300_000,   // 5 min
+    executorTimeoutMs: 300_000,  // 5 min
+    maxAttempts: 2,
+  },
+  M: {
+    plannerModel: 'sonnet',
+    executorModel: 'sonnet',
+    plannerTimeoutMs: 600_000,   // 10 min
+    executorTimeoutMs: 600_000,  // 10 min
+    maxAttempts: 3,
+  },
+  L: {
+    plannerModel: 'sonnet',
+    executorModel: 'opus',
+    plannerTimeoutMs: 900_000,   // 15 min
+    executorTimeoutMs: 900_000,  // 15 min
+    maxAttempts: 3,
+  },
+  XL: {
+    plannerModel: 'opus',
+    executorModel: 'opus',
+    plannerTimeoutMs: 900_000,   // 15 min
+    executorTimeoutMs: 900_000,  // 15 min
+    maxAttempts: 3,
+  },
+}
+
+const DEFAULT_SIZE: TShirtSize = 'M'
+
+function detectTShirtSize(labels: { name: string }[]): TShirtSize {
+  for (const l of labels) {
+    const m = l.name.match(/^size[:\/]?\s*(XL|L|M|S)$/i)
+    if (m) return m[1].toUpperCase() as TShirtSize
+  }
+  return DEFAULT_SIZE
+}
+
+function getSizeProfile(size: TShirtSize): SizeProfile {
+  return SIZE_PROFILES[size] ?? SIZE_PROFILES[DEFAULT_SIZE]
+}
+
 // ── Constants ────────────────────────────────────────────────────────────────
 
 const QUESTION_TIMEOUT_MS = 7 * 24 * 60 * 60 * 1000 // 7 days
-const PLANNER_TIMEOUT_MS = 900_000  // 15 min
-const EXECUTOR_TIMEOUT_MS = 900_000 // 15 min
 const MAX_EXECUTOR_ATTEMPTS = 3
 
 // ── Label helpers ────────────────────────────────────────────────────────────
@@ -359,26 +416,37 @@ async function pushBranchAndCreatePR(
 ): Promise<boolean> {
   localPath = expandHome(localPath)
   try {
+    // Commit any uncommitted changes left by the executor
     await execFileAsync('git', ['add', '-A'], { cwd: localPath, encoding: 'utf-8', timeout: 15_000 })
     const { stdout: status } = await execFileAsync('git', ['status', '--porcelain'], {
       cwd: localPath, encoding: 'utf-8', timeout: 10_000,
     })
-    if (!status.trim()) return false
+    if (status.trim()) {
+      const commitMsg = `${title}\n\nCloses #${issueNumber}\n\nCo-Authored-By: Penny Orchestrator <noreply@penny.dev>`
+      await execFileAsync('git', ['commit', '-m', commitMsg], {
+        cwd: localPath, encoding: 'utf-8', timeout: 15_000,
+      })
+    }
 
-    const commitMsg = `${title}\n\nCloses #${issueNumber}\n\nCo-Authored-By: Penny Orchestrator <noreply@penny.dev>`
-    await execFileAsync('git', ['commit', '-m', commitMsg], {
-      cwd: localPath, encoding: 'utf-8', timeout: 15_000,
+    // Check if the branch has any commits ahead of origin (executor may have committed already)
+    const baseBranch = await resolveRemoteDefaultBranch(localPath)
+    const { stdout: revList } = await execFileAsync('git', ['rev-list', '--count', `origin/${baseBranch}..HEAD`], {
+      cwd: localPath, encoding: 'utf-8', timeout: 10_000,
     })
+    if (parseInt(revList.trim(), 10) === 0) {
+      console.log(`[github-pipeline] No commits ahead of origin/${baseBranch} for ${branch} — nothing to push`)
+      return false
+    }
+
     await execFileAsync('git', ['push', '-u', 'origin', branch], {
       cwd: localPath, encoding: 'utf-8', timeout: 60_000,
     })
     const prBody = `Closes #${issueNumber}\n\nAutomated implementation by Penny orchestrator (2-agent pipeline).`
-    const prBase = await resolveRemoteDefaultBranch(localPath)
     await execFileAsync('gh', [
       'pr', 'create',
       '--repo', `${config.owner}/${config.repo}`,
       '--head', branch,
-      '--base', prBase,
+      '--base', baseBranch,
       '--title', title,
       '--body', prBody,
     ], { cwd: localPath, encoding: 'utf-8', timeout: 30_000 })
@@ -407,7 +475,8 @@ function buildPlannerPrompt(issue: GHIssue, repoKey: string, answerContext?: str
     issue.body || '(no description)',
     '',
     'Output a numbered plan with exact file paths and changes. Be concise — the executor agent implements from your plan.',
-    'If unclear, output QUESTION: followed by your question.',
+    'Only output QUESTION: if you genuinely cannot proceed without an answer (e.g. ambiguous requirements, missing context about business logic).',
+    'Do NOT ask about tests, tooling, or things you can discover by reading the code. Just plan the fix.',
   ]
   if (answerContext) {
     parts.push('', '## Previous Question Context', '', answerContext)
@@ -448,11 +517,13 @@ async function runPlannerAgent(
 ): Promise<'done' | 'question' | 'failed'> {
   const repoKey = `${config.owner}/${config.repo}`
   const prompt = buildPlannerPrompt(issue, repoKey, answerContext)
+  const profile = getSizeProfile(tracked.size)
 
-  console.log(`[github-pipeline] Running planner for ${repoKey}#${tracked.number}`)
+  console.log(`[github-pipeline] Running planner for ${repoKey}#${tracked.number} (size=${tracked.size}, model=${profile.plannerModel})`)
   const result = await runAgentHeadless('issue-planner', config.localPath, prompt, {
-    timeoutMs: PLANNER_TIMEOUT_MS,
+    timeoutMs: profile.plannerTimeoutMs,
     phase: 'planning',
+    modelOverride: profile.plannerModel,
   })
 
   if (!result.success) {
@@ -494,11 +565,14 @@ async function runExecutorAgent(
   const repoKey = `${config.owner}/${config.repo}`
   const agentCwd = tracked.worktreePath || config.localPath
   const prompt = buildExecutorPrompt(tracked, repoKey)
+  const profile = getSizeProfile(tracked.size)
+  const maxAttempts = profile.maxAttempts
 
-  console.log(`[github-pipeline] Running executor for ${repoKey}#${tracked.number} (attempt ${tracked.executorAttempts + 1}/${MAX_EXECUTOR_ATTEMPTS})`)
+  console.log(`[github-pipeline] Running executor for ${repoKey}#${tracked.number} (size=${tracked.size}, model=${profile.executorModel}, attempt ${tracked.executorAttempts + 1}/${maxAttempts})`)
   const result = await runAgentHeadless('electron-dev', agentCwd, prompt, {
-    timeoutMs: EXECUTOR_TIMEOUT_MS,
+    timeoutMs: profile.executorTimeoutMs,
     phase: 'executing',
+    modelOverride: profile.executorModel,
   })
 
   if (!result.success) {
@@ -527,6 +601,10 @@ function loadState(): void {
   try {
     if (fs.existsSync(STATE_PATH)) {
       state = JSON.parse(fs.readFileSync(STATE_PATH, 'utf-8'))
+      // Backfill size for issues created before t-shirt sizing
+      for (const issue of state.issues) {
+        if (!issue.size) issue.size = DEFAULT_SIZE
+      }
     }
   } catch { state = { issues: [] } }
 }
@@ -549,6 +627,9 @@ export async function ingestIssue(config: RepoConfig, issue: GHIssue): Promise<P
     return existing // already in pipeline
   }
 
+  const size = detectTShirtSize(issue.labels)
+  const profile = getSizeProfile(size)
+
   const entry: PipelineIssue = {
     number: issue.number,
     repo: repoKey,
@@ -556,6 +637,7 @@ export async function ingestIssue(config: RepoConfig, issue: GHIssue): Promise<P
     body: issue.body || '',
     stage: 'planning',
     priority: 'normal',
+    size,
     ingestedAt: Date.now(),
     updatedAt: Date.now(),
     executorAttempts: 0,
@@ -571,7 +653,7 @@ export async function ingestIssue(config: RepoConfig, issue: GHIssue): Promise<P
   await Promise.allSettled([
     setLabel(config, issue.number, ['agent-ready'], 'agent-planning'),
     addComment(config, issue.number,
-      '🤖 **Picked up by Penny** (2-agent pipeline)\n\nPlanner agent is designing the approach...',
+      `🤖 **Picked up by Penny** (2-agent pipeline, size **${size}**)\n\nPlanner: \`${profile.plannerModel}\` · Executor: \`${profile.executorModel}\`\n\nPlanner agent is designing the approach...`,
     ),
   ])
 
@@ -640,10 +722,15 @@ export async function drivePipeline(repos: RepoConfig[]): Promise<void> {
           tracked.stage = 'awaiting-answer'
           tracked.questionPostedAt = Date.now()
           tracked.updatedAt = Date.now()
+          const repoKey = `${config.owner}/${config.repo}`
           await Promise.allSettled([
             setLabel(config, tracked.number, ['agent-planning'], 'agent-question'),
             addComment(config, tracked.number,
               `❓ **Agent question:**\n\n${tracked.questionComment}\n\n_Remove the \`agent-question\` label when you've answered to resume planning._`,
+            ),
+            dmOwner(
+              `:question: *${repoKey}#${tracked.number}* needs your input:\n>${tracked.questionComment}\n\n<https://github.com/${repoKey}/issues/${tracked.number}|Answer on GitHub>`,
+              ':question:',
             ),
           ])
         } else {
@@ -656,6 +743,10 @@ export async function drivePipeline(repos: RepoConfig[]): Promise<void> {
             setLabel(config, tracked.number, ['agent-planning'], 'agent-failed'),
             addComment(config, tracked.number,
               `❌ **Planning failed**\n\n${errorBody}\n\nTo retry, remove \`agent-failed\` and add \`agent-ready\`.`,
+            ),
+            postPipelineNotification(
+              `:x: *${config.owner}/${config.repo}#${tracked.number}* planning failed\n<https://github.com/${config.owner}/${config.repo}/issues/${tracked.number}|View issue>`,
+              ':x:',
             ),
           ])
         }
@@ -727,9 +818,13 @@ export async function drivePipeline(repos: RepoConfig[]): Promise<void> {
             addComment(config, tracked.number,
               `✅ **Implementation complete**${prCreated ? '\nA pull request has been created for review.' : ''}`,
             ),
+            postPipelineNotification(
+              `:white_check_mark: *${tracked.repo}#${tracked.number}* done (size ${tracked.size})${prCreated ? ' — PR created' : ''}\n<https://github.com/${tracked.repo}/issues/${tracked.number}|View issue>`,
+              ':white_check_mark:',
+            ),
           ])
-        } else if (tracked.executorAttempts < MAX_EXECUTOR_ATTEMPTS) {
-          console.log(`[github-pipeline] Executor retry for #${tracked.number} (${tracked.executorAttempts}/${MAX_EXECUTOR_ATTEMPTS})`)
+        } else if (tracked.executorAttempts < getSizeProfile(tracked.size).maxAttempts) {
+          console.log(`[github-pipeline] Executor retry for #${tracked.number} (${tracked.executorAttempts}/${getSizeProfile(tracked.size).maxAttempts})`)
         } else {
           if (tracked.worktreePath) await cleanupWorktree(config.localPath, tracked.worktreePath)
           tracked.stage = 'failed'
@@ -737,10 +832,19 @@ export async function drivePipeline(repos: RepoConfig[]): Promise<void> {
           const execErrorBody = tracked.lastError
             ? `\`\`\`\n${tracked.lastError.slice(0, 1000)}\n\`\`\``
             : ''
+          const maxAtt = getSizeProfile(tracked.size).maxAttempts
           await Promise.allSettled([
             setLabel(config, tracked.number, ['agent-executing'], 'agent-failed'),
             addComment(config, tracked.number,
-              `❌ **Executor failed** after ${MAX_EXECUTOR_ATTEMPTS} attempts.\n\n${execErrorBody}\n\nTo retry, remove \`agent-failed\` and add \`agent-ready\`.`,
+              `❌ **Executor failed** after ${maxAtt} attempts.\n\n${execErrorBody}\n\nTo retry, remove \`agent-failed\` and add \`agent-ready\`.`,
+            ),
+            postPipelineNotification(
+              `:x: *${tracked.repo}#${tracked.number}* failed after ${maxAtt} attempts (size ${tracked.size})\n<https://github.com/${tracked.repo}/issues/${tracked.number}|View issue>`,
+              ':x:',
+            ),
+            dmOwner(
+              `:x: *${tracked.repo}#${tracked.number}* executor failed after ${maxAtt} attempts (size ${tracked.size})\n<https://github.com/${tracked.repo}/issues/${tracked.number}|View issue>`,
+              ':x:',
             ),
           ])
         }

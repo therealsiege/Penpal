@@ -620,3 +620,92 @@ export async function stopSlackBridge(): Promise<void> {
 export function isSlackBridgeRunning(): boolean {
   return slackApp !== null
 }
+
+// ── Pipeline Notifications ─────────────────────────────────────────────────
+
+/** Default channel for pipeline alerts (looked up once, cached). */
+let pipelineChannelId: string | null = null
+
+async function resolvePipelineChannel(): Promise<string | null> {
+  if (pipelineChannelId) return pipelineChannelId
+  if (!slackApp) return null
+
+  const target = process.env.SLACK_PIPELINE_CHANNEL || `${CHANNEL_PREFIX}-pipeline`
+  try {
+    const result = await slackApp.client.conversations.list({
+      types: 'public_channel',
+      limit: 1000,
+      exclude_archived: true,
+    })
+    const ch = (result.channels || []).find(c => c.name === target && !c.is_archived)
+    if (ch?.id) {
+      pipelineChannelId = ch.id
+      await slackApp.client.conversations.join({ channel: ch.id }).catch(() => {})
+      return pipelineChannelId
+    }
+
+    // Create it
+    const created = await slackApp.client.conversations.create({ name: target, is_private: false })
+    if (created.channel?.id) {
+      pipelineChannelId = created.channel.id
+      await slackApp.client.conversations.join({ channel: pipelineChannelId }).catch(() => {})
+      await slackApp.client.conversations.setTopic({
+        channel: pipelineChannelId,
+        topic: 'GitHub issue pipeline notifications from Penny',
+      }).catch(() => {})
+      return pipelineChannelId
+    }
+  } catch (err) {
+    console.error('[slack-bridge] Failed to resolve pipeline channel:', err)
+  }
+  return null
+}
+
+/**
+ * Post a notification to the pipeline Slack channel.
+ * Used by github-pipeline for questions, failures, and completions.
+ */
+export async function postPipelineNotification(text: string, emoji = ':robot_face:'): Promise<void> {
+  const channelId = await resolvePipelineChannel()
+  if (!channelId || !slackApp) return
+
+  try {
+    await slackApp.client.chat.postMessage({
+      channel: channelId,
+      text,
+      username: 'Penny Pipeline',
+      icon_emoji: emoji,
+    })
+  } catch (err) {
+    console.error('[slack-bridge] Failed to post pipeline notification:', err)
+  }
+}
+
+/**
+ * Send a direct message to the workspace owner.
+ * Requires SLACK_OWNER_USER_ID in env (Slack member ID, e.g. U07XXXXXXXX).
+ */
+export async function dmOwner(text: string, emoji = ':robot_face:'): Promise<void> {
+  if (!slackApp) return
+  const userId = process.env.SLACK_OWNER_USER_ID
+  if (!userId) {
+    console.warn('[slack-bridge] SLACK_OWNER_USER_ID not set — cannot DM owner')
+    return
+  }
+
+  try {
+    // Open (or reuse) a DM conversation with the owner
+    const dm = await slackApp.client.conversations.open({ users: userId })
+    const channelId = dm.channel?.id
+    if (!channelId) return
+
+    await slackApp.client.chat.postMessage({
+      channel: channelId,
+      text,
+      username: 'Penny Pipeline',
+      icon_emoji: emoji,
+    })
+  } catch (err) {
+    console.error('[slack-bridge] Failed to DM owner:', err)
+  }
+}

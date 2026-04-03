@@ -1481,6 +1481,8 @@ export interface RunHeadlessOptions {
    * Omit for legacy behavior: single `PENNY_TASK_RUNNER` with no automatic fallback.
    */
   phase?: HeadlessPhase
+  /** Override the agent's default model (e.g. 'opus', 'sonnet', 'haiku'). */
+  modelOverride?: string
 }
 
 function spawnHeadlessCli(invocation: HeadlessInvocation, timeoutMs: number): Promise<HeadlessResult> {
@@ -1557,7 +1559,7 @@ async function runSingleHeadlessBackend(
   agentId: string,
   cwd: string,
   prompt: string,
-  opts: { permissionMode?: string; timeoutMs: number },
+  opts: { permissionMode?: string; timeoutMs: number; modelOverride?: string },
 ): Promise<HeadlessResult> {
   if (backend === 'ollama') {
     const r = await runOllama(prompt, { timeoutMs: opts.timeoutMs })
@@ -1575,6 +1577,7 @@ async function runSingleHeadlessBackend(
       headless: true,
       permissionMode: opts.permissionMode,
       runner: backend,
+      modelOverride: opts.modelOverride,
     })
   } catch (err) {
     return { success: false, output: '', error: (err as Error).message, durationMs: 0 }
@@ -1607,6 +1610,7 @@ export async function runAgentHeadless(
     last = await runSingleHeadlessBackend(backend, agentId, cwd, prompt, {
       permissionMode: opts.permissionMode,
       timeoutMs,
+      modelOverride: opts.modelOverride,
     })
 
     if (last.success) return last

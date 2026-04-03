@@ -13,10 +13,23 @@
 /* ── Base ──────────────────────────────────────────────────────────────────── */
 
 :root {
+  /* Primary nav rail + vault chrome; single dial for comfortable defaults */
+  --penny-ui-nav-scale: 2.125;
+  --penny-shell-rail-width: calc(188px * var(--penny-ui-nav-scale));
+
+  /* Tasks panel + orchestrator modal (same scale as nav/vault) */
+  --penny-task-fs-9: calc(9px * var(--penny-ui-nav-scale));
+  --penny-task-fs-10: calc(10px * var(--penny-ui-nav-scale));
+  --penny-task-fs-11: calc(11px * var(--penny-ui-nav-scale));
+  --penny-task-fs-12: calc(12px * var(--penny-ui-nav-scale));
+  --penny-task-fs-14: calc(14px * var(--penny-ui-nav-scale));
+  --penny-task-fs-18: calc(18px * var(--penny-ui-nav-scale));
+  --penny-task-fs-20: calc(20px * var(--penny-ui-nav-scale));
+
   --ui-font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
-  --ui-font-size: 15px;
+  --ui-font-size: 17px;
   --editor-font-family: ui-monospace, 'SF Mono', 'Cascadia Code', 'Fira Code', Menlo, monospace;
-  --editor-font-size: 16px;
+  --editor-font-size: 17px;
   --editor-line-height: 1.6;
 
   /* ── Theme color tokens (dark default) ───────────────────────────────────── */
@@ -633,9 +646,12 @@ html.penpal-no-vignette body::before {
   background: linear-gradient(180deg, rgba(0, 255, 136, 0.35), rgba(55, 65, 81, 0.9));
 }
 
-/* ── Vault Panel — 130% base font ──────────────────────────────────────── */
+/* ── Vault Panel — scaled base (was 130%; × --penny-ui-nav-scale for tree chrome) ─ */
 
-.vault-panel { font-size: 130%; }
+.vault-panel {
+  /* Previously ~130% of app text; scales with --penny-ui-nav-scale */
+  font-size: calc(1.3em * var(--penny-ui-nav-scale));
+}
 
 /* ── Vault Markdown Preview ─────────────────────────────────────────────── */
 

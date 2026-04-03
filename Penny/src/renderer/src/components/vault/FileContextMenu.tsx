@@ -107,7 +107,7 @@ export function FileContextMenu({ x, y, path, isDirectory, onClose, onOpenInEdit
           value={newName}
           onChange={e => setNewName(e.target.value)}
           onKeyDown={e => { if (e.key === 'Enter') submitRename(); if (e.key === 'Escape') onClose() }}
-          className="bg-[var(--c-bg-surface)] text-[var(--c-text-primary)] text-xs px-2 py-1 rounded border border-[var(--c-border)] w-48 outline-none focus:border-blue-500"
+          className="bg-[var(--c-bg-surface)] text-[var(--c-text-primary)] text-[length:calc(12px*var(--penny-ui-nav-scale))] px-2 py-1 rounded border border-[var(--c-border)] w-[length:calc(12rem*var(--penny-ui-nav-scale))] outline-none focus:border-blue-500"
           placeholder="New name"
         />
       </div>
@@ -117,13 +117,13 @@ export function FileContextMenu({ x, y, path, isDirectory, onClose, onOpenInEdit
   if (creating) {
     return (
       <div ref={menuRef} className="fixed z-50 bg-[var(--c-bg-elevated)] border border-[var(--c-border)] rounded shadow-xl p-2" style={{ left: x, top: y }}>
-        <div className="text-[10px] text-[var(--c-border-hover)] mb-1">New {creating}</div>
+        <div className="text-[length:calc(10px*var(--penny-ui-nav-scale))] text-[var(--c-border-hover)] mb-1">New {creating}</div>
         <input
           autoFocus
           value={createName}
           onChange={e => setCreateName(e.target.value)}
           onKeyDown={e => { if (e.key === 'Enter') submitCreate(); if (e.key === 'Escape') onClose() }}
-          className="bg-[var(--c-bg-surface)] text-[var(--c-text-primary)] text-xs px-2 py-1 rounded border border-[var(--c-border)] w-48 outline-none focus:border-blue-500"
+          className="bg-[var(--c-bg-surface)] text-[var(--c-text-primary)] text-[length:calc(12px*var(--penny-ui-nav-scale))] px-2 py-1 rounded border border-[var(--c-border)] w-[length:calc(12rem*var(--penny-ui-nav-scale))] outline-none focus:border-blue-500"
           placeholder={creating === 'folder' ? 'Folder name' : 'File name (.md)'}
         />
       </div>
@@ -144,7 +144,7 @@ export function FileContextMenu({ x, y, path, isDirectory, onClose, onOpenInEdit
   return (
     <div
       ref={menuRef}
-      className="fixed z-50 bg-[var(--c-bg-elevated)] border border-[var(--c-border)] rounded shadow-xl py-1 min-w-[160px]"
+      className="fixed z-50 bg-[var(--c-bg-elevated)] border border-[var(--c-border)] rounded shadow-xl py-1 min-w-[length:calc(160px*var(--penny-ui-nav-scale))]"
       style={{ left: x, top: y }}
     >
       {items.map((item, i) =>
@@ -154,7 +154,7 @@ export function FileContextMenu({ x, y, path, isDirectory, onClose, onOpenInEdit
           <button
             key={i}
             onClick={item.action}
-            className="w-full text-left px-3 py-1 text-xs text-[var(--c-text-secondary)] hover:bg-[var(--c-border)] transition-colors"
+            className="w-full text-left px-3 py-1 text-[length:calc(12px*var(--penny-ui-nav-scale))] text-[var(--c-text-secondary)] hover:bg-[var(--c-border)] transition-colors"
           >
             {item.label}
           </button>

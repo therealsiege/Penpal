@@ -41,13 +41,13 @@ export function OutlinePanel() {
 
   if (!activeTab) {
     return (
-      <div className="p-3 text-xs text-[var(--c-text-faint)]">No file open</div>
+      <div className="p-3 text-[length:calc(12px*var(--penny-ui-nav-scale))] text-[var(--c-text-faint)]">No file open</div>
     )
   }
 
   if (headings.length === 0) {
     return (
-      <div className="p-3 text-xs text-[var(--c-text-faint)]">No headings found</div>
+      <div className="p-3 text-[length:calc(12px*var(--penny-ui-nav-scale))] text-[var(--c-text-faint)]">No headings found</div>
     )
   }
 
@@ -56,8 +56,8 @@ export function OutlinePanel() {
       {headings.map((h, i) => (
         <div
           key={i}
-          className="px-3 py-1 text-sm text-[var(--c-text-secondary)] hover:text-[var(--c-text-heading)] hover:bg-[color-mix(in_srgb,var(--c-bg-elevated)_40%,transparent)] cursor-pointer transition-colors truncate"
-          style={{ paddingLeft: `${(h.level - 1) * 12 + 12}px` }}
+          className="px-3 py-1 text-[length:calc(14px*var(--penny-ui-nav-scale))] text-[var(--c-text-secondary)] hover:text-[var(--c-text-heading)] hover:bg-[color-mix(in_srgb,var(--c-bg-elevated)_40%,transparent)] cursor-pointer transition-colors truncate"
+          style={{ paddingLeft: `calc(${(h.level - 1) * 12 + 12}px * var(--penny-ui-nav-scale))` }}
           title={h.text}
           onClick={() => {
             document.dispatchEvent(new CustomEvent('outline-scroll', { detail: { line: h.line } }))

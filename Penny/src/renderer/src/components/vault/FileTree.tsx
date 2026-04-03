@@ -65,13 +65,13 @@ const FileRow = memo(function FileRow({
   return (
     <div
       className={[
-        'flex items-center gap-1.5 py-1 px-1.5 cursor-pointer rounded text-[16px]',
+        'flex items-center gap-1.5 py-1 px-1.5 cursor-pointer rounded text-[length:calc(16px*var(--penny-ui-nav-scale))]',
         'transition-colors duration-75 hover:bg-[color-mix(in_srgb,var(--c-bg-elevated)_50%,transparent)]',
         isPreviewed
           ? 'bg-blue-600/20 text-blue-300 border-l-2 border-blue-500'
           : 'text-[var(--c-text-muted)] border-l-2 border-transparent',
       ].join(' ')}
-      style={{ paddingLeft: `${depth * 14 + 4}px` }}
+      style={{ paddingLeft: `calc(${depth * 14 + 4}px * var(--penny-ui-nav-scale))` }}
       onClick={() => onPreview(entry.path)}
       onDoubleClick={() => onOpenInEditor?.(entry.path)}
       onContextMenu={(e) => onContextMenu(e, entry)}
@@ -81,9 +81,9 @@ const FileRow = memo(function FileRow({
         checked={isSelected}
         onChange={(e) => { e.stopPropagation(); onToggleSelect(entry.path) }}
         onClick={(e) => e.stopPropagation()}
-        className="w-3 h-3 rounded border-[var(--c-border)] bg-[var(--c-bg-elevated)] accent-[var(--c-accent-blue)] shrink-0 cursor-pointer"
+        className="w-[length:calc(12px*var(--penny-ui-nav-scale))] h-[length:calc(12px*var(--penny-ui-nav-scale))] rounded border-[var(--c-border)] bg-[var(--c-bg-elevated)] accent-[var(--c-accent-blue)] shrink-0 cursor-pointer"
       />
-      <span className="w-4 text-center text-[var(--c-border)] shrink-0 text-[9px] font-mono">
+      <span className="w-[length:calc(1rem*var(--penny-ui-nav-scale))] text-center text-[var(--c-border)] shrink-0 text-[length:calc(9px*var(--penny-ui-nav-scale))] font-mono">
         {getIcon(entry.name)}
       </span>
       <span className="truncate">{entry.name}</span>
@@ -165,18 +165,18 @@ function TreeNode({
     <div>
       <div
         className={[
-          'flex items-center gap-1.5 py-1 px-1.5 cursor-pointer rounded text-[16px] group',
+          'flex items-center gap-1.5 py-1 px-1.5 cursor-pointer rounded text-[length:calc(16px*var(--penny-ui-nav-scale))] group',
           'transition-colors duration-75 hover:bg-[color-mix(in_srgb,var(--c-bg-elevated)_50%,transparent)]',
           'text-[var(--c-text-muted)] border-l-2 border-transparent',
           !entry.isDirectory && flashingPaths.has(entry.path) ? 'animate-new-file-flash' : '',
         ].join(' ')}
-        style={{ paddingLeft: `${depth * 14 + 4}px` }}
+        style={{ paddingLeft: `calc(${depth * 14 + 4}px * var(--penny-ui-nav-scale))` }}
         onClick={() => setExpanded(!expanded)}
         onContextMenu={(e) => onContextMenu(e, entry)}
       >
         <span
           className={[
-            'w-4 text-center text-[var(--c-border-hover)] shrink-0 text-[15px] inline-block',
+            'w-[length:calc(1rem*var(--penny-ui-nav-scale))] text-center text-[var(--c-border-hover)] shrink-0 text-[length:calc(15px*var(--penny-ui-nav-scale))] inline-block',
             'transition-transform duration-200',
             expanded ? 'rotate-90' : 'rotate-0',
           ].join(' ')}
@@ -186,7 +186,7 @@ function TreeNode({
         <span className="truncate text-[var(--c-text-secondary)] font-medium">
           {entry.name}
           {loaded && filteredChildren.length > 0 && (
-            <span className="text-[var(--c-border)] text-[11px] ml-1.5 font-normal">
+            <span className="text-[var(--c-border)] text-[length:calc(11px*var(--penny-ui-nav-scale))] ml-1.5 font-normal">
               {filteredChildren.length}
             </span>
           )}
@@ -227,8 +227,8 @@ function TreeNode({
           ))}
           {!loaded && (
             <div
-              className="text-[var(--c-border)] text-[15px]"
-              style={{ paddingLeft: `${(depth + 1) * 14 + 4}px` }}
+              className="text-[var(--c-border)] text-[length:calc(15px*var(--penny-ui-nav-scale))]"
+              style={{ paddingLeft: `calc(${(depth + 1) * 14 + 4}px * var(--penny-ui-nav-scale))` }}
             >
               Loading...
             </div>
@@ -282,7 +282,7 @@ export function FileTree({
   const rootFiles = rootEntries.filter((e) => !e.isDirectory)
 
   return (
-    <div className="overflow-y-auto h-full py-1 text-[16px] relative">
+    <div className="overflow-y-auto h-full py-1 text-[length:calc(16px*var(--penny-ui-nav-scale))] relative">
       {rootDirs.map((entry) => (
         <TreeNode
           key={entry.path}
@@ -312,7 +312,7 @@ export function FileTree({
         />
       ))}
       {rootEntries.length === 0 && (
-        <div className="text-[var(--c-border)] text-[15px] px-3 py-4 text-center">No files found</div>
+        <div className="text-[var(--c-border)] text-[length:calc(15px*var(--penny-ui-nav-scale))] px-3 py-4 text-center">No files found</div>
       )}
       {contextMenu && (
         <FileContextMenu
