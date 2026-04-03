@@ -180,9 +180,9 @@ export function VenturesModal({ onClose }: VenturesModalProps) {
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 backdrop-blur-[2px] animate-backdrop-fade-in"
       onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
     >
-      <div className="bg-[#0c1018] border border-[#2a3440] rounded-xl shadow-2xl w-[780px] max-h-[80vh] overflow-hidden flex flex-col animate-modal-scale-in">
+      <div className="bg-[var(--c-bg-surface)] border border-[var(--c-border)] rounded-xl shadow-2xl w-[780px] max-h-[80vh] overflow-hidden flex flex-col animate-modal-scale-in">
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-[#2a3440]">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--c-border)]">
           <div className="flex items-center gap-3">
             <div className="w-2.5 h-2.5 rounded-full bg-amber-400" />
             <h2 className="text-sm font-semibold text-white">File Cabinet</h2>
@@ -192,26 +192,26 @@ export function VenturesModal({ onClose }: VenturesModalProps) {
           </div>
           <button
             onClick={onClose}
-            className="text-[#3a4858] hover:text-white transition-colors text-lg leading-none px-1"
+            className="text-[var(--c-border-hover)] hover:text-white transition-colors text-lg leading-none px-1"
           >
             &times;
           </button>
         </div>
 
         {/* Breadcrumbs */}
-        <div className="px-5 py-2 border-b border-[#2a3440] flex items-center gap-1 text-[11px] overflow-x-auto">
+        <div className="px-5 py-2 border-b border-[var(--c-border)] flex items-center gap-1 text-[11px] overflow-x-auto">
           {breadcrumbs.map((crumb, i) => (
             <span
               key={crumb.path}
               className="flex items-center gap-1 shrink-0 transition-all duration-150"
             >
-              {i > 0 && <span className="text-[#2a3440]">/</span>}
+              {i > 0 && <span className="text-[var(--c-border)]">/</span>}
               <button
                 onClick={() => navigateTo(crumb.path)}
-                className={`transition-all duration-150 hover:text-[#0c1018] hover:text-white ${
+                className={`transition-all duration-150 hover:text-[var(--c-bg-surface)] hover:text-white ${
                   i === breadcrumbs.length - 1
-                    ? 'text-[#c4ccd6] font-medium'
-                    : 'text-[#3a4858]'
+                    ? 'text-[var(--c-text-primary)] font-medium'
+                    : 'text-[var(--c-border-hover)]'
                 }`}
               >
                 {crumb.label}
@@ -223,15 +223,15 @@ export function VenturesModal({ onClose }: VenturesModalProps) {
         {/* Body — two-panel layout */}
         <div className="flex-1 overflow-hidden flex min-h-0">
           {/* Left: file list */}
-          <div className="w-[280px] border-r border-[#2a3440] overflow-auto">
+          <div className="w-[280px] border-r border-[var(--c-border)] overflow-auto">
             {/* Loading skeleton */}
             {loading && entries.length === 0 && (
               <div className="px-4 py-3 space-y-2.5">
                 {Array.from({ length: 6 }).map((_, i) => (
                   <div key={i} className="flex items-center gap-2.5">
-                    <div className="w-4 h-4 rounded animate-shimmer bg-[#2a3440]/40 shrink-0" />
+                    <div className="w-4 h-4 rounded animate-shimmer bg-[color-mix(in_srgb,var(--c-border)_40%,transparent)] shrink-0" />
                     <div
-                      className="h-2.5 rounded animate-shimmer bg-[#2a3440]/40"
+                      className="h-2.5 rounded animate-shimmer bg-[color-mix(in_srgb,var(--c-border)_40%,transparent)]"
                       style={{ width: `${55 + (i % 3) * 15}%` }}
                     />
                   </div>
@@ -243,7 +243,7 @@ export function VenturesModal({ onClose }: VenturesModalProps) {
             {!loading && entries.length === 0 && (
               <div className="flex flex-col items-center justify-center gap-2 py-10 animate-card-enter">
                 <span className="text-2xl opacity-30">📂</span>
-                <p className="text-[#2a3440] text-xs">Empty directory</p>
+                <p className="text-[var(--c-border)] text-xs">Empty directory</p>
               </div>
             )}
 
@@ -254,16 +254,16 @@ export function VenturesModal({ onClose }: VenturesModalProps) {
                   key={entry.path}
                   onClick={() => openFile(entry)}
                   style={{ animationDelay: `${Math.min(idx, 19) * 0.03}s` }}
-                  className={`stagger-item w-full text-left px-4 py-2 flex items-center gap-2.5 hover:bg-[#141a22]/60 transition-colors border-b border-[#2a3440]/50 ${
-                    selectedFile === entry.path ? 'bg-[#141a22]/80' : ''
+                  className={`stagger-item w-full text-left px-4 py-2 flex items-center gap-2.5 hover:bg-[color-mix(in_srgb,var(--c-bg-elevated)_60%,transparent)] transition-colors border-b border-[color-mix(in_srgb,var(--c-border)_50%,transparent)] ${
+                    selectedFile === entry.path ? 'bg-[color-mix(in_srgb,var(--c-bg-elevated)_80%,transparent)]' : ''
                   }`}
                 >
                   <span className="text-sm shrink-0 hover:scale-110 transition-transform duration-100 inline-block">
                     {fileIcon(entry)}
                   </span>
-                  <span className="text-xs text-[#8a96a4] truncate">{entry.name}</span>
+                  <span className="text-xs text-[var(--c-text-secondary)] truncate">{entry.name}</span>
                   {entry.isDirectory && (
-                    <span className="text-xs text-[#2a3440] ml-auto shrink-0">&rsaquo;</span>
+                    <span className="text-xs text-[var(--c-border)] ml-auto shrink-0">&rsaquo;</span>
                   )}
                 </button>
               ))}
@@ -275,12 +275,12 @@ export function VenturesModal({ onClose }: VenturesModalProps) {
             {/* File loading skeleton */}
             {loading && selectedFile && (
               <div className="space-y-3 pt-1">
-                <div className="h-3 w-1/2 rounded animate-shimmer bg-[#2a3440]/40" />
-                <div className="h-px w-full bg-[#141a22]/60" />
+                <div className="h-3 w-1/2 rounded animate-shimmer bg-[color-mix(in_srgb,var(--c-border)_40%,transparent)]" />
+                <div className="h-px w-full bg-[color-mix(in_srgb,var(--c-bg-elevated)_60%,transparent)]" />
                 {Array.from({ length: 8 }).map((_, i) => (
                   <div
                     key={i}
-                    className="h-2 rounded animate-shimmer bg-[#2a3440]/30"
+                    className="h-2 rounded animate-shimmer bg-[color-mix(in_srgb,var(--c-border)_30%,transparent)]"
                     style={{ width: `${40 + (i % 5) * 12}%` }}
                   />
                 ))}
@@ -290,15 +290,15 @@ export function VenturesModal({ onClose }: VenturesModalProps) {
             {/* Empty prompt */}
             {!selectedFile && !fileContent && !loading && (
               <div className="flex items-center justify-center h-full">
-                <p className="text-[#2a3440] text-xs">Select a file to preview</p>
+                <p className="text-[var(--c-border)] text-xs">Select a file to preview</p>
               </div>
             )}
 
             {/* File preview */}
             {fileContent !== null && selectedFile && !loading && (
               <div key={previewKey} className="ventures-md animate-card-enter">
-                <div className="mb-3 pb-2 border-b border-[#2a3440]">
-                  <p className="text-xs text-[#3a4858] font-mono truncate">{selectedFile}</p>
+                <div className="mb-3 pb-2 border-b border-[var(--c-border)]">
+                  <p className="text-xs text-[var(--c-border-hover)] font-mono truncate">{selectedFile}</p>
                 </div>
                 <div
                   className="md-content"
@@ -310,13 +310,13 @@ export function VenturesModal({ onClose }: VenturesModalProps) {
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between px-5 py-3 border-t border-[#2a3440]">
-          <p className="text-xs text-[#2a3440]">
+        <div className="flex items-center justify-between px-5 py-3 border-t border-[var(--c-border)]">
+          <p className="text-xs text-[var(--c-border)]">
             {entries.length} items {currentPath ? `in ${currentPath}` : ''}
           </p>
           <button
             onClick={() => loadDir(currentPath)}
-            className="px-3 py-1 text-xs bg-[#141a22] hover:bg-[#2a3440] rounded border border-[#2a3440] text-[#8a96a4] transition-colors"
+            className="px-3 py-1 text-xs bg-[var(--c-bg-elevated)] hover:bg-[var(--c-border)] rounded border border-[var(--c-border)] text-[var(--c-text-secondary)] transition-colors"
           >
             Refresh
           </button>
@@ -344,17 +344,17 @@ export function VenturesModal({ onClose }: VenturesModalProps) {
         }
         .md-content .md-link { text-decoration: underline; text-underline-offset: 2px; }
 
-        /* Dark theme (always active) */
-        .md-content h1 { color: #f1f5f9; }
-        .md-content h2 { color: #e2e8f0; }
-        .md-content h3 { color: #cbd5e1; }
-        .md-content p, .md-content li { color: #94a3b8; }
-        .md-content hr { border-top: 1px solid #334155; }
-        .md-content strong { color: #e2e8f0; }
-        .md-content em { color: #a5b4c8; }
-        .md-content .md-inline-code { background: #1e293b; color: #93c5fd; }
-        .md-content .md-code-block { background: #0f172a; border: 1px solid #1e293b; color: #93c5fd; }
-        .md-content .md-link { color: #60a5fa; }
+        /* Theme-aware markdown */
+        .md-content h1 { color: var(--c-text-bright); }
+        .md-content h2 { color: var(--c-text-heading); }
+        .md-content h3 { color: var(--c-text-primary); }
+        .md-content p, .md-content li { color: var(--c-text-secondary); }
+        .md-content hr { border-top: 1px solid var(--c-border); }
+        .md-content strong { color: var(--c-text-bright); }
+        .md-content em { color: var(--c-text-primary); }
+        .md-content .md-inline-code { background: var(--c-bg-elevated); color: var(--c-accent-blue); }
+        .md-content .md-code-block { background: var(--c-bg-chrome); border: 1px solid var(--c-border); color: var(--c-accent-blue); }
+        .md-content .md-link { color: var(--c-accent-blue); }
         .md-content .md-wikilink { color: #a78bfa; }
       `}</style>
     </div>

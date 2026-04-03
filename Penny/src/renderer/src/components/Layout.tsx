@@ -24,14 +24,14 @@ function NavButton({
         onClick={onClick}
         title={label}
         aria-current={active ? 'page' : undefined}
-        className={`no-drag relative w-full min-h-[2.75rem] rounded-2xl flex items-center gap-2.5 pl-2.5 pr-2.5 py-2 transition-all duration-300 overflow-visible focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00ff88]/45 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0a0e14] active:scale-[0.98] ${
+        className={`no-drag relative w-full min-h-[2.75rem] rounded-2xl flex items-center gap-2.5 pl-2.5 pr-2.5 py-2 transition-all duration-300 overflow-visible focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color-mix(in_srgb,var(--c-accent)_45%,transparent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--c-bg-chrome)] active:scale-[0.98] ${
           active
-            ? 'text-[#00ff88] bg-[linear-gradient(105deg,rgba(0,255,136,0.16)_0%,rgba(0,255,136,0.05)_42%,transparent_100%)] shadow-[inset_0_0_0_1px_rgba(0,255,136,0.22),0_8px_32px_-12px_rgba(0,255,136,0.25)]'
-            : 'text-[#4a5c6e] hover:text-[#b8c4d0] hover:bg-[rgba(10,18,28,0.85)] hover:shadow-[inset_0_0_0_1px_rgba(42,52,64,0.55)]'
+            ? 'text-[var(--c-accent)] bg-[linear-gradient(105deg,rgba(0,255,136,0.16)_0%,rgba(0,255,136,0.05)_42%,transparent_100%)] shadow-[inset_0_0_0_1px_rgba(0,255,136,0.22),0_8px_32px_-12px_rgba(0,255,136,0.25)]'
+            : 'text-[var(--c-text-faint)] hover:text-[var(--c-text-primary)] hover:bg-[color-mix(in_srgb,var(--c-bg-elevated)_85%,transparent)] hover:shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--c-border)_55%,transparent)]'
         }`}
       >
         <span
-          className={`absolute left-0.5 top-1/2 -translate-y-1/2 w-[3px] h-6 rounded-full bg-[#00ff88] transition-all duration-300 origin-center ${
+          className={`absolute left-0.5 top-1/2 -translate-y-1/2 w-[3px] h-6 rounded-full bg-[var(--c-accent)] transition-all duration-300 origin-center ${
             active ? 'scale-y-100 opacity-100' : 'scale-y-0 opacity-0'
           }`}
           style={active ? { boxShadow: '0 0 12px rgba(0,255,136,0.65)' } : undefined}
@@ -40,8 +40,8 @@ function NavButton({
         <span
           className={`shrink-0 w-9 h-9 rounded-xl flex items-center justify-center transition-all duration-300 ${
             active
-              ? 'bg-[#00ff88]/14 text-[#00ff88] shadow-[inset_0_1px_0_0_rgba(255,255,255,0.08),0_4px_14px_-4px_rgba(0,255,136,0.35)]'
-              : 'bg-[#0c141c]/90 text-current group-hover:bg-[#121c28] group-hover:text-[#d4dce6]'
+              ? 'bg-[color-mix(in_srgb,var(--c-accent)_14%,transparent)] text-[var(--c-accent)] shadow-[inset_0_1px_0_0_rgba(255,255,255,0.08),0_4px_14px_-4px_color-mix(in_srgb,var(--c-accent)_35%,transparent)]'
+              : 'bg-[color-mix(in_srgb,var(--c-bg-surface)_90%,transparent)] text-current group-hover:bg-[var(--c-bg-elevated)] group-hover:text-[var(--c-text-heading)]'
           }`}
         >
           <span className="transition-transform duration-300 group-hover:scale-105 flex items-center [&>svg]:w-[18px] [&>svg]:h-[18px]">
@@ -56,8 +56,8 @@ function NavButton({
         <span
           className="
             pointer-events-none absolute left-full top-1/2 -translate-y-1/2 ml-2 z-50
-            px-3 py-2 rounded-xl bg-[#0c1018]/98 backdrop-blur-md text-[#a8b4c4] text-xs font-medium whitespace-nowrap
-            shadow-[0_12px_40px_rgba(0,0,0,0.55)] border border-[#2a3440]/90
+            px-3 py-2 rounded-xl bg-[color-mix(in_srgb,var(--c-bg-surface)_98%,transparent)] backdrop-blur-md text-[var(--c-text-secondary)] text-xs font-medium whitespace-nowrap
+            shadow-[0_12px_40px_rgba(0,0,0,0.55)] border border-[color-mix(in_srgb,var(--c-border)_90%,transparent)]
             opacity-0 -translate-x-1 group-hover:opacity-100 group-hover:translate-x-0
             transition-all duration-200
           "
@@ -71,7 +71,7 @@ function NavButton({
 
 function NavSectionLabel({ children }: { children: string }) {
   return (
-    <p className="px-3 pt-5 pb-2 text-[10px] font-bold uppercase tracking-[0.22em] text-transparent bg-clip-text bg-gradient-to-r from-[#5a6a7a] via-[#8a96a4] to-[#5a6a7a]">
+    <p className="px-3 pt-5 pb-2 text-[10px] font-bold uppercase tracking-[0.22em] text-transparent bg-clip-text bg-gradient-to-r from-[var(--c-text-muted)] via-[var(--c-text-secondary)] to-[var(--c-text-muted)]">
       {children}
     </p>
   )
@@ -79,19 +79,19 @@ function NavSectionLabel({ children }: { children: string }) {
 
 export function Layout({ activePanel, onNavigate, children }: LayoutProps) {
   return (
-    <div className="flex h-screen bg-[#040608] text-slate-100 select-none overflow-hidden">
+    <div className="flex h-screen bg-[var(--c-bg-deep)] text-[var(--c-text-primary)] select-none overflow-hidden">
       <aside
         aria-label="Primary navigation"
         className="
           shell-sidebar
           w-[188px] shrink-0 flex flex-col items-stretch
-          border-r border-[#1a2230]
-          bg-[linear-gradient(180deg,#090d14_0%,#0c1018_38%,#070a0f_100%)]
+          border-r border-[var(--c-bg-hover)]
+          bg-[linear-gradient(180deg,var(--c-bg-deep)_0%,var(--c-bg-surface)_38%,var(--c-bg-deep)_100%)]
           shadow-[4px_0_40px_-18px_rgba(0,0,0,0.75)]
         "
       >
         <div
-          className="pointer-events-none absolute inset-y-0 right-0 w-px z-0 bg-gradient-to-b from-transparent via-[#00ff88]/22 to-transparent opacity-95"
+          className="pointer-events-none absolute inset-y-0 right-0 w-px z-0 bg-gradient-to-b from-transparent via-[color-mix(in_srgb,var(--c-accent)_22%,transparent)] to-transparent opacity-95"
           aria-hidden
         />
 
@@ -103,8 +103,8 @@ export function Layout({ activePanel, onNavigate, children }: LayoutProps) {
               className="
                 relative flex flex-col items-center gap-2.5 py-3.5 px-3 rounded-[1.35rem]
                 overflow-hidden
-                bg-[linear-gradient(155deg,rgba(18,26,36,0.96)_0%,rgba(8,12,18,0.99)_55%,rgba(6,9,14,1)_100%)]
-                border border-[#2a3440]/80
+                bg-[linear-gradient(155deg,color-mix(in_srgb,var(--c-bg-elevated)_96%,transparent)_0%,color-mix(in_srgb,var(--c-bg-chrome)_99%,transparent)_55%,var(--c-bg-deep)_100%)]
+                border border-[color-mix(in_srgb,var(--c-border)_80%,transparent)]
                 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.06),0_16px_48px_-24px_rgba(0,0,0,0.75),0_0_0_1px_rgba(0,0,0,0.35)]
               "
             >
@@ -112,19 +112,19 @@ export function Layout({ activePanel, onNavigate, children }: LayoutProps) {
                 className="pointer-events-none absolute inset-0 opacity-[0.5] bg-[radial-gradient(ellipse_80%_60%_at_50%_-20%,rgba(232,184,75,0.12),transparent_60%)]"
                 aria-hidden
               />
-              <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[#00ff88]/30 to-transparent" aria-hidden />
+              <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[color-mix(in_srgb,var(--c-accent)_30%,transparent)] to-transparent" aria-hidden />
 
-              <div className="relative w-full flex items-center justify-between text-[9px] uppercase tracking-[0.18em] text-[#5a6a7a] font-semibold">
+              <div className="relative w-full flex items-center justify-between text-[9px] uppercase tracking-[0.18em] text-[var(--c-text-muted)] font-semibold">
                 <span>PenPal OS</span>
-                <span className="inline-flex items-center gap-1 rounded-full border border-[#00ff88]/35 bg-[#00ff88]/10 px-2 py-0.5 text-[#7fffc7]">
-                  <span className="w-1.5 h-1.5 rounded-full bg-[#00ff88] shadow-[0_0_8px_rgba(0,255,136,0.75)]" />
+                <span className="inline-flex items-center gap-1 rounded-full border border-[color-mix(in_srgb,var(--c-accent)_35%,transparent)] bg-[color-mix(in_srgb,var(--c-accent)_10%,transparent)] px-2 py-0.5 text-[var(--c-accent)]">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[var(--c-accent)] shadow-[0_0_8px_rgba(0,255,136,0.75)]" />
                   Online
                 </span>
               </div>
 
               <div className="relative">
                 <div
-                  className="absolute -inset-1 rounded-2xl bg-gradient-to-br from-[#e8b84b]/35 via-transparent to-[#00ff88]/10 opacity-75 blur-[2px]"
+                  className="absolute -inset-1 rounded-2xl bg-gradient-to-br from-[#e8b84b]/35 via-transparent to-[color-mix(in_srgb,var(--c-accent)_10%,transparent)] opacity-75 blur-[2px]"
                   aria-hidden
                 />
                 <img
@@ -149,15 +149,15 @@ export function Layout({ activePanel, onNavigate, children }: LayoutProps) {
                 >
                   PenPal
                 </span>
-                <span className="mt-1 block text-[10px] text-[#6a7a8c] tracking-[0.22em] uppercase font-semibold">
+                <span className="mt-1 block text-[10px] text-[var(--c-text-dim)] tracking-[0.22em] uppercase font-semibold">
                   Mission Control
                 </span>
               </div>
 
-              <div className="w-full h-px bg-gradient-to-r from-transparent via-[#2a3440]/90 to-transparent" />
-              <div className="relative w-full flex items-center justify-between text-[9px] text-[#5a6a7a] font-mono tracking-wide">
+              <div className="w-full h-px bg-gradient-to-r from-transparent via-[color-mix(in_srgb,var(--c-border)_90%,transparent)] to-transparent" />
+              <div className="relative w-full flex items-center justify-between text-[9px] text-[var(--c-text-muted)] font-mono tracking-wide">
                 <span>v0.1.0</span>
-                <span className="text-[#4a5c6e]">Sector-7</span>
+                <span className="text-[var(--c-text-faint)]">Sector-7</span>
               </div>
             </div>
           </div>
@@ -215,19 +215,8 @@ export function Layout({ activePanel, onNavigate, children }: LayoutProps) {
               </svg>
             }
           />
-          <NavButton
-            label="Handbook"
-            active={activePanel === 'handbook'}
-            onClick={() => onNavigate('handbook')}
-            icon={
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
-                <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
-              </svg>
-            }
-          />
 
-          <div className="my-3 mx-2 h-px bg-gradient-to-r from-transparent via-[#2a3440]/90 to-transparent" role="presentation" />
+          <div className="my-3 mx-2 h-px bg-gradient-to-r from-transparent via-[color-mix(in_srgb,var(--c-border)_90%,transparent)] to-transparent" role="presentation" />
 
           <NavSectionLabel>Tools</NavSectionLabel>
           <NavButton
@@ -267,30 +256,30 @@ export function Layout({ activePanel, onNavigate, children }: LayoutProps) {
           />
         </nav>
 
-        <div className="shrink-0 px-2.5 pb-4 pt-3 mt-auto border-t border-[#1a2230]/90 bg-[linear-gradient(180deg,rgba(8,10,14,0.2)_0%,rgba(4,6,10,0.85)_100%)]">
+        <div className="shrink-0 px-2.5 pb-4 pt-3 mt-auto border-t border-[color-mix(in_srgb,var(--c-bg-hover)_90%,transparent)] bg-[linear-gradient(180deg,color-mix(in_srgb,var(--c-bg-app)_20%,transparent)_0%,color-mix(in_srgb,var(--c-bg-deep)_85%,transparent)_100%)]">
           <div className="relative group">
             <button
               type="button"
               title="Command Palette (⌘K)"
               onClick={() => document.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', metaKey: true }))}
-              className="no-drag w-full rounded-2xl flex items-center gap-3 px-3 py-2.5 text-[#6a7a8c] hover:text-[#00ff88] transition-all duration-300 border border-[#2a3440]/50 bg-[linear-gradient(145deg,rgba(12,18,26,0.9)_0%,rgba(6,10,14,0.95)_100%)] hover:border-[#00ff88]/35 hover:shadow-[0_0_24px_-8px_rgba(0,255,136,0.35),inset_0_1px_0_0_rgba(255,255,255,0.05)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00ff88]/40 focus-visible:ring-offset-2 focus-visible:ring-offset-[#070a0f] active:scale-[0.98]"
+              className="no-drag w-full rounded-2xl flex items-center gap-3 px-3 py-2.5 text-[var(--c-text-dim)] hover:text-[var(--c-accent)] transition-all duration-300 border border-[color-mix(in_srgb,var(--c-border)_50%,transparent)] bg-[linear-gradient(145deg,color-mix(in_srgb,var(--c-bg-surface)_90%,transparent)_0%,color-mix(in_srgb,var(--c-bg-deep)_95%,transparent)_100%)] hover:border-[color-mix(in_srgb,var(--c-accent)_35%,transparent)] hover:shadow-[0_0_24px_-8px_rgba(0,255,136,0.35),inset_0_1px_0_0_rgba(255,255,255,0.05)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color-mix(in_srgb,var(--c-accent)_40%,transparent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--c-bg-deep)] active:scale-[0.98]"
             >
-              <span className="w-9 h-9 rounded-xl flex items-center justify-center bg-[#0a121a] border border-[#2a3440]/60 text-[#5a6a7a] group-hover:text-[#00ff88] group-hover:border-[#00ff88]/30 transition-colors shadow-inner">
+              <span className="w-9 h-9 rounded-xl flex items-center justify-center bg-[var(--c-bg-chrome)] border border-[color-mix(in_srgb,var(--c-border)_60%,transparent)] text-[var(--c-text-muted)] group-hover:text-[var(--c-accent)] group-hover:border-[color-mix(in_srgb,var(--c-accent)_30%,transparent)] transition-colors shadow-inner">
                 <svg className="w-[18px] h-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <circle cx="11" cy="11" r="8" />
                   <line x1="21" y1="21" x2="16.65" y2="16.65" />
                 </svg>
               </span>
               <span className="flex flex-col items-start min-w-0 text-left">
-                <span className="text-[12px] font-semibold text-[#8a96a4] group-hover:text-[#dce4ec] transition-colors">Quick search</span>
-                <span className="text-[10px] text-[#4a5c6e] font-mono tracking-wide">⌘K</span>
+                <span className="text-[12px] font-semibold text-[var(--c-text-secondary)] group-hover:text-[var(--c-text-heading)] transition-colors">Quick search</span>
+                <span className="text-[10px] text-[var(--c-text-faint)] font-mono tracking-wide">⌘K</span>
               </span>
             </button>
             <span
               className="
                 pointer-events-none absolute left-full top-1/2 -translate-y-1/2 ml-2 z-50
-                px-3 py-2 rounded-xl bg-[#0c1018]/98 backdrop-blur-md text-[#a8b4c4] text-xs font-medium whitespace-nowrap
-                shadow-[0_12px_40px_rgba(0,0,0,0.55)] border border-[#2a3440]/90
+                px-3 py-2 rounded-xl bg-[color-mix(in_srgb,var(--c-bg-surface)_98%,transparent)] backdrop-blur-md text-[var(--c-text-secondary)] text-xs font-medium whitespace-nowrap
+                shadow-[0_12px_40px_rgba(0,0,0,0.55)] border border-[color-mix(in_srgb,var(--c-border)_90%,transparent)]
                 opacity-0 -translate-x-1 group-hover:opacity-100 group-hover:translate-x-0
                 transition-all duration-200
               "
@@ -302,7 +291,7 @@ export function Layout({ activePanel, onNavigate, children }: LayoutProps) {
         </div>
       </aside>
 
-      <main className="shell-main flex-1 min-h-0 overflow-hidden flex flex-col min-w-0 bg-[#06080c]">
+      <main className="shell-main flex-1 min-h-0 overflow-hidden flex flex-col min-w-0 bg-[var(--c-bg-deep)]">
         {children}
       </main>
     </div>

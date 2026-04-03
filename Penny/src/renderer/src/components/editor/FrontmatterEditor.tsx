@@ -69,11 +69,11 @@ export function FrontmatterEditor() {
   if (!activeTab || Object.keys(data).length === 0) return null
 
   return (
-    <div className="mb-3 rounded bg-[#141a22]/60 border border-[#2a3440]/90 px-3 py-2">
-      <div className="text-[10px] text-[#5a6a7a] mb-1.5 font-medium">Properties</div>
+    <div className="mb-3 rounded bg-[color-mix(in_srgb,var(--c-bg-elevated)_60%,transparent)] border border-[color-mix(in_srgb,var(--c-border)_90%,transparent)] px-3 py-2">
+      <div className="text-[10px] text-[var(--c-text-muted)] mb-1.5 font-medium">Properties</div>
       {Object.entries(data).map(([key, val]) => (
         <div key={key} className="flex items-center gap-2 text-xs py-0.5 group">
-          <span className="text-[#5a6a7a] shrink-0 w-20 truncate">{key}</span>
+          <span className="text-[var(--c-text-muted)] shrink-0 w-20 truncate">{key}</span>
           {editingKey === key ? (
             <input
               autoFocus
@@ -81,11 +81,11 @@ export function FrontmatterEditor() {
               onChange={e => setEditValue(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter') handleEditSave(); if (e.key === 'Escape') setEditingKey(null) }}
               onBlur={handleEditSave}
-              className="flex-1 bg-[#06080c] text-[#dce4ec] text-xs px-1.5 py-0.5 rounded border border-[#3a4858] outline-none focus:border-[#00ff88]/40"
+              className="flex-1 bg-[var(--c-bg-deep)] text-[var(--c-text-heading)] text-xs px-1.5 py-0.5 rounded border border-[var(--c-border-hover)] outline-none focus:border-[color-mix(in_srgb,var(--c-accent)_40%,transparent)]"
             />
           ) : (
             <span
-              className="text-[#c4ccd6] truncate flex-1 cursor-pointer hover:text-[#dce4ec]"
+              className="text-[var(--c-text-primary)] truncate flex-1 cursor-pointer hover:text-[var(--c-text-heading)]"
               onClick={() => handleEditStart(key, val)}
             >
               {Array.isArray(val) ? val.join(', ') : String(val ?? '')}
@@ -93,30 +93,30 @@ export function FrontmatterEditor() {
           )}
           <button
             onClick={() => handleDelete(key)}
-            className="text-[#3a4858] hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all text-[10px]"
+            className="text-[var(--c-border-hover)] hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all text-[10px]"
           >
             x
           </button>
         </div>
       ))}
       {/* Add new property */}
-      <div className="flex items-center gap-1 mt-1.5 pt-1.5 border-t border-[#2a3440]/40">
+      <div className="flex items-center gap-1 mt-1.5 pt-1.5 border-t border-[color-mix(in_srgb,var(--c-border)_40%,transparent)]">
         <input
           value={newKey}
           onChange={e => setNewKey(e.target.value)}
           placeholder="key"
-          className="w-20 bg-[#06080c]/50 text-[#8a96a4] text-[10px] px-1.5 py-0.5 rounded border border-[#2a3440]/90 outline-none focus:border-[#00ff88]/40"
+          className="w-20 bg-[color-mix(in_srgb,var(--c-bg-deep)_50%,transparent)] text-[var(--c-text-secondary)] text-[10px] px-1.5 py-0.5 rounded border border-[color-mix(in_srgb,var(--c-border)_90%,transparent)] outline-none focus:border-[color-mix(in_srgb,var(--c-accent)_40%,transparent)]"
         />
         <input
           value={newValue}
           onChange={e => setNewValue(e.target.value)}
           onKeyDown={e => { if (e.key === 'Enter') handleAddProperty() }}
           placeholder="value"
-          className="flex-1 bg-[#06080c]/50 text-[#8a96a4] text-[10px] px-1.5 py-0.5 rounded border border-[#2a3440]/90 outline-none focus:border-[#00ff88]/40"
+          className="flex-1 bg-[color-mix(in_srgb,var(--c-bg-deep)_50%,transparent)] text-[var(--c-text-secondary)] text-[10px] px-1.5 py-0.5 rounded border border-[color-mix(in_srgb,var(--c-border)_90%,transparent)] outline-none focus:border-[color-mix(in_srgb,var(--c-accent)_40%,transparent)]"
         />
         <button
           onClick={handleAddProperty}
-          className="text-[10px] text-[#4a5c6e] hover:text-[#00e5ff] transition-colors"
+          className="text-[10px] text-[var(--c-text-faint)] hover:text-[var(--c-accent-blue)] transition-colors"
         >
           +
         </button>

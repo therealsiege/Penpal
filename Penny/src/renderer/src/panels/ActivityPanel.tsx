@@ -24,7 +24,7 @@ function formatDuration(ms: number): string {
 
 function ShimmerRow() {
   return (
-    <div className="rounded-lg p-3 border border-slate-800 overflow-hidden relative">
+    <div className="rounded-lg p-3 border border-[var(--c-border-subtle)] overflow-hidden relative">
       <div
         className="absolute inset-0 animate-shimmer"
         style={{
@@ -33,8 +33,8 @@ function ShimmerRow() {
           backgroundSize: '800px 100%',
         }}
       />
-      <div className="h-3.5 w-32 bg-slate-800 rounded mb-2" />
-      <div className="h-2.5 w-20 bg-slate-800/60 rounded" />
+      <div className="h-3.5 w-32 bg-[var(--c-bg-elevated)] rounded mb-2" />
+      <div className="h-2.5 w-20 bg-[var(--c-bg-elevated)]/60 rounded" />
     </div>
   )
 }
@@ -53,10 +53,10 @@ function LoadingSkeleton({ rows = 4 }: { rows?: number }) {
 
 function EmptyState({ message }: { message: string }) {
   return (
-    <div className="animate-card-enter flex flex-col items-center justify-center gap-2 rounded-lg border border-slate-800 bg-slate-900/50 p-8 text-center">
+    <div className="animate-card-enter flex flex-col items-center justify-center gap-2 rounded-lg border border-[var(--c-border-subtle)] bg-[var(--c-bg-surface)]/50 p-8 text-center">
       {/* inbox icon */}
       <svg
-        className="w-8 h-8 text-slate-600"
+        className="w-8 h-8 text-[var(--c-text-faint)]"
         fill="none"
         viewBox="0 0 24 24"
         stroke="currentColor"
@@ -69,7 +69,7 @@ function EmptyState({ message }: { message: string }) {
           d="M9 3H5a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2V9m-9-6l6 6m-6-6v6h6"
         />
       </svg>
-      <p className="text-xs text-slate-500">{message}</p>
+      <p className="text-xs text-[var(--c-text-muted)]">{message}</p>
     </div>
   )
 }
@@ -78,7 +78,7 @@ function EmptyState({ message }: { message: string }) {
 
 function SectionHeader({ children }: { children: React.ReactNode }) {
   return (
-    <h3 className="animate-fade-slide-down text-xs font-medium text-slate-500 uppercase tracking-wider mb-3">
+    <h3 className="animate-fade-slide-down text-xs font-medium text-[var(--c-text-muted)] uppercase tracking-wider mb-3">
       {children}
     </h3>
   )
@@ -97,8 +97,8 @@ function JobRunRow({ run, index, isNew }: JobRunRowProps) {
     <div
       className={[
         'rounded-lg p-3 border transition-all duration-100',
-        'bg-slate-900 border-slate-800',
-        'hover:bg-slate-800/50',
+        'bg-[var(--c-bg-surface)] border-[var(--c-border-subtle)]',
+        'hover:bg-[var(--c-bg-elevated)]/50',
         isNew ? 'animate-new-item-flash border-l-2' : '',
       ].join(' ')}
       style={{
@@ -110,13 +110,13 @@ function JobRunRow({ run, index, isNew }: JobRunRowProps) {
       <div className="flex items-center justify-between mb-1">
         <div className="flex items-center gap-2">
           <StatusBadge status={run.success ? 'ok' : 'fail'} />
-          <span className="text-sm font-medium text-slate-200">{run.job}</span>
+          <span className="text-sm font-medium text-[var(--c-text-heading)]">{run.job}</span>
         </div>
-        <span className="text-[11px] text-slate-600 transition-all duration-200">
+        <span className="text-[11px] text-[var(--c-text-faint)] transition-all duration-200">
           {timeAgo(run.started_at)}
         </span>
       </div>
-      <div className="flex items-center gap-3 text-[11px] text-slate-500">
+      <div className="flex items-center gap-3 text-[11px] text-[var(--c-text-muted)]">
         <span>{formatDuration(run.duration_ms)}</span>
         <span>exit {run.exit_code}</span>
       </div>
@@ -142,8 +142,8 @@ function LeadRow({ lead, index, isNew }: LeadRowProps) {
     <div
       className={[
         'rounded-lg p-3 border transition-all duration-100',
-        'bg-slate-900 border-slate-800',
-        'hover:bg-slate-800/50',
+        'bg-[var(--c-bg-surface)] border-[var(--c-border-subtle)]',
+        'hover:bg-[var(--c-bg-elevated)]/50',
         isNew ? 'border-l-2' : '',
       ].join(' ')}
       style={{
@@ -151,20 +151,20 @@ function LeadRow({ lead, index, isNew }: LeadRowProps) {
       }}
     >
       <div className="flex items-center justify-between mb-1">
-        <span className="text-sm font-medium text-slate-200">{lead.name}</span>
+        <span className="text-sm font-medium text-[var(--c-text-heading)]">{lead.name}</span>
         <span
           className={`text-xs font-mono transition-all duration-200 ${
             lead.score >= 50
               ? 'text-emerald-400'
               : lead.score >= 30
               ? 'text-amber-400'
-              : 'text-slate-500'
+              : 'text-[var(--c-text-muted)]'
           }`}
         >
           {lead.score}
         </span>
       </div>
-      <div className="flex items-center gap-3 text-[11px] text-slate-500">
+      <div className="flex items-center gap-3 text-[11px] text-[var(--c-text-muted)]">
         <span>{lead.businessArm}</span>
         {lead.source && <span>via {lead.source}</span>}
       </div>
@@ -220,7 +220,7 @@ function BriefingViewer() {
             className={`px-2.5 py-1 text-xs rounded-md border whitespace-nowrap transition-colors ${
               selectedDate === date
                 ? 'bg-blue-600/20 border-blue-500/30 text-blue-400'
-                : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-slate-200'
+                : 'bg-[var(--c-bg-elevated)] border-[var(--c-border)] text-[var(--c-text-secondary)] hover:text-[var(--c-text-heading)]'
             }`}
           >
             {date}
@@ -229,14 +229,14 @@ function BriefingViewer() {
       </div>
 
       {/* Content */}
-      <div className="bg-slate-900 border border-slate-800 rounded-lg overflow-hidden">
+      <div className="bg-[var(--c-bg-surface)] border border-[var(--c-border-subtle)] rounded-lg overflow-hidden">
         {content === null ? (
           <div className="p-4">
             <LoadingSkeleton rows={5} />
           </div>
         ) : (
           <div className="p-4 max-h-[60vh] overflow-y-auto animate-fade-slide-up">
-            <pre className="text-xs text-slate-300 whitespace-pre-wrap font-mono leading-relaxed">
+            <pre className="text-xs text-[var(--c-text-primary)] whitespace-pre-wrap font-mono leading-relaxed">
               {content}
             </pre>
           </div>
@@ -297,19 +297,19 @@ export function ActivityPanel() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h2 className="text-lg font-semibold">Activity</h2>
-          <p className="text-xs text-slate-500 mt-0.5">
+          <p className="text-xs text-[var(--c-text-muted)] mt-0.5">
             Recent system activity, leads, and daily briefings
           </p>
         </div>
-        <div className="flex bg-slate-900 border border-slate-800 rounded-lg overflow-hidden">
+        <div className="flex bg-[var(--c-bg-surface)] border border-[var(--c-border-subtle)] rounded-lg overflow-hidden">
           {(['feed', 'briefing'] as const).map(t => (
             <button
               key={t}
               onClick={() => setTab(t)}
               className={`px-3 py-1.5 text-xs transition-colors ${
                 tab === t
-                  ? 'bg-slate-700 text-white'
-                  : 'text-slate-400 hover:text-slate-200'
+                  ? 'bg-[var(--c-bg-hover)] text-white'
+                  : 'text-[var(--c-text-secondary)] hover:text-[var(--c-text-heading)]'
               }`}
             >
               {t === 'feed' ? 'Activity Feed' : 'Daily Briefing'}

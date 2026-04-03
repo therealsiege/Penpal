@@ -172,7 +172,7 @@ export function VaultPanel() {
   return (
     <div className="relative h-full overflow-hidden">
       <div className="absolute inset-0 bg-cover bg-center bg-no-repeat" style={{ backgroundImage: 'url(vault-bg.jpg)' }} />
-      <div className="absolute inset-0 bg-[#080a0e]/[0.94]" />
+      <div className="absolute inset-0 bg-[color-mix(in_srgb,var(--c-bg-app)_94%,transparent)]" />
     <div className="relative flex flex-col h-full vault-zoom vault-panel z-[1]" style={{ zoom }}>
       {/* Quick Switcher overlay */}
       {showQuickSwitcher && (
@@ -183,11 +183,11 @@ export function VaultPanel() {
       )}
 
       {/* Top bar */}
-      <div className="shrink-0 flex items-center gap-2 px-3 py-2 border-b border-[#2a3440]/60 bg-[#0c1018]/40">
+      <div className="shrink-0 flex items-center gap-2 px-3 py-2 border-b border-[color-mix(in_srgb,var(--c-border)_60%,transparent)] bg-[color-mix(in_srgb,var(--c-bg-surface)_40%,transparent)]">
         <div className="drag-region flex-1 h-2" />
         <button
           onClick={() => setShowQuickSwitcher(true)}
-          className="text-[15px] text-[#3a4858] hover:text-[#8a96a4] px-2.5 py-1.5 rounded bg-[#141a22]/40 transition-colors"
+          className="text-[15px] text-[var(--c-border-hover)] hover:text-[var(--c-text-secondary)] px-2.5 py-1.5 rounded bg-[color-mix(in_srgb,var(--c-bg-elevated)_40%,transparent)] transition-colors"
           title="Quick Open (Cmd+P)"
         >
           Open...
@@ -203,7 +203,7 @@ export function VaultPanel() {
         <button
           onClick={() => setShowRightSidebar(s => !s)}
           className={`text-[15px] px-2.5 py-1.5 rounded transition-colors ${
-            showRightSidebar ? 'bg-[#00ff88]/12 text-[#00e5ff]' : 'text-[#3a4858] hover:text-[#8a96a4] bg-[#141a22]/40'
+            showRightSidebar ? 'bg-[color-mix(in_srgb,var(--c-accent)_12%,transparent)] text-[var(--c-accent-blue)]' : 'text-[var(--c-border-hover)] hover:text-[var(--c-text-secondary)] bg-[color-mix(in_srgb,var(--c-bg-elevated)_40%,transparent)]'
           }`}
           title="Toggle Outline (Cmd+\\)"
         >
@@ -215,19 +215,19 @@ export function VaultPanel() {
       <div className="flex-1 flex overflow-hidden" style={{ cursor: resizing ? 'col-resize' : undefined }}>
         {/* Left sidebar: tree or search */}
         <div
-          className="shrink-0 border-r border-[#2a3440]/60 overflow-hidden flex flex-col bg-[#080a0e]/50"
+          className="shrink-0 border-r border-[color-mix(in_srgb,var(--c-border)_60%,transparent)] overflow-hidden flex flex-col bg-[color-mix(in_srgb,var(--c-bg-app)_50%,transparent)]"
           style={{ width: sidebarWidth }}
         >
           {/* Sidebar mode tabs */}
-          <div className="shrink-0 flex border-b border-[#2a3440]/60">
+          <div className="shrink-0 flex border-b border-[color-mix(in_srgb,var(--c-border)_60%,transparent)]">
             {(['tree', 'search'] as const).map(mode => (
               <button
                 key={mode}
                 onClick={() => setLeftSidebarMode(mode)}
                 className={`flex-1 px-2 py-1.5 text-[15px] capitalize transition-colors ${
                   leftSidebarMode === mode
-                    ? 'text-[#00e5ff] bg-[#141a22]/40'
-                    : 'text-[#3a4858] hover:text-[#8a96a4]'
+                    ? 'text-[var(--c-accent-blue)] bg-[color-mix(in_srgb,var(--c-bg-elevated)_40%,transparent)]'
+                    : 'text-[var(--c-border-hover)] hover:text-[var(--c-text-secondary)]'
                 }`}
               >
                 {mode === 'tree' ? 'Files' : 'Search'}
@@ -250,7 +250,7 @@ export function VaultPanel() {
 
         {/* Resize handle */}
         <div
-          className="w-1 hover:bg-[#00ff88]/20 cursor-col-resize transition-colors shrink-0"
+          className="w-1 hover:bg-[color-mix(in_srgb,var(--c-accent)_20%,transparent)] cursor-col-resize transition-colors shrink-0"
           onMouseDown={handleMouseDown}
         />
 
@@ -272,8 +272,8 @@ export function VaultPanel() {
       </div>
 
       {/* Bottom bar */}
-      <div className="shrink-0 flex items-center justify-between px-3 py-2 border-t border-[#2a3440]/60 bg-[#0c1018]/40">
-        <div className="text-[15px] text-[#3a4858]">
+      <div className="shrink-0 flex items-center justify-between px-3 py-2 border-t border-[color-mix(in_srgb,var(--c-border)_60%,transparent)] bg-[color-mix(in_srgb,var(--c-bg-surface)_40%,transparent)]">
+        <div className="text-[15px] text-[var(--c-border-hover)]">
           {selectedFiles.size > 0
             ? `${selectedFiles.size} file${selectedFiles.size > 1 ? 's' : ''} selected`
             : tabs.length > 0
@@ -282,7 +282,7 @@ export function VaultPanel() {
           {selectedFiles.size > 0 && (
             <button
               onClick={() => setSelectedFiles(new Set())}
-              className="ml-2 text-[#2a3440] hover:text-[#5a6a7a] transition-colors"
+              className="ml-2 text-[var(--c-border)] hover:text-[var(--c-text-muted)] transition-colors"
             >
               Clear
             </button>
@@ -290,10 +290,10 @@ export function VaultPanel() {
         </div>
         <div className="flex items-center gap-1">
           <SendToAgent selectedFiles={selectedFiles} />
-          <span className="mx-2 w-px h-4 bg-[#141a22]/60" />
-          <button onClick={zoomOut} className="w-7 h-7 rounded text-[#3a4858] hover:text-[#8a96a4] hover:bg-[#141a22]/60 flex items-center justify-center text-[15px] transition-colors" title="Zoom Out (Cmd+-)">-</button>
-          <button onClick={zoomReset} className="px-1.5 h-7 rounded text-[#3a4858] hover:text-[#8a96a4] hover:bg-[#141a22]/60 text-xs tabular-nums transition-colors" title="Reset Zoom (Cmd+0)">{Math.round(zoom * 100)}%</button>
-          <button onClick={zoomIn} className="w-7 h-7 rounded text-[#3a4858] hover:text-[#8a96a4] hover:bg-[#141a22]/60 flex items-center justify-center text-[15px] transition-colors" title="Zoom In (Cmd+=)">+</button>
+          <span className="mx-2 w-px h-4 bg-[color-mix(in_srgb,var(--c-bg-elevated)_60%,transparent)]" />
+          <button onClick={zoomOut} className="w-7 h-7 rounded text-[var(--c-border-hover)] hover:text-[var(--c-text-secondary)] hover:bg-[color-mix(in_srgb,var(--c-bg-elevated)_60%,transparent)] flex items-center justify-center text-[15px] transition-colors" title="Zoom Out (Cmd+-)">-</button>
+          <button onClick={zoomReset} className="px-1.5 h-7 rounded text-[var(--c-border-hover)] hover:text-[var(--c-text-secondary)] hover:bg-[color-mix(in_srgb,var(--c-bg-elevated)_60%,transparent)] text-xs tabular-nums transition-colors" title="Reset Zoom (Cmd+0)">{Math.round(zoom * 100)}%</button>
+          <button onClick={zoomIn} className="w-7 h-7 rounded text-[var(--c-border-hover)] hover:text-[var(--c-text-secondary)] hover:bg-[color-mix(in_srgb,var(--c-bg-elevated)_60%,transparent)] flex items-center justify-center text-[15px] transition-colors" title="Zoom In (Cmd+=)">+</button>
         </div>
       </div>
     </div>

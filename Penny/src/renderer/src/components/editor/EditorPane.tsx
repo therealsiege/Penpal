@@ -101,7 +101,7 @@ function useMarkdownComponents(onNavigate: (target: string) => void): Components
         <a
           {...props}
           href={href}
-          className="text-[#00e5ff] underline underline-offset-2 hover:text-[#00ff88] cursor-pointer"
+          className="text-[var(--c-accent-blue)] underline underline-offset-2 hover:text-[var(--c-accent)] cursor-pointer"
           onClick={(e) => {
             e.preventDefault()
             if (href) onNavigate(href.replace(/\.md$/, ''))
@@ -236,10 +236,10 @@ export function EditorPane() {
 
   if (tabs.length === 0) {
     return (
-      <div className="flex items-center justify-center h-full text-[#4a5c6e]">
+      <div className="flex items-center justify-center h-full text-[var(--c-text-faint)]">
         <div className="text-center">
           <div className="text-2xl mb-2">Select a file</div>
-          <div className="text-sm text-[#5a6a7a]">Click to preview, double-click to edit</div>
+          <div className="text-sm text-[var(--c-text-muted)]">Click to preview, double-click to edit</div>
         </div>
       </div>
     )
@@ -253,11 +253,11 @@ export function EditorPane() {
       <EditorTabs />
 
       {activeTab && (
-        <div className="shrink-0 flex items-center justify-between px-3 py-1.5 border-b border-[#2a3440]/60 bg-[#0c1018]/40">
+        <div className="shrink-0 flex items-center justify-between px-3 py-1.5 border-b border-[color-mix(in_srgb,var(--c-border)_60%,transparent)] bg-[color-mix(in_srgb,var(--c-bg-surface)_40%,transparent)]">
           <div className="flex items-center gap-3 truncate mr-4">
-            <span className="text-sm text-[#5a6a7a] truncate">{activeTab.path}</span>
+            <span className="text-sm text-[var(--c-text-muted)] truncate">{activeTab.path}</span>
             {isMarkdown && (
-              <span className="text-[10px] text-[#2a3440] tabular-nums shrink-0">
+              <span className="text-[10px] text-[var(--c-border)] tabular-nums shrink-0">
                 {words.toLocaleString()} words &middot; {readTime}
               </span>
             )}
@@ -271,8 +271,8 @@ export function EditorPane() {
                 onClick={() => setViewMode(mode)}
                 className={`px-2 py-0.5 text-xs rounded transition-colors ${
                   viewMode === mode
-                    ? 'bg-[#00ff88]/12 text-[#00e5ff]'
-                    : 'text-[#5a6a7a] hover:text-[#c4ccd6]'
+                    ? 'bg-[color-mix(in_srgb,var(--c-accent)_12%,transparent)] text-[var(--c-accent-blue)]'
+                    : 'text-[var(--c-text-muted)] hover:text-[var(--c-text-primary)]'
                 }`}
               >
                 {mode === 'source' ? 'Edit' : 'Preview'}
@@ -299,11 +299,11 @@ export function EditorPane() {
             <div className="max-w-3xl mx-auto px-8 py-6">
               {/* Article title */}
               {isMarkdown && title && (
-                <h1 className="text-2xl font-bold text-[#dce4ec] mb-1 leading-tight">{title}</h1>
+                <h1 className="text-2xl font-bold text-[var(--c-text-heading)] mb-1 leading-tight">{title}</h1>
               )}
               {/* Reading stats */}
               {isMarkdown && (
-                <div className="text-xs text-[#3a4858] mb-6">
+                <div className="text-xs text-[var(--c-border-hover)] mb-6">
                   {words.toLocaleString()} words &middot; {readTime}
                 </div>
               )}
@@ -321,7 +321,7 @@ export function EditorPane() {
                   </ReactMarkdown>
                 </div>
               ) : (
-                <pre className="text-xs text-[#c4ccd6] font-mono whitespace-pre-wrap break-words">
+                <pre className="text-xs text-[var(--c-text-primary)] font-mono whitespace-pre-wrap break-words">
                   {activeTab.content}
                 </pre>
               )}

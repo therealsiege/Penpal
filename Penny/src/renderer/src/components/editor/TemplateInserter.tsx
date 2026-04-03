@@ -68,7 +68,7 @@ export function TemplateInserter({ onInsert }: TemplateInserterProps) {
     return (
       <button
         onClick={() => setOpen(true)}
-        className="text-xs text-[#5a6a7a] hover:text-[#c4ccd6] px-2 py-1 rounded bg-[#141a22]/40 transition-colors"
+        className="text-xs text-[var(--c-text-muted)] hover:text-[var(--c-text-primary)] px-2 py-1 rounded bg-[color-mix(in_srgb,var(--c-bg-elevated)_40%,transparent)] transition-colors"
         title="Insert template"
       >
         Template
@@ -78,20 +78,20 @@ export function TemplateInserter({ onInsert }: TemplateInserterProps) {
 
   return (
     <div className="relative">
-      <div className="absolute top-full right-0 mt-1 bg-[#141a22] border border-[#2a3440] rounded-lg shadow-xl py-1 min-w-[160px] z-50 ring-1 ring-[#00ff88]/8">
+      <div className="absolute top-full right-0 mt-1 bg-[var(--c-bg-elevated)] border border-[var(--c-border)] rounded-lg shadow-xl py-1 min-w-[160px] z-50 ring-1 ring-[color-mix(in_srgb,var(--c-accent)_8%,transparent)]">
         {Object.keys(TEMPLATES).map(name => (
           <button
             key={name}
             onClick={() => { onInsert(TEMPLATES[name]); setOpen(false) }}
-            className="w-full text-left px-3 py-1.5 text-xs text-[#c4ccd6] hover:bg-[#1a2430] transition-colors"
+            className="w-full text-left px-3 py-1.5 text-xs text-[var(--c-text-primary)] hover:bg-[var(--c-bg-hover)] transition-colors"
           >
             {name}
           </button>
         ))}
-        <div className="border-t border-[#2a3440] mt-1 pt-1">
+        <div className="border-t border-[var(--c-border)] mt-1 pt-1">
           <button
             onClick={() => setOpen(false)}
-            className="w-full text-left px-3 py-1 text-xs text-[#5a6a7a] hover:text-[#c4ccd6] transition-colors"
+            className="w-full text-left px-3 py-1 text-xs text-[var(--c-text-muted)] hover:text-[var(--c-text-primary)] transition-colors"
           >
             Cancel
           </button>

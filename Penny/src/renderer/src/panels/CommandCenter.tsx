@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
+import { useAppearanceStore } from '../stores/appearance-store'
 import { usePolling } from '../hooks/usePolling'
 import { AgentAvatar } from '../components/AgentAvatar'
 import { useToast } from '../components/Toast'
@@ -78,23 +79,23 @@ function AgentActionPopup({
       onClick={onClose}
     >
       <div
-        className="bg-gradient-to-b from-[#0c1018] to-[#080b10] border border-[#2a3440] rounded-xl p-4 w-[400px] shadow-2xl ring-1 ring-[#00ff88]/10"
+        className="bg-gradient-to-b from-[var(--c-bg-surface)] to-[var(--c-bg-app)] border border-[var(--c-border)] rounded-xl p-4 w-[400px] shadow-2xl ring-1 ring-[color-mix(in_srgb,var(--c-accent)_10%,transparent)]"
         onClick={e => e.stopPropagation()}
       >
         <div className="flex items-center justify-between mb-3">
           <div>
-            <h3 className="text-[13px] font-bold text-[#dce4ec]">{state.config.name}</h3>
+            <h3 className="text-[13px] font-bold text-[var(--c-text-heading)]">{state.config.name}</h3>
             {state.config.title && state.config.title !== state.config.name && (
-              <p className="text-[11px] text-[#5a6a7a] mt-0.5">{state.config.title}</p>
+              <p className="text-[11px] text-[var(--c-text-muted)] mt-0.5">{state.config.title}</p>
             )}
             <div className="flex items-center gap-2 mt-0.5">
               {state.cwd && (
-                <span className="text-[13px] text-[#00e5ff]/80 font-mono">
+                <span className="text-[13px] text-[color-mix(in_srgb,var(--c-accent-blue)_80%,transparent)] font-mono">
                   {state.cwd.split('/').pop()}
                 </span>
               )}
               {state.sessionMode && state.sessionMode !== 'idle' && (
-                <span className="text-[13px] px-1.5 py-0.5 rounded bg-[#141a22] text-[#8a96a4]">
+                <span className="text-[13px] px-1.5 py-0.5 rounded bg-[var(--c-bg-elevated)] text-[var(--c-text-secondary)]">
                   {state.sessionMode}
                 </span>
               )}
@@ -120,7 +121,7 @@ function AgentActionPopup({
           </div>
           <button
             onClick={onClose}
-            className="text-[#5a6a7a] hover:text-[#c4ccd6] text-lg"
+            className="text-[var(--c-text-muted)] hover:text-[var(--c-text-primary)] text-lg"
           >
             x
           </button>
@@ -128,13 +129,13 @@ function AgentActionPopup({
 
         {/* Persona info — Fix 10: includes backstory */}
         {state.config.persona && (
-          <div className="bg-[#141a22]/30 rounded-lg px-3 py-2 mb-3 border border-[#2a3440]/30">
-            <p className="text-[11px] text-[#8a96a4] italic leading-relaxed">
+          <div className="bg-[color-mix(in_srgb,var(--c-bg-elevated)_30%,transparent)] rounded-lg px-3 py-2 mb-3 border border-[color-mix(in_srgb,var(--c-border)_30%,transparent)]">
+            <p className="text-[11px] text-[var(--c-text-secondary)] italic leading-relaxed">
               &ldquo;{state.config.persona.catchphrase}&rdquo;
             </p>
-            <p className="text-[10px] text-[#4a5c6e] mt-1">{state.config.persona.style}</p>
+            <p className="text-[10px] text-[var(--c-text-faint)] mt-1">{state.config.persona.style}</p>
             {state.config.persona.backstory && (
-              <p className="text-[10px] text-[#5a6a7a] mt-1.5 leading-relaxed">
+              <p className="text-[10px] text-[var(--c-text-muted)] mt-1.5 leading-relaxed">
                 {state.config.persona.backstory.length > 120
                   ? state.config.persona.backstory.slice(0, 117) + '...'
                   : state.config.persona.backstory}
@@ -175,7 +176,7 @@ function AgentActionPopup({
                 <p className="text-[10px] text-green-400/60">Sandbox isolation active</p>
               )}
               {state.openclaw.agentId && (
-                <p className="text-[10px] text-[#5a6a7a] font-mono">
+                <p className="text-[10px] text-[var(--c-text-muted)] font-mono">
                   Agent: {state.openclaw.agentId}
                 </p>
               )}
@@ -199,8 +200,8 @@ function AgentActionPopup({
         {state.config.allowedTools.length > 0 && (() => {
           const { mcpServers, builtins } = extractAgentTools(state.config.allowedTools)
           return (mcpServers.length > 0 || builtins.length > 0) ? (
-            <div className="bg-[#141a22]/30 rounded-lg px-3 py-2 mb-3 border border-[#2a3440]/30">
-              <p className="text-[10px] text-[#5a6a7a] uppercase tracking-wider mb-1.5">Toolbelt</p>
+            <div className="bg-[color-mix(in_srgb,var(--c-bg-elevated)_30%,transparent)] rounded-lg px-3 py-2 mb-3 border border-[color-mix(in_srgb,var(--c-border)_30%,transparent)]">
+              <p className="text-[10px] text-[var(--c-text-muted)] uppercase tracking-wider mb-1.5">Toolbelt</p>
               <div className="flex items-center gap-1.5 flex-wrap">
                 {mcpServers.map(s => (
                   <span
@@ -224,9 +225,9 @@ function AgentActionPopup({
         })()}
 
         {state.lastAssistantBlurb && (
-          <div className="bg-[#141a22]/50 rounded-lg px-3 py-2 mb-3 border border-[#2a3440]/50">
-            <p className="text-[13px] text-[#5a6a7a] uppercase mb-0.5">Currently</p>
-            <p className="text-[13px] text-[#c4ccd6]">{state.lastAssistantBlurb}</p>
+          <div className="bg-[color-mix(in_srgb,var(--c-bg-elevated)_50%,transparent)] rounded-lg px-3 py-2 mb-3 border border-[color-mix(in_srgb,var(--c-border)_50%,transparent)]">
+            <p className="text-[13px] text-[var(--c-text-muted)] uppercase mb-0.5">Currently</p>
+            <p className="text-[13px] text-[var(--c-text-primary)]">{state.lastAssistantBlurb}</p>
           </div>
         )}
 
@@ -250,7 +251,7 @@ function AgentActionPopup({
           <>
             {needsApproval && state.tty && (
               <div className="mb-3">
-                <p className="text-[13px] text-[#5a6a7a] uppercase font-medium mb-1.5">
+                <p className="text-[13px] text-[var(--c-text-muted)] uppercase font-medium mb-1.5">
                   {state.sessionMode === 'accept-edits' ? 'Pending Edit Approval' : 'Pending Tool Approval'}
                 </p>
                 <div className="flex gap-2">
@@ -289,7 +290,7 @@ function AgentActionPopup({
                     setMsg('')
                   }
                 }}
-                className="flex-1 bg-[#06080c] border border-[#2a3440] rounded-md px-3 py-2 text-[13px] text-[#dce4ec] placeholder-[#4a5c6e] focus:outline-none focus:border-[#00ff88]/35 font-mono"
+                className="flex-1 bg-[var(--c-bg-deep)] border border-[var(--c-border)] rounded-md px-3 py-2 text-[13px] text-[var(--c-text-heading)] placeholder-[var(--c-text-faint)] focus:outline-none focus:border-[color-mix(in_srgb,var(--c-accent)_35%,transparent)] font-mono"
               />
               <button
                 onClick={() => {
@@ -307,13 +308,13 @@ function AgentActionPopup({
 
             {state.tty && (
               <div className="mb-3">
-                <p className="text-[13px] text-[#5a6a7a] uppercase font-medium mb-1.5">Quick Response</p>
+                <p className="text-[13px] text-[var(--c-text-muted)] uppercase font-medium mb-1.5">Quick Response</p>
                 <div className="flex gap-1.5">
                   {['1', '2', '3', '4', '5'].map(n => (
                     <button
                       key={n}
                       onClick={() => onSendMessage(n)}
-                      className="w-9 h-9 text-[13px] font-bold bg-[#141a22] hover:bg-blue-900/40 border border-[#2a3440] rounded-md text-[#c4ccd6] transition-colors"
+                      className="w-9 h-9 text-[13px] font-bold bg-[var(--c-bg-elevated)] hover:bg-blue-900/40 border border-[var(--c-border)] rounded-md text-[var(--c-text-primary)] transition-colors"
                     >
                       {n}
                     </button>
@@ -338,7 +339,7 @@ function AgentActionPopup({
               {state.tty && (
                 <button
                   onClick={onFocusiTerm}
-                  className="flex-1 px-3 py-1.5 text-[13px] bg-[#141a22] hover:bg-[#1a2430] rounded-md border border-[#2a3440] text-[#c4ccd6] transition-colors"
+                  className="flex-1 px-3 py-1.5 text-[13px] bg-[var(--c-bg-elevated)] hover:bg-[var(--c-bg-hover)] rounded-md border border-[var(--c-border)] text-[var(--c-text-primary)] transition-colors"
                 >
                   Focus in iTerm
                 </button>
@@ -366,13 +367,13 @@ function TypePickerModal({
 }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 backdrop-blur-[2px] animate-backdrop-fade-in">
-      <div className="bg-gradient-to-b from-[#0c1018] to-[#080b10] border border-[#2a3440] rounded-xl p-5 w-[520px] shadow-2xl max-h-[80vh] overflow-y-auto animate-modal-scale-in ring-1 ring-[#00ff88]/10">
+      <div className="bg-gradient-to-b from-[var(--c-bg-surface)] to-[var(--c-bg-app)] border border-[var(--c-border)] rounded-xl p-5 w-[520px] shadow-2xl max-h-[80vh] overflow-y-auto animate-modal-scale-in ring-1 ring-[color-mix(in_srgb,var(--c-accent)_10%,transparent)]">
         <div className="flex items-center justify-between mb-4">
           <div>
-            <h3 className="text-[13px] font-bold text-[#dce4ec]">Hire Worker</h3>
-            <p className="text-[13px] text-[#5a6a7a] mt-0.5">Choose a role</p>
+            <h3 className="text-[13px] font-bold text-[var(--c-text-heading)]">Hire Worker</h3>
+            <p className="text-[13px] text-[var(--c-text-muted)] mt-0.5">Choose a role</p>
           </div>
-          <button onClick={onClose} className="text-[#5a6a7a] hover:text-[#c4ccd6] text-lg">
+          <button onClick={onClose} className="text-[var(--c-text-muted)] hover:text-[var(--c-text-primary)] text-lg">
             x
           </button>
         </div>
@@ -381,10 +382,10 @@ function TypePickerModal({
             <button
               key={c.id}
               onClick={() => onSelect(c)}
-              className="stagger-item text-left p-3 bg-[#141a22]/50 hover:bg-[#141a22] border border-[#2a3440]/50 hover:border-[#3a4858] rounded-lg transition-all duration-150 hover:scale-[1.02] active:scale-[0.98] group"
+              className="stagger-item text-left p-3 bg-[color-mix(in_srgb,var(--c-bg-elevated)_50%,transparent)] hover:bg-[var(--c-bg-elevated)] border border-[color-mix(in_srgb,var(--c-border)_50%,transparent)] hover:border-[var(--c-border-hover)] rounded-lg transition-all duration-150 hover:scale-[1.02] active:scale-[0.98] group"
             >
-              <p className="text-[13px] font-semibold text-[#dce4ec] group-hover:text-[#dce4ec]">{c.name}</p>
-              <p className="text-[13px] text-[#5a6a7a] mt-0.5">
+              <p className="text-[13px] font-semibold text-[var(--c-text-heading)] group-hover:text-[var(--c-text-heading)]">{c.name}</p>
+              <p className="text-[13px] text-[var(--c-text-muted)] mt-0.5">
                 {c.mcpProfile} / {c.model}
               </p>
               <div className="flex flex-wrap gap-1 mt-1.5">
@@ -426,19 +427,19 @@ function LaunchModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 backdrop-blur-[2px] animate-backdrop-fade-in">
-      <div className="bg-gradient-to-b from-[#0c1018] to-[#080b10] border border-[#2a3440] rounded-xl p-5 w-[420px] shadow-2xl animate-modal-scale-in ring-1 ring-[#00ff88]/10">
+      <div className="bg-gradient-to-b from-[var(--c-bg-surface)] to-[var(--c-bg-app)] border border-[var(--c-border)] rounded-xl p-5 w-[420px] shadow-2xl animate-modal-scale-in ring-1 ring-[color-mix(in_srgb,var(--c-accent)_10%,transparent)]">
         <div className="flex items-center justify-between mb-4">
           <div>
-            <h3 className="text-[13px] font-bold text-[#dce4ec]">{config.name}</h3>
-            <p className="text-[13px] text-[#5a6a7a] mt-0.5">
+            <h3 className="text-[13px] font-bold text-[var(--c-text-heading)]">{config.name}</h3>
+            <p className="text-[13px] text-[var(--c-text-muted)] mt-0.5">
               {config.model} / {config.mcpProfile}
             </p>
           </div>
-          <button onClick={onClose} className="text-[#5a6a7a] hover:text-[#c4ccd6] text-lg">
+          <button onClick={onClose} className="text-[var(--c-text-muted)] hover:text-[var(--c-text-primary)] text-lg">
             x
           </button>
         </div>
-        <p className="text-[13px] text-[#5a6a7a] uppercase font-medium mb-2">Working Directory</p>
+        <p className="text-[13px] text-[var(--c-text-muted)] uppercase font-medium mb-2">Working Directory</p>
         {repos.length > 0 && (
           <div className="flex flex-wrap gap-1.5 mb-3">
             {repos.map(r => (
@@ -451,7 +452,7 @@ function LaunchModal({
                 className={`stagger-item px-2.5 py-1 text-[13px] rounded-md border transition-all duration-150 hover:scale-[1.02] active:scale-[0.98] ${
                   cwd === r && !custom
                     ? 'bg-blue-600/20 border-blue-500/30 text-blue-400'
-                    : 'bg-[#141a22] border-[#2a3440] text-[#8a96a4] hover:text-[#dce4ec]'
+                    : 'bg-[var(--c-bg-elevated)] border-[var(--c-border)] text-[var(--c-text-secondary)] hover:text-[var(--c-text-heading)]'
                 }`}
               >
                 {r.split('/').pop()}
@@ -471,7 +472,7 @@ function LaunchModal({
             onKeyDown={e =>
               e.key === 'Enter' && (custom || cwd) && onLaunch(config.id, custom || cwd)
             }
-            className="flex-1 bg-[#06080c] border border-[#2a3440] rounded-md px-3 py-2 text-[13px] text-[#dce4ec] placeholder-[#4a5c6e] focus:outline-none focus:border-[#00ff88]/35 font-mono"
+            className="flex-1 bg-[var(--c-bg-deep)] border border-[var(--c-border)] rounded-md px-3 py-2 text-[13px] text-[var(--c-text-heading)] placeholder-[var(--c-text-faint)] focus:outline-none focus:border-[color-mix(in_srgb,var(--c-accent)_35%,transparent)] font-mono"
           />
           <button
             onClick={async () => {
@@ -481,7 +482,7 @@ function LaunchModal({
                 setCwd(picked)
               }
             }}
-            className="flex-none px-3 py-2 text-[13px] bg-[#141a22] hover:bg-[#1a2430] border border-[#2a3440] rounded-md text-[#c4ccd6] transition-colors"
+            className="flex-none px-3 py-2 text-[13px] bg-[var(--c-bg-elevated)] hover:bg-[var(--c-bg-hover)] border border-[var(--c-border)] rounded-md text-[var(--c-text-primary)] transition-colors"
           >
             Browse...
           </button>
@@ -489,7 +490,7 @@ function LaunchModal({
         <div className="flex gap-2 justify-end">
           <button
             onClick={onClose}
-            className="px-3 py-1.5 text-[13px] bg-[#141a22] hover:bg-[#1a2430] rounded-md border border-[#2a3440] text-[#8a96a4] transition-colors"
+            className="px-3 py-1.5 text-[13px] bg-[var(--c-bg-elevated)] hover:bg-[var(--c-bg-hover)] rounded-md border border-[var(--c-border)] text-[var(--c-text-secondary)] transition-colors"
           >
             Cancel
           </button>
@@ -523,7 +524,7 @@ function getStatusDot(state: AgentState): { color: string; pulse: boolean } {
   if (state.sessionMode === 'accept-edits') return { color: 'bg-blue-400', pulse: false }
   if (state.sessionMode === 'working') return { color: 'bg-emerald-400', pulse: false }
   if (state.status === 'active') return { color: 'bg-emerald-400', pulse: false }
-  return { color: 'bg-[#4a5c6e]', pulse: false }
+  return { color: 'bg-[var(--c-text-faint)]', pulse: false }
 }
 
 // ---------------------------------------------------------------------------
@@ -741,22 +742,22 @@ function ConfigModal({ config, onClose, onRefresh }: {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 backdrop-blur-[2px] animate-backdrop-fade-in" onClick={onClose}>
-      <div className="bg-gradient-to-b from-[#0c1018] to-[#080b10] border border-[#2a3440] rounded-xl p-5 w-[680px] shadow-2xl max-h-[80vh] overflow-y-auto animate-modal-scale-in ring-1 ring-[#00ff88]/10" onClick={e => e.stopPropagation()}>
+      <div className="bg-gradient-to-b from-[var(--c-bg-surface)] to-[var(--c-bg-app)] border border-[var(--c-border)] rounded-xl p-5 w-[680px] shadow-2xl max-h-[80vh] overflow-y-auto animate-modal-scale-in ring-1 ring-[color-mix(in_srgb,var(--c-accent)_10%,transparent)]" onClick={e => e.stopPropagation()}>
 
         {/* Header */}
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-3">
-            <h3 className="text-[15px] font-bold text-[#dce4ec]">Config</h3>
-            <div className="flex rounded-lg bg-[#141a22] p-0.5">
+            <h3 className="text-[15px] font-bold text-[var(--c-text-heading)]">Config</h3>
+            <div className="flex rounded-lg bg-[var(--c-bg-elevated)] p-0.5">
               {(['mcp', 'claude', 'agents'] as const).map(t => (
                 <button key={t} onClick={() => setTab(t)}
-                  className={`px-2.5 py-0.5 text-[10px] rounded capitalize ${tab === t ? 'bg-[#2a3440] text-white' : 'text-[#5a6a7a]'}`}
+                  className={`px-2.5 py-0.5 text-[10px] rounded capitalize ${tab === t ? 'bg-[var(--c-border)] text-white' : 'text-[var(--c-text-muted)]'}`}
                 >{t === 'mcp' ? `MCP (${config.mcp.totalUniqueServers})` : t === 'claude' ? 'Claude' : `Agents (${config.agents.length})`}</button>
               ))}
             </div>
             {saving && <span className="text-[10px] text-amber-400 animate-pulse">Saving...</span>}
           </div>
-          <button onClick={onClose} className="text-[#5a6a7a] hover:text-[#c4ccd6] text-lg">x</button>
+          <button onClick={onClose} className="text-[var(--c-text-muted)] hover:text-[var(--c-text-primary)] text-lg">x</button>
         </div>
 
         {/* ── MCP Tab ─────────────────────────────────────────────────── */}
@@ -765,9 +766,9 @@ function ConfigModal({ config, onClose, onRefresh }: {
             {/* Project .mcp.json */}
             <div>
               <div className="flex items-center justify-between mb-2">
-                <p className="text-[10px] text-[#5a6a7a] uppercase tracking-wider">
+                <p className="text-[10px] text-[var(--c-text-muted)] uppercase tracking-wider">
                   Project MCP Servers ({config.mcp.projectServers.length})
-                  <span className="text-[#3a4858] ml-2 normal-case">.mcp.json</span>
+                  <span className="text-[var(--c-border-hover)] ml-2 normal-case">.mcp.json</span>
                 </p>
                 <button onClick={() => setAddingMcp({ target: 'project' })}
                   className="text-[10px] px-2 py-0.5 rounded bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/30 text-emerald-400 transition-colors"
@@ -784,9 +785,9 @@ function ConfigModal({ config, onClose, onRefresh }: {
             {Object.entries(config.mcp.profileServers).map(([profile, servers]) => (
               <div key={profile}>
                 <div className="flex items-center justify-between mb-2">
-                  <p className="text-[10px] text-[#5a6a7a] uppercase tracking-wider">
+                  <p className="text-[10px] text-[var(--c-text-muted)] uppercase tracking-wider">
                     Profile: <span className="text-cyan-400/70">{profile}</span>
-                    <span className="text-[#3a4858] ml-2 normal-case">({servers.length} servers)</span>
+                    <span className="text-[var(--c-border-hover)] ml-2 normal-case">({servers.length} servers)</span>
                   </p>
                   <button onClick={() => setAddingMcp({ target: profile })}
                     className="text-[10px] px-2 py-0.5 rounded bg-cyan-600/20 hover:bg-cyan-600/30 border border-cyan-500/30 text-cyan-400 transition-colors"
@@ -825,8 +826,8 @@ function ConfigModal({ config, onClose, onRefresh }: {
         {/* ── Claude Tab ──────────────────────────────────────────────── */}
         {tab === 'claude' && (
           <div className="flex flex-col gap-3">
-            <div className="bg-[#141a22]/50 rounded-lg px-3 py-2 border border-[#2a3440]/50">
-              <p className="text-[10px] text-[#5a6a7a] uppercase tracking-wider mb-1.5">Global Settings</p>
+            <div className="bg-[color-mix(in_srgb,var(--c-bg-elevated)_50%,transparent)] rounded-lg px-3 py-2 border border-[color-mix(in_srgb,var(--c-border)_50%,transparent)]">
+              <p className="text-[10px] text-[var(--c-text-muted)] uppercase tracking-wider mb-1.5">Global Settings</p>
               <div className="flex flex-wrap gap-1.5 mb-2">
                 {config.claude.globalSettings.alwaysThinking && (
                   <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-500/10 border border-purple-500/20 text-purple-400">Always Thinking</span>
@@ -837,17 +838,17 @@ function ConfigModal({ config, onClose, onRefresh }: {
               </div>
               {config.claude.globalSettings.envVars.length > 0 && (
                 <div className="mb-1.5">
-                  <p className="text-[9px] text-[#4a5c6e] mb-1">Environment Variables</p>
+                  <p className="text-[9px] text-[var(--c-text-faint)] mb-1">Environment Variables</p>
                   <div className="flex flex-wrap gap-1">
                     {config.claude.globalSettings.envVars.map(k => (
-                      <span key={k} className="text-[10px] px-1.5 py-0.5 rounded bg-[#0a0e14] text-[#6a7a8c] font-mono">{k}</span>
+                      <span key={k} className="text-[10px] px-1.5 py-0.5 rounded bg-[var(--c-bg-chrome)] text-[var(--c-text-dim)] font-mono">{k}</span>
                     ))}
                   </div>
                 </div>
               )}
               {config.claude.globalSettings.permissions.allow.length > 0 && (
                 <div>
-                  <p className="text-[9px] text-[#4a5c6e] mb-1">Allowed Permissions</p>
+                  <p className="text-[9px] text-[var(--c-text-faint)] mb-1">Allowed Permissions</p>
                   <div className="flex flex-wrap gap-1">
                     {config.claude.globalSettings.permissions.allow.map(p => (
                       <span key={p} className="text-[10px] px-1.5 py-0.5 rounded bg-green-500/10 border border-green-500/20 text-green-400 font-mono">{p}</span>
@@ -856,19 +857,19 @@ function ConfigModal({ config, onClose, onRefresh }: {
                 </div>
               )}
             </div>
-            <div className="bg-[#141a22]/50 rounded-lg px-3 py-2 border border-[#2a3440]/50">
-              <p className="text-[10px] text-[#5a6a7a] uppercase tracking-wider mb-1.5">Project Settings</p>
-              <p className="text-[11px] text-[#6a7a8c] font-mono">{config.claude.projectSettings.path}</p>
-              <p className={`text-[10px] mt-0.5 ${config.claude.projectSettings.exists ? 'text-green-400' : 'text-[#4a5c6e]'}`}>
+            <div className="bg-[color-mix(in_srgb,var(--c-bg-elevated)_50%,transparent)] rounded-lg px-3 py-2 border border-[color-mix(in_srgb,var(--c-border)_50%,transparent)]">
+              <p className="text-[10px] text-[var(--c-text-muted)] uppercase tracking-wider mb-1.5">Project Settings</p>
+              <p className="text-[11px] text-[var(--c-text-dim)] font-mono">{config.claude.projectSettings.path}</p>
+              <p className={`text-[10px] mt-0.5 ${config.claude.projectSettings.exists ? 'text-green-400' : 'text-[var(--c-text-faint)]'}`}>
                 {config.claude.projectSettings.exists ? 'Active' : 'Not configured'}
               </p>
             </div>
-            <div className="bg-[#141a22]/50 rounded-lg px-3 py-2 border border-[#2a3440]/50">
-              <p className="text-[10px] text-[#5a6a7a] uppercase tracking-wider mb-1.5">CLAUDE.md Files ({config.claude.claudeMdFiles.length})</p>
+            <div className="bg-[color-mix(in_srgb,var(--c-bg-elevated)_50%,transparent)] rounded-lg px-3 py-2 border border-[color-mix(in_srgb,var(--c-border)_50%,transparent)]">
+              <p className="text-[10px] text-[var(--c-text-muted)] uppercase tracking-wider mb-1.5">CLAUDE.md Files ({config.claude.claudeMdFiles.length})</p>
               {config.claude.claudeMdFiles.map(f => (
-                <div key={f.path} className="flex items-center gap-2 py-1 border-b border-[#2a3440]/30 last:border-0">
+                <div key={f.path} className="flex items-center gap-2 py-1 border-b border-[color-mix(in_srgb,var(--c-border)_30%,transparent)] last:border-0">
                   <span className="text-[11px] text-cyan-400/80 font-mono flex-1 truncate">{f.path}</span>
-                  <span className="text-[10px] text-[#4a5c6e] shrink-0">{(f.sizeBytes / 1024).toFixed(1)}KB</span>
+                  <span className="text-[10px] text-[var(--c-text-faint)] shrink-0">{(f.sizeBytes / 1024).toFixed(1)}KB</span>
                 </div>
               ))}
             </div>
@@ -881,20 +882,20 @@ function ConfigModal({ config, onClose, onRefresh }: {
             {config.agents.map(a => {
               const isEditing = editingAgent === a.agentId
               return (
-                <div key={a.agentId} className={`bg-[#141a22]/50 rounded-lg px-3 py-2 border transition-colors ${isEditing ? 'border-cyan-500/40' : 'border-[#2a3440]/50'}`}>
+                <div key={a.agentId} className={`bg-[color-mix(in_srgb,var(--c-bg-elevated)_50%,transparent)] rounded-lg px-3 py-2 border transition-colors ${isEditing ? 'border-cyan-500/40' : 'border-[color-mix(in_srgb,var(--c-border)_50%,transparent)]'}`}>
                   <div className="flex items-center justify-between mb-1.5">
                     <div className="flex items-center gap-2">
-                      <span className="text-[12px] font-semibold text-[#dce4ec]">{a.agentName}</span>
+                      <span className="text-[12px] font-semibold text-[var(--c-text-heading)]">{a.agentName}</span>
                       <span className="text-[10px] px-1.5 py-0.5 rounded bg-cyan-500/10 border border-cyan-500/20 text-cyan-400">{a.mcpProfile}</span>
                     </div>
                     <div className="flex items-center gap-2">
-                      <span className="text-[10px] text-[#4a5c6e] font-mono">{a.agentId}</span>
+                      <span className="text-[10px] text-[var(--c-text-faint)] font-mono">{a.agentId}</span>
                       <button
                         onClick={() => setEditingAgent(isEditing ? null : a.agentId)}
                         className={`text-[10px] px-1.5 py-0.5 rounded border transition-colors ${
                           isEditing
                             ? 'bg-cyan-500/20 border-cyan-500/30 text-cyan-400'
-                            : 'bg-[#0a0e14] border-[#2a3440] text-[#5a6a7a] hover:text-[#8a96a4]'
+                            : 'bg-[var(--c-bg-chrome)] border-[var(--c-border)] text-[var(--c-text-muted)] hover:text-[var(--c-text-secondary)]'
                         }`}
                       >{isEditing ? 'Done' : 'Edit'}</button>
                     </div>
@@ -903,7 +904,7 @@ function ConfigModal({ config, onClose, onRefresh }: {
                   {/* MCP servers */}
                   {a.mcpServers.length > 0 && (
                     <div className="flex items-center gap-1 mb-1 flex-wrap">
-                      <span className="text-[9px] text-[#4a5c6e] mr-1">MCP:</span>
+                      <span className="text-[9px] text-[var(--c-text-faint)] mr-1">MCP:</span>
                       {a.mcpServers.map(s => (
                         <span key={s} className="text-[10px] px-1.5 py-0.5 rounded bg-indigo-500/10 border border-indigo-500/20 text-indigo-400">{s}</span>
                       ))}
@@ -912,9 +913,9 @@ function ConfigModal({ config, onClose, onRefresh }: {
 
                   {/* Tools — editable when selected */}
                   <div className="flex items-center gap-1 flex-wrap">
-                    <span className="text-[9px] text-[#4a5c6e] mr-1">Tools:</span>
+                    <span className="text-[9px] text-[var(--c-text-faint)] mr-1">Tools:</span>
                     {a.allowedTools.map(t => (
-                      <span key={t} className="text-[10px] px-1 py-0.5 rounded bg-[#0a0e14] text-[#6a7a8c] font-mono inline-flex items-center gap-0.5 group">
+                      <span key={t} className="text-[10px] px-1 py-0.5 rounded bg-[var(--c-bg-chrome)] text-[var(--c-text-dim)] font-mono inline-flex items-center gap-0.5 group">
                         {t.length > 25 ? t.slice(0, 23) + '..' : t}
                         {isEditing && (
                           <button
@@ -936,7 +937,7 @@ function ConfigModal({ config, onClose, onRefresh }: {
                         onChange={e => setNewTool(e.target.value)}
                         onKeyDown={e => { if (e.key === 'Enter') doAddAgentTool(a.agentId, newTool, a.allowedTools) }}
                         placeholder="mcp__server__* or Bash(cmd:*)"
-                        className="flex-1 bg-[#06080c] border border-[#2a3440] rounded px-2 py-1 text-[11px] text-[#dce4ec] placeholder-[#3a4858] font-mono focus:outline-none focus:border-cyan-500/40"
+                        className="flex-1 bg-[var(--c-bg-deep)] border border-[var(--c-border)] rounded px-2 py-1 text-[11px] text-[var(--c-text-heading)] placeholder-[var(--c-border-hover)] font-mono focus:outline-none focus:border-cyan-500/40"
                       />
                       <button
                         onClick={() => doAddAgentTool(a.agentId, newTool, a.allowedTools)}
@@ -949,7 +950,7 @@ function ConfigModal({ config, onClose, onRefresh }: {
                   {/* Skills */}
                   {a.skills.length > 0 && (
                     <div className="flex items-center gap-1 mt-1 flex-wrap">
-                      <span className="text-[9px] text-[#4a5c6e] mr-1">Skills:</span>
+                      <span className="text-[9px] text-[var(--c-text-faint)] mr-1">Skills:</span>
                       {a.skills.map(s => (
                         <span key={s} className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/10 border border-amber-500/20 text-amber-400">{s}</span>
                       ))}
@@ -976,16 +977,16 @@ function AddMcpForm({ target, onAdd, onCancel }: {
   const [argsStr, setArgsStr] = useState('')
 
   return (
-    <div className="bg-[#0a0e14] rounded-lg px-3 py-3 border border-cyan-500/30">
+    <div className="bg-[var(--c-bg-chrome)] rounded-lg px-3 py-3 border border-cyan-500/30">
       <p className="text-[10px] text-cyan-400 uppercase tracking-wider mb-2">
         Add MCP Server to {target === 'project' ? '.mcp.json' : `profile: ${target}`}
       </p>
       <div className="flex flex-col gap-2">
         <div className="flex gap-2">
           <input type="text" value={name} onChange={e => setName(e.target.value)} placeholder="Server name"
-            className="flex-1 bg-[#06080c] border border-[#2a3440] rounded px-2 py-1.5 text-[11px] text-[#dce4ec] placeholder-[#3a4858] font-mono focus:outline-none focus:border-cyan-500/40" />
+            className="flex-1 bg-[var(--c-bg-deep)] border border-[var(--c-border)] rounded px-2 py-1.5 text-[11px] text-[var(--c-text-heading)] placeholder-[var(--c-border-hover)] font-mono focus:outline-none focus:border-cyan-500/40" />
           <select value={command} onChange={e => setCommand(e.target.value)}
-            className="bg-[#06080c] border border-[#2a3440] rounded px-2 py-1.5 text-[11px] text-[#dce4ec] font-mono focus:outline-none focus:border-cyan-500/40">
+            className="bg-[var(--c-bg-deep)] border border-[var(--c-border)] rounded px-2 py-1.5 text-[11px] text-[var(--c-text-heading)] font-mono focus:outline-none focus:border-cyan-500/40">
             <option value="npx">npx</option>
             <option value="uvx">uvx</option>
             <option value="node">node</option>
@@ -993,10 +994,10 @@ function AddMcpForm({ target, onAdd, onCancel }: {
         </div>
         <input type="text" value={argsStr} onChange={e => setArgsStr(e.target.value)}
           placeholder="Args (space-separated, e.g. -y @pkg/name)"
-          className="bg-[#06080c] border border-[#2a3440] rounded px-2 py-1.5 text-[11px] text-[#dce4ec] placeholder-[#3a4858] font-mono focus:outline-none focus:border-cyan-500/40" />
+          className="bg-[var(--c-bg-deep)] border border-[var(--c-border)] rounded px-2 py-1.5 text-[11px] text-[var(--c-text-heading)] placeholder-[var(--c-border-hover)] font-mono focus:outline-none focus:border-cyan-500/40" />
         <div className="flex gap-2 justify-end">
           <button onClick={onCancel}
-            className="px-2.5 py-1 text-[10px] bg-[#141a22] hover:bg-[#1a2430] border border-[#2a3440] rounded text-[#8a96a4] transition-colors"
+            className="px-2.5 py-1 text-[10px] bg-[var(--c-bg-elevated)] hover:bg-[var(--c-bg-hover)] border border-[var(--c-border)] rounded text-[var(--c-text-secondary)] transition-colors"
           >Cancel</button>
           <button onClick={() => { if (name.trim()) onAdd({ name: name.trim(), command, args: argsStr.split(/\s+/).filter(Boolean) }) }}
             disabled={!name.trim()}
@@ -1014,9 +1015,9 @@ function McpServerCard({ server, onRemove }: { server: McpServerEntry; onRemove?
     : server.command
   const envCount = Object.keys(server.env).length
   return (
-    <div className="bg-[#141a22]/60 rounded-lg px-2.5 py-2 border border-[#2a3440]/40 group relative">
+    <div className="bg-[color-mix(in_srgb,var(--c-bg-elevated)_60%,transparent)] rounded-lg px-2.5 py-2 border border-[color-mix(in_srgb,var(--c-border)_40%,transparent)] group relative">
       <div className="flex items-center justify-between mb-0.5">
-        <span className="text-[11px] font-semibold text-[#dce4ec]">{server.name}</span>
+        <span className="text-[11px] font-semibold text-[var(--c-text-heading)]">{server.name}</span>
         <div className="flex items-center gap-1">
           <span className={`text-[9px] px-1 py-0.5 rounded ${
             server.source === 'project' ? 'bg-blue-500/10 text-blue-400' : 'bg-purple-500/10 text-purple-400'
@@ -1029,9 +1030,9 @@ function McpServerCard({ server, onRemove }: { server: McpServerEntry; onRemove?
           )}
         </div>
       </div>
-      <p className="text-[10px] text-[#5a6a7a] font-mono truncate">{cmdShort}</p>
+      <p className="text-[10px] text-[var(--c-text-muted)] font-mono truncate">{cmdShort}</p>
       {envCount > 0 && (
-        <p className="text-[9px] text-[#3a4858] mt-0.5">{envCount} env var{envCount !== 1 ? 's' : ''}</p>
+        <p className="text-[9px] text-[var(--c-border-hover)] mt-0.5">{envCount} env var{envCount !== 1 ? 's' : ''}</p>
       )}
     </div>
   )
@@ -1050,32 +1051,32 @@ function SharePickerModal({ source, agents, onShare, onClose }: {
   const targets = agents.filter(a => a.config.id !== source.config.id && a.tty)
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 backdrop-blur-[2px] animate-backdrop-fade-in" onClick={onClose}>
-      <div className="bg-gradient-to-b from-[#0c1018] to-[#080b10] border border-[#2a3440] rounded-xl p-5 w-[400px] shadow-2xl animate-modal-scale-in ring-1 ring-[#00ff88]/10" onClick={e => e.stopPropagation()}>
+      <div className="bg-gradient-to-b from-[var(--c-bg-surface)] to-[var(--c-bg-app)] border border-[var(--c-border)] rounded-xl p-5 w-[400px] shadow-2xl animate-modal-scale-in ring-1 ring-[color-mix(in_srgb,var(--c-accent)_10%,transparent)]" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-4">
           <div>
-            <h3 className="text-[13px] font-bold text-[#dce4ec]">Share from {source.config.name}</h3>
-            <p className="text-[13px] text-[#5a6a7a] mt-0.5">Send last output to another agent</p>
+            <h3 className="text-[13px] font-bold text-[var(--c-text-heading)]">Share from {source.config.name}</h3>
+            <p className="text-[13px] text-[var(--c-text-muted)] mt-0.5">Send last output to another agent</p>
           </div>
-          <button onClick={onClose} className="text-[#5a6a7a] hover:text-[#c4ccd6] text-lg">x</button>
+          <button onClick={onClose} className="text-[var(--c-text-muted)] hover:text-[var(--c-text-primary)] text-lg">x</button>
         </div>
         {!source.lastAssistantBlurb ? (
-          <p className="text-[13px] text-[#5a6a7a] py-4 text-center">No output to share</p>
+          <p className="text-[13px] text-[var(--c-text-muted)] py-4 text-center">No output to share</p>
         ) : (
           <>
-            <div className="bg-[#141a22]/50 rounded-lg px-3 py-2 mb-3 border border-[#2a3440]/50">
-              <p className="text-[13px] text-[#5a6a7a] uppercase mb-0.5">Sharing</p>
-              <p className="text-[13px] text-[#c4ccd6] line-clamp-3">{source.lastAssistantBlurb}</p>
+            <div className="bg-[color-mix(in_srgb,var(--c-bg-elevated)_50%,transparent)] rounded-lg px-3 py-2 mb-3 border border-[color-mix(in_srgb,var(--c-border)_50%,transparent)]">
+              <p className="text-[13px] text-[var(--c-text-muted)] uppercase mb-0.5">Sharing</p>
+              <p className="text-[13px] text-[var(--c-text-primary)] line-clamp-3">{source.lastAssistantBlurb}</p>
             </div>
             {targets.length === 0 ? (
-              <p className="text-[13px] text-[#5a6a7a] py-4 text-center">No other agents available</p>
+              <p className="text-[13px] text-[var(--c-text-muted)] py-4 text-center">No other agents available</p>
             ) : (
               <div className="flex flex-col gap-2">
                 {targets.map(t => (
                   <button key={t.config.id} onClick={() => onShare(t)}
-                    className="stagger-item flex items-center gap-2 p-2 bg-[#141a22]/50 hover:bg-[#141a22] border border-[#2a3440]/50 hover:border-[#3a4858] rounded-lg transition-all duration-150 hover:scale-[1.01] active:scale-[0.99] text-left">
+                    className="stagger-item flex items-center gap-2 p-2 bg-[color-mix(in_srgb,var(--c-bg-elevated)_50%,transparent)] hover:bg-[var(--c-bg-elevated)] border border-[color-mix(in_srgb,var(--c-border)_50%,transparent)] hover:border-[var(--c-border-hover)] rounded-lg transition-all duration-150 hover:scale-[1.01] active:scale-[0.99] text-left">
                     <span className={`w-2 h-2 rounded-full ${getStatusDot(t).color}`} />
-                    <span className="text-[13px] text-[#dce4ec]">{t.config.name}</span>
-                    {t.cwd && <span className="text-[13px] text-[#5a6a7a] ml-auto">{t.cwd.split('/').pop()}</span>}
+                    <span className="text-[13px] text-[var(--c-text-heading)]">{t.config.name}</span>
+                    {t.cwd && <span className="text-[13px] text-[var(--c-text-muted)] ml-auto">{t.cwd.split('/').pop()}</span>}
                   </button>
                 ))}
               </div>
@@ -1135,7 +1136,7 @@ function getRankColor(level: number): string {
   if (level >= 7) return 'text-purple-400'
   if (level >= 5) return 'text-blue-400'
   if (level >= 3) return 'text-green-400'
-  return 'text-[#8a96a4]'
+  return 'text-[var(--c-text-secondary)]'
 }
 
 function LeaderboardModal({ agents, xpData, onClose }: {
@@ -1168,30 +1169,30 @@ function LeaderboardModal({ agents, xpData, onClose }: {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 backdrop-blur-[2px] animate-backdrop-fade-in" onClick={onClose}>
-      <div className="bg-gradient-to-b from-[#0c1018] to-[#080b10] border border-[#2a3440] rounded-xl p-5 w-[560px] shadow-2xl max-h-[75vh] overflow-y-auto animate-modal-scale-in ring-1 ring-[#00ff88]/10" onClick={e => e.stopPropagation()}>
+      <div className="bg-gradient-to-b from-[var(--c-bg-surface)] to-[var(--c-bg-app)] border border-[var(--c-border)] rounded-xl p-5 w-[560px] shadow-2xl max-h-[75vh] overflow-y-auto animate-modal-scale-in ring-1 ring-[color-mix(in_srgb,var(--c-accent)_10%,transparent)]" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-3">
-            <h3 className="text-[15px] font-bold text-[#dce4ec]">Leaderboard</h3>
-            <div className="flex rounded-lg bg-[#141a22] p-0.5">
+            <h3 className="text-[15px] font-bold text-[var(--c-text-heading)]">Leaderboard</h3>
+            <div className="flex rounded-lg bg-[var(--c-bg-elevated)] p-0.5">
               <button
                 onClick={() => setViewMode('xp')}
-                className={`px-2 py-0.5 text-[10px] rounded ${viewMode === 'xp' ? 'bg-[#2a3440] text-white' : 'text-[#5a6a7a]'}`}
+                className={`px-2 py-0.5 text-[10px] rounded ${viewMode === 'xp' ? 'bg-[var(--c-border)] text-white' : 'text-[var(--c-text-muted)]'}`}
               >
                 XP
               </button>
               <button
                 onClick={() => setViewMode('resources')}
-                className={`px-2 py-0.5 text-[10px] rounded ${viewMode === 'resources' ? 'bg-[#2a3440] text-white' : 'text-[#5a6a7a]'}`}
+                className={`px-2 py-0.5 text-[10px] rounded ${viewMode === 'resources' ? 'bg-[var(--c-border)] text-white' : 'text-[var(--c-text-muted)]'}`}
               >
                 Resources
               </button>
             </div>
           </div>
-          <button onClick={onClose} className="text-[#5a6a7a] hover:text-[#c4ccd6] text-lg">x</button>
+          <button onClick={onClose} className="text-[var(--c-text-muted)] hover:text-[var(--c-text-primary)] text-lg">x</button>
         </div>
 
         {/* Stats bar */}
-        <div className="flex items-center gap-4 mb-4 px-3 py-2 bg-[#141a22]/50 rounded-lg border border-[#2a3440]/50 text-[12px] text-[#8a96a4]">
+        <div className="flex items-center gap-4 mb-4 px-3 py-2 bg-[color-mix(in_srgb,var(--c-bg-elevated)_50%,transparent)] rounded-lg border border-[color-mix(in_srgb,var(--c-border)_50%,transparent)] text-[12px] text-[var(--c-text-secondary)]">
           {viewMode === 'xp' ? (
             <>
               <span>{xpEntries.length} agent{xpEntries.length !== 1 ? 's' : ''}</span>
@@ -1211,42 +1212,42 @@ function LeaderboardModal({ agents, xpData, onClose }: {
           /* XP Leaderboard */
           xpEntries.length === 0 ? (
             <div className="text-center py-8">
-              <p className="text-[13px] text-[#5a6a7a] mb-2">No XP data yet</p>
-              <p className="text-[11px] text-[#4a5c6e]">Complete tasks to earn XP and climb the ranks</p>
+              <p className="text-[13px] text-[var(--c-text-muted)] mb-2">No XP data yet</p>
+              <p className="text-[11px] text-[var(--c-text-faint)]">Complete tasks to earn XP and climb the ranks</p>
             </div>
           ) : (
             <div className="flex flex-col gap-2">
               {xpEntries.map((entry, idx) => (
                 <div key={entry.agentId} className={`stagger-item p-3 rounded-lg border transition-all ${
                   idx === 0 ? 'bg-amber-900/20 border-amber-700/50' :
-                  idx === 1 ? 'bg-[#141a22]/60 border-[#3a4858]/50' :
+                  idx === 1 ? 'bg-[color-mix(in_srgb,var(--c-bg-elevated)_60%,transparent)] border-[color-mix(in_srgb,var(--c-border-hover)_50%,transparent)]' :
                   idx === 2 ? 'bg-orange-900/15 border-orange-800/40' :
-                  'bg-[#141a22]/30 border-[#2a3440]/30'
+                  'bg-[color-mix(in_srgb,var(--c-bg-elevated)_30%,transparent)] border-[color-mix(in_srgb,var(--c-border)_30%,transparent)]'
                 }`}>
                   <div className="flex items-center gap-3">
-                    <span className={`text-lg w-8 text-center font-bold ${idx === 0 ? 'text-amber-400' : 'text-[#5a6a7a]'}`}>
+                    <span className={`text-lg w-8 text-center font-bold ${idx === 0 ? 'text-amber-400' : 'text-[var(--c-text-muted)]'}`}>
                       {idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : `#${idx + 1}`}
                     </span>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
-                        <p className="text-[13px] font-semibold text-[#dce4ec] truncate">{entry.name}</p>
-                        <span className={`text-[10px] px-1.5 py-0.5 rounded ${getRankColor(entry.xp.level)} bg-[#141a22]/80`}>
+                        <p className="text-[13px] font-semibold text-[var(--c-text-heading)] truncate">{entry.name}</p>
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded ${getRankColor(entry.xp.level)} bg-[color-mix(in_srgb,var(--c-bg-elevated)_80%,transparent)]`}>
                           {getRankBadge(entry.xp.level)} Lv.{entry.xp.level} {entry.xp.rank}
                         </span>
                       </div>
-                      <p className="text-[10px] text-[#5a6a7a] truncate">{entry.project}</p>
+                      <p className="text-[10px] text-[var(--c-text-muted)] truncate">{entry.project}</p>
                     </div>
                     <div className="text-right shrink-0">
-                      <p className={`text-[14px] font-bold ${idx === 0 ? 'text-amber-400' : 'text-[#c4ccd6]'}`}>
+                      <p className={`text-[14px] font-bold ${idx === 0 ? 'text-amber-400' : 'text-[var(--c-text-primary)]'}`}>
                         {entry.xp.totalXP.toLocaleString()}
                       </p>
-                      <p className="text-[10px] text-[#5a6a7a]">XP</p>
+                      <p className="text-[10px] text-[var(--c-text-muted)]">XP</p>
                     </div>
                   </div>
 
                   {/* Progress bar to next level */}
                   <div className="mt-2 flex items-center gap-2">
-                    <div className="flex-1 h-1.5 bg-[#141a22] rounded-full overflow-hidden">
+                    <div className="flex-1 h-1.5 bg-[var(--c-bg-elevated)] rounded-full overflow-hidden">
                       <div
                         className={`h-full rounded-full ${
                           entry.xp.level >= 9 ? 'bg-amber-500' :
@@ -1258,7 +1259,7 @@ function LeaderboardModal({ agents, xpData, onClose }: {
                         style={{ width: `${Math.min(100, (entry.xp.totalXP % 1000) / 10)}%` }}
                       />
                     </div>
-                    <span className="text-[9px] text-[#4a5c6e] w-16 text-right">
+                    <span className="text-[9px] text-[var(--c-text-faint)] w-16 text-right">
                       {entry.xp.tasksCompleted} tasks
                     </span>
                   </div>
@@ -1276,7 +1277,7 @@ function LeaderboardModal({ agents, xpData, onClose }: {
         ) : (
           /* Resource Leaderboard (original) */
           resourceEntries.length === 0 ? (
-            <p className="text-[13px] text-[#5a6a7a] text-center py-8">No active sessions.</p>
+            <p className="text-[13px] text-[var(--c-text-muted)] text-center py-8">No active sessions.</p>
           ) : (
             <div className="flex flex-col gap-2">
               {resourceEntries.map((entry, idx) => {
@@ -1284,26 +1285,26 @@ function LeaderboardModal({ agents, xpData, onClose }: {
                 return (
                   <div key={entry.directory} className={`stagger-item p-3 rounded-lg border transition-all ${
                     idx === 0 ? 'bg-amber-900/15 border-amber-700/40' :
-                    idx === 1 ? 'bg-[#141a22]/60 border-[#3a4858]/40' :
+                    idx === 1 ? 'bg-[color-mix(in_srgb,var(--c-bg-elevated)_60%,transparent)] border-[color-mix(in_srgb,var(--c-border-hover)_40%,transparent)]' :
                     idx === 2 ? 'bg-orange-900/10 border-orange-800/30' :
-                    'bg-[#141a22]/30 border-[#2a3440]/30'
+                    'bg-[color-mix(in_srgb,var(--c-bg-elevated)_30%,transparent)] border-[color-mix(in_srgb,var(--c-border)_30%,transparent)]'
                   }`}>
                     <div className="flex items-center gap-3">
                       <span className="text-lg w-8 text-center font-bold shrink-0" style={{ fontFamily: 'Monogram, monospace' }}>
                         {idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : `#${idx + 1}`}
                       </span>
                       <div className="flex-1 min-w-0">
-                        <p className="text-[13px] font-semibold text-[#dce4ec] truncate">{entry.projectName}</p>
-                        <p className="text-[10px] text-[#5a6a7a] truncate">{entry.directory}</p>
+                        <p className="text-[13px] font-semibold text-[var(--c-text-heading)] truncate">{entry.projectName}</p>
+                        <p className="text-[10px] text-[var(--c-text-muted)] truncate">{entry.directory}</p>
                       </div>
                       <div className="text-right shrink-0">
                         <p className="text-[13px] font-bold text-amber-400">{entry.totalMemoryMB.toLocaleString()} MB</p>
-                        <p className="text-[10px] text-[#5a6a7a]">{entry.totalCpu.toFixed(1)}% CPU</p>
+                        <p className="text-[10px] text-[var(--c-text-muted)]">{entry.totalCpu.toFixed(1)}% CPU</p>
                       </div>
                     </div>
 
                     {/* Memory proportion bar */}
-                    <div className="mt-2 h-1.5 bg-[#141a22] rounded-full overflow-hidden">
+                    <div className="mt-2 h-1.5 bg-[var(--c-bg-elevated)] rounded-full overflow-hidden">
                       <div
                         className="h-full rounded-full bg-gradient-to-r from-amber-500 to-orange-500"
                         style={{ width: `${Math.max(memPct, 2)}%` }}
@@ -1313,10 +1314,10 @@ function LeaderboardModal({ agents, xpData, onClose }: {
                     {/* Agent breakdown */}
                     <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1">
                       {entry.agents.map((a, i) => (
-                        <span key={i} className="text-[10px] text-[#8a96a4] flex items-center gap-1">
-                          <span className={`w-1.5 h-1.5 rounded-full ${a.status === 'active' ? 'bg-emerald-400' : 'bg-[#4a5c6e]'}`} />
+                        <span key={i} className="text-[10px] text-[var(--c-text-secondary)] flex items-center gap-1">
+                          <span className={`w-1.5 h-1.5 rounded-full ${a.status === 'active' ? 'bg-emerald-400' : 'bg-[var(--c-text-faint)]'}`} />
                           {a.name}
-                          <span className="text-[#4a5c6e]">{a.memoryMB}MB</span>
+                          <span className="text-[var(--c-text-faint)]">{a.memoryMB}MB</span>
                         </span>
                       ))}
                     </div>
@@ -1337,6 +1338,7 @@ function LeaderboardModal({ agents, xpData, onClose }: {
 
 export function CommandCenter(props: CommandCenterProps) {
   const { toast } = useToast()
+  const uiTheme = useAppearanceStore((s) => s.theme)
 
   // --- Polling ---
   const { data: agentStatuses, errorCount: agentPollErrors } = usePolling<AgentState[]>(
@@ -1787,7 +1789,7 @@ export function CommandCenter(props: CommandCenterProps) {
         ? 'bg-amber-400'
         : health?.overall === 'down'
           ? 'bg-red-400'
-          : 'bg-[#4a5c6e]'
+          : 'bg-[var(--c-text-faint)]'
 
   const healthLabel =
     health?.overall === 'healthy'
@@ -1803,7 +1805,7 @@ export function CommandCenter(props: CommandCenterProps) {
   // ---------------------------------------------------------------------------
 
   return (
-    <div className="flex flex-col h-full bg-[#06080c] text-[#c8d0e0] select-none overflow-hidden">
+    <div className="flex flex-col h-full bg-[var(--c-bg-deep)] text-[#c8d0e0] select-none overflow-hidden">
 
       {/* ------------------------------------------------------------------ */}
       {/* Status Bar                                                           */}
@@ -1812,20 +1814,20 @@ export function CommandCenter(props: CommandCenterProps) {
         {/* Left side */}
         <div className="flex items-center gap-3 min-w-0 flex-wrap">
           <div
-            className="flex items-center gap-2.5 min-w-0 pl-2 pr-3 py-1 rounded-xl bg-[#0a1018]/75 border border-[#1e2838]/90 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.04)]"
+            className="flex items-center gap-2.5 min-w-0 pl-2 pr-3 py-1 rounded-xl bg-[color-mix(in_srgb,var(--c-bg-surface)_75%,transparent)] border border-[color-mix(in_srgb,var(--c-border-subtle)_90%,transparent)] shadow-[inset_0_1px_0_0_rgba(255,255,255,0.04)]"
             title="Office workspace"
           >
-            <span className="text-[9px] font-bold uppercase tracking-[0.2em] text-[#00ff88]/90 shrink-0 hidden sm:inline">
+            <span className="text-[9px] font-bold uppercase tracking-[0.2em] text-[color-mix(in_srgb,var(--c-accent)_90%,transparent)] shrink-0 hidden sm:inline">
               Office
             </span>
-            <span className="hidden sm:block w-px h-3.5 bg-[#2a3440]/80 shrink-0" aria-hidden />
+            <span className="hidden sm:block w-px h-3.5 bg-[color-mix(in_srgb,var(--c-border)_80%,transparent)] shrink-0" aria-hidden />
             <div className="flex items-center gap-1.5 min-w-0">
-              <span className="text-[13px] text-[#6a7a8c]">Agents</span>
-              <span className="text-[13px] font-semibold tabular-nums text-[#00e5ff] drop-shadow-[0_0_12px_rgba(0,229,255,0.25)]">
+              <span className="text-[13px] text-[var(--c-text-dim)]">Agents</span>
+              <span className="text-[13px] font-semibold tabular-nums text-[var(--c-accent-blue)] drop-shadow-[0_0_12px_rgba(0,229,255,0.25)]">
                 {activeAgentCount}/{agents.length}
               </span>
               <span
-                className="text-[10px] text-[#4a5c6e] font-mono truncate"
+                className="text-[10px] text-[var(--c-text-faint)] font-mono truncate"
                 title={`Claude ${claudeAgentCount} | Cursor ${cursorAgentCount} | OpenCode/Claw ${externalCliAgentCount}`}
               >
                 C{claudeAgentCount} Cu{cursorAgentCount} X{externalCliAgentCount}
@@ -1834,13 +1836,13 @@ export function CommandCenter(props: CommandCenterProps) {
           </div>
 
           <span
-            className="text-[13px] font-mono tabular-nums text-[#9aacbc] px-2.5 py-1 rounded-lg bg-[linear-gradient(180deg,rgba(12,18,26,0.95)_0%,rgba(8,12,18,0.98)_100%)] border border-[#2a3440]/55 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.05)]"
+            className="text-[13px] font-mono tabular-nums text-[#9aacbc] px-2.5 py-1 rounded-lg bg-[linear-gradient(180deg,rgba(12,18,26,0.95)_0%,rgba(8,12,18,0.98)_100%)] border border-[color-mix(in_srgb,var(--c-border)_55%,transparent)] shadow-[inset_0_1px_0_0_rgba(255,255,255,0.05)]"
             aria-label={`Local time ${clock}`}
           >
             {clock}
           </span>
 
-          <span className="flex items-center gap-2 text-[11px] text-[#6a7a8c] px-2 py-0.5 rounded-lg border border-transparent hover:border-[#2a3440]/60 hover:bg-[#0a0e14]/50 transition-colors" title={healthLabel}>
+          <span className="flex items-center gap-2 text-[11px] text-[var(--c-text-dim)] px-2 py-0.5 rounded-lg border border-transparent hover:border-[color-mix(in_srgb,var(--c-border)_60%,transparent)] hover:bg-[color-mix(in_srgb,var(--c-bg-chrome)_50%,transparent)] transition-colors" title={healthLabel}>
             <span className={`h-2 w-2 rounded-full shrink-0 ring-2 ring-black/30 ${healthColor} ${health?.overall === 'healthy' ? 'shadow-[0_0_10px_rgba(52,211,153,0.65)]' : ''}`} />
             <span className="hidden md:inline font-medium">{healthLabel}</span>
           </span>
@@ -1852,10 +1854,10 @@ export function CommandCenter(props: CommandCenterProps) {
             <button
               type="button"
               onClick={props.onOpenScheduler}
-              className={`flex items-center gap-1 px-2.5 py-1 rounded-lg border text-[13px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00ff88]/35 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0c1018] ${
+              className={`flex items-center gap-1 px-2.5 py-1 rounded-lg border text-[13px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color-mix(in_srgb,var(--c-accent)_35%,transparent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--c-bg-surface)] ${
                 failedJobs.length > 0
                   ? 'bg-red-500/15 border-red-500/30 text-red-400 hover:bg-red-500/25'
-                  : 'bg-[#00e5ff]/10 border-[#00e5ff]/22 text-[#00e5ff]/85 hover:bg-[#00e5ff]/18'
+                  : 'bg-[color-mix(in_srgb,var(--c-accent-blue)_10%,transparent)] border-[color-mix(in_srgb,var(--c-accent-blue)_22%,transparent)] text-[color-mix(in_srgb,var(--c-accent-blue)_85%,transparent)] hover:bg-[color-mix(in_srgb,var(--c-accent-blue)_18%,transparent)]'
               }`}
             >
               {failedJobs.length > 0 ? (
@@ -1870,7 +1872,7 @@ export function CommandCenter(props: CommandCenterProps) {
             type="button"
             onClick={() => { void runOfficeSmokeCheck() }}
             disabled={smokeCheckRunning}
-            className="flex items-center gap-1 px-2.5 py-1 bg-[#141a22] hover:bg-[#1a2430] border border-[#2a3440] rounded-lg text-[#8a96a4] text-[13px] transition-colors disabled:opacity-50 disabled:cursor-default focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00ff88]/30 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0c1018]"
+            className="flex items-center gap-1 px-2.5 py-1 bg-[var(--c-bg-elevated)] hover:bg-[var(--c-bg-hover)] border border-[var(--c-border)] rounded-lg text-[var(--c-text-secondary)] text-[13px] transition-colors disabled:opacity-50 disabled:cursor-default focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color-mix(in_srgb,var(--c-accent)_30%,transparent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--c-bg-surface)]"
           >
             {smokeCheckRunning ? 'Checking...' : 'Smoke'}
           </button>
@@ -1878,7 +1880,7 @@ export function CommandCenter(props: CommandCenterProps) {
           <button
             type="button"
             onClick={() => setShowLeaderboard(true)}
-            className="flex items-center gap-1 px-2.5 py-1 bg-[#d4a017]/10 hover:bg-[#d4a017]/18 border border-[#d4a017]/28 rounded-lg text-[#d4a017] text-[13px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#d4a017]/40 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0c1018]"
+            className="flex items-center gap-1 px-2.5 py-1 bg-[#d4a017]/10 hover:bg-[#d4a017]/18 border border-[#d4a017]/28 rounded-lg text-[#d4a017] text-[13px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#d4a017]/40 focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--c-bg-surface)]"
           >
             🏆
             Ranks
@@ -1887,7 +1889,7 @@ export function CommandCenter(props: CommandCenterProps) {
           <button
             type="button"
             onClick={() => window.api.openDownloads()}
-            className="flex items-center gap-1 px-2.5 py-1 bg-[#141a22] hover:bg-[#1a2430] border border-[#2a3440] rounded-lg text-[#8a96a4] text-[13px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00ff88]/30 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0c1018]"
+            className="flex items-center gap-1 px-2.5 py-1 bg-[var(--c-bg-elevated)] hover:bg-[var(--c-bg-hover)] border border-[var(--c-border)] rounded-lg text-[var(--c-text-secondary)] text-[13px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color-mix(in_srgb,var(--c-accent)_30%,transparent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--c-bg-surface)]"
           >
             <IconDownload />
             Downloads
@@ -1902,7 +1904,7 @@ export function CommandCenter(props: CommandCenterProps) {
                 setShowConfig(true)
               }
             }}
-            className="flex items-center gap-1 px-2.5 py-1 bg-[#141a22] hover:bg-[#1a2430] border border-[#2a3440] rounded-lg text-[#8a96a4] text-[13px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00ff88]/30 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0c1018]"
+            className="flex items-center gap-1 px-2.5 py-1 bg-[var(--c-bg-elevated)] hover:bg-[var(--c-bg-hover)] border border-[var(--c-border)] rounded-lg text-[var(--c-text-secondary)] text-[13px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color-mix(in_srgb,var(--c-accent)_30%,transparent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--c-bg-surface)]"
           >
             Config
           </button>
@@ -1924,12 +1926,13 @@ export function CommandCenter(props: CommandCenterProps) {
       {/* ------------------------------------------------------------------ */}
       <div className="flex-1 flex flex-col min-h-0 overflow-hidden p-2.5 pt-2">
         <div className="flex-1 min-h-0 relative overflow-hidden rounded-[14px]">
-          {/* Void behind canvas — navy wash + faint texture (Among Us–style lab mood) */}
+          {/* Void behind canvas — themed wash + faint texture */}
           <div
             className="absolute inset-0 bg-cover bg-center bg-no-repeat opacity-[0.08]"
             style={{
-              backgroundImage:
-                'linear-gradient(165deg, #0a1628 0%, #06080c 45%, #0c1a2e 100%), url(office-bg.jpg)',
+              backgroundImage: uiTheme === 'light'
+                ? 'linear-gradient(165deg, var(--c-bg-app) 0%, var(--c-bg-elevated) 45%, var(--c-bg-deep) 100%), url(light-1.jpg)'
+                : 'linear-gradient(165deg, var(--c-bg-app) 0%, var(--c-bg-deep) 45%, var(--c-bg-surface) 100%), url(office-bg.jpg)',
             }}
           />
           <div
@@ -1943,7 +1946,7 @@ export function CommandCenter(props: CommandCenterProps) {
       {/* Embedded Terminal                                                   */}
       {/* ------------------------------------------------------------------ */}
       {terminal && (
-        <div className="flex-none h-64 border-t border-[#1a2430] bg-[linear-gradient(180deg,#070a0f_0%,#05070b_100%)] shadow-[inset_0_1px_0_0_rgba(0,255,136,0.06)]">
+        <div className="flex-none h-64 border-t border-[var(--c-bg-hover)] bg-[linear-gradient(180deg,var(--c-bg-deep)_0%,var(--c-bg-chrome)_100%)] shadow-[inset_0_1px_0_0_rgba(0,255,136,0.06)]">
           <Terminal
             ptyId={terminal.ptyId}
             title={terminal.title}
@@ -2084,7 +2087,7 @@ function QuickActionButton({
   return (
     <button
       onClick={onClick}
-      className="flex items-center gap-1.5 px-3 py-1.5 bg-[#0c1018]/60 hover:bg-[#141a22] border border-[#2a3440] hover:border-[#2a3440] rounded-lg text-[#8a96a4] hover:text-[#dce4ec] text-[13px] transition-all duration-150 hover:scale-[1.02] hover:-translate-y-0.5 active:scale-[0.98] active:translate-y-0"
+      className="flex items-center gap-1.5 px-3 py-1.5 bg-[color-mix(in_srgb,var(--c-bg-surface)_60%,transparent)] hover:bg-[var(--c-bg-elevated)] border border-[var(--c-border)] hover:border-[var(--c-border)] rounded-lg text-[var(--c-text-secondary)] hover:text-[var(--c-text-heading)] text-[13px] transition-all duration-150 hover:scale-[1.02] hover:-translate-y-0.5 active:scale-[0.98] active:translate-y-0"
     >
       {icon}
       <span>{label}</span>
@@ -2100,7 +2103,7 @@ function QuickActionButton({
 const MCP_DISPLAY: Record<string, { label: string; color: string }> = {
   serena:   { label: 'Serena',   color: 'text-violet-400 bg-violet-500/10 border-violet-500/20' },
   context7:  { label: 'Context7', color: 'text-cyan-400 bg-cyan-500/10 border-cyan-500/20' },
-  github:    { label: 'GitHub',   color: 'text-[#c4ccd6] bg-[#4a5c6e]/15 border-[#4a5c6e]/25' },
+  github:    { label: 'GitHub',   color: 'text-[var(--c-text-primary)] bg-[color-mix(in_srgb,var(--c-text-faint)_15%,transparent)] border-[color-mix(in_srgb,var(--c-text-faint)_25%,transparent)]' },
   Neon:      { label: 'Neon',     color: 'text-green-400 bg-green-500/10 border-green-500/20' },
   magic:     { label: '21st',     color: 'text-pink-400 bg-pink-500/10 border-pink-500/20' },
   linear:    { label: 'Linear',   color: 'text-indigo-400 bg-indigo-500/10 border-indigo-500/20' },
@@ -2110,9 +2113,9 @@ const BUILTIN_DISPLAY: Record<string, { label: string; color: string }> = {
   Edit:  { label: 'Edit',  color: 'text-blue-400 bg-blue-500/10 border-blue-500/20' },
   Write: { label: 'Write', color: 'text-blue-400 bg-blue-500/10 border-blue-500/20' },
   Bash:  { label: 'Bash',  color: 'text-amber-400 bg-amber-500/10 border-amber-500/20' },
-  Read:  { label: 'Read',  color: 'text-[#8a96a4] bg-[#4a5c6e]/15 border-[#4a5c6e]/25' },
-  Glob:  { label: 'Glob',  color: 'text-[#8a96a4] bg-[#4a5c6e]/15 border-[#4a5c6e]/25' },
-  Grep:  { label: 'Grep',  color: 'text-[#8a96a4] bg-[#4a5c6e]/15 border-[#4a5c6e]/25' },
+  Read:  { label: 'Read',  color: 'text-[var(--c-text-secondary)] bg-[color-mix(in_srgb,var(--c-text-faint)_15%,transparent)] border-[color-mix(in_srgb,var(--c-text-faint)_25%,transparent)]' },
+  Glob:  { label: 'Glob',  color: 'text-[var(--c-text-secondary)] bg-[color-mix(in_srgb,var(--c-text-faint)_15%,transparent)] border-[color-mix(in_srgb,var(--c-text-faint)_25%,transparent)]' },
+  Grep:  { label: 'Grep',  color: 'text-[var(--c-text-secondary)] bg-[color-mix(in_srgb,var(--c-text-faint)_15%,transparent)] border-[color-mix(in_srgb,var(--c-text-faint)_25%,transparent)]' },
 }
 
 function extractAgentTools(allowedTools: string[]): { mcpServers: { label: string; color: string }[]; builtins: { label: string; color: string }[] } {
@@ -2129,7 +2132,7 @@ function extractAgentTools(allowedTools: string[]): { mcpServers: { label: strin
       if (!seenMcp.has(server)) {
         seenMcp.add(server)
         const display = MCP_DISPLAY[server]
-        mcpServers.push(display || { label: server, color: 'text-[#8a96a4] bg-[#4a5c6e]/15 border-[#4a5c6e]/25' })
+        mcpServers.push(display || { label: server, color: 'text-[var(--c-text-secondary)] bg-[color-mix(in_srgb,var(--c-text-faint)_15%,transparent)] border-[color-mix(in_srgb,var(--c-text-faint)_25%,transparent)]' })
       }
       continue
     }

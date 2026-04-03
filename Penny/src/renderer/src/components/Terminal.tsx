@@ -22,10 +22,10 @@ export function Terminal({ ptyId, onClose, title }: TerminalProps) {
       fontSize: 12,
       fontFamily: 'Menlo, Monaco, "Courier New", monospace',
       theme: {
-        background: '#0a0e1a',
+        background: 'var(--c-bg-chrome)',
         foreground: '#c8ccd4',
         cursor: '#528bff',
-        cursorAccent: '#0a0e1a',
+        cursorAccent: 'var(--c-bg-chrome)',
         selectionBackground: '#3e4451',
         black: '#1e2127',
         red: '#e06c75',
@@ -108,23 +108,23 @@ export function Terminal({ ptyId, onClose, title }: TerminalProps) {
   return (
     <div className="flex flex-col h-full">
       {/* Terminal header */}
-      <div className="flex items-center justify-between px-3 py-1.5 bg-[#0c1018] border-b border-[#2a3440]">
+      <div className="flex items-center justify-between px-3 py-1.5 bg-[var(--c-bg-surface)] border-b border-[var(--c-border)]">
         <div className="flex items-center gap-2">
-          <span className="text-[10px] text-[#5a6a7a] font-mono">{title || ptyId}</span>
+          <span className="text-[10px] text-[var(--c-text-muted)] font-mono">{title || ptyId}</span>
           {exited && (
-            <span className="text-[9px] text-[#2a3440] bg-[#141a22] px-1.5 py-0.5 rounded">exited</span>
+            <span className="text-[9px] text-[var(--c-border)] bg-[var(--c-bg-elevated)] px-1.5 py-0.5 rounded">exited</span>
           )}
         </div>
         <button
           onClick={onClose}
-          className="text-[#3a4858] hover:text-[#8a96a4] text-sm leading-none px-1"
+          className="text-[var(--c-border-hover)] hover:text-[var(--c-text-secondary)] text-sm leading-none px-1"
           title="Close terminal"
         >
           ×
         </button>
       </div>
       {/* Terminal content */}
-      <div ref={containerRef} className="flex-1 bg-[#0a0e1a]" />
+      <div ref={containerRef} className="flex-1 bg-[var(--c-bg-chrome)]" />
     </div>
   )
 }
