@@ -25,9 +25,9 @@ export { PropType }
 export const PROP_STRIP_W = 60
 
 // Shared wall geometry constants (mirrored from calcRoomSize / layoutWorkstations)
-const WALL_T = 8
-const WALL_I = 4
-const DOOR_CLEARANCE = 30
+const WALL_T = 24
+const WALL_I = 12
+const DOOR_CLEARANCE = 40
 
 // ---------------------------------------------------------------------------
 // Types
@@ -144,17 +144,17 @@ export function computeRoomLayout(
   // -------------------------------------------------------------------------
 
   const wallBorder = (WALL_T + WALL_I + ROOM_PADDING) * 2
-  const LAB_SIDE_PAD = 140  // side margins — space for wall props + wide lab desks
+  const LAB_SIDE_PAD = 80   // side margins — tight fit around desks
   const baseWidth =
     wallBorder + cols * WORKSTATION_W + LAB_SIDE_PAD + labDeskBreathing.sidePadExtra
   const height =
     (WALL_T + WALL_I) * 2 + ROOM_HEADER_H + ROOM_PADDING * 2 + ROOM_TOP_EXTRA +
     LAB_EQUIP_ZONE_H +  // equipment shelf at top
-    rows * WORKSTATION_H + DOOR_CLEARANCE + 60  // extra bottom for equipment
+    rows * WORKSTATION_H + DOOR_CLEARANCE + 100  // bottom clearance from wall
 
   // Zone width — big enough for properly-scaled lab props (consoles at 3x, tanks at 2.5x)
-  const MIN_ROOM_W = 600
-  const MIN_ROOM_H = 460
+  const MIN_ROOM_W = 550
+  const MIN_ROOM_H = 480
   const width = Math.max(MIN_ROOM_W, baseWidth + PROP_STRIP_W)
   const finalHeight = Math.max(MIN_ROOM_H, height)
 

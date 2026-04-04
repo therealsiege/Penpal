@@ -15,7 +15,7 @@ export interface WorkstationSprite {
   statusDot: Phaser.GameObjects.Sprite
   roleBadge: Phaser.GameObjects.Text | null
   deskBody: Phaser.GameObjects.Rectangle
-  deskTop: Phaser.GameObjects.Rectangle
+  deskTop: Phaser.GameObjects.Rectangle | null
   monitorSprite: Phaser.GameObjects.Sprite | null
   chairSprite: Phaser.GameObjects.Sprite | null
   /** Sprite-based monitor screen frame overlay (PANEL_OUTLINE) */

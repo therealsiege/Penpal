@@ -4,7 +4,7 @@
 // ---------------------------------------------------------------------------
 
 import Phaser from 'phaser'
-import { SPRITESHEET_KEYS, LAB_TILESET_FRAMES } from './office-asset-keys'
+import { SPRITESHEET_KEYS, LAB_TILESET_FRAMES, LAB_IMAGE_KEYS } from './office-asset-keys'
 import { LAB_TILE_SIZE } from './office-constants'
 
 // ---------------------------------------------------------------------------
@@ -82,25 +82,22 @@ export class WorkspaceUnifiedFloor {
   ): void {
     this.cleanup()
 
-    const hasLabTileset = this.scene.textures.exists(SPRITESHEET_KEYS.LAB_MAIN_TILESET)
-    if (!hasLabTileset) return
+    if (!this.scene.textures.exists(LAB_IMAGE_KEYS.HEX_FLOOR_A)) return
 
     // ── Full autotiled hex floor with walls + corners ──
-    const tileScale = 0.50
-    const effectiveSize = LAB_TILE_SIZE * tileScale  // 64px cells
+    const tileScale = 0.85
+    const effectiveSize = LAB_TILE_SIZE * tileScale  // ~109px cells
     const cols = Math.max(4, Math.floor(width / effectiveSize))
     const rows = Math.max(4, Math.floor(height / effectiveSize))
 
     // Center the grid
     const gridW = cols * effectiveSize
     const gridH = rows * effectiveSize
-    // Integer pixel alignment so wall tiles + hazard tape meet cleanly at outer corners.
     const offsetX = Math.round(x + (width - gridW) / 2)
     const offsetY = Math.round(y + (height - gridH) / 2)
 
     const gapBands = opts?.roomFloorRects ? verticalCorridorGaps(opts.roomFloorRects) : []
 
-    // Simple hash for variety
     const hash = Math.abs(Math.floor(x * 7 + y * 13)) | 0
 
     for (let row = 0; row < rows; row++) {
@@ -118,65 +115,35 @@ export class WorkspaceUnifiedFloor {
           !isRight &&
           columnSpansCorridorGap(cellLeft, cellRight, gapBands, 8)
 
-        let frame: number
+        let imageKey: string
 
-        // ── Corners — thick variants for the facility walls ──
-        if (isTop && isLeft)          frame = LAB_TILESET_FRAMES.CORNER_TL_THICK
-        else if (isTop && isRight)    frame = LAB_TILESET_FRAMES.CORNER_TR_THICK
-        else if (isBottom && isLeft)  frame = LAB_TILESET_FRAMES.CORNER_BL_THICK
-        else if (isBottom && isRight) frame = LAB_TILESET_FRAMES.CORNER_BR_THICK
-        // ── Inter-zone corridor (between room footprints) — vertical wall strip, not open hex ──
-        else if (isCorridorCol && isTop) frame = LAB_TILESET_FRAMES.WALL_TOP_THICK
-        else if (isCorridorCol && isBottom) {
-          const accent = (hash + col * 3) % 10
-          if (accent === 0) frame = LAB_TILESET_FRAMES.WALL_BOTTOM_WINDOW_A
-          else frame = LAB_TILESET_FRAMES.WALL_BOTTOM_THICK
-        }
+        // ── Corners ──
+        if (isTop && isLeft)          imageKey = LAB_IMAGE_KEYS.CORNER_TL
+        else if (isTop && isRight)    imageKey = LAB_IMAGE_KEYS.CORNER_TR
+        else if (isBottom && isLeft)  imageKey = LAB_IMAGE_KEYS.CORNER_BL
+        else if (isBottom && isRight) imageKey = LAB_IMAGE_KEYS.CORNER_BR
+        // ── Inter-zone corridor columns ──
+        else if (isCorridorCol && isTop)    imageKey = LAB_IMAGE_KEYS.WALL_TOP
+        else if (isCorridorCol && isBottom) imageKey = LAB_IMAGE_KEYS.WALL_BOTTOM
         else if (isCorridorCol) {
-          // Corridor spine: hex floor (walkable gap between zones). A full column of WALL_LEFT
-          // tiles read as a solid partition and fought the lab kit props visually.
-          const cellHash = (hash + row * 7 + col * 13) % 40
-          if (cellHash === 0 && row > 2 && row < rows - 3) {
-            frame = LAB_TILESET_FRAMES.FLOOR_FEATURE
-          } else {
-            const floorVariant = (hash * 3 + row * 11 + col * 17) % 24
-            if (floorVariant === 0)       frame = LAB_TILESET_FRAMES.HEX_FLOOR_B
-            else if (floorVariant === 1)  frame = LAB_TILESET_FRAMES.HEX_FLOOR_C
-            else if (floorVariant === 2)  frame = LAB_TILESET_FRAMES.HEX_FLOOR_D
-            else                          frame = LAB_TILESET_FRAMES.HEX_FLOOR_A
-          }
+          const floorVariant = (hash * 3 + row * 11 + col * 17) % 10
+          imageKey = floorVariant < 2 ? LAB_IMAGE_KEYS.HEX_FLOOR_B : LAB_IMAGE_KEYS.HEX_FLOOR_A
         }
-        // ── Edges — thick walls for the outer facility boundary ──
-        // Top/bottom: thick hazard-stripe walls (Among Us–style lab reference)
-        else if (isTop) {
-          frame = LAB_TILESET_FRAMES.WALL_TOP_THICK
-        }
-        else if (isBottom) {
-          const accent = (hash + col * 3) % 10
-          if (accent === 0) frame = LAB_TILESET_FRAMES.WALL_BOTTOM_WINDOW_A
-          else frame = LAB_TILESET_FRAMES.WALL_BOTTOM_THICK
-        }
-        else if (isLeft)   frame = LAB_TILESET_FRAMES.WALL_LEFT
-        else if (isRight)  frame = LAB_TILESET_FRAMES.WALL_RIGHT
-        // ── Interior: hex floor tiles only. (Wall-console autotiles belong in a real
-        //    tile map; stamping CONSOLE_* on row/col 1 misaligns art. Room props handle equipment.)
+        // ── Edges ──
+        else if (isTop)    imageKey = LAB_IMAGE_KEYS.WALL_TOP
+        else if (isBottom) imageKey = LAB_IMAGE_KEYS.WALL_BOTTOM
+        else if (isLeft)   imageKey = LAB_IMAGE_KEYS.WALL_LEFT
+        else if (isRight)  imageKey = LAB_IMAGE_KEYS.WALL_RIGHT
+        // ── Interior hex floor ──
         else {
-          const cellHash = (hash + row * 7 + col * 13) % 40
-          if (cellHash === 0 && row > 2 && col > 2 && row < rows - 3 && col < cols - 3) {
-            frame = LAB_TILESET_FRAMES.FLOOR_FEATURE
-          } else {
-            const floorVariant = (hash * 3 + row * 11 + col * 17) % 24
-            if (floorVariant === 0)       frame = LAB_TILESET_FRAMES.HEX_FLOOR_B
-            else if (floorVariant === 1)  frame = LAB_TILESET_FRAMES.HEX_FLOOR_C
-            else if (floorVariant === 2)  frame = LAB_TILESET_FRAMES.HEX_FLOOR_D
-            else                          frame = LAB_TILESET_FRAMES.HEX_FLOOR_A
-          }
+          const floorVariant = (hash * 3 + row * 11 + col * 17) % 10
+          imageKey = floorVariant < 2 ? LAB_IMAGE_KEYS.HEX_FLOOR_B : LAB_IMAGE_KEYS.HEX_FLOOR_A
         }
 
         const tx = offsetX + col * effectiveSize + effectiveSize / 2
         const ty = offsetY + row * effectiveSize + effectiveSize / 2
 
-        const tile = this.scene.add.sprite(tx, ty, SPRITESHEET_KEYS.LAB_MAIN_TILESET, frame)
+        const tile = this.scene.add.image(tx, ty, imageKey)
           .setScale(tileScale)
           .setAlpha(1)
           .setDepth(-3)

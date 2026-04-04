@@ -5,7 +5,7 @@
 // ---------------------------------------------------------------------------
 
 import Phaser from 'phaser'
-import { SPRITESHEET_KEYS, ICON_FRAMES, ITEM_FRAMES, STATUS_DOT_FRAMES, LEGO_FRAMES, PET_COUNT, PET_FACE_FRAMES, EFFECT_ANIM_KEYS, IMAGE_KEYS, ANIMAL_SPECIES, ANIMAL_COUNT, ANIMAL_IDLE_FRAMES, MEDAL_HD_FRAMES, LAB_PROP_FRAMES } from './office-asset-keys'
+import { SPRITESHEET_KEYS, ICON_FRAMES, ITEM_FRAMES, STATUS_DOT_FRAMES, LEGO_FRAMES, PET_COUNT, PET_FACE_FRAMES, EFFECT_ANIM_KEYS, IMAGE_KEYS, ANIMAL_SPECIES, ANIMAL_COUNT, ANIMAL_IDLE_FRAMES, MEDAL_HD_FRAMES, LAB_PROP_FRAMES, LAB_IMAGE_KEYS } from './office-asset-keys'
 import { fadeInUp, fadeOutDown, pulse } from './juice-utils'
 import { AnimConfig } from './animation-config'
 import { EventBus, EVENTS } from './events'
@@ -148,74 +148,95 @@ export class WorkstationFactory {
     const wsContainer = this.scene.add.container(0, 0)
     room.container.add(wsContainer)
 
-    // Lab stool sprite (issue #144) — prefer LAB_PROPS sheet, fall back to office chair
     const labPropsLoaded = this.scene.textures.exists(SPRITESHEET_KEYS.LAB_PROPS)
-    let chairSprite: Phaser.GameObjects.Sprite | null = null
-    if (labPropsLoaded) {
-      chairSprite = this.scene.add.sprite(0, WS_CHAIR_Y + 4, SPRITESHEET_KEYS.LAB_PROPS, LAB_PROP_FRAMES.STOOL)
-      chairSprite.setScale(0.22).setAlpha(0.85)
-      wsContainer.add(chairSprite)
-    } else if (this.host.officeTilesLoaded) {
-      chairSprite = this.scene.add.sprite(0, WS_CHAIR_Y + 4, SPRITESHEET_KEYS.OFFICE, FRAME_CHAIR_DARK)
-      chairSprite.setScale(0.44).setAlpha(0.85)
-      wsContainer.add(chairSprite)
-    } else {
-      wsContainer.add(this.scene.add.rectangle(0, WS_CHAIR_Y, 18, 13, activeTheme.deskBody).setStrokeStyle(1, activeTheme.deskTop, 0.6))
-    }
-
+    const hasConsoleDeskImage = this.scene.textures.exists(LAB_IMAGE_KEYS.PROP_CONSOLE_DESK)
     const facilityStrategic = this.host.usesFacilityLabStrategicProps?.() === true
 
-    // Eval glow arc — rendered behind desk via painter's order (dim on facility lab — reads as stray floor discs)
-    const evalGlow = this.scene.add.arc(0, WS_DESK_Y, EVAL_GLOW_RADIUS, 0, 360, false, EVAL_GLOW_GREY, 1)
-    const evalGlowMin = facilityStrategic ? EVAL_GLOW_ALPHA_MIN * 0.28 : EVAL_GLOW_ALPHA_MIN
-    const evalGlowMax = facilityStrategic ? EVAL_GLOW_ALPHA_MAX * 0.28 : EVAL_GLOW_ALPHA_MAX
-    evalGlow.setAlpha((evalGlowMin + evalGlowMax) / 2)
-    wsContainer.add(evalGlow)
-
-    // Lab reskin: wider surface + cyan stroke (fits keyboard, lamp, papers like ref lab packs)
-    const deskW = labPropsLoaded ? 112 : 80
-    const deskH = labPropsLoaded ? 24 : 21
-    const deskFill   = labPropsLoaded ? COLOR_LAB_DESK_BODY : COLOR_DESK_BODY
-    const deskStroke = labPropsLoaded ? COLOR_LAB_DESK_STROKE : activeTheme.deskStrokeIdle
-    const deskStrokeAlpha = labPropsLoaded ? COLOR_LAB_DESK_STROKE_ALPHA : 0.5
-    const deskBody = this.scene.add.rectangle(0, WS_DESK_Y, deskW, deskH, deskFill).setStrokeStyle(1, deskStroke, deskStrokeAlpha)
-    wsContainer.add(deskBody)
-
-    const deskTopColor = labPropsLoaded ? COLOR_LAB_DESK_STROKE : COLOR_DESK_TOP
-    const deskTop = this.scene.add.rectangle(0, WS_DESK_Y - 8, deskW - 5, 3, deskTopColor)
-    wsContainer.add(deskTop)
-
+    // Console desk image — replaces individual chair + desk rect + monitor in lab mode
+    let consoleDeskSprite: Phaser.GameObjects.Image | null = null
+    let chairSprite: Phaser.GameObjects.Sprite | null = null
+    let deskBody: Phaser.GameObjects.Rectangle
+    let deskTop: Phaser.GameObjects.Rectangle | null = null
     let monitorSprite: Phaser.GameObjects.Sprite | null = null
     let monitorGlowFx: Phaser.FX.Glow | undefined
     let screenLines: Phaser.GameObjects.Graphics | undefined
     let screenTween: Phaser.Tweens.Tween | undefined
     const screenState = { mode: 'idle' }
+    let evalGlow: Phaser.GameObjects.Arc | undefined
+    const evalGlowMin = facilityStrategic ? EVAL_GLOW_ALPHA_MIN * 0.12 : EVAL_GLOW_ALPHA_MIN
+    const evalGlowMax = facilityStrategic ? EVAL_GLOW_ALPHA_MAX * 0.12 : EVAL_GLOW_ALPHA_MAX
 
-    // Facility lab: wall consoles live on labFacilityPropsLayer — avoid duplicating CONSOLE_SCREEN + aux props on every desk.
-    if (labPropsLoaded && facilityStrategic) {
-      if (this.host.officeTilesLoaded) {
-        monitorSprite = this.scene.add.sprite(0, WS_MONITOR_Y, SPRITESHEET_KEYS.OFFICE, FRAME_MONITOR)
-          .setScale(0.38)
-          .setDepth(4)
-        wsContainer.add(monitorSprite)
+    const deskW = hasConsoleDeskImage ? 100 : (labPropsLoaded ? 100 : 80)
+
+    if (hasConsoleDeskImage) {
+      // Single console-desk image: chair at bottom, screens at top, keyboard + gauges in middle
+      // 521x416 source → scale to ~100px wide
+      consoleDeskSprite = this.scene.add.image(0, WS_DESK_Y + 4, LAB_IMAGE_KEYS.PROP_CONSOLE_DESK)
+        .setScale(0.42)
+        .setAngle(180)
+        .setAlpha(0.92)
+        .setDepth(1)
+      wsContainer.add(consoleDeskSprite)
+
+      // Invisible desk body for hit detection and status stroke
+      deskBody = this.scene.add.rectangle(0, WS_DESK_Y, deskW, 18, 0x000000, 0)
+        .setStrokeStyle(1, activeTheme.deskStrokeIdle, 0)
+      wsContainer.add(deskBody)
+    } else {
+      // Fallback: individual chair + desk rect + monitor
+      if (labPropsLoaded) {
+        chairSprite = this.scene.add.sprite(0, WS_CHAIR_Y + 4, SPRITESHEET_KEYS.LAB_PROPS, LAB_PROP_FRAMES.STOOL)
+        chairSprite.setScale(0.32).setAlpha(0.85)
+        wsContainer.add(chairSprite)
+      } else if (this.host.officeTilesLoaded) {
+        chairSprite = this.scene.add.sprite(0, WS_CHAIR_Y + 4, SPRITESHEET_KEYS.OFFICE, FRAME_CHAIR_DARK)
+        chairSprite.setScale(0.50).setAlpha(0.85)
+        wsContainer.add(chairSprite)
       } else {
-        monitorSprite = this.scene.add.sprite(0, WS_MONITOR_Y, SPRITESHEET_KEYS.LAB_PROPS, LAB_PROP_FRAMES.MONITOR)
-          .setScale(0.22)
-          .setDepth(4)
-          .setAlpha(0.9)
+        wsContainer.add(this.scene.add.rectangle(0, WS_CHAIR_Y, 18, 13, activeTheme.deskBody).setStrokeStyle(1, activeTheme.deskTop, 0.6))
+      }
+
+      // Eval glow arc
+      evalGlow = this.scene.add.arc(0, WS_DESK_Y, EVAL_GLOW_RADIUS, 0, 360, false, EVAL_GLOW_GREY, 1)
+      evalGlow.setAlpha((evalGlowMin + evalGlowMax) / 2)
+      wsContainer.add(evalGlow)
+
+      const deskH = labPropsLoaded ? 18 : 21
+      const deskFill   = labPropsLoaded ? COLOR_LAB_DESK_BODY : COLOR_DESK_BODY
+      const deskStroke = labPropsLoaded ? COLOR_LAB_DESK_STROKE : activeTheme.deskStrokeIdle
+      const deskStrokeAlpha = labPropsLoaded ? 0.3 : 0.5
+      const deskFillAlpha = labPropsLoaded ? 0.25 : 1
+      deskBody = this.scene.add.rectangle(0, WS_DESK_Y, deskW, deskH, deskFill).setAlpha(deskFillAlpha).setStrokeStyle(1, deskStroke, deskStrokeAlpha)
+      wsContainer.add(deskBody)
+
+      if (!labPropsLoaded) {
+        const deskTopColor = COLOR_DESK_TOP
+        deskTop = this.scene.add.rectangle(0, WS_DESK_Y - 8, deskW - 5, 3, deskTopColor)
+        wsContainer.add(deskTop)
+      }
+
+      // Monitor
+      if (labPropsLoaded && facilityStrategic) {
+        if (this.host.officeTilesLoaded) {
+          monitorSprite = this.scene.add.sprite(0, WS_MONITOR_Y, SPRITESHEET_KEYS.OFFICE, FRAME_MONITOR)
+            .setScale(0.42).setDepth(4)
+          wsContainer.add(monitorSprite)
+        } else {
+          monitorSprite = this.scene.add.sprite(0, WS_MONITOR_Y, SPRITESHEET_KEYS.LAB_PROPS, LAB_PROP_FRAMES.MONITOR)
+            .setScale(0.30).setDepth(4).setAlpha(0.9)
+          wsContainer.add(monitorSprite)
+        }
+        if (monitorSprite) {
+          monitorGlowFx = monitorSprite.postFX.addGlow(0x64748b, 0, 0, false, AnimConfig.monitor.glowQuality, AnimConfig.monitor.glowDistance * 0.55)
+        }
+      } else if (labPropsLoaded) {
+        monitorSprite = this.scene.add.sprite(0, WS_MONITOR_Y, SPRITESHEET_KEYS.LAB_PROPS, LAB_PROP_FRAMES.CONSOLE_SCREEN)
+          .setScale(0.35).setDepth(4)
+        wsContainer.add(monitorSprite)
+      } else if (this.host.officeTilesLoaded) {
+        monitorSprite = this.scene.add.sprite(0, WS_MONITOR_Y, SPRITESHEET_KEYS.OFFICE, FRAME_MONITOR).setScale(0.48)
         wsContainer.add(monitorSprite)
       }
-      if (monitorSprite) {
-        monitorGlowFx = monitorSprite.postFX.addGlow(0x64748b, 0, 0, false, AnimConfig.monitor.glowQuality, AnimConfig.monitor.glowDistance * 0.55)
-      }
-    } else if (labPropsLoaded) {
-      monitorSprite = this.scene.add.sprite(0, WS_MONITOR_Y, SPRITESHEET_KEYS.LAB_PROPS, LAB_PROP_FRAMES.CONSOLE_SCREEN)
-        .setScale(0.26)
-        .setDepth(4)
-      wsContainer.add(monitorSprite)
-    } else if (this.host.officeTilesLoaded) {
-      monitorSprite = this.scene.add.sprite(0, WS_MONITOR_Y, SPRITESHEET_KEYS.OFFICE, FRAME_MONITOR).setScale(0.42)
-      wsContainer.add(monitorSprite)
     }
     if (monitorSprite && labPropsLoaded && !facilityStrategic) {
       monitorGlowFx = monitorSprite.postFX.addGlow(0x0ea5e9, 0, 0, false, AnimConfig.monitor.glowQuality, AnimConfig.monitor.glowDistance)
@@ -478,8 +499,8 @@ export class WorkstationFactory {
       // LED underglow strip — color based on rank
       ledGlow = this.scene.add.graphics()
       const ledColor = isDeskItemUnlocked(agentLevel, 'rgb_underglow') ? getRankColor(agentLevel) : activeTheme.deskStrokeIdle
-      ledGlow.fillStyle(ledColor, isDeskItemUnlocked(agentLevel, 'rgb_underglow') ? 0.6 : 0.3)
-      ledGlow.fillRoundedRect(-34, WS_DESK_Y + 4, 68, 2, 1)
+      ledGlow.fillStyle(ledColor, isDeskItemUnlocked(agentLevel, 'rgb_underglow') ? 0.35 : 0.15)
+      ledGlow.fillRoundedRect(-30, WS_DESK_Y + 5, 60, 2, 1)
       wsContainer.add(ledGlow)
 
       // Gold desk trim for Master+ (L8)
@@ -618,7 +639,7 @@ export class WorkstationFactory {
 
     // Show persona name (e.g. "Marcus Chen") instead of title
     const nameText = this.scene.add.text(0, WS_NAME_Y, '', {
-      fontSize: '13px', color: activeTheme.nameText, fontFamily: "'Monogram', system-ui, monospace",
+      fontSize: '15px', color: activeTheme.nameText, fontFamily: "'Monogram', system-ui, monospace",
       backgroundColor: activeTheme.nameBg, padding: { x: 5, y: 2 }, align: 'center',
       resolution: 2,
     }).setOrigin(0.5).setVisible(false)
@@ -1090,6 +1111,9 @@ export class WorkstationFactory {
       this.scene.tweens.killTweensOf(ws.container)
       this.scene.tweens.add({ targets: ws.container, x: cx, y: cy, duration: 280, ease: 'Power2' })
       ws.container.setDepth(cy + room.y)
+
+      // Console-desk is created at 180° so chair faces up toward the duder sprite.
+      // No per-position rotation needed — all agents face the same way.
     })
 
     // Spawn in-room props if not already placed (skip right-strip clutter when JSON facility kit already fills the room)

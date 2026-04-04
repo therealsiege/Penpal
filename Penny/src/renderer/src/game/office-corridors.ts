@@ -131,7 +131,7 @@ export class OfficeCorridors {
 
       this.corridorSegments.push({ x1: minX, y1: hallY, x2: maxX, y2: hallY, color: lineColor })
 
-      const HALL_H = 12
+      const HALL_H = 20
       const HALL_FLOOR = 0x0f1520
       const HALL_STRIPE = 0x1a2535
       const HALL_EDGE = activeTheme.separator
@@ -202,7 +202,7 @@ export class OfficeCorridors {
     }
 
     // Shared constants for connector walkway rendering (same as intra-team values)
-    const C_HALL_H = 12
+    const C_HALL_H = 20
     const C_HALL_FLOOR = 0x0f1520
     const C_HALL_EDGE = activeTheme.separator
     const C_LEG_W = 6

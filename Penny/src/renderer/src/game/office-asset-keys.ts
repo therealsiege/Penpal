@@ -405,6 +405,92 @@ export const LAB_SMOOTH_FRAMES = Object.freeze({
 } as const)
 
 // ---------------------------------------------------------------------------
+// Lab tile pack — individual image keys (loaded as separate PNGs, not spritesheets)
+// ---------------------------------------------------------------------------
+
+/** Individual image keys for the Itch.io lab tile pack.
+ *  Each maps to a single PNG loaded via `this.load.image()` in BootScene.
+ *  Used in autotiler functions instead of LAB_TILESET_FRAMES numeric indices. */
+export const LAB_IMAGE_KEYS = Object.freeze({
+  // ── Floors ──
+  HEX_FLOOR_A: 'lab-floor-a',
+  HEX_FLOOR_B: 'lab-floor-b',
+  OUTER_FILL:  'lab-outer-fill',
+  OUTSIDE_FILL: 'lab-outside-fill',
+
+  // ── Outer wall corners ──
+  CORNER_TL: 'lab-corner-tl',
+  CORNER_TR: 'lab-corner-tr',
+  CORNER_BL: 'lab-corner-bl',
+  CORNER_BR: 'lab-corner-br',
+
+  // ── Wall edges ──
+  WALL_TOP:    'lab-wall-top',
+  WALL_BOTTOM: 'lab-wall-bottom',
+  WALL_LEFT:   'lab-wall-left',
+  WALL_RIGHT:  'lab-wall-right',
+
+  // ── Inner corners ──
+  INNER_TL: 'lab-inner-tl',
+  INNER_TR: 'lab-inner-tr',
+  INNER_BL: 'lab-inner-bl',
+  INNER_BR: 'lab-inner-br',
+
+  // ── T-junctions ──
+  T_TOP:    'lab-t-top',
+  T_BOTTOM: 'lab-t-bottom',
+  T_LEFT:   'lab-t-left',
+  T_RIGHT:  'lab-t-right',
+
+  // ── Intersections ──
+  FOUR_WAY: 'lab-four-way',
+  SINGLE:   'lab-single',
+
+  // ── Pipes ──
+  PIPE_H:         'lab-pipe-h',
+  PIPE_H2:        'lab-pipe-h2',
+  PIPE_V:         'lab-pipe-v',
+  PIPE_CROSS:     'lab-pipe-cross',
+  PIPE_CAP_TOP:   'lab-pipe-cap-top',
+  PIPE_CAP_BOTTOM:'lab-pipe-cap-bottom',
+  PIPE_CAP_LEFT:  'lab-pipe-cap-left',
+  PIPE_CAP_RIGHT: 'lab-pipe-cap-right',
+  PIPE_VALVE:     'lab-pipe-valve',
+  PIPE_CORNER_TL: 'lab-pipe-corner-tl',
+  PIPE_CORNER_TR: 'lab-pipe-corner-tr',
+  PIPE_CORNER_BL: 'lab-pipe-corner-bl',
+  PIPE_CORNER_BR: 'lab-pipe-corner-br',
+
+  // ── Props ──
+  PROP_CONSOLE_LONG:  'lab-prop-console-long',
+  PROP_CONSOLE_SHORT: 'lab-prop-console-short',
+  PROP_CONSOLE_CORNER:'lab-prop-console-corner',
+  PROP_POD:           'lab-prop-pod',
+  PROP_GENERATOR:     'lab-prop-generator',
+  PROP_TANK:          'lab-prop-tank',
+  PROP_MICROSCOPE:    'lab-prop-microscope',
+  PROP_BEAKER:        'lab-prop-beaker',
+  PROP_MONITOR:       'lab-prop-monitor',
+  PROP_KEYBOARD:      'lab-prop-keyboard',
+  PROP_STOOL:         'lab-prop-stool',
+  PROP_LASER_HEAD:    'lab-prop-laser-head',
+  PROP_WARNING:       'lab-prop-warning',
+  PROP_VENT:          'lab-prop-vent',
+  PROP_SHELF:         'lab-prop-shelf',
+  PROP_LED_ON:        'lab-prop-led-on',
+  PROP_LED_OFF:       'lab-prop-led-off',
+  PROP_SLIDING_DOOR:  'lab-prop-sliding-door',
+  PROP_DESK_LAMP:     'lab-prop-desk-lamp',
+  PROP_DOME:          'lab-prop-dome',
+  PROP_SINK:          'lab-prop-sink',
+  PROP_PETRI_DISH:    'lab-prop-petri-dish',
+  PROP_TEST_TUBES:    'lab-prop-test-tubes',
+  PROP_SCREEN:        'lab-prop-screen',
+  PROP_WALL_LIGHT:    'lab-prop-wall-light',
+  PROP_CONSOLE_DESK:  'lab-prop-console-desk',
+} as const)
+
+// ---------------------------------------------------------------------------
 // Lab pipe frame indices (128x128 cells, 7 cols × 5 rows in LAB_PIPES spritesheet)
 // Frame layout identified from the sprite image (row-major, 0-indexed):
 //   Row 0: corner-TL, horiz-top, corner-TR, horiz-arrow, T-down, T-left, coupling-horiz

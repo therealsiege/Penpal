@@ -158,6 +158,6 @@ export function buildCombinedOfficeTeamDraft(
     campusRooms,
     preferredTeamWidth,
     OFFICE_COMBINED_TEAM_KEY,
-    'Office',
+    'Lab',
   )
 }
