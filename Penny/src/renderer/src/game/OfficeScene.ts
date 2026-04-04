@@ -26,6 +26,7 @@ import {
 
 import { SPRITESHEET_KEYS, SCENE_KEYS } from './office-asset-keys'
 import { computeLabLayout, type SpritePlacement } from './lab-layout-engine'
+import { detectRoomType } from './office-layout'
 import {
   labRoomFloorWorldRect,
   collectFacilityDeskPositionsWorld,
@@ -1101,6 +1102,7 @@ export class OfficeScene extends Phaser.Scene {
           floorClipRects: [floorRect],
           strategicWing,
           hexSlabWorldRect: this.labHexSlabRect ?? undefined,
+          roomType: detectRoomType(room.cwd),
         },
       )
       propPlacements.push(...slice.propPlacements)

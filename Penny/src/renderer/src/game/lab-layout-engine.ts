@@ -773,6 +773,8 @@ export interface ComputeLabLayoutOptions {
    * `Math.round` origin). Fixes facility props floating off visible cell centers vs a single unified floor.
    */
   hexSlabWorldRect?: { x: number; y: number; width: number; height: number }
+  /** Room type from cwd keywords — determines which zone props appear. */
+  roomType?: string
 }
 
 export function computeLabLayout(
@@ -821,7 +823,18 @@ export function computeLabLayout(
     maskGridToFloorClips(grid, clipRects)
   }
 
-  const zone = ZONE_TYPES[hash % 4]
+  // Map room type → zone type so each room purpose gets appropriate props
+  const ROOM_TYPE_TO_ZONE: Record<string, ZoneType> = {
+    'design-studio':  'control',    // screens, consoles, keyboards
+    'server-room':    'machinery',  // generators, power cells, pipes
+    'mobile-lab':     'control',    // consoles, screens, keyboards
+    'game-den':       'pod',        // pods, lasers, experimental equipment
+    'creative-suite': 'chemical',   // microscope, beakers, sink, shelf
+    'ops-center':     'machinery',  // generators, pipes, power cells
+    'qa-lab':         'chemical',   // test tubes, microscope, petri dishes
+    'standard':       'control',    // default: consoles + screens
+  }
+  const zone: ZoneType = (opts?.roomType && ROOM_TYPE_TO_ZONE[opts.roomType]) || ZONE_TYPES[hash % 4]
 
   // Strategic props use the same centered hex footprint as wall tiles (not the raw floor AABB margin).
   const strategic = computeStrategicReferencePlacements(

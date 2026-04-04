@@ -59,15 +59,15 @@ export const OFFICE_FRAME_PRINTER      = 126
 // Layout constants
 // ---------------------------------------------------------------------------
 
-export const CHAR_SCALE      = 0.134
-/** Desk grid cell size — roomier for lab-style cluttered desks + walking space */
-export const WORKSTATION_W   = 112
-export const WORKSTATION_H   = 92
-export const ROOM_PADDING    = 20
-export const ROOM_TOP_EXTRA  = 34   // extra top padding so thought bubbles clear room headers
-export const LAB_EQUIP_ZONE_H = 88  // equipment shelf at top of each zone
-export const ROOM_HEADER_H   = 20
-export const ROOM_GAP        = 44  // corridor space between zones (lab floor breathing room)
+export const CHAR_SCALE      = 0.20
+/** Desk grid cell size — fits console-desk image at 0.42 scale (~219x175) */
+export const WORKSTATION_W   = 160
+export const WORKSTATION_H   = 155
+export const ROOM_PADDING    = 30
+export const ROOM_TOP_EXTRA  = 50   // extra top padding so desks + thought bubbles clear top wall
+export const LAB_EQUIP_ZONE_H = 20  // minimal equip zone — props placed by layout engine
+export const ROOM_HEADER_H   = 26
+export const ROOM_GAP        = 80   // corridor space between zones (lab floor breathing room)
 export const MAX_AGENTS_PER_ROW = 4
 export const TEAM_AREA_PAD_X = 8
 export const TEAM_AREA_PAD_Y = 8
@@ -75,12 +75,12 @@ export const TEAM_AREA_GAP_X = 4   // teams butt up against each other
 export const TEAM_AREA_GAP_Y = 4
 export const TEAM_LABEL_H = 16
 
-export const WS_CHAIR_Y    = 6
-export const WS_SPRITE_Y   = -5
-export const WS_DESK_Y     = 18
-export const WS_MONITOR_Y  = 5
-export const WS_NAME_Y     = 40
-export const WS_DOT_GAP    = 4
+export const WS_CHAIR_Y    = 8
+export const WS_SPRITE_Y   = -6
+export const WS_DESK_Y     = 22
+export const WS_MONITOR_Y  = 6
+export const WS_NAME_Y     = 46
+export const WS_DOT_GAP    = 5
 export const IDLE_WALK_BREAK_MIN_MS = 9000
 export const IDLE_WALK_BREAK_VAR_MS = 7000
 export const IDLE_WALK_RANGE_X = 20
@@ -107,17 +107,17 @@ export const COLOR_LAB_DESK_STROKE_ALPHA = 0.4
 export const WORLD_MARGIN   = 30
 
 // Camera & navigation constants
-export const ZOOM_MIN = 0.8
-export const ZOOM_MAX = 2.5
-export const ZOOM_FIT_MAX = 1.5
+export const ZOOM_MIN = 1.2
+export const ZOOM_MAX = 4.0
+export const ZOOM_FIT_MAX = 2.5
 export const ZOOM_LERP_SPEED = 0.08
 export const FOLLOW_LERP_SPEED = 0.06
 // LOD thresholds — zoom boundaries between 3 detail levels
 // Level 1 (zoom < LOD_L1_MAX): building overview — rooms as colored rects only
 // Level 2 (LOD_L1_MAX..LOD_L2_MAX): room view — agents + desks, no micro-accessories
 // Level 3 (zoom > LOD_L2_MAX): full detail — all accessories, particles, monitor content
-export const LOD_L1_MAX = 0.5
-export const LOD_L2_MAX = 0.85
+export const LOD_L1_MAX = 0.9
+export const LOD_L2_MAX = 1.5
 export const POD_REFRESH_MS = 90
 export const AMBIENT_MOTE_POOL_SIZE = 26
 export const MAKO_MOTE_POOL_SIZE = 15
@@ -130,7 +130,7 @@ export const EVAL_GLOW_GREEN   = 0x22c55e
 export const EVAL_GLOW_AMBER   = 0xf59e0b
 export const EVAL_GLOW_RED     = 0xef4444
 export const EVAL_GLOW_GREY    = 0x6b7280
-export const EVAL_GLOW_RADIUS  = 18
+export const EVAL_GLOW_RADIUS  = 14
 /** Object alpha pulse (issue: ~0.15 effective mid; tween 0.1 ↔ 0.2) */
 export const EVAL_GLOW_ALPHA_MIN      = 0.1
 export const EVAL_GLOW_ALPHA_MAX      = 0.2

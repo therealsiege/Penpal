@@ -492,7 +492,7 @@ export class OfficeBackground {
 
     // ONE facility outline around all teams — dark, thick walls
     g.fillStyle(COLOR_WALL)
-    g.fillRoundedRect(allX - 6, allY - 6, (allRight - allX) + 12, (allBottom - allY) + 12, 8)
+    g.fillRoundedRect(allX - 10, allY - 10, (allRight - allX) + 20, (allBottom - allY) + 20, 8)
     g.fillStyle(activeTheme.bg, 0.15)
     g.fillRoundedRect(allX, allY, allRight - allX, allBottom - allY, 5)
 

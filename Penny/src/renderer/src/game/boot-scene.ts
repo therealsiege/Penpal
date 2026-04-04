@@ -80,7 +80,7 @@ export class BootScene extends BaseScene {
     // Friendly display names for each asset key
     const assetDisplayNames: Record<string, string> = {
       [SPRITESHEET_KEYS.CHARACTERS]: 'Characters',
-      [SPRITESHEET_KEYS.OFFICE]: 'Office Tiles',
+      [SPRITESHEET_KEYS.OFFICE]: 'Lab Tiles',
       [SPRITESHEET_KEYS.ROOMS]: 'Room Tiles',
       [SPRITESHEET_KEYS.DUDER_1]: 'Duder A',
       [SPRITESHEET_KEYS.DUDER_2]: 'Duder B',
@@ -377,6 +377,52 @@ export class BootScene extends BaseScene {
     this.load.spritesheet(SPRITESHEET_KEYS.LAB_SMOOTH, './sprites/lab-smooth.png', {
       frameWidth: 48, frameHeight: 48,
     })
+
+    // ── Lab tile pack — individual PNGs ──────────────────────────────────────
+    const labWalls: [string, string][] = [
+      ['lab-floor-a', 'floor-a'], ['lab-floor-b', 'floor-b'],
+      ['lab-outer-fill', 'outer-fill'], ['lab-outside-fill', 'outside-fill'],
+      ['lab-corner-tl', 'corner-tl'], ['lab-corner-tr', 'corner-tr'],
+      ['lab-corner-bl', 'corner-bl'], ['lab-corner-br', 'corner-br'],
+      ['lab-wall-top', 'wall-top'], ['lab-wall-bottom', 'wall-bottom'],
+      ['lab-wall-left', 'wall-left'], ['lab-wall-right', 'wall-right'],
+      ['lab-inner-tl', 'inner-tl'], ['lab-inner-tr', 'inner-tr'],
+      ['lab-inner-bl', 'inner-bl'], ['lab-inner-br', 'inner-br'],
+      ['lab-t-top', 't-top'], ['lab-t-bottom', 't-bottom'],
+      ['lab-t-left', 't-left'], ['lab-t-right', 't-right'],
+      ['lab-four-way', 'four-way'], ['lab-single', 'single'],
+    ]
+    for (const [key, file] of labWalls) this.load.image(key, `./assets/lab/walls/${file}.png`)
+
+    const labPipes: [string, string][] = [
+      ['lab-pipe-h', 'pipe-h'], ['lab-pipe-h2', 'pipe-h2'], ['lab-pipe-v', 'pipe-v'],
+      ['lab-pipe-cross', 'pipe-cross'],
+      ['lab-pipe-cap-top', 'pipe-cap-top'], ['lab-pipe-cap-bottom', 'pipe-cap-bottom'],
+      ['lab-pipe-cap-left', 'pipe-cap-left'], ['lab-pipe-cap-right', 'pipe-cap-right'],
+      ['lab-pipe-valve', 'pipe-valve'],
+      ['lab-pipe-corner-tl', 'pipe-corner-tl'], ['lab-pipe-corner-tr', 'pipe-corner-tr'],
+      ['lab-pipe-corner-bl', 'pipe-corner-bl'], ['lab-pipe-corner-br', 'pipe-corner-br'],
+    ]
+    for (const [key, file] of labPipes) this.load.image(key, `./assets/lab/pipes/${file}.png`)
+
+    const labProps: [string, string][] = [
+      ['lab-prop-console-long', 'console_example_long'],
+      ['lab-prop-console-short', 'console_example_short'],
+      ['lab-prop-console-corner', 'console_example_corner'],
+      ['lab-prop-pod', 'pod'], ['lab-prop-generator', 'generator'],
+      ['lab-prop-tank', 'large_tank'], ['lab-prop-microscope', 'microscope'],
+      ['lab-prop-beaker', 'beaker'], ['lab-prop-monitor', 'monitor'],
+      ['lab-prop-keyboard', 'keyboard'], ['lab-prop-stool', 'stool'],
+      ['lab-prop-laser-head', 'laser_head'], ['lab-prop-warning', 'warning_stripes'],
+      ['lab-prop-vent', 'vent'], ['lab-prop-shelf', 'shelf'],
+      ['lab-prop-led-on', 'led_on'], ['lab-prop-led-off', 'led_off'],
+      ['lab-prop-sliding-door', 'sliding_door'], ['lab-prop-desk-lamp', 'desk_lamp'],
+      ['lab-prop-dome', 'dome'], ['lab-prop-sink', 'circular_sink'],
+      ['lab-prop-petri-dish', 'petri_dish'], ['lab-prop-test-tubes', 'test_tube_holder'],
+      ['lab-prop-screen', 'free_standing_screen'], ['lab-prop-wall-light', 'wall_light'],
+      ['lab-prop-console-desk', 'console-desk'],
+    ]
+    for (const [key, file] of labProps) this.load.image(key, `./assets/lab/props/${file}.png`)
 
     // Kenney UI sound effects (OGG)
     this.load.audio(AUDIO_KEYS.CLICK_A, './sounds/click-a.ogg')

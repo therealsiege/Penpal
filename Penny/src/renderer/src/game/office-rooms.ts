@@ -15,7 +15,7 @@ import {
   ROOM_HEADER_H,
   LAB_EQUIP_ZONE_H,
 } from './office-constants'
-import { SPRITESHEET_KEYS, ICON_FRAMES, ITEM_FRAMES, EFFECT_ANIM_KEYS, LEGO_FRAMES, LAB_TILESET_FRAMES, LAB_SMOOTH_FRAMES, PIPE_FRAMES, CABLE_FRAMES } from './office-asset-keys'
+import { SPRITESHEET_KEYS, ICON_FRAMES, ITEM_FRAMES, EFFECT_ANIM_KEYS, LEGO_FRAMES, LAB_TILESET_FRAMES, LAB_SMOOTH_FRAMES, PIPE_FRAMES, CABLE_FRAMES, LAB_IMAGE_KEYS } from './office-asset-keys'
 import { LAB_TILE_SIZE } from './office-constants'
 import { ROOM_HEADER_ITEM } from './workstation-creation'
 import { LAB_PROP_FRAMES as LP } from './lab-prop-frames.generated'
@@ -266,31 +266,17 @@ export class OfficeRooms {
     const floorW = w
     const floorH = h - ROOM_HEADER_H
 
-    // ── Header bar at the bottom of the room ──
+    // ── Header bar at the bottom of the room — subtle, not a solid dark block ──
     const hBarX = -w / 2
     const hBarY = h / 2 - ROOM_HEADER_H
-    g.fillStyle(roomStyle.header, 1)
+    g.fillStyle(roomStyle.header, 0.5)
     g.fillRect(hBarX, hBarY, w, ROOM_HEADER_H)
-    // Subtle gradient overlay on header
-    g.fillStyle(0x0a1628, 0.3)
-    g.fillRect(hBarX, hBarY, w, Math.ceil(ROOM_HEADER_H * 0.6))
-    g.fillStyle(0xffffff, 0.06)
-    g.fillRect(hBarX, hBarY + ROOM_HEADER_H - 2, w, 2)
 
     // Accent line above the header
-    g.lineStyle(2, roomStyle.accent, 0.72)
+    g.lineStyle(1, roomStyle.accent, 0.4)
     g.lineBetween(hBarX, hBarY, hBarX + w, hBarY)
 
-    // Room number plate
     const roomIndex = this.hashToken(room.teamKey || room.cwd || room.label) % 99
-    const plateW = 16
-    const plateH = 10
-    const plateX = hBarX + 4
-    const plateY = hBarY + (ROOM_HEADER_H - plateH) / 2
-    g.fillStyle(0x0d1b2a, 0.5)
-    g.fillRoundedRect(plateX, plateY, plateW, plateH, 2)
-    g.lineStyle(1, roomStyle.accent, 0.4)
-    g.strokeRoundedRect(plateX, plateY, plateW, plateH, 2)
 
     // Status strip
     if (room.statusStrip) {
@@ -300,8 +286,8 @@ export class OfficeRooms {
     }
     {
       const sg = this.scene.add.graphics()
-      sg.fillStyle(0x64748b, 0.4)
-      sg.fillRect(hBarX, hBarY - 3, w, 2)
+      sg.fillStyle(0x64748b, 0.2)
+      sg.fillRect(hBarX, hBarY - 2, w, 1)
       room.container.add(sg)
       room.statusStrip = sg
     }
@@ -507,10 +493,10 @@ export class OfficeRooms {
     floorW: number,
     floorH: number,
   ): void {
-    if (!this.scene.textures.exists(SPRITESHEET_KEYS.LAB_MAIN_TILESET)) return
+    if (!this.scene.textures.exists(LAB_IMAGE_KEYS.HEX_FLOOR_A)) return
 
-    const tileScale = 0.50
-    const step = LAB_TILE_SIZE * tileScale  // 64px
+    const tileScale = 0.85
+    const step = LAB_TILE_SIZE * tileScale  // ~109px
     const cols = Math.max(4, Math.floor(floorW / step))
     const rows = Math.max(4, Math.floor(floorH / step))
     const hash = this.hashToken(room.cwd)
@@ -536,51 +522,30 @@ export class OfficeRooms {
         const isSideEdge = (isLeft || isRight) && (r <= 2 || r >= rows - 3)
         if (!isStripRow && !isSideEdge) continue
 
-        let frame: number
+        let imageKey: string
 
         // ── Corners ──
-        if (isTopWall && isLeft)           frame = LAB_TILESET_FRAMES.CORNER_TL_THICK
-        else if (isTopWall && isRight)     frame = LAB_TILESET_FRAMES.CORNER_TR_THICK
-        else if (isBottomWall && isLeft)   frame = LAB_TILESET_FRAMES.CORNER_BL_THICK
-        else if (isBottomWall && isRight)  frame = LAB_TILESET_FRAMES.CORNER_BR_THICK
+        if (isTopWall && isLeft)           imageKey = LAB_IMAGE_KEYS.CORNER_TL
+        else if (isTopWall && isRight)     imageKey = LAB_IMAGE_KEYS.CORNER_TR
+        else if (isBottomWall && isLeft)   imageKey = LAB_IMAGE_KEYS.CORNER_BL
+        else if (isBottomWall && isRight)  imageKey = LAB_IMAGE_KEYS.CORNER_BR
         // ── Top wall ──
-        else if (isTopWall) {
-          const variant = (hash + c * 5) % 6
-          frame = variant < 2 ? LAB_TILESET_FRAMES.WALL_TOP_THICK : LAB_TILESET_FRAMES.WALL_TOP
-        }
+        else if (isTopWall)                imageKey = LAB_IMAGE_KEYS.WALL_TOP
         // ── Bottom wall ──
-        else if (isBottomWall) {
-          const variant = (hash + c * 3) % 6
-          if (variant === 0) frame = LAB_TILESET_FRAMES.WALL_BOTTOM_WINDOW_A
-          else if (variant === 1) frame = LAB_TILESET_FRAMES.WALL_BOTTOM_THICK
-          else frame = LAB_TILESET_FRAMES.WALL_BOTTOM
-        }
+        else if (isBottomWall)             imageKey = LAB_IMAGE_KEYS.WALL_BOTTOM
         // ── Side walls (partial — only near corners) ──
-        else if (isLeft)  frame = LAB_TILESET_FRAMES.WALL_LEFT
-        else if (isRight) frame = LAB_TILESET_FRAMES.WALL_RIGHT
-        // ── Top console/equipment row ──
-        else if (isTopConsole) {
-          const variant = (hash + c * 7) % 6
-          if (variant === 0)      frame = LAB_TILESET_FRAMES.CONSOLE_TOP
-          else if (variant === 1) frame = LAB_TILESET_FRAMES.CONSOLE_SMALL
-          else if (variant === 2) frame = LAB_TILESET_FRAMES.CONSOLE_BOT_LEFT
-          else                    frame = LAB_TILESET_FRAMES.HEX_FLOOR_A
+        else if (isLeft)                   imageKey = LAB_IMAGE_KEYS.WALL_LEFT
+        else if (isRight)                  imageKey = LAB_IMAGE_KEYS.WALL_RIGHT
+        // ── Console/equipment rows — use floor tiles (props placed separately) ──
+        else {
+          const floorVariant = (hash + r * 11 + c * 17) % 8
+          imageKey = floorVariant === 0 ? LAB_IMAGE_KEYS.HEX_FLOOR_B : LAB_IMAGE_KEYS.HEX_FLOOR_A
         }
-        // ── Bottom console/equipment row ──
-        else if (isBottomConsole) {
-          const variant = (hash + c * 11) % 6
-          if (variant === 0)      frame = LAB_TILESET_FRAMES.CONSOLE_SMALL
-          else if (variant === 1) frame = LAB_TILESET_FRAMES.WALL_BOTTOM_WINDOW_B
-          else if (variant === 2) frame = LAB_TILESET_FRAMES.CONSOLE_BOT_RIGHT
-          else                    frame = LAB_TILESET_FRAMES.HEX_FLOOR_A
-        }
-        // Shouldn't reach here, but fallback
-        else frame = LAB_TILESET_FRAMES.HEX_FLOOR_A
 
         const tx = offsetX + c * step + step / 2
         const ty = offsetY + r * step + step / 2
 
-        const tile = this.scene.add.sprite(tx, ty, SPRITESHEET_KEYS.LAB_MAIN_TILESET, frame)
+        const tile = this.scene.add.image(tx, ty, imageKey)
           .setScale(tileScale)
           .setAlpha(0.95)
           .setDepth(-2)
@@ -601,10 +566,10 @@ export class OfficeRooms {
     floorW: number,
     floorH: number,
   ): void {
-    if (!this.scene.textures.exists(SPRITESHEET_KEYS.LAB_MAIN_TILESET)) return
+    if (!this.scene.textures.exists(LAB_IMAGE_KEYS.HEX_FLOOR_A)) return
 
-    const tileScale = 0.50
-    const step = LAB_TILE_SIZE * tileScale  // 64px
+    const tileScale = 0.85
+    const step = LAB_TILE_SIZE * tileScale  // ~109px
     const cols = Math.max(4, Math.floor(floorW / step))
     const rows = Math.max(4, Math.floor(floorH / step))
     const hash = this.hashToken(room.cwd)
@@ -614,8 +579,7 @@ export class OfficeRooms {
     const offsetX = floorX + (floorW - gridW) / 2
     const offsetY = floorY + (floorH - gridH) / 2
 
-    // Full autotile: thick walls + hex floor interior + console equipment.
-    // This matches the reference — rooms have visible hex floor pattern.
+    // Full autotile: thick walls + hex floor interior.
     for (let r = 0; r < rows; r++) {
       for (let c = 0; c < cols; c++) {
         const isTop = r === 0
@@ -623,62 +587,28 @@ export class OfficeRooms {
         const isLeft = c === 0
         const isRight = c === cols - 1
 
-        let frame: number
+        let imageKey: string
 
-        // ── Corners — all THICK for heavy walls ──
-        if (isTop && isLeft)          frame = LAB_TILESET_FRAMES.CORNER_TL_THICK
-        else if (isTop && isRight)    frame = LAB_TILESET_FRAMES.CORNER_TR_THICK
-        else if (isBottom && isLeft)  frame = LAB_TILESET_FRAMES.CORNER_BL_THICK
-        else if (isBottom && isRight) frame = LAB_TILESET_FRAMES.CORNER_BR_THICK
-        // ── Wall edges — THICK variants ──
-        else if (isTop)               frame = LAB_TILESET_FRAMES.WALL_TOP_THICK
-        else if (isBottom) {
-          const variant = (hash + c * 3) % 5
-          frame = variant < 2 ? LAB_TILESET_FRAMES.WALL_BOTTOM_WINDOW_A
-            : variant === 2 ? LAB_TILESET_FRAMES.WALL_BOTTOM_THICK
-            : LAB_TILESET_FRAMES.WALL_BOTTOM
-        }
-        else if (isLeft)              frame = LAB_TILESET_FRAMES.WALL_LEFT
-        else if (isRight)             frame = LAB_TILESET_FRAMES.WALL_RIGHT
-        // ── Inner wall row: console/equipment tiles ──
-        else if (r === 1) {
-          const variant = (hash + c * 7) % 5
-          if (variant === 0) frame = LAB_TILESET_FRAMES.CONSOLE_TOP
-          else if (variant === 1) frame = LAB_TILESET_FRAMES.CONSOLE_SMALL
-          else frame = LAB_TILESET_FRAMES.HEX_FLOOR_A
-        }
-        else if (r === rows - 2) {
-          const variant = (hash + c * 11) % 5
-          if (variant === 0) frame = LAB_TILESET_FRAMES.CONSOLE_SMALL
-          else if (variant === 1) frame = LAB_TILESET_FRAMES.WALL_BOTTOM_WINDOW_B
-          else frame = LAB_TILESET_FRAMES.HEX_FLOOR_A
-        }
-        else if (c === 1) {
-          const variant = (hash + r * 13) % 4
-          frame = variant === 0 ? LAB_TILESET_FRAMES.CONSOLE_LEFT : LAB_TILESET_FRAMES.HEX_FLOOR_A
-        }
-        else if (c === cols - 2) {
-          const variant = (hash + r * 17) % 4
-          frame = variant === 0 ? LAB_TILESET_FRAMES.CONSOLE_RIGHT : LAB_TILESET_FRAMES.HEX_FLOOR_A
-        }
-        // ── Interior hex floor — visible pattern like the reference ──
+        // ── Corners ──
+        if (isTop && isLeft)          imageKey = LAB_IMAGE_KEYS.CORNER_TL
+        else if (isTop && isRight)    imageKey = LAB_IMAGE_KEYS.CORNER_TR
+        else if (isBottom && isLeft)  imageKey = LAB_IMAGE_KEYS.CORNER_BL
+        else if (isBottom && isRight) imageKey = LAB_IMAGE_KEYS.CORNER_BR
+        // ── Wall edges ──
+        else if (isTop)               imageKey = LAB_IMAGE_KEYS.WALL_TOP
+        else if (isBottom)            imageKey = LAB_IMAGE_KEYS.WALL_BOTTOM
+        else if (isLeft)              imageKey = LAB_IMAGE_KEYS.WALL_LEFT
+        else if (isRight)             imageKey = LAB_IMAGE_KEYS.WALL_RIGHT
+        // ── Interior hex floor ──
         else {
-          const cellHash = (hash + r * 7 + c * 13) % 25
-          if (cellHash === 0 && r > 2 && c > 2 && r < rows - 3 && c < cols - 3) {
-            frame = LAB_TILESET_FRAMES.FLOOR_FEATURE  // reactor/light feature
-          } else {
-            const floorVariant = (hash * 3 + r * 11 + c * 17) % 15
-            if (floorVariant === 0)       frame = LAB_TILESET_FRAMES.HEX_FLOOR_B
-            else if (floorVariant === 1)  frame = LAB_TILESET_FRAMES.HEX_FLOOR_C
-            else if (floorVariant === 2)  frame = LAB_TILESET_FRAMES.HEX_FLOOR_D
-            else                          frame = LAB_TILESET_FRAMES.HEX_FLOOR_A
-          }
+          const floorVariant = (hash * 3 + r * 11 + c * 17) % 10
+          imageKey = floorVariant < 2 ? LAB_IMAGE_KEYS.HEX_FLOOR_B : LAB_IMAGE_KEYS.HEX_FLOOR_A
         }
 
         const tx = offsetX + c * step + step / 2
         const ty = offsetY + r * step + step / 2
 
-        const tile = this.scene.add.sprite(tx, ty, SPRITESHEET_KEYS.LAB_MAIN_TILESET, frame)
+        const tile = this.scene.add.image(tx, ty, imageKey)
           .setScale(tileScale)
           .setAlpha(0.95)
           .setDepth(-2)
@@ -714,35 +644,19 @@ export class OfficeRooms {
     if (room.cornerTileSprites) { for (const s of room.cornerTileSprites) s.destroy() }
     room.cornerTileSprites = []
 
-    if (!this.scene.textures.exists(SPRITESHEET_KEYS.LAB_MAIN_TILESET)) return
+    if (!this.scene.textures.exists(LAB_IMAGE_KEYS.HEX_FLOOR_A)) return
 
-    // ── Autotile: single grid covering the entire floor area ──
-    // 128px tiles scaled to 0.50 (64px cells). Matches lab-layout-engine grid.
-    const tileScale = 0.50
-    const step = LAB_TILE_SIZE * tileScale  // 64px
+    const tileScale = 0.85
+    const step = LAB_TILE_SIZE * tileScale  // ~109px
 
     const cols = Math.max(4, Math.floor(floorW / step))
     const rows = Math.max(4, Math.floor(floorH / step))
     const hash = this.hashToken(room.cwd)
 
-    // Center the grid within the floor area
     const gridW = cols * step
     const gridH = rows * step
     const offsetX = floorX + (floorW - gridW) / 2
     const offsetY = floorY + (floorH - gridH) / 2
-
-    // Console equipment along inner wall edges (1 tile in from wall)
-    const consolePositions = new Set<string>()
-    if (cols > 4 && rows > 4) {
-      const cCount = Math.min(3, Math.floor((cols + rows) / 6))
-      for (let i = 0; i < cCount; i++) {
-        const ch = (hash + i * 17) % 4
-        if (ch === 0 && rows > 4)      consolePositions.add(`1,${2 + ((hash + i * 3) % Math.max(1, rows - 4))}`)
-        else if (ch === 1 && rows > 4)  consolePositions.add(`${cols - 2},${2 + ((hash + i * 7) % Math.max(1, rows - 4))}`)
-        else if (ch === 2 && cols > 4)  consolePositions.add(`${2 + ((hash + i * 5) % Math.max(1, cols - 4))},1`)
-        else if (ch === 3 && cols > 4)  consolePositions.add(`${2 + ((hash + i * 11) % Math.max(1, cols - 4))},${rows - 2}`)
-      }
-    }
 
     for (let r = 0; r < rows; r++) {
       for (let c = 0; c < cols; c++) {
@@ -751,53 +665,28 @@ export class OfficeRooms {
         const isLeft = c === 0
         const isRight = c === cols - 1
 
-        let frame: number
+        let imageKey: string
 
-        // ── Corners — mix standard + thick variants ──
-        const useThickCorners = (hash % 3) !== 2  // ~67% of rooms get thick corners
-        if (isTop && isLeft)          frame = useThickCorners ? LAB_TILESET_FRAMES.CORNER_TL_THICK : LAB_TILESET_FRAMES.CORNER_TL
-        else if (isTop && isRight)    frame = useThickCorners ? LAB_TILESET_FRAMES.CORNER_TR_THICK : LAB_TILESET_FRAMES.CORNER_TR
-        else if (isBottom && isLeft)  frame = useThickCorners ? LAB_TILESET_FRAMES.CORNER_BL_THICK : LAB_TILESET_FRAMES.CORNER_BL
-        else if (isBottom && isRight) frame = useThickCorners ? LAB_TILESET_FRAMES.CORNER_BR_THICK : LAB_TILESET_FRAMES.CORNER_BR
-        // ── Edges — use thick variants for top/bottom to match reference ──
-        else if (isTop) {
-          const topVariant = (hash + c * 5) % 8
-          frame = topVariant < 3 ? LAB_TILESET_FRAMES.WALL_TOP_THICK : LAB_TILESET_FRAMES.WALL_TOP
-        }
-        else if (isBottom) {
-          const bottomAccent = (hash + c * 3) % 6
-          if (bottomAccent === 0 && c > 0 && c < cols - 1) frame = LAB_TILESET_FRAMES.WALL_BOTTOM_WINDOW_A
-          else if (bottomAccent === 1 && c > 0 && c < cols - 1) frame = LAB_TILESET_FRAMES.WALL_BOTTOM_THICK
-          else frame = LAB_TILESET_FRAMES.WALL_BOTTOM
-        }
-        else if (isLeft)   frame = LAB_TILESET_FRAMES.WALL_LEFT
-        else if (isRight)  frame = LAB_TILESET_FRAMES.WALL_RIGHT
-        // ── Console equipment ──
-        else if (consolePositions.has(`${c},${r}`)) {
-          if (c === 1)               frame = LAB_TILESET_FRAMES.CONSOLE_LEFT
-          else if (c === cols - 2)   frame = LAB_TILESET_FRAMES.CONSOLE_RIGHT
-          else if (r === 1)          frame = LAB_TILESET_FRAMES.CONSOLE_TOP
-          else                       frame = LAB_TILESET_FRAMES.CONSOLE_SMALL
-        }
-        // ── Interior floor — mix variants for visual richness ──
+        // ── Corners ──
+        if (isTop && isLeft)          imageKey = LAB_IMAGE_KEYS.CORNER_TL
+        else if (isTop && isRight)    imageKey = LAB_IMAGE_KEYS.CORNER_TR
+        else if (isBottom && isLeft)  imageKey = LAB_IMAGE_KEYS.CORNER_BL
+        else if (isBottom && isRight) imageKey = LAB_IMAGE_KEYS.CORNER_BR
+        // ── Wall edges ──
+        else if (isTop)               imageKey = LAB_IMAGE_KEYS.WALL_TOP
+        else if (isBottom)            imageKey = LAB_IMAGE_KEYS.WALL_BOTTOM
+        else if (isLeft)              imageKey = LAB_IMAGE_KEYS.WALL_LEFT
+        else if (isRight)             imageKey = LAB_IMAGE_KEYS.WALL_RIGHT
+        // ── Interior hex floor ──
         else {
-          const cellHash = (hash + r * 7 + c * 13) % 25
-          if (cellHash === 0 && r > 1 && c > 1 && r < rows - 2 && c < cols - 2) {
-            frame = LAB_TILESET_FRAMES.FLOOR_FEATURE
-          } else {
-            const floorVariant = (hash * 3 + r * 11 + c * 17) % 20
-            if (floorVariant === 0)       frame = LAB_TILESET_FRAMES.HEX_FLOOR_B
-            else if (floorVariant === 1)  frame = LAB_TILESET_FRAMES.HEX_FLOOR_C
-            else if (floorVariant === 2)  frame = LAB_TILESET_FRAMES.HEX_FLOOR_D
-            else if (floorVariant === 3)  frame = LAB_TILESET_FRAMES.HEX_FLOOR_B
-            else                          frame = LAB_TILESET_FRAMES.HEX_FLOOR_A
-          }
+          const floorVariant = (hash * 3 + r * 11 + c * 17) % 10
+          imageKey = floorVariant < 2 ? LAB_IMAGE_KEYS.HEX_FLOOR_B : LAB_IMAGE_KEYS.HEX_FLOOR_A
         }
 
         const tx = offsetX + c * step + step / 2
         const ty = offsetY + r * step + step / 2
 
-        const tile = this.scene.add.sprite(tx, ty, SPRITESHEET_KEYS.LAB_MAIN_TILESET, frame)
+        const tile = this.scene.add.image(tx, ty, imageKey)
           .setScale(tileScale)
           .setAlpha(0.90)
           .setDepth(-2.5)
@@ -1220,13 +1109,14 @@ export class OfficeRooms {
     const layout = computeRoomLayout(room.agents.length, roomType, room.doorSide)
     const labResult = computeLabLayout(
       floorX, floorY, floorW, floorH, h, layout.deskPositions, layout.deskArea,
-      this.host.usesFacilityLabStrategicProps() ? { strategicMode: 'none' } : undefined,
+      this.host.usesFacilityLabStrategicProps() ? { strategicMode: 'none', roomType } : { roomType },
     )
 
-    // Place props from engine output
+    // Place props from engine output — scaled up for visual presence
+    const PROP_SCALE_MULT = 8.0
     for (const p of labResult.propPlacements) {
       const spr = this.scene.add.sprite(p.x, p.y, SPRITESHEET_KEYS.LAB_PROPS, p.frame)
-        .setScale(p.scale).setAlpha(p.alpha).setDepth(p.depth)
+        .setScale(p.scale * PROP_SCALE_MULT).setAlpha(p.alpha).setDepth(p.depth)
       if (p.angle != null) spr.setAngle(p.angle)
       if (p.tint) spr.setTint(p.tint)
       room.container.add(spr)
@@ -1242,15 +1132,15 @@ export class OfficeRooms {
       glowG.setDepth(0.5)
       // Draw concentric circles — opaque enough to be clearly visible
       glowG.fillStyle(glow.color, 0.12)
-      glowG.fillCircle(glow.x, glow.y, 36)
+      glowG.fillCircle(glow.x, glow.y, 60)
       glowG.fillStyle(glow.color, 0.22)
-      glowG.fillCircle(glow.x, glow.y, 24)
+      glowG.fillCircle(glow.x, glow.y, 40)
       glowG.fillStyle(glow.color, 0.40)
-      glowG.fillCircle(glow.x, glow.y, 14)
+      glowG.fillCircle(glow.x, glow.y, 22)
       glowG.fillStyle(glow.color, 0.65)
-      glowG.fillCircle(glow.x, glow.y, 7)
+      glowG.fillCircle(glow.x, glow.y, 10)
       glowG.fillStyle(0xffffff, 0.40)
-      glowG.fillCircle(glow.x, glow.y, 3)
+      glowG.fillCircle(glow.x, glow.y, 4)
       room.container.add(glowG)
       room.floorTileSprites!.push(glowG as unknown as Phaser.GameObjects.Sprite)
     }

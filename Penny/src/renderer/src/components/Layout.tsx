@@ -48,14 +48,14 @@ function NavButton({
           </span>
         </span>
 
-        <span className="text-[length:calc(12.325px*var(--penny-ui-nav-scale))] font-semibold tracking-tight text-left flex-1 leading-snug">{label}</span>
+        <span className="text-[length:calc(10.476px*var(--penny-ui-nav-scale))] font-semibold tracking-tight text-left flex-1 leading-snug">{label}</span>
       </button>
 
       {!active && (
         <span
           className="
             pointer-events-none absolute left-full top-1/2 -translate-y-1/2 ml-2 z-50
-            px-3 py-2 rounded-xl bg-[color-mix(in_srgb,var(--c-bg-surface)_98%,transparent)] backdrop-blur-md text-[var(--c-text-secondary)] text-[length:calc(9.35px*var(--penny-ui-nav-scale))] font-medium whitespace-nowrap
+            px-3 py-2 rounded-xl bg-[color-mix(in_srgb,var(--c-bg-surface)_98%,transparent)] backdrop-blur-md text-[var(--c-text-secondary)] text-[length:calc(7.948px*var(--penny-ui-nav-scale))] font-medium whitespace-nowrap
             shadow-[0_12px_40px_rgba(0,0,0,0.55)] border border-[color-mix(in_srgb,var(--c-border)_90%,transparent)]
             opacity-0 -translate-x-1 group-hover:opacity-100 group-hover:translate-x-0
             transition-all duration-200
@@ -70,7 +70,7 @@ function NavButton({
 
 function NavSectionLabel({ children }: { children: string }) {
   return (
-    <p className="px-3 pt-5 pb-2 text-[length:calc(8.925px*var(--penny-ui-nav-scale))] font-bold uppercase tracking-[0.18em] text-[var(--c-text-muted)]">
+    <p className="px-3 pt-5 pb-2 text-[length:calc(7.586px*var(--penny-ui-nav-scale))] font-bold uppercase tracking-[0.18em] text-[var(--c-text-muted)]">
       {children}
     </p>
   )
@@ -116,7 +116,7 @@ export function Layout({ activePanel, onNavigate, children }: LayoutProps) {
                 >
                   PenPal
                 </span>
-                <span className="mt-1 block text-[length:calc(10.5px*var(--penny-ui-nav-scale))] text-[var(--c-accent-blue)] tracking-[0.18em] uppercase font-semibold">
+                <span className="mt-1 block text-[length:calc(8.925px*var(--penny-ui-nav-scale))] text-[var(--c-accent-blue)] tracking-[0.18em] uppercase font-semibold">
                   Mission Control
                 </span>
               </div>
@@ -128,13 +128,13 @@ export function Layout({ activePanel, onNavigate, children }: LayoutProps) {
           >
           <NavSectionLabel>Workspace</NavSectionLabel>
           <NavButton
-            label="Office"
+            label="Lab"
             active={activePanel === 'office'}
             onClick={() => onNavigate('office')}
             icon={
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
-                <polyline points="9 22 9 12 15 12 15 22" />
+                <path d="M9 3h6v7l4 8H5l4-8V3z" />
+                <line x1="8" y1="3" x2="16" y2="3" />
               </svg>
             }
           />
@@ -232,14 +232,14 @@ export function Layout({ activePanel, onNavigate, children }: LayoutProps) {
                 </svg>
               </span>
               <span className="flex flex-col items-start min-w-0 text-left">
-                <span className="text-[length:calc(10.625px*var(--penny-ui-nav-scale))] font-semibold text-[var(--c-text-secondary)] group-hover:text-[var(--c-text-heading)] transition-colors">Quick search</span>
-                <span className="text-[length:calc(8.925px*var(--penny-ui-nav-scale))] text-[var(--c-text-faint)] font-mono tracking-wide">⌘K</span>
+                <span className="text-[length:calc(9.031px*var(--penny-ui-nav-scale))] font-semibold text-[var(--c-text-secondary)] group-hover:text-[var(--c-text-heading)] transition-colors">Quick search</span>
+                <span className="text-[length:calc(7.586px*var(--penny-ui-nav-scale))] text-[var(--c-text-faint)] font-mono tracking-wide">⌘K</span>
               </span>
             </button>
             <span
               className="
                 pointer-events-none absolute left-full top-1/2 -translate-y-1/2 ml-2 z-50
-                px-3 py-2 rounded-xl bg-[color-mix(in_srgb,var(--c-bg-surface)_98%,transparent)] backdrop-blur-md text-[var(--c-text-secondary)] text-[length:calc(9.35px*var(--penny-ui-nav-scale))] font-medium whitespace-nowrap
+                px-3 py-2 rounded-xl bg-[color-mix(in_srgb,var(--c-bg-surface)_98%,transparent)] backdrop-blur-md text-[var(--c-text-secondary)] text-[length:calc(7.948px*var(--penny-ui-nav-scale))] font-medium whitespace-nowrap
                 shadow-[0_12px_40px_rgba(0,0,0,0.55)] border border-[color-mix(in_srgb,var(--c-border)_90%,transparent)]
                 opacity-0 -translate-x-1 group-hover:opacity-100 group-hover:translate-x-0
                 transition-all duration-200

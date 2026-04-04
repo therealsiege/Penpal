@@ -1733,7 +1733,7 @@ export function CommandCenter(props: CommandCenterProps) {
     try {
       const scene = sceneRef.current
       if (!scene) {
-        toast('Office smoke failed: scene unavailable', 'error')
+        toast('Lab smoke failed: scene unavailable', 'error')
         return
       }
 
@@ -1770,12 +1770,12 @@ export function CommandCenter(props: CommandCenterProps) {
       }
 
       if (issues.length > 0) {
-        toast(`Office smoke failed: ${issues.join(' | ')}`, 'error')
+        toast(`Lab smoke failed: ${issues.join(' | ')}`, 'error')
       } else {
-        toast(`Office smoke ok: ${before.roomCount} rooms, ${before.workstationCount} desks`, 'success')
+        toast(`Lab smoke ok: ${before.roomCount} rooms, ${before.workstationCount} desks`, 'success')
       }
     } catch {
-      toast('Office smoke failed unexpectedly', 'error')
+      toast('Lab smoke failed unexpectedly', 'error')
     } finally {
       setSmokeCheckRunning(false)
     }
@@ -1796,10 +1796,10 @@ export function CommandCenter(props: CommandCenterProps) {
         <div className="flex items-center gap-3 min-w-0 flex-wrap">
           <div
             className="flex items-center gap-2.5 min-w-0 pl-2 pr-3 py-1 rounded-xl bg-[color-mix(in_srgb,var(--c-bg-surface)_75%,transparent)] border border-[color-mix(in_srgb,var(--c-border-subtle)_90%,transparent)] shadow-[inset_0_1px_0_0_rgba(255,255,255,0.04)]"
-            title="Office workspace"
+            title="Lab workspace"
           >
             <span className="text-[9px] font-bold uppercase tracking-[0.2em] text-[color-mix(in_srgb,var(--c-accent)_90%,transparent)] shrink-0 hidden sm:inline">
-              Office
+              Lab
             </span>
             <span className="hidden sm:block w-px h-3.5 bg-[color-mix(in_srgb,var(--c-border)_80%,transparent)] shrink-0" aria-hidden />
             <div className="flex items-center gap-1.5 min-w-0">
