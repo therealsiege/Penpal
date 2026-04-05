@@ -208,9 +208,17 @@ export class OfficeBackground {
   // layoutRooms — master layout orchestrator
   // ---------------------------------------------------------------------------
 
+  /** Fingerprint of last layout — skip full rebuild if rooms haven't changed */
+  private _lastLayoutKey = ''
+
   layoutRooms(): void {
     const rooms = this.host.getRooms()
     const roomList = Array.from(rooms.values())
+
+    // Skip full rebuild if room set + agent counts are unchanged
+    const layoutKey = roomList.map(r => `${r.cwd}:${r.agents.length}`).sort().join('|')
+    if (layoutKey === this._lastLayoutKey && layoutKey.length > 0) return
+    this._lastLayoutKey = layoutKey
 
     if (roomList.length === 0) {
       this.interior.invalidateBgCache()

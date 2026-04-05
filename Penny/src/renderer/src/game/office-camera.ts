@@ -261,10 +261,8 @@ export class OfficeCamera {
     }
 
     this.host.setWorldSize(contentW, contentH)
-    // Allow generous panning beyond content — any room can be dragged to viewport center
-    const viewW = cam.width / Math.max(cam.zoom, 0.3)
-    const viewH = cam.height / Math.max(cam.zoom, 0.3)
-    const pad = Math.max(viewW, viewH, contentW, contentH)
+    // Reasonable padding — half a viewport worth of overscroll
+    const pad = WORLD_MARGIN * 3
     cam.setBounds(-pad, -pad, contentW + pad * 2, contentH + pad * 2)
   }
 
