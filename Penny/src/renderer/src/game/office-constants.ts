@@ -107,9 +107,9 @@ export const COLOR_LAB_DESK_STROKE_ALPHA = 0.4
 export const WORLD_MARGIN   = 30
 
 // Camera & navigation constants
-export const ZOOM_MIN = 1.2
+export const ZOOM_MIN = 1.0
 export const ZOOM_MAX = 4.0
-export const ZOOM_FIT_MAX = 2.5
+export const ZOOM_FIT_MAX = 1.0
 export const ZOOM_LERP_SPEED = 0.08
 export const FOLLOW_LERP_SPEED = 0.06
 // LOD thresholds — zoom boundaries between 3 detail levels

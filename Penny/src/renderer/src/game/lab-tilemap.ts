@@ -590,12 +590,12 @@ export class LabTilemap {
     const nearDesk = (wx: number, wy: number) =>
       allDesks.some(d => Math.abs(d.x - wx) < DESK_CLEAR && Math.abs(d.y - wy) < DESK_CLEAR)
 
-    // Place a prop sprite scaled to a target display height
-    const placeProp = (wx: number, wy: number, frame: string, displayH: number, alpha = 0.90, depth = -2): Phaser.GameObjects.Sprite | null => {
+    // Place a prop sprite at uniform tile-grid scale (same as wall tiles: 0.375)
+    const PROP_SCALE = TILE_SCALE  // 0.375 — matches 128px tile → 48px cell
+    const placeProp = (wx: number, wy: number, frame: string, _unused?: number, alpha = 0.90, depth = -2): Phaser.GameObjects.Sprite | null => {
       if (nearDesk(wx, wy)) return null
       const spr = this.scene.add.sprite(wx, wy, SPRITESHEET_KEYS.LAB_PROPS, frame)
-      const s = displayH / (spr.height || 100)
-      spr.setScale(s).setAlpha(alpha).setDepth(depth)
+      spr.setScale(PROP_SCALE).setAlpha(alpha).setDepth(depth)
       this.pipeSprites.push(spr)
       return spr
     }
@@ -606,38 +606,38 @@ export class LabTilemap {
     // =====================================================================
 
     interface CornerKit {
-      cornerTL: [string, number]   // [frame, displayHeight] — top-left corner anchor
-      cornerTR: [string, number]   // top-right corner anchor
-      topConsole: string           // console spanning top wall between corners
-      consoleScreen: string        // small screen overlay on the console
-      floorAccent: string          // subtle bottom-wall floor item
+      cornerTL: string    // top-left corner anchor frame
+      cornerTR: string    // top-right corner anchor frame
+      topConsole: string  // console spanning top wall between corners
+      consoleScreen: string // small screen overlay on the console
+      floorAccent: string // subtle bottom-wall floor item
     }
 
     const themes: CornerKit[] = [
       { // POWER ROOM
-        cornerTL: ['generator', 75],
-        cornerTR: ['large_tank', 70],
+        cornerTL: 'generator',
+        cornerTR: 'large_tank',
         topConsole: 'blank_console_long',
         consoleScreen: 'console_screen_wave_01',
         floorAccent: 'cable_cover',
       },
       { // RESEARCH LAB
-        cornerTL: ['pod', 70],
-        cornerTR: ['lab_machine_01', 75],
+        cornerTL: 'pod',
+        cornerTR: 'lab_machine_01',
         topConsole: 'blank_console_long',
         consoleScreen: 'console_screen_lines_02',
         floorAccent: 'octogon_plate',
       },
       { // CONTROL ROOM
-        cornerTL: ['console_example_corner', 75],
-        cornerTR: ['console_example_corner', 75],
+        cornerTL: 'console_example_corner',
+        cornerTR: 'console_example_corner',
         topConsole: 'console_example_long',
         consoleScreen: 'console_screen_wave_03',
         floorAccent: 'cable_cover_with_ramp',
       },
       { // SERVER ROOM
-        cornerTL: ['unit_example_01', 70],
-        cornerTR: ['unit_example_04', 70],
+        cornerTL: 'unit_example_01',
+        cornerTR: 'unit_example_04',
         topConsole: 'console_example_long',
         consoleScreen: 'console_screen_lines_04',
         floorAccent: 'octogon_plate_small',
@@ -652,27 +652,27 @@ export class LabTilemap {
       const R = room.x + room.width / 2
       const B = room.y + room.height / 2
 
-      // ── TOP-LEFT CORNER: anchor equipment rotated 180° into the corner ──
+      // ── TOP-LEFT CORNER: anchor equipment into the corner ──
       {
-        const spr = placeProp(L + 30, T + 45, theme.cornerTL[0], theme.cornerTL[1], 0.88, -2.2)
+        const spr = placeProp(L + 30, T + 45, theme.cornerTL, undefined, 0.88, -2.2)
         if (spr) { spr.setOrigin(0, 0).setAngle(270) }
       }
 
       // ── TOP-RIGHT CORNER: anchor equipment into the corner ──
       {
-        const spr = placeProp(R - 6, T - 30, theme.cornerTR[0], theme.cornerTR[1], 0.88, -2.2)
-        if (spr) spr.setOrigin(1, 0) // pin to top-right corner
+        const spr = placeProp(R - 6, T - 30, theme.cornerTR, undefined, 0.88, -2.2)
+        if (spr) spr.setOrigin(1, 0)
       }
 
       // ── TOP WALL CENTER: console between the two corner pieces ──
       {
         const cx = room.x
         const cy = T + 10
-        const spr = placeProp(cx, cy, theme.topConsole, 55, 0.85, -2.3)
+        const spr = placeProp(cx, cy, theme.topConsole, undefined, 0.85, -2.3)
         if (spr) {
           spr.setOrigin(0.5, 0)
           // Screen overlay on top of the console
-          const screen = placeProp(cx, cy + 12, theme.consoleScreen, 16, 0.80, -2.15)
+          const screen = placeProp(cx, cy + 12, theme.consoleScreen, undefined, 0.80, -2.15)
           if (screen) screen.setOrigin(0.5, 0)
         }
       }
