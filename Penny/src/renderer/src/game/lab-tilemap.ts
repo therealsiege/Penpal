@@ -59,6 +59,8 @@ export class LabTilemap {
   private tiles: Phaser.GameObjects.Image[] = []
   private pipeSprites: Phaser.GameObjects.Sprite[] = []
   private decorGraphics: Phaser.GameObjects.Graphics | null = null
+  /** Fingerprint of last rendered room set — skip re-render if unchanged */
+  private lastRenderKey = ''
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene
@@ -69,6 +71,11 @@ export class LabTilemap {
   // -------------------------------------------------------------------------
 
   render(rooms: FacilityRoom[]): void {
+    // Skip full rebuild if room positions/sizes haven't changed
+    const key = rooms.map(r => `${r.cwd}:${r.x|0},${r.y|0},${r.width|0},${r.height|0}`).join('|')
+    if (key === this.lastRenderKey && this.tiles.length > 0) return
+    this.lastRenderKey = key
+
     this.cleanup()
     if (rooms.length === 0 || !this.scene.textures.exists(LAB_IMAGE_KEYS.HEX_FLOOR_A)) return
 
