@@ -353,10 +353,8 @@ export class BootScene extends BaseScene {
       frameWidth: 43, frameHeight: 82,
     })
 
-    // Lab props spritesheet — 64x64 cells, 12 cols (built from Phaser.Resources/lab/props/SVGS)
-    this.load.spritesheet(SPRITESHEET_KEYS.LAB_PROPS, './sprites/lab-props.png', {
-      frameWidth: 64, frameHeight: 64,
-    })
+    // Lab props atlas — variable-size sprites from GDS editor (135 named frames)
+    this.load.atlas(SPRITESHEET_KEYS.LAB_PROPS, './sprites/lab-props-atlas.png', './sprites/lab-props-atlas.json')
 
     // Lab pipes — 128x128 cells, 7 cols × 5 rows (pipe runs, connectors, valves)
     this.load.spritesheet(SPRITESHEET_KEYS.LAB_PIPES, './sprites/lab-pipes.png', {

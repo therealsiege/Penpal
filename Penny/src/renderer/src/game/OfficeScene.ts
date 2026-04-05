@@ -14,6 +14,7 @@ import { OfficeSelection } from './office-selection'
 import { OfficeRooms } from './office-rooms'
 import { OfficeWorkstations } from './office-workstation'
 import { OfficeBackground } from './office-background'
+import { LabEditor } from './lab-editor'
 import { OfficeBroadcast } from './office-broadcast'
 import { OfficeCamera, panDurationFromDistance, getWorkstationWorldPos } from './office-camera'
 import { AnimConfig } from './animation-config'
@@ -86,6 +87,8 @@ export class OfficeScene extends Phaser.Scene {
 
   // Office background — extracted to OfficeBackground
   private background!: OfficeBackground
+  // Lab layout editor — toggle with E key
+  private labEditor!: LabEditor
 
 
   private cafe!: PennyCafe
@@ -332,6 +335,9 @@ export class OfficeScene extends Phaser.Scene {
       setLabHexSlabRect: (r) => { this.labHexSlabRect = r },
     })
     this.background.init()
+
+    // Lab editor — toggle with E key for interactive prop placement
+    this.labEditor = new LabEditor(this)
 
     // Pod connecting lines and chat animations
     this.pods = new OfficePods(this)
@@ -1111,9 +1117,11 @@ export class OfficeScene extends Phaser.Scene {
     // Above room floor / heat (-2…0.5) but workstations use depth ≈ cy+room.y (hundreds),
     // so props still sort under desks — avoids fighting interior floor tiles.
     const layer = this.add.container(0, 0).setDepth(1.2)
+    const OLD_CELL = 64
     for (const p of propPlacements) {
       const spr = this.add.sprite(p.x, p.y, SPRITESHEET_KEYS.LAB_PROPS, p.frame)
-        .setScale(p.scale)
+      const fw = spr.width || OLD_CELL
+      spr.setScale((p.scale * OLD_CELL) / fw)
         .setAlpha(p.alpha)
         .setDepth(p.depth)
       if (p.angle != null) spr.setAngle(p.angle)
@@ -1259,6 +1267,9 @@ export class OfficeScene extends Phaser.Scene {
       this.lastShadowUpdateAt = time
       this.atmosphere.updateShadows(this.rooms)
     }
+
+    // Lab editor grid refresh
+    if (this.labEditor) this.labEditor.update()
 
     // Status bar: agent stats every 3s, clock label every 60s
     if (this.ui.hasStatusBar && time - this.lastStatusBarUpdateAt >= 3000) {
