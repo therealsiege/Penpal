@@ -237,10 +237,10 @@ export class OfficeBackground {
       return
     }
 
-    // ── Unified lab layout — all rooms as zones in one wide facility ──
-    const viewWidth = this.host.getViewWidth()
-    // Keep facility roughly square — rooms wrap into rows instead of one long strip
-    const availableW = Math.max(viewWidth * 0.85, 800)
+    // ── Unified lab layout — fixed-width grid of office rooms ──
+    // Rooms fill left-to-right in columns, wrapping to new rows as needed.
+    // Layout is independent of viewport/window size.
+    const MAX_ROOM_COLS = 3  // max rooms per row
     const areaPadX = TEAM_AREA_PAD_X
     const areaPadY = TEAM_AREA_PAD_Y
     const areaGapX = TEAM_AREA_GAP_X
@@ -250,8 +250,6 @@ export class OfficeBackground {
     // Merge ALL rooms into a single "lab" team so they pack into one facility
     const teams = new Map<string, Room[]>()
     const UNIFIED_KEY = '__lab__'
-    // Rooms are still created with cwd-derived team keys; align to unified key so corridor
-    // pipe/cable decals and other __lab__ gating match the single-facility layout.
     for (const room of roomList) {
       room.teamKey = UNIFIED_KEY
     }
@@ -259,9 +257,9 @@ export class OfficeBackground {
 
     const teamKeys = [UNIFIED_KEY]
 
-    // Single team fills the full available width
-    const teamColumns = 1
-    const preferredTeamWidth = availableW
+    // Fixed width: widest room × MAX_ROOM_COLS + gaps
+    const widestRoom = roomList.reduce((max, r) => Math.max(max, r.width), 280)
+    const preferredTeamWidth = areaPadX * 2 + MAX_ROOM_COLS * widestRoom + (MAX_ROOM_COLS - 1) * ROOM_GAP
 
     const teamLayouts: TeamAreaLayout[] = []
     const teamDrafts: Array<{
@@ -283,13 +281,15 @@ export class OfficeBackground {
       let cursorY = 0
       let rowHeight = 0
       let maxUsedWidth = 0
+      let colIdx = 0
 
       for (const room of teamRooms) {
-        const maxTeamWidth = Math.max(180, preferredTeamWidth - areaPadX * 2)
-        if (cursorX > 0 && cursorX + room.width > maxTeamWidth) {
+        // Wrap to next row after MAX_ROOM_COLS
+        if (colIdx >= MAX_ROOM_COLS && colIdx > 0) {
           cursorX = 0
           cursorY += rowHeight + ROOM_GAP
           rowHeight = 0
+          colIdx = 0
         }
         roomLocalPos.set(room, {
           x: areaPadX + cursorX + room.width / 2,
@@ -299,6 +299,7 @@ export class OfficeBackground {
         cursorX += room.width + ROOM_GAP
         rowHeight = Math.max(rowHeight, room.height)
         maxUsedWidth = Math.max(maxUsedWidth, Math.max(0, cursorX - ROOM_GAP))
+        colIdx++
       }
 
       const contentH = teamRooms.length > 0 ? cursorY + rowHeight : 0
@@ -327,25 +328,10 @@ export class OfficeBackground {
     const serviceRowH = cafe.height
     const serviceRowBottomY = serviceRowH + areaGapY
 
-    // ── Row 1+: Agent office teams ──
+    // ── Row 1+: Agent office teams (single unified team) ──
     const rows: Array<{ drafts: TeamDraft[]; width: number; height: number }> = []
-    let rowDrafts: TeamDraft[] = []
-    let rowWidth = 0
-    let rowHeight = 0
     for (const draft of teamDrafts) {
-      const nextWidth = rowDrafts.length === 0 ? draft.width : rowWidth + areaGapX + draft.width
-      if (rowDrafts.length > 0 && nextWidth > availableW) {
-        rows.push({ drafts: rowDrafts, width: rowWidth, height: rowHeight })
-        rowDrafts = []
-        rowWidth = 0
-        rowHeight = 0
-      }
-      rowDrafts.push(draft)
-      rowWidth = rowDrafts.length === 1 ? draft.width : rowWidth + areaGapX + draft.width
-      rowHeight = Math.max(rowHeight, draft.height)
-    }
-    if (rowDrafts.length > 0) {
-      rows.push({ drafts: rowDrafts, width: rowWidth, height: rowHeight })
+      rows.push({ drafts: [draft], width: draft.width, height: draft.height })
     }
 
     // Agent offices start below the service row

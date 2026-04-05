@@ -488,8 +488,8 @@ export class OfficeScene extends Phaser.Scene {
       if (this.resizeTimer) clearTimeout(this.resizeTimer)
       this.resizeTimer = setTimeout(() => {
         this.resizeTimer = null
-        this.background.invalidateBgCache()
-        this.background.layoutRooms()
+        // Fixed grid layout — don't relayout rooms on window resize.
+        // Just update camera bounds and re-fit.
         this.officeCamera.updateCameraBounds()
         if (this.rooms.size > 0) this.zoomToFit(true)
       }, 100)

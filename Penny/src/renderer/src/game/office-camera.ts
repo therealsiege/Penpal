@@ -247,26 +247,25 @@ export class OfficeCamera {
   updateCameraBounds(): void {
     const cam = this.scene.cameras.main
     const rooms = this.host.getRooms()
-    let maxX = 0
-    let maxY = 0
+
+    // Content bounds from rooms + cafe only — independent of viewport size
+    let contentW = 0, contentH = 0
     for (const room of rooms.values()) {
-      maxX = Math.max(maxX, room.x + room.width / 2 + WORLD_MARGIN)
-      maxY = Math.max(maxY, room.y + room.height / 2 + WORLD_MARGIN)
+      contentW = Math.max(contentW, room.x + room.width / 2 + WORLD_MARGIN)
+      contentH = Math.max(contentH, room.y + room.height / 2 + WORLD_MARGIN)
     }
-    const hasRooms = rooms.size > 0
-    const bgDims = this.host.getBackground().getBgDimensions()
-    let contentW = Math.max(maxX, hasRooms ? bgDims.w + 30 : 0)
-    let contentH = Math.max(maxY, hasRooms ? bgDims.h + 30 : 0)
     const cafeBounds = this.host.getCafe().getBounds()
     if (cafeBounds) {
       contentW = Math.max(contentW, cafeBounds.x + cafeBounds.w + WORLD_MARGIN)
       contentH = Math.max(contentH, cafeBounds.y + cafeBounds.h + WORLD_MARGIN)
     }
-    const { viewWidth, viewHeight } = this.host.getViewSize()
-    const worldWidth = Math.max(contentW, viewWidth)
-    const worldHeight = Math.max(contentH, viewHeight)
-    this.host.setWorldSize(worldWidth, worldHeight)
-    cam.setBounds(-WORLD_MARGIN, -WORLD_MARGIN, worldWidth + WORLD_MARGIN * 2, worldHeight + WORLD_MARGIN * 2)
+
+    this.host.setWorldSize(contentW, contentH)
+    // Allow generous panning beyond content — any room can be dragged to viewport center
+    const viewW = cam.width / Math.max(cam.zoom, 0.3)
+    const viewH = cam.height / Math.max(cam.zoom, 0.3)
+    const pad = Math.max(viewW, viewH, contentW, contentH)
+    cam.setBounds(-pad, -pad, contentW + pad * 2, contentH + pad * 2)
   }
 
   zoomToFit(animated: boolean, opts?: { slow?: boolean }): void {
@@ -287,13 +286,8 @@ export class OfficeCamera {
       maxX = Math.max(maxX, cafeBounds.x + cafeBounds.w)
       maxY = Math.max(maxY, cafeBounds.y + cafeBounds.h)
     }
-    const bgDims = this.host.getBackground().getBgDimensions()
-    if (bgDims.w > 0) {
-      minX = Math.min(minX, 0)
-      minY = Math.min(minY, 0)
-      maxX = Math.max(maxX, bgDims.w + 30)
-      maxY = Math.max(maxY, bgDims.h + 30)
-    }
+    // Don't include background dimensions — they bloat the bounding box
+    // and pull the camera center away from the actual rooms.
     const padFactor = 1.08
     const { viewWidth, viewHeight } = this.host.getViewSize()
     const fitZoom = Phaser.Math.Clamp(
