@@ -18,6 +18,8 @@ import { OfficeInterior } from './office-interior'
 import type { InteriorHostScene } from './office-interior'
 import { WorkspaceUnifiedFloor } from './workspace-unified-floor'
 import type { UnifiedFloorHostScene } from './workspace-unified-floor'
+import { LabTilemap } from './lab-tilemap'
+import type { FacilityRoom } from './lab-tilemap'
 // Suppress unused import warnings for constants only referenced inside the
 // sub-modules (they are still re-exported conceptually via the barrel).
 void LOD_L1_MAX
@@ -110,6 +112,7 @@ export class OfficeBackground {
   private corridors: OfficeCorridors
   private interior: OfficeInterior
   private unifiedFloor: WorkspaceUnifiedFloor
+  private labTilemap: LabTilemap
 
   constructor(scene: Phaser.Scene, host: BackgroundHostScene) {
     this.scene = scene
@@ -143,6 +146,7 @@ export class OfficeBackground {
     this.corridors = new OfficeCorridors(scene, corridorHost)
     this.interior = new OfficeInterior(scene, interiorHost)
     this.unifiedFloor = new WorkspaceUnifiedFloor(scene, unifiedFloorHost)
+    this.labTilemap = new LabTilemap(scene)
   }
 
   // ---------------------------------------------------------------------------
@@ -235,8 +239,8 @@ export class OfficeBackground {
 
     // ── Unified lab layout — all rooms as zones in one wide facility ──
     const viewWidth = this.host.getViewWidth()
-    // Fill the full viewport width for a wide lab
-    const availableW = Math.max(viewWidth * 1.4, 1200)
+    // Keep facility roughly square — rooms wrap into rows instead of one long strip
+    const availableW = Math.max(viewWidth * 0.85, 800)
     const areaPadX = TEAM_AREA_PAD_X
     const areaPadY = TEAM_AREA_PAD_Y
     const areaGapX = TEAM_AREA_GAP_X
@@ -466,6 +470,7 @@ export class OfficeBackground {
     if (layouts.length === 0) {
       this.host.setLabHexSlabRect(null)
       this.unifiedFloor.cleanup()
+      this.labTilemap.cleanup()
       return
     }
 
@@ -490,15 +495,17 @@ export class OfficeBackground {
       height: allBottom - allY,
     })
 
-    // ONE facility outline around all teams — dark, thick walls
-    g.fillStyle(COLOR_WALL)
-    g.fillRoundedRect(allX - 10, allY - 10, (allRight - allX) + 20, (allBottom - allY) + 20, 8)
-    g.fillStyle(activeTheme.bg, 0.15)
-    g.fillRoundedRect(allX, allY, allRight - allX, allBottom - allY, 5)
-
-    // ONE unified floor — continuous hex across the whole PENPAL slab (no inter-zone wall column
-    // or hazard stripe running down the middle between atlas/sidekick).
-    this.unifiedFloor.drawFloor(allX, allY, allRight - allX, allBottom - allY, 0x3b82f6)
+    // ── Single facility tilemap — one big building with interior dividers ──
+    const allRooms = Array.from(this.host.getRooms().values())
+    const facilityRooms: FacilityRoom[] = allRooms.map(r => {
+      const roomType = detectRoomType(r.cwd)
+      const layout = computeRoomLayout(r.agents.length, roomType, r.doorSide)
+      return {
+        x: r.x, y: r.y, width: r.width, height: r.height, cwd: r.cwd,
+        deskPositions: layout.deskPositions,
+      }
+    })
+    this.labTilemap.render(facilityRooms)
 
     // Windows along the top wall of the facility (for atmosphere glint effect)
     const atmosphere = this.host.getAtmosphere()
@@ -941,6 +948,7 @@ export class OfficeBackground {
   applyLodToWhiteboard(lodLevel: number): void {
     this.interior.applyLodToWhiteboard(lodLevel)
     this.unifiedFloor.applyLod(lodLevel)
+    this.labTilemap.applyLod(lodLevel)
   }
 
   tickReactorGlow(time: number): void {
@@ -1030,5 +1038,6 @@ export class OfficeBackground {
     this.corridors.destroy()
     this.interior.destroy()
     this.unifiedFloor.destroy()
+    this.labTilemap.destroy()
   }
 }

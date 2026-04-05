@@ -405,9 +405,9 @@ export function applyLabStrategicLayoutFromJson(ctx: LayoutApplyContext): Strate
     return inAnyClip(x, y) && farFromDesks(x, y, minD)
   }
 
-  function resolveFrame(key: string): number {
-    const n = (LP as Record<string, number>)[key]
-    if (typeof n !== 'number') {
+  function resolveFrame(key: string): number | string {
+    const n = (LP as Record<string, number | string>)[key]
+    if (n == null) {
       throw new Error(`lab-strategic-layout.json: unknown frame "${key}"`)
     }
     return n

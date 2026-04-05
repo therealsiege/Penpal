@@ -170,9 +170,9 @@ export class WorkstationFactory {
 
     if (hasConsoleDeskImage) {
       // Single console-desk image: chair at bottom, screens at top, keyboard + gauges in middle
-      // 521x416 source → scale to ~100px wide
+      // 521x416 source × 0.30 = ~156x125px — fills the workstation cell
       consoleDeskSprite = this.scene.add.image(0, WS_DESK_Y + 4, LAB_IMAGE_KEYS.PROP_CONSOLE_DESK)
-        .setScale(0.42)
+        .setScale(0.38)
         .setAngle(180)
         .setAlpha(0.92)
         .setDepth(1)
@@ -186,11 +186,11 @@ export class WorkstationFactory {
       // Fallback: individual chair + desk rect + monitor
       if (labPropsLoaded) {
         chairSprite = this.scene.add.sprite(0, WS_CHAIR_Y + 4, SPRITESHEET_KEYS.LAB_PROPS, LAB_PROP_FRAMES.STOOL)
-        chairSprite.setScale(0.32).setAlpha(0.85)
+        chairSprite.setScale(0.22).setAlpha(0.85)
         wsContainer.add(chairSprite)
       } else if (this.host.officeTilesLoaded) {
         chairSprite = this.scene.add.sprite(0, WS_CHAIR_Y + 4, SPRITESHEET_KEYS.OFFICE, FRAME_CHAIR_DARK)
-        chairSprite.setScale(0.50).setAlpha(0.85)
+        chairSprite.setScale(0.40).setAlpha(0.85)
         wsContainer.add(chairSprite)
       } else {
         wsContainer.add(this.scene.add.rectangle(0, WS_CHAIR_Y, 18, 13, activeTheme.deskBody).setStrokeStyle(1, activeTheme.deskTop, 0.6))
@@ -219,11 +219,11 @@ export class WorkstationFactory {
       if (labPropsLoaded && facilityStrategic) {
         if (this.host.officeTilesLoaded) {
           monitorSprite = this.scene.add.sprite(0, WS_MONITOR_Y, SPRITESHEET_KEYS.OFFICE, FRAME_MONITOR)
-            .setScale(0.42).setDepth(4)
+            .setScale(0.46).setDepth(4)
           wsContainer.add(monitorSprite)
         } else {
           monitorSprite = this.scene.add.sprite(0, WS_MONITOR_Y, SPRITESHEET_KEYS.LAB_PROPS, LAB_PROP_FRAMES.MONITOR)
-            .setScale(0.30).setDepth(4).setAlpha(0.9)
+            .setScale(0.16).setDepth(4).setAlpha(0.9)
           wsContainer.add(monitorSprite)
         }
         if (monitorSprite) {
@@ -231,10 +231,10 @@ export class WorkstationFactory {
         }
       } else if (labPropsLoaded) {
         monitorSprite = this.scene.add.sprite(0, WS_MONITOR_Y, SPRITESHEET_KEYS.LAB_PROPS, LAB_PROP_FRAMES.CONSOLE_SCREEN)
-          .setScale(0.35).setDepth(4)
+          .setScale(0.24).setDepth(4)
         wsContainer.add(monitorSprite)
       } else if (this.host.officeTilesLoaded) {
-        monitorSprite = this.scene.add.sprite(0, WS_MONITOR_Y, SPRITESHEET_KEYS.OFFICE, FRAME_MONITOR).setScale(0.48)
+        monitorSprite = this.scene.add.sprite(0, WS_MONITOR_Y, SPRITESHEET_KEYS.OFFICE, FRAME_MONITOR).setScale(0.50)
         wsContainer.add(monitorSprite)
       }
     }
@@ -446,7 +446,7 @@ export class WorkstationFactory {
           // Fallback: composable monster body sprite
           const petFrame = nameHash % PET_COUNT
           deskPet = this.scene.add.sprite(petX, WS_DESK_Y - 6, SPRITESHEET_KEYS.DESK_PETS, petFrame)
-            .setScale(0.42)
+            .setScale(0.32)
             .setAlpha(0.9)
           wsContainer.add(deskPet)
           extraDecos.push(deskPet)
@@ -479,7 +479,7 @@ export class WorkstationFactory {
         // Place on the opposite side from the sticky note
         const sigX = -28
         signatureItemSprite = this.scene.add.sprite(sigX, WS_DESK_Y - 12, SPRITESHEET_KEYS.GAME_ITEMS, sigFrame)
-          .setScale(0.25)
+          .setScale(0.40)
           .setAlpha(0.65)
         wsContainer.add(signatureItemSprite)
         extraDecos.push(signatureItemSprite)
@@ -490,7 +490,7 @@ export class WorkstationFactory {
         const roomType = detectRoomType(room.cwd ?? '')
         const roomItemFrame = getRoomTypeItem(roomType, nameHash)
         roomPropSprite = this.scene.add.sprite(30, WS_DESK_Y - 4, SPRITESHEET_KEYS.GAME_ITEMS, roomItemFrame)
-          .setScale(0.25)
+          .setScale(0.40)
           .setAlpha(0.7)
         wsContainer.add(roomPropSprite)
         extraDecos.push(roomPropSprite)
@@ -515,9 +515,12 @@ export class WorkstationFactory {
     } else {
       // Lab mode — cluttered analyst / operator desk (props from LAB_PROPS)
       const LP = LAB_PROP_FRAMES
-      const addLabProp = (frame: number, x: number, y: number, scale: number, alpha = 0.9, depth = 2) => {
+      const OLD_CELL = 64
+      const addLabProp = (frame: string | number, x: number, y: number, scale: number, alpha = 0.9, depth = 2) => {
         const s = this.scene.add.sprite(x, y, SPRITESHEET_KEYS.LAB_PROPS, frame)
-          .setScale(scale).setAlpha(alpha).setDepth(depth)
+        // Normalize: old scale was relative to 64px cells, now relative to native sprite size
+        const fw = s.width || OLD_CELL
+        s.setScale((scale * OLD_CELL) / fw).setAlpha(alpha).setDepth(depth)
         wsContainer.add(s)
         extraDecos.push(s)
       }
@@ -639,8 +642,8 @@ export class WorkstationFactory {
 
     // Show persona name (e.g. "Marcus Chen") instead of title
     const nameText = this.scene.add.text(0, WS_NAME_Y, '', {
-      fontSize: '15px', color: activeTheme.nameText, fontFamily: "'Monogram', system-ui, monospace",
-      backgroundColor: activeTheme.nameBg, padding: { x: 5, y: 2 }, align: 'center',
+      fontSize: '11px', color: activeTheme.nameText, fontFamily: "'Monogram', system-ui, monospace",
+      backgroundColor: activeTheme.nameBg, padding: { x: 4, y: 1 }, align: 'center',
       resolution: 2,
     }).setOrigin(0.5).setVisible(false)
     wsContainer.add(nameText)
@@ -1112,8 +1115,23 @@ export class WorkstationFactory {
       this.scene.tweens.add({ targets: ws.container, x: cx, y: cy, duration: 280, ease: 'Power2' })
       ws.container.setDepth(cy + room.y)
 
-      // Console-desk is created at 180° so chair faces up toward the duder sprite.
-      // No per-position rotation needed — all agents face the same way.
+      // Rotate console-desk so chair faces room center (0,0).
+      // The image is created at 180° (chair on top). Adjust angle based on position.
+      const consoleDeskImg = ws.container.list.find(
+        (o: Phaser.GameObjects.GameObject) => (o as Phaser.GameObjects.Image).texture?.key === LAB_IMAGE_KEYS.PROP_CONSOLE_DESK
+      ) as Phaser.GameObjects.Image | undefined
+      if (consoleDeskImg) {
+        // Top half → chair faces down (180° already set at creation)
+        // Bottom half → chair faces up (0°)
+        // Left edge → chair faces right (90°)
+        // Right edge → chair faces left (-90°)
+        const halfW = room.width / 2 * 0.4
+        const halfH = room.height / 2 * 0.4
+        if (Math.abs(cx) > halfW && cx < 0)       consoleDeskImg.setAngle(90)   // left wall
+        else if (Math.abs(cx) > halfW && cx > 0)   consoleDeskImg.setAngle(-90)  // right wall
+        else if (cy < 0)                            consoleDeskImg.setAngle(0)    // top half — screens up, chair down
+        else                                        consoleDeskImg.setAngle(180)  // bottom half — screens down, chair up
+      }
     })
 
     // Spawn in-room props if not already placed (skip right-strip clutter when JSON facility kit already fills the room)

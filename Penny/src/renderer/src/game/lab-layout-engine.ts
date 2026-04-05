@@ -15,7 +15,7 @@ import { computeStrategicReferencePlacements, type StrategicFloorClipRect } from
 export const LAB_TILE_SCALE = 0.50
 export const LAB_CELL_STEP = LAB_TILE_SIZE * LAB_TILE_SCALE  // 64px
 /** Cap after strategic anchors + optional sparse wall fill */
-export const LAB_MAX_PROPS_PER_ROOM = 24
+export const LAB_MAX_PROPS_PER_ROOM = 32
 export const LAB_GLOW_COLOR = 0x22d3ee
 export const LAB_GLOW_MIN_SPACING = 2  // cells between glow lights
 
@@ -32,7 +32,7 @@ export type ZoneType = 'control' | 'chemical' | 'machinery' | 'pod'
 const ZONE_TYPES: ZoneType[] = ['control', 'chemical', 'machinery', 'pod']
 
 interface PropBlueprint {
-  frame: number
+  frame: number | string
   widthCells: number
   heightCells: number
   validZones: PlacementZone[]
@@ -42,7 +42,7 @@ interface PropBlueprint {
 }
 
 export interface SpritePlacement {
-  frame: number
+  frame: number | string
   x: number
   y: number
   scale: number
@@ -175,8 +175,8 @@ export class CellGrid {
 // ---------------------------------------------------------------------------
 
 interface StationGroup {
-  base: { frame: number; scale: number; tint?: number }
-  overlays: Array<{ frame: number; scale: number; dx: number; dy: number; depth: number; tint?: number }>
+  base: { frame: number | string; scale: number; tint?: number }
+  overlays: Array<{ frame: number | string; scale: number; dx: number; dy: number; depth: number; tint?: number }>
   widthCells: number
   heightCells: number
   validZones: PlacementZone[]
@@ -662,7 +662,7 @@ function placeProps(
     const j = (hash + i * 47) % (i + 1)
     ;[sharedPick[i], sharedPick[j]] = [sharedPick[j], sharedPick[i]]
   }
-  const accentCap = opts?.skipStationGroups ? 2 : 5
+  const accentCap = opts?.skipStationGroups ? 6 : 10
   let allBlueprints: PropBlueprint[] = [...blueprints, ...sharedPick.slice(0, accentCap)]
   if (opts?.wallsOnly) {
     allBlueprints = allBlueprints.map(stripCenterZones).filter((x): x is PropBlueprint => x != null)
@@ -862,16 +862,17 @@ export function computeLabLayout(
   const clippedFacility = clipRects != null && clipRects.length > 0
   // Facility merge passes floorClipRects per room: never add loose wall props (keyboards, duplicate
   // corner consoles) on top of JSON strategic art — v10+ silhouette stays authoritative.
+  // More props, placed against walls as inner border — reference lab style
   const maxLoose =
-    !useStrategic ? 6
-    : clippedFacility && useStrategic ? 0
-    : strategicCount >= 6 ? 0
-      : Math.max(2, 7 - strategicCount)
+    !useStrategic ? 14
+    : clippedFacility && useStrategic ? 6
+    : strategicCount >= 6 ? 4
+      : Math.max(6, 15 - strategicCount)
   propPlacements.push(
     ...placeProps(grid, zone, hash, {
       skipStationGroups: useStrategic,
       maxLooseProps: maxLoose,
-      wallsOnly: true,
+      wallsOnly: false,
     }),
   )
 

@@ -97,13 +97,13 @@ export class OfficeRooms {
     const ledY = height / 2 - ROOM_HEADER_H / 2
     const statusLedGlow = this.scene.add
       .sprite(ledX, ledY, SPRITESHEET_KEYS.GAME_ICONS, ICON_FRAMES.CIRCLE_GREY)
-      .setScale(0.25)
+      .setScale(0.35)
       .setAlpha(0.15)
       .setBlendMode(Phaser.BlendModes.ADD)
     container.add(statusLedGlow)
     const statusLed = this.scene.add
       .sprite(ledX, ledY, SPRITESHEET_KEYS.GAME_ICONS, ICON_FRAMES.CIRCLE_GREY)
-      .setScale(0.19)
+      .setScale(0.28)
     container.add(statusLed)
 
     // Door graphics — separate objects so they can be animated independently.
@@ -299,8 +299,8 @@ export class OfficeRooms {
     if (!room.wallTileSprites) room.wallTileSprites = []
     if (!room.cornerTileSprites) room.cornerTileSprites = []
 
-    // ── Zone equipment — props placed on the shared facility floor ──
-    this.placeLabEquipment(room, floorX, floorY, floorW, floorH)
+    // Per-room walls + props now handled by lab-tilemap.ts (single building tilemap).
+    // No per-room placeLabEquipment — the tilemap decorateRooms() places all props.
 
     // No per-room hazard tape — corridor-level drawCorridorDetails() handles
     // zone boundaries with alternating yellow/dark stripes at actual corridors.
@@ -423,7 +423,7 @@ export class OfficeRooms {
 
     const puff = this.scene.add.sprite(worldX, worldY, SPRITESHEET_KEYS.EFFECTS_PUFF)
       .setDepth(200)
-      .setScale(0.22)
+      .setScale(0.38)
       .setAlpha(0.4)
     puff.play(EFFECT_ANIM_KEYS.PUFF)
     puff.once('animationcomplete', () => puff.destroy())
@@ -432,7 +432,7 @@ export class OfficeRooms {
     const hingeX = worldX - doorW / 2
     const puff2 = this.scene.add.sprite(hingeX, worldY, SPRITESHEET_KEYS.EFFECTS_PUFF)
       .setDepth(200)
-      .setScale(0.15)
+      .setScale(0.28)
       .setAlpha(0.25)
     puff2.play(EFFECT_ANIM_KEYS.PUFF)
     puff2.once('animationcomplete', () => puff2.destroy())
@@ -1112,11 +1112,16 @@ export class OfficeRooms {
       this.host.usesFacilityLabStrategicProps() ? { strategicMode: 'none', roomType } : { roomType },
     )
 
-    // Place props from engine output — scaled up for visual presence
-    const PROP_SCALE_MULT = 8.0
+    // Place props — engine scales were designed for 64px spritesheet cells.
+    // Now that lab-props is a proper atlas with native-size sprites, we normalize:
+    // desiredPx = oldScale * 64 → newScale = oldScale * 64 / nativeWidth
+    const OLD_CELL = 64
     for (const p of labResult.propPlacements) {
       const spr = this.scene.add.sprite(p.x, p.y, SPRITESHEET_KEYS.LAB_PROPS, p.frame)
-        .setScale(p.scale * PROP_SCALE_MULT).setAlpha(p.alpha).setDepth(p.depth)
+      // Normalize scale: old scale was relative to 64px cells, now relative to native size
+      const fw = spr.width || OLD_CELL
+      const normalizedScale = (p.scale * OLD_CELL) / fw
+      spr.setScale(normalizedScale).setAlpha(p.alpha).setDepth(p.depth)
       if (p.angle != null) spr.setAngle(p.angle)
       if (p.tint) spr.setTint(p.tint)
       room.container.add(spr)
@@ -1131,16 +1136,16 @@ export class OfficeRooms {
       // Depth 0.5 = above floor tiles (-2) and props (-1.x), below workstations
       glowG.setDepth(0.5)
       // Draw concentric circles — opaque enough to be clearly visible
-      glowG.fillStyle(glow.color, 0.12)
-      glowG.fillCircle(glow.x, glow.y, 60)
-      glowG.fillStyle(glow.color, 0.22)
-      glowG.fillCircle(glow.x, glow.y, 40)
-      glowG.fillStyle(glow.color, 0.40)
-      glowG.fillCircle(glow.x, glow.y, 22)
-      glowG.fillStyle(glow.color, 0.65)
+      glowG.fillStyle(glow.color, 0.10)
+      glowG.fillCircle(glow.x, glow.y, 30)
+      glowG.fillStyle(glow.color, 0.18)
+      glowG.fillCircle(glow.x, glow.y, 18)
+      glowG.fillStyle(glow.color, 0.35)
       glowG.fillCircle(glow.x, glow.y, 10)
-      glowG.fillStyle(0xffffff, 0.40)
-      glowG.fillCircle(glow.x, glow.y, 4)
+      glowG.fillStyle(glow.color, 0.55)
+      glowG.fillCircle(glow.x, glow.y, 5)
+      glowG.fillStyle(0xffffff, 0.35)
+      glowG.fillCircle(glow.x, glow.y, 2)
       room.container.add(glowG)
       room.floorTileSprites!.push(glowG as unknown as Phaser.GameObjects.Sprite)
     }
@@ -1450,7 +1455,7 @@ export class OfficeRooms {
       const iconFrame = ROOM_HEADER_ITEM[roomType] ?? ROOM_HEADER_ITEM['standard']
       const iconX = -(headerText.width / 2) - 14
       room.roomHeaderIcon = this.scene.add.sprite(iconX, headerY, SPRITESHEET_KEYS.GAME_ITEMS, iconFrame)
-        .setScale(0.22)
+        .setScale(0.32)
         .setAlpha(0.6)
         .setOrigin(0.5)
       room.container.add(room.roomHeaderIcon)

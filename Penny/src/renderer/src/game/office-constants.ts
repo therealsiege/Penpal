@@ -59,15 +59,15 @@ export const OFFICE_FRAME_PRINTER      = 126
 // Layout constants
 // ---------------------------------------------------------------------------
 
-export const CHAR_SCALE      = 0.20
-/** Desk grid cell size — fits console-desk image at 0.42 scale (~219x175) */
-export const WORKSTATION_W   = 160
-export const WORKSTATION_H   = 155
-export const ROOM_PADDING    = 30
-export const ROOM_TOP_EXTRA  = 50   // extra top padding so desks + thought bubbles clear top wall
-export const LAB_EQUIP_ZONE_H = 20  // minimal equip zone — props placed by layout engine
-export const ROOM_HEADER_H   = 26
-export const ROOM_GAP        = 80   // corridor space between zones (lab floor breathing room)
+export const CHAR_SCALE      = 0.16
+/** Desk grid cell size — fits console-desk at 0.15 + duder at 0.12 */
+export const WORKSTATION_W   = 100
+export const WORKSTATION_H   = 85
+export const ROOM_PADDING    = 18
+export const ROOM_TOP_EXTRA  = 16   // extra top padding so desks + thought bubbles clear top wall
+export const LAB_EQUIP_ZONE_H = 16  // minimal equip zone — props placed by layout engine
+export const ROOM_HEADER_H   = 18
+export const ROOM_GAP        = 50   // corridor space between zones — at least 1 tile cell
 export const MAX_AGENTS_PER_ROW = 4
 export const TEAM_AREA_PAD_X = 8
 export const TEAM_AREA_PAD_Y = 8
@@ -75,12 +75,12 @@ export const TEAM_AREA_GAP_X = 4   // teams butt up against each other
 export const TEAM_AREA_GAP_Y = 4
 export const TEAM_LABEL_H = 16
 
-export const WS_CHAIR_Y    = 8
-export const WS_SPRITE_Y   = -6
-export const WS_DESK_Y     = 22
-export const WS_MONITOR_Y  = 6
-export const WS_NAME_Y     = 46
-export const WS_DOT_GAP    = 5
+export const WS_CHAIR_Y    = 5
+export const WS_SPRITE_Y   = -4
+export const WS_DESK_Y     = 16
+export const WS_MONITOR_Y  = 4
+export const WS_NAME_Y     = 34
+export const WS_DOT_GAP    = 4
 export const IDLE_WALK_BREAK_MIN_MS = 9000
 export const IDLE_WALK_BREAK_VAR_MS = 7000
 export const IDLE_WALK_RANGE_X = 20
