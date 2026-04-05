@@ -136,14 +136,14 @@ function ClipCard({ clip, playing, onPlay, showCategory }: ClipCardProps) {
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color-mix(in_srgb,var(--c-accent)_40%,transparent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--c-bg-app)]',
         playing
           ? [
-              'bg-[linear-gradient(145deg,rgba(0,255,136,0.14)_0%,rgba(12,18,26,0.95)_55%,rgba(8,12,18,0.98)_100%)]',
-              'border-[color-mix(in_srgb,var(--c-accent)_45%,transparent)] text-[#e8f8f0]',
+              'bg-[linear-gradient(145deg,color-mix(in_srgb,var(--c-accent)_14%,var(--c-bg-surface))_0%,var(--c-bg-surface)_55%,var(--c-bg-chrome)_100%)]',
+              'border-[color-mix(in_srgb,var(--c-accent)_45%,transparent)] text-[var(--c-text-heading)]',
               'shadow-[0_0_32px_-10px_rgba(0,255,136,0.45),inset_0_1px_0_0_rgba(255,255,255,0.06)]',
             ].join(' ')
           : [
-              'bg-[linear-gradient(165deg,rgba(12,18,26,0.92)_0%,rgba(8,11,16,0.96)_100%)]',
+              'bg-[color-mix(in_srgb,var(--c-bg-surface)_94%,transparent)]',
               'border-[color-mix(in_srgb,var(--c-border)_90%,transparent)] text-[var(--c-text-primary)]',
-              'hover:border-[color-mix(in_srgb,var(--c-accent)_25%,transparent)] hover:shadow-[0_12px_40px_-24px_rgba(0,0,0,0.55)]',
+              'hover:border-[color-mix(in_srgb,var(--c-accent)_25%,transparent)] hover:shadow-[0_12px_40px_-24px_rgba(0,0,0,0.25)]',
             ].join(' '),
       ].join(' ')}
     >
@@ -553,7 +553,7 @@ export function SoundboardPanel() {
             )}
 
             {error && (
-              <div className="text-xs text-red-300/95 bg-red-950/40 border border-red-500/25 rounded-xl px-3 py-2.5">
+              <div className="text-xs text-[var(--c-error,#f87171)] bg-[color-mix(in_srgb,var(--c-error,#f87171)_10%,var(--c-bg-surface))] border border-[color-mix(in_srgb,var(--c-error,#f87171)_25%,transparent)] rounded-xl px-3 py-2.5">
                 {error}
               </div>
             )}

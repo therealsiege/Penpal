@@ -412,7 +412,7 @@ export class WorkstationAnimator {
 
         // Small PLAY_DARK "speaker" sprite at the sound wave origin
         const speaker = this.scene.add.sprite(0, 0, SPRITESHEET_KEYS.GAME_ICONS, ICON_FRAMES.PLAY_DARK)
-          .setScale(0.06).setAlpha(0.2)
+          .setScale(0.14).setAlpha(0.2)
         ws.container.add(speaker)
         speaker.setPosition(gfx.x, gfx.y)
         ws.soundWaveSpeaker = speaker
@@ -437,7 +437,7 @@ export class WorkstationAnimator {
             const noteX = (Math.random() - 0.5) * 10
             const noteY = WS_SPRITE_Y - 2
             const note = this.scene.add.sprite(noteX, noteY, SPRITESHEET_KEYS.GAME_ICONS, ICON_FRAMES.CIRCLE_BLUE)
-              .setScale(0.06).setAlpha(0.3)
+              .setScale(0.12).setAlpha(0.3)
             ws.container.add(note)
             this.scene.tweens.add({
               targets: note,

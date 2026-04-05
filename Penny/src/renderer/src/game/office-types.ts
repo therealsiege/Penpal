@@ -244,6 +244,8 @@ export interface Room {
   miniWhiteboardTexts?: Phaser.GameObjects.Text[]
   doorSide: 'top' | 'bottom'
   propsPlaced?: boolean
+  /** Console connectors between adjacent desks — destroyed on re-layout */
+  deskConnectors?: Phaser.GameObjects.Sprite[]
   // Neon signage glow on room header text
   headerGlowFx?: Phaser.FX.Glow
   headerGlowTween?: Phaser.Tweens.Tween

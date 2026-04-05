@@ -98,16 +98,16 @@ function NumberStepper({ value, onChange, min, max, step = 1, label }: {
 }) {
   return (
     <div className="flex items-center justify-between">
-      <span className="text-sm text-[var(--c-text-primary)]">{label}</span>
+      <span className="text-[1.05rem] text-[var(--c-text-primary)]">{label}</span>
       <div className="flex items-center gap-2">
         <button
           onClick={() => onChange(Math.max(min, +(value - step).toFixed(1)))}
-          className="w-7 h-7 rounded bg-[var(--c-bg-elevated)] hover:bg-[var(--c-bg-hover)] text-[var(--c-text-primary)] text-sm flex items-center justify-center transition-colors"
+          className="w-7 h-7 rounded bg-[var(--c-bg-elevated)] hover:bg-[var(--c-bg-hover)] text-[var(--c-text-primary)] text-[1.05rem] flex items-center justify-center transition-colors"
         >-</button>
-        <span className="text-sm text-[var(--c-text-heading)] w-10 text-center tabular-nums">{value}</span>
+        <span className="text-[1.05rem] text-[var(--c-text-heading)] w-10 text-center tabular-nums">{value}</span>
         <button
           onClick={() => onChange(Math.min(max, +(value + step).toFixed(1)))}
-          className="w-7 h-7 rounded bg-[var(--c-bg-elevated)] hover:bg-[var(--c-bg-hover)] text-[var(--c-text-primary)] text-sm flex items-center justify-center transition-colors"
+          className="w-7 h-7 rounded bg-[var(--c-bg-elevated)] hover:bg-[var(--c-bg-hover)] text-[var(--c-text-primary)] text-[1.05rem] flex items-center justify-center transition-colors"
         >+</button>
       </div>
     </div>
@@ -122,11 +122,11 @@ function FontSelect({ value, onChange, options, label }: {
 }) {
   return (
     <div className="flex items-center justify-between">
-      <span className="text-sm text-[var(--c-text-primary)]">{label}</span>
+      <span className="text-[1.05rem] text-[var(--c-text-primary)]">{label}</span>
       <select
         value={value}
         onChange={e => onChange(e.target.value)}
-        className="bg-[var(--c-bg-elevated)] border border-[var(--c-border)] rounded px-2 py-1.5 text-sm text-[var(--c-text-primary)] outline-none focus:border-[color-mix(in_srgb,var(--c-accent)_45%,transparent)] max-w-[200px]"
+        className="bg-[var(--c-bg-elevated)] border border-[var(--c-border)] rounded px-2 py-1.5 text-[1.05rem] text-[var(--c-text-primary)] outline-none focus:border-[color-mix(in_srgb,var(--c-accent)_45%,transparent)] max-w-[200px]"
       >
         {options.map(o => (
           <option key={o.value} value={o.value}>{o.label}</option>
@@ -216,7 +216,7 @@ function ThemeCard({ themeName, isActive, onSelect }: {
           position: 'absolute',
           bottom: 5,
           right: 8,
-          fontSize: 9,
+          fontSize: 11,
           fontWeight: 600,
           color: p.textColor,
           opacity: 0.7,
@@ -239,8 +239,8 @@ function ToggleSwitch({ enabled, onToggle, label, description }: {
   return (
     <div className="flex items-center justify-between">
       <div>
-        <p className="text-sm text-[var(--c-text-primary)]">{label}</p>
-        {description && <p className="text-xs text-[var(--c-text-muted)] mt-0.5">{description}</p>}
+        <p className="text-[1.05rem] text-[var(--c-text-primary)]">{label}</p>
+        {description && <p className="text-[0.9rem] text-[var(--c-text-muted)] mt-0.5">{description}</p>}
       </div>
       <button
         role="switch"
@@ -292,16 +292,16 @@ export function SettingsPanel() {
     <PanelBackground>
     <div className="h-full overflow-y-auto relative z-[1]">
       <div className="max-w-xl mx-auto py-8 px-6">
-        <h1 className="text-lg font-semibold text-[var(--c-text-heading)] mb-6">Settings</h1>
+        <h1 className="text-[1.35rem] font-semibold text-[var(--c-text-heading)] mb-6">Settings</h1>
 
         {/* Appearance — Theme picker */}
         <section className="mb-8">
-          <h2 className="text-xs font-semibold text-[var(--c-text-muted)] uppercase tracking-wider mb-4">Appearance</h2>
+          <h2 className="text-[0.9rem] font-semibold text-[var(--c-text-muted)] uppercase tracking-wider mb-4">Appearance</h2>
           <div className="space-y-5 bg-[color-mix(in_srgb,var(--c-bg-surface)_85%,transparent)] rounded-lg p-4 border border-[color-mix(in_srgb,var(--c-border)_90%,transparent)]">
 
             {/* Theme preview cards */}
             <div>
-              <p className="text-sm text-[var(--c-text-primary)] mb-3">Theme</p>
+              <p className="text-[1.05rem] text-[var(--c-text-primary)] mb-3">Theme</p>
               <div className="flex items-center gap-3 flex-wrap">
                 {(['dark', 'light', 'system'] as ThemePreference[]).map(t => (
                   <ThemeCard
@@ -315,10 +315,10 @@ export function SettingsPanel() {
             </div>
 
             <NumberStepper label="Zoom Level" value={+(zoom * 100).toFixed(0)} onChange={v => setZoom(v / 100)} min={70} max={200} step={10} />
-            <div className="text-xs text-[var(--c-text-faint)]">Tip: Use Cmd+= / Cmd+- in the Vault to zoom quickly</div>
+            <div className="text-[0.9rem] text-[var(--c-text-faint)]">Tip: Use Cmd+= / Cmd+- in the Vault to zoom quickly</div>
 
             <div className="pt-2 border-t border-[color-mix(in_srgb,var(--c-border)_80%,transparent)] space-y-4">
-              <p className="text-sm text-[var(--c-text-primary)]">Shell effects</p>
+              <p className="text-[1.05rem] text-[var(--c-text-primary)]">Shell effects</p>
               <ToggleSwitch
                 label="Scanline overlay"
                 description="Subtle horizontal lines across the window (retro CRT look)"
@@ -337,7 +337,7 @@ export function SettingsPanel() {
 
         {/* Animation toggles */}
         <section className="mb-8">
-          <h2 className="text-xs font-semibold text-[var(--c-text-muted)] uppercase tracking-wider mb-4">Animations</h2>
+          <h2 className="text-[0.9rem] font-semibold text-[var(--c-text-muted)] uppercase tracking-wider mb-4">Animations</h2>
           <div className="space-y-4 bg-[color-mix(in_srgb,var(--c-bg-surface)_85%,transparent)] rounded-lg p-4 border border-[color-mix(in_srgb,var(--c-border)_90%,transparent)]">
             <ToggleSwitch
               label="Ambient particles"
@@ -362,7 +362,7 @@ export function SettingsPanel() {
 
         {/* UI Font */}
         <section className="mb-8">
-          <h2 className="text-xs font-semibold text-[var(--c-text-muted)] uppercase tracking-wider mb-4">Interface Font</h2>
+          <h2 className="text-[0.9rem] font-semibold text-[var(--c-text-muted)] uppercase tracking-wider mb-4">Interface Font</h2>
           <div className="space-y-4 bg-[color-mix(in_srgb,var(--c-bg-surface)_85%,transparent)] rounded-lg p-4 border border-[color-mix(in_srgb,var(--c-border)_90%,transparent)]">
             <FontSelect label="Font Family" value={uiFontFamily} onChange={setUiFontFamily} options={FONT_OPTIONS} />
             <NumberStepper label="Font Size" value={uiFontSize} onChange={setUiFontSize} min={10} max={24} />
@@ -376,7 +376,7 @@ export function SettingsPanel() {
 
         {/* Editor Font */}
         <section className="mb-8">
-          <h2 className="text-xs font-semibold text-[var(--c-text-muted)] uppercase tracking-wider mb-4">Editor Font</h2>
+          <h2 className="text-[0.9rem] font-semibold text-[var(--c-text-muted)] uppercase tracking-wider mb-4">Editor Font</h2>
           <div className="space-y-4 bg-[color-mix(in_srgb,var(--c-bg-surface)_85%,transparent)] rounded-lg p-4 border border-[color-mix(in_srgb,var(--c-border)_90%,transparent)]">
             <FontSelect label="Font Family" value={editorFontFamily} onChange={setEditorFontFamily} options={MONO_FONT_OPTIONS} />
             <NumberStepper label="Font Size" value={editorFontSize} onChange={setEditorFontSize} min={10} max={28} />
@@ -398,7 +398,7 @@ over the lazy dog.
         <section className="mb-4">
           <div className="animate-card-enter bg-[color-mix(in_srgb,var(--c-bg-surface)_85%,transparent)] rounded-lg p-5 border border-[color-mix(in_srgb,var(--c-border)_90%,transparent)] flex flex-col items-center gap-1.5 text-center">
             <div className="flex items-center gap-2">
-              <span className="text-sm font-semibold text-[var(--c-text-heading)]">Penny v0.1.0</span>
+              <span className="text-[1.05rem] font-semibold text-[var(--c-text-heading)]">Penny v0.1.0</span>
               <svg
                 aria-hidden="true"
                 width="14"
@@ -413,7 +413,7 @@ over the lazy dog.
                 />
               </svg>
             </div>
-            <p className="text-xs text-[var(--c-text-muted)]">Built with Electron + Phaser + React</p>
+            <p className="text-[0.9rem] text-[var(--c-text-muted)]">Built with Electron + Phaser + React</p>
           </div>
         </section>
 

@@ -60,14 +60,14 @@ export const OFFICE_FRAME_PRINTER      = 126
 // ---------------------------------------------------------------------------
 
 export const CHAR_SCALE      = 0.16
-/** Desk grid cell size — fits console-desk at 0.15 + duder at 0.12 */
-export const WORKSTATION_W   = 100
-export const WORKSTATION_H   = 85
+/** Desk grid cell size — console-desk at 0.38 ≈ 198×158px, cells match with gap for connectors */
+export const WORKSTATION_W   = 210
+export const WORKSTATION_H   = 130
 export const ROOM_PADDING    = 18
 export const ROOM_TOP_EXTRA  = 16   // extra top padding so desks + thought bubbles clear top wall
 export const LAB_EQUIP_ZONE_H = 16  // minimal equip zone — props placed by layout engine
 export const ROOM_HEADER_H   = 18
-export const ROOM_GAP        = 50   // corridor space between zones — at least 1 tile cell
+export const ROOM_GAP        = 50   // corridor space between zones
 export const MAX_AGENTS_PER_ROW = 4
 export const TEAM_AREA_PAD_X = 8
 export const TEAM_AREA_PAD_Y = 8
