@@ -311,7 +311,7 @@ export function EditorPane() {
               <FrontmatterEditor />
 
               {isMarkdown ? (
-                <div className="vault-markdown prose prose-invert max-w-none text-[19.5px] leading-relaxed">
+                <div className="vault-markdown prose prose-invert max-w-none text-[26px] leading-relaxed">
                   <ReactMarkdown
                     remarkPlugins={[remarkGfm]}
                     rehypePlugins={[rehypeHighlight]}

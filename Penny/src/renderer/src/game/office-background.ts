@@ -483,10 +483,20 @@ export class OfficeBackground {
     type IconType = typeof ICON_TYPES[number]
 
     // ── Unified facility bounding box encompassing ALL team areas ──
-    const allX = Math.min(...layouts.map(a => a.x)) - 20
-    const allY = Math.min(...layouts.map(a => a.y)) - 20
-    const allRight = Math.max(...layouts.map(a => a.x + a.width)) + 20
-    const allBottom = Math.max(...layouts.map(a => a.y + a.height)) + 20
+    let allX = Math.min(...layouts.map(a => a.x)) - 20
+    let allY = Math.min(...layouts.map(a => a.y)) - 20
+    let allRight = Math.max(...layouts.map(a => a.x + a.width)) + 20
+    let allBottom = Math.max(...layouts.map(a => a.y + a.height)) + 20
+
+    // Include cafe in facility bounds so the building encloses it
+    const cafe = this.host.getCafe()
+    const cafeBds = cafe.getBounds()
+    if (cafeBds) {
+      allX = Math.min(allX, cafeBds.x - 20)
+      allY = Math.min(allY, cafeBds.y - 20)
+      allRight = Math.max(allRight, cafeBds.x + cafeBds.w + 20)
+      allBottom = Math.max(allBottom, cafeBds.y + cafeBds.h + 20)
+    }
 
     this.host.setLabHexSlabRect({
       x: allX,
@@ -505,6 +515,18 @@ export class OfficeBackground {
         deskPositions: layout.deskPositions,
       }
     })
+    // Include cafe as a facility room so the building walls wrap around it
+    const cafeBounds = cafe.getBounds()
+    if (cafeBounds) {
+      facilityRooms.push({
+        x: cafeBounds.x + cafeBounds.w / 2,
+        y: cafeBounds.y + cafeBounds.h / 2,
+        width: cafeBounds.w,
+        height: cafeBounds.h,
+        cwd: '__cafe__',
+        deskPositions: [],
+      })
+    }
     this.labTilemap.render(facilityRooms)
 
     // Windows along the top wall of the facility (for atmosphere glint effect)

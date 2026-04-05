@@ -279,6 +279,14 @@ export class OfficeCamera {
       maxX = Math.max(maxX, room.x + room.width / 2)
       maxY = Math.max(maxY, room.y + room.height / 2)
     }
+    // Include cafe bounds so camera centers on the full facility
+    const cafeBounds = this.host.getCafe().getBounds()
+    if (cafeBounds) {
+      minX = Math.min(minX, cafeBounds.x)
+      minY = Math.min(minY, cafeBounds.y)
+      maxX = Math.max(maxX, cafeBounds.x + cafeBounds.w)
+      maxY = Math.max(maxY, cafeBounds.y + cafeBounds.h)
+    }
     const bgDims = this.host.getBackground().getBgDimensions()
     if (bgDims.w > 0) {
       minX = Math.min(minX, 0)

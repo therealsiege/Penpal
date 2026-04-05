@@ -119,7 +119,7 @@ export class NavMesh {
     this.grid = Array.from({ length: this.gridH }, () => new Array(this.gridW).fill(false))
 
     // 1. Corridors — mark walkable hallway segments
-    const CORR_W = 68 // walkable width for corridors (matches wider lab corridors)
+    const CORR_W = 44 // walkable width for corridors
     const CORR_PAD = 6 // extra length past endpoints
     for (const seg of config.corridorSegments) {
       const dx = Math.abs(seg.x1 - seg.x2)

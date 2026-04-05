@@ -1,5 +1,6 @@
 import Phaser from 'phaser'
-import { ANIM_KEYS, SPRITESHEET_KEYS, ITEM_FRAMES, ICON_FRAMES, EFFECT_ANIM_KEYS } from './office-asset-keys'
+import { ANIM_KEYS, SPRITESHEET_KEYS, ITEM_FRAMES, ICON_FRAMES, EFFECT_ANIM_KEYS, LAB_IMAGE_KEYS } from './office-asset-keys'
+import { LAB_PROP_FRAMES } from './lab-prop-frames.generated'
 import { CHAR_SCALE as DUDER_SCALE } from './office-constants'
 import { CHAR_SCALE } from './office-constants'
 import { activeTheme } from './office-theme'
@@ -12,10 +13,10 @@ import type { ChatHost } from './cafe-chat'
 // Constants
 // ---------------------------------------------------------------------------
 
-const CAFE_W = 340
-const CAFE_H = 180
+const CAFE_W = 400
+const CAFE_H = 260
 const COUNTER_W = 16
-const BEHIND_W = 68
+const BEHIND_W = 140
 const STOOL_GAP = 48
 const NUM_STOOLS = 6
 const TOTAL_STOOLS_W = (NUM_STOOLS - 1) * STOOL_GAP
@@ -137,68 +138,124 @@ export class PennyCafe implements CoffeeRunHost, ChatHost {
     const g = scene.add.graphics()
     container.add(g)
 
-    // ── Barista workspace (top) — dark gunmetal ──
-    g.fillStyle(0x1a2030, 0.9)
-    g.fillRoundedRect(0, 0, CAFE_W, BEHIND_W, { tl: 6, tr: 6, bl: 0, br: 0 })
-    g.fillStyle(0x0d1117, 0.6)
-    g.fillRect(6, 6, CAFE_W - 12, BEHIND_W - 12)
+    // The cafe is an open zone inside the facility — no walls, no floor tiles.
+    // The building's unified tilemap + autotiled walls already contain it.
+    // South side is completely open (connection to the lab).
+    // We only draw: laser entrance line, interior divider, props, characters.
 
-    // ── Header sign ──
-    g.fillStyle(0x0a0f1a, 0.9)
-    g.fillRoundedRect(6, 2, CAFE_W - 12, 24, { tl: 4, tr: 4, bl: 0, br: 0 })
-    g.lineStyle(2, 0x00ff88, 0.5)
-    g.lineBetween(6, 26, CAFE_W - 6, 26)
-    const signText = scene.add.text(CAFE_W / 2, 14, 'PENPAL CAFE', {
+    const hasLP = scene.textures.exists(SPRITESHEET_KEYS.LAB_PROPS)
+    const machinePositions = [50, CAFE_W / 2] // steam source X positions
+
+    // ── Laser entrance — horizontal beam across south edge ──
+    const laserY = CAFE_H - 2
+    g.lineStyle(2, 0xff3333, 0.70)
+    g.lineBetween(0, laserY, CAFE_W, laserY)
+    g.fillStyle(0xff3333, 0.85)
+    g.fillCircle(0, laserY, 4)
+    g.fillCircle(CAFE_W, laserY, 4)
+
+    // ── Sign — top of cafe area ──
+    g.fillStyle(0x0f172a, 0.85)
+    g.fillRoundedRect(8, 2, CAFE_W - 16, 22, 3)
+    container.add(scene.add.text(CAFE_W / 2, 13, 'PENPAL CAFE', {
       fontSize: '14px', fontFamily: 'system-ui, sans-serif', fontStyle: 'bold',
-      color: '#00ff88', resolution: 2,
-    }).setOrigin(0.5)
-    container.add(signText)
+      color: '#22d3ee', resolution: 2,
+    }).setOrigin(0.5))
 
-    // ── Equipment (espresso machines + menu board) ──
-    const eqY = 30
-    const machinePositions = [30, 110]
-    for (const mx of machinePositions) {
-      g.fillStyle(0x334155, 0.7)
-      g.fillRoundedRect(mx, eqY, 20, 22, 3)
-      // Power indicator — red dot sprite instead of fillCircle
-      const indicator = scene.add.sprite(mx + 10, eqY + 5, SPRITESHEET_KEYS.GAME_ICONS, ICON_FRAMES.CIRCLE_RED)
-        .setScale(0.18).setAlpha(0.6).setOrigin(0.5)
-      container.add(indicator)
+    // ── Brewing area props — back wall, room-scale sizes ──
+    const brewY = 28
+
+    if (hasLP) {
+      // Back wall workbench
+      container.add(scene.add.sprite(CAFE_W / 2, brewY + 4, SPRITESHEET_KEYS.LAB_PROPS, LAB_PROP_FRAMES.DESK_TOP_LONG)
+        .setScale(0.35).setAlpha(0.88).setOrigin(0.5))
+
+      // Wall lights
+      for (const wx of [20, CAFE_W - 20]) {
+        const light = scene.add.sprite(wx, 10, SPRITESHEET_KEYS.LAB_PROPS, LAB_PROP_FRAMES.WALL_LIGHT)
+          .setScale(0.30).setAlpha(0.75).setOrigin(0.5)
+        container.add(light)
+        scene.tweens.add({
+          targets: light, alpha: { from: 0.65, to: 0.90 },
+          duration: 1400, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
+        })
+      }
+
+      // Generator — left (0.45)
+      container.add(scene.add.sprite(40, brewY + 34, SPRITESHEET_KEYS.LAB_PROPS, LAB_PROP_FRAMES.GENERATOR)
+        .setScale(0.45).setAlpha(0.90).setOrigin(0.5))
+
+      // Power cell — next to generator (0.30)
+      const cell = scene.add.sprite(100, brewY + 30, SPRITESHEET_KEYS.LAB_PROPS, LAB_PROP_FRAMES.POWER_CELL)
+        .setScale(0.30).setAlpha(0.82).setOrigin(0.5)
+      container.add(cell)
+      scene.tweens.add({ targets: cell, scaleX: { from: 0.28, to: 0.32 }, scaleY: { from: 0.28, to: 0.32 }, duration: 800, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' })
+
+      // Pod — center brew chamber (0.36)
+      container.add(scene.add.sprite(CAFE_W / 2, brewY + 40, SPRITESHEET_KEYS.LAB_PROPS, LAB_PROP_FRAMES.POD)
+        .setScale(0.36).setAlpha(0.88).setOrigin(0.5))
+
+      // Scale — right of pod (0.28)
+      container.add(scene.add.sprite(CAFE_W / 2 + 65, brewY + 32, SPRITESHEET_KEYS.LAB_PROPS, LAB_PROP_FRAMES.SCALE)
+        .setScale(0.28).setAlpha(0.82).setOrigin(0.5))
+
+      // Control unit — right station (0.38)
+      container.add(scene.add.sprite(CAFE_W - 40, brewY + 36, SPRITESHEET_KEYS.LAB_PROPS, LAB_PROP_FRAMES.UNIT_EXAMPLE_04)
+        .setScale(0.38).setAlpha(0.85).setOrigin(0.5))
+
+      // Lab cups on bench
+      for (const lx of [CAFE_W * 0.35, CAFE_W * 0.55, CAFE_W * 0.78]) {
+        container.add(scene.add.sprite(lx, brewY + 8, SPRITESHEET_KEYS.LAB_PROPS, LAB_PROP_FRAMES.CUP)
+          .setScale(0.22).setAlpha(0.75).setOrigin(0.5))
+      }
+
+      // Consoles + screens — flanking
+      for (const sx of [30, CAFE_W - 30]) {
+        container.add(scene.add.sprite(sx, brewY + 62, SPRITESHEET_KEYS.LAB_PROPS, 'blank_console_short')
+          .setScale(0.35).setAlpha(0.88).setOrigin(0.5))
+        container.add(scene.add.sprite(sx, brewY + 54, SPRITESHEET_KEYS.LAB_PROPS, 'console_screen_wave_01')
+          .setScale(0.30).setAlpha(0.85).setOrigin(0.5))
+      }
     }
+
+    // ── Espresso bar / counter — desk_top_long as divider ──
+    const counterY = BEHIND_W
+    if (hasLP) {
+      container.add(scene.add.sprite(CAFE_W / 2, counterY + 8, SPRITESHEET_KEYS.LAB_PROPS, LAB_PROP_FRAMES.DESK_TOP_LONG)
+        .setScale(0.35).setAlpha(0.90).setOrigin(0.5))
+    } else {
+      g.fillStyle(0x1a3a52, 0.9)
+      g.fillRoundedRect(8, counterY, CAFE_W - 16, COUNTER_W, 3)
+    }
+    g.fillStyle(0x22d3ee, 0.25)
+    g.fillRect(10, counterY + 12, CAFE_W - 20, 2)
+
     // Menu board
-    g.fillStyle(0x0d1117, 0.85)
-    g.fillRoundedRect(200, eqY, 60, 28, 2)
-    g.lineStyle(1, 0x00e5ff, 0.4)
-    g.strokeRoundedRect(200, eqY, 60, 28, 2)
-    // Menu items — small item sprites instead of placeholder lines
+    const menuX = CAFE_W / 2 - 30
+    const menuY = brewY + 54
+    g.fillStyle(0x0f172a, 0.9)
+    g.fillRoundedRect(menuX, menuY, 60, 28, 2)
+    g.lineStyle(1, 0x22d3ee, 0.4)
+    g.strokeRoundedRect(menuX, menuY, 60, 28, 2)
     const menuItems = [ITEM_FRAMES.COFFEE_CUP, ITEM_FRAMES.DONUT, ITEM_FRAMES.PIZZA]
     for (let ml = 0; ml < 3; ml++) {
-      const itemSprite = scene.add.sprite(210, eqY + 8 + ml * 8, SPRITESHEET_KEYS.GAME_ITEMS, menuItems[ml])
-        .setScale(0.28).setAlpha(0.55).setOrigin(0.5)
-      container.add(itemSprite)
-      // Price placeholder line
-      g.fillStyle(0x00ff88, 0.12)
-      g.fillRect(220, eqY + 4 + ml * 8, 34, 2)
+      container.add(scene.add.sprite(menuX + 10, menuY + 8 + ml * 8, SPRITESHEET_KEYS.GAME_ITEMS, menuItems[ml])
+        .setScale(0.28).setAlpha(0.55).setOrigin(0.5))
+      g.fillStyle(0x22d3ee, 0.12)
+      g.fillRect(menuX + 20, menuY + 4 + ml * 8, 34, 2)
     }
 
-    // ── Counter bar ──
-    const counterY = BEHIND_W
-    g.fillStyle(0x2a3040, 0.9)
-    g.fillRoundedRect(8, counterY, CAFE_W - 16, COUNTER_W, 3)
-    g.fillStyle(0x00e5ff, 0.15)
-    g.fillRect(10, counterY + 2, CAFE_W - 20, 4)
+    // Coffee cups on bar
+    for (const cupX of [30, CAFE_W * 0.35, CAFE_W * 0.65, CAFE_W - 30]) {
+      container.add(scene.add.sprite(cupX, counterY + 4, SPRITESHEET_KEYS.GAME_ITEMS, ITEM_FRAMES.COFFEE_CUP)
+        .setScale(0.35).setAlpha(0.85).setOrigin(0.5))
+    }
 
-    // ── Customer area (bottom) ──
-    const customerTopY = counterY + COUNTER_W
-    const customerH = CAFE_H - BEHIND_W - COUNTER_W
-    g.fillStyle(0x1a2030, 0.55)
-    g.fillRoundedRect(0, customerTopY, CAFE_W, customerH, { tl: 0, tr: 0, bl: 6, br: 6 })
-
-    // ── Baristas ──
-    const baristaWorkY = BEHIND_W - 14
+    // ── Baristas — between equipment and counter ──
+    const baristaWorkY = counterY - 14
     const baristaConfigs = [
-      { homeX: 80, charIdx: 1, name: 'Latte Larry' },
-      { homeX: 250, charIdx: 0, name: 'Mocha Maya' },
+      { homeX: CAFE_W * 0.3, charIdx: 1, name: 'Latte Larry' },
+      { homeX: CAFE_W * 0.7, charIdx: 0, name: 'Mocha Maya' },
     ]
 
     this.baristaHomeX.length = 0
@@ -207,85 +264,50 @@ export class PennyCafe implements CoffeeRunHost, ChatHost {
       const walkKey = cfg.charIdx === 1 ? ANIM_KEYS.WALK_2 : ANIM_KEYS.WALK_1
       const bc = scene.add.container(cfg.homeX, baristaWorkY)
       container.add(bc)
-
-      const bSprite = scene.add.sprite(0, 0, walkKey, 0)
-        .setScale(CHAR_SCALE).setOrigin(0.5, 1)
-      bc.add(bSprite)
-
-      const apron = scene.add.rectangle(0, -8, 14, 12, 0x059669, 0.35)
-      bc.add(apron)
-
-      const tag = scene.add.text(0, 6, cfg.name, {
+      bc.add(scene.add.sprite(0, 0, walkKey, 0).setScale(CHAR_SCALE).setOrigin(0.5, 1))
+      bc.add(scene.add.rectangle(0, -8, 14, 12, 0x059669, 0.35))
+      bc.add(scene.add.text(0, 6, cfg.name, {
         fontSize: '10px', fontFamily: 'system-ui, sans-serif', color: activeTheme.accentText,
         backgroundColor: activeTheme.nameBg, padding: { x: 4, y: 2 }, resolution: 2,
-      }).setOrigin(0.5, 0)
-      bc.add(tag)
-
+      }).setOrigin(0.5, 0))
       this.baristas.push(bc)
       this.baristaHomeX.push(cfg.homeX)
-
       scene.tweens.add({ targets: bc, angle: { from: -3, to: 3 }, duration: 700 + Math.random() * 300, yoyo: true, repeat: -1, ease: 'Sine.easeInOut', delay: Math.random() * 500 })
-      scene.tweens.add({ targets: bSprite, y: -2, scaleY: CHAR_SCALE * 0.97, duration: 450 + Math.random() * 200, yoyo: true, repeat: -1, ease: 'Sine.easeInOut', delay: Math.random() * 400 })
       scene.tweens.add({ targets: bc, x: cfg.homeX + 10, duration: 1600 + Math.random() * 600, yoyo: true, repeat: -1, ease: 'Sine.easeInOut', delay: Math.random() * 800 })
     }
 
-    // ── Stools — centered below counter ──
+    // ── Stools — customer seating ──
     const stoolY = counterY + COUNTER_W + 16
-    for (let si = 0; si < NUM_STOOLS; si++) {
-      const sx = STOOL_START_X + si * STOOL_GAP
-      g.lineStyle(1.5, 0x4a5a6c, 0.55)
-      g.lineBetween(sx - 6, stoolY + 16, sx - 2, stoolY + 4)
-      g.lineBetween(sx + 6, stoolY + 16, sx + 2, stoolY + 4)
-      g.lineBetween(sx - 4, stoolY + 14, sx - 1, stoolY + 4)
-      g.lineBetween(sx + 4, stoolY + 14, sx + 1, stoolY + 4)
-      g.lineStyle(1.5, 0x5a6a7c, 0.45)
-      g.lineBetween(sx - 5, stoolY + 12, sx + 5, stoolY + 12)
-      g.fillStyle(0x7a8a9c, 0.8)
-      g.fillRect(sx - 1, stoolY + 2, 2, 10)
-      g.fillStyle(0x1e293b, 0.95)
-      g.fillEllipse(sx, stoolY, 16, 8)
-      g.fillStyle(0x334155, 0.7)
-      g.fillEllipse(sx, stoolY - 1, 12, 5)
-      g.lineStyle(0.5, 0x475569, 0.3)
-      g.lineBetween(sx - 4, stoolY, sx + 4, stoolY)
-    }
-
-    // ── Coffee cups on counter — sprite decor ──
-    const cupPositions = [60, 140, 190, 260]
-    for (const cupX of cupPositions) {
-      const cupSprite = scene.add.sprite(cupX, counterY + 6, SPRITESHEET_KEYS.GAME_ITEMS, ITEM_FRAMES.COFFEE_CUP)
-        .setScale(0.35).setAlpha(0.85).setOrigin(0.5)
-      container.add(cupSprite)
+    if (hasLP) {
+      for (let si = 0; si < NUM_STOOLS; si++) {
+        const sx = STOOL_START_X + si * STOOL_GAP
+        container.add(scene.add.sprite(sx, stoolY + 6, SPRITESHEET_KEYS.LAB_PROPS, 'stool')
+          .setScale(0.22).setAlpha(0.85).setOrigin(0.5))
+      }
+    } else {
+      for (let si = 0; si < NUM_STOOLS; si++) {
+        const sx = STOOL_START_X + si * STOOL_GAP
+        g.fillStyle(0x1e293b, 0.95)
+        g.fillEllipse(sx, stoolY, 16, 8)
+      }
     }
 
     this.worldY = cy + stoolY
 
-    // ── Duder NPC barista helpers — static sprite characters in the behind-counter area ──
-    const duderConfigs = [
-      { key: SPRITESHEET_KEYS.DUDER_1, x: 170, y: baristaWorkY - 4, flipX: false },
-      { key: SPRITESHEET_KEYS.DUDER_2, x: 300, y: baristaWorkY - 4, flipX: true },
-    ]
-    for (const cfg of duderConfigs) {
+    // ── Duder NPC helpers ──
+    for (const cfg of [
+      { key: SPRITESHEET_KEYS.DUDER_1, x: CAFE_W / 2, y: baristaWorkY - 20, flipX: false },
+      { key: SPRITESHEET_KEYS.DUDER_2, x: CAFE_W - 50, y: baristaWorkY - 20, flipX: true },
+    ]) {
       if (!scene.textures.exists(cfg.key)) continue
       const duder = scene.add.sprite(cfg.x, cfg.y, cfg.key, 0)
-        .setScale(DUDER_SCALE * 0.85)
-        .setOrigin(0.5, 1)
-        .setAlpha(0.7)
-        .setFlipX(cfg.flipX)
+        .setScale(DUDER_SCALE * 0.85).setOrigin(0.5, 1).setAlpha(0.7).setFlipX(cfg.flipX)
       container.add(duder)
-      // Idle sway tween — gentle left-right lean
-      scene.tweens.add({
-        targets: duder,
-        angle: { from: -2, to: 2 },
-        duration: 1200 + Math.random() * 600,
-        yoyo: true,
-        repeat: -1,
-        ease: 'Sine.easeInOut',
-        delay: Math.random() * 800,
-      })
+      scene.tweens.add({ targets: duder, angle: { from: -2, to: 2 }, duration: 1400, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' })
     }
 
-    // ── Animated steam — puff VFX sprites ──
+    // ── Steam VFX ──
+    const steamSourceY = brewY + 26
     this.steamTimer = scene.time.addEvent({
       delay: 1800, loop: true,
       callback: () => {
@@ -294,33 +316,18 @@ export class PennyCafe implements CoffeeRunHost, ChatHost {
         const puffKey = EFFECT_ANIM_KEYS.PUFF
         const hasPuffAnim = scene.anims.exists(puffKey)
         for (let si = 0; si < 2; si++) {
-          const px = mx + 10 + (si - 0.5) * 4
+          const px = mx + 10 + (si - 0.5) * 6
           if (hasPuffAnim) {
-            const puff = scene.add.sprite(px, eqY - 2, SPRITESHEET_KEYS.EFFECTS_PUFF, 0)
+            const puff = scene.add.sprite(px, steamSourceY, SPRITESHEET_KEYS.EFFECTS_PUFF, 0)
               .setScale(0.12).setAlpha(0.3).setOrigin(0.5).setTint(0x00e5ff)
             container.add(puff)
             puff.play(puffKey)
-            scene.tweens.add({
-              targets: puff,
-              y: eqY - 16 - Math.random() * 8,
-              x: px + (Math.random() - 0.5) * 6,
-              alpha: 0, scale: 0.06,
-              duration: 900 + Math.random() * 400, delay: si * 120, ease: 'Sine.easeOut',
-              onComplete: () => { puff.destroy() },
-            })
+            scene.tweens.add({ targets: puff, y: steamSourceY - 24, x: px + (Math.random() - 0.5) * 10, alpha: 0, scale: 0.06, duration: 900 + Math.random() * 400, delay: si * 120, ease: 'Sine.easeOut', onComplete: () => { puff.destroy() } })
           } else {
-            // Fallback: use a circle-dot icon sprite instead of Graphics circle
-            const dot = scene.add.sprite(px, eqY - 2, SPRITESHEET_KEYS.GAME_ICONS, ICON_FRAMES.CIRCLE_BLUE)
+            const dot = scene.add.sprite(px, steamSourceY, SPRITESHEET_KEYS.GAME_ICONS, ICON_FRAMES.CIRCLE_BLUE)
               .setScale(0.1).setAlpha(0.22).setOrigin(0.5)
             container.add(dot)
-            scene.tweens.add({
-              targets: dot,
-              y: eqY - 16 - Math.random() * 8,
-              x: px + (Math.random() - 0.5) * 6,
-              alpha: 0, scale: 0.04,
-              duration: 900 + Math.random() * 400, delay: si * 120, ease: 'Sine.easeOut',
-              onComplete: () => { dot.destroy() },
-            })
+            scene.tweens.add({ targets: dot, y: steamSourceY - 24, x: px + (Math.random() - 0.5) * 10, alpha: 0, scale: 0.04, duration: 900 + Math.random() * 400, delay: si * 120, ease: 'Sine.easeOut', onComplete: () => { dot.destroy() } })
           }
         }
       },

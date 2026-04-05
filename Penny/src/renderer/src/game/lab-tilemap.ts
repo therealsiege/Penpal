@@ -6,7 +6,7 @@
 // ---------------------------------------------------------------------------
 
 import Phaser from 'phaser'
-import { LAB_IMAGE_KEYS, SPRITESHEET_KEYS, PIPE_FRAMES } from './office-asset-keys'
+import { LAB_IMAGE_KEYS, SPRITESHEET_KEYS } from './office-asset-keys'
 import { LAB_TILE_SIZE } from './office-constants'
 
 // ---------------------------------------------------------------------------
@@ -21,8 +21,10 @@ const CELL = LAB_TILE_SIZE * TILE_SCALE  // 48px
 const WALL_THICK = 2
 /** Margin cells outside the outer wall (void) */
 const VOID_MARGIN = 0
-/** Opening width in cells for interior dividers */
-const OPENING_WIDTH = 4
+/** Opening width in cells for interior dividers (doorway gap) */
+const OPENING_WIDTH = 3
+/** Interior divider wall thickness in cells */
+const DIVIDER_THICK = 2
 
 // ---------------------------------------------------------------------------
 // Cell types
@@ -117,8 +119,7 @@ export class LabTilemap {
       }
     }
 
-    // ── 5. Interior dividers between rooms ──
-    this.addInteriorDividers(grid, rooms, originX, originY, cols, rows)
+    // ── 5. Interior dividers — drawn as graphics after tiles (not tile-based) ──
 
     // ── 6. Render tiles ──
     const hash = Math.abs(Math.floor(originX * 7 + originY * 13)) | 0
@@ -145,19 +146,16 @@ export class LabTilemap {
       }
     }
 
-    // ── 7. Hazard tape along interior dividers ──
+    // ── 7. Hazard tape along outer wall-floor boundaries ──
     this.drawHazardTape(grid, originX, originY, cols, rows)
 
-    // ── 8. Floor glow lights ──
-    this.drawFloorGlows(grid, originX, originY, cols, rows, hash)
+    // ── 8. Interior dividers — graphics walls matching outer wall style ──
+    this.drawInteriorDividers(rooms)
 
-    // ── 9. Corridor pipe runs ──
-    this.drawCorridorPipes(grid, rooms, originX, originY, cols, rows)
+    // ── 9. Floor glow lights (corridors only) ──
+    this.drawFloorGlows(grid, originX, originY, cols, rows, hash, rooms)
 
-    // ── 10. Outer wall pipe runs — prominent pipes along the building perimeter ──
-    this.drawOuterPipes(grid, originX, originY, cols, rows, hash)
-
-    // ── 11. Room props — wall-lining furniture, corner equipment, floor accents ──
+    // ── 9. Room props — large wall-lining equipment, no scattered clutter ──
     this.decorateRooms(rooms, grid, originX, originY, cols, rows, hash)
   }
 
@@ -171,99 +169,208 @@ export class LabTilemap {
     originX: number,
     originY: number,
     cols: number,
-    rows: number,
+    numRows: number,
   ): void {
     if (rooms.length < 2) return
 
-    // Convert room bounds to grid coordinates
-    const roomCells = rooms.map(r => ({
-      c0: Math.floor((r.x - r.width / 2 - originX) / CELL),
-      r0: Math.floor((r.y - r.height / 2 - originY) / CELL),
-      c1: Math.ceil((r.x + r.width / 2 - originX) / CELL),
-      r1: Math.ceil((r.y + r.height / 2 - originY) / CELL),
-      cx: Math.floor((r.x - originX) / CELL),
-      cy: Math.floor((r.y - originY) / CELL),
-    }))
+    // ── Group rooms into rows (rooms with similar Y centers) ──
+    const sorted = [...rooms].sort((a, b) => a.y - b.y)
+    const rowGroups: FacilityRoom[][] = []
+    for (const r of sorted) {
+      const lastRow = rowGroups[rowGroups.length - 1]
+      if (lastRow && Math.abs(lastRow[0].y - r.y) < r.height * 0.5) {
+        lastRow.push(r)
+      } else {
+        rowGroups.push([r])
+      }
+    }
+    // Sort rooms within each row by X
+    for (const row of rowGroups) row.sort((a, b) => a.x - b.x)
 
-    // Find pairs of rooms that are horizontally adjacent (side by side)
-    for (let i = 0; i < roomCells.length; i++) {
-      for (let j = i + 1; j < roomCells.length; j++) {
-        const a = roomCells[i]
-        const b = roomCells[j]
+    // ── Vertical dividers between adjacent rooms in the same row ──
+    for (const row of rowGroups) {
+      for (let i = 0; i < row.length - 1; i++) {
+        const a = row[i], b = row[i + 1]
+        const aRight = a.x + a.width / 2
+        const bLeft = b.x - b.width / 2
 
-        // Check vertical overlap (they share rows)
-        const overlapR0 = Math.max(a.r0, b.r0)
-        const overlapR1 = Math.min(a.r1, b.r1)
-        if (overlapR1 <= overlapR0) continue // no vertical overlap
-
-        // Check if horizontally adjacent (gap between them)
-        const leftRoom = a.c1 < b.c0 ? a : b.c1 < a.c0 ? b : null
-        const rightRoom = leftRoom === a ? b : a
-        if (!leftRoom) continue // overlapping, not adjacent
-
-        const gapC0 = leftRoom.c1
-        const gapC1 = rightRoom.c0
-        if (gapC1 - gapC0 > 6) continue // too far apart
-
-        // Draw vertical divider — 2 columns thick at the midpoint
-        const divCMid = Math.floor((gapC0 + gapC1) / 2)
-        const divCols = [divCMid, divCMid + 1].filter(c => c >= 0 && c < cols)
+        // Divider X at midpoint between rooms — 2 columns
+        const divWX = (aRight + bLeft) / 2
+        const divC = Math.round((divWX - originX) / CELL)
+        const divCols = [divC, divC + 1].filter(cc => cc >= 0 && cc < cols)
         if (divCols.length === 0) continue
 
-        // Opening in the middle
-        const midR = Math.floor((overlapR0 + overlapR1) / 2)
+        // Vertical span: union of both rooms' Y ranges
+        const topY = Math.min(a.y - a.height / 2, b.y - b.height / 2)
+        const botY = Math.max(a.y + a.height / 2, b.y + b.height / 2)
+        const r0 = Math.max(0, Math.floor((topY - originY) / CELL))
+        const r1 = Math.min(numRows, Math.ceil((botY - originY) / CELL))
+
+        // Doorway opening in the middle
+        const midR = Math.floor((r0 + r1) / 2)
         const openR0 = midR - Math.floor(OPENING_WIDTH / 2)
         const openR1 = openR0 + OPENING_WIDTH
 
-        for (let r = overlapR0; r < overlapR1; r++) {
-          if (r >= openR0 && r < openR1) continue // opening
-          for (const divC of divCols) {
-            if (r >= 0 && r < rows) {
-              grid[r][divC] = WALL
-            }
-          }
+        for (let r = r0; r < r1; r++) {
+          if (r >= openR0 && r < openR1) continue
+          for (const dc of divCols) grid[r][dc] = WALL
         }
       }
     }
 
-    // Find pairs that are vertically adjacent (stacked)
-    for (let i = 0; i < roomCells.length; i++) {
-      for (let j = i + 1; j < roomCells.length; j++) {
-        const a = roomCells[i]
-        const b = roomCells[j]
+    // ── Horizontal dividers between adjacent row groups ──
+    for (let gi = 0; gi < rowGroups.length - 1; gi++) {
+      const topRow = rowGroups[gi]
+      const botRow = rowGroups[gi + 1]
 
-        // Check horizontal overlap
-        const overlapC0 = Math.max(a.c0, b.c0)
-        const overlapC1 = Math.min(a.c1, b.c1)
-        if (overlapC1 <= overlapC0) continue
+      // Bottom edge of top row, top edge of bottom row
+      let topEdge = -Infinity
+      for (const r of topRow) topEdge = Math.max(topEdge, r.y + r.height / 2)
+      let botEdge = Infinity
+      for (const r of botRow) botEdge = Math.min(botEdge, r.y - r.height / 2)
 
-        // Check if vertically adjacent
-        const topRoom = a.r1 < b.r0 ? a : b.r1 < a.r0 ? b : null
-        const bottomRoom = topRoom === a ? b : a
-        if (!topRoom) continue
+      const divWY = (topEdge + botEdge) / 2
+      const divR = Math.round((divWY - originY) / CELL)
+      const divRows = [divR, divR + 1].filter(rr => rr >= 0 && rr < numRows)
+      if (divRows.length === 0) continue
 
-        const gapR0 = topRoom.r1
-        const gapR1 = bottomRoom.r0
-        if (gapR1 - gapR0 > 6) continue
+      // Horizontal span: full width of whichever row group is wider
+      let leftX = Infinity, rightX = -Infinity
+      for (const r of [...topRow, ...botRow]) {
+        leftX = Math.min(leftX, r.x - r.width / 2)
+        rightX = Math.max(rightX, r.x + r.width / 2)
+      }
+      const c0 = Math.max(0, Math.floor((leftX - originX) / CELL))
+      const c1 = Math.min(cols, Math.ceil((rightX - originX) / CELL))
 
-        // Draw horizontal divider — 2 rows thick at the midpoint
-        const divRMid = Math.floor((gapR0 + gapR1) / 2)
-        const divRows = [divRMid, divRMid + 1].filter(r => r >= 0 && r < rows)
-        if (divRows.length === 0) continue
+      // Doorway opening in the middle
+      const midC = Math.floor((c0 + c1) / 2)
+      const openC0 = midC - Math.floor(OPENING_WIDTH / 2)
+      const openC1 = openC0 + OPENING_WIDTH
 
-        const midC = Math.floor((overlapC0 + overlapC1) / 2)
-        const openC0 = midC - Math.floor(OPENING_WIDTH / 2)
-        const openC1 = openC0 + OPENING_WIDTH
+      for (let c = c0; c < c1; c++) {
+        if (c >= openC0 && c < openC1) continue
+        for (const dr of divRows) grid[dr][c] = WALL
+      }
+    }
+  }
 
-        for (let c = overlapC0; c < overlapC1; c++) {
-          if (c >= openC0 && c < openC1) continue
-          for (const divR of divRows) {
-            if (c >= 0 && c < cols) {
-              grid[divR][c] = WALL
-            }
-          }
+  // -------------------------------------------------------------------------
+  // Interior dividers — thin graphics walls between adjacent rooms
+  // -------------------------------------------------------------------------
+
+  private drawInteriorDividers(rooms: FacilityRoom[]): void {
+    if (rooms.length < 2) return
+
+    const g = this.scene.add.graphics().setDepth(-2.4)
+    this.tiles.push(g as unknown as Phaser.GameObjects.Image)
+
+    const WALL_COLOR = 0x1a2744     // facility wall navy
+    const WALL_W = 24               // match outer wall visual weight
+    const DOOR_GAP = 48             // doorway opening (1 tile)
+    const TAPE_W = 5                // hazard tape strip width
+
+    // Group rooms into rows by similar Y center
+    const sorted = [...rooms].sort((a, b) => a.y - b.y)
+    const rowGroups: FacilityRoom[][] = []
+    for (const r of sorted) {
+      const lastRow = rowGroups[rowGroups.length - 1]
+      if (lastRow && Math.abs(lastRow[0].y - r.y) < r.height * 0.5) {
+        lastRow.push(r)
+      } else {
+        rowGroups.push([r])
+      }
+    }
+    for (const row of rowGroups) row.sort((a, b) => a.x - b.x)
+
+    // ── Vertical dividers between rooms in the same row ──
+    for (const row of rowGroups) {
+      for (let i = 0; i < row.length - 1; i++) {
+        const a = row[i], b = row[i + 1]
+        const divX = (a.x + a.width / 2 + b.x - b.width / 2) / 2
+
+        const topY = Math.min(a.y - a.height / 2, b.y - b.height / 2)
+        const botY = Math.max(a.y + a.height / 2, b.y + b.height / 2)
+        const midY = (topY + botY) / 2
+        const segTopH = midY - DOOR_GAP / 2 - topY
+        const segBotH = botY - midY - DOOR_GAP / 2
+
+        // Wall body
+        g.fillStyle(WALL_COLOR, 1)
+        if (segTopH > 0) g.fillRect(divX - WALL_W / 2, topY, WALL_W, segTopH)
+        if (segBotH > 0) g.fillRect(divX - WALL_W / 2, midY + DOOR_GAP / 2, WALL_W, segBotH)
+
+        // Hazard tape on both long edges
+        if (segTopH > 0) {
+          this.drawDividerTape(g, divX - WALL_W / 2, topY, TAPE_W, segTopH, false)
+          this.drawDividerTape(g, divX + WALL_W / 2 - TAPE_W, topY, TAPE_W, segTopH, false)
+        }
+        if (segBotH > 0) {
+          this.drawDividerTape(g, divX - WALL_W / 2, midY + DOOR_GAP / 2, TAPE_W, segBotH, false)
+          this.drawDividerTape(g, divX + WALL_W / 2 - TAPE_W, midY + DOOR_GAP / 2, TAPE_W, segBotH, false)
         }
       }
+    }
+
+    // ── Horizontal dividers between row groups ──
+    for (let gi = 0; gi < rowGroups.length - 1; gi++) {
+      const topRow = rowGroups[gi]
+      const botRow = rowGroups[gi + 1]
+
+      let topEdge = -Infinity
+      for (const r of topRow) topEdge = Math.max(topEdge, r.y + r.height / 2)
+      let botEdge = Infinity
+      for (const r of botRow) botEdge = Math.min(botEdge, r.y - r.height / 2)
+      const divY = (topEdge + botEdge) / 2
+
+      let leftX = Infinity, rightX = -Infinity
+      for (const r of [...topRow, ...botRow]) {
+        leftX = Math.min(leftX, r.x - r.width / 2)
+        rightX = Math.max(rightX, r.x + r.width / 2)
+      }
+      const midX = (leftX + rightX) / 2
+      const segLeftW = midX - DOOR_GAP / 2 - leftX
+      const segRightW = rightX - midX - DOOR_GAP / 2
+
+      // Wall body
+      g.fillStyle(WALL_COLOR, 1)
+      if (segLeftW > 0) g.fillRect(leftX, divY - WALL_W / 2, segLeftW, WALL_W)
+      if (segRightW > 0) g.fillRect(midX + DOOR_GAP / 2, divY - WALL_W / 2, segRightW, WALL_W)
+
+      // Hazard tape on both long edges
+      if (segLeftW > 0) {
+        this.drawDividerTape(g, leftX, divY - WALL_W / 2, segLeftW, TAPE_W, true)
+        this.drawDividerTape(g, leftX, divY + WALL_W / 2 - TAPE_W, segLeftW, TAPE_W, true)
+      }
+      if (segRightW > 0) {
+        this.drawDividerTape(g, midX + DOOR_GAP / 2, divY - WALL_W / 2, segRightW, TAPE_W, true)
+        this.drawDividerTape(g, midX + DOOR_GAP / 2, divY + WALL_W / 2 - TAPE_W, segRightW, TAPE_W, true)
+      }
+    }
+  }
+
+  /** Draw alternating yellow/dark hazard tape segments on a divider edge */
+  private drawDividerTape(
+    g: Phaser.GameObjects.Graphics,
+    x: number, y: number, w: number, h: number,
+    horizontal: boolean,
+  ): void {
+    const SEG = 6
+    const YELLOW = 0xfbbf24
+    const DARK = 0x1a1a2e
+    let pos = 0
+    let isYellow = true
+    const length = horizontal ? w : h
+    while (pos < length) {
+      const len = Math.min(SEG, length - pos)
+      g.fillStyle(isYellow ? YELLOW : DARK, isYellow ? 0.5 : 0.35)
+      if (horizontal) {
+        g.fillRect(x + pos, y, len, h)
+      } else {
+        g.fillRect(x, y + pos, w, len)
+      }
+      pos += SEG
+      isYellow = !isYellow
     }
   }
 
@@ -272,41 +379,60 @@ export class LabTilemap {
   // -------------------------------------------------------------------------
 
   private autotileWall(grid: CellGrid, r: number, c: number, rows: number, cols: number): string {
-    const f = (dr: number, dc: number) =>
+    const isFloor = (dr: number, dc: number) =>
       r + dr >= 0 && r + dr < rows && c + dc >= 0 && c + dc < cols &&
       grid[r + dr][c + dc] === FLOOR
 
-    const n = f(-1, 0)
-    const s = f(1, 0)
-    const w = f(0, -1)
-    const e = f(0, 1)
+    const n = isFloor(-1, 0)
+    const s = isFloor(1, 0)
+    const w = isFloor(0, -1)
+    const e = isFloor(0, 1)
+    const cnt = +n + +s + +e + +w
 
-    // Outer corners — floor on two adjacent sides (convex)
-    if (s && e && !n && !w) return LAB_IMAGE_KEYS.CORNER_TL
-    if (s && w && !n && !e) return LAB_IMAGE_KEYS.CORNER_TR
-    if (n && e && !s && !w) return LAB_IMAGE_KEYS.CORNER_BL
-    if (n && w && !s && !e) return LAB_IMAGE_KEYS.CORNER_BR
+    // Floor on all 4 cardinal sides — inner island or 4-way junction
+    if (cnt === 4) return LAB_IMAGE_KEYS.FOUR_WAY
 
-    // Edges — floor on one side
-    if (s && !n && !w && !e) return LAB_IMAGE_KEYS.WALL_TOP
-    if (n && !s && !w && !e) return LAB_IMAGE_KEYS.WALL_BOTTOM
-    if (e && !n && !s && !w) return LAB_IMAGE_KEYS.WALL_LEFT
-    if (w && !n && !s && !e) return LAB_IMAGE_KEYS.WALL_RIGHT
+    // T-junctions — floor on 3 cardinal sides
+    if (cnt === 3) {
+      if (!n) return LAB_IMAGE_KEYS.T_TOP     // wall extends up, floor on S/E/W
+      if (!s) return LAB_IMAGE_KEYS.T_BOTTOM  // wall extends down, floor on N/E/W
+      if (!w) return LAB_IMAGE_KEYS.T_LEFT    // wall extends left, floor on N/S/E
+      if (!e) return LAB_IMAGE_KEYS.T_RIGHT   // wall extends right, floor on N/S/W
+    }
 
-    // Interior divider walls — floor on opposite sides
-    if (n && s) return LAB_IMAGE_KEYS.WALL_LEFT   // vertical divider
-    if (e && w) return LAB_IMAGE_KEYS.WALL_TOP     // horizontal divider
+    // 2 cardinal floor neighbors
+    if (cnt === 2) {
+      // Adjacent pair → outer (convex) corner
+      if (s && e) return LAB_IMAGE_KEYS.CORNER_TL
+      if (s && w) return LAB_IMAGE_KEYS.CORNER_TR
+      if (n && e) return LAB_IMAGE_KEYS.CORNER_BL
+      if (n && w) return LAB_IMAGE_KEYS.CORNER_BR
 
-    // T-junctions — floor on 3 sides
-    if (n && s && e) return LAB_IMAGE_KEYS.WALL_LEFT
-    if (n && s && w) return LAB_IMAGE_KEYS.WALL_RIGHT
-    if (e && w && s) return LAB_IMAGE_KEYS.WALL_TOP
-    if (e && w && n) return LAB_IMAGE_KEYS.WALL_BOTTOM
+      // Opposite pair → interior divider
+      if (n && s) return LAB_IMAGE_KEYS.WALL_LEFT   // vertical divider strip
+      if (e && w) return LAB_IMAGE_KEYS.WALL_TOP     // horizontal divider strip
+    }
 
-    // Floor on all 4 sides — shouldn't happen often
-    if (n && s && e && w) return LAB_IMAGE_KEYS.HEX_FLOOR_A
+    // 1 cardinal floor neighbor — straight edge
+    if (cnt === 1) {
+      if (s) return LAB_IMAGE_KEYS.WALL_TOP
+      if (n) return LAB_IMAGE_KEYS.WALL_BOTTOM
+      if (e) return LAB_IMAGE_KEYS.WALL_LEFT
+      if (w) return LAB_IMAGE_KEYS.WALL_RIGHT
+    }
 
-    // Fallback — outer fill for isolated wall cells
+    // 0 cardinal floor neighbors — check diagonals for inner (concave) corners
+    const ne = isFloor(-1, 1)
+    const nw = isFloor(-1, -1)
+    const se = isFloor(1, 1)
+    const sw = isFloor(1, -1)
+
+    if (se) return LAB_IMAGE_KEYS.INNER_TL  // floor at bottom-right → inner top-left corner
+    if (sw) return LAB_IMAGE_KEYS.INNER_TR  // floor at bottom-left → inner top-right corner
+    if (ne) return LAB_IMAGE_KEYS.INNER_BL  // floor at top-right → inner bottom-left corner
+    if (nw) return LAB_IMAGE_KEYS.INNER_BR  // floor at top-left → inner bottom-right corner
+
+    // Deep interior wall — no adjacent floor at all
     return LAB_IMAGE_KEYS.OUTER_FILL
   }
 
@@ -389,7 +515,7 @@ export class LabTilemap {
   }
 
   // -------------------------------------------------------------------------
-  // Floor glow lights — cyan pools scattered on the floor
+  // Floor glow lights — cyan pools in CORRIDORS between rooms only
   // -------------------------------------------------------------------------
 
   private drawFloorGlows(
@@ -399,342 +525,48 @@ export class LabTilemap {
     cols: number,
     rows: number,
     hash: number,
+    rooms?: FacilityRoom[],
   ): void {
     const glowG = this.scene.add.graphics().setDepth(-2.8)
     this.tiles.push(glowG as unknown as Phaser.GameObjects.Image)
 
-    // Place a few glow pools at deterministic floor positions
-    const count = Math.min(8, Math.max(3, Math.floor((cols * rows) / 80)))
-    for (let i = 0; i < count; i++) {
-      const seed = (hash + i * 37) | 0
-      const gc = 3 + (Math.abs(seed) % Math.max(1, cols - 6))
-      const gr = 3 + (Math.abs(seed * 7) % Math.max(1, rows - 6))
-      if (gr >= rows || gc >= cols || grid[gr][gc] !== FLOOR) continue
-
-      const gx = originX + gc * CELL + CELL / 2
-      const gy = originY + gr * CELL + CELL / 2
-
-      glowG.fillStyle(0x38bdf8, 0.08)
-      glowG.fillCircle(gx, gy, 30)
-      glowG.fillStyle(0x22d3ee, 0.14)
-      glowG.fillCircle(gx, gy, 16)
-      glowG.fillStyle(0x7dd3fc, 0.22)
-      glowG.fillCircle(gx, gy, 7)
-    }
-  }
-
-  // -------------------------------------------------------------------------
-  // Corridor pipe runs — pipes placed on floor cells between rooms
-  // -------------------------------------------------------------------------
-
-  private drawCorridorPipes(
-    grid: CellGrid,
-    rooms: FacilityRoom[],
-    originX: number,
-    originY: number,
-    cols: number,
-    rows: number,
-  ): void {
-    if (rooms.length < 2) return
-    if (!this.scene.textures.exists(SPRITESHEET_KEYS.LAB_PIPES)) return
-
-    const PIPE_SCALE = 0.25
-    const PIPE_ALPHA = 0.8
-    const PIPE_DEPTH = -2.5
-
-    // Convert room bounds to grid coordinates
-    const roomCells = rooms.map(r => ({
-      c0: Math.floor((r.x - r.width / 2 - originX) / CELL),
-      r0: Math.floor((r.y - r.height / 2 - originY) / CELL),
-      c1: Math.ceil((r.x + r.width / 2 - originX) / CELL),
-      r1: Math.ceil((r.y + r.height / 2 - originY) / CELL),
-    }))
-
-    // Helper: check if a grid cell is inside any room boundary
-    const isInsideRoom = (gr: number, gc: number): boolean => {
-      for (const rc of roomCells) {
-        if (gr >= rc.r0 && gr < rc.r1 && gc >= rc.c0 && gc < rc.c1) return true
+    // Helper: is this world position inside any room?
+    const insideRoom = (wx: number, wy: number): boolean => {
+      if (!rooms) return false
+      for (const r of rooms) {
+        if (wx > r.x - r.width / 2 && wx < r.x + r.width / 2 &&
+            wy > r.y - r.height / 2 && wy < r.y + r.height / 2) return true
       }
       return false
     }
 
-    // Helper: place a single pipe sprite
-    const placePipe = (gr: number, gc: number, frame: number): void => {
-      const wx = originX + gc * CELL + CELL / 2
-      const wy = originY + gr * CELL + CELL / 2
-      const spr = this.scene.add.sprite(wx, wy, SPRITESHEET_KEYS.LAB_PIPES, frame)
-        .setScale(PIPE_SCALE)
-        .setAlpha(PIPE_ALPHA)
-        .setDepth(PIPE_DEPTH)
-      this.pipeSprites.push(spr)
-    }
-
-    // ── Horizontal pipe runs between side-by-side rooms ──
-    for (let i = 0; i < roomCells.length; i++) {
-      for (let j = i + 1; j < roomCells.length; j++) {
-        const a = roomCells[i]
-        const b = roomCells[j]
-
-        // Vertical overlap check
-        const overlapR0 = Math.max(a.r0, b.r0)
-        const overlapR1 = Math.min(a.r1, b.r1)
-        if (overlapR1 <= overlapR0) continue
-
-        // Determine left/right
-        const leftRoom = a.c1 <= b.c0 ? a : b.c1 <= a.c0 ? b : null
-        const rightRoom = leftRoom === a ? b : a
-        if (!leftRoom) continue
-
-        const gapC0 = leftRoom.c1
-        const gapC1 = rightRoom.c0
-        if (gapC1 - gapC0 > 8) continue // too far apart
-
-        // Pick a row in the overlap region for the pipe run (offset from center
-        // so we don't overlap with the door opening which is at the midpoint)
-        const midR = Math.floor((overlapR0 + overlapR1) / 2)
-        // Place pipe run 2 rows above the door opening center, or fall back near top
-        const pipeRow = Math.max(overlapR0 + 1, midR - Math.floor(OPENING_WIDTH / 2) - 2)
-        if (pipeRow < 0 || pipeRow >= rows) continue
-
-        // Collect corridor columns for this run (floor cells not inside rooms)
-        const runCols: number[] = []
-        for (let c = gapC0; c < gapC1; c++) {
-          if (c >= 0 && c < cols && grid[pipeRow][c] === FLOOR && !isInsideRoom(pipeRow, c)) {
-            runCols.push(c)
-          }
-        }
-        if (runCols.length === 0) continue
-
-        // Place horizontal pipe sprites along the run
-        for (let idx = 0; idx < runCols.length; idx++) {
-          const c = runCols[idx]
-          let frame: number
-          if (idx === 0) {
-            // Start cap / corner
-            frame = PIPE_FRAMES.CORNER_TL
-          } else if (idx === runCols.length - 1) {
-            // End cap / corner
-            frame = PIPE_FRAMES.CORNER_BR
-          } else {
-            frame = PIPE_FRAMES.HORIZ_TOP
-          }
-          placePipe(pipeRow, c, frame)
-        }
-
-        // Place valve at midpoint of the run
-        if (runCols.length >= 3) {
-          const midIdx = Math.floor(runCols.length / 2)
-          const valveC = runCols[midIdx]
-          const vwx = originX + valveC * CELL + CELL / 2
-          const vwy = originY + pipeRow * CELL + CELL / 2
-          const valve = this.scene.add.sprite(vwx, vwy, SPRITESHEET_KEYS.LAB_PIPES, PIPE_FRAMES.VALVE)
-            .setScale(PIPE_SCALE)
-            .setAlpha(PIPE_ALPHA)
-            .setDepth(PIPE_DEPTH + 0.01) // slightly above pipes
-          this.pipeSprites.push(valve)
-        }
+    // Collect corridor floor cells (floor cells NOT inside any room)
+    const corridorCells: { x: number; y: number }[] = []
+    for (let r = 2; r < rows - 2; r++) {
+      for (let c = 2; c < cols - 2; c++) {
+        if (grid[r][c] !== FLOOR) continue
+        const wx = originX + c * CELL + CELL / 2
+        const wy = originY + r * CELL + CELL / 2
+        if (!insideRoom(wx, wy)) corridorCells.push({ x: wx, y: wy })
       }
     }
 
-    // ── Vertical pipe runs between stacked rooms ──
-    for (let i = 0; i < roomCells.length; i++) {
-      for (let j = i + 1; j < roomCells.length; j++) {
-        const a = roomCells[i]
-        const b = roomCells[j]
-
-        // Horizontal overlap check
-        const overlapC0 = Math.max(a.c0, b.c0)
-        const overlapC1 = Math.min(a.c1, b.c1)
-        if (overlapC1 <= overlapC0) continue
-
-        // Determine top/bottom
-        const topRoom = a.r1 <= b.r0 ? a : b.r1 <= a.r0 ? b : null
-        const bottomRoom = topRoom === a ? b : a
-        if (!topRoom) continue
-
-        const gapR0 = topRoom.r1
-        const gapR1 = bottomRoom.r0
-        if (gapR1 - gapR0 > 8) continue // too far apart
-
-        // Pick a column for the pipe run (offset from door opening center)
-        const midC = Math.floor((overlapC0 + overlapC1) / 2)
-        const pipeCol = Math.max(overlapC0 + 1, midC - Math.floor(OPENING_WIDTH / 2) - 2)
-        if (pipeCol < 0 || pipeCol >= cols) continue
-
-        // Collect corridor rows for this run
-        const runRows: number[] = []
-        for (let r = gapR0; r < gapR1; r++) {
-          if (r >= 0 && r < rows && grid[r][pipeCol] === FLOOR && !isInsideRoom(r, pipeCol)) {
-            runRows.push(r)
-          }
-        }
-        if (runRows.length === 0) continue
-
-        // Place vertical pipe sprites along the run
-        for (let idx = 0; idx < runRows.length; idx++) {
-          const r = runRows[idx]
-          let frame: number
-          if (idx === 0) {
-            // Start cap / corner
-            frame = PIPE_FRAMES.CORNER_TL
-          } else if (idx === runRows.length - 1) {
-            // End cap / corner
-            frame = PIPE_FRAMES.CORNER_BR
-          } else {
-            frame = PIPE_FRAMES.VERT_LEFT
-          }
-          placePipe(r, pipeCol, frame)
-        }
-
-        // Place valve at midpoint of the run
-        if (runRows.length >= 3) {
-          const midIdx = Math.floor(runRows.length / 2)
-          const valveR = runRows[midIdx]
-          const vwx = originX + pipeCol * CELL + CELL / 2
-          const vwy = originY + valveR * CELL + CELL / 2
-          const valve = this.scene.add.sprite(vwx, vwy, SPRITESHEET_KEYS.LAB_PIPES, PIPE_FRAMES.VALVE)
-            .setScale(PIPE_SCALE)
-            .setAlpha(PIPE_ALPHA)
-            .setDepth(PIPE_DEPTH + 0.01)
-          this.pipeSprites.push(valve)
-        }
-      }
+    // Place glow lights evenly spaced in corridor cells
+    const maxGlows = Math.min(6, Math.max(2, Math.floor(corridorCells.length / 3)))
+    const step = Math.max(1, Math.floor(corridorCells.length / maxGlows))
+    for (let i = 0; i < maxGlows && i * step < corridorCells.length; i++) {
+      const cell = corridorCells[i * step]
+      glowG.fillStyle(0x38bdf8, 0.10)
+      glowG.fillCircle(cell.x, cell.y, 26)
+      glowG.fillStyle(0x22d3ee, 0.18)
+      glowG.fillCircle(cell.x, cell.y, 13)
+      glowG.fillStyle(0x7dd3fc, 0.28)
+      glowG.fillCircle(cell.x, cell.y, 5)
     }
   }
 
   // -------------------------------------------------------------------------
-  // Outer wall pipes — prominent pipe runs along building perimeter
-  // -------------------------------------------------------------------------
-
-  private drawOuterPipes(
-    grid: CellGrid,
-    originX: number,
-    originY: number,
-    cols: number,
-    rows: number,
-    hash: number,
-  ): void {
-    if (!this.scene.textures.exists(SPRITESHEET_KEYS.LAB_PIPES)) return
-
-    const SCALE = 0.35
-    const ALPHA = 0.88
-    const DEPTH = -2.6
-
-    const place = (r: number, c: number, frame: number) => {
-      const wx = originX + c * CELL + CELL / 2
-      const wy = originY + r * CELL + CELL / 2
-      const spr = this.scene.add.sprite(wx, wy, SPRITESHEET_KEYS.LAB_PIPES, frame)
-        .setScale(SCALE).setAlpha(ALPHA).setDepth(DEPTH)
-      this.pipeSprites.push(spr)
-    }
-
-    // Find inner edge of the top wall (first floor row)
-    let topFloorRow = -1, botFloorRow = -1
-    for (let r = 0; r < rows; r++) {
-      for (let c = 0; c < cols; c++) {
-        if (grid[r][c] === FLOOR) { topFloorRow = r; break }
-      }
-      if (topFloorRow >= 0) break
-    }
-    for (let r = rows - 1; r >= 0; r--) {
-      for (let c = 0; c < cols; c++) {
-        if (grid[r][c] === FLOOR) { botFloorRow = r; break }
-      }
-      if (botFloorRow >= 0) break
-    }
-    if (topFloorRow < 0 || botFloorRow < 0) return
-
-    // Top wall pipe — horizontal run just inside the top wall
-    const pipeR = topFloorRow
-    let leftC = cols, rightC = 0
-    for (let c = 0; c < cols; c++) {
-      if (grid[pipeR][c] === FLOOR) { leftC = Math.min(leftC, c); rightC = Math.max(rightC, c) }
-    }
-
-    if (rightC - leftC > 2) {
-      place(pipeR, leftC, PIPE_FRAMES.CORNER_TL)
-      for (let c = leftC + 1; c < rightC; c++) {
-        if (grid[pipeR][c] !== FLOOR) continue
-        const frame = ((hash + c) % 6 === 0) ? PIPE_FRAMES.HORIZ_ARROW : PIPE_FRAMES.HORIZ_TOP
-        place(pipeR, c, frame)
-      }
-      place(pipeR, rightC, PIPE_FRAMES.CORNER_TR)
-      // Valve near midpoint
-      const mid = Math.floor((leftC + rightC) / 2)
-      if (grid[pipeR][mid] === FLOOR) {
-        place(pipeR, mid, PIPE_FRAMES.VALVE)
-      }
-    }
-
-    // Bottom wall pipe
-    const botPipeR = botFloorRow
-    let bLeftC = cols, bRightC = 0
-    for (let c = 0; c < cols; c++) {
-      if (grid[botPipeR][c] === FLOOR) { bLeftC = Math.min(bLeftC, c); bRightC = Math.max(bRightC, c) }
-    }
-
-    if (bRightC - bLeftC > 2) {
-      place(botPipeR, bLeftC, PIPE_FRAMES.CORNER_BL)
-      for (let c = bLeftC + 1; c < bRightC; c++) {
-        if (grid[botPipeR][c] !== FLOOR) continue
-        place(botPipeR, c, PIPE_FRAMES.HORIZ_TOP)
-      }
-      place(botPipeR, bRightC, PIPE_FRAMES.CORNER_BR)
-    }
-
-    // Left wall pipe — vertical run just inside the left wall
-    let leftFloorCol = -1
-    for (let c = 0; c < cols; c++) {
-      for (let r = 0; r < rows; r++) {
-        if (grid[r][c] === FLOOR) { leftFloorCol = c; break }
-      }
-      if (leftFloorCol >= 0) break
-    }
-    if (leftFloorCol >= 0) {
-      let lTopR = rows, lBotR = 0
-      for (let r = 0; r < rows; r++) {
-        if (grid[r][leftFloorCol] === FLOOR) { lTopR = Math.min(lTopR, r); lBotR = Math.max(lBotR, r) }
-      }
-      if (lBotR - lTopR > 2) {
-        place(lTopR, leftFloorCol, PIPE_FRAMES.CORNER_TL)
-        for (let r = lTopR + 1; r < lBotR; r++) {
-          if (grid[r][leftFloorCol] !== FLOOR) continue
-          place(r, leftFloorCol, PIPE_FRAMES.VERT_LEFT)
-        }
-        place(lBotR, leftFloorCol, PIPE_FRAMES.CORNER_BL)
-        const midR = Math.floor((lTopR + lBotR) / 2)
-        if (grid[midR][leftFloorCol] === FLOOR) place(midR, leftFloorCol, PIPE_FRAMES.VALVE)
-      }
-    }
-
-    // Right wall pipe — vertical run just inside the right wall
-    let rightFloorCol = -1
-    for (let c = cols - 1; c >= 0; c--) {
-      for (let r = 0; r < rows; r++) {
-        if (grid[r][c] === FLOOR) { rightFloorCol = c; break }
-      }
-      if (rightFloorCol >= 0) break
-    }
-    if (rightFloorCol >= 0) {
-      let rTopR = rows, rBotR = 0
-      for (let r = 0; r < rows; r++) {
-        if (grid[r][rightFloorCol] === FLOOR) { rTopR = Math.min(rTopR, r); rBotR = Math.max(rBotR, r) }
-      }
-      if (rBotR - rTopR > 2) {
-        place(rTopR, rightFloorCol, PIPE_FRAMES.CORNER_TR)
-        for (let r = rTopR + 1; r < rBotR; r++) {
-          if (grid[r][rightFloorCol] !== FLOOR) continue
-          place(r, rightFloorCol, PIPE_FRAMES.VERT_RIGHT)
-        }
-        place(rBotR, rightFloorCol, PIPE_FRAMES.CORNER_BR)
-        const midR = Math.floor((rTopR + rBotR) / 2)
-        if (grid[midR][rightFloorCol] === FLOOR) place(midR, rightFloorCol, PIPE_FRAMES.VALVE)
-      }
-    }
-  }
-
-  // -------------------------------------------------------------------------
-  // Room decoration — wall-lining props, corner equipment, floor accents
+  // Room decoration — corner-based strategic placement
   // -------------------------------------------------------------------------
 
   private decorateRooms(
@@ -744,12 +576,12 @@ export class LabTilemap {
     _originY: number,
     _cols: number,
     _rows: number,
-    hash: number,
+    _hash: number,
   ): void {
     if (!this.scene.textures.exists(SPRITESHEET_KEYS.LAB_PROPS)) return
 
     // ── Desk positions for collision avoidance ──
-    const DESK_CLEAR = 55
+    const DESK_CLEAR = 75  // generous clearance to prevent ANY desk overlap
     const allDesks: { x: number; y: number }[] = []
     for (const r of rooms) {
       if (!r.deskPositions) continue
@@ -758,117 +590,94 @@ export class LabTilemap {
     const nearDesk = (wx: number, wy: number) =>
       allDesks.some(d => Math.abs(d.x - wx) < DESK_CLEAR && Math.abs(d.y - wy) < DESK_CLEAR)
 
-    // Place a prop sprite scaled to a target display width
-    const prop = (wx: number, wy: number, frame: string, displayW: number, alpha = 0.9, depth = -2) => {
-      if (nearDesk(wx, wy)) return
+    // Place a prop sprite scaled to a target display height
+    const placeProp = (wx: number, wy: number, frame: string, displayH: number, alpha = 0.90, depth = -2): Phaser.GameObjects.Sprite | null => {
+      if (nearDesk(wx, wy)) return null
       const spr = this.scene.add.sprite(wx, wy, SPRITESHEET_KEYS.LAB_PROPS, frame)
-      spr.setScale(displayW / (spr.width || 100)).setAlpha(alpha).setDepth(depth)
+      const s = displayH / (spr.height || 100)
+      spr.setScale(s).setAlpha(alpha).setDepth(depth)
       this.pipeSprites.push(spr)
-    }
-
-    // Cyan glow pool
-    const glow = (wx: number, wy: number) => {
-      const g = this.scene.add.graphics().setDepth(-2.7)
-      g.fillStyle(0x22d3ee, 0.06); g.fillCircle(wx, wy, 28)
-      g.fillStyle(0x22d3ee, 0.14); g.fillCircle(wx, wy, 14)
-      g.fillStyle(0x7dd3fc, 0.28); g.fillCircle(wx, wy, 6)
-      this.pipeSprites.push(g as unknown as Phaser.GameObjects.Sprite)
+      return spr
     }
 
     // =====================================================================
-    // Per-room: deliberate wall-lining with composed console stations
+    // 4 room themes — corner-first placement like the reference image
+    // Each theme: corner anchors (top-left, top-right), top console, floor accent
     // =====================================================================
+
+    interface CornerKit {
+      cornerTL: [string, number]   // [frame, displayHeight] — top-left corner anchor
+      cornerTR: [string, number]   // top-right corner anchor
+      topConsole: string           // console spanning top wall between corners
+      consoleScreen: string        // small screen overlay on the console
+      floorAccent: string          // subtle bottom-wall floor item
+    }
+
+    const themes: CornerKit[] = [
+      { // POWER ROOM
+        cornerTL: ['generator', 75],
+        cornerTR: ['large_tank', 70],
+        topConsole: 'blank_console_long',
+        consoleScreen: 'console_screen_wave_01',
+        floorAccent: 'cable_cover',
+      },
+      { // RESEARCH LAB
+        cornerTL: ['pod', 70],
+        cornerTR: ['lab_machine_01', 75],
+        topConsole: 'blank_console_long',
+        consoleScreen: 'console_screen_lines_02',
+        floorAccent: 'octogon_plate',
+      },
+      { // CONTROL ROOM
+        cornerTL: ['console_example_corner', 75],
+        cornerTR: ['console_example_corner', 75],
+        topConsole: 'console_example_long',
+        consoleScreen: 'console_screen_wave_03',
+        floorAccent: 'cable_cover_with_ramp',
+      },
+      { // SERVER ROOM
+        cornerTL: ['unit_example_01', 70],
+        cornerTR: ['unit_example_04', 70],
+        topConsole: 'console_example_long',
+        consoleScreen: 'console_screen_lines_04',
+        floorAccent: 'octogon_plate_small',
+      },
+    ]
 
     for (let ri = 0; ri < rooms.length; ri++) {
       const room = rooms[ri]
-      const rh = Math.abs(hash + ri * 97) | 0
+      const theme = themes[ri % themes.length]
       const L = room.x - room.width / 2
       const T = room.y - room.height / 2
       const R = room.x + room.width / 2
       const B = room.y + room.height / 2
 
-      // ── TOP WALL: composed console stations ──
+      // ── TOP-LEFT CORNER: anchor equipment rotated 180° into the corner ──
       {
-        const stationW = 110
-        const n = Math.max(1, Math.floor((room.width - 60) / stationW))
-        const spacing = (room.width - 60) / n
-        const screens = ['console_screen_wave_01', 'console_screen_lines_02', 'console_screen_wave_03', 'console_screen_lines_04']
-        const controls = ['dial', 'numb_pad', 'console_led_on', 'joystick', 'stop_button']
+        const spr = placeProp(L + 30, T + 45, theme.cornerTL[0], theme.cornerTL[1], 0.88, -2.2)
+        if (spr) { spr.setOrigin(0, 0).setAngle(270) }
+      }
 
-        for (let i = 0; i < n; i++) {
-          const cx = L + 30 + spacing * (i + 0.5)
-          const cy = T + 22
-          const isLong = i % 2 === 0
-          prop(cx, cy, isLong ? 'blank_console_long' : 'blank_console_short', isLong ? 105 : 70, 0.92, -2.2)
-          prop(cx, cy - 3, screens[(rh + i) % screens.length], isLong ? 28 : 22, 0.85, -2.1)
-          if (isLong) {
-            prop(cx - 24, cy + 8, controls[(rh + i) % controls.length], 14, 0.75, -2.1)
-            prop(cx + 24, cy + 8, controls[(rh + i + 2) % controls.length], 14, 0.75, -2.1)
-          }
+      // ── TOP-RIGHT CORNER: anchor equipment into the corner ──
+      {
+        const spr = placeProp(R - 6, T - 30, theme.cornerTR[0], theme.cornerTR[1], 0.88, -2.2)
+        if (spr) spr.setOrigin(1, 0) // pin to top-right corner
+      }
+
+      // ── TOP WALL CENTER: console between the two corner pieces ──
+      {
+        const cx = room.x
+        const cy = T + 10
+        const spr = placeProp(cx, cy, theme.topConsole, 55, 0.85, -2.3)
+        if (spr) {
+          spr.setOrigin(0.5, 0)
+          // Screen overlay on top of the console
+          const screen = placeProp(cx, cy + 12, theme.consoleScreen, 16, 0.80, -2.15)
+          if (screen) screen.setOrigin(0.5, 0)
         }
       }
 
-      // ── BOTTOM WALL: equipment row (above header bar) ──
-      {
-        const botEquip = ['power_cell', 'chest_closed', 'unit_example_02', 'cable_cover']
-        const n = Math.max(1, Math.floor((room.width - 60) / 100))
-        const spacing = (room.width - 60) / n
-        for (let i = 0; i < n; i++) {
-          const cx = L + 30 + spacing * (i + 0.5)
-          prop(cx, B - 30, botEquip[(rh + i) % botEquip.length], 60, 0.8, -2.2)
-        }
-      }
-
-      // ── LEFT WALL: large equipment ──
-      {
-        const equip = ['generator', 'large_tank', 'pod', 'shelf', 'fan_unit_housing']
-        const n = room.height > 200 ? 2 : 1
-        const spacing = (room.height - 100) / n
-        for (let i = 0; i < n; i++) {
-          prop(L + 26, T + 60 + spacing * (i + 0.5), equip[(rh + i * 3) % equip.length], 65, 0.9, -2)
-        }
-      }
-
-      // ── RIGHT WALL: large equipment ──
-      {
-        const equip = ['unit_large', 'console_example_corner', 'large_tank', 'generator', 'pod']
-        const n = room.height > 200 ? 2 : 1
-        const spacing = (room.height - 100) / n
-        for (let i = 0; i < n; i++) {
-          prop(R - 26, T + 60 + spacing * (i + 0.5), equip[(rh + i * 5 + 1) % equip.length], 65, 0.9, -2)
-        }
-      }
-
-      // ── CORNERS: large centerpieces ──
-      {
-        const cp = ['lab_machine_01', 'dome', 'unit_example_03', 'unit_square']
-        prop(L + 40, T + 40, cp[rh % cp.length], 75, 0.88, -1.9)
-        prop(R - 40, T + 40, cp[(rh + 1) % cp.length], 70, 0.88, -1.9)
-      }
-
-      // ── FLOOR: 1 warning sign + 3 glow lights (left, center, right) ──
-      {
-        const signs = ['warning_biological', 'warning_power', 'warning_death']
-        prop(L + 55, B - 38, signs[rh % signs.length], 26, 0.65, -2.5)
-        glow(room.x - room.width * 0.25, room.y)
-        glow(room.x, room.y - room.height * 0.1)
-        glow(room.x + room.width * 0.25, room.y)
-      }
-
-      // ── PIPE RUN along top wall (behind consoles) ──
-      if (this.scene.textures.exists(SPRITESHEET_KEYS.LAB_PIPES)) {
-        const py = T + 6
-        const x0 = L + 30, x1 = R - 30
-        const step = 30, PS = 0.18, PD = -2.4
-
-        this.pipeSprites.push(this.scene.add.sprite(x0, py, SPRITESHEET_KEYS.LAB_PIPES, PIPE_FRAMES.CORNER_TL).setScale(PS).setAlpha(0.7).setDepth(PD))
-        for (let px = x0 + step; px < x1 - step; px += step) {
-          const f = ((rh + Math.round(px)) % 8 === 0) ? PIPE_FRAMES.HORIZ_ARROW : PIPE_FRAMES.HORIZ_TOP
-          this.pipeSprites.push(this.scene.add.sprite(px, py, SPRITESHEET_KEYS.LAB_PIPES, f).setScale(PS).setAlpha(0.7).setDepth(PD))
-        }
-        this.pipeSprites.push(this.scene.add.sprite(x1, py, SPRITESHEET_KEYS.LAB_PIPES, PIPE_FRAMES.CORNER_TR).setScale(PS).setAlpha(0.7).setDepth(PD))
-        this.pipeSprites.push(this.scene.add.sprite((x0 + x1) / 2, py, SPRITESHEET_KEYS.LAB_PIPES, PIPE_FRAMES.VALVE).setScale(PS * 0.85).setAlpha(0.75).setDepth(PD + 0.01))
-      }
+      // Bottom corners — TODO: add desk-flanking corner consoles
     }
   }
 

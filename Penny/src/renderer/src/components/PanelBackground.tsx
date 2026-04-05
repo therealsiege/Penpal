@@ -17,8 +17,8 @@ export function PanelBackground({ children }: { children: React.ReactNode }) {
         className="absolute inset-0"
         style={{ background: isLight ? 'rgba(245,240,232,0.88)' : 'rgba(8,10,14,0.94)' }}
       />
-      {/* Content */}
-      <div className="relative h-full">{children}</div>
+      {/* Content — zoomed to match office panel scale */}
+      <div className="relative h-full" style={{ zoom: 1.4 }}>{children}</div>
     </div>
   )
 }

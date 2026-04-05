@@ -1077,11 +1077,12 @@ export class OfficeScene extends Phaser.Scene {
    * Per-room `placeLabEquipment` skips strategic placement when LAB_PROPS is loaded.
    */
   private rebuildLabFacilityProps(): void {
+    // Cleanup old layer — tilemap.decorateRooms() now handles all room props
     if (this.labFacilityPropsLayer) {
       this.labFacilityPropsLayer.destroy(true)
       this.labFacilityPropsLayer = null
     }
-    if (!this.textures.exists(SPRITESHEET_KEYS.LAB_PROPS)) return
+    return  // Props now rendered by lab-tilemap.ts decorateRooms()
 
     const roomList = [...this.rooms.values()]
     if (roomList.length === 0) return

@@ -170,7 +170,7 @@ export class WorkstationFactory {
 
     if (hasConsoleDeskImage) {
       // Single console-desk image: chair at bottom, screens at top, keyboard + gauges in middle
-      // 521x416 source × 0.30 = ~156x125px — fills the workstation cell
+      // 521x416 source × 0.38 ≈ 198×158px — large desk, grid cells sized to match
       consoleDeskSprite = this.scene.add.image(0, WS_DESK_Y + 4, LAB_IMAGE_KEYS.PROP_CONSOLE_DESK)
         .setScale(0.38)
         .setAngle(180)
@@ -611,14 +611,17 @@ export class WorkstationFactory {
     wsContainer.add(progressRing)
     lodLevel2Objects.push(progressRing)
 
-    // Character shadow
-    const shadow = this.scene.add.ellipse(0, WS_SPRITE_Y + 2, 20, 6, 0x000000, 0.2)
+    // Character shadow — offset to chair position when console desk is active
+    const chairOffX = hasConsoleDeskImage ? 18 : 0
+    const chairOffY = hasConsoleDeskImage ? 2 : 0
+    const chairAngle = hasConsoleDeskImage ? -15 : 0
+    const shadow = this.scene.add.ellipse(chairOffX, WS_SPRITE_Y + 2 + chairOffY, 20, 6, 0x000000, 0.2)
     wsContainer.add(shadow)
 
     const charIdx = this.host.getAgentCharacterIndex(agent)
     const frame   = this.host.getPoseFrame(charIdx, agent)
-    const sprite  = this.scene.add.sprite(0, WS_SPRITE_Y, SPRITESHEET_KEYS.CHARACTERS, frame)
-    sprite.setScale(CHAR_SCALE).setOrigin(0.5, 1)
+    const sprite  = this.scene.add.sprite(chairOffX, WS_SPRITE_Y + chairOffY, SPRITESHEET_KEYS.CHARACTERS, frame)
+    sprite.setScale(CHAR_SCALE).setOrigin(0.5, 1).setAngle(chairAngle)
     wsContainer.add(sprite)
 
     // Thought bubble — dark card with accent border and live blurb text
@@ -1115,24 +1118,68 @@ export class WorkstationFactory {
       this.scene.tweens.add({ targets: ws.container, x: cx, y: cy, duration: 280, ease: 'Power2' })
       ws.container.setDepth(cy + room.y)
 
-      // Rotate console-desk so chair faces room center (0,0).
-      // The image is created at 180° (chair on top). Adjust angle based on position.
-      const consoleDeskImg = ws.container.list.find(
-        (o: Phaser.GameObjects.GameObject) => (o as Phaser.GameObjects.Image).texture?.key === LAB_IMAGE_KEYS.PROP_CONSOLE_DESK
-      ) as Phaser.GameObjects.Image | undefined
-      if (consoleDeskImg) {
-        // Top half → chair faces down (180° already set at creation)
-        // Bottom half → chair faces up (0°)
-        // Left edge → chair faces right (90°)
-        // Right edge → chair faces left (-90°)
-        const halfW = room.width / 2 * 0.4
-        const halfH = room.height / 2 * 0.4
-        if (Math.abs(cx) > halfW && cx < 0)       consoleDeskImg.setAngle(90)   // left wall
-        else if (Math.abs(cx) > halfW && cx > 0)   consoleDeskImg.setAngle(-90)  // right wall
-        else if (cy < 0)                            consoleDeskImg.setAngle(0)    // top half — screens up, chair down
-        else                                        consoleDeskImg.setAngle(180)  // bottom half — screens down, chair up
-      }
+      // Console-desk stays at creation angle (180°). All workstation elements
+      // (sprite, monitor, chair, desk items) are positioned relative to this
+      // orientation — rotating the desk alone misaligns everything else.
     })
+
+    // ── Connecting console between adjacent desks ──
+    if (room.deskConnectors) {
+      for (const c of room.deskConnectors) c.destroy()
+    }
+    room.deskConnectors = []
+
+    if (this.scene.textures.exists(SPRITESHEET_KEYS.LAB_PROPS) && count > 1) {
+      // Group desks by row (similar Y)
+      const rows = new Map<number, { x: number; y: number }[]>()
+      for (const pos of layout.deskPositions) {
+        const rowKey = Math.round(pos.y / 10) * 10
+        if (!rows.has(rowKey)) rows.set(rowKey, [])
+        rows.get(rowKey)!.push(pos)
+      }
+
+      for (const [, rowDesks] of rows) {
+        rowDesks.sort((a, b) => a.x - b.x)
+
+        // Connecting consoles between adjacent desks in this row
+        for (let i = 0; i < rowDesks.length - 1; i++) {
+          const a = rowDesks[i]
+          const b = rowDesks[i + 1]
+          const midX = (a.x + b.x) / 2 + 15
+          const midY = (a.y + b.y) / 2 + WS_DESK_Y + 10
+          const spr = this.scene.add.sprite(midX, midY, SPRITESHEET_KEYS.LAB_PROPS, 'console_example_short')
+          spr.setScale(0.38)
+            .setAngle(90)
+            .setAlpha(0.90)
+            .setDepth(0)
+          room.container.add(spr)
+          room.deskConnectors.push(spr)
+        }
+
+        // Corner terminals flanking the row
+        const leftDesk = rowDesks[0]
+        const rightDesk = rowDesks[rowDesks.length - 1]
+        const cornerY = leftDesk.y + WS_DESK_Y + 10
+
+        // Left corner terminal — rotated 45° facing inward
+        const lSpr = this.scene.add.sprite(
+          leftDesk.x - WORKSTATION_W * 0.5 - 9, cornerY - 19,
+          SPRITESHEET_KEYS.LAB_PROPS, 'console_example_corner',
+        )
+        lSpr.setScale(0.39).setAngle(180).setAlpha(0.88).setDepth(0)
+        room.container.add(lSpr)
+        room.deskConnectors.push(lSpr)
+
+        // Right corner terminal — rotated -45° facing inward
+        const rSpr = this.scene.add.sprite(
+          rightDesk.x + WORKSTATION_W * 0.5 + 42, cornerY - 15,
+          SPRITESHEET_KEYS.LAB_PROPS, 'console_example_corner',
+        )
+        rSpr.setScale(0.39).setAngle(90).setAlpha(0.88).setDepth(0)
+        room.container.add(rSpr)
+        room.deskConnectors.push(rSpr)
+      }
+    }
 
     // Spawn in-room props if not already placed (skip right-strip clutter when JSON facility kit already fills the room)
     const skipInteractiveStrip =
