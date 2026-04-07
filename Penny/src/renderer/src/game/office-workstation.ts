@@ -419,7 +419,7 @@ export class OfficeWorkstations {
             this.host.spawnAlertRipple(wx, wy, rippleColor)
             this.host.spawnSpriteReaction(wx, wy, ICON_FRAMES.CIRCLE_YELLOW) // blocked
             // Smoke effect on blocked/error state
-            this.host.celebrations.error(wx, wy, { agentId: agent.config?.id ?? '' })
+            this.host.celebrations?.error(wx, wy, { agentId: agent.config?.id ?? '' })
           }
         }
         // Juice: shake the workstation container and flash the sprite red to signal attention needed

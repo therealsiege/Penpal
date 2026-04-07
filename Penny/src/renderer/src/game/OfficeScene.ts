@@ -334,6 +334,12 @@ export class OfficeScene extends Phaser.Scene {
       setCafeFloorMask: (g) => { this.cafeFloorMask = g },
       rebuildLabFacilityProps: () => this.rebuildLabFacilityProps(),
       setLabHexSlabRect: (r) => { this.labHexSlabRect = r },
+      relayoutAllWorkstations: () => {
+        this.ensureWsManager()
+        for (const room of this.rooms.values()) {
+          this.wsManager.layoutWorkstations(room)
+        }
+      },
     })
     this.background.init()
 
