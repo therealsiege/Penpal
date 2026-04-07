@@ -76,6 +76,8 @@ export const SPRITESHEET_KEYS = Object.freeze({
   LAB_SMOOTH: 'lab-smooth',
   /** GDS-exported medium lab scene — packed atlas with all scene sprites */
   GDS_MEDIUM: 'gds-medium',
+  /** GDS world map — default start scene backdrop */
+  GDS_WORLDMAP: 'gds-worldmap',
 } as const)
 
 // ---------------------------------------------------------------------------

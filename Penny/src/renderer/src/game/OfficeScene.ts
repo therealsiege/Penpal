@@ -473,7 +473,13 @@ export class OfficeScene extends Phaser.Scene {
       if (now - lastSceneClickTime < 350) {
         const wp = cam.getWorldPoint(p.x, p.y)
         if (!this.getAgentAtWorldPoint(wp.x, wp.y)) {
-          this.zoomToFit(true)
+          // GDS mode: double-click empty space → back to world map
+          if (this.background.hasGdsScene()) {
+            EventBus.emit(EVENTS.NAVIGATE_CAMPUS)
+            this.scene.sleep(SCENE_KEYS.OFFICE)
+          } else {
+            this.zoomToFit(true)
+          }
         }
       }
       lastSceneClickTime = now
@@ -1074,6 +1080,7 @@ export class OfficeScene extends Phaser.Scene {
           if (!scene.background.hasGdsScene()) return null
           return scene.background.assignGdsDeskSlot(agentId)
         },
+        getGdsScale: () => scene.background.hasGdsScene() ? scene.background.getGdsScale() : 1,
       })
     }
   }

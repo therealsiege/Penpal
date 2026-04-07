@@ -204,6 +204,9 @@ export class OfficeBackground {
   /** Whether the GDS scene is active (and should override procedural layout). */
   hasGdsScene(): boolean { return this.gdsRenderer.isRendered() }
 
+  /** GDS scene scale factor (pixels per GDS unit). Used to scale workstations proportionally. */
+  getGdsScale(): number { return this.gdsRenderer.getScale() }
+
   /** Get world-space desk slot positions from the GDS scene stool locations. */
   getGdsDeskSlots(): GdsDeskSlot[] { return this.gdsRenderer.getDeskSlots() }
 

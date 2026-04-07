@@ -200,7 +200,7 @@ export class BootScene extends BaseScene {
           ease: 'Power2',
           onComplete: () => {
             allObjects.forEach(obj => obj.destroy())
-            this.scene.start(SCENE_KEYS.OFFICE)
+            this.scene.start(SCENE_KEYS.CAMPUS)
           },
         })
       })
@@ -360,6 +360,9 @@ export class BootScene extends BaseScene {
 
     // GDS-exported medium lab scene — composited scene image
     this.load.image(SPRITESHEET_KEYS.GDS_MEDIUM, './sprites/gds-medium-scene.png')
+
+    // GDS world map — default start scene
+    this.load.image(SPRITESHEET_KEYS.GDS_WORLDMAP, './sprites/gds-worldmap.png')
 
     // Lab pipes — 128x128 cells, 7 cols × 5 rows (pipe runs, connectors, valves)
     this.load.spritesheet(SPRITESHEET_KEYS.LAB_PIPES, './sprites/lab-pipes.png', {
