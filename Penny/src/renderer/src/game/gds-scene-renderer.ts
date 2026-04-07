@@ -37,18 +37,18 @@ export interface GdsSceneLayout {
 // Y nudged +40 so character sprites (origin bottom-center) sit ON the stool
 // flipX: true = face left (sprite mirrored), based on which side the desk is
 const STOOL_Y_NUDGE = 40
-// Stool rotation from GDS scene — the angle the character should face (degrees)
+// sitFrame: 0=south/facing viewer, 1=looking screen-right, 2=north/back, 3=looking screen-left
 const GDS_STOOL_POSITIONS: { x: number; y: number; flipX: boolean; sitFrame: number; angle: number }[] = [
-  { x: 1824, y: 254 + STOOL_Y_NUDGE, flipX: false, sitFrame: 0, angle: 30 },
-  { x: 1478, y: 918 + STOOL_Y_NUDGE, flipX: false, sitFrame: 0, angle: -156 },
-  { x: 877, y: 1281 + STOOL_Y_NUDGE, flipX: false, sitFrame: 0, angle: 111 },
-  { x: 880, y: 1629 + STOOL_Y_NUDGE, flipX: false, sitFrame: 0, angle: 155 },
-  { x: 920, y: 1855 + STOOL_Y_NUDGE, flipX: false, sitFrame: 0, angle: 69 },
-  { x: 1629, y: 1614 + STOOL_Y_NUDGE, flipX: false, sitFrame: 0, angle: -105 },
-  { x: 2018, y: 1630 + STOOL_Y_NUDGE, flipX: false, sitFrame: 0, angle: 111 },
-  { x: 1559, y: 1849 + STOOL_Y_NUDGE, flipX: false, sitFrame: 0, angle: 40 },
-  { x: 2632, y: 1590 + STOOL_Y_NUDGE, flipX: false, sitFrame: 0, angle: -137 },
-  { x: 2627, y: 1879 + STOOL_Y_NUDGE, flipX: false, sitFrame: 0, angle: -74 },
+  { x: 1824, y: 254 + STOOL_Y_NUDGE, flipX: false, sitFrame: 3, angle: 0 },   // top room — desk is screen-left
+  { x: 1478, y: 918 + STOOL_Y_NUDGE, flipX: false, sitFrame: 2, angle: 0 },   // mid console — desk is up/north
+  { x: 877, y: 1281 + STOOL_Y_NUDGE, flipX: false, sitFrame: 3, angle: 0 },   // mid-left — desk is screen-left
+  { x: 880, y: 1629 + STOOL_Y_NUDGE, flipX: false, sitFrame: 1, angle: 0 },   // bot-left corner 1 — desk is screen-right
+  { x: 920, y: 1855 + STOOL_Y_NUDGE, flipX: false, sitFrame: 3, angle: 0 },   // bot-left corner 2 — desk is screen-left
+  { x: 1629, y: 1614 + STOOL_Y_NUDGE, flipX: false, sitFrame: 1, angle: 0 },  // bot-center 1 — desk is screen-right
+  { x: 2018, y: 1630 + STOOL_Y_NUDGE, flipX: false, sitFrame: 1, angle: 0 },  // bot-center 2 — desk is screen-right
+  { x: 1559, y: 1849 + STOOL_Y_NUDGE, flipX: false, sitFrame: 0, angle: 0 },  // bot-center 3 — desk is south
+  { x: 2632, y: 1590 + STOOL_Y_NUDGE, flipX: false, sitFrame: 1, angle: 0 },  // bot-right 1 — desk is screen-right
+  { x: 2627, y: 1879 + STOOL_Y_NUDGE, flipX: false, sitFrame: 1, angle: 0 },  // bot-right 2 — desk is screen-right
 ]
 
 // ---------------------------------------------------------------------------

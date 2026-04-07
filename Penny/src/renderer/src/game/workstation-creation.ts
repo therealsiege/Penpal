@@ -637,12 +637,11 @@ export class WorkstationFactory {
     let sprite: Phaser.GameObjects.Sprite
 
     if (gdsScene) {
-      // GDS mode: use front-facing sit sprite, rotated to match the stool angle
+      // GDS mode: use directional sit frame based on stool→desk direction
       const slot = this.host.getOrAssignGdsDeskSlot?.(agent.config.id)
       const sitKey = charIdx === 1 ? ANIM_KEYS.SIT_2 : ANIM_KEYS.SIT_1
-      sprite = this.scene.add.sprite(chairOffX, WS_SPRITE_Y + chairOffY, sitKey, 0)
+      sprite = this.scene.add.sprite(chairOffX, WS_SPRITE_Y + chairOffY, sitKey, slot?.sitFrame ?? 0)
       sprite.setScale(CHAR_SCALE).setOrigin(0.5, 1)
-      if (slot) sprite.setAngle(slot.angle)
     } else {
       const frame = this.host.getPoseFrame(charIdx, agent)
       sprite = this.scene.add.sprite(chairOffX, WS_SPRITE_Y + chairOffY, SPRITESHEET_KEYS.CHARACTERS, frame)
@@ -1152,6 +1151,10 @@ export class WorkstationFactory {
         if (slot) {
           cx = slot.x - room.x
           cy = slot.y - room.y
+          // Apply directional sit frame (may not have been available at creation time)
+          const charIdx = this.host.getAgentCharacterIndex(ws.state ?? { config: { name: agentId } } as AgentState)
+          const sitKey = charIdx === 1 ? ANIM_KEYS.SIT_2 : ANIM_KEYS.SIT_1
+          ws.sprite.setTexture(sitKey, slot.sitFrame)
         } else if (i < layout.deskPositions.length) {
           // Fall back to grid if all GDS slots taken
           cx = layout.deskPositions[i].x

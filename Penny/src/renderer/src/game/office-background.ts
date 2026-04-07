@@ -54,6 +54,8 @@ export interface BackgroundHostScene {
   updateCameraBounds(): void
   setWorldSize(w: number, h: number): void
   markPodsDirty(): void
+  /** Re-layout all workstations (called after GDS scene renders so desk slots are available). */
+  relayoutAllWorkstations(): void
 
   // Particles
   setCorridorData(segments: Array<{ x1: number; y1: number; x2: number; y2: number; color: number }>, hasActive: boolean): void
@@ -491,6 +493,11 @@ export class OfficeBackground {
     this.drawTeamAreas(teamLayouts)
     this.corridors.drawCorridors(roomList)
     this.corridors.drawHallwayIndicators(this.scene.time.now)
+
+    // After GDS scene renders, re-layout workstations so they pick up desk slots
+    if (gdsActive && this.gdsRenderer.isRendered()) {
+      this.host.relayoutAllWorkstations()
+    }
 
     this.host.updateCameraBounds()
     this.host.rebuildLabFacilityProps()
