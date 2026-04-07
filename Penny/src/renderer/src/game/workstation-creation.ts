@@ -153,7 +153,9 @@ export class WorkstationFactory {
     const gdsScene = this.host.getOrAssignGdsDeskSlot != null
 
     // Scale up workstation elements to match the GDS scene's zoom level
-    if (gdsScene) wsContainer.setScale(1.65)
+    // Scale workstations proportionally to the GDS scene size
+    const gdsWsScale = gdsScene ? (this.host.getGdsScale?.() ?? 0.37) * 1.5 : 1
+    if (gdsScene) wsContainer.setScale(gdsWsScale)
 
     const labPropsLoaded = this.scene.textures.exists(SPRITESHEET_KEYS.LAB_PROPS)
     const hasConsoleDeskImage = !gdsScene && this.scene.textures.exists(LAB_IMAGE_KEYS.PROP_CONSOLE_DESK)
@@ -191,9 +193,10 @@ export class WorkstationFactory {
       wsContainer.add(deskBody)
     } else if (gdsScene) {
       // GDS scene mode — desks are in the backdrop image.
-      // Invisible hit area only — no fill, no stroke.
+      // Create deskBody but keep it fully hidden (hit detection uses separate hitArea).
       deskBody = this.scene.add.rectangle(0, WS_DESK_Y, deskW, 40, 0x000000, 0)
       deskBody.setStrokeStyle(0, 0x000000, 0)
+      deskBody.setVisible(false)
       wsContainer.add(deskBody)
     } else {
       // Fallback: individual chair + desk rect + monitor
@@ -1064,7 +1067,7 @@ export class WorkstationFactory {
     })
 
     hitArea.on('pointerover', () => {
-      const baseScale = gdsScene ? 1.65 : 1
+      const baseScale = gdsScene ? gdsWsScale : 1
       this.scene.tweens.killTweensOf(wsContainer)
       this.scene.tweens.add({ targets: wsContainer, scaleX: baseScale * 1.07, scaleY: baseScale * 1.07, duration: 140, ease: 'Back.easeOut' })
       if (!gdsScene) ws.deskBody.setStrokeStyle(2, 0x3b82f6, 0.9)
@@ -1097,7 +1100,7 @@ export class WorkstationFactory {
     })
 
     hitArea.on('pointerout', () => {
-      const baseScale = gdsScene ? 1.65 : 1
+      const baseScale = gdsScene ? gdsWsScale : 1
       this.scene.tweens.killTweensOf(wsContainer)
       this.scene.tweens.add({ targets: wsContainer, scaleX: baseScale, scaleY: baseScale, duration: 140, ease: 'Power2' })
       // Reset signature item angle in case yoyo tween was interrupted

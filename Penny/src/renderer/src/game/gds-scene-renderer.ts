@@ -126,18 +126,18 @@ export class GdsSceneRenderer {
     for (const cfg of BARISTAS) {
       const wx = this.originX + cfg.gdsX * this.scale
       const wy = this.originY + cfg.gdsY * this.scale
-      const bScale = 1.65  // match workstation container scale
+      const containerScale = this.scale * 2.5  // tuned to match workstation duder size
 
-      const bc = this.scene.add.container(wx, wy).setDepth(0)
+      const bc = this.scene.add.container(wx, wy).setDepth(0).setScale(containerScale)
 
       const walkKey = cfg.charIdx === 1 ? ANIM_KEYS.WALK_2 : ANIM_KEYS.WALK_1
       bc.add(this.scene.add.sprite(0, 0, walkKey, 0)
-        .setScale(CHAR_SCALE * bScale).setOrigin(0.5, 1))
+        .setScale(CHAR_SCALE).setOrigin(0.5, 1))
 
       // Green apron indicator
-      bc.add(this.scene.add.rectangle(0, -8 * bScale, 14 * bScale, 12 * bScale, 0x059669, 0.35))
+      bc.add(this.scene.add.rectangle(0, -8, 14, 12, 0x059669, 0.35))
 
-      bc.add(this.scene.add.text(0, 6 * bScale, cfg.name, {
+      bc.add(this.scene.add.text(0, 6, cfg.name, {
         fontSize: scaledFontSize(8),
         fontFamily: 'system-ui, sans-serif',
         color: activeTheme.accentText,

@@ -103,6 +103,8 @@ export interface WorkstationHost {
   usesFacilityLabStrategicProps?(): boolean
   /** Get the assigned GDS desk slot (world-space) for an agent, assigning if needed. */
   getOrAssignGdsDeskSlot?(agentId: string): { x: number; y: number; flipX: boolean; sitFrame: number; angle: number } | null
+  /** GDS scene scale factor — used to scale workstations proportionally to the scene. */
+  getGdsScale?(): number
 }
 
 // ---------------------------------------------------------------------------
@@ -365,8 +367,8 @@ export class OfficeWorkstations {
       this.removeCoffeeIndicator(ws)
     }
     if (ws.container.alpha < 0.9) ws.container.setAlpha(1)
-    // Restore scale if it somehow shrunk — but respect GDS mode's 1.65× base scale
-    const gdsBaseScale = this.host.getOrAssignGdsDeskSlot ? 1.65 : 1
+    // Restore scale if it somehow shrunk — respect GDS mode's dynamic base scale
+    const gdsBaseScale = this.host.getOrAssignGdsDeskSlot ? (this.host.getGdsScale?.() ?? 0.37) * 1.5 : 1
     if (ws.container.scaleX < gdsBaseScale * 0.9) ws.container.setScale(gdsBaseScale)
 
     // Skip redundant updates — fingerprint the fields that affect visuals
