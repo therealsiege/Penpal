@@ -5,7 +5,7 @@
 // ---------------------------------------------------------------------------
 
 import Phaser from 'phaser'
-import { SPRITESHEET_KEYS, ICON_FRAMES, ITEM_FRAMES, STATUS_DOT_FRAMES, LEGO_FRAMES, PET_COUNT, PET_FACE_FRAMES, EFFECT_ANIM_KEYS, IMAGE_KEYS, ANIMAL_SPECIES, ANIMAL_COUNT, ANIMAL_IDLE_FRAMES, MEDAL_HD_FRAMES, LAB_PROP_FRAMES, LAB_IMAGE_KEYS } from './office-asset-keys'
+import { SPRITESHEET_KEYS, ANIM_KEYS, ICON_FRAMES, ITEM_FRAMES, STATUS_DOT_FRAMES, LEGO_FRAMES, PET_COUNT, PET_FACE_FRAMES, EFFECT_ANIM_KEYS, IMAGE_KEYS, ANIMAL_SPECIES, ANIMAL_COUNT, ANIMAL_IDLE_FRAMES, MEDAL_HD_FRAMES, LAB_PROP_FRAMES, LAB_IMAGE_KEYS } from './office-asset-keys'
 import { fadeInUp, fadeOutDown, pulse } from './juice-utils'
 import { AnimConfig } from './animation-config'
 import { EventBus, EVENTS } from './events'
@@ -40,6 +40,7 @@ import {
   CTX_METER_H,
   CTX_GREEN,
   CTX_METER_BASE_ALPHA,
+  scaledFontSize,
 } from './office-constants'
 import type { WorkstationHost } from './office-workstation'
 import { isDeskItemUnlocked, isFlairUnlocked, getRankColor } from './cosmetic-tiers'
@@ -148,8 +149,14 @@ export class WorkstationFactory {
     const wsContainer = this.scene.add.container(0, 0)
     room.container.add(wsContainer)
 
+    // GDS scene mode: desks are in the backdrop image — only render agent + indicators
+    const gdsScene = this.host.getOrAssignGdsDeskSlot != null
+
+    // Scale up workstation elements to match the GDS scene's zoom level
+    if (gdsScene) wsContainer.setScale(1.65)
+
     const labPropsLoaded = this.scene.textures.exists(SPRITESHEET_KEYS.LAB_PROPS)
-    const hasConsoleDeskImage = this.scene.textures.exists(LAB_IMAGE_KEYS.PROP_CONSOLE_DESK)
+    const hasConsoleDeskImage = !gdsScene && this.scene.textures.exists(LAB_IMAGE_KEYS.PROP_CONSOLE_DESK)
     const facilityStrategic = this.host.usesFacilityLabStrategicProps?.() === true
 
     // Console desk image — replaces individual chair + desk rect + monitor in lab mode
@@ -181,6 +188,12 @@ export class WorkstationFactory {
       // Invisible desk body for hit detection and status stroke
       deskBody = this.scene.add.rectangle(0, WS_DESK_Y, deskW, 18, 0x000000, 0)
         .setStrokeStyle(1, activeTheme.deskStrokeIdle, 0)
+      wsContainer.add(deskBody)
+    } else if (gdsScene) {
+      // GDS scene mode — desks are in the backdrop image.
+      // Invisible hit area only — no fill, no stroke.
+      deskBody = this.scene.add.rectangle(0, WS_DESK_Y, deskW, 40, 0x000000, 0)
+      deskBody.setStrokeStyle(0, 0x000000, 0)
       wsContainer.add(deskBody)
     } else {
       // Fallback: individual chair + desk rect + monitor
@@ -316,7 +329,7 @@ export class WorkstationFactory {
 
     // Monitor blurb text — tiny live text overlaid on the monitor screen
     const monitorText = this.scene.add.text(0, WS_MONITOR_Y - 1, '', {
-      fontSize: '4px',
+      fontSize: scaledFontSize(4),
       fontFamily: 'monospace',
       color: '#5a6a7a',
       wordWrap: { width: labPropsLoaded ? 18 : 14, useAdvancedWrap: false },
@@ -358,7 +371,9 @@ export class WorkstationFactory {
     let roomPropSprite: Phaser.GameObjects.Sprite | null = null
     let ledGlow: Phaser.GameObjects.Graphics | undefined
 
-    if (!labPropsLoaded) {
+    if (gdsScene) {
+      // GDS scene mode — no desk accessories needed (already in backdrop)
+    } else if (!labPropsLoaded) {
       // --- Office mode: full desk accessory set ---
 
       // Desk lamp (unlocks at Associate / L4)
@@ -563,7 +578,7 @@ export class WorkstationFactory {
     wsContainer.add(taskCountBg)
 
     const taskCountText = this.scene.add.text(Math.round(deskW * 0.42) + 7, WS_DESK_Y - 8, '0', {
-      fontSize: '5px',
+      fontSize: scaledFontSize(5),
       fontFamily: 'system-ui, monospace',
       color: '#5a6a7a',
       resolution: 3,
@@ -619,9 +634,20 @@ export class WorkstationFactory {
     wsContainer.add(shadow)
 
     const charIdx = this.host.getAgentCharacterIndex(agent)
-    const frame   = this.host.getPoseFrame(charIdx, agent)
-    const sprite  = this.scene.add.sprite(chairOffX, WS_SPRITE_Y + chairOffY, SPRITESHEET_KEYS.CHARACTERS, frame)
-    sprite.setScale(CHAR_SCALE).setOrigin(0.5, 1).setAngle(chairAngle)
+    let sprite: Phaser.GameObjects.Sprite
+
+    if (gdsScene) {
+      // GDS mode: use front-facing sit sprite, rotated to match the stool angle
+      const slot = this.host.getOrAssignGdsDeskSlot?.(agent.config.id)
+      const sitKey = charIdx === 1 ? ANIM_KEYS.SIT_2 : ANIM_KEYS.SIT_1
+      sprite = this.scene.add.sprite(chairOffX, WS_SPRITE_Y + chairOffY, sitKey, 0)
+      sprite.setScale(CHAR_SCALE).setOrigin(0.5, 1)
+      if (slot) sprite.setAngle(slot.angle)
+    } else {
+      const frame = this.host.getPoseFrame(charIdx, agent)
+      sprite = this.scene.add.sprite(chairOffX, WS_SPRITE_Y + chairOffY, SPRITESHEET_KEYS.CHARACTERS, frame)
+      sprite.setScale(CHAR_SCALE).setOrigin(0.5, 1).setAngle(chairAngle)
+    }
     wsContainer.add(sprite)
 
     // Thought bubble — dark card with accent border and live blurb text
@@ -633,7 +659,7 @@ export class WorkstationFactory {
       thoughtBubbleBg.setVisible(false)
     }
     const thoughtBubbleText = this.scene.add.text(0, 0, '', {
-      fontSize: '10px', color: '#c8d0e0', fontFamily: 'system-ui, sans-serif',
+      fontSize: scaledFontSize(10), color: '#c8d0e0', fontFamily: 'system-ui, sans-serif',
       wordWrap: { width: 95, useAdvancedWrap: false },
       align: 'left', resolution: 2, lineSpacing: 1,
     }).setOrigin(0.5)
@@ -645,7 +671,7 @@ export class WorkstationFactory {
 
     // Show persona name (e.g. "Marcus Chen") instead of title
     const nameText = this.scene.add.text(0, WS_NAME_Y, '', {
-      fontSize: '11px', color: activeTheme.nameText, fontFamily: "'Monogram', system-ui, monospace",
+      fontSize: scaledFontSize(11), color: activeTheme.nameText, fontFamily: "'Monogram', system-ui, monospace",
       backgroundColor: activeTheme.nameBg, padding: { x: 4, y: 1 }, align: 'center',
       resolution: 2,
     }).setOrigin(0.5).setVisible(false)
@@ -734,7 +760,7 @@ export class WorkstationFactory {
     // Role badge (S / R / E) — shown when agent has a pod role assigned.
     // Sits to the left of the name tag; revealed/hidden in updateWorkstation.
     const roleBadge = this.scene.add.text(-30, WS_NAME_Y, '', {
-      fontSize: '9px', color: activeTheme.nameBg.replace(/cc$/, ''), fontFamily: 'system-ui, monospace',
+      fontSize: scaledFontSize(9), color: activeTheme.nameBg.replace(/cc$/, ''), fontFamily: 'system-ui, monospace',
       fontStyle: 'bold', backgroundColor: activeTheme.accentText,
       padding: { x: 3, y: 1 }, resolution: 2,
     }).setOrigin(0.5).setVisible(false)
@@ -743,7 +769,7 @@ export class WorkstationFactory {
 
     // Uptime indicator — tiny dim counter just below the name tag
     const uptimeText = this.scene.add.text(0, WS_NAME_Y + 12, '', {
-      fontSize: '6px', color: '#3a4858', fontFamily: 'system-ui, monospace',
+      fontSize: scaledFontSize(6), color: '#3a4858', fontFamily: 'system-ui, monospace',
       resolution: 2, align: 'center',
     }).setOrigin(0.5).setAlpha(0.7).setVisible(false)
     wsContainer.add(uptimeText)
@@ -770,7 +796,7 @@ export class WorkstationFactory {
 
     const XP_TEXT_Y = XP_BAR_Y + 6
     const xpBarText = this.scene.add.text(0, XP_TEXT_Y, '', {
-      fontSize: '5px', color: '#5a6a7a', fontFamily: "'Monogram', monospace",
+      fontSize: scaledFontSize(5), color: '#5a6a7a', fontFamily: "'Monogram', monospace",
       resolution: 2, align: 'center',
     }).setOrigin(0.5).setVisible(false)
     wsContainer.add(xpBarText)
@@ -841,7 +867,7 @@ export class WorkstationFactory {
     const blockedIndicatorBadge = this.scene.add.sprite(0, 0, SPRITESHEET_KEYS.GAME_ICONS, ICON_FRAMES.CIRCLE_YELLOW)
       .setScale(0.32).setOrigin(0.5)
     const blockedIndicatorText = this.scene.add.text(0, -0.5, '!', {
-      fontSize: '10px',
+      fontSize: scaledFontSize(10),
       color: activeTheme.nameBg.replace(/cc$/, ''),
       fontFamily: 'system-ui, monospace',
       fontStyle: 'bold',
@@ -857,7 +883,7 @@ export class WorkstationFactory {
       -WORKSTATION_W / 2 + 4,
       WS_SPRITE_Y - 20,
       '',
-      { fontSize: '8px', fontFamily: 'system-ui, sans-serif', resolution: 2 },
+      { fontSize: scaledFontSize(8), fontFamily: 'system-ui, sans-serif', resolution: 2 },
     ).setOrigin(0, 1).setAlpha(0)
     wsContainer.add(moodEmoji)
     lodLevel3Objects.push(moodEmoji)
@@ -1039,9 +1065,10 @@ export class WorkstationFactory {
     })
 
     hitArea.on('pointerover', () => {
+      const baseScale = gdsScene ? 1.65 : 1
       this.scene.tweens.killTweensOf(wsContainer)
-      this.scene.tweens.add({ targets: wsContainer, scaleX: 1.07, scaleY: 1.07, duration: 140, ease: 'Back.easeOut' })
-      ws.deskBody.setStrokeStyle(2, 0x3b82f6, 0.9)
+      this.scene.tweens.add({ targets: wsContainer, scaleX: baseScale * 1.07, scaleY: baseScale * 1.07, duration: 140, ease: 'Back.easeOut' })
+      if (!gdsScene) ws.deskBody.setStrokeStyle(2, 0x3b82f6, 0.9)
 
       // --- Micro-interactions: desk items react to pointer ---
       // Desk pet excited bounce
@@ -1071,8 +1098,9 @@ export class WorkstationFactory {
     })
 
     hitArea.on('pointerout', () => {
+      const baseScale = gdsScene ? 1.65 : 1
       this.scene.tweens.killTweensOf(wsContainer)
-      this.scene.tweens.add({ targets: wsContainer, scaleX: 1, scaleY: 1, duration: 140, ease: 'Power2' })
+      this.scene.tweens.add({ targets: wsContainer, scaleX: baseScale, scaleY: baseScale, duration: 140, ease: 'Power2' })
       // Reset signature item angle in case yoyo tween was interrupted
       if (ws.signatureItem) ws.signatureItem.setAngle(0)
       this.restoreDeskStrokeCallback(ws)
@@ -1103,27 +1131,47 @@ export class WorkstationFactory {
   // ---------------------------------------------------------------------------
 
   layout(room: Room): void {
-    const agents = Array.from(room.workstations.values())
-    const count  = agents.length
+    const entries = Array.from(room.workstations.entries()) // [agentId, ws]
+    const count  = entries.length
     if (count === 0) return
+
+    // GDS scene mode: use pre-designed desk slot positions
+    const getSlot = this.host.getOrAssignGdsDeskSlot
+    const useGds = getSlot != null
 
     const roomType = detectRoomType(room.cwd ?? '')
     const layout = computeRoomLayout(count, roomType, room.doorSide ?? 'bottom')
 
-    agents.forEach((ws, i) => {
-      if (i >= layout.deskPositions.length) return
-      const { x: cx, y: cy } = layout.deskPositions[i]
+    entries.forEach(([agentId, ws], i) => {
+      let cx: number
+      let cy: number
+
+      if (useGds) {
+        // Try to get a GDS desk slot (world-space), convert to room-relative
+        const slot = getSlot(agentId)
+        if (slot) {
+          cx = slot.x - room.x
+          cy = slot.y - room.y
+        } else if (i < layout.deskPositions.length) {
+          // Fall back to grid if all GDS slots taken
+          cx = layout.deskPositions[i].x
+          cy = layout.deskPositions[i].y
+        } else {
+          return
+        }
+      } else {
+        if (i >= layout.deskPositions.length) return
+        cx = layout.deskPositions[i].x
+        cy = layout.deskPositions[i].y
+      }
 
       this.scene.tweens.killTweensOf(ws.container)
       this.scene.tweens.add({ targets: ws.container, x: cx, y: cy, duration: 280, ease: 'Power2' })
       ws.container.setDepth(cy + room.y)
-
-      // Console-desk stays at creation angle (180°). All workstation elements
-      // (sprite, monitor, chair, desk items) are positioned relative to this
-      // orientation — rotating the desk alone misaligns everything else.
     })
 
-    // ── Connecting console between adjacent desks ──
+    // ── Connecting console between adjacent desks (skip in GDS mode) ──
+    if (useGds) return
     if (room.deskConnectors) {
       for (const c of room.deskConnectors) c.destroy()
     }

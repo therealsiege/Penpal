@@ -8,15 +8,15 @@ jobs:
   rss-ingest:
     description: Ingest RSS feeds + Google Alerts for all ventures
     command: npm run ingest:all
-    cron: 0 6,14 * * *
+    cron: 0 7,13,19 * * *
     timeout: 300
     enabled: true
   daily-briefing:
-    description: Generate daily intelligence briefing
+    description: Generate intelligence briefing with dispatch + lead activity
     command: npm run briefing
-    cron: 30 6 * * 1-5
+    cron: 30 7,13,19 * * *
     timeout: 120
-    enabled: false
+    enabled: true
     depends_on:
       - rss-ingest
   npi-enrich:
@@ -40,6 +40,6 @@ jobs:
   weekly-digest:
     description: Generate weekly eval digest report
     command: cd ../Penny && npx electron . --run-digest
-    cron: "0 8 * * 1"
+    cron: 0 8 * * 1
     timeout: 120
     enabled: false

@@ -5,7 +5,7 @@ import {
   EFFECT_ANIM_KEYS, ANIMAL_IDLE_FRAMES, ANIMAL_SPECIES,
   LAB_ANIM_KEYS, LAB_PROP_FRAMES,
 } from './office-asset-keys'
-import { CHAR_FRAME_W, CHAR_FRAME_H, OFFICE_TILE_SIZE, ROOM_TILE_SIZE, LAB_TILE_SIZE } from './office-constants'
+import { CHAR_FRAME_W, CHAR_FRAME_H, OFFICE_TILE_SIZE, ROOM_TILE_SIZE, LAB_TILE_SIZE, scaledFontSize } from './office-constants'
 
 // ---------------------------------------------------------------------------
 // BootScene — shared asset preloader
@@ -33,7 +33,7 @@ export class BootScene extends BaseScene {
 
     // Title text
     const loadTitle = this.add.text(camW / 2, camH / 2 - 60, 'LOADING OFFICE', {
-      fontSize: '14px', fontFamily: 'monospace', color: '#5a7a6a', resolution: 2,
+      fontSize: scaledFontSize(14), fontFamily: 'monospace', color: '#5a7a6a', resolution: 2,
     }).setOrigin(0.5).setDepth(20001)
 
     // Progress bar track + fill
@@ -50,12 +50,12 @@ export class BootScene extends BaseScene {
     const totalAssets = Object.keys(SPRITESHEET_KEYS).length + Object.keys(ANIM_KEYS).length + Object.keys(IMAGE_KEYS).length
     let loadedCount = 0
     const counterText = this.add.text(camW / 2, barY + 20, `0 / ${totalAssets} assets`, {
-      fontSize: '10px', fontFamily: 'monospace', color: '#3a4858', resolution: 2,
+      fontSize: scaledFontSize(10), fontFamily: 'monospace', color: '#3a4858', resolution: 2,
     }).setOrigin(0.5).setDepth(20001)
 
     // Current asset name
     const assetText = this.add.text(camW / 2, barY + 38, '', {
-      fontSize: '10px', fontFamily: 'monospace', color: '#2a3440', resolution: 2,
+      fontSize: scaledFontSize(10), fontFamily: 'monospace', color: '#2a3440', resolution: 2,
     }).setOrigin(0.5).setDepth(20001)
 
     // Sprite preview area — show small thumbnails of loaded spritesheets
@@ -116,6 +116,8 @@ export class BootScene extends BaseScene {
       // Wave 8
       [SPRITESHEET_KEYS.LAB_MAIN_TILESET]: 'Lab Tileset',
       [SPRITESHEET_KEYS.LAB_SMOOTH]: 'Lab Smooth',
+      // GDS scene
+      [SPRITESHEET_KEYS.GDS_MEDIUM]: 'GDS Lab Scene',
     }
 
     // Spritesheets worth showing a thumbnail preview for
@@ -166,7 +168,7 @@ export class BootScene extends BaseScene {
           previewSlots.push(sprite)
 
           const label = this.add.text(sx, previewY + 22, assetDisplayNames[sheetKey] || sheetKey, {
-            fontSize: '7px', fontFamily: 'monospace', color: '#2a3440', resolution: 2,
+            fontSize: scaledFontSize(7), fontFamily: 'monospace', color: '#2a3440', resolution: 2,
           }).setOrigin(0.5).setDepth(20001).setAlpha(0)
           this.tweens.add({ targets: label, alpha: 0.6, duration: 200 })
           previewLabels.push(label)
@@ -356,6 +358,9 @@ export class BootScene extends BaseScene {
     // Lab props atlas — variable-size sprites from GDS editor (135 named frames)
     this.load.atlas(SPRITESHEET_KEYS.LAB_PROPS, './sprites/lab-props-atlas.png', './sprites/lab-props-atlas.json')
 
+    // GDS-exported medium lab scene — composited scene image
+    this.load.image(SPRITESHEET_KEYS.GDS_MEDIUM, './sprites/gds-medium-scene.png')
+
     // Lab pipes — 128x128 cells, 7 cols × 5 rows (pipe runs, connectors, valves)
     this.load.spritesheet(SPRITESHEET_KEYS.LAB_PIPES, './sprites/lab-pipes.png', {
       frameWidth: 128, frameHeight: 128,
@@ -391,6 +396,12 @@ export class BootScene extends BaseScene {
       ['lab-four-way', 'four-way'], ['lab-single', 'single'],
     ]
     for (const [key, file] of labWalls) this.load.image(key, `./assets/lab/walls/${file}.png`)
+
+    // Room background tilesets
+    this.load.image('lab-tileset-fill', './assets/lab/tileset-fill.png')
+    this.load.image('lab-tileset-top', './assets/lab/tileset-top.png')
+    this.load.image('lab-smooth-tileset', './assets/lab/smooth-tileset.png')
+    this.load.image('lab-pipe-tileset', './assets/lab/pipe-tileset.png')
 
     const labPipes: [string, string][] = [
       ['lab-pipe-h', 'pipe-h'], ['lab-pipe-h2', 'pipe-h2'], ['lab-pipe-v', 'pipe-v'],

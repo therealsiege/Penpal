@@ -5,6 +5,7 @@ import { SCENE_KEYS, SPRITESHEET_KEYS, TOAST_ICON_FRAMES, ICON_FRAMES, IMAGE_KEY
 import { activeTheme } from './office-theme'
 import { ActivityFeed } from './activity-feed'
 import type { AgentState } from '../types'
+import { scaledFontSize } from './office-constants'
 
 // ---------------------------------------------------------------------------
 // UIScene — screen-space HUD overlay, runs parallel to OfficeScene
@@ -203,7 +204,7 @@ export class UIScene extends BaseScene {
       .setScale(0.3).setOrigin(0.5)
 
     const label = this.add.text(26, 6, message, {
-      fontSize: '11px', fontFamily: 'monospace', color: activeTheme.headerText,
+      fontSize: scaledFontSize(11), fontFamily: 'monospace', color: activeTheme.headerText,
       wordWrap: { width: TOAST_W - 34 }, resolution: 2,
     })
 
@@ -306,7 +307,7 @@ export class UIScene extends BaseScene {
     this.infoBarBg = this.add.rectangle(0, 0, vw, INFO_BAR_H, activeTheme.panelBg, 0.9).setOrigin(0, 0)
     const sep = this.add.rectangle(0, 0, vw, 1, activeTheme.separator, 1).setOrigin(0, 0)
 
-    const ts = { fontFamily: 'monospace', fontSize: '10px', fontStyle: 'bold', color: '#f1f5f9', resolution: 2 }
+    const ts = { fontFamily: 'monospace', fontSize: scaledFontSize(10), fontStyle: 'bold', color: '#f1f5f9', resolution: 2 }
     this.infoBarText   = this.add.text(12,      INFO_BAR_H / 2, '', ts).setOrigin(0, 0.5)
     this.infoBarStatus = this.add.text(vw - 12, INFO_BAR_H / 2, '', { ...ts, color: '#34d399' }).setOrigin(1, 0.5)
 
@@ -337,7 +338,7 @@ export class UIScene extends BaseScene {
     panelGfx.strokeRoundedRect(cx - HELP_W / 2, cy - HELP_H / 2, HELP_W, HELP_H, 10)
 
     const title = this.add.text(cx, cy - HELP_H / 2 + 18, 'Keyboard Shortcuts', {
-      fontSize: '12px', fontStyle: 'bold', color: '#f1f5f9', fontFamily: 'monospace', resolution: 2,
+      fontSize: scaledFontSize(12), fontStyle: 'bold', color: '#f1f5f9', fontFamily: 'monospace', resolution: 2,
     }).setOrigin(0.5, 0).setScrollFactor(0)
 
     const divGfx = this.add.graphics()
@@ -354,8 +355,8 @@ export class UIScene extends BaseScene {
       const [key, desc] = SHORTCUTS[i]
       const rowY = startY + i * rowH
       rows.push(
-        this.add.text(keyX,  rowY, key,  { fontSize: '10px', color: '#5a6a7a', fontFamily: 'monospace', fontStyle: 'bold', resolution: 2 }).setScrollFactor(0),
-        this.add.text(descX, rowY, desc, { fontSize: '10px', color: activeTheme.subtleText, fontFamily: 'monospace', resolution: 2 }).setScrollFactor(0),
+        this.add.text(keyX,  rowY, key,  { fontSize: scaledFontSize(10), color: '#5a6a7a', fontFamily: 'monospace', fontStyle: 'bold', resolution: 2 }).setScrollFactor(0),
+        this.add.text(descX, rowY, desc, { fontSize: scaledFontSize(10), color: activeTheme.subtleText, fontFamily: 'monospace', resolution: 2 }).setScrollFactor(0),
       )
     }
 
@@ -376,7 +377,7 @@ export class UIScene extends BaseScene {
       .setScale(0.35).setOrigin(0.5, 0.5).setAlpha(0.6).setScrollFactor(0)
 
     const hint = this.add.text(cx - 66, cy + HELP_H / 2 - 12, 'Press H or ESC to dismiss', {
-      fontSize: '9px', color: '#3a4858', fontFamily: 'monospace', resolution: 2,
+      fontSize: scaledFontSize(9), color: '#3a4858', fontFamily: 'monospace', resolution: 2,
     }).setOrigin(0, 0.5).setScrollFactor(0)
 
     this.helpOverlay = this.add.container(0, 0, [backdrop, panelGfx, title, divGfx, ...rows, hintDivider, hintBtn, hint])

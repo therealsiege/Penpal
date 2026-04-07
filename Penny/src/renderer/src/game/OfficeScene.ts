@@ -304,6 +304,7 @@ export class OfficeScene extends Phaser.Scene {
       setWorldSize: (w, h) => { this.worldWidth = w; this.worldHeight = h },
       softLockCameraInput: () => this.lockCameraJuiceInput(),
       softUnlockCameraInput: () => this.unlockCameraJuiceInput(),
+      getGdsSceneBounds: () => this.background?.hasGdsScene() ? this.background.getGdsSceneBounds() : null,
     })
     this.officeCamera.init()
 
@@ -1063,6 +1064,10 @@ export class OfficeScene extends Phaser.Scene {
         getNavMesh: () => scene.navMesh,
         getOrchestratorTaskForAgent: (id) => scene.orchestratorTasksByAgent.get(id),
         usesFacilityLabStrategicProps: () => scene.textures.exists(SPRITESHEET_KEYS.LAB_PROPS),
+        getOrAssignGdsDeskSlot: (agentId: string) => {
+          if (!scene.background.hasGdsScene()) return null
+          return scene.background.assignGdsDeskSlot(agentId)
+        },
       })
     }
   }
@@ -1713,6 +1718,9 @@ export class OfficeScene extends Phaser.Scene {
         w: bMaxX - bMinX + 80, h: bMaxY - bMinY + 80,
       }
     }
+
+    // In GDS mode, disable pathfinding — agents stay at their desks
+    this.navMesh.disabled = this.background.hasGdsScene()
 
     this.navMesh.rebuild({
       buildingBounds,

@@ -14,6 +14,7 @@ import {
   COLOR_DOOR_FILL,
   ROOM_HEADER_H,
   LAB_EQUIP_ZONE_H,
+  scaledFontSize,
 } from './office-constants'
 import { SPRITESHEET_KEYS, ICON_FRAMES, ITEM_FRAMES, EFFECT_ANIM_KEYS, LEGO_FRAMES, LAB_TILESET_FRAMES, LAB_SMOOTH_FRAMES, PIPE_FRAMES, CABLE_FRAMES, LAB_IMAGE_KEYS } from './office-asset-keys'
 import { LAB_TILE_SIZE } from './office-constants'
@@ -1386,7 +1387,7 @@ export class OfficeRooms {
       headerY,
       this.host.formatLabel(room.label),
       {
-        fontSize: '24px', color: activeTheme.headerText,
+        fontSize: scaledFontSize(24), color: activeTheme.headerText,
         fontFamily: "'Monogram', system-ui, monospace", fontStyle: 'bold', align: 'center',
         resolution: 2,
       },
@@ -1521,7 +1522,7 @@ export class OfficeRooms {
       headerY,
       `${room.agents.length}`,
       {
-        fontSize: '13px',
+        fontSize: scaledFontSize(13),
         color: isActive ? activeTheme.accentText : isWaiting ? '#fbbf24' : '#3a4858',
         fontFamily: 'system-ui, monospace',
         backgroundColor: activeTheme.nameBg,

@@ -177,8 +177,11 @@ export class NavMesh {
     // findPath() adds the agent's own room + door zone via ownRoomRect.
   }
 
+  /** When true, findPath always returns null (used in GDS scene mode). */
+  disabled = false
+
   findPath(start: NavPoint, end: NavPoint, ownRoomRect?: NavRect): NavPoint[] | null {
-    if (this.gridW === 0) return null
+    if (this.disabled || this.gridW === 0) return null
 
     // Pre-compute the agent's own room + door zone as ADDITIONAL walkable area.
     // The base grid has corridors + cafe only. The ownRoomRect extends above

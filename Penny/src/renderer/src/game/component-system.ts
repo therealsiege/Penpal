@@ -14,6 +14,7 @@
 import Phaser from 'phaser'
 import { EventBus, EVENTS } from './events'
 import type { AgentState, AgentStatus, SessionMode } from '../types'
+import { scaledFontSize } from './office-constants'
 
 // ---------------------------------------------------------------------------
 // Base Component
@@ -354,7 +355,7 @@ export class NameTagComponent extends Component {
     super()
     this.scene = scene
     this.nameText = scene.add.text(0, y, label, {
-      fontSize: '9px',
+      fontSize: scaledFontSize(9),
       color: '#c8d0d8',
       resolution: 2,
       ...style,
@@ -393,7 +394,7 @@ export class NameTagComponent extends Component {
         this.nameText.x + this.nameText.width / 2 + 5,
         this.nameText.y,
         role,
-        { fontSize: '7px', color, resolution: 2, fontStyle: 'bold' }
+        { fontSize: scaledFontSize(7), color, resolution: 2, fontStyle: 'bold' }
       ).setOrigin(0, 0)
       container.add(this.roleBadge)
     } else {

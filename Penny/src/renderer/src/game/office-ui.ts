@@ -3,7 +3,7 @@ import type { AgentState } from '../types'
 import type { WorkstationSprite, Room } from './office-types'
 import { NavMesh } from './nav-mesh'
 import type { PennyCafe } from './penny-cafe'
-import { WS_DESK_Y } from './office-constants'
+import { WS_DESK_Y, scaledFontSize } from './office-constants'
 import { activeTheme } from './office-theme'
 import { SPRITESHEET_KEYS, TOAST_ICON_FRAMES, ICON_FRAMES, ITEM_FRAMES, PET_COUNT, IMAGE_KEYS } from './office-asset-keys'
 import { SIGNATURE_ITEM_NAMES } from './workstation-creation'
@@ -193,7 +193,7 @@ export class OfficeUI {
 
     // Label — offset right to clear the dot
     const label = this.scene.add.text(26, 6, text, {
-      fontSize: '11px', fontFamily: 'monospace', color: activeTheme.headerText,
+      fontSize: scaledFontSize(11), fontFamily: 'monospace', color: activeTheme.headerText,
       wordWrap: { width: TOAST_W - 34 },
     })
 
@@ -342,24 +342,24 @@ export class OfficeUI {
     g.lineStyle(2, aInt, 0.6); g.lineBetween(cX + 7, aY, cX + tW - 7, aY)
     const ct = this.scene.add.container(0, 0); ct.setScrollFactor(0).setDepth(10001); this.tooltipContainer = ct
     const tx = cX + PX; let ty = aY + PY
-    ct.add(this.scene.add.text(tx, ty, name, { fontSize: '12px', color: '#f1f5f9', fontFamily: 'system-ui, sans-serif', fontStyle: 'bold', resolution: 2 }))
-    if (role) { const rc: Record<string, string> = { SOLVER: '#3b82f6', REVIEWER: '#8b5cf6', EXECUTOR: '#22c55e' }; ct.add(this.scene.add.text(cX + tW - PX, ty + 1, role, { fontSize: '9px', color: '#ffffff', fontFamily: 'system-ui, monospace', fontStyle: 'bold', backgroundColor: rc[role] ?? '#3a4858', padding: { x: 4, y: 2 }, resolution: 2 }).setOrigin(1, 0)) }
+    ct.add(this.scene.add.text(tx, ty, name, { fontSize: scaledFontSize(12), color: '#f1f5f9', fontFamily: 'system-ui, sans-serif', fontStyle: 'bold', resolution: 2 }))
+    if (role) { const rc: Record<string, string> = { SOLVER: '#3b82f6', REVIEWER: '#8b5cf6', EXECUTOR: '#22c55e' }; ct.add(this.scene.add.text(cX + tW - PX, ty + 1, role, { fontSize: scaledFontSize(9), color: '#ffffff', fontFamily: 'system-ui, monospace', fontStyle: 'bold', backgroundColor: rc[role] ?? '#3a4858', padding: { x: 4, y: 2 }, resolution: 2 }).setOrigin(1, 0)) }
     ty += LH
-    if (title) { ct.add(this.scene.add.text(tx, ty, title, { fontSize: '10px', color: activeTheme.subtleText, fontFamily: 'system-ui, sans-serif', resolution: 2 })); ty += LH }
+    if (title) { ct.add(this.scene.add.text(tx, ty, title, { fontSize: scaledFontSize(10), color: activeTheme.subtleText, fontFamily: 'system-ui, sans-serif', resolution: 2 })); ty += LH }
     ty += 4
     const statusDotFrame = aInt === 0xfbbf24 ? ICON_FRAMES.CIRCLE_YELLOW : aInt === 0x34d399 ? ICON_FRAMES.CIRCLE_GREEN : aInt === 0xa78bfa ? ICON_FRAMES.CIRCLE_BLUE : ICON_FRAMES.CIRCLE_GREY
-    ct.add(this.scene.add.sprite(tx + 3.5, ty + LH / 2, SPRITESHEET_KEYS.GAME_ICONS, statusDotFrame).setScale(0.22).setOrigin(0.5)); ct.add(this.scene.add.text(tx + 12, ty, statusLabel, { fontSize: '10px', color: statusHex, fontFamily: 'system-ui, sans-serif', fontStyle: 'bold', resolution: 2 }))
-    if (uptime) ct.add(this.scene.add.text(cX + tW - PX, ty, uptime, { fontSize: '10px', color: '#5a6a7a', fontFamily: 'system-ui, monospace', resolution: 2 }).setOrigin(1, 0))
+    ct.add(this.scene.add.sprite(tx + 3.5, ty + LH / 2, SPRITESHEET_KEYS.GAME_ICONS, statusDotFrame).setScale(0.22).setOrigin(0.5)); ct.add(this.scene.add.text(tx + 12, ty, statusLabel, { fontSize: scaledFontSize(10), color: statusHex, fontFamily: 'system-ui, sans-serif', fontStyle: 'bold', resolution: 2 }))
+    if (uptime) ct.add(this.scene.add.text(cX + tW - PX, ty, uptime, { fontSize: scaledFontSize(10), color: '#5a6a7a', fontFamily: 'system-ui, monospace', resolution: 2 }).setOrigin(1, 0))
     ty += LH
-    if (hasR) { ct.add(this.scene.add.text(tx + 12, ty, resources, { fontSize: '9px', color: '#5a6a7a', fontFamily: 'system-ui, monospace', resolution: 2 })); ty += LH }
-    if (hasTrait) { ct.add(this.scene.add.text(tx + 12, ty, sigTrait, { fontSize: '9px', color: '#a78bfa', fontFamily: 'system-ui, sans-serif', fontStyle: 'italic', resolution: 2 })); ty += LH }
+    if (hasR) { ct.add(this.scene.add.text(tx + 12, ty, resources, { fontSize: scaledFontSize(9), color: '#5a6a7a', fontFamily: 'system-ui, monospace', resolution: 2 })); ty += LH }
+    if (hasTrait) { ct.add(this.scene.add.text(tx + 12, ty, sigTrait, { fontSize: scaledFontSize(9), color: '#a78bfa', fontFamily: 'system-ui, sans-serif', fontStyle: 'italic', resolution: 2 })); ty += LH }
     if (hasPetPreview) {
       ty += 2
       ct.add(this.scene.add.sprite(tx + 8, ty + 6, SPRITESHEET_KEYS.DESK_PETS, tooltipPetFrame).setScale(0.5).setOrigin(0.5))
       ct.add(this.scene.add.sprite(tx + 24, ty + 6, SPRITESHEET_KEYS.GAME_ITEMS, tooltipSigFrame).setScale(0.4).setOrigin(0.5))
       ty += LH
     }
-    if (hasS) { ty += 2; const dg = this.scene.add.graphics(); dg.setScrollFactor(0); dg.lineStyle(1, activeTheme.panelStroke, 0.6); dg.lineBetween(tx, ty, cX + tW - PX, ty); ct.add(dg); ty += 4; ct.add(this.scene.add.text(tx, ty, sub, { fontSize: '10px', color: activeTheme.subtleText, fontFamily: 'system-ui, sans-serif', wordWrap: { width: TW }, resolution: 2 })) }
+    if (hasS) { ty += 2; const dg = this.scene.add.graphics(); dg.setScrollFactor(0); dg.lineStyle(1, activeTheme.panelStroke, 0.6); dg.lineBetween(tx, ty, cX + tW - PX, ty); ct.add(dg); ty += 4; ct.add(this.scene.add.text(tx, ty, sub, { fontSize: scaledFontSize(10), color: activeTheme.subtleText, fontFamily: 'system-ui, sans-serif', wordWrap: { width: TW }, resolution: 2 })) }
     ct.setAlpha(0); g.setAlpha(0)
     this.tooltipFadeTween = this.scene.tweens.add({ targets: [ct, g], alpha: 1, duration: 150, ease: 'Quad.easeOut' })
   }
@@ -439,7 +439,7 @@ export class OfficeUI {
     container.add(
       this.scene.add
         .text(panelX, panelY - PH / 2 + 18, 'Keyboard Shortcuts', {
-          fontSize: '12px',
+          fontSize: scaledFontSize(12),
           fontStyle: 'bold',
           color: '#f1f5f9',
           fontFamily: 'monospace',
@@ -483,10 +483,10 @@ export class OfficeUI {
       const [key, desc] = shortcuts[i]
       const rowY = startY + i * rowH
       container.add(
-        this.scene.add.text(keyX, rowY, key, { fontSize: '10px', color: '#5a6a7a', fontFamily: 'monospace', fontStyle: 'bold' }).setScrollFactor(0),
+        this.scene.add.text(keyX, rowY, key, { fontSize: scaledFontSize(10), color: '#5a6a7a', fontFamily: 'monospace', fontStyle: 'bold' }).setScrollFactor(0),
       )
       container.add(
-        this.scene.add.text(descX, rowY, desc, { fontSize: '10px', color: activeTheme.subtleText, fontFamily: 'monospace' }).setScrollFactor(0),
+        this.scene.add.text(descX, rowY, desc, { fontSize: scaledFontSize(10), color: activeTheme.subtleText, fontFamily: 'monospace' }).setScrollFactor(0),
       )
     }
 
@@ -513,7 +513,7 @@ export class OfficeUI {
     container.add(
       this.scene.add
         .text(panelX - 66, panelY + PH / 2 - 12, 'Press H or ESC to dismiss', {
-          fontSize: '9px',
+          fontSize: scaledFontSize(9),
           color: '#3a4858',
           fontFamily: 'monospace',
         })
@@ -585,7 +585,7 @@ export class OfficeUI {
     container.add(
       this.scene.add
         .text(panelX, panelY - PH / 2 + 18, 'Ops Board', {
-          fontSize: '12px',
+          fontSize: scaledFontSize(12),
           fontStyle: 'bold',
           color: '#f1f5f9',
           fontFamily: 'monospace',
@@ -617,7 +617,7 @@ export class OfficeUI {
       container.add(
         this.scene.add
           .text(panelX, startY + 10, 'No capabilities registered', {
-            fontSize: '10px',
+            fontSize: scaledFontSize(10),
             color: activeTheme.subtleText,
             fontFamily: 'monospace',
           })
@@ -641,7 +641,7 @@ export class OfficeUI {
       container.add(
         this.scene.add
           .text(titleX, rowY, row.title, {
-            fontSize: '10px',
+            fontSize: scaledFontSize(10),
             color: '#f1f5f9',
             fontFamily: 'monospace',
           })
@@ -652,7 +652,7 @@ export class OfficeUI {
       container.add(
         this.scene.add
           .text(statusX, rowY, row.status, {
-            fontSize: '10px',
+            fontSize: scaledFontSize(10),
             color: dotColor === 0x5a6a7a ? activeTheme.subtleText : `#${dotColor.toString(16).padStart(6, '0')}`,
             fontFamily: 'monospace',
           })
@@ -665,7 +665,7 @@ export class OfficeUI {
     container.add(
       this.scene.add
         .text(panelX, panelY + PH / 2 - 14, 'Press O or ESC to dismiss', {
-          fontSize: '9px',
+          fontSize: scaledFontSize(9),
           color: '#3a4858',
           fontFamily: 'monospace',
         })
@@ -719,14 +719,14 @@ export class OfficeUI {
     container.add(panelGfx)
 
     const textStyle: Phaser.Types.GameObjects.Text.TextStyle = {
-      fontSize: '10px', fontFamily: 'monospace', color: '#34d399', resolution: 2,
+      fontSize: scaledFontSize(10), fontFamily: 'monospace', color: '#34d399', resolution: 2,
     }
     this.debugFpsText = this.scene.add.text(16, this.viewHeight - 82, 'FPS: --', textStyle).setScrollFactor(0)
     this.debugObjectCountText = this.scene.add.text(16, this.viewHeight - 68, 'Objects: --', textStyle).setScrollFactor(0)
     const navStats = navMesh.getStats()
     const navText = this.scene.add.text(16, this.viewHeight - 54, `NavMesh: ${navStats.walkable}/${navStats.total} walkable`, { ...textStyle, color: '#60a5fa' }).setScrollFactor(0)
     const roomText = this.scene.add.text(16, this.viewHeight - 40, `Rooms: ${rooms.size}  Agents: ${agents.length}`, { ...textStyle, color: activeTheme.subtleText }).setScrollFactor(0)
-    const hintText = this.scene.add.text(16, this.viewHeight - 26, 'Press ` to dismiss', { ...textStyle, color: '#3a4858', fontSize: '9px' }).setScrollFactor(0)
+    const hintText = this.scene.add.text(16, this.viewHeight - 26, 'Press ` to dismiss', { ...textStyle, color: '#3a4858', fontSize: scaledFontSize(9) }).setScrollFactor(0)
     container.add([this.debugFpsText, this.debugObjectCountText, navText, roomText, hintText])
 
     // Nav mesh world-space overlays
@@ -858,7 +858,7 @@ export class OfficeUI {
     bg.fillRoundedRect(-72, -11, 72, 22, 4)
 
     const text = this.scene.add.text(-36, 0, label, {
-      fontSize: '10px',
+      fontSize: scaledFontSize(10),
       color: activeTheme.subtleText,
       fontFamily: 'system-ui, sans-serif',
       resolution: 2,
@@ -1055,7 +1055,7 @@ export class OfficeUI {
     this.statusBarContainer = this.scene.add.container(0, vh - BAR_H).setDepth(9995).setScrollFactor(0);
     this.statusBarBg = this.scene.add.rectangle(0, 0, vw, BAR_H, activeTheme.panelBg, 0.85).setOrigin(0, 0);
     this.statusBarContainer.add(this.statusBarBg);
-    const ts = { fontFamily: 'monospace', fontSize: '9px', fontStyle: 'bold', color: activeTheme.subtleText };
+    const ts = { fontFamily: 'monospace', fontSize: scaledFontSize(9), fontStyle: 'bold', color: activeTheme.subtleText };
     const midY = BAR_H / 2;
     const brandText = this.scene.add.text(10, midY, 'PENNY OFFICE', ts).setOrigin(0, 0.5);
     this.statusBarContainer.add(brandText);

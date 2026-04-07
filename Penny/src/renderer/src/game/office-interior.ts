@@ -10,6 +10,7 @@ import {
   OFFICE_FRAME_MONITOR, OFFICE_FRAME_PRINTER,
   OFFICE_FRAME_TRASH, OFFICE_FRAME_STORAGE, OFFICE_FRAME_FILE_CABINET,
   WORLD_MARGIN, ROOM_HEADER_H,
+  scaledFontSize,
 } from './office-constants'
 
 /** Returns true when the lab prop spritesheet is loaded — signals lab skin mode */
@@ -279,16 +280,16 @@ export class OfficeInterior {
         ? this.scene.add.sprite(0, 0, SPRITESHEET_KEYS.OFFICE, OFFICE_FRAME_WHITEBOARD).setScale(0.32).setAlpha(0.55).setDepth(-0.5)
         : null
       const titleText = this.scene.add.text(0, -11, 'TEAM STATUS', {
-        fontSize: '5px', fontFamily: 'monospace', color: '#8a96a4', fontStyle: 'bold', resolution: 2,
+        fontSize: scaledFontSize(5), fontFamily: 'monospace', color: '#8a96a4', fontStyle: 'bold', resolution: 2,
       }).setOrigin(0.5, 0).setAlpha(0.9).setDepth(0)
       const agentLine = this.scene.add.text(0, -3, 'Agents: 0', {
-        fontSize: '4px', fontFamily: 'monospace', color: '#5a6a7a', resolution: 2,
+        fontSize: scaledFontSize(4), fontFamily: 'monospace', color: '#5a6a7a', resolution: 2,
       }).setOrigin(0.5, 0).setAlpha(0.7).setDepth(0)
       const activeLine = this.scene.add.text(0, 4, 'Active: 0', {
-        fontSize: '4px', fontFamily: 'monospace', color: '#5a6a7a', resolution: 2,
+        fontSize: scaledFontSize(4), fontFamily: 'monospace', color: '#5a6a7a', resolution: 2,
       }).setOrigin(0.5, 0).setAlpha(0.7).setDepth(0)
       const roomLine = this.scene.add.text(0, 11, 'Rooms: 0', {
-        fontSize: '4px', fontFamily: 'monospace', color: '#5a6a7a', resolution: 2,
+        fontSize: scaledFontSize(4), fontFamily: 'monospace', color: '#5a6a7a', resolution: 2,
       }).setOrigin(0.5, 0).setAlpha(0.7).setDepth(0)
       const wbChildren: Phaser.GameObjects.GameObject[] = [wbBg, titleText, agentLine, activeLine, roomLine]
       if (wbSprite) wbChildren.unshift(wbSprite)
@@ -367,7 +368,7 @@ export class OfficeInterior {
         for (let zy = fy + 45; zy < fy + fh - 45; zy += 400) {
           const label = `Z-${String(zoneIdx).padStart(2, '0')}`
           const zoneText = this.scene.add.text(zx, zy, label, {
-            fontSize: '6px',
+            fontSize: scaledFontSize(6),
             fontFamily: 'monospace',
             color: '#2a3a4a',
             resolution: 2,

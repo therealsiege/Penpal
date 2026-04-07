@@ -1,6 +1,6 @@
 import Phaser from 'phaser'
 import { activeTheme } from './office-theme'
-import { WS_DESK_Y } from './office-constants'
+import { WS_DESK_Y, scaledFontSize } from './office-constants'
 import { SPRITESHEET_KEYS } from './office-asset-keys'
 import { WeatherParticles } from './particles-weather'
 import { AmbientParticles } from './particles-ambient'
@@ -526,7 +526,7 @@ export class OfficeParticles {
   private initEmojiReactionPool(): void {
     for (let i = 0; i < 10; i++) {
       const label = this.scene.add
-        .text(0, 0, '', { fontSize: '12px', resolution: 2 })
+        .text(0, 0, '', { fontSize: scaledFontSize(12), resolution: 2 })
         .setDepth(500)
         .setAlpha(0)
         .setData('busy', false)

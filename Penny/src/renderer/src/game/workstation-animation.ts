@@ -39,6 +39,7 @@ import {
   EVAL_GLOW_RED,
   EVAL_GLOW_GREY,
   EVAL_GLOW_REFRESH_MS,
+  scaledFontSize,
 } from './office-constants'
 import { ANIM_KEYS, DIFFICULTY_STAR_FRAME, ICON_FRAMES, EFFECT_ANIM_KEYS, SPRITESHEET_KEYS, PET_FACE_FRAMES } from './office-asset-keys'
 import { getAgentCharacterIndex } from './office-helpers'
@@ -249,10 +250,13 @@ export class WorkstationAnimator {
       })
     }
 
+    // GDS mode: sprite angle/frame are locked to stool rotation
+    const gdsLock = this.host.getOrAssignGdsDeskSlot != null
+
     ws.sprite.y = WS_SPRITE_Y
     ws.sprite.x = 0
     ws.sprite.setScale(CHAR_SCALE)
-    ws.sprite.setAngle(0)
+    if (!gdsLock) ws.sprite.setAngle(0)
 
     this.updateMonitorGlow(ws, isWorking, isWaiting)
 
@@ -260,7 +264,7 @@ export class WorkstationAnimator {
     const base = charIdx * CHAR_COLS
 
     if (isWaiting) {
-      ws.sprite.setFrame(base + POSE_IDLE)
+      if (!gdsLock) ws.sprite.setFrame(base + POSE_IDLE)
       ws.pulseTween = this.scene.tweens.add({
         targets: ws.sprite, scaleX: CHAR_SCALE * AnimConfig.waiting.pulseScaleFactor, scaleY: CHAR_SCALE * AnimConfig.waiting.pulseScaleFactor,
         duration: AnimConfig.waiting.pulseDuration, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
@@ -289,7 +293,7 @@ export class WorkstationAnimator {
       }
       this.restoreDeskStrokeCallback(ws)
     } else if (isWorking) {
-      ws.sprite.setFrame(base + POSE_INTERACT)
+      if (!gdsLock) ws.sprite.setFrame(base + POSE_INTERACT)
       ws.typingTween = this.scene.tweens.add({
         targets: ws.sprite, x: AnimConfig.working.typingAmplitude,
         duration: AnimConfig.working.typingDuration, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
@@ -302,7 +306,7 @@ export class WorkstationAnimator {
         targets: ws.sprite, angle: AnimConfig.working.headTiltAngle,
         duration: AnimConfig.working.headTiltDuration, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
       })
-      ws.deskBody.setStrokeStyle(1, 0x34d399, 0.55)
+      if (!this.host.getOrAssignGdsDeskSlot) ws.deskBody.setStrokeStyle(1, 0x34d399, 0.55)
 
       // Keyboard glow — subtle blue stroke shimmer while typing
       if (ws.keyboard) {
@@ -507,7 +511,7 @@ export class WorkstationAnimator {
       this.showSpeechBubble(ws, agent)
 
     } else {
-      ws.sprite.setFrame(base + POSE_SIT)
+      if (!gdsLock) ws.sprite.setFrame(base + POSE_SIT)
       ws.breathTween = this.scene.tweens.add({
         targets: ws.sprite, scaleY: CHAR_SCALE * AnimConfig.idle.breathScaleFactor,
         duration: AnimConfig.idle.breathDuration, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
@@ -613,19 +617,22 @@ export class WorkstationAnimator {
       ws.sprite.setData('idleSince', Date.now())
 
       // Head tilt: tween angle -4..+4 degrees every 8-15s, hold 1s, return to 0
-      ws.lookAroundTimer = this.scene.time.addEvent({
-        delay: 8000 + Math.random() * 7000,
-        loop: true,
-        callback: () => {
-          if (ws.headTiltTween) ws.headTiltTween.destroy()
-          const angle = (Math.random() - 0.5) * 8   // -4 to +4 degrees
-          ws.headTiltTween = this.scene.tweens.add({
-            targets: ws.sprite, angle,
-            duration: 400, hold: 1000, yoyo: true, ease: 'Sine.easeInOut',
-            onComplete: () => { ws.sprite.setAngle(0); ws.headTiltTween = undefined },
-          })
-        },
-      })
+      // Skip in GDS mode — sprite angle is locked to stool rotation
+      if (!gdsLock) {
+        ws.lookAroundTimer = this.scene.time.addEvent({
+          delay: 8000 + Math.random() * 7000,
+          loop: true,
+          callback: () => {
+            if (ws.headTiltTween) ws.headTiltTween.destroy()
+            const angle = (Math.random() - 0.5) * 8   // -4 to +4 degrees
+            ws.headTiltTween = this.scene.tweens.add({
+              targets: ws.sprite, angle,
+              duration: 400, hold: 1000, yoyo: true, ease: 'Sine.easeInOut',
+              onComplete: () => { ws.sprite.setAngle(0); ws.headTiltTween = undefined },
+            })
+          },
+        })
+      }
 
       // Stretch: scaleY 1→1.04 over 300ms, hold 200ms, back to 1 every 20-30s
       ws.stretchTimer = this.scene.time.addEvent({
@@ -698,9 +705,9 @@ export class WorkstationAnimator {
           const idleSince: number = ws.sprite.getData('idleSince') ?? Date.now()
           if (Date.now() - idleSince < 60000) return
           if (ws.walkBreakTween) return
-          ws.sprite.setFrame(base + POSE_INTERACT)
+          if (!gdsLock) ws.sprite.setFrame(base + POSE_INTERACT)
           this.scene.time.delayedCall(1500, () => {
-            if (ws.lastAnimMode === 'idle') {
+            if (ws.lastAnimMode === 'idle' && !gdsLock) {
               ws.sprite.setFrame(base + POSE_SIT)
             }
           })
@@ -713,6 +720,7 @@ export class WorkstationAnimator {
           delay: 15000 + Math.random() * 10000,
           loop: true,
           callback: () => {
+            if (gdsLock) return
             if (ws.walkBreakTween || ws.headTiltTween || ws.lastAnimMode !== 'idle') return
             if (!ws.deskPet || !ws.deskPet.visible) return
             const petDir = ws.deskPet.x > 0 ? 3 : -3
@@ -753,6 +761,7 @@ export class WorkstationAnimator {
         delay: 18000 + Math.random() * 12000,
         loop: true,
         callback: () => {
+          if (gdsLock) return
           if (ws.walkBreakTween || ws.headTiltTween || ws.lastAnimMode !== 'idle') return
           if ((ws.energyLevel ?? 1) > 0.3) return
           // Lean slightly toward the energy bar (left side of desk)
@@ -832,7 +841,7 @@ export class WorkstationAnimator {
             if (ws.walkBreakTween) { ws.walkBreakTween.destroy(); ws.walkBreakTween = undefined }
             ws.sprite.x = 0
             ws.sprite.y = WS_SPRITE_Y
-            ws.sprite.setFrame(base + POSE_SIT)
+            if (!gdsLock) ws.sprite.setFrame(base + POSE_SIT)
           }
 
           pathWalker.startPath(goPath, () => {
@@ -1255,7 +1264,7 @@ export class WorkstationAnimator {
       const bg = this.scene.add.graphics()
       const txt = this.scene.add.text(0, 0, '', {
         fontFamily: 'monospace',
-        fontSize: '8px',
+        fontSize: scaledFontSize(8),
         color: activeTheme.headerText,
         resolution: 2,
       }).setOrigin(0.5)

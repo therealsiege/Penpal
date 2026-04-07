@@ -4,6 +4,14 @@
 // No imports required — all values are primitives.
 // ---------------------------------------------------------------------------
 
+// Global text scale — multiplied into all fontSize values
+export const TEXT_SCALE = 1.5
+
+/** Scale a pixel font size by TEXT_SCALE and return as CSS string, e.g. '15px' */
+export function scaledFontSize(basePx: number): string {
+  return `${Math.round(basePx * TEXT_SCALE)}px`
+}
+
 // Keyboard shortcut constants
 export const KB_ZOOM_STEP = 0.15
 export const KB_AUTO_PAN_INTERVAL = 3000
@@ -30,6 +38,10 @@ export const FRAME_MONITOR      = 122
 
 export const ROOM_TILE_SIZE = 48
 export const LAB_TILE_SIZE  = 128
+
+// GDS-exported scene dimensions (medium layout)
+export const GDS_SCENE_WIDTH  = 3840
+export const GDS_SCENE_HEIGHT = 2160
 
 // Office decoration frame indices
 export const OFFICE_FRAME_PLANT      = 68

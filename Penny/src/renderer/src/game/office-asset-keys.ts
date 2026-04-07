@@ -74,6 +74,16 @@ export const SPRITESHEET_KEYS = Object.freeze({
   LAB_MAIN_TILESET: 'lab-main-tileset',
   /** Lab smooth corners — 48x48 cells, 8 cols × 1 row (8 frames). Corner/edge transition pieces */
   LAB_SMOOTH: 'lab-smooth',
+  /** GDS-exported medium lab scene — packed atlas with all scene sprites */
+  GDS_MEDIUM: 'gds-medium',
+} as const)
+
+// ---------------------------------------------------------------------------
+// GDS scene layout JSON keys (loaded via this.load.json in BootScene)
+// ---------------------------------------------------------------------------
+
+export const GDS_SCENE_KEYS = Object.freeze({
+  MEDIUM_LAYOUT: 'gds-medium-layout',
 } as const)
 
 // ---------------------------------------------------------------------------

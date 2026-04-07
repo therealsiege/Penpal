@@ -1,6 +1,6 @@
 import Phaser from 'phaser'
 import type { Room } from './office-types'
-import { WORLD_MARGIN } from './office-constants'
+import { WORLD_MARGIN, scaledFontSize } from './office-constants'
 import { SPRITESHEET_KEYS, EFFECT_ANIM_KEYS, ITEM_FRAMES, ICON_FRAMES, IMAGE_KEYS } from './office-asset-keys'
 import { activeTheme } from './office-theme'
 
@@ -563,7 +563,7 @@ export class OfficeTerrain {
       this.terrainDecos.push(pwrLight)
       // Label
       const subLabel = this.scene.add.text(subX, subY - sbH / 2 + 3, 'PWR-SUB 7G', {
-        fontSize: '4px', fontFamily: 'monospace', color: '#5a6a7a', resolution: 2,
+        fontSize: scaledFontSize(4), fontFamily: 'monospace', color: '#5a6a7a', resolution: 2,
       }).setOrigin(0.5, 0).setDepth(-9).setAlpha(0.75)
       this.terrainDecos.push(subLabel)
     }
@@ -673,7 +673,7 @@ export class OfficeTerrain {
       g.lineStyle(1, MAKO_CYAN, 0.2)
       g.strokeRoundedRect(signX - 30, signY - 42, 60, 16, 2)
       const signText = this.scene.add.text(signX, signY - 34, sectorNames[sectorIdx], {
-        fontSize: '5px', fontFamily: 'monospace', color: activeTheme.accentText, resolution: 2,
+        fontSize: scaledFontSize(5), fontFamily: 'monospace', color: activeTheme.accentText, resolution: 2,
       }).setOrigin(0.5).setAlpha(0.75).setDepth(-9)
       this.terrainDecos.push(signText)
       sectorIdx++
@@ -708,7 +708,7 @@ export class OfficeTerrain {
       }
       // Pad label
       const padLabel = this.scene.add.text(padCX, padCY + padR + 8, 'PAD-01', {
-        fontSize: '5px', fontFamily: 'monospace', color: '#5a6a7a', resolution: 2,
+        fontSize: scaledFontSize(5), fontFamily: 'monospace', color: '#5a6a7a', resolution: 2,
       }).setOrigin(0.5).setAlpha(0.68).setDepth(-9)
       this.terrainDecos.push(padLabel)
     }
@@ -850,7 +850,7 @@ export class OfficeTerrain {
           this.terrainDecos.push(light)
           // Label
           const label = this.scene.add.text(cx, by_ + 2, `BLD-${col}${row}`, {
-            fontSize: '4px', fontFamily: 'monospace', color: '#4a5a6a', resolution: 2,
+            fontSize: scaledFontSize(4), fontFamily: 'monospace', color: '#4a5a6a', resolution: 2,
           }).setOrigin(0.5, 0).setDepth(-9).setAlpha(0.6)
           this.terrainDecos.push(label)
           // Prop: stone blocks near building
@@ -905,7 +905,7 @@ export class OfficeTerrain {
 
           // Zone label
           const sLabel = this.scene.add.text(cx, cy + 26, 'STORAGE', {
-            fontSize: '4px', fontFamily: 'monospace', color: '#3a4a5a', resolution: 2,
+            fontSize: scaledFontSize(4), fontFamily: 'monospace', color: '#3a4a5a', resolution: 2,
           }).setOrigin(0.5).setDepth(-9).setAlpha(0.5)
           this.terrainDecos.push(sLabel)
           // Prop: crate sprites stacked near containers
@@ -991,7 +991,7 @@ export class OfficeTerrain {
           g.lineStyle(0.5, 0x8a7a2a, 0.35)
           g.strokeRect(cx - tw / 2 - 2, cy + th / 2 + 8, 30, 8)
           const dangerLabel = this.scene.add.text(cx - tw / 2 + 13, cy + th / 2 + 12, 'DANGER HIGH VOLTAGE', {
-            fontSize: '2.5px', fontFamily: 'monospace', color: '#8a6a1a', resolution: 2,
+            fontSize: scaledFontSize(2.5), fontFamily: 'monospace', color: '#8a6a1a', resolution: 2,
           }).setOrigin(0.5).setDepth(-9).setAlpha(0.4)
           this.terrainDecos.push(dangerLabel)
           // Prop: coin box (equipment locker) near transformer
@@ -1100,12 +1100,12 @@ export class OfficeTerrain {
           g.lineBetween(arrowCx + 2, arrowCy + 3, arrowCx + 6, arrowCy)
           // "P" label
           const pLabel = this.scene.add.text(cx, cy - ph / 2 + 6, 'P', {
-            fontSize: '8px', fontFamily: 'monospace', fontStyle: 'bold', color: '#3a5a7a', resolution: 2,
+            fontSize: scaledFontSize(8), fontFamily: 'monospace', fontStyle: 'bold', color: '#3a5a7a', resolution: 2,
           }).setOrigin(0.5).setAlpha(0.45).setDepth(-9)
           this.terrainDecos.push(pLabel)
           // "LOT" number label
           const lotLabel = this.scene.add.text(cx, cy - ph / 2 + 14, `LOT-${col}${row}`, {
-            fontSize: '5px', fontFamily: 'monospace', color: '#3a4a5a', resolution: 2,
+            fontSize: scaledFontSize(5), fontFamily: 'monospace', color: '#3a4a5a', resolution: 2,
           }).setOrigin(0.5).setAlpha(0.3).setDepth(-9)
           this.terrainDecos.push(lotLabel)
         }

@@ -37,6 +37,7 @@ import {
   CTX_ROT_SHAKE_PX,
   CTX_ROT_SHAKE_MS,
   CTX_ROT_SHAKE_REPEATS,
+  scaledFontSize,
 } from './office-constants'
 import { WorkstationFactory } from './workstation-creation'
 import { WorkstationAnimator } from './workstation-animation'
@@ -100,6 +101,8 @@ export interface WorkstationHost {
    * workstation minimal so agent desks don’t duplicate the same console kit as room decor.
    */
   usesFacilityLabStrategicProps?(): boolean
+  /** Get the assigned GDS desk slot (world-space) for an agent, assigning if needed. */
+  getOrAssignGdsDeskSlot?(agentId: string): { x: number; y: number; flipX: boolean; sitFrame: number; angle: number } | null
 }
 
 // ---------------------------------------------------------------------------
@@ -248,7 +251,7 @@ export class OfficeWorkstations {
 
     if (!ws.orchestratorTaskLabel) {
       const text = this.scene.add.text(0, WS_NAME_Y + 11, line, {
-        fontSize: '7px',
+        fontSize: scaledFontSize(7),
         fontFamily: 'system-ui, monospace',
         color: '#5eead4',
         backgroundColor: '#0c1018',
@@ -362,7 +365,9 @@ export class OfficeWorkstations {
       this.removeCoffeeIndicator(ws)
     }
     if (ws.container.alpha < 0.9) ws.container.setAlpha(1)
-    if (ws.container.scaleX < 0.9) ws.container.setScale(1)
+    // Restore scale if it somehow shrunk — but respect GDS mode's 1.65× base scale
+    const gdsBaseScale = this.host.getOrAssignGdsDeskSlot ? 1.65 : 1
+    if (ws.container.scaleX < gdsBaseScale * 0.9) ws.container.setScale(gdsBaseScale)
 
     // Skip redundant updates — fingerprint the fields that affect visuals
     const blurbSnippet = agent.lastAssistantBlurb?.slice(0, 20) ?? ''
@@ -478,8 +483,11 @@ export class OfficeWorkstations {
       }
     }
 
-    const charIdx = this.host.getAgentCharacterIndex(agent)
-    ws.sprite.setFrame(this.host.getPoseFrame(charIdx, agent))
+    // GDS mode: sprite uses directional sit strip — don't override with CHARACTERS frame
+    if (!this.host.getOrAssignGdsDeskSlot) {
+      const charIdx = this.host.getAgentCharacterIndex(agent)
+      ws.sprite.setFrame(this.host.getPoseFrame(charIdx, agent))
+    }
 
     // Warm orange tint for orchestrator headless task agents
     if (agent.isOrchestratorTask) {
@@ -1248,6 +1256,9 @@ export class OfficeWorkstations {
   // ---------------------------------------------------------------------------
 
   restoreDeskStroke(ws: WorkstationSprite): void {
+    // GDS mode: desk body is invisible (backdrop has the desks)
+    if (this.host.getOrAssignGdsDeskSlot) return
+
     const s = ws.state
     if (s?.needsInteraction) {
       ws.deskBody.setStrokeStyle(2, 0xfbbf24, 0.7)
