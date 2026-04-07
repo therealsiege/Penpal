@@ -1,12 +1,12 @@
 {
-  "timestamp": 1775260016989,
-  "weekStart": 1774846800000,
+  "timestamp": 1775541847718,
+  "weekStart": 1775451600000,
   "agents": [
     {
       "id": "fullstack-dev",
       "name": "Marcus Chen",
       "title": "Full Stack Developer",
-      "status": "idle",
+      "status": "blocked",
       "room": "sidekick",
       "roomPath": "/Users/fuzeelogik/sidekick",
       "currentTask": null,
@@ -18,7 +18,7 @@
       "tasksFailed": 0,
       "currentStreak": 0,
       "sessionMode": "waiting",
-      "uptime": "8h 27m"
+      "uptime": "2h 36m"
     },
     {
       "id": "nextjs-frontend",
@@ -150,7 +150,7 @@
       "id": "product-mgr",
       "name": "Jordan Miles",
       "title": "Product Manager",
-      "status": "idle",
+      "status": "blocked",
       "room": "sidekick",
       "roomPath": "/Users/fuzeelogik/sidekick",
       "currentTask": null,
@@ -162,7 +162,7 @@
       "tasksFailed": 0,
       "currentStreak": 0,
       "sessionMode": "waiting",
-      "uptime": "8h 27m"
+      "uptime": "2h 36m"
     },
     {
       "id": "product-marketer",
@@ -186,7 +186,7 @@
       "id": "exec-assistant",
       "name": "Sam Torres",
       "title": "Executive Assistant",
-      "status": "idle",
+      "status": "blocked",
       "room": "sidekick",
       "roomPath": "/Users/fuzeelogik/sidekick",
       "currentTask": null,
@@ -198,7 +198,7 @@
       "tasksFailed": 0,
       "currentStreak": 0,
       "sessionMode": "waiting",
-      "uptime": "8h 27m"
+      "uptime": "2h 36m"
     },
     {
       "id": "issue-planner",
@@ -229,9 +229,9 @@
         "Sam Torres"
       ],
       "agentCount": 3,
-      "idleCount": 3,
+      "idleCount": 0,
       "activeCount": 0,
-      "blockedCount": 0
+      "blockedCount": 3
     },
     {
       "name": "1putthealth.com",

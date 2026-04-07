@@ -11,6 +11,7 @@ import { leaderboardManager } from './leaderboard'
 import { seasonManager, type SeasonChallenge } from './seasons'
 import { SPRITESHEET_KEYS, ICON_FRAMES, IMAGE_KEYS, MEDAL_HD_FRAMES } from './office-asset-keys'
 import { activeTheme } from './office-theme'
+import { scaledFontSize } from './office-constants'
 
 // ---------------------------------------------------------------------------
 // SeasonHUD
@@ -200,7 +201,7 @@ export class SeasonHUD {
 
     // Season name
     this.seasonNameText = this.scene.add.text(0, 0, '', {
-      fontSize: '9px', fontFamily: 'system-ui, monospace', color: '#c8d0e0',
+      fontSize: scaledFontSize(9), fontFamily: 'system-ui, monospace', color: '#c8d0e0',
       resolution: 2,
     }).setOrigin(1, 0)
     this.hudContainer.add(this.seasonNameText)
@@ -221,21 +222,21 @@ export class SeasonHUD {
     this.hudContainer.add(this.progressBar)
 
     this.progressText = this.scene.add.text(0, 13, '', {
-      fontSize: '6px', fontFamily: 'system-ui, monospace', color: '#5a6a7a',
+      fontSize: scaledFontSize(6), fontFamily: 'system-ui, monospace', color: '#5a6a7a',
       resolution: 2,
     }).setOrigin(1, 0)
     this.hudContainer.add(this.progressText)
 
     // Credits counter
     this.creditsText = this.scene.add.text(0, 24, '', {
-      fontSize: '8px', fontFamily: 'system-ui, monospace', color: '#fbbf24',
+      fontSize: scaledFontSize(8), fontFamily: 'system-ui, monospace', color: '#fbbf24',
       resolution: 2,
     }).setOrigin(1, 0)
     this.hudContainer.add(this.creditsText)
 
     // Active quest count
     this.questCountText = this.scene.add.text(-60, 24, '', {
-      fontSize: '8px', fontFamily: 'system-ui, monospace', color: '#3b82f6',
+      fontSize: scaledFontSize(8), fontFamily: 'system-ui, monospace', color: '#3b82f6',
       resolution: 2,
     }).setOrigin(1, 0)
     this.hudContainer.add(this.questCountText)
@@ -276,7 +277,7 @@ export class SeasonHUD {
 
     // Title
     const title = this.scene.add.text(panelW / 2, 10, 'LEADERBOARD', {
-      fontSize: '10px', fontFamily: 'system-ui, monospace', color: '#fbbf24',
+      fontSize: scaledFontSize(10), fontFamily: 'system-ui, monospace', color: '#fbbf24',
       resolution: 2,
     }).setOrigin(0.5, 0)
     this.leaderboardContainer.add(title)
@@ -369,7 +370,7 @@ export class SeasonHUD {
         })
       } else {
         const rankNum = this.scene.add.text(8, rowY, `${entry.rank}.`, {
-          fontSize: '7px', fontFamily: 'system-ui, monospace', color: '#5a6a7a',
+          fontSize: scaledFontSize(7), fontFamily: 'system-ui, monospace', color: '#5a6a7a',
           resolution: 2,
         })
         this.leaderboardContainer!.add(rankNum)
@@ -378,7 +379,7 @@ export class SeasonHUD {
       // Agent name + MVP tag
       const mvpTag = isMVP ? ' MVP' : ''
       const nameLabel = this.scene.add.text(28, rowY, `${entry.agentName}${mvpTag}`, {
-        fontSize: '8px', fontFamily: 'system-ui, monospace', color,
+        fontSize: scaledFontSize(8), fontFamily: 'system-ui, monospace', color,
         resolution: 2,
       })
       this.leaderboardContainer!.add(nameLabel)
@@ -405,7 +406,7 @@ export class SeasonHUD {
       const tasksLabel = entry.tasksCompleted === 1 ? '1 task' : `${entry.tasksCompleted} tasks`
       const streakSuffix = entry.currentStreak >= 3 ? ` | x${entry.currentStreak}` : ''
       const statsLine = this.scene.add.text(28, rowY + 11, `${entry.seasonXP} XP | ${tasksLabel} | ${entry.rankTitle}${streakSuffix}`, {
-        fontSize: '6px', fontFamily: 'system-ui, monospace', color: statsColor,
+        fontSize: scaledFontSize(6), fontFamily: 'system-ui, monospace', color: statsColor,
         resolution: 2,
       })
       this.leaderboardContainer!.add(statsLine)
@@ -413,7 +414,7 @@ export class SeasonHUD {
 
     if (rankings.length === 0) {
       const empty = this.scene.add.text(105, 40, 'No agents ranked yet', {
-        fontSize: '8px', fontFamily: 'system-ui, monospace', color: '#4a5464',
+        fontSize: scaledFontSize(8), fontFamily: 'system-ui, monospace', color: '#4a5464',
         resolution: 2,
       }).setOrigin(0.5, 0)
       this.leaderboardContainer!.add(empty)
@@ -462,7 +463,7 @@ export class SeasonHUD {
     this.challengeContainer.add(bg)
 
     const title = this.scene.add.text(105, 8, `${season.name} Challenges`, {
-      fontSize: '9px', fontFamily: 'system-ui, monospace', color: '#c8d0e0',
+      fontSize: scaledFontSize(9), fontFamily: 'system-ui, monospace', color: '#c8d0e0',
       resolution: 2,
     }).setOrigin(0.5, 0)
     this.challengeContainer.add(title)
@@ -503,7 +504,7 @@ export class SeasonHUD {
       }
 
       const row = this.scene.add.text(28, rowY, `${ch.description}${progress}`, {
-        fontSize: '7px', fontFamily: 'system-ui, monospace', color,
+        fontSize: scaledFontSize(7), fontFamily: 'system-ui, monospace', color,
         resolution: 2, wordWrap: { width: 172 },
       })
       this.challengeContainer!.add(row)
@@ -578,7 +579,7 @@ export class SeasonHUD {
     // Title with balance
     const balance = creditManager.getBalance()
     const title = this.scene.add.text(panelW / 2, 10, `SHOP  \u00A4${balance}`, {
-      fontSize: '10px', fontFamily: 'system-ui, monospace', color: '#fbbf24',
+      fontSize: scaledFontSize(10), fontFamily: 'system-ui, monospace', color: '#fbbf24',
       resolution: 2,
     }).setOrigin(0.5, 0)
     this.shopContainer.add(title)
@@ -634,7 +635,7 @@ export class SeasonHUD {
       // Item name
       const nameColor = owned ? '#4a5464' : canAfford ? '#c8d0e0' : '#6a7484'
       const nameText = this.scene.add.text(32, rowY, item.name, {
-        fontSize: '8px', fontFamily: 'system-ui, monospace', color: nameColor,
+        fontSize: scaledFontSize(8), fontFamily: 'system-ui, monospace', color: nameColor,
         resolution: 2,
       })
       this.shopContainer!.add(nameText)
@@ -642,7 +643,7 @@ export class SeasonHUD {
       // Description line
       const descColor = owned ? '#3a4454' : '#5a6a7a'
       const descText = this.scene.add.text(32, rowY + 11, item.description, {
-        fontSize: '6px', fontFamily: 'system-ui, monospace', color: descColor,
+        fontSize: scaledFontSize(6), fontFamily: 'system-ui, monospace', color: descColor,
         resolution: 2,
       })
       this.shopContainer!.add(descText)
@@ -650,14 +651,14 @@ export class SeasonHUD {
       // Price / owned badge (right-aligned)
       if (owned) {
         const ownedLabel = this.scene.add.text(panelW - 10, rowY + 4, 'OWNED', {
-          fontSize: '7px', fontFamily: 'system-ui, monospace', color: '#34d399',
+          fontSize: scaledFontSize(7), fontFamily: 'system-ui, monospace', color: '#34d399',
           resolution: 2,
         }).setOrigin(1, 0)
         this.shopContainer!.add(ownedLabel)
       } else {
         const priceColor = canAfford ? '#fbbf24' : '#ef4444'
         const priceLabel = this.scene.add.text(panelW - 10, rowY + 4, `\u00A4${item.price}`, {
-          fontSize: '8px', fontFamily: 'system-ui, monospace', color: priceColor,
+          fontSize: scaledFontSize(8), fontFamily: 'system-ui, monospace', color: priceColor,
           resolution: 2,
         }).setOrigin(1, 0)
         this.shopContainer!.add(priceLabel)
@@ -669,7 +670,7 @@ export class SeasonHUD {
     if (catalog.length > items.length) {
       const hintY = 30 + items.length * rowH
       const hint = this.scene.add.text(panelW / 2, hintY, `${catalog.length - items.length} more...`, {
-        fontSize: '6px', fontFamily: 'system-ui, monospace', color: '#4a5464',
+        fontSize: scaledFontSize(6), fontFamily: 'system-ui, monospace', color: '#4a5464',
         resolution: 2,
       }).setOrigin(0.5, 0)
       this.shopContainer!.add(hint)

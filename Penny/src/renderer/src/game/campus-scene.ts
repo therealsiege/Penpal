@@ -1,6 +1,7 @@
 import { BaseScene } from './base-scene'
 import { EventBus, EVENTS } from './events'
 import { SCENE_KEYS } from './office-asset-keys'
+import { scaledFontSize } from './office-constants'
 
 // ---------------------------------------------------------------------------
 // CampusScene — top-level building selector
@@ -100,7 +101,7 @@ export class CampusScene extends BaseScene {
 
     // Building name
     this.add.text(cx, cy - 40, title, {
-      fontSize: '18px',
+      fontSize: scaledFontSize(18),
       fontFamily: 'monospace',
       color: theme.headerText,
       resolution: 2,
@@ -108,7 +109,7 @@ export class CampusScene extends BaseScene {
 
     // Count badge
     const label = this.add.text(cx, cy + 20, countText(), {
-      fontSize: '13px',
+      fontSize: scaledFontSize(13),
       fontFamily: 'monospace',
       color: theme.subtleText,
       resolution: 2,

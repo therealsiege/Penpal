@@ -1,5 +1,6 @@
 import Phaser from 'phaser'
 import type { CafeVisitor, ChatSession } from './penny-cafe'
+import { scaledFontSize } from './office-constants'
 
 // ---------------------------------------------------------------------------
 // Social emojis
@@ -199,7 +200,7 @@ export class CafeChatManager {
     c.add(bg)
 
     const dots = scene.add.text(0, 0, '...', {
-      fontSize: '8px', fontFamily: 'system-ui, sans-serif',
+      fontSize: scaledFontSize(8), fontFamily: 'system-ui, sans-serif',
       color: '#00ff88', resolution: 2,
     }).setOrigin(0.5)
     c.add(dots)

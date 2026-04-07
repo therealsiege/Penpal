@@ -1,8 +1,8 @@
 // ---------------------------------------------------------------------------
 // lab-tilemap.ts
-// Single-building tilemap renderer. One big lab facility with outer walls,
-// hex floor interior, and interior divider walls with openings between rooms.
-// Replaces per-room wall tiles + unified floor.
+// Room rendering using the full lab kit: NineSlice room backgrounds (fill+top),
+// smooth floor panels, detailed pipe runs, floor glows, wall decorations,
+// and dense room props.
 // ---------------------------------------------------------------------------
 
 import Phaser from 'phaser'
@@ -13,40 +13,58 @@ import { LAB_TILE_SIZE } from './office-constants'
 // Constants
 // ---------------------------------------------------------------------------
 
-/** Tile display scale — 128px tiles → 48px on screen for good tile density */
 const TILE_SCALE = 0.375
-/** Effective cell size in world pixels */
 const CELL = LAB_TILE_SIZE * TILE_SCALE  // 48px
-/** Wall thickness in cells around the outer perimeter */
-const WALL_THICK = 2
-/** Margin cells outside the outer wall (void) */
-const VOID_MARGIN = 0
-/** Opening width in cells for interior dividers (doorway gap) */
-const OPENING_WIDTH = 3
-/** Interior divider wall thickness in cells */
-const DIVIDER_THICK = 2
+
+// NineSlice source — large room in tileset_fill.png (top-left)
+const TILESET_FILL = 'lab-tileset-fill'
+const TILESET_TOP = 'lab-tileset-top'
+const SMOOTH_KEY = 'lab-smooth-tileset'
+const PIPE_KEY = 'lab-pipe-tileset'
+const ROOM_FRAME = 'room-bg'
+const ROOM_TOP_FRAME = 'room-top'
+const ROOM_SRC = { x: 6, y: 6, w: 450, h: 390 }
+const BORDER = 45          // source px for NineSlice corner/edge
+const WALL_SCALE = 0.45    // scale NineSlice so borders are ~20px display (45*0.45≈20)
+const WALL_PAD = 12        // extra world-px around room for the visible wall
+
+// Smooth tileset frames (896×896 source)
+const SMOOTH_FRAMES = {
+  LARGE_PANEL:  { name: 'sm-large',  x: 18, y: 18,  w: 396, h: 336 },
+  FOUR_BOLT:    { name: 'sm-4bolt',  x: 530, y: 530, w: 256, h: 256 },
+  SMALL_PANEL:  { name: 'sm-small',  x: 180, y: 498, w: 195, h: 210 },
+  HORIZ_BAR:    { name: 'sm-hbar',   x: 18, y: 378,  w: 310, h: 78 },
+}
+
+// Pipe tileset frames (896×640 source) — key individual pieces
+const PIPE_FRAMES = {
+  H_STRAIGHT:   { name: 'pt-h',     x: 370, y: 5,   w: 175, h: 64 },
+  V_STRAIGHT:   { name: 'pt-v',     x: 500, y: 90,  w: 64, h: 175 },
+  CORNER_TL:    { name: 'pt-ctl',   x: 5, y: 5,     w: 128, h: 128 },
+  CORNER_TR:    { name: 'pt-ctr',   x: 242, y: 5,   w: 128, h: 128 },
+  CORNER_BL:    { name: 'pt-cbl',   x: 5, y: 210,   w: 128, h: 128 },
+  CORNER_BR:    { name: 'pt-cbr',   x: 135, y: 210,  w: 128, h: 128 },
+  T_DOWN:       { name: 'pt-td',    x: 580, y: 5,   w: 128, h: 128 },
+  T_RIGHT:      { name: 'pt-tr',    x: 710, y: 5,   w: 128, h: 128 },
+  CROSS:        { name: 'pt-cross', x: 135, y: 100,  w: 100, h: 100 },
+  VALVE:        { name: 'pt-valve', x: 370, y: 200,  w: 100, h: 100 },
+  CAP:          { name: 'pt-cap',   x: 5, y: 350,    w: 64, h: 50 },
+  COUPLING:     { name: 'pt-coup',  x: 100, y: 350,  w: 80, h: 70 },
+  BROKEN:       { name: 'pt-broken', x: 5, y: 470,   w: 200, h: 64 },
+}
+
+// Hazard tape for interior dividers
+const TAPE_SEG = 8
+const TAPE_YELLOW = 0xfbbf24
+const TAPE_DARK = 0x1a1a2e
 
 // ---------------------------------------------------------------------------
-// Cell types
-// ---------------------------------------------------------------------------
-
-const VOID  = 0
-const FLOOR = 1
-const WALL  = 2
-
-type CellGrid = Uint8Array[]
-
-// ---------------------------------------------------------------------------
-// Room rect — world-space bounding box (center + size)
+// Room rect
 // ---------------------------------------------------------------------------
 
 export interface FacilityRoom {
-  x: number       // center X in world space
-  y: number       // center Y in world space
-  width: number
-  height: number
+  x: number; y: number; width: number; height: number
   cwd: string
-  /** Desk center positions relative to room center (from computeRoomLayout) */
   deskPositions?: { x: number; y: number }[]
 }
 
@@ -56,539 +74,356 @@ export interface FacilityRoom {
 
 export class LabTilemap {
   private scene: Phaser.Scene
-  private tiles: Phaser.GameObjects.Image[] = []
-  private pipeSprites: Phaser.GameObjects.Sprite[] = []
-  private decorGraphics: Phaser.GameObjects.Graphics | null = null
-  /** Fingerprint of last rendered room set — skip re-render if unchanged */
+  private objects: Phaser.GameObjects.GameObject[] = []
   private lastRenderKey = ''
+  private framesAdded = false
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene
   }
 
   // -------------------------------------------------------------------------
-  // render — build grid and place tiles for the entire facility
+  // render
   // -------------------------------------------------------------------------
 
   render(rooms: FacilityRoom[]): void {
-    // Skip full rebuild if room positions/sizes haven't changed
     const key = rooms.map(r => `${r.cwd}:${r.x|0},${r.y|0},${r.width|0},${r.height|0}`).join('|')
-    if (key === this.lastRenderKey && this.tiles.length > 0) return
+    if (key === this.lastRenderKey && this.objects.length > 0) return
     this.lastRenderKey = key
-
     this.cleanup()
-    if (rooms.length === 0 || !this.scene.textures.exists(LAB_IMAGE_KEYS.HEX_FLOOR_A)) return
+    if (rooms.length === 0) return
+    this.ensureFrames()
 
-    // ── 1. Facility bounding box ──
-    // Include extra room padding so agents near edges are well inside walls
-    const ROOM_INSET = 30  // extra px inside each room edge
-    let fMinX = Infinity, fMinY = Infinity, fMaxX = -Infinity, fMaxY = -Infinity
-    for (const r of rooms) {
-      fMinX = Math.min(fMinX, r.x - r.width / 2 - ROOM_INSET)
-      fMinY = Math.min(fMinY, r.y - r.height / 2 - ROOM_INSET)
-      fMaxX = Math.max(fMaxX, r.x + r.width / 2 + ROOM_INSET)
-      fMaxY = Math.max(fMaxY, r.y + r.height / 2 + ROOM_INSET)
-    }
+    const hash = Math.abs(Math.floor(rooms[0].x * 7 + rooms[0].y * 13)) | 0
 
-    // Pad for outer wall thickness
-    const pad = WALL_THICK * CELL
-    const originX = fMinX - pad
-    const originY = fMinY - pad
-    const totalW = fMaxX - fMinX + pad * 2
-    const totalH = fMaxY - fMinY + pad * 2
-    const cols = Math.ceil(totalW / CELL)
-    const rows = Math.ceil(totalH / CELL)
-
-    // ── 2. Build grid — start all VOID ──
-    const grid: CellGrid = Array.from({ length: rows }, () => new Uint8Array(cols))
-
-    // ── 3. Mark building interior as FLOOR ──
-    // The entire bounding box (minus outer wall margin) is floor.
-    // This creates one big open building.
-    const floorC0 = VOID_MARGIN + WALL_THICK
-    const floorR0 = VOID_MARGIN + WALL_THICK
-    const floorC1 = cols - VOID_MARGIN - WALL_THICK
-    const floorR1 = rows - VOID_MARGIN - WALL_THICK
-    for (let r = floorR0; r < floorR1; r++) {
-      for (let c = floorC0; c < floorC1; c++) {
-        grid[r][c] = FLOOR
-      }
-    }
-
-    // ── 4. Mark outer walls ──
-    // Wall = cells in the margin band that are adjacent to floor
-    for (let r = 0; r < rows; r++) {
-      for (let c = 0; c < cols; c++) {
-        if (grid[r][c] !== VOID) continue
-        if (this.hasNeighbor(grid, r, c, rows, cols, FLOOR)) {
-          grid[r][c] = WALL
-        }
-      }
-    }
-
-    // ── 5. Interior dividers — drawn as graphics after tiles (not tile-based) ──
-
-    // ── 6. Render tiles ──
-    const hash = Math.abs(Math.floor(originX * 7 + originY * 13)) | 0
-    for (let r = 0; r < rows; r++) {
-      for (let c = 0; c < cols; c++) {
-        const type = grid[r][c]
-        if (type === VOID) continue
-
-        const wx = originX + c * CELL + CELL / 2
-        const wy = originY + r * CELL + CELL / 2
-
-        let imageKey: string
-        if (type === FLOOR) {
-          const v = (hash + r * 17 + c * 31) % 10
-          imageKey = v < 2 ? LAB_IMAGE_KEYS.HEX_FLOOR_B : LAB_IMAGE_KEYS.HEX_FLOOR_A
-        } else {
-          imageKey = this.autotileWall(grid, r, c, rows, cols)
-        }
-
-        const tile = this.scene.add.image(wx, wy, imageKey)
-          .setScale(TILE_SCALE)
-          .setDepth(-3)
-        this.tiles.push(tile)
-      }
-    }
-
-    // ── 7. Hazard tape along outer wall-floor boundaries ──
-    this.drawHazardTape(grid, originX, originY, cols, rows)
-
-    // ── 8. Interior dividers — graphics walls matching outer wall style ──
+    // Layer 1: Room backgrounds (NineSlice fill + top)
+    this.placeRoomBackgrounds(rooms)
+    // Layer 2: Smooth floor panels inside rooms
+    this.placeSmoothPanels(rooms, hash)
+    // Layer 3: Interior dividers between rooms
     this.drawInteriorDividers(rooms)
-
-    // ── 9. Floor glow lights (corridors only) ──
-    this.drawFloorGlows(grid, originX, originY, cols, rows, hash, rooms)
-
-    // ── 9. Room props — large wall-lining equipment, no scattered clutter ──
-    this.decorateRooms(rooms, grid, originX, originY, cols, rows, hash)
+    // Layer 4: Floor glow lights
+    this.drawFloorGlows(rooms)
+    // Layer 5: Exterior pipe runs (detailed tileset pipes)
+    this.drawExteriorPipes(rooms)
+    // Layer 6: Room props — dense equipment placement
+    this.decorateRooms(rooms, hash)
+    // Layer 7: Wall-mounted decorations
+    this.decorateWalls(rooms, hash)
   }
 
   // -------------------------------------------------------------------------
-  // Interior dividers — wall strips between rooms with openings
+  // Frame registration
   // -------------------------------------------------------------------------
 
-  private addInteriorDividers(
-    grid: CellGrid,
-    rooms: FacilityRoom[],
-    originX: number,
-    originY: number,
-    cols: number,
-    numRows: number,
-  ): void {
-    if (rooms.length < 2) return
+  private ensureFrames(): void {
+    if (this.framesAdded) return
+    this.framesAdded = true
 
-    // ── Group rooms into rows (rooms with similar Y centers) ──
-    const sorted = [...rooms].sort((a, b) => a.y - b.y)
-    const rowGroups: FacilityRoom[][] = []
-    for (const r of sorted) {
-      const lastRow = rowGroups[rowGroups.length - 1]
-      if (lastRow && Math.abs(lastRow[0].y - r.y) < r.height * 0.5) {
-        lastRow.push(r)
-      } else {
-        rowGroups.push([r])
-      }
-    }
-    // Sort rooms within each row by X
-    for (const row of rowGroups) row.sort((a, b) => a.x - b.x)
-
-    // ── Vertical dividers between adjacent rooms in the same row ──
-    for (const row of rowGroups) {
-      for (let i = 0; i < row.length - 1; i++) {
-        const a = row[i], b = row[i + 1]
-        const aRight = a.x + a.width / 2
-        const bLeft = b.x - b.width / 2
-
-        // Divider X at midpoint between rooms — 2 columns
-        const divWX = (aRight + bLeft) / 2
-        const divC = Math.round((divWX - originX) / CELL)
-        const divCols = [divC, divC + 1].filter(cc => cc >= 0 && cc < cols)
-        if (divCols.length === 0) continue
-
-        // Vertical span: union of both rooms' Y ranges
-        const topY = Math.min(a.y - a.height / 2, b.y - b.height / 2)
-        const botY = Math.max(a.y + a.height / 2, b.y + b.height / 2)
-        const r0 = Math.max(0, Math.floor((topY - originY) / CELL))
-        const r1 = Math.min(numRows, Math.ceil((botY - originY) / CELL))
-
-        // Doorway opening in the middle
-        const midR = Math.floor((r0 + r1) / 2)
-        const openR0 = midR - Math.floor(OPENING_WIDTH / 2)
-        const openR1 = openR0 + OPENING_WIDTH
-
-        for (let r = r0; r < r1; r++) {
-          if (r >= openR0 && r < openR1) continue
-          for (const dc of divCols) grid[r][dc] = WALL
-        }
+    // Room background frames
+    for (const [key, frame] of [[TILESET_FILL, ROOM_FRAME], [TILESET_TOP, ROOM_TOP_FRAME]] as const) {
+      if (this.scene.textures.exists(key)) {
+        const tex = this.scene.textures.get(key)
+        if (!tex.has(frame)) tex.add(frame, 0, ROOM_SRC.x, ROOM_SRC.y, ROOM_SRC.w, ROOM_SRC.h)
       }
     }
 
-    // ── Horizontal dividers between adjacent row groups ──
-    for (let gi = 0; gi < rowGroups.length - 1; gi++) {
-      const topRow = rowGroups[gi]
-      const botRow = rowGroups[gi + 1]
-
-      // Bottom edge of top row, top edge of bottom row
-      let topEdge = -Infinity
-      for (const r of topRow) topEdge = Math.max(topEdge, r.y + r.height / 2)
-      let botEdge = Infinity
-      for (const r of botRow) botEdge = Math.min(botEdge, r.y - r.height / 2)
-
-      const divWY = (topEdge + botEdge) / 2
-      const divR = Math.round((divWY - originY) / CELL)
-      const divRows = [divR, divR + 1].filter(rr => rr >= 0 && rr < numRows)
-      if (divRows.length === 0) continue
-
-      // Horizontal span: full width of whichever row group is wider
-      let leftX = Infinity, rightX = -Infinity
-      for (const r of [...topRow, ...botRow]) {
-        leftX = Math.min(leftX, r.x - r.width / 2)
-        rightX = Math.max(rightX, r.x + r.width / 2)
+    // Smooth tileset frames
+    if (this.scene.textures.exists(SMOOTH_KEY)) {
+      const tex = this.scene.textures.get(SMOOTH_KEY)
+      for (const f of Object.values(SMOOTH_FRAMES)) {
+        if (!tex.has(f.name)) tex.add(f.name, 0, f.x, f.y, f.w, f.h)
       }
-      const c0 = Math.max(0, Math.floor((leftX - originX) / CELL))
-      const c1 = Math.min(cols, Math.ceil((rightX - originX) / CELL))
+    }
 
-      // Doorway opening in the middle
-      const midC = Math.floor((c0 + c1) / 2)
-      const openC0 = midC - Math.floor(OPENING_WIDTH / 2)
-      const openC1 = openC0 + OPENING_WIDTH
-
-      for (let c = c0; c < c1; c++) {
-        if (c >= openC0 && c < openC1) continue
-        for (const dr of divRows) grid[dr][c] = WALL
+    // Pipe tileset frames
+    if (this.scene.textures.exists(PIPE_KEY)) {
+      const tex = this.scene.textures.get(PIPE_KEY)
+      for (const f of Object.values(PIPE_FRAMES)) {
+        if (!tex.has(f.name)) tex.add(f.name, 0, f.x, f.y, f.w, f.h)
       }
     }
   }
 
   // -------------------------------------------------------------------------
-  // Interior dividers — thin graphics walls between adjacent rooms
+  // Room backgrounds — NineSlice fill + top overlay
+  // -------------------------------------------------------------------------
+
+  private placeRoomBackgrounds(rooms: FacilityRoom[]): void {
+    const hasFill = this.scene.textures.exists(TILESET_FILL)
+    const hasTop = this.scene.textures.exists(TILESET_TOP)
+    if (!hasFill && !hasTop) return
+
+    for (const room of rooms) {
+      // Logical NineSlice size (before scaling) — divide by WALL_SCALE
+      // so that after scaling, the display size = room + wallPad
+      const displayW = room.width + WALL_PAD * 2
+      const displayH = room.height + WALL_PAD * 2
+      const logicalW = displayW / WALL_SCALE
+      const logicalH = displayH / WALL_SCALE
+
+      if (hasFill) {
+        const ns = this.scene.add.nineslice(
+          room.x, room.y, TILESET_FILL, ROOM_FRAME,
+          logicalW, logicalH, BORDER, BORDER, BORDER, BORDER,
+        ).setOrigin(0.5).setScale(WALL_SCALE).setDepth(-3)
+        this.objects.push(ns)
+      }
+
+      if (hasTop) {
+        const nsTop = this.scene.add.nineslice(
+          room.x, room.y, TILESET_TOP, ROOM_TOP_FRAME,
+          logicalW, logicalH, BORDER, BORDER, BORDER, BORDER,
+        ).setOrigin(0.5).setScale(WALL_SCALE).setDepth(-2.9).setAlpha(0.85)
+        this.objects.push(nsTop)
+      }
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // Smooth floor panels — accent zones inside rooms
+  // -------------------------------------------------------------------------
+
+  private placeSmoothPanels(rooms: FacilityRoom[], hash: number): void {
+    if (!this.scene.textures.exists(SMOOTH_KEY)) return
+
+    const panelChoices = [
+      SMOOTH_FRAMES.LARGE_PANEL,
+      SMOOTH_FRAMES.FOUR_BOLT,
+      SMOOTH_FRAMES.SMALL_PANEL,
+    ]
+
+    for (let ri = 0; ri < rooms.length; ri++) {
+      const room = rooms[ri]
+      const panel = panelChoices[ri % panelChoices.length]
+
+      // Scale panel to fit ~60% of room interior
+      const targetW = room.width * 0.55
+      const targetH = room.height * 0.45
+      const scaleX = targetW / panel.w
+      const scaleY = targetH / panel.h
+      const s = Math.min(scaleX, scaleY, 0.45) // cap to avoid oversized
+
+      const spr = this.scene.add.sprite(room.x, room.y + 10, SMOOTH_KEY, panel.name)
+        .setScale(s).setAlpha(0.18).setDepth(-2.85)
+      this.objects.push(spr)
+
+      // Horizontal bar accent near bottom of room
+      if (room.width > 200) {
+        const bar = this.scene.add.sprite(room.x, room.y + room.height * 0.35, SMOOTH_KEY, SMOOTH_FRAMES.HORIZ_BAR.name)
+          .setScale(s * 0.8).setAlpha(0.12).setDepth(-2.85)
+        this.objects.push(bar)
+      }
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // Interior dividers
   // -------------------------------------------------------------------------
 
   private drawInteriorDividers(rooms: FacilityRoom[]): void {
     if (rooms.length < 2) return
 
     const g = this.scene.add.graphics().setDepth(-2.4)
-    this.tiles.push(g as unknown as Phaser.GameObjects.Image)
+    this.objects.push(g)
 
-    const WALL_COLOR = 0x1a2744     // facility wall navy
-    const WALL_W = 24               // match outer wall visual weight
-    const DOOR_GAP = 48             // doorway opening (1 tile)
-    const TAPE_W = 5                // hazard tape strip width
+    const WALL_COLOR = 0x1a2744, WALL_W = 16, DOOR_GAP = 48, TAPE_W = 5
+    const rowGroups = this.groupRoomsByRow(rooms)
 
-    // Group rooms into rows by similar Y center
-    const sorted = [...rooms].sort((a, b) => a.y - b.y)
-    const rowGroups: FacilityRoom[][] = []
-    for (const r of sorted) {
-      const lastRow = rowGroups[rowGroups.length - 1]
-      if (lastRow && Math.abs(lastRow[0].y - r.y) < r.height * 0.5) {
-        lastRow.push(r)
-      } else {
-        rowGroups.push([r])
-      }
-    }
-    for (const row of rowGroups) row.sort((a, b) => a.x - b.x)
-
-    // ── Vertical dividers between rooms in the same row ──
+    // Vertical dividers
     for (const row of rowGroups) {
       for (let i = 0; i < row.length - 1; i++) {
         const a = row[i], b = row[i + 1]
         const divX = (a.x + a.width / 2 + b.x - b.width / 2) / 2
-
-        const topY = Math.min(a.y - a.height / 2, b.y - b.height / 2)
-        const botY = Math.max(a.y + a.height / 2, b.y + b.height / 2)
+        const topY = Math.min(a.y - a.height / 2, b.y - b.height / 2) - WALL_PAD
+        const botY = Math.max(a.y + a.height / 2, b.y + b.height / 2) + WALL_PAD
         const midY = (topY + botY) / 2
-        const segTopH = midY - DOOR_GAP / 2 - topY
-        const segBotH = botY - midY - DOOR_GAP / 2
 
-        // Wall body
-        g.fillStyle(WALL_COLOR, 1)
-        if (segTopH > 0) g.fillRect(divX - WALL_W / 2, topY, WALL_W, segTopH)
-        if (segBotH > 0) g.fillRect(divX - WALL_W / 2, midY + DOOR_GAP / 2, WALL_W, segBotH)
-
-        // Hazard tape on both long edges
-        if (segTopH > 0) {
-          this.drawDividerTape(g, divX - WALL_W / 2, topY, TAPE_W, segTopH, false)
-          this.drawDividerTape(g, divX + WALL_W / 2 - TAPE_W, topY, TAPE_W, segTopH, false)
-        }
-        if (segBotH > 0) {
-          this.drawDividerTape(g, divX - WALL_W / 2, midY + DOOR_GAP / 2, TAPE_W, segBotH, false)
-          this.drawDividerTape(g, divX + WALL_W / 2 - TAPE_W, midY + DOOR_GAP / 2, TAPE_W, segBotH, false)
+        for (const [sy, sh] of [[topY, midY - DOOR_GAP / 2 - topY], [midY + DOOR_GAP / 2, botY - midY - DOOR_GAP / 2]]) {
+          if (sh > 0) {
+            g.fillStyle(WALL_COLOR, 1)
+            g.fillRect(divX - WALL_W / 2, sy, WALL_W, sh)
+            this.drawTape(g, divX - WALL_W / 2, sy, TAPE_W, sh, false)
+            this.drawTape(g, divX + WALL_W / 2 - TAPE_W, sy, TAPE_W, sh, false)
+          }
         }
       }
     }
 
-    // ── Horizontal dividers between row groups ──
+    // Horizontal dividers
     for (let gi = 0; gi < rowGroups.length - 1; gi++) {
-      const topRow = rowGroups[gi]
-      const botRow = rowGroups[gi + 1]
-
-      let topEdge = -Infinity
+      const topRow = rowGroups[gi], botRow = rowGroups[gi + 1]
+      let topEdge = -Infinity, botEdge = Infinity
       for (const r of topRow) topEdge = Math.max(topEdge, r.y + r.height / 2)
-      let botEdge = Infinity
       for (const r of botRow) botEdge = Math.min(botEdge, r.y - r.height / 2)
       const divY = (topEdge + botEdge) / 2
 
       let leftX = Infinity, rightX = -Infinity
       for (const r of [...topRow, ...botRow]) {
-        leftX = Math.min(leftX, r.x - r.width / 2)
-        rightX = Math.max(rightX, r.x + r.width / 2)
+        leftX = Math.min(leftX, r.x - r.width / 2); rightX = Math.max(rightX, r.x + r.width / 2)
       }
+      leftX -= WALL_PAD; rightX += WALL_PAD
       const midX = (leftX + rightX) / 2
-      const segLeftW = midX - DOOR_GAP / 2 - leftX
-      const segRightW = rightX - midX - DOOR_GAP / 2
 
-      // Wall body
-      g.fillStyle(WALL_COLOR, 1)
-      if (segLeftW > 0) g.fillRect(leftX, divY - WALL_W / 2, segLeftW, WALL_W)
-      if (segRightW > 0) g.fillRect(midX + DOOR_GAP / 2, divY - WALL_W / 2, segRightW, WALL_W)
-
-      // Hazard tape on both long edges
-      if (segLeftW > 0) {
-        this.drawDividerTape(g, leftX, divY - WALL_W / 2, segLeftW, TAPE_W, true)
-        this.drawDividerTape(g, leftX, divY + WALL_W / 2 - TAPE_W, segLeftW, TAPE_W, true)
-      }
-      if (segRightW > 0) {
-        this.drawDividerTape(g, midX + DOOR_GAP / 2, divY - WALL_W / 2, segRightW, TAPE_W, true)
-        this.drawDividerTape(g, midX + DOOR_GAP / 2, divY + WALL_W / 2 - TAPE_W, segRightW, TAPE_W, true)
+      for (const [sx, sw] of [[leftX, midX - DOOR_GAP / 2 - leftX], [midX + DOOR_GAP / 2, rightX - midX - DOOR_GAP / 2]]) {
+        if (sw > 0) {
+          g.fillStyle(WALL_COLOR, 1)
+          g.fillRect(sx, divY - WALL_W / 2, sw, WALL_W)
+          this.drawTape(g, sx, divY - WALL_W / 2, sw, TAPE_W, true)
+          this.drawTape(g, sx, divY + WALL_W / 2 - TAPE_W, sw, TAPE_W, true)
+        }
       }
     }
   }
 
-  /** Draw alternating yellow/dark hazard tape segments on a divider edge */
-  private drawDividerTape(
-    g: Phaser.GameObjects.Graphics,
-    x: number, y: number, w: number, h: number,
-    horizontal: boolean,
-  ): void {
-    const SEG = 6
-    const YELLOW = 0xfbbf24
-    const DARK = 0x1a1a2e
-    let pos = 0
-    let isYellow = true
-    const length = horizontal ? w : h
-    while (pos < length) {
-      const len = Math.min(SEG, length - pos)
-      g.fillStyle(isYellow ? YELLOW : DARK, isYellow ? 0.5 : 0.35)
-      if (horizontal) {
-        g.fillRect(x + pos, y, len, h)
-      } else {
-        g.fillRect(x, y + pos, w, len)
+  private drawTape(g: Phaser.GameObjects.Graphics, x: number, y: number, w: number, h: number, horiz: boolean): void {
+    const len = horiz ? w : h
+    let pos = 0, yellow = true
+    while (pos < len) {
+      const seg = Math.min(TAPE_SEG, len - pos)
+      g.fillStyle(yellow ? TAPE_YELLOW : TAPE_DARK, yellow ? 0.75 : 0.55)
+      if (horiz) g.fillRect(x + pos, y, seg, h); else g.fillRect(x, y + pos, w, seg)
+      pos += TAPE_SEG; yellow = !yellow
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // Floor glow lights
+  // -------------------------------------------------------------------------
+
+  private drawFloorGlows(rooms: FacilityRoom[]): void {
+    const g = this.scene.add.graphics().setDepth(-2.8)
+    this.objects.push(g)
+
+    const glow = (x: number, y: number, s = 1.0) => {
+      g.fillStyle(0x38bdf8, 0.12 * s); g.fillCircle(x, y, 32 * s)
+      g.fillStyle(0x22d3ee, 0.25 * s); g.fillCircle(x, y, 16 * s)
+      g.fillStyle(0x7dd3fc, 0.40 * s); g.fillCircle(x, y, 6 * s)
+    }
+
+    for (const room of rooms) {
+      const L = room.x - room.width / 2, T = room.y - room.height / 2
+      const R = room.x + room.width / 2, B = room.y + room.height / 2
+      const i = 35
+      glow(L + i, T + i, 0.8); glow(R - i, T + i, 0.8)
+      glow(L + i, B - i, 0.8); glow(R - i, B - i, 0.8)
+      if (room.width > 200) { glow(room.x, T + i, 0.9); glow(room.x, B - i, 0.9) }
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // Exterior pipes — detailed tileset pieces
+  // -------------------------------------------------------------------------
+
+  private drawExteriorPipes(rooms: FacilityRoom[]): void {
+    if (rooms.length === 0) return
+    const hasPipeTileset = this.scene.textures.exists(PIPE_KEY)
+
+    // Facility bounding box
+    let fMinX = Infinity, fMinY = Infinity, fMaxX = -Infinity, fMaxY = -Infinity
+    for (const r of rooms) {
+      fMinX = Math.min(fMinX, r.x - r.width / 2 - WALL_PAD)
+      fMinY = Math.min(fMinY, r.y - r.height / 2 - WALL_PAD)
+      fMaxX = Math.max(fMaxX, r.x + r.width / 2 + WALL_PAD)
+      fMaxY = Math.max(fMaxY, r.y + r.height / 2 + WALL_PAD)
+    }
+
+    const off = CELL * 0.6
+    const topY = fMinY - off, botY = fMaxY + off
+    const leftX = fMinX - off, rightX = fMaxX + off
+    const S = 0.28 // pipe display scale — proportional to room size
+
+    if (hasPipeTileset) {
+      // Use detailed pipe tileset pieces
+      const place = (x: number, y: number, frame: string, angle = 0, alpha = 0.75) => {
+        const spr = this.scene.add.sprite(x, y, PIPE_KEY, frame)
+          .setScale(S).setAlpha(alpha).setDepth(-3.5).setAngle(angle)
+        this.objects.push(spr)
       }
-      pos += SEG
-      isYellow = !isYellow
-    }
-  }
 
-  // -------------------------------------------------------------------------
-  // Autotile — select wall tile based on floor neighbors
-  // -------------------------------------------------------------------------
+      const spacing = CELL * 1.1
+      const hStart = leftX + CELL * 1.2, hEnd = rightX - CELL * 1.2
+      const numH = Math.max(0, Math.floor((hEnd - hStart) / spacing))
 
-  private autotileWall(grid: CellGrid, r: number, c: number, rows: number, cols: number): string {
-    const isFloor = (dr: number, dc: number) =>
-      r + dr >= 0 && r + dr < rows && c + dc >= 0 && c + dc < cols &&
-      grid[r + dr][c + dc] === FLOOR
-
-    const n = isFloor(-1, 0)
-    const s = isFloor(1, 0)
-    const w = isFloor(0, -1)
-    const e = isFloor(0, 1)
-    const cnt = +n + +s + +e + +w
-
-    // Floor on all 4 cardinal sides — inner island or 4-way junction
-    if (cnt === 4) return LAB_IMAGE_KEYS.FOUR_WAY
-
-    // T-junctions — floor on 3 cardinal sides
-    if (cnt === 3) {
-      if (!n) return LAB_IMAGE_KEYS.T_TOP     // wall extends up, floor on S/E/W
-      if (!s) return LAB_IMAGE_KEYS.T_BOTTOM  // wall extends down, floor on N/E/W
-      if (!w) return LAB_IMAGE_KEYS.T_LEFT    // wall extends left, floor on N/S/E
-      if (!e) return LAB_IMAGE_KEYS.T_RIGHT   // wall extends right, floor on N/S/W
-    }
-
-    // 2 cardinal floor neighbors
-    if (cnt === 2) {
-      // Adjacent pair → outer (convex) corner
-      if (s && e) return LAB_IMAGE_KEYS.CORNER_TL
-      if (s && w) return LAB_IMAGE_KEYS.CORNER_TR
-      if (n && e) return LAB_IMAGE_KEYS.CORNER_BL
-      if (n && w) return LAB_IMAGE_KEYS.CORNER_BR
-
-      // Opposite pair → interior divider
-      if (n && s) return LAB_IMAGE_KEYS.WALL_LEFT   // vertical divider strip
-      if (e && w) return LAB_IMAGE_KEYS.WALL_TOP     // horizontal divider strip
-    }
-
-    // 1 cardinal floor neighbor — straight edge
-    if (cnt === 1) {
-      if (s) return LAB_IMAGE_KEYS.WALL_TOP
-      if (n) return LAB_IMAGE_KEYS.WALL_BOTTOM
-      if (e) return LAB_IMAGE_KEYS.WALL_LEFT
-      if (w) return LAB_IMAGE_KEYS.WALL_RIGHT
-    }
-
-    // 0 cardinal floor neighbors — check diagonals for inner (concave) corners
-    const ne = isFloor(-1, 1)
-    const nw = isFloor(-1, -1)
-    const se = isFloor(1, 1)
-    const sw = isFloor(1, -1)
-
-    if (se) return LAB_IMAGE_KEYS.INNER_TL  // floor at bottom-right → inner top-left corner
-    if (sw) return LAB_IMAGE_KEYS.INNER_TR  // floor at bottom-left → inner top-right corner
-    if (ne) return LAB_IMAGE_KEYS.INNER_BL  // floor at top-right → inner bottom-left corner
-    if (nw) return LAB_IMAGE_KEYS.INNER_BR  // floor at top-left → inner bottom-right corner
-
-    // Deep interior wall — no adjacent floor at all
-    return LAB_IMAGE_KEYS.OUTER_FILL
-  }
-
-  // -------------------------------------------------------------------------
-  // Hazard tape — yellow/dark stripes along interior wall boundaries
-  // -------------------------------------------------------------------------
-
-  private drawHazardTape(
-    grid: CellGrid,
-    originX: number,
-    originY: number,
-    cols: number,
-    rows: number,
-  ): void {
-    if (!this.decorGraphics) {
-      this.decorGraphics = this.scene.add.graphics().setDepth(-2.5)
-    }
-    const g = this.decorGraphics
-    g.clear()
-
-    const YELLOW = 0xfbbf24
-    const DARK = 0x1a1a2e
-    const SEG = 6
-    const TAPE_W = 4
-    const AY = 0.5
-    const AD = 0.35
-
-    // Draw hazard tape on ALL wall-floor boundaries — both outer perimeter and interior dividers.
-    // This gives the reference image's look where every wall edge has safety striping.
-    for (let r = 0; r < rows; r++) {
-      for (let c = 0; c < cols; c++) {
-        if (grid[r][c] !== WALL) continue
-
-        const wx = originX + c * CELL
-        const wy = originY + r * CELL
-
-        // Draw tape on each side that faces floor
-        if (r + 1 < rows && grid[r + 1][c] === FLOOR)
-          this.drawTapeH(g, wx, wy + CELL - TAPE_W / 2, CELL, TAPE_W, SEG, YELLOW, DARK, AY, AD)
-        if (r > 0 && grid[r - 1][c] === FLOOR)
-          this.drawTapeH(g, wx, wy - TAPE_W / 2, CELL, TAPE_W, SEG, YELLOW, DARK, AY, AD)
-        if (c + 1 < cols && grid[r][c + 1] === FLOOR)
-          this.drawTapeV(g, wx + CELL - TAPE_W / 2, wy, TAPE_W, CELL, SEG, YELLOW, DARK, AY, AD)
-        if (c > 0 && grid[r][c - 1] === FLOOR)
-          this.drawTapeV(g, wx - TAPE_W / 2, wy, TAPE_W, CELL, SEG, YELLOW, DARK, AY, AD)
+      // Top + bottom horizontal runs
+      for (let i = 0; i < numH; i++) {
+        const px = hStart + i * spacing
+        place(px, topY, PIPE_FRAMES.H_STRAIGHT.name)
+        place(px, botY, PIPE_FRAMES.H_STRAIGHT.name)
       }
-    }
-  }
 
-  private drawTapeH(
-    g: Phaser.GameObjects.Graphics,
-    x: number, y: number, length: number, width: number,
-    seg: number, c1: number, c2: number, a1: number, a2: number,
-  ): void {
-    let pos = 0
-    let yellow = true
-    while (pos < length) {
-      const len = Math.min(seg, length - pos)
-      g.fillStyle(yellow ? c1 : c2, yellow ? a1 : a2)
-      g.fillRect(x + pos, y, len, width)
-      pos += seg
-      yellow = !yellow
-    }
-  }
+      // Corners
+      place(hStart - CELL * 0.6, topY, PIPE_FRAMES.CORNER_TL.name)
+      place(hEnd + CELL * 0.6, topY, PIPE_FRAMES.CORNER_TR.name)
+      place(hStart - CELL * 0.6, botY, PIPE_FRAMES.CORNER_BL.name)
+      place(hEnd + CELL * 0.6, botY, PIPE_FRAMES.CORNER_BR.name)
 
-  private drawTapeV(
-    g: Phaser.GameObjects.Graphics,
-    x: number, y: number, width: number, length: number,
-    seg: number, c1: number, c2: number, a1: number, a2: number,
-  ): void {
-    let pos = 0
-    let yellow = true
-    while (pos < length) {
-      const len = Math.min(seg, length - pos)
-      g.fillStyle(yellow ? c1 : c2, yellow ? a1 : a2)
-      g.fillRect(x, y + pos, width, len)
-      pos += seg
-      yellow = !yellow
-    }
-  }
-
-  // -------------------------------------------------------------------------
-  // Floor glow lights — cyan pools in CORRIDORS between rooms only
-  // -------------------------------------------------------------------------
-
-  private drawFloorGlows(
-    grid: CellGrid,
-    originX: number,
-    originY: number,
-    cols: number,
-    rows: number,
-    hash: number,
-    rooms?: FacilityRoom[],
-  ): void {
-    const glowG = this.scene.add.graphics().setDepth(-2.8)
-    this.tiles.push(glowG as unknown as Phaser.GameObjects.Image)
-
-    // Helper: is this world position inside any room?
-    const insideRoom = (wx: number, wy: number): boolean => {
-      if (!rooms) return false
-      for (const r of rooms) {
-        if (wx > r.x - r.width / 2 && wx < r.x + r.width / 2 &&
-            wy > r.y - r.height / 2 && wy < r.y + r.height / 2) return true
+      // Left + right vertical runs
+      const vStart = topY + CELL * 0.7, vEnd = botY - CELL * 0.7
+      const numV = Math.max(0, Math.floor((vEnd - vStart) / spacing))
+      for (let i = 0; i < numV; i++) {
+        const py = vStart + i * spacing
+        place(leftX, py, PIPE_FRAMES.V_STRAIGHT.name)
+        place(rightX, py, PIPE_FRAMES.V_STRAIGHT.name)
       }
-      return false
-    }
 
-    // Collect corridor floor cells (floor cells NOT inside any room)
-    const corridorCells: { x: number; y: number }[] = []
-    for (let r = 2; r < rows - 2; r++) {
-      for (let c = 2; c < cols - 2; c++) {
-        if (grid[r][c] !== FLOOR) continue
-        const wx = originX + c * CELL + CELL / 2
-        const wy = originY + r * CELL + CELL / 2
-        if (!insideRoom(wx, wy)) corridorCells.push({ x: wx, y: wy })
+      // T-junctions at room boundaries along top pipe
+      if (numH > 3) {
+        place(hStart + Math.floor(numH * 0.33) * spacing, topY, PIPE_FRAMES.T_DOWN.name)
+        place(hStart + Math.floor(numH * 0.66) * spacing, topY, PIPE_FRAMES.T_DOWN.name)
+      }
+
+      // Valves
+      if (numH > 2) place(hStart + Math.floor(numH * 0.5) * spacing, botY, PIPE_FRAMES.VALVE.name)
+      if (numV > 2) place(leftX, vStart + Math.floor(numV * 0.5) * spacing, PIPE_FRAMES.VALVE.name)
+
+      // Broken pipe accent on right side
+      if (numV > 3) {
+        place(rightX, vEnd - spacing, PIPE_FRAMES.BROKEN.name, 90, 0.55)
+      }
+
+      // Couplings between pipes
+      if (numV > 1) {
+        place(rightX, vStart + spacing * 0.5, PIPE_FRAMES.COUPLING.name, 90, 0.65)
+      }
+
+    } else {
+      // Fallback to individual pipe images
+      const place = (x: number, y: number, imgKey: string) => {
+        const spr = this.scene.add.image(x, y, imgKey)
+          .setScale(TILE_SCALE * 0.9).setAlpha(0.65).setDepth(-3.5)
+        this.objects.push(spr)
+      }
+      const spacing = CELL * 0.9
+      const hStart = leftX + CELL, hEnd = rightX - CELL
+      const numH = Math.max(0, Math.floor((hEnd - hStart) / spacing))
+      for (let i = 0; i < numH; i++) {
+        place(hStart + i * spacing, topY, LAB_IMAGE_KEYS.PIPE_H)
+        place(hStart + i * spacing, botY, LAB_IMAGE_KEYS.PIPE_H)
+      }
+      place(hStart - CELL * 0.4, topY, LAB_IMAGE_KEYS.PIPE_CORNER_TL)
+      place(hEnd + CELL * 0.4, topY, LAB_IMAGE_KEYS.PIPE_CORNER_TR)
+      place(hStart - CELL * 0.4, botY, LAB_IMAGE_KEYS.PIPE_CORNER_BL)
+      place(hEnd + CELL * 0.4, botY, LAB_IMAGE_KEYS.PIPE_CORNER_BR)
+      const vStart = topY + CELL * 0.5, vEnd = botY - CELL * 0.5
+      const numV = Math.max(0, Math.floor((vEnd - vStart) / spacing))
+      for (let i = 0; i < numV; i++) {
+        place(leftX, vStart + i * spacing, LAB_IMAGE_KEYS.PIPE_V)
+        place(rightX, vStart + i * spacing, LAB_IMAGE_KEYS.PIPE_V)
       }
     }
-
-    // Place glow lights evenly spaced in corridor cells
-    const maxGlows = Math.min(6, Math.max(2, Math.floor(corridorCells.length / 3)))
-    const step = Math.max(1, Math.floor(corridorCells.length / maxGlows))
-    for (let i = 0; i < maxGlows && i * step < corridorCells.length; i++) {
-      const cell = corridorCells[i * step]
-      glowG.fillStyle(0x38bdf8, 0.10)
-      glowG.fillCircle(cell.x, cell.y, 26)
-      glowG.fillStyle(0x22d3ee, 0.18)
-      glowG.fillCircle(cell.x, cell.y, 13)
-      glowG.fillStyle(0x7dd3fc, 0.28)
-      glowG.fillCircle(cell.x, cell.y, 5)
-    }
   }
 
   // -------------------------------------------------------------------------
-  // Room decoration — corner-based strategic placement
+  // Room props — dense equipment from 135+ lab prop frames
   // -------------------------------------------------------------------------
 
-  private decorateRooms(
-    rooms: FacilityRoom[],
-    _grid: CellGrid,
-    _originX: number,
-    _originY: number,
-    _cols: number,
-    _rows: number,
-    _hash: number,
-  ): void {
+  private decorateRooms(rooms: FacilityRoom[], hash: number): void {
     if (!this.scene.textures.exists(SPRITESHEET_KEYS.LAB_PROPS)) return
+    const LP = SPRITESHEET_KEYS.LAB_PROPS
 
-    // ── Desk positions for collision avoidance ──
-    const DESK_CLEAR = 75  // generous clearance to prevent ANY desk overlap
+    // Desk collision avoidance
+    const DESK_CLEAR = 70
     const allDesks: { x: number; y: number }[] = []
     for (const r of rooms) {
       if (!r.deskPositions) continue
@@ -597,94 +432,137 @@ export class LabTilemap {
     const nearDesk = (wx: number, wy: number) =>
       allDesks.some(d => Math.abs(d.x - wx) < DESK_CLEAR && Math.abs(d.y - wy) < DESK_CLEAR)
 
-    // Place a prop sprite at uniform tile-grid scale (same as wall tiles: 0.375)
-    const PROP_SCALE = TILE_SCALE  // 0.375 — matches 128px tile → 48px cell
-    const placeProp = (wx: number, wy: number, frame: string, _unused?: number, alpha = 0.90, depth = -2): Phaser.GameObjects.Sprite | null => {
+    const place = (wx: number, wy: number, frame: string, alpha = 0.88, depth = -2, angle = 0): Phaser.GameObjects.Sprite | null => {
       if (nearDesk(wx, wy)) return null
-      const spr = this.scene.add.sprite(wx, wy, SPRITESHEET_KEYS.LAB_PROPS, frame)
-      spr.setScale(PROP_SCALE).setAlpha(alpha).setDepth(depth)
-      this.pipeSprites.push(spr)
+      const spr = this.scene.add.sprite(wx, wy, LP, frame)
+        .setScale(TILE_SCALE).setAlpha(alpha).setDepth(depth).setAngle(angle)
+      this.objects.push(spr)
       return spr
     }
 
-    // =====================================================================
-    // 4 room themes — corner-first placement like the reference image
-    // Each theme: corner anchors (top-left, top-right), top console, floor accent
-    // =====================================================================
+    // Room theme kits — each defines corner anchors and equipment
+    const themes = [
+      { tl: 'generator', tr: 'large_tank', console: 'blank_console_long', screen: 'console_screen_wave_01',
+        bl: 'cable_cover', br: 'power_cell', mid: 'free_standing_screen', extra: ['gas_valve_on', 'switch_up'] },
+      { tl: 'pod', tr: 'lab_machine_01', console: 'blank_console_long', screen: 'console_screen_lines_02',
+        bl: 'unit_small', br: 'block_01', mid: 'dome', extra: ['circular_sink', 'beaker'] },
+      { tl: 'console_example_corner', tr: 'unit_example_03', console: 'console_example_long', screen: 'console_screen_wave_03',
+        bl: 'cable_cover_with_ramp', br: 'block_05', mid: 'unit_large', extra: ['gas_valve_off', 'test_tube_holder'] },
+      { tl: 'unit_example_01', tr: 'unit_example_04', console: 'console_example_long', screen: 'console_screen_lines_04',
+        bl: 'octogon_plate', br: 'block_03', mid: 'unit_example_02', extra: ['petri_dish', 'small_apparatus'] },
+    ]
 
-    interface CornerKit {
-      cornerTL: string    // top-left corner anchor frame
-      cornerTR: string    // top-right corner anchor frame
-      topConsole: string  // console spanning top wall between corners
-      consoleScreen: string // small screen overlay on the console
-      floorAccent: string // subtle bottom-wall floor item
-    }
-
-    const themes: CornerKit[] = [
-      { // POWER ROOM
-        cornerTL: 'generator',
-        cornerTR: 'large_tank',
-        topConsole: 'blank_console_long',
-        consoleScreen: 'console_screen_wave_01',
-        floorAccent: 'cable_cover',
-      },
-      { // RESEARCH LAB
-        cornerTL: 'pod',
-        cornerTR: 'lab_machine_01',
-        topConsole: 'blank_console_long',
-        consoleScreen: 'console_screen_lines_02',
-        floorAccent: 'octogon_plate',
-      },
-      { // CONTROL ROOM
-        cornerTL: 'console_example_corner',
-        cornerTR: 'console_example_corner',
-        topConsole: 'console_example_long',
-        consoleScreen: 'console_screen_wave_03',
-        floorAccent: 'cable_cover_with_ramp',
-      },
-      { // SERVER ROOM
-        cornerTL: 'unit_example_01',
-        cornerTR: 'unit_example_04',
-        topConsole: 'console_example_long',
-        consoleScreen: 'console_screen_lines_04',
-        floorAccent: 'octogon_plate_small',
-      },
+    // Small scatter items for floor edges
+    const scatterItems = [
+      'beaker', 'conical_beaker', 'test_tube_holder', 'petri_dish', 'small_apparatus',
+      'tablet', 'cup', 'clipboard', 'pencil', 'desk_draw', 'tube',
     ]
 
     for (let ri = 0; ri < rooms.length; ri++) {
+      const room = rooms[ri], t = themes[ri % themes.length]
+      const L = room.x - room.width / 2, T = room.y - room.height / 2
+      const R = room.x + room.width / 2, B = room.y + room.height / 2
+
+      // Top-left corner — large equipment
+      const tlSpr = place(L + 30, T + 45, t.tl, 0.88, -2.2, 270)
+      if (tlSpr) tlSpr.setOrigin(0, 0)
+
+      // Top-right corner — large equipment
+      const trSpr = place(R - 6, T - 30, t.tr, 0.88, -2.2)
+      if (trSpr) trSpr.setOrigin(1, 0)
+
+      // Top wall center — console + screen
+      const consoleSpr = place(room.x, T + 10, t.console, 0.85, -2.3)
+      if (consoleSpr) {
+        consoleSpr.setOrigin(0.5, 0)
+        const scr = place(room.x, T + 22, t.screen, 0.80, -2.15)
+        if (scr) scr.setOrigin(0.5, 0)
+      }
+
+      // Bottom-left corner
+      place(L + 35, B - 20, t.bl, 0.75, -2.3)
+      // Bottom-right corner
+      place(R - 35, B - 20, t.br, 0.75, -2.3)
+
+      // Mid-room feature (if space allows)
+      if (room.width > 200 && room.height > 150) {
+        place(R - 55, room.y - 15, t.mid, 0.70, -2.2)
+      }
+
+      // Extra equipment along walls
+      if (t.extra.length >= 2) {
+        place(L + 20, room.y - 20, t.extra[0], 0.65, -2.1)
+        place(R - 20, room.y + 20, t.extra[1], 0.65, -2.1)
+      }
+
+      // Scatter items along walls — 4-6 small props
+      const seed = (hash + ri * 37) >>> 0
+      for (let si = 0; si < 5; si++) {
+        const item = scatterItems[(seed + si * 7) % scatterItems.length]
+        const t2 = si / 5
+        let sx: number, sy: number
+        if (si < 2) { sx = L + 15 + si * 20; sy = T + room.height * (0.3 + si * 0.15) }
+        else if (si < 4) { sx = R - 15 - (si - 2) * 20; sy = T + room.height * (0.35 + (si - 2) * 0.15) }
+        else { sx = room.x + (t2 - 0.5) * room.width * 0.3; sy = B - 12 }
+        place(sx, sy, item, 0.55, -2.05)
+      }
+
+      // Cable covers along floor edges
+      if (ri % 2 === 0) {
+        place(L + room.width * 0.3, B - 8, 'cable_piece_01', 0.45, -2.8)
+      } else {
+        place(R - room.width * 0.3, T + 8, 'cable_piece_03', 0.45, -2.8)
+      }
+
+      // Sliding door at room entrance
+      place(room.x, B + WALL_PAD * 0.5, 'sliding_door', 0.60, -2.5)
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // Wall decorations — vents, panels, warning signs, lights
+  // -------------------------------------------------------------------------
+
+  private decorateWalls(rooms: FacilityRoom[], hash: number): void {
+    if (!this.scene.textures.exists(SPRITESHEET_KEYS.LAB_PROPS)) return
+    const LP = SPRITESHEET_KEYS.LAB_PROPS
+
+    const topFrames = ['vent_slats', 'small_rectangle_panel', 'octagonal_panel', 'warning_stripes', 'narrow_skylight']
+    const sideFrames = ['vent', 'sunken_vent', 'rectangle_panel', 'sunken_cell', 'circular_panel']
+    const warnFrames = ['warning_biological', 'warning_power', 'warning_death', 'warning_warning']
+
+    const place = (x: number, y: number, frame: string, scale: number, angle = 0, alpha = 0.75) => {
+      const spr = this.scene.add.sprite(x, y, LP, frame)
+        .setScale(TILE_SCALE * scale).setAlpha(alpha).setDepth(-2.1).setAngle(angle)
+      this.objects.push(spr)
+    }
+
+    for (let ri = 0; ri < rooms.length; ri++) {
       const room = rooms[ri]
-      const theme = themes[ri % themes.length]
-      const L = room.x - room.width / 2
-      const T = room.y - room.height / 2
-      const R = room.x + room.width / 2
-      const B = room.y + room.height / 2
+      const L = room.x - room.width / 2, T = room.y - room.height / 2
+      const R = room.x + room.width / 2, B = room.y + room.height / 2
+      const seed = hash + ri * 37
 
-      // ── TOP-LEFT CORNER: anchor equipment into the corner ──
-      {
-        const spr = placeProp(L + 30, T + 45, theme.cornerTL, undefined, 0.88, -2.2)
-        if (spr) { spr.setOrigin(0, 0).setAngle(270) }
-      }
+      // Top wall — 2-3 decorations
+      place(L + room.width * 0.2, T + 6, topFrames[seed % topFrames.length], 0.6)
+      place(R - room.width * 0.2, T + 6, topFrames[(seed + 2) % topFrames.length], 0.6)
+      if (room.width > 300) place(room.x, T + 6, topFrames[(seed + 4) % topFrames.length], 0.5)
 
-      // ── TOP-RIGHT CORNER: anchor equipment into the corner ──
-      {
-        const spr = placeProp(R - 6, T - 30, theme.cornerTR, undefined, 0.88, -2.2)
-        if (spr) spr.setOrigin(1, 0)
-      }
+      // Left wall — 2 decorations
+      place(L + 8, room.y - room.height * 0.15, sideFrames[(seed + 1) % sideFrames.length], 0.55, 90)
+      place(L + 8, room.y + room.height * 0.2, sideFrames[(seed + 3) % sideFrames.length], 0.45, 90)
 
-      // ── TOP WALL CENTER: console between the two corner pieces ──
-      {
-        const cx = room.x
-        const cy = T + 10
-        const spr = placeProp(cx, cy, theme.topConsole, undefined, 0.85, -2.3)
-        if (spr) {
-          spr.setOrigin(0.5, 0)
-          // Screen overlay on top of the console
-          const screen = placeProp(cx, cy + 12, theme.consoleScreen, undefined, 0.80, -2.15)
-          if (screen) screen.setOrigin(0.5, 0)
-        }
-      }
+      // Right wall — 2 decorations
+      place(R - 8, room.y - room.height * 0.2, sideFrames[(seed + 5) % sideFrames.length], 0.55, -90)
+      place(R - 8, room.y + room.height * 0.15, sideFrames[(seed + 4) % sideFrames.length], 0.45, -90)
 
-      // Bottom corners — TODO: add desk-flanking corner consoles
+      // Bottom wall — warning signs + wall light
+      place(R - 40, B - 8, warnFrames[(seed + 2) % warnFrames.length], 0.5, 0, 0.80)
+      place(L + 40, B - 8, 'wall_light', 0.4, 0, 0.65)
+
+      // LED indicators near top corners (like the example's red/green lights)
+      place(L + 15, T + 15, 'led_on', 0.25, 0, 0.70)
+      place(R - 15, T + 15, 'led_on', 0.25, 0, 0.70)
     }
   }
 
@@ -692,40 +570,26 @@ export class LabTilemap {
   // Helpers
   // -------------------------------------------------------------------------
 
-  private hasNeighbor(grid: CellGrid, r: number, c: number, rows: number, cols: number, type: number): boolean {
-    if (r > 0 && grid[r - 1][c] === type) return true
-    if (r < rows - 1 && grid[r + 1][c] === type) return true
-    if (c > 0 && grid[r][c - 1] === type) return true
-    if (c < cols - 1 && grid[r][c + 1] === type) return true
-    // Diagonals for corner wall detection
-    if (r > 0 && c > 0 && grid[r - 1][c - 1] === type) return true
-    if (r > 0 && c < cols - 1 && grid[r - 1][c + 1] === type) return true
-    if (r < rows - 1 && c > 0 && grid[r + 1][c - 1] === type) return true
-    if (r < rows - 1 && c < cols - 1 && grid[r + 1][c + 1] === type) return true
-    return false
+  private groupRoomsByRow(rooms: FacilityRoom[]): FacilityRoom[][] {
+    const sorted = [...rooms].sort((a, b) => a.y - b.y)
+    const groups: FacilityRoom[][] = []
+    for (const r of sorted) {
+      const last = groups[groups.length - 1]
+      if (last && Math.abs(last[0].y - r.y) < r.height * 0.5) last.push(r)
+      else groups.push([r])
+    }
+    for (const row of groups) row.sort((a, b) => a.x - b.x)
+    return groups
   }
-
-  // -------------------------------------------------------------------------
-  // LOD
-  // -------------------------------------------------------------------------
 
   applyLod(lodLevel: number): void {
     const visible = lodLevel >= 2
-    for (const t of this.tiles) t.setVisible(visible)
-    for (const s of this.pipeSprites) s.setVisible(visible)
-    if (this.decorGraphics) this.decorGraphics.setVisible(visible)
+    for (const o of this.objects) (o as Phaser.GameObjects.Components.Visible).setVisible(visible)
   }
 
-  // -------------------------------------------------------------------------
-  // Cleanup
-  // -------------------------------------------------------------------------
-
   cleanup(): void {
-    for (const t of this.tiles) t.destroy()
-    this.tiles = []
-    for (const s of this.pipeSprites) s.destroy()
-    this.pipeSprites = []
-    if (this.decorGraphics) { this.decorGraphics.destroy(); this.decorGraphics = null }
+    for (const o of this.objects) o.destroy()
+    this.objects = []
   }
 
   destroy(): void {

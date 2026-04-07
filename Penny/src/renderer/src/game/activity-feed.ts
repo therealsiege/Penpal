@@ -6,6 +6,7 @@
 
 import Phaser from 'phaser'
 import { SPRITESHEET_KEYS, ICON_FRAMES } from './office-asset-keys'
+import { scaledFontSize } from './office-constants'
 
 // ---------------------------------------------------------------------------
 // Feed entry type mapping — event kind to icon frame
@@ -81,7 +82,7 @@ export class ActivityFeed {
         .setScale(ICON_SCALE)
         .setOrigin(0.5)
       const label = scene.add.text(20, slotY + 2, '', {
-        fontSize: '9px',
+        fontSize: scaledFontSize(9),
         fontFamily: 'system-ui, monospace',
         color: '#b0bec5',
         resolution: 2,

@@ -7,6 +7,7 @@
 import Phaser from 'phaser'
 import { ICON_FRAMES, EFFECT_ANIM_KEYS, SPRITESHEET_KEYS } from './office-asset-keys'
 import type { Room } from './office-types'
+import { scaledFontSize } from './office-constants'
 
 export class OfficeBroadcast {
   private scene: Phaser.Scene
@@ -59,7 +60,7 @@ export class OfficeBroadcast {
     // Scrolling text — starts just off the right edge, scrolls to past the left edge
     const label = '\u{1F4E2}  BROADCAST:  ' + message
     this.bannerText = this.scene.add.text(viewW + 10, BANNER_H / 2, label, {
-      fontSize: '10px',
+      fontSize: scaledFontSize(10),
       fontFamily: 'ui-monospace, monospace',
       color: TEXT_COLOR,
       resolution: 2,

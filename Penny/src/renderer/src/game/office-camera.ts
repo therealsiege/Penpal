@@ -29,6 +29,8 @@ export interface CameraHostScene {
   setWorldSize(w: number, h: number): void
   softLockCameraInput?: () => void
   softUnlockCameraInput?: () => void
+  /** GDS scene world bounds (when active). */
+  getGdsSceneBounds?(): { x: number; y: number; width: number; height: number } | null
 }
 
 export function panDurationFromDistance(worldDist: number): number {
@@ -171,6 +173,13 @@ export class OfficeCamera {
   }
 
   getMinZoom(): number {
+    // In GDS mode, allow zooming out further to fit the full scene
+    const gds = this.host.getGdsSceneBounds?.()
+    if (gds) {
+      const { viewWidth, viewHeight } = this.host.getViewSize()
+      const fitZoom = Math.min(viewWidth / gds.width, viewHeight / gds.height)
+      return Math.min(ZOOM_MIN, fitZoom * 0.9)
+    }
     return ZOOM_MIN
   }
 
@@ -254,10 +263,16 @@ export class OfficeCamera {
       contentW = Math.max(contentW, room.x + room.width / 2 + WORLD_MARGIN)
       contentH = Math.max(contentH, room.y + room.height / 2 + WORLD_MARGIN)
     }
-    const cafeBounds = this.host.getCafe().getBounds()
-    if (cafeBounds) {
-      contentW = Math.max(contentW, cafeBounds.x + cafeBounds.w + WORLD_MARGIN)
-      contentH = Math.max(contentH, cafeBounds.y + cafeBounds.h + WORLD_MARGIN)
+    const gdsBounds2 = this.host.getGdsSceneBounds?.()
+    if (gdsBounds2) {
+      contentW = Math.max(contentW, gdsBounds2.x + gdsBounds2.width + WORLD_MARGIN)
+      contentH = Math.max(contentH, gdsBounds2.y + gdsBounds2.height + WORLD_MARGIN)
+    } else {
+      const cafeBounds = this.host.getCafe().getBounds()
+      if (cafeBounds) {
+        contentW = Math.max(contentW, cafeBounds.x + cafeBounds.w + WORLD_MARGIN)
+        contentH = Math.max(contentH, cafeBounds.y + cafeBounds.h + WORLD_MARGIN)
+      }
     }
 
     this.host.setWorldSize(contentW, contentH)
@@ -269,6 +284,20 @@ export class OfficeCamera {
   zoomToFit(animated: boolean, opts?: { slow?: boolean }): void {
     const rooms = this.host.getRooms()
     if (rooms.size === 0) return
+
+    // GDS mode: scene is sized to fill the viewport at zoom 1, centered in world
+    const gdsBounds = this.host.getGdsSceneBounds?.()
+    if (gdsBounds) {
+      const cam = this.scene.cameras.main
+      const cx = gdsBounds.x + gdsBounds.width / 2
+      const cy = gdsBounds.y + gdsBounds.height / 2
+      this.targetZoom = 1
+      this.followTarget = null
+      cam.setZoom(1)
+      cam.centerOn(cx, cy)
+      return
+    }
+
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
     for (const room of rooms.values()) {
       minX = Math.min(minX, room.x - room.width / 2)
@@ -276,7 +305,6 @@ export class OfficeCamera {
       maxX = Math.max(maxX, room.x + room.width / 2)
       maxY = Math.max(maxY, room.y + room.height / 2)
     }
-    // Include cafe bounds so camera centers on the full facility
     const cafeBounds = this.host.getCafe().getBounds()
     if (cafeBounds) {
       minX = Math.min(minX, cafeBounds.x)
@@ -284,8 +312,6 @@ export class OfficeCamera {
       maxX = Math.max(maxX, cafeBounds.x + cafeBounds.w)
       maxY = Math.max(maxY, cafeBounds.y + cafeBounds.h)
     }
-    // Don't include background dimensions — they bloat the bounding box
-    // and pull the camera center away from the actual rooms.
     const padFactor = 1.08
     const { viewWidth, viewHeight } = this.host.getViewSize()
     const fitZoom = Phaser.Math.Clamp(

@@ -9,6 +9,7 @@ import {
   TEAM_AREA_PAD_X, TEAM_AREA_PAD_Y, TEAM_AREA_GAP_X, TEAM_AREA_GAP_Y, TEAM_LABEL_H,
   COLOR_WALL,
   WORLD_MARGIN, LOD_L1_MAX,
+  scaledFontSize,
 } from './office-constants'
 import { OfficeTerrain } from './office-terrain'
 import type { TerrainHostScene } from './office-terrain'
@@ -20,6 +21,8 @@ import { WorkspaceUnifiedFloor } from './workspace-unified-floor'
 import type { UnifiedFloorHostScene } from './workspace-unified-floor'
 import { LabTilemap } from './lab-tilemap'
 import type { FacilityRoom } from './lab-tilemap'
+import { GdsSceneRenderer } from './gds-scene-renderer'
+import type { GdsDeskSlot } from './gds-scene-renderer'
 // Suppress unused import warnings for constants only referenced inside the
 // sub-modules (they are still re-exported conceptually via the barrel).
 void LOD_L1_MAX
@@ -113,6 +116,7 @@ export class OfficeBackground {
   private interior: OfficeInterior
   private unifiedFloor: WorkspaceUnifiedFloor
   private labTilemap: LabTilemap
+  private gdsRenderer: GdsSceneRenderer
 
   constructor(scene: Phaser.Scene, host: BackgroundHostScene) {
     this.scene = scene
@@ -147,6 +151,7 @@ export class OfficeBackground {
     this.interior = new OfficeInterior(scene, interiorHost)
     this.unifiedFloor = new WorkspaceUnifiedFloor(scene, unifiedFloorHost)
     this.labTilemap = new LabTilemap(scene)
+    this.gdsRenderer = new GdsSceneRenderer(scene)
   }
 
   // ---------------------------------------------------------------------------
@@ -194,6 +199,27 @@ export class OfficeBackground {
 
   hasWhiteboardContainer(): boolean { return this.interior.hasWhiteboardContainer() }
 
+  /** Whether the GDS scene is active (and should override procedural layout). */
+  hasGdsScene(): boolean { return this.gdsRenderer.isRendered() }
+
+  /** Get world-space desk slot positions from the GDS scene stool locations. */
+  getGdsDeskSlots(): GdsDeskSlot[] { return this.gdsRenderer.getDeskSlots() }
+
+  /** Total desk slots available in the GDS scene. */
+  getGdsDeskSlotCount(): number { return this.gdsRenderer.getDeskSlotCount() }
+
+  /** Assign an agent to the next free GDS desk slot. Returns world position or null. */
+  assignGdsDeskSlot(agentId: string): GdsDeskSlot | null { return this.gdsRenderer.assignSlot(agentId) }
+
+  /** Release a GDS desk slot when an agent leaves. */
+  releaseGdsDeskSlot(agentId: string): void { this.gdsRenderer.releaseSlot(agentId) }
+
+  /** Get the assigned GDS desk slot for an agent. Returns world position or null. */
+  getGdsDeskSlotForAgent(agentId: string): GdsDeskSlot | null { return this.gdsRenderer.getSlotForAgent(agentId) }
+
+  /** Get world bounds of the GDS scene (for camera centering). */
+  getGdsSceneBounds(): { x: number; y: number; width: number; height: number } | null { return this.gdsRenderer.getWorldBounds() }
+
   // ---------------------------------------------------------------------------
   // calcRoomSize
   // ---------------------------------------------------------------------------
@@ -225,11 +251,14 @@ export class OfficeBackground {
       this.corridors.clearCorridors()
       this.drawTeamAreas([])
 
-      // Still build service buildings even with no agent rooms
+      // Still build service buildings even with no agent rooms (skip in GDS mode)
       const cafe = this.host.getCafe()
-      const cafeX = WORLD_MARGIN + cafe.width / 2
-      const cafeTopY = WORLD_MARGIN
-      cafe.build(cafeX, cafeTopY)
+      const gdsOn = this.scene.textures.exists(SPRITESHEET_KEYS.GDS_MEDIUM)
+      if (!gdsOn) {
+        const cafeX = WORLD_MARGIN + cafe.width / 2
+        const cafeTopY = WORLD_MARGIN
+        cafe.build(cafeX, cafeTopY)
+      }
       const serviceMaxX = WORLD_MARGIN + cafe.width + WORLD_MARGIN
       const serviceMaxY = WORLD_MARGIN + cafe.height + WORLD_MARGIN
       const cam = this.scene.cameras.main
@@ -332,9 +361,11 @@ export class OfficeBackground {
 
     // ── Row 0: Service buildings (cafe) ──
     // These occupy a dedicated top row; agent offices start below.
+    // In GDS mode the cafe is already baked into the scene image — skip it.
     const cafe = this.host.getCafe()
-    const serviceRowH = cafe.height
-    const serviceRowBottomY = serviceRowH + areaGapY
+    const gdsActive = this.scene.textures.exists(SPRITESHEET_KEYS.GDS_MEDIUM)
+    const serviceRowH = gdsActive ? 0 : cafe.height
+    const serviceRowBottomY = gdsActive ? 0 : serviceRowH + areaGapY
 
     // ── Row 1+: Agent office teams (single unified team) ──
     const rows: Array<{ drafts: TeamDraft[]; width: number; height: number }> = []
@@ -354,13 +385,23 @@ export class OfficeBackground {
         const areaY = WORLD_MARGIN + areaCursorY
 
         for (const room of draft.rooms) {
-          const local = draft.roomLocalPos.get(room)
-          if (!local) continue
-          room.x = areaX + local.x
-          room.y = areaY + local.y
-          room.doorSide = doorSide
-          this.scene.tweens.killTweensOf(room.container)
-          room.container.setPosition(room.x, room.y)
+          if (gdsActive) {
+            // GDS mode: place all room containers at origin.
+            // Workstations use world-space GDS stool positions directly.
+            room.x = 0
+            room.y = 0
+            room.doorSide = doorSide
+            this.scene.tweens.killTweensOf(room.container)
+            room.container.setPosition(0, 0)
+          } else {
+            const local = draft.roomLocalPos.get(room)
+            if (!local) continue
+            room.x = areaX + local.x
+            room.y = areaY + local.y
+            room.doorSide = doorSide
+            this.scene.tweens.killTweensOf(room.container)
+            room.container.setPosition(room.x, room.y)
+          }
         }
 
         teamLayouts.push({
@@ -417,11 +458,18 @@ export class OfficeBackground {
     // World size: include all team areas + service buildings.
     // Ensure the world is at least as large as the viewport (at current zoom)
     // so the terrain always fills the visible area.
-    const serviceMaxX = WORLD_MARGIN + cafe.width
+    const serviceMaxX = gdsActive ? 0 : WORLD_MARGIN + cafe.width
     const totalMaxX = Math.max(maxX, serviceMaxX)
-    const totalMaxY = Math.max(maxY, cafeBottomY)
-    const worldW = Math.max(totalMaxX + WORLD_MARGIN, vpW + WORLD_MARGIN * 2)
-    const worldH = Math.max(totalMaxY + WORLD_MARGIN, vpH + WORLD_MARGIN * 2)
+    const totalMaxY = Math.max(maxY, gdsActive ? 0 : cafeBottomY)
+
+    // Include GDS scene bounds in world size
+    const gdsB = this.gdsRenderer.getWorldBounds()
+    let worldW = Math.max(totalMaxX + WORLD_MARGIN, vpW + WORLD_MARGIN * 2)
+    let worldH = Math.max(totalMaxY + WORLD_MARGIN, vpH + WORLD_MARGIN * 2)
+    if (gdsB) {
+      worldW = Math.max(worldW, gdsB.x + gdsB.width + WORLD_MARGIN)
+      worldH = Math.max(worldH, gdsB.y + gdsB.height + WORLD_MARGIN)
+    }
     this.host.setWorldSize(worldW, worldH)
 
     // Draw outdoor terrain (grass, trees, paths) around buildings
@@ -430,8 +478,8 @@ export class OfficeBackground {
     this.interior.initReactorGlow(this.terrain.reactorCenter)
     this.host.markPodsDirty()
 
-    // Build service buildings
-    if (rooms.size > 0) {
+    // Build service buildings (skip in GDS mode — cafe is in the backdrop)
+    if (rooms.size > 0 && !gdsActive) {
       cafe.build(cafeX, cafeTopY)
     }
 
@@ -465,6 +513,7 @@ export class OfficeBackground {
       this.host.setLabHexSlabRect(null)
       this.unifiedFloor.cleanup()
       this.labTilemap.cleanup()
+      this.gdsRenderer.cleanup()
       return
     }
 
@@ -482,14 +531,17 @@ export class OfficeBackground {
     let allRight = Math.max(...layouts.map(a => a.x + a.width)) + 20
     let allBottom = Math.max(...layouts.map(a => a.y + a.height)) + 20
 
-    // Include cafe in facility bounds so the building encloses it
-    const cafe = this.host.getCafe()
-    const cafeBds = cafe.getBounds()
-    if (cafeBds) {
-      allX = Math.min(allX, cafeBds.x - 20)
-      allY = Math.min(allY, cafeBds.y - 20)
-      allRight = Math.max(allRight, cafeBds.x + cafeBds.w + 20)
-      allBottom = Math.max(allBottom, cafeBds.y + cafeBds.h + 20)
+    // Include cafe in facility bounds so the building encloses it (skip in GDS mode)
+    const hasGdsScene = this.gdsRenderer.isRendered() || this.scene.textures.exists(SPRITESHEET_KEYS.GDS_MEDIUM)
+    if (!hasGdsScene) {
+      const cafe = this.host.getCafe()
+      const cafeBds = cafe.getBounds()
+      if (cafeBds) {
+        allX = Math.min(allX, cafeBds.x - 20)
+        allY = Math.min(allY, cafeBds.y - 20)
+        allRight = Math.max(allRight, cafeBds.x + cafeBds.w + 20)
+        allBottom = Math.max(allBottom, cafeBds.y + cafeBds.h + 20)
+      }
     }
 
     this.host.setLabHexSlabRect({
@@ -509,19 +561,33 @@ export class OfficeBackground {
         deskPositions: layout.deskPositions,
       }
     })
-    // Include cafe as a facility room so the building walls wrap around it
-    const cafeBounds = cafe.getBounds()
-    if (cafeBounds) {
-      facilityRooms.push({
-        x: cafeBounds.x + cafeBounds.w / 2,
-        y: cafeBounds.y + cafeBounds.h / 2,
-        width: cafeBounds.w,
-        height: cafeBounds.h,
-        cwd: '__cafe__',
-        deskPositions: [],
+    // Use GDS-exported scene if available; otherwise fall back to procedural tilemap
+    if (this.scene.textures.exists(SPRITESHEET_KEYS.GDS_MEDIUM)) {
+      // Place the GDS scene image centered in the viewport.
+      // Use the viewport dimensions as the target so the scene fills the screen.
+      const cam = this.scene.cameras.main
+      const viewW = cam.width
+      const viewH = cam.height
+      const sceneCX = viewW / 2
+      const sceneCY = viewH / 2
+      this.gdsRenderer.render(SPRITESHEET_KEYS.GDS_MEDIUM, sceneCX, sceneCY, viewW, viewH)
+
+      // Expand facility bounds to match the rendered scene
+      const gdsBounds = this.gdsRenderer.getWorldBounds()
+      if (gdsBounds) {
+        allX = gdsBounds.x
+        allY = gdsBounds.y
+        allRight = gdsBounds.x + gdsBounds.width
+        allBottom = gdsBounds.y + gdsBounds.height
+      }
+      // Update slab rect with expanded GDS bounds
+      this.host.setLabHexSlabRect({
+        x: allX, y: allY,
+        width: allRight - allX, height: allBottom - allY,
       })
+    } else {
+      this.labTilemap.render(facilityRooms)
     }
-    this.labTilemap.render(facilityRooms)
 
     // Windows along the top wall of the facility (for atmosphere glint effect)
     const atmosphere = this.host.getAtmosphere()
@@ -537,9 +603,36 @@ export class OfficeBackground {
       })
     }
 
+    // In GDS mode, skip heavy team-area chrome — just add small wall labels per room
+    const hasGds = this.gdsRenderer.isRendered()
+
     for (const area of layouts) {
       const color = this.host.getTeamColor(area.teamKey)
       const { x, y, width, height } = area
+
+      if (hasGds) {
+        // GDS mode: small room labels near each room's first assigned desk slot
+        const rooms = Array.from(this.host.getRooms().values())
+        const slots = this.gdsRenderer.getDeskSlots()
+        let slotIdx = 0
+        for (const room of rooms) {
+          // Find first slot assigned to an agent in this room
+          let lx = slots[slotIdx]?.x ?? 0
+          let ly = (slots[slotIdx]?.y ?? 0) + 30
+          slotIdx += room.agents.length
+          const label = this.host.formatLabel(room.label || room.cwd)
+          const labelText = this.scene.add.text(lx, ly, label, {
+            fontSize: scaledFontSize(8),
+            color: '#94a3b8',
+            fontFamily: "'Monogram', system-ui, monospace",
+            backgroundColor: 'rgba(15,23,42,0.7)',
+            padding: { x: 3, y: 1 },
+            resolution: 2,
+          }).setOrigin(0.5, 0).setDepth(10).setAlpha(0.85)
+          this.teamAreaLabels.push(labelText)
+        }
+        continue // skip banner, overlays, corner brackets, etc.
+      }
 
       // Ceiling light per team zone
       const lightX = x + width / 2
@@ -628,7 +721,7 @@ export class OfficeBackground {
 
       // Team label
       const labelText = this.scene.add.text(x + width / 2 + 4, y + BANNER_H / 2, area.teamLabel, {
-        fontSize: '14px',
+        fontSize: scaledFontSize(14),
         color: activeTheme.headerText,
         fontFamily: 'system-ui, monospace',
         fontStyle: 'bold',
@@ -670,7 +763,7 @@ export class OfficeBackground {
       const badgePadX = 5
       const badgePadY = 3
       const badgeTextObj = this.scene.add.text(0, 0, badgeLabel, {
-        fontSize: '10px',
+        fontSize: scaledFontSize(10),
         color: activeTheme.accentText,
         fontFamily: 'system-ui, monospace',
         resolution: 2,
@@ -965,6 +1058,7 @@ export class OfficeBackground {
     this.interior.applyLodToWhiteboard(lodLevel)
     this.unifiedFloor.applyLod(lodLevel)
     this.labTilemap.applyLod(lodLevel)
+    this.gdsRenderer.applyLod(lodLevel)
   }
 
   tickReactorGlow(time: number): void {
@@ -1055,5 +1149,6 @@ export class OfficeBackground {
     this.interior.destroy()
     this.unifiedFloor.destroy()
     this.labTilemap.destroy()
+    this.gdsRenderer.destroy()
   }
 }

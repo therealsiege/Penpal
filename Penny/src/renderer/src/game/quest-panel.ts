@@ -10,6 +10,7 @@ import { questSystem, QuestSystem } from './quest-system'
 import type { Quest, QuestDifficulty } from './quest-system'
 import { SPRITESHEET_KEYS, ICON_FRAMES, IMAGE_KEYS, DIFFICULTY_STAR_FRAME } from './office-asset-keys'
 import { activeTheme } from './office-theme'
+import { scaledFontSize } from './office-constants'
 
 // ---------------------------------------------------------------------------
 // QuestPanel
@@ -157,7 +158,7 @@ export class QuestPanel {
 
     // Title
     const title = this.scene.add.text(panelW / 2, curY, 'QUEST LOG', {
-      fontSize: '10px', fontFamily: 'system-ui, monospace', color: '#fbbf24',
+      fontSize: scaledFontSize(10), fontFamily: 'system-ui, monospace', color: '#fbbf24',
       resolution: 2,
     }).setOrigin(0.5, 0)
     this.container.add(title)
@@ -178,7 +179,7 @@ export class QuestPanel {
     // ── Active quests section ──
     if (activeQuests.length === 0) {
       const empty = this.scene.add.text(panelW / 2, curY, 'No active quests', {
-        fontSize: '7px', fontFamily: 'system-ui, monospace', color: '#4a5464',
+        fontSize: scaledFontSize(7), fontFamily: 'system-ui, monospace', color: '#4a5464',
         resolution: 2,
       }).setOrigin(0.5, 0)
       this.container.add(empty)
@@ -194,7 +195,7 @@ export class QuestPanel {
 
     // ── History section header ──
     const histLabel = this.scene.add.text(10, curY, 'HISTORY', {
-      fontSize: '7px', fontFamily: 'system-ui, monospace', color: '#5a6a7a',
+      fontSize: scaledFontSize(7), fontFamily: 'system-ui, monospace', color: '#5a6a7a',
       resolution: 2,
     })
     this.container.add(histLabel)
@@ -203,7 +204,7 @@ export class QuestPanel {
     // ── Completed quests section ──
     if (completedQuests.length === 0) {
       const empty = this.scene.add.text(panelW / 2, curY, 'No completed quests', {
-        fontSize: '7px', fontFamily: 'system-ui, monospace', color: '#4a5464',
+        fontSize: scaledFontSize(7), fontFamily: 'system-ui, monospace', color: '#4a5464',
         resolution: 2,
       }).setOrigin(0.5, 0)
       this.container.add(empty)
@@ -220,7 +221,7 @@ export class QuestPanel {
     const avgStr = stats.averageDifficulty > 0 ? stats.averageDifficulty.toFixed(1) : '0'
     const statsText = this.scene.add.text(panelW / 2, curY,
       `${stats.totalCompleted} done | avg ${avgStr} diff | x${stats.longestStreak} streak`, {
-        fontSize: '7px', fontFamily: 'system-ui, monospace', color: '#5a6a7a',
+        fontSize: scaledFontSize(7), fontFamily: 'system-ui, monospace', color: '#5a6a7a',
         resolution: 2,
       }).setOrigin(0.5, 0)
     this.container.add(statsText)
@@ -228,7 +229,7 @@ export class QuestPanel {
     if (stats.xpEarnedToday > 0) {
       const todayText = this.scene.add.text(panelW / 2, curY + 10,
         `Today: +${stats.xpEarnedToday} XP`, {
-          fontSize: '6px', fontFamily: 'system-ui, monospace', color: '#3b82f6',
+          fontSize: scaledFontSize(6), fontFamily: 'system-ui, monospace', color: '#3b82f6',
           resolution: 2,
         }).setOrigin(0.5, 0)
       this.container.add(todayText)
@@ -255,7 +256,7 @@ export class QuestPanel {
       ? quest.agentId.slice(0, 12) + '..'
       : quest.agentId
     const nameText = this.scene.add.text(26, y, agentLabel, {
-      fontSize: '7px', fontFamily: 'system-ui, monospace', color: '#c8d0e0',
+      fontSize: scaledFontSize(7), fontFamily: 'system-ui, monospace', color: '#c8d0e0',
       resolution: 2,
     })
     this.container.add(nameText)
@@ -264,7 +265,7 @@ export class QuestPanel {
     const elapsedMs = now - quest.startedAt
     const elapsed = this._formatDuration(elapsedMs)
     const elapsedText = this.scene.add.text(panelW - 60, y, elapsed, {
-      fontSize: '7px', fontFamily: 'system-ui, monospace', color: '#5a6a7a',
+      fontSize: scaledFontSize(7), fontFamily: 'system-ui, monospace', color: '#5a6a7a',
       resolution: 2,
     })
     this.container.add(elapsedText)
@@ -272,7 +273,7 @@ export class QuestPanel {
     // XP reward
     const diffColor = '#' + (QuestSystem.getDifficultyColor(quest.difficulty)).toString(16).padStart(6, '0')
     const xpText = this.scene.add.text(panelW - 10, y, `+${quest.xpReward}`, {
-      fontSize: '7px', fontFamily: 'system-ui, monospace', color: diffColor,
+      fontSize: scaledFontSize(7), fontFamily: 'system-ui, monospace', color: diffColor,
       resolution: 2,
     }).setOrigin(1, 0)
     this.container.add(xpText)
@@ -297,7 +298,7 @@ export class QuestPanel {
       : quest.title
     const color = isCompleted ? '#8a96a4' : '#6a4444'
     const titleText = this.scene.add.text(26, y, titleLabel, {
-      fontSize: '7px', fontFamily: 'system-ui, monospace', color,
+      fontSize: scaledFontSize(7), fontFamily: 'system-ui, monospace', color,
       resolution: 2,
     })
     this.container.add(titleText)
@@ -306,7 +307,7 @@ export class QuestPanel {
     if (quest.durationMs) {
       const dur = this._formatDuration(quest.durationMs)
       const durText = this.scene.add.text(panelW - 60, y, dur, {
-        fontSize: '6px', fontFamily: 'system-ui, monospace', color: '#4a5464',
+        fontSize: scaledFontSize(6), fontFamily: 'system-ui, monospace', color: '#4a5464',
         resolution: 2,
       })
       this.container.add(durText)
@@ -315,7 +316,7 @@ export class QuestPanel {
     // XP earned
     if (isCompleted) {
       const xpText = this.scene.add.text(panelW - 10, y, `+${quest.xpReward}`, {
-        fontSize: '7px', fontFamily: 'system-ui, monospace', color: '#34d399',
+        fontSize: scaledFontSize(7), fontFamily: 'system-ui, monospace', color: '#34d399',
         resolution: 2,
       }).setOrigin(1, 0)
       this.container.add(xpText)

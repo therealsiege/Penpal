@@ -8,6 +8,7 @@ import { achievements } from './achievements'
 import type { Achievement } from './achievements'
 import { IMAGE_KEYS } from './office-asset-keys'
 import { activeTheme } from './office-theme'
+import { scaledFontSize } from './office-constants'
 
 const SECTIONS: { title: string; ids: string[] }[] = [
   { title: 'Milestones', ids: ['first_agent', 'full_house', 'night_owl', 'early_bird'] },
@@ -154,7 +155,7 @@ export class AchievementPanel {
     this.container.add(bg)
 
     const title = this.scene.add.text(0, -halfH + 18, 'ACHIEVEMENTS', {
-      fontSize: '13px',
+      fontSize: scaledFontSize(13),
       fontFamily: 'system-ui, monospace',
       color: '#fbbf24',
       resolution: 2,
@@ -174,7 +175,7 @@ export class AchievementPanel {
 
     for (const sec of SECTIONS) {
       const secTitle = this.scene.add.text(left, y, sec.title.toUpperCase(), {
-        fontSize: '9px',
+        fontSize: scaledFontSize(9),
         fontFamily: 'system-ui, monospace',
         color: '#94a3b8',
         resolution: 2,
@@ -190,7 +191,7 @@ export class AchievementPanel {
         const nameColor = unlocked ? activeTheme.tooltipText : '#64748b'
 
         const row = this.scene.add.text(left, y, `${a.icon}  ${a.title}`, {
-          fontSize: '11px',
+          fontSize: scaledFontSize(11),
           fontFamily: 'system-ui, monospace',
           color: nameColor,
           resolution: 2,
@@ -198,7 +199,7 @@ export class AchievementPanel {
         this.container.add(row)
 
         const mark = this.scene.add.text(halfW - 16, y, unlocked ? '✓' : '—', {
-          fontSize: '10px',
+          fontSize: scaledFontSize(10),
           fontFamily: 'system-ui, monospace',
           color: unlocked ? '#22c55e' : '#475569',
           resolution: 2,
@@ -207,7 +208,7 @@ export class AchievementPanel {
         y += 14
 
         const sub = this.scene.add.text(left, y, a.description, {
-          fontSize: '9px',
+          fontSize: scaledFontSize(9),
           fontFamily: 'system-ui, monospace',
           color: '#64748b',
           resolution: 2,
@@ -228,7 +229,7 @@ export class AchievementPanel {
           this.container.add(track)
           this.container.add(fill)
           const pt = this.scene.add.text(left + barW / 2, y + 12, pl, {
-            fontSize: '8px',
+            fontSize: scaledFontSize(8),
             fontFamily: 'system-ui, monospace',
             color: '#94a3b8',
             resolution: 2,
@@ -245,7 +246,7 @@ export class AchievementPanel {
       halfH - 14,
       `${prog.unlocked}/${prog.total} unlocked   ·   A close   ·   Esc`,
       {
-        fontSize: '9px',
+        fontSize: scaledFontSize(9),
         fontFamily: 'system-ui, monospace',
         color: '#64748b',
         resolution: 2,

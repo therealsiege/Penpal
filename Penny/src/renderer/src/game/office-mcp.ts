@@ -7,6 +7,7 @@ import {
   MCP_ICON_CLUSTER_SPACING_Y,
   MCP_DASH_LENGTH,
   MCP_DASH_GAP,
+  scaledFontSize,
 } from './office-constants'
 import { drawDashedLine, hashToken } from './office-helpers'
 import { SPRITESHEET_KEYS, ICON_FRAMES } from './office-asset-keys'
@@ -148,7 +149,7 @@ export class OfficeMcp {
 
         // Short label
         const label = this.scene.add.text(clusterX + 7, iconY - 4, getServerLabel(srv), {
-          fontSize: '7px',
+          fontSize: scaledFontSize(7),
           fontFamily: 'monospace',
           color: '#' + color.toString(16).padStart(6, '0'),
           resolution: 2,

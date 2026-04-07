@@ -11,6 +11,7 @@ import { shake, pulse, bounce } from './juice-utils'
 import { EventBus, EVENTS } from './events'
 import { activeTheme } from './office-theme'
 import { SPRITESHEET_KEYS, ITEM_FRAMES, ICON_FRAMES } from './office-asset-keys'
+import { scaledFontSize } from './office-constants'
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -176,7 +177,7 @@ class InteractiveProp {
     // Terminal text drawn on top of board
     const eqs = ['SECTOR 7 SCAN', 'O(n log n)', '∑ xᵢ / n', 'λ f.(λ x.f(x x))', 'MAKO LVL OK']
     this.whiteboardDisplay = this.scene.add.text(-30, -20, eqs[0], {
-      fontSize: '7px', color: '#00ff88', fontFamily: 'monospace', resolution: 2,
+      fontSize: scaledFontSize(7), color: '#00ff88', fontFamily: 'monospace', resolution: 2,
     }).setDepth(this.container.depth + 0.5)
     this.whiteboardDisplay.setPosition(
       this.container.x - 30,
@@ -238,7 +239,7 @@ class InteractiveProp {
       this.container.x - 11,
       this.container.y - 11,
       'INSERT COIN',
-      { fontSize: '4px', color: '#00ff88', fontFamily: 'monospace', resolution: 2 }
+      { fontSize: scaledFontSize(4), color: '#00ff88', fontFamily: 'monospace', resolution: 2 }
     ).setDepth(this.container.depth + 0.5)
     void ic
   }
@@ -619,7 +620,7 @@ class InteractiveProp {
     // All LEDs flash rapidly — "REBOOT" text appears
     const rebootText = this.scene.add.text(
       this.container.x, this.container.y - 32, 'REBOOT',
-      { fontSize: '6px', color: '#00ff88', fontFamily: 'monospace', resolution: 2 }
+      { fontSize: scaledFontSize(6), color: '#00ff88', fontFamily: 'monospace', resolution: 2 }
     ).setOrigin(0.5).setDepth(this.container.depth + 1)
 
     let step = 0

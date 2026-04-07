@@ -1,5 +1,6 @@
 import Phaser from 'phaser'
 import { ICON_FRAMES } from './office-asset-keys'
+import { scaledFontSize } from './office-constants'
 
 // ---------------------------------------------------------------------------
 // AgentMoodManager — emoji thought bubbles and mood derivation for office agents
@@ -176,7 +177,7 @@ export class AgentMoodManager {
     const startY = y - 20
 
     const text = this.scene.add.text(x + jitterX, startY, emoji, {
-      fontSize: '14px',
+      fontSize: scaledFontSize(14),
       fontFamily: 'system-ui, sans-serif',
       resolution: 2,
     })

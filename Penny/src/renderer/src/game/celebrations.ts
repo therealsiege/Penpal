@@ -13,6 +13,7 @@ import { SPRITESHEET_KEYS, EFFECT_ANIM_KEYS, ICON_FRAMES, LEGO_SPECIAL_FRAMES, D
 import type { QuestDifficulty } from './quest-system'
 import { soundEngine } from './sound-engine'
 import { AnimConfig } from './animation-config'
+import { scaledFontSize } from './office-constants'
 
 // Pool sizes
 const BURST_POOL_SIZE = 48   // shared by rankUp + milestone burst layers
@@ -292,7 +293,7 @@ export class CelebrationManager {
     const radius = Math.round(52 * (1 + 0.08 * (mergeCount - 1)))
     this._particleBurst(x, y, burstN, rankColor, radius)
     this._risingText(x, y - 18, `PROMOTED!`, {
-      fontSize: '13px',
+      fontSize: scaledFontSize(13),
       fontFamily: 'monospace',
       color: '#' + rankColor.toString(16).padStart(6, '0'),
       stroke: '#000000',
@@ -303,7 +304,7 @@ export class CelebrationManager {
     this._screenFlash(rankColor)
     this._scene.time.delayedCall(400, () => {
       this._risingText(x, y - 10, newRank, {
-        fontSize: '10px',
+        fontSize: scaledFontSize(10),
         fontFamily: 'monospace',
         color: '#ffffff',
         stroke: '#000000',
@@ -313,7 +314,7 @@ export class CelebrationManager {
     })
     this._scene.time.delayedCall(200, () => {
       this._risingText(x, y + 8, agentName, {
-        fontSize: '9px',
+        fontSize: scaledFontSize(9),
         fontFamily: 'monospace',
         color: '#aaaaaa',
         stroke: '#000000',
@@ -434,7 +435,7 @@ export class CelebrationManager {
     const cx = cam.width / 2
     const cy = cam.height * 0.38
     const t = this._scene.add.text(cx, cy, `COMBO x${streak}`, {
-      fontSize: '18px',
+      fontSize: scaledFontSize(18),
       fontFamily: 'monospace',
       color: '#34d399',
       stroke: '#000000',
@@ -494,7 +495,7 @@ export class CelebrationManager {
     const screenX = cam.width - 20
     const screenY = 60
     const banner = this._scene.add.text(screenX + 200, screenY, text, {
-      fontSize: '14px',
+      fontSize: scaledFontSize(14),
       fontFamily: 'monospace',
       color: '#fbbf24',
       stroke: '#000000',
@@ -616,7 +617,7 @@ export class CelebrationManager {
     // Rising title text
     this._scene.time.delayedCall(150, () => {
       this._risingText(x, y - 8, title, {
-        fontSize: '10px',
+        fontSize: scaledFontSize(10),
         fontFamily: 'monospace',
         color: '#fbbf24',
         stroke: '#000000',
@@ -717,13 +718,13 @@ export class CelebrationManager {
     panel.add(bg)
 
     const hdr = this._scene.add.text(panelW / 2, 10, 'Final standings', {
-      fontSize: '10px', fontFamily: 'monospace', color: '#e2e8f0', resolution: 2,
+      fontSize: scaledFontSize(10), fontFamily: 'monospace', color: '#e2e8f0', resolution: 2,
     }).setOrigin(0.5, 0)
     panel.add(hdr)
 
     if (rows.length === 0) {
       const empty = this._scene.add.text(10, 32, 'No agents ranked yet', {
-        fontSize: '8px', fontFamily: 'monospace', color: '#64748b', resolution: 2,
+        fontSize: scaledFontSize(8), fontFamily: 'monospace', color: '#64748b', resolution: 2,
       })
       panel.add(empty)
     } else {
@@ -744,10 +745,10 @@ export class CelebrationManager {
         }
         const nameCol = rank <= 3 ? '#fbbf24' : '#94a3b8'
         const line = this._scene.add.text(medal ? 28 : 8, rowY, `${rank}. ${entry.agentName}`, {
-          fontSize: '8px', fontFamily: 'monospace', color: nameCol, resolution: 2,
+          fontSize: scaledFontSize(8), fontFamily: 'monospace', color: nameCol, resolution: 2,
         })
         const sub = this._scene.add.text(medal ? 28 : 8, rowY + 11, `${entry.seasonXP} XP · ${entry.tasksCompleted} tasks`, {
-          fontSize: '7px', fontFamily: 'monospace', color: '#64748b', resolution: 2,
+          fontSize: scaledFontSize(7), fontFamily: 'monospace', color: '#64748b', resolution: 2,
         })
         panel.add(line)
         panel.add(sub)
@@ -778,7 +779,7 @@ export class CelebrationManager {
     })
 
     const summary = this._scene.add.text(w / 2, h * 0.62, payload.summaryLine, {
-      fontSize: '11px',
+      fontSize: scaledFontSize(11),
       fontFamily: 'monospace',
       color: '#f8fafc',
       stroke: '#000000',
@@ -794,7 +795,7 @@ export class CelebrationManager {
 
     const creditLabel = `+${payload.creditBonusShown} season credits`
     const creditBadge = this._scene.add.text(w / 2, h * 0.72, creditLabel, {
-      fontSize: '10px',
+      fontSize: scaledFontSize(10),
       fontFamily: 'monospace',
       color: '#fbbf24',
       stroke: '#000000',
@@ -875,7 +876,7 @@ export class CelebrationManager {
     const glowLayers: Phaser.GameObjects.Text[] = []
     for (let i = 0; i < 3; i++) {
       const t = this._scene.add.text(cx + (i - 1) * 2, h * 0.28 + (i - 1), payload.seasonName, {
-        fontSize: '20px',
+        fontSize: scaledFontSize(20),
         fontFamily: 'monospace',
         color: accentHex,
         stroke: '#000000',
@@ -886,7 +887,7 @@ export class CelebrationManager {
       toDestroy.push(t)
     }
     const title = this._scene.add.text(cx, h * 0.28, payload.seasonName, {
-      fontSize: '20px',
+      fontSize: scaledFontSize(20),
       fontFamily: 'monospace',
       color: '#ffffff',
       stroke: accentHex,
@@ -928,14 +929,14 @@ export class CelebrationManager {
     list.add(listBg)
 
     const listTitle = this._scene.add.text(110, 8, 'Challenges', {
-      fontSize: '9px', fontFamily: 'monospace', color: '#e2e8f0', resolution: 2,
+      fontSize: scaledFontSize(9), fontFamily: 'monospace', color: '#e2e8f0', resolution: 2,
     }).setOrigin(0.5, 0)
     list.add(listTitle)
 
     challenges.forEach((ch, i) => {
       const mark = ch.completed ? '\u2713' : '\u25CB'
       const row = this._scene.add.text(10, 24 + i * lh, `${mark} ${ch.description}`, {
-        fontSize: '8px',
+        fontSize: scaledFontSize(8),
         fontFamily: 'monospace',
         color: ch.completed ? '#34d399' : '#94a3b8',
         resolution: 2,
@@ -1021,7 +1022,7 @@ export class CelebrationManager {
     // 2. Rising text with challenge description
     this._scene.time.delayedCall(100, () => {
       const label = this._scene.add.text(cx, cy + 22, description, {
-        fontSize: '11px',
+        fontSize: scaledFontSize(11),
         fontFamily: 'monospace',
         color: '#34d399',
         stroke: '#000000',
@@ -1107,7 +1108,7 @@ export class CelebrationManager {
 
     // 3. Rising text showing the item name
     this._risingText(x, y - 8, itemName, {
-      fontSize: '9px',
+      fontSize: scaledFontSize(9),
       fontFamily: 'monospace',
       color: '#fbbf24',
       stroke: '#000000',
@@ -1264,7 +1265,7 @@ export class CelebrationManager {
 
       this._scene.time.delayedCall(120, () => {
         this._risingText(x, y - 6, `+${xpAmount} XP`, {
-          fontSize: '10px',
+          fontSize: scaledFontSize(10),
           fontFamily: 'monospace',
           color: diffHex,
           stroke: '#000000',
@@ -1274,7 +1275,7 @@ export class CelebrationManager {
       })
       this._scene.time.delayedCall(250, () => {
         this._risingText(x, y + 4, `+${creditAmount}c`, {
-          fontSize: '9px',
+          fontSize: scaledFontSize(9),
           fontFamily: 'monospace',
           color: '#fbbf24',
           stroke: '#000000',
@@ -1392,7 +1393,7 @@ export class CelebrationManager {
 
     // Rising "+amount" text
     const txt = this._scene.add.text(x, y - 14, `+${amount}`, {
-      fontSize: '10px',
+      fontSize: scaledFontSize(10),
       fontFamily: 'monospace',
       color: hexColor,
       stroke: '#000000',

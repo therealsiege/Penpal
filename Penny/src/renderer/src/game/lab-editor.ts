@@ -7,6 +7,7 @@
 
 import Phaser from 'phaser'
 import { SPRITESHEET_KEYS } from './office-asset-keys'
+import { scaledFontSize } from './office-constants'
 
 // All available prop frames from the atlas
 const PROP_CATALOG = [
@@ -92,7 +93,7 @@ export class LabEditor {
 
     // Info text (screen-space, top)
     this.infoText = this.scene.add.text(10, 10, 'LAB EDITOR | Click palette → click world | Right-click delete | Drag to move | S=export | E=close', {
-      fontSize: '12px', color: '#22d3ee', fontFamily: 'monospace',
+      fontSize: scaledFontSize(12), color: '#22d3ee', fontFamily: 'monospace',
       backgroundColor: '#0f172aee', padding: { x: 8, y: 4 }, resolution: 2,
     }).setScrollFactor(0).setDepth(10000)
 
@@ -165,7 +166,7 @@ export class LabEditor {
 
     // Title
     const title = this.scene.add.text(PAD, PAD, 'PROPS', {
-      fontSize: '11px', color: '#22d3ee', fontFamily: 'monospace', resolution: 2,
+      fontSize: scaledFontSize(11), color: '#22d3ee', fontFamily: 'monospace', resolution: 2,
     })
     this.paletteContainer.add(title)
 
