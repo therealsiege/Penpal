@@ -8,5 +8,35 @@
     { "id": "door-bot-left",   "type": "laser", "gdsX": 973,  "gdsY": 1397, "width": 179, "height": 30,  "color": "0xc084fc", "glowColor": "0xa855f7", "proximityPx": 50 },
     { "id": "door-mid-right",  "type": "laser", "gdsX": 2324, "gdsY": 579,  "width": 30,  "height": 169, "color": "0xc084fc", "glowColor": "0xa855f7", "proximityPx": 50 },
     { "id": "door-mid-horiz",  "type": "laser", "gdsX": 1857, "gdsY": 510,  "width": 185, "height": 30,  "color": "0xc084fc", "glowColor": "0xa855f7", "proximityPx": 50 }
+  ],
+  "baristas": [
+    {
+      "id": "latte-larry",
+      "name": "Latte Larry",
+      "charIdx": 1,
+      "gdsX": 2580,
+      "gdsY": 800,
+      "startFacing": "left",
+      "walkRange": 20,
+      "walkDurationMs": 1200,
+      "bobAmplitude": 3,
+      "bobDurationMs": 150,
+      "workPulses": 4,
+      "startDelayMs": 0
+    },
+    {
+      "id": "mocha-maya",
+      "name": "Mocha Maya",
+      "charIdx": 0,
+      "gdsX": 2580,
+      "gdsY": 1050,
+      "startFacing": "right",
+      "walkRange": 20,
+      "walkDurationMs": 1200,
+      "bobAmplitude": 3,
+      "bobDurationMs": 150,
+      "workPulses": 4,
+      "startDelayMs": 2000
+    }
   ]
 }

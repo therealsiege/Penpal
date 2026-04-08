@@ -366,7 +366,7 @@ export class BootScene extends BaseScene {
     // GDS-exported medium lab scene — composited scene image
     this.load.image(SPRITESHEET_KEYS.GDS_MEDIUM, './sprites/gds-medium-scene.png')
 
-    // Lab map — door positions, room metadata (data-driven layout)
+    // Lab map — doors, barista positions, room metadata (data-driven layout)
     this.load.json(GDS_SCENE_KEYS.LAB_MAP, './sprites/lab-map.json')
 
     // GDS world map — default start scene
