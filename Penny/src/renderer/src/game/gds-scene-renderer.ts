@@ -28,6 +28,23 @@ export interface GdsSceneLayout {
   components: { frame: string; x: number; y: number; width: number; height: number; zOrder: number; rotationRadians: number; flipX: boolean; flipY: boolean; opacity: number }[]
 }
 
+export interface LabMapProp {
+  id: string
+  type: 'rotating-knob' | 'blink-led' | 'pulse-glow' | 'console-flash'
+  gdsX: number
+  gdsY: number
+  // rotating-knob
+  speed?: number
+  radius?: number
+  // blink-led
+  color?: string
+  interval?: number
+  // pulse-glow
+  minAlpha?: number
+  maxAlpha?: number
+  period?: number
+}
+
 // ---------------------------------------------------------------------------
 // Desk slot positions in GDS scene space (3840×2160)
 // Each entry is where a stool sits in the exported scene.
@@ -52,6 +69,31 @@ const GDS_STOOL_POSITIONS: { x: number; y: number; flipX: boolean; sitFrame: num
 ]
 
 // ---------------------------------------------------------------------------
+// Ambient prop definitions in GDS scene space (3840×2160)
+// ---------------------------------------------------------------------------
+
+const GDS_PROP_DEFS: LabMapProp[] = [
+  { id: 'console-knob-1',  type: 'rotating-knob', gdsX: 1200, gdsY: 500,  speed: 0.5, radius: 6 },
+  { id: 'console-knob-2',  type: 'rotating-knob', gdsX: 1550, gdsY: 920,  speed: 0.8, radius: 5 },
+  { id: 'rack-led-1',      type: 'blink-led',     gdsX: 2400, gdsY: 300,  color: 'green', interval: 1200 },
+  { id: 'rack-led-2',      type: 'blink-led',     gdsX: 2400, gdsY: 380,  color: 'amber', interval: 900 },
+  { id: 'reactor-core',    type: 'pulse-glow',    gdsX: 1920, gdsY: 1080, radius: 18, color: 'cyan', minAlpha: 0.15, maxAlpha: 0.55, period: 2200 },
+  { id: 'console-flash-1', type: 'console-flash', gdsX: 1478, gdsY: 918,  radius: 12 },
+]
+
+const PROP_COLOR_MAP: Record<string, number> = {
+  green: 0x22c55e,
+  amber: 0xf59e0b,
+  red:   0xef4444,
+  cyan:  0x00e5ff,
+  blue:  0x3b82f6,
+}
+
+function propColor(name: string | undefined): number {
+  return (name && PROP_COLOR_MAP[name]) ?? 0x22c55e
+}
+
+// ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
 
@@ -61,6 +103,25 @@ const SCENE_DEPTH = -3
 // GdsSceneRenderer
 // ---------------------------------------------------------------------------
 
+interface PropOverlayEntry {
+  id: string
+  type: string
+  gfx: Phaser.GameObjects.Graphics
+  worldX: number
+  worldY: number
+  // rotating-knob
+  angle: number
+  speed: number
+  radius: number
+  // pulse-glow maxAlpha (may be adjusted by ceiling intensity)
+  baseMaxAlpha: number
+  pulseTween: Phaser.Tweens.Tween | null
+  // blink-led
+  blinkTimer: Phaser.Time.TimerEvent | null
+  ledOn: boolean
+  ledColor: number
+}
+
 export class GdsSceneRenderer {
   private scene: Phaser.Scene
   private backdrop: Phaser.GameObjects.Image | null = null
@@ -69,6 +130,8 @@ export class GdsSceneRenderer {
   private scale = 1
   private originX = 0
   private originY = 0
+
+  private propOverlays: PropOverlayEntry[] = []
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene
@@ -105,6 +168,7 @@ export class GdsSceneRenderer {
     this.rendered = true
 
     this.placeBaristas()
+    this.placePropOverlays()
   }
 
   // -------------------------------------------------------------------------
@@ -160,6 +224,180 @@ export class GdsSceneRenderer {
 
       this.baristaContainers.push(bc)
     }
+  }
+
+  // -------------------------------------------------------------------------
+  // Prop overlays — ambient animated graphics layered over the GDS backdrop
+  // -------------------------------------------------------------------------
+
+  private placePropOverlays(): void {
+    this.cleanupPropOverlays()
+
+    for (const def of GDS_PROP_DEFS) {
+      const wx = this.originX + def.gdsX * this.scale
+      const wy = this.originY + def.gdsY * this.scale
+      const r  = (def.radius ?? 6) * this.scale
+      const gfx = this.scene.add.graphics().setDepth(SCENE_DEPTH + 1)
+
+      const entry: PropOverlayEntry = {
+        id: def.id,
+        type: def.type,
+        gfx,
+        worldX: wx,
+        worldY: wy,
+        angle: 0,
+        speed: def.speed ?? 0.5,
+        radius: r,
+        baseMaxAlpha: def.maxAlpha ?? 0.55,
+        pulseTween: null,
+        blinkTimer: null,
+        ledOn: true,
+        ledColor: propColor(def.color),
+      }
+
+      if (def.type === 'rotating-knob') {
+        this.drawKnob(gfx, wx, wy, r, 0)
+
+      } else if (def.type === 'blink-led') {
+        const col = propColor(def.color)
+        gfx.fillStyle(col, 1.0)
+        gfx.fillCircle(wx, wy, r)
+        const interval = def.interval ?? 1200
+        entry.blinkTimer = this.scene.time.addEvent({
+          delay: interval,
+          loop: true,
+          callback: () => {
+            entry.ledOn = !entry.ledOn
+            const targetAlpha = entry.ledOn ? 1.0 : 0.2
+            this.scene.tweens.add({
+              targets: gfx,
+              alpha: targetAlpha,
+              duration: 100,
+              ease: 'Linear',
+            })
+          },
+        })
+
+      } else if (def.type === 'pulse-glow') {
+        const col = propColor(def.color)
+        const minA = def.minAlpha ?? 0.15
+        const maxA = def.maxAlpha ?? 0.55
+        gfx.fillStyle(col, maxA)
+        gfx.fillCircle(wx, wy, r)
+        gfx.setAlpha(minA)
+        entry.pulseTween = this.scene.tweens.add({
+          targets: gfx,
+          alpha: { from: minA, to: maxA },
+          duration: (def.period ?? 2200) / 2,
+          ease: 'Sine.easeInOut',
+          yoyo: true,
+          repeat: -1,
+        })
+
+      } else if (def.type === 'console-flash') {
+        const col = propColor(def.color)
+        gfx.fillStyle(col, 0.9)
+        gfx.fillCircle(wx, wy, r)
+        gfx.setAlpha(0)
+      }
+
+      this.propOverlays.push(entry)
+    }
+  }
+
+  private drawKnob(gfx: Phaser.GameObjects.Graphics, cx: number, cy: number, r: number, angle: number): void {
+    gfx.clear()
+    gfx.lineStyle(Math.max(1, r * 0.3), activeTheme.accentText ? 0x94a3b8 : 0x94a3b8, 0.6)
+    gfx.strokeCircle(cx, cy, r)
+    const ex = cx + Math.cos(angle) * r * 0.8
+    const ey = cy + Math.sin(angle) * r * 0.8
+    gfx.lineStyle(Math.max(1, r * 0.25), 0x00e5ff, 0.85)
+    gfx.lineBetween(cx, cy, ex, ey)
+  }
+
+  /** Called each frame from the update loop to advance rotating knobs. */
+  updatePropOverlays(delta: number): void {
+    for (const p of this.propOverlays) {
+      if (p.type === 'rotating-knob') {
+        p.angle += p.speed * delta * 0.001  // speed = radians per second
+        this.drawKnob(p.gfx, p.worldX, p.worldY, p.radius, p.angle)
+      }
+    }
+  }
+
+  /** Flash the nearest console-flash prop within `radiusWorld` of the given world position. */
+  flashConsoleProp(worldX: number, worldY: number, radiusWorld = 80): void {
+    let nearest: PropOverlayEntry | null = null
+    let bestDist = radiusWorld * radiusWorld
+    for (const p of this.propOverlays) {
+      if (p.type !== 'console-flash') continue
+      const dx = p.worldX - worldX
+      const dy = p.worldY - worldY
+      const dist2 = dx * dx + dy * dy
+      if (dist2 < bestDist) { bestDist = dist2; nearest = p }
+    }
+    if (!nearest) return
+    const gfx = nearest.gfx
+    gfx.setAlpha(0)
+    this.scene.tweens.add({
+      targets: gfx,
+      alpha: { from: 0, to: 0.9 },
+      duration: 80,
+      ease: 'Linear',
+      yoyo: false,
+      onComplete: () => {
+        this.scene.tweens.add({
+          targets: gfx,
+          alpha: 0,
+          duration: 220,
+          ease: 'Cubic.easeOut',
+        })
+      },
+    })
+  }
+
+  /**
+   * Adjust ceiling / pulse-glow intensity based on time-of-day.
+   * @param t  0–1 where 0 = night (dim) and 1 = midday (bright)
+   */
+  setCeilingLightIntensity(t: number): void {
+    for (const p of this.propOverlays) {
+      if (p.type !== 'pulse-glow' || !p.pulseTween) continue
+      const newMax = p.baseMaxAlpha * (0.4 + 0.6 * t)
+      // Update the tween end value — restart for clean transition
+      p.pulseTween.stop()
+      const gfx = p.gfx
+      const minA = p.baseMaxAlpha * 0.3 * (0.4 + 0.6 * t)
+      p.pulseTween = this.scene.tweens.add({
+        targets: gfx,
+        alpha: { from: minA, to: newMax },
+        duration: 1100,
+        ease: 'Sine.easeInOut',
+        yoyo: true,
+        repeat: -1,
+      })
+    }
+  }
+
+  // ── Test helpers ──
+
+  /** Number of active prop overlay entries (for tests). */
+  getPropOverlayCount(): number { return this.propOverlays.length }
+
+  /** Snapshot of a prop overlay by id (for tests). Returns null if not found. */
+  getPropById(id: string): { angle: number; alpha: number } | null {
+    const p = this.propOverlays.find(e => e.id === id)
+    if (!p) return null
+    return { angle: p.angle, alpha: p.gfx.alpha }
+  }
+
+  private cleanupPropOverlays(): void {
+    for (const p of this.propOverlays) {
+      if (p.pulseTween) { p.pulseTween.stop(); p.pulseTween = null }
+      if (p.blinkTimer) { p.blinkTimer.destroy(); p.blinkTimer = null }
+      p.gfx.destroy()
+    }
+    this.propOverlays = []
   }
 
   // -------------------------------------------------------------------------
@@ -243,6 +481,7 @@ export class GdsSceneRenderer {
     if (this.backdrop) { this.backdrop.destroy(); this.backdrop = null }
     for (const c of this.baristaContainers) c.destroy(true)
     this.baristaContainers = []
+    this.cleanupPropOverlays()
     this.rendered = false
   }
 
