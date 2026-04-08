@@ -5,7 +5,7 @@
 
 import Phaser from 'phaser'
 import { GDS_SCENE_WIDTH, GDS_SCENE_HEIGHT, CHAR_SCALE, scaledFontSize } from './office-constants'
-import { ANIM_KEYS } from './office-asset-keys'
+import { ANIM_KEYS, SPRITESHEET_KEYS, GDS_SCENE_KEYS } from './office-asset-keys'
 import { activeTheme } from './office-theme'
 
 // ---------------------------------------------------------------------------
@@ -29,27 +29,45 @@ export interface GdsSceneLayout {
 }
 
 // ---------------------------------------------------------------------------
-// Desk slot positions in GDS scene space (3840×2160)
-// Each entry is where a stool sits in the exported scene.
+// Lab map — loaded from lab-map.json at runtime
+// sitFrame: 0=south/facing viewer, 1=screen-right, 2=north/back, 3=screen-left
 // ---------------------------------------------------------------------------
 
-// Stool CENTER positions (from GDS scene export, computed as x+w/2, y+h/2)
-// Y nudged +40 so character sprites (origin bottom-center) sit ON the stool
-// flipX: true = face left (sprite mirrored), based on which side the desk is
-const STOOL_Y_NUDGE = 40
-// sitFrame: 0=south/facing viewer, 1=looking screen-right, 2=north/back, 3=looking screen-left
-const GDS_STOOL_POSITIONS: { x: number; y: number; flipX: boolean; sitFrame: number; angle: number }[] = [
-  { x: 1824, y: 254 + STOOL_Y_NUDGE, flipX: false, sitFrame: 3, angle: 0 },   // top room — desk is screen-left
-  { x: 1478, y: 918 + STOOL_Y_NUDGE, flipX: false, sitFrame: 2, angle: 0 },   // mid console — desk is up/north
-  { x: 877, y: 1281 + STOOL_Y_NUDGE, flipX: false, sitFrame: 3, angle: 0 },   // mid-left — desk is screen-left
-  { x: 880, y: 1629 + STOOL_Y_NUDGE, flipX: false, sitFrame: 1, angle: 0 },   // bot-left corner 1 — desk is screen-right
-  { x: 920, y: 1855 + STOOL_Y_NUDGE, flipX: false, sitFrame: 3, angle: 0 },   // bot-left corner 2 — desk is screen-left
-  { x: 1629, y: 1614 + STOOL_Y_NUDGE, flipX: false, sitFrame: 1, angle: 0 },  // bot-center 1 — desk is screen-right
-  { x: 2018, y: 1630 + STOOL_Y_NUDGE, flipX: false, sitFrame: 1, angle: 0 },  // bot-center 2 — desk is screen-right
-  { x: 1559, y: 1849 + STOOL_Y_NUDGE, flipX: false, sitFrame: 0, angle: 0 },  // bot-center 3 — desk is south
-  { x: 2632, y: 1590 + STOOL_Y_NUDGE, flipX: false, sitFrame: 1, angle: 0 },  // bot-right 1 — desk is screen-right
-  { x: 2627, y: 1879 + STOOL_Y_NUDGE, flipX: false, sitFrame: 1, angle: 0 },  // bot-right 2 — desk is screen-right
-]
+export interface LabMapDesk {
+  id: string
+  label: string
+  room: string
+  gdsX: number
+  gdsY: number
+  sitFrame: number
+  flipX: boolean
+  angle: number
+  assignTo?: string | null
+  walkTrack?: { points: { x: number; y: number }[]; loop?: boolean } | null
+  animations?: { idle?: string; working?: string; break?: string }
+  notes?: string
+}
+
+export interface LabMapRoom {
+  id: string
+  label: string
+  bounds?: { x: number; y: number; w: number; h: number }
+}
+
+export interface LabMapJson {
+  scene?: { width: number; height: number; backdrop: string; stoolYNudge?: number }
+  rooms?: LabMapRoom[]
+  desks?: LabMapDesk[]
+  cafeSttools?: { id: string; gdsX: number; gdsY: number }[]
+  walkableTiles?: { x: number; y: number; w: number; h: number }[]
+}
+
+function loadLabMap(scene: Phaser.Scene): LabMapJson {
+  const data = scene.cache.json.get(GDS_SCENE_KEYS.LAB_MAP) as LabMapJson | undefined
+  if (data?.desks) return data
+  console.warn('[GDS] lab-map.json not found in cache')
+  return { desks: [], cafeSttools: [] }
+}
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -65,6 +83,7 @@ export class GdsSceneRenderer {
   private scene: Phaser.Scene
   private backdrop: Phaser.GameObjects.Image | null = null
   private rendered = false
+  private labMap: LabMapJson = { desks: [], cafeSttools: [] }
 
   private scale = 1
   private originX = 0
@@ -103,6 +122,7 @@ export class GdsSceneRenderer {
 
     this.backdrop = img
     this.rendered = true
+    this.labMap = loadLabMap(this.scene)
 
     this.placeBaristas()
   }
@@ -170,24 +190,34 @@ export class GdsSceneRenderer {
 
   getDeskSlots(): GdsDeskSlot[] {
     if (!this.rendered) return []
-    return GDS_STOOL_POSITIONS.map(s => ({
-      x: this.originX + s.x * this.scale,
-      y: this.originY + s.y * this.scale,
-      flipX: s.flipX,
-      sitFrame: s.sitFrame,
-      angle: s.angle,
+    const desks = this.labMap.desks ?? []
+    return desks.map(d => ({
+      x: this.originX + d.gdsX * this.scale,
+      y: this.originY + d.gdsY * this.scale,
+      flipX: d.flipX,
+      sitFrame: d.sitFrame,
+      angle: d.angle,
     }))
   }
 
-  getDeskSlotCount(): number { return GDS_STOOL_POSITIONS.length }
+  getDeskSlotCount(): number { return (this.labMap.desks ?? []).length }
+
+  getDeskByLabel(label: string): LabMapDesk | undefined {
+    return (this.labMap.desks ?? []).find(d => d.label === label || d.id === label)
+  }
+
+  getDeskAt(index: number): LabMapDesk | undefined { return this.labMap.desks?.[index] }
+
+  getLabMap(): LabMapJson { return this.labMap }
 
   assignSlot(agentId: string): GdsDeskSlot | null {
     if (!this.rendered) return null
     const existing = this.assignedSlots.get(agentId)
     if (existing !== undefined) return this.getDeskSlots()[existing] ?? null
 
+    const desks = this.labMap.desks ?? []
     const usedIndices = new Set(this.assignedSlots.values())
-    for (let i = 0; i < GDS_STOOL_POSITIONS.length; i++) {
+    for (let i = 0; i < desks.length; i++) {
       if (!usedIndices.has(i)) {
         this.assignedSlots.set(agentId, i)
         return this.getDeskSlots()[i]

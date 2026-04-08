@@ -86,6 +86,7 @@ export const SPRITESHEET_KEYS = Object.freeze({
 
 export const GDS_SCENE_KEYS = Object.freeze({
   MEDIUM_LAYOUT: 'gds-medium-layout',
+  LAB_MAP: 'gds-lab-map',
 } as const)
 
 // ---------------------------------------------------------------------------

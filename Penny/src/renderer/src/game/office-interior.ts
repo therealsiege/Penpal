@@ -687,6 +687,8 @@ export class OfficeInterior {
   // ---------------------------------------------------------------------------
 
   updateRoomActivity(room: Room): void {
+    // GDS mode — room chrome is hidden; skip activity bar/LED updates
+    if (this.scene.textures.exists(SPRITESHEET_KEYS.GDS_MEDIUM)) return
     const agents = room.agents
     if (agents.length === 0) return
     const waitingCount = agents.filter(a => a.needsInteraction).length

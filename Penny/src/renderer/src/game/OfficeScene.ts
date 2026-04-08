@@ -1038,6 +1038,7 @@ export class OfficeScene extends Phaser.Scene {
         destroyWorkstation: (ws) => { this.ensureWsManager(); this.wsManager.destroyWorkstation(ws) },
         formatLabel: (label) => formatLabel(label),
         usesFacilityLabStrategicProps: () => this.textures.exists(SPRITESHEET_KEYS.LAB_PROPS),
+        hasGdsScene: () => this.textures.exists(SPRITESHEET_KEYS.GDS_MEDIUM),
       })
     }
   }
@@ -1225,14 +1226,14 @@ export class OfficeScene extends Phaser.Scene {
       this.pods.setLastDrawAt(time)
       this.pods.clearDirty()
     }
-    // MCP server connection lines — dashed lines from workstations to tool icon clusters
-    if (lodLevel >= 2 && (this.mcp.isDirty() || this.mcp.hasActiveConnections(this.rooms)) && time - this.mcp.getLastDrawAt() >= MCP_REFRESH_MS) {
+    // MCP server connection lines — skip in GDS mode (room positions are 0,0)
+    if (!this.background.hasGdsScene() && lodLevel >= 2 && (this.mcp.isDirty() || this.mcp.hasActiveConnections(this.rooms)) && time - this.mcp.getLastDrawAt() >= MCP_REFRESH_MS) {
       this.mcp.drawMcpLines(time, this.rooms)
       this.mcp.setLastDrawAt(time)
       this.mcp.clearDirty()
     }
-    // Hide MCP lines at L1 overview zoom
-    if (lodLevel < 2 && this.mcp) this.mcp.setVisible(false)
+    // Hide MCP lines at L1 overview zoom or in GDS mode
+    if ((lodLevel < 2 || this.background.hasGdsScene()) && this.mcp) this.mcp.setVisible(false)
     else if (lodLevel >= 2 && this.mcp) this.mcp.setVisible(true)
     // Rivalry connecting lines — electric blue dashes between rival agents (every 2.5s)
     if (lodLevel >= 2 && this.pods.hasRivalries() && time - this.pods.getLastRivalryDrawAt() >= 2500) {

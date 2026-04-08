@@ -423,13 +423,16 @@ export class OfficeBackground {
       areaCursorY += row.height + areaGapY
     }
 
+    const gdsWillRender = this.scene.textures.exists(SPRITESHEET_KEYS.GDS_MEDIUM)
     for (const room of roomList) {
-      if (!room.cwd.startsWith('__')) {
-        this.host.refreshRoomHeaderText(room)
+      if (!gdsWillRender) {
+        if (!room.cwd.startsWith('__')) {
+          this.host.refreshRoomHeaderText(room)
+        }
+        const accentColor = this.host.getTeamColor(room.teamKey)
+        const floorW = room.width - 12
+        this.host.drawDoorPanel(room, floorW, accentColor)
       }
-      const accentColor = this.host.getTeamColor(room.teamKey)
-      const floorW = room.width - 12
-      this.host.drawDoorPanel(room, floorW, accentColor)
     }
 
     // Room extents (tight) — used for building walls
@@ -621,27 +624,7 @@ export class OfficeBackground {
       const { x, y, width, height } = area
 
       if (hasGds) {
-        // GDS mode: small room labels near each room's first assigned desk slot
-        const rooms = Array.from(this.host.getRooms().values())
-        const slots = this.gdsRenderer.getDeskSlots()
-        let slotIdx = 0
-        for (const room of rooms) {
-          // Find first slot assigned to an agent in this room
-          let lx = slots[slotIdx]?.x ?? 0
-          let ly = (slots[slotIdx]?.y ?? 0) + 30
-          slotIdx += room.agents.length
-          const label = this.host.formatLabel(room.label || room.cwd)
-          const labelText = this.scene.add.text(lx, ly, label, {
-            fontSize: scaledFontSize(8),
-            color: '#94a3b8',
-            fontFamily: "'Monogram', system-ui, monospace",
-            backgroundColor: 'rgba(15,23,42,0.7)',
-            padding: { x: 3, y: 1 },
-            resolution: 2,
-          }).setOrigin(0.5, 0).setDepth(10).setAlpha(0.85)
-          this.teamAreaLabels.push(labelText)
-        }
-        continue // skip banner, overlays, corner brackets, etc.
+        continue // skip banner, overlays, corner brackets, etc. — GDS backdrop has room context
       }
 
       // Ceiling light per team zone

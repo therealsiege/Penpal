@@ -315,7 +315,7 @@ export class WorkstationFactory {
         },
       })
       screenTween.pause()
-    } else if (!monitorSprite) {
+    } else if (!gdsScene && !monitorSprite) {
       wsContainer.add(this.scene.add.rectangle(0, WS_MONITOR_Y, 16, 13, activeTheme.roomFloor).setStrokeStyle(1, activeTheme.deskTop, 0.8))
     }
     if (monitorSprite && !labPropsLoaded && this.host.officeTilesLoaded) {
