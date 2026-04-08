@@ -24,6 +24,7 @@ import { PreferenceCollector, PreferenceStore, connectCollector } from './prefer
 import { initAutoUpdater } from './auto-updater'
 import { infraUp, infraDown } from './data-scripts'
 import { taskOutcomeCollector } from './evals/collectors/task-outcomes'
+import { initClaudeUsageScraper, destroyClaudeUsageScraper } from './claude-usage'
 
 // Electron apps launched from Dock/Finder get a minimal PATH (/usr/bin:/bin:/usr/sbin:/sbin).
 // Ensure common tool locations are reachable (homebrew, nvm, local bin, etc.)
@@ -127,6 +128,7 @@ app.whenReady().then(() => {
   taskOutcomeCollector.start()
   startOrchestrator()
   initAutoUpdater()
+  initClaudeUsageScraper()
   infraUp()
 
   // Write game state snapshot for MCP tools (every 5s)
@@ -144,6 +146,7 @@ app.on('window-all-closed', () => {
 })
 
 app.on('before-quit', async () => {
+  destroyClaudeUsageScraper()
   stopFileWatcher()
   taskOutcomeCollector.stop()
   stopOrchestrator()
