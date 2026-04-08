@@ -7,6 +7,7 @@ import { Terminal } from '../components/Terminal'
 import type { AgentConfig, AgentState, ContextHealth, HealthResult, HotLead, JobStatus, PodWorkflow, PodPreset, ProjectLeaderboardEntry, OpencodeSession, AgentXP, OpenClawInfo, ConfigSnapshot, McpServerEntry, AgentToolSummary, getRankForXP, Task } from '../types'
 import { mergeAgentContextFromHealth } from '../utils/contextHealthMerge'
 import { PodLauncherModal, PodStatusModal, PodListModal } from '../components/PodModal'
+import { ClaudeUsageIndicator } from '../components/ClaudeUsageIndicator'
 import { createOfficeGame } from '../game/OfficeGame'
 import { OfficeScene } from '../game/OfficeScene'
 import { EventBus, EVENTS } from '../game/events'
@@ -1871,6 +1872,8 @@ export function CommandCenter(props: CommandCenterProps) {
             🏆
             Ranks
           </button>
+
+          <ClaudeUsageIndicator />
 
           <button
             type="button"

@@ -724,3 +724,21 @@ export interface ConfigSnapshot {
   agents: AgentToolSummary[]
   timestamp: number
 }
+
+export interface ClaudeUsageLimit {
+  used: number      // 0–1 fraction
+  label: string     // e.g. "57% used"
+  resetsAt: string  // human-readable, e.g. "Fri 10:00 AM"
+}
+
+export interface ClaudeUsage {
+  status: 'ok' | 'not-logged-in' | 'parse-error' | 'network-error'
+  sessionUsedFraction: number  // 0–1
+  sessionResetsIn: string      // e.g. "2 hr 57 min"
+  allModels: ClaudeUsageLimit
+  sonnetOnly: ClaudeUsageLimit
+  extraSpent: number           // dollars
+  extraLimit: number           // dollars
+  extraBalance: number         // dollars
+  fetchedAt: number            // Date.now() timestamp
+}

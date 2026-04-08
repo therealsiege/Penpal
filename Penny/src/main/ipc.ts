@@ -4,6 +4,7 @@ import fs from 'fs'
 import path from 'path'
 import os from 'os'
 import { checkHealth } from './health'
+import { getClaudeUsage } from './claude-usage'
 import { startSlackBridge, stopSlackBridge, isSlackBridgeRunning } from './slack-bridge'
 import { getJobStatuses, getJobHistory, forceRunJob } from './scheduler-bridge'
 import {
@@ -269,6 +270,7 @@ function wrapHandler<T>(fn: (...args: unknown[]) => Promise<T> | T) {
 
 export function registerIpcHandlers() {
   ipcMain.handle('health:check', wrapHandler(() => checkHealth()))
+  ipcMain.handle('claude:usage', wrapHandler(() => getClaudeUsage()))
   ipcMain.handle('scheduler:status', wrapHandler(() => getJobStatuses()))
   ipcMain.handle('scheduler:history', wrapHandler((jobName?: unknown) =>
     getJobHistory(typeof jobName === 'string' ? jobName : undefined),
