@@ -36,6 +36,7 @@ export default defineConfig({
             'src/main/evals/__tests__/**/*.test.ts',
             'tests/main/evals/**/*.test.ts',
             'src/mcp/**/*.test.ts',
+            'src/main/mcp-manager.test.ts',
           ],
           setupFiles: ['tests/setup/main.setup.ts'],
           clearMocks: true,

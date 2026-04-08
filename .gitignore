@@ -157,3 +157,6 @@ forge-out/
 # Local agent / Penny worktrees (never commit)
 .claude/worktrees/
 .penny-worktrees/
+
+# MCP master config (contains API keys — managed by Penny MCP panel)
+.penpal/

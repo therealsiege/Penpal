@@ -193,6 +193,18 @@ export function Layout({ activePanel, onNavigate, children }: LayoutProps) {
             }
           />
           <NavButton
+            label="MCP"
+            active={activePanel === 'mcp'}
+            onClick={() => onNavigate('mcp')}
+            icon={
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="2" y="3" width="20" height="14" rx="2" />
+                <path d="M8 21h8M12 17v4" />
+                <path d="M7 8h.01M11 8h.01M15 8h.01" />
+              </svg>
+            }
+          />
+          <NavButton
             label="Soundboard"
             active={activePanel === 'soundboard'}
             onClick={() => onNavigate('soundboard')}
