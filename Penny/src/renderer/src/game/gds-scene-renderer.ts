@@ -5,7 +5,7 @@
 
 import Phaser from 'phaser'
 import { GDS_SCENE_WIDTH, GDS_SCENE_HEIGHT, CHAR_SCALE, scaledFontSize } from './office-constants'
-import { ANIM_KEYS } from './office-asset-keys'
+import { ANIM_KEYS, GDS_SCENE_KEYS } from './office-asset-keys'
 import { activeTheme } from './office-theme'
 
 // ---------------------------------------------------------------------------
@@ -26,6 +26,43 @@ export interface GdsSceneLayout {
   height: number
   componentCount: number
   components: { frame: string; x: number; y: number; width: number; height: number; zOrder: number; rotationRadians: number; flipX: boolean; flipY: boolean; opacity: number }[]
+}
+
+// ---------------------------------------------------------------------------
+// Lab-map types (loaded from lab-map.json at runtime)
+// ---------------------------------------------------------------------------
+
+export interface LabMapRoom {
+  id: string
+  gdsX: number
+  gdsY: number
+  width: number
+  height: number
+}
+
+export interface LabMapDoor {
+  id: string
+  type: 'laser' | 'sliding'
+  gdsX: number
+  gdsY: number
+  width: number
+  height: number
+  color?: string     // hex string e.g. "0xc084fc"
+  glowColor?: string // hex string e.g. "0xa855f7"
+  proximityPx?: number
+}
+
+export interface LabMapJson {
+  version: number
+  rooms?: LabMapRoom[]
+  desks?: { gdsX: number; gdsY: number }[]
+  doors?: LabMapDoor[]
+}
+
+function loadLabMap(scene: Phaser.Scene, key: string): LabMapJson {
+  const data = scene.cache.json.get(key) as LabMapJson | undefined
+  if (!data?.doors) return { version: 0, rooms: [], desks: [], doors: [] }
+  return { rooms: [], desks: [], doors: [], ...data }
 }
 
 // ---------------------------------------------------------------------------
@@ -70,6 +107,20 @@ export class GdsSceneRenderer {
   private originX = 0
   private originY = 0
 
+  private labMap: LabMapJson = { version: 0, rooms: [], desks: [], doors: [] }
+  private laserDoors: Array<{
+    id: string
+    graphics: Phaser.GameObjects.Graphics
+    worldX: number
+    worldY: number
+    worldW: number
+    worldH: number
+    color: number
+    glowColor: number
+    proximityPx: number
+    open: boolean
+  }> = []
+
   constructor(scene: Phaser.Scene) {
     this.scene = scene
   }
@@ -105,6 +156,7 @@ export class GdsSceneRenderer {
     this.rendered = true
 
     this.placeBaristas()
+    this.placeLaserDoors(GDS_SCENE_KEYS.LAB_MAP)
   }
 
   // -------------------------------------------------------------------------
@@ -159,6 +211,66 @@ export class GdsSceneRenderer {
       })
 
       this.baristaContainers.push(bc)
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // Laser doors — data-driven from lab-map.json
+  // -------------------------------------------------------------------------
+
+  private placeLaserDoors(labMapKey: string): void {
+    // Destroy existing
+    for (const d of this.laserDoors) d.graphics.destroy()
+    this.laserDoors = []
+
+    this.labMap = loadLabMap(this.scene, labMapKey)
+    const doors = (this.labMap.doors ?? []).filter(d => d.type === 'laser')
+
+    for (const d of doors) {
+      const wx = this.originX + d.gdsX * this.scale
+      const wy = this.originY + d.gdsY * this.scale
+      const ww = d.width * this.scale
+      const wh = d.height * this.scale
+
+      const color = parseInt((d.color ?? '0xc084fc').replace(/^0x/i, ''), 16)
+      const glowColor = parseInt((d.glowColor ?? '0xa855f7').replace(/^0x/i, ''), 16)
+      const proximityPx = d.proximityPx ?? 50
+
+      const g = this.scene.add.graphics()
+      g.setDepth(1)
+      // Main beam fill
+      g.fillStyle(color, 0.55)
+      g.fillRect(wx, wy, ww, wh)
+      // Glow border
+      g.lineStyle(2, glowColor, 0.8)
+      g.strokeRect(wx, wy, ww, wh)
+      // Emitter dots at corners
+      const dotR = 4
+      g.fillStyle(glowColor, 0.9)
+      g.fillCircle(wx, wy, dotR)
+      g.fillCircle(wx + ww, wy, dotR)
+      g.fillCircle(wx, wy + wh, dotR)
+      g.fillCircle(wx + ww, wy + wh, dotR)
+
+      this.laserDoors.push({ id: d.id, graphics: g, worldX: wx, worldY: wy, worldW: ww, worldH: wh, color, glowColor, proximityPx, open: false })
+    }
+  }
+
+  updateLaserDoors(agentWorldPositions: { x: number; y: number }[]): void {
+    for (const door of this.laserDoors) {
+      const doorCX = door.worldX + door.worldW / 2
+      const doorCY = door.worldY + door.worldH / 2
+      const threshold = door.proximityPx
+      const threshold2 = threshold * threshold
+      const anyClose = agentWorldPositions.some(p => {
+        const dx = p.x - doorCX
+        const dy = p.y - doorCY
+        return dx * dx + dy * dy < threshold2
+      })
+      if (anyClose !== door.open) {
+        door.open = anyClose
+        door.graphics.setVisible(!anyClose)
+      }
     }
   }
 
@@ -233,6 +345,10 @@ export class GdsSceneRenderer {
 
   applyLod(lodLevel: number): void {
     if (this.backdrop) this.backdrop.setVisible(lodLevel >= 1)
+    const visible = lodLevel >= 1
+    for (const d of this.laserDoors) {
+      if (!d.open) d.graphics.setVisible(visible)
+    }
   }
 
   // -------------------------------------------------------------------------
@@ -243,6 +359,8 @@ export class GdsSceneRenderer {
     if (this.backdrop) { this.backdrop.destroy(); this.backdrop = null }
     for (const c of this.baristaContainers) c.destroy(true)
     this.baristaContainers = []
+    for (const d of this.laserDoors) d.graphics.destroy()
+    this.laserDoors = []
     this.rendered = false
   }
 

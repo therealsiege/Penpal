@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "rooms": [],
+  "desks": [],
+  "doors": [
+    { "id": "door-top-room",   "type": "laser", "gdsX": 1596, "gdsY": 203,  "width": 30,  "height": 260, "color": "0xc084fc", "glowColor": "0xa855f7", "proximityPx": 50 },
+    { "id": "door-bot-center", "type": "laser", "gdsX": 1811, "gdsY": 1821, "width": 30,  "height": 151, "color": "0xc084fc", "glowColor": "0xa855f7", "proximityPx": 50 },
+    { "id": "door-bot-left",   "type": "laser", "gdsX": 973,  "gdsY": 1397, "width": 179, "height": 30,  "color": "0xc084fc", "glowColor": "0xa855f7", "proximityPx": 50 },
+    { "id": "door-mid-right",  "type": "laser", "gdsX": 2324, "gdsY": 579,  "width": 30,  "height": 169, "color": "0xc084fc", "glowColor": "0xa855f7", "proximityPx": 50 },
+    { "id": "door-mid-horiz",  "type": "laser", "gdsX": 1857, "gdsY": 510,  "width": 185, "height": 30,  "color": "0xc084fc", "glowColor": "0xa855f7", "proximityPx": 50 }
+  ]
+}
