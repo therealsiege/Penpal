@@ -27,6 +27,7 @@ export default defineConfig({
           ],
           include: [
             'tests/main/**/*.test.ts',
+            'src/main/__tests__/**/*.test.ts',
             'src/main/pods.test.ts',
             'src/main/pods-workflow-review.test.ts',
             'src/main/pods-self-fix-workflow.test.ts',

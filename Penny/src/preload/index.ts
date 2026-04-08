@@ -212,7 +212,7 @@ contextBridge.exposeInMainWorld('api', {
   vaultSearchRich: (query: string, glob?: string, limit?: number) => ipcRenderer.invoke('vault:search', query, glob, limit),
   orchestratorQueueRich: () => ipcRenderer.invoke('orchestrator:queue'),
   orchestratorAgentHealthRich: () => ipcRenderer.invoke('orchestrator:agent-health'),
-  claudeUsage: () => ipcRenderer.invoke('claude:usage'),
-  claudeLogin: () => ipcRenderer.invoke('claude:login'),
-  claudeRefreshUsage: () => ipcRenderer.invoke('claude:refresh'),
+  claudeUsage: () => ipcRenderer.invoke('claude-usage:get'),
+  claudeLogin: () => ipcRenderer.invoke('claude-usage:login'),
+  claudeRefreshUsage: () => ipcRenderer.invoke('claude-usage:refresh'),
 })

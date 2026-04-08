@@ -13,6 +13,7 @@ import fs from 'fs'
 import path from 'path'
 import os from 'os'
 import { checkHealth } from './health'
+import { getClaudeUsage, showClaudeLogin, refreshClaudeUsage } from './claude-usage'
 import { startSlackBridge, stopSlackBridge, isSlackBridgeRunning } from './slack-bridge'
 import { getJobStatuses, getJobHistory, forceRunJob } from './scheduler-bridge'
 import {
@@ -44,7 +45,6 @@ import {
   focusCursorIDE,
 } from './cursor-sessions'
 import { getOpencodeSessions } from './opencode-sessions'
-import { getClaudeUsage, showClaudeLogin, refreshClaudeUsage } from './claude-usage'
 import {
   getAgentConfigs,
   getAgentConfig,
@@ -180,7 +180,7 @@ import {
 } from './config-reader'
 import type { PreferenceStore } from './preferences'
 import { contextResponse } from './context-response'
-// claude-usage already imported above
+// (claude-usage imported at top)
 
 export const ipcEvents = new EventEmitter()
 
