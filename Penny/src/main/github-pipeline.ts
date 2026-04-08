@@ -1,11 +1,12 @@
 /**
  * 2-Agent GitHub Issue Pipeline
  *
- * Drives GitHub issues through a planner→executor flow:
- *   agent-ready → agent-planning → [agent-question]* → agent-executing → pr-ready | agent-failed
+ * Drives GitHub issues through a planner→executor→validator flow:
+ *   agent-ready → agent-planning → [agent-question]* → agent-executing → agent-validating → pr-ready | agent-failed
  *
  * The planner agent explores the codebase and designs an implementation plan.
  * The executor agent implements the plan in an isolated worktree, writes tests, and commits.
+ * The validator agent runs tests and captures Playwright screenshots for visual verification.
  * The system pushes the branch and creates the PR.
  */
 
@@ -22,7 +23,7 @@ import { postPipelineNotification, dmOwner } from './slack-bridge'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
-export type PipelineStage = 'planning' | 'awaiting-answer' | 'executing' | 'done' | 'failed'
+export type PipelineStage = 'planning' | 'awaiting-answer' | 'executing' | 'validating' | 'done' | 'failed'
 
 export interface PipelineIssue {
   number: number
@@ -43,9 +44,11 @@ export interface PipelineIssue {
   questionPostedAt?: number
   executorAttempts: number
   lastError?: string
+  validatorOutput?: string
   // Guards against concurrent runs
   plannerRunning: boolean
   executorRunning: boolean
+  validatorRunning: boolean
 }
 
 interface RepoConfig {
@@ -121,7 +124,9 @@ function getSizeProfile(size: TShirtSize): SizeProfile {
 // ── Constants ────────────────────────────────────────────────────────────────
 
 const QUESTION_TIMEOUT_MS = 7 * 24 * 60 * 60 * 1000 // 7 days
+const VALIDATOR_TIMEOUT_MS = 1_200_000 // 20 min
 const MAX_EXECUTOR_ATTEMPTS = 3
+const SCREENSHOT_DIR = '.playwright-screenshots'
 
 // ── Label helpers ────────────────────────────────────────────────────────────
 
@@ -586,6 +591,143 @@ async function runExecutorAgent(
   return 'done'
 }
 
+// ── Validator prompt builder ─────────────────────────────────────────────────
+
+export function buildValidatorPrompt(issue: PipelineIssue, repoKey: string): string {
+  return [
+    `You are validating the implementation for GitHub issue ${repoKey}#${issue.number}: ${issue.title}`,
+    '',
+    '## Implementation Plan (for context)',
+    '',
+    issue.plannerOutput?.slice(0, 2000) || '(no plan available)',
+    '',
+    '## Your Tasks',
+    '',
+    '1. Run the project\'s existing test suite (`npm test` or the appropriate command).',
+    '2. If a dev server can be started (`npm run dev`), start it and use Playwright to navigate',
+    '   the application and capture screenshots of key UI areas affected by this change.',
+    `3. Save all screenshots to \`${SCREENSHOT_DIR}/\` in the current working directory.`,
+    '   Use descriptive filenames (e.g., `dashboard-overview.png`, `settings-panel.png`).',
+    '4. Report your findings in this exact format:',
+    '',
+    '```',
+    'VALIDATION_RESULT: PASS or FAIL',
+    'TEST_SUMMARY: <one-line summary of test results>',
+    'SCREENSHOTS: <comma-separated list of screenshot filenames, or "none">',
+    'DETAILS: <brief description of what was validated>',
+    '```',
+    '',
+    'If tests fail or you find issues, report FAIL with details about what broke.',
+    'Do NOT fix any code — only report findings.',
+  ].join('\n')
+}
+
+// ── Validator runner ─────────────────────────────────────────────────────────
+
+async function runValidatorAgent(
+  config: RepoConfig,
+  tracked: PipelineIssue,
+): Promise<'pass' | 'fail'> {
+  const repoKey = `${config.owner}/${config.repo}`
+  const agentCwd = tracked.worktreePath || config.localPath
+  const prompt = buildValidatorPrompt(tracked, repoKey)
+
+  console.log(`[github-pipeline] Running validator for ${repoKey}#${tracked.number}`)
+  const result = await runAgentHeadless('issue-validator', agentCwd, prompt, {
+    timeoutMs: VALIDATOR_TIMEOUT_MS,
+    phase: 'validating',
+  })
+
+  if (!result.success) {
+    const errorDetail = [result.error, result.output?.slice(-500)].filter(Boolean).join('\n\n')
+    tracked.lastError = errorDetail || 'Validator exited with error'
+    console.error(`[github-pipeline] Validator failed for #${tracked.number}:`, errorDetail)
+    return 'fail'
+  }
+
+  tracked.validatorOutput = result.output.trim()
+
+  // Parse structured result
+  const resultMatch = tracked.validatorOutput.match(/VALIDATION_RESULT:\s*(PASS|FAIL)/i)
+  if (resultMatch && resultMatch[1].toUpperCase() === 'PASS') {
+    return 'pass'
+  }
+
+  tracked.lastError = tracked.validatorOutput.slice(-500)
+  return 'fail'
+}
+
+// ── Screenshot collection & PR comment ──────────────────────────────────────
+
+export async function collectScreenshots(worktreePath: string): Promise<string[]> {
+  const screenshotDir = path.join(worktreePath, SCREENSHOT_DIR)
+  if (!fs.existsSync(screenshotDir)) return []
+  try {
+    const files = fs.readdirSync(screenshotDir)
+    return files.filter(f => /\.(png|jpg|jpeg|webp)$/i.test(f))
+  } catch {
+    return []
+  }
+}
+
+export async function uploadScreenshotsToPR(
+  config: RepoConfig,
+  branch: string,
+  worktreePath: string,
+  issueNumber: number,
+): Promise<string> {
+  const screenshots = await collectScreenshots(worktreePath)
+  if (screenshots.length === 0) return ''
+
+  const screenshotDir = path.join(worktreePath, SCREENSHOT_DIR)
+
+  // Commit screenshots to the branch so they're accessible via raw GitHub URLs
+  try {
+    await execFileAsync('git', ['add', SCREENSHOT_DIR], {
+      cwd: worktreePath, encoding: 'utf-8', timeout: 15_000,
+    })
+    const { stdout: status } = await execFileAsync('git', ['status', '--porcelain', SCREENSHOT_DIR], {
+      cwd: worktreePath, encoding: 'utf-8', timeout: 10_000,
+    })
+    if (status.trim()) {
+      await execFileAsync('git', ['commit', '-m', 'chore: add validation screenshots'], {
+        cwd: worktreePath, encoding: 'utf-8', timeout: 15_000,
+      })
+      await execFileAsync('git', ['push', 'origin', branch], {
+        cwd: worktreePath, encoding: 'utf-8', timeout: 60_000,
+      })
+    }
+  } catch (err) {
+    console.error('[github-pipeline] Failed to push screenshots:', err)
+    // Fall back to base64 inline images
+    return buildBase64ScreenshotComment(screenshotDir, screenshots)
+  }
+
+  // Build markdown with GitHub raw URLs
+  const lines = ['### Validation Screenshots', '']
+  for (const file of screenshots) {
+    const rawUrl = `https://raw.githubusercontent.com/${config.owner}/${config.repo}/${branch}/${SCREENSHOT_DIR}/${file}`
+    const label = file.replace(/\.(png|jpg|jpeg|webp)$/i, '').replace(/[-_]/g, ' ')
+    lines.push(`**${label}**`, `![${label}](${rawUrl})`, '')
+  }
+  return lines.join('\n')
+}
+
+function buildBase64ScreenshotComment(dir: string, files: string[]): string {
+  const lines = ['### Validation Screenshots', '']
+  for (const file of files.slice(0, 5)) { // Limit to 5 to avoid comment size limits
+    try {
+      const data = fs.readFileSync(path.join(dir, file))
+      const ext = path.extname(file).slice(1).toLowerCase()
+      const mime = ext === 'jpg' ? 'jpeg' : ext
+      const b64 = data.toString('base64')
+      const label = file.replace(/\.(png|jpg|jpeg|webp)$/i, '').replace(/[-_]/g, ' ')
+      lines.push(`**${label}**`, `![${label}](data:image/${mime};base64,${b64})`, '')
+    } catch { /* skip unreadable files */ }
+  }
+  return lines.join('\n')
+}
+
 // ── Pipeline driver ──────────────────────────────────────────────────────────
 
 export interface PipelineState {
@@ -643,6 +785,7 @@ export async function ingestIssue(config: RepoConfig, issue: GHIssue): Promise<P
     executorAttempts: 0,
     plannerRunning: false,
     executorRunning: false,
+    validatorRunning: false,
   }
 
   // Remove stale entry if re-ingesting
@@ -803,20 +946,13 @@ export async function drivePipeline(repos: RepoConfig[]): Promise<void> {
         const result = await runExecutorAgent(config, tracked)
 
         if (result === 'done') {
-          const gitCwd = tracked.worktreePath ?? config.localPath
-          const prCreated = await pushBranchAndCreatePR(
-            config, gitCwd, tracked.branch, tracked.number,
-            `[${tracked.repo.split('/')[1]}#${tracked.number}] ${tracked.title}`,
-          )
-          if (tracked.worktreePath) await cleanupWorktree(config.localPath, tracked.worktreePath)
-
-          tracked.stage = 'done'
+          // Transition to validation stage instead of done
+          tracked.stage = 'validating'
           tracked.updatedAt = Date.now()
-          const doneLabel = prCreated ? 'pr-ready' : 'agent-done'
           await Promise.allSettled([
-            setLabel(config, tracked.number, ['agent-executing'], doneLabel),
+            setLabel(config, tracked.number, ['agent-executing'], 'agent-validating'),
             addComment(config, tracked.number,
-              `✅ **Implementation complete**${prCreated ? '\nA pull request has been created for review.' : ''}`,
+              '🔍 **Executor complete** — running validation agent (tests + screenshots)...',
             ),
             postPipelineNotification(
               `:white_check_mark: *${tracked.repo}#${tracked.number}* done (size ${tracked.size})${prCreated ? ' — PR created' : ''}\n<https://github.com/${tracked.repo}/issues/${tracked.number}|View issue>`,
@@ -855,6 +991,72 @@ export async function drivePipeline(repos: RepoConfig[]): Promise<void> {
         saveState()
       }
     }
+
+    // ── Validating ──
+    if (tracked.stage === 'validating' && !tracked.validatorRunning) {
+      tracked.validatorRunning = true
+      saveState()
+
+      try {
+        const result = await runValidatorAgent(config, tracked)
+        const gitCwd = tracked.worktreePath ?? config.localPath
+
+        // Upload screenshots to PR regardless of pass/fail
+        let screenshotMarkdown = ''
+        if (tracked.branch && tracked.worktreePath) {
+          screenshotMarkdown = await uploadScreenshotsToPR(
+            config, tracked.branch, tracked.worktreePath, tracked.number,
+          )
+        }
+
+        if (result === 'pass') {
+          // Push branch and create PR
+          const prCreated = await pushBranchAndCreatePR(
+            config, gitCwd, tracked.branch!, tracked.number,
+            `[${tracked.repo.split('/')[1]}#${tracked.number}] ${tracked.title}`,
+          )
+          if (tracked.worktreePath) await cleanupWorktree(config.localPath, tracked.worktreePath)
+
+          tracked.stage = 'done'
+          tracked.updatedAt = Date.now()
+
+          const validationSummary = tracked.validatorOutput?.match(/TEST_SUMMARY:\s*(.+)/)?.[1] || 'All checks passed'
+          const doneLabel = prCreated ? 'pr-ready' : 'agent-done'
+          const commentParts = [
+            `✅ **Implementation complete — validation passed**`,
+            `\n**Test summary:** ${validationSummary}`,
+            prCreated ? '\nA pull request has been created for review.' : '',
+            screenshotMarkdown ? `\n${screenshotMarkdown}` : '',
+          ]
+          await Promise.allSettled([
+            setLabel(config, tracked.number, ['agent-validating'], doneLabel),
+            addComment(config, tracked.number, commentParts.filter(Boolean).join('\n')),
+          ])
+        } else {
+          if (tracked.worktreePath) await cleanupWorktree(config.localPath, tracked.worktreePath)
+          tracked.stage = 'failed'
+          tracked.updatedAt = Date.now()
+          const validationError = tracked.lastError
+            ? `\`\`\`\n${tracked.lastError.slice(0, 1000)}\n\`\`\``
+            : ''
+          const commentParts = [
+            `❌ **Validation failed**`,
+            validationError,
+            screenshotMarkdown ? `\n${screenshotMarkdown}` : '',
+            '\nTo retry, remove `agent-failed` and add `agent-ready`.',
+          ]
+          await Promise.allSettled([
+            setLabel(config, tracked.number, ['agent-validating'], 'agent-failed'),
+            addComment(config, tracked.number, commentParts.filter(Boolean).join('\n')),
+          ])
+        }
+      } catch (err) {
+        console.error(`[github-pipeline] Validator error for #${tracked.number}:`, err)
+      } finally {
+        tracked.validatorRunning = false
+        saveState()
+      }
+    }
   }
 }
 
@@ -871,6 +1073,7 @@ export function initPipeline(): void {
   for (const issue of state.issues) {
     if (issue.plannerRunning) { issue.plannerRunning = false; reset++ }
     if (issue.executorRunning) { issue.executorRunning = false; reset++ }
+    if (issue.validatorRunning) { issue.validatorRunning = false; reset++ }
   }
   if (reset > 0) {
     saveState()
