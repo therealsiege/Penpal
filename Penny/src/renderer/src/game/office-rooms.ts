@@ -37,6 +37,8 @@ export interface RoomsHostScene {
   formatLabel(label: string): string
   /** When lab props use a single facility-level layer, skip per-room strategic placement. */
   usesFacilityLabStrategicProps(): boolean
+  /** True when a GDS backdrop scene is active (or will be) — skip room headers/chrome. */
+  hasGdsScene?(): boolean
 }
 
 // ---------------------------------------------------------------------------
@@ -122,6 +124,15 @@ export class OfficeRooms {
     heatOverlay.setDepth(0.5) // above floor graphics, below workstation containers
     container.add(heatOverlay)
 
+    const gds = this.host.hasGdsScene?.() ?? false
+    if (gds) {
+      activityBar.setVisible(false)
+      waitingBar.setVisible(false)
+      statusLed.setVisible(false)
+      statusLedGlow.setVisible(false)
+      heatOverlay.setVisible(false)
+    }
+
     const room: Room = {
       cwd, label, teamKey, teamLabel, agents,
       x: 0, y: 0, width, height,
@@ -143,8 +154,10 @@ export class OfficeRooms {
 
     this.drawRoomBackground(room)
     this.host.syncWorkstations(room, agents)
-    this.host.updateRoomActivity(room)
-    this.updateDoorGlow(room)
+    if (!gds) {
+      this.host.updateRoomActivity(room)
+      this.updateDoorGlow(room)
+    }
     return room
   }
 
@@ -239,6 +252,18 @@ export class OfficeRooms {
   drawRoomBackground(room: Room): void {
     const g = room.floorGraphics
     g.clear()
+
+    // GDS mode — backdrop has all room visuals; hide container chrome
+    if (this.host.hasGdsScene?.()) {
+      room.activityBar?.setVisible(false)
+      room.waitingBar?.setVisible(false)
+      room.statusLed?.setVisible(false)
+      room.statusLedGlow?.setVisible(false)
+      room.doorGraphics?.clear()
+      room.doorFrameGraphics?.clear()
+      room.heatOverlay?.setVisible(false)
+      return
+    }
 
     const w = room.width
     const h = room.height
@@ -1377,6 +1402,9 @@ export class OfficeRooms {
       for (const b of room.headerLegoBricks) b.destroy()
       room.headerLegoBricks = undefined
     }
+
+    // GDS mode — backdrop has room context, skip header text/icons
+    if (this.host.hasGdsScene?.()) return
 
     const headerY = room.height / 2 - ROOM_HEADER_H / 2
     const WALL_T = 3
