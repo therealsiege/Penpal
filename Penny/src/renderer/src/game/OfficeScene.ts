@@ -1734,14 +1734,19 @@ export class OfficeScene extends Phaser.Scene {
       }
     }
 
-    // In GDS mode, disable pathfinding — agents stay at their desks
-    this.navMesh.disabled = this.background.hasGdsScene()
+    this.navMesh.disabled = false
 
-    this.navMesh.rebuild({
-      buildingBounds,
-      corridorSegments: this.background.getCorridorSegments(),
-      cafeBounds: this.cafe.getBounds(),
-    })
+    // In GDS mode, build nav mesh from lab floor walkable tiles; otherwise use corridors.
+    if (this.background.hasGdsScene()) {
+      const tiles = this.background.getGdsWalkableTiles()
+      this.navMesh.rebuildFromGdsTiles(tiles)
+    } else {
+      this.navMesh.rebuild({
+        buildingBounds,
+        corridorSegments: this.background.getCorridorSegments(),
+        cafeBounds: this.cafe.getBounds(),
+      })
+    }
   }
 
 

@@ -177,7 +177,41 @@ export class NavMesh {
     // findPath() adds the agent's own room + door zone via ownRoomRect.
   }
 
-  /** When true, findPath always returns null (used in GDS scene mode). */
+  /**
+   * Build nav mesh from GDS walkable floor tiles (world-space rects).
+   * Everything is blocked except the provided tile rects.
+   */
+  rebuildFromGdsTiles(tiles: { x: number; y: number; w: number; h: number }[]): void {
+    this.disabled = false
+    if (tiles.length === 0) {
+      this.grid = []; this.gridW = 0; this.gridH = 0; return
+    }
+
+    // Compute bounds from tiles
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+    for (const t of tiles) {
+      minX = Math.min(minX, t.x)
+      minY = Math.min(minY, t.y)
+      maxX = Math.max(maxX, t.x + t.w)
+      maxY = Math.max(maxY, t.y + t.h)
+    }
+    const pad = 20
+    minX -= pad; minY -= pad; maxX += pad; maxY += pad
+
+    this.originX = minX; this.originY = minY
+    this.gridW = Math.ceil((maxX - minX) / CELL_SIZE)
+    this.gridH = Math.ceil((maxY - minY) / CELL_SIZE)
+
+    // Everything blocked
+    this.grid = Array.from({ length: this.gridH }, () => new Array(this.gridW).fill(false))
+
+    // Mark walkable tiles
+    for (const t of tiles) {
+      this.markRect(t.x, t.y, t.w, t.h)
+    }
+  }
+
+  /** When true, findPath always returns null. */
   disabled = false
 
   findPath(start: NavPoint, end: NavPoint, ownRoomRect?: NavRect): NavPoint[] | null {
@@ -258,6 +292,8 @@ export class NavMesh {
     const g = this.toGrid(x, y)
     return g.gx >= 0 && g.gx < this.gridW && g.gy >= 0 && g.gy < this.gridH && this.grid[g.gy][g.gx]
   }
+
+  isWalkable(x: number, y: number): boolean { return this.isPointWalkable(x, y) }
 
   // ── Debug: dump walkable cells count ──
   getStats(): { gridW: number; gridH: number; walkable: number; total: number } {

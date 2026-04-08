@@ -1257,6 +1257,10 @@ export class OfficeWorkstations {
   // restoreDeskStroke — reset desk outline based on current agent state
   // ---------------------------------------------------------------------------
 
+  triggerWalkBreak(agentId: string): boolean {
+    return this.animator.triggerWalkBreak(agentId)
+  }
+
   restoreDeskStroke(ws: WorkstationSprite): void {
     // GDS mode: desk body is invisible (backdrop has the desks)
     if (this.host.getOrAssignGdsDeskSlot) return

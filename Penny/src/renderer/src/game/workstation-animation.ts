@@ -1905,4 +1905,79 @@ export class WorkstationAnimator {
       }
     }
   }
+
+  /**
+   * Imperatively trigger a walk break for the given agent.
+   * Returns true if a walk was started, false if conditions aren't met
+   * (no navmesh, already walking, not idle, no valid path found).
+   */
+  triggerWalkBreak(agentId: string): boolean {
+    const navMesh = this.host.getNavMesh()
+    if (!navMesh || navMesh.disabled) return false
+
+    // Find the workstation and its room
+    let ownerRoom: Room | null = null
+    let ws: WorkstationSprite | null = null
+    for (const room of this.host.getRooms().values()) {
+      const found = room.workstations.get(agentId)
+      if (found) { ownerRoom = room; ws = found; break }
+    }
+    if (!ownerRoom || !ws) return false
+    if (!ws.state || ws.walkBreakTween || !ws.sprite.visible) return false
+
+    const worldX = ownerRoom.x + ws.container.x
+    const worldY = ownerRoom.y + ws.container.y + WS_SPRITE_Y
+
+    const ownRoomRect = buildOwnRoomRect(ownerRoom)
+
+    // Try 16 angles to find a valid path (30-60px radius)
+    let goPath: { x: number; y: number }[] | null = null
+    let targetX = 0
+    let targetY = 0
+    for (let i = 0; i < 16; i++) {
+      const angle = (i / 16) * Math.PI * 2
+      const dist = 30 + Math.random() * 30
+      const tx = worldX + Math.cos(angle) * dist
+      const ty = worldY + Math.sin(angle) * dist
+      const path = navMesh.findPath({ x: worldX, y: worldY }, { x: tx, y: ty }, ownRoomRect)
+      if (path && path.length >= 2) {
+        goPath = path; targetX = tx; targetY = ty; break
+      }
+    }
+    if (!goPath) return false
+
+    const agent = ws.state
+    const charIdx = getAgentCharacterIndex(agent)
+    const walkSheetKey = charIdx === 1 ? ANIM_KEYS.WALK_2 : ANIM_KEYS.WALK_1
+    const walkSprite = this.scene.add.sprite(worldX, worldY, walkSheetKey, 0)
+      .setScale(CHAR_SCALE).setOrigin(0.5, 1).setDepth(9000)
+    const walkShadow = this.scene.add.ellipse(worldX, worldY + 2, 16, 5, 0x000000, 0.15).setDepth(8999)
+
+    ws.sprite.setVisible(false)
+    ws.walkBreakTween = this.scene.tweens.addCounter({ duration: 999999 })
+
+    const pathWalker = new PathWalker(this.scene, walkSprite, walkShadow, walkSheetKey)
+
+    const returnPath = navMesh.findPath({ x: targetX, y: targetY }, { x: worldX, y: worldY }, ownRoomRect)
+      ?? [...goPath].reverse()
+
+    const finishWalk = () => {
+      pathWalker.destroy()
+      walkSprite.destroy()
+      walkShadow.destroy()
+      ws!.sprite.setVisible(true)
+      if (ws!.walkBreakTween) { ws!.walkBreakTween.destroy(); ws!.walkBreakTween = undefined }
+      ws!.sprite.x = 0
+      ws!.sprite.y = WS_SPRITE_Y
+    }
+
+    pathWalker.startPath(goPath, () => {
+      this.scene.time.delayedCall(800 + Math.random() * 600, () => {
+        if (!walkSprite.active) { finishWalk(); return }
+        pathWalker.startPath(returnPath, finishWalk)
+      })
+    })
+
+    return true
+  }
 }
