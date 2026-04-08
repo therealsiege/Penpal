@@ -1082,6 +1082,21 @@ export class OfficeBackground {
     this.gdsRenderer.applyLod(lodLevel)
   }
 
+  /** Advance rotating-knob prop overlays each frame. Call from the OfficeScene update loop. */
+  updateGdsPropOverlays(delta: number): void {
+    if (this.gdsRenderer.isRendered()) this.gdsRenderer.updatePropOverlays(delta)
+  }
+
+  /** Flash the nearest console-flash prop close to the given world position (e.g. on task complete). */
+  flashNearestConsoleProp(worldX: number, worldY: number): void {
+    this.gdsRenderer.flashConsoleProp(worldX, worldY)
+  }
+
+  /** Update GDS ceiling/pulse-glow light intensity from the atmosphere time-of-day value (0–1). */
+  setGdsCeilingLightIntensity(t: number): void {
+    this.gdsRenderer.setCeilingLightIntensity(t)
+  }
+
   tickReactorGlow(time: number): void {
     this.interior.tickReactorGlow(time)
     this.terrain.tickReactorPulse(time)
