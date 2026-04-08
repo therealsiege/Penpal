@@ -5,12 +5,31 @@
 
 import Phaser from 'phaser'
 import { GDS_SCENE_WIDTH, GDS_SCENE_HEIGHT, CHAR_SCALE, scaledFontSize } from './office-constants'
-import { ANIM_KEYS } from './office-asset-keys'
+import { ANIM_KEYS, GDS_SCENE_KEYS } from './office-asset-keys'
 import { activeTheme } from './office-theme'
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
+
+export interface LabMapBarista {
+  id: string
+  name: string
+  charIdx: number
+  gdsX: number
+  gdsY: number
+  startFacing: 'left' | 'right'
+  walkRange: number
+  walkDurationMs: number
+  bobAmplitude: number
+  bobDurationMs: number
+  workPulses: number
+  startDelayMs: number
+}
+
+export interface LabMapJson {
+  baristas?: LabMapBarista[]
+}
 
 export interface GdsDeskSlot {
   x: number
@@ -69,6 +88,7 @@ export class GdsSceneRenderer {
   private scale = 1
   private originX = 0
   private originY = 0
+  private labMap: LabMapJson | null = null
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene
@@ -104,6 +124,10 @@ export class GdsSceneRenderer {
     this.backdrop = img
     this.rendered = true
 
+    if (!this.labMap) {
+      this.labMap = (this.scene.cache.json.get(GDS_SCENE_KEYS.LAB_MAP) as LabMapJson | undefined) ?? null
+    }
+
     this.placeBaristas()
   }
 
@@ -117,11 +141,13 @@ export class GdsSceneRenderer {
     for (const c of this.baristaContainers) c.destroy(true)
     this.baristaContainers = []
 
-    // Cafe area in GDS scene coords — between the serving bars in the right room
-    const BARISTAS = [
-      { gdsX: 2580, gdsY: 800, charIdx: 1, name: 'Latte Larry' },
-      { gdsX: 2580, gdsY: 1050, charIdx: 0, name: 'Mocha Maya' },
-    ]
+    // Cafe area in GDS scene coords — config loaded from lab-map.json
+    const BARISTAS = (this.labMap?.baristas ?? []).map(b => ({
+      gdsX: b.gdsX,
+      gdsY: b.gdsY,
+      charIdx: b.charIdx,
+      name: b.name,
+    }))
 
     for (const cfg of BARISTAS) {
       const wx = this.originX + cfg.gdsX * this.scale

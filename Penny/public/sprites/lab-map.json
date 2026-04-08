@@ -1,0 +1,32 @@
+{
+  "baristas": [
+    {
+      "id": "latte-larry",
+      "name": "Latte Larry",
+      "charIdx": 1,
+      "gdsX": 2580,
+      "gdsY": 800,
+      "startFacing": "left",
+      "walkRange": 20,
+      "walkDurationMs": 1200,
+      "bobAmplitude": 3,
+      "bobDurationMs": 150,
+      "workPulses": 4,
+      "startDelayMs": 0
+    },
+    {
+      "id": "mocha-maya",
+      "name": "Mocha Maya",
+      "charIdx": 0,
+      "gdsX": 2580,
+      "gdsY": 1050,
+      "startFacing": "right",
+      "walkRange": 20,
+      "walkDurationMs": 1200,
+      "bobAmplitude": 3,
+      "bobDurationMs": 150,
+      "workPulses": 4,
+      "startDelayMs": 2000
+    }
+  ]
+}

@@ -3,7 +3,7 @@ import { activeTheme } from './office-theme'
 import {
   SCENE_KEYS, SPRITESHEET_KEYS, ANIM_KEYS, IMAGE_KEYS, AUDIO_KEYS,
   EFFECT_ANIM_KEYS, ANIMAL_IDLE_FRAMES, ANIMAL_SPECIES,
-  LAB_ANIM_KEYS, LAB_PROP_FRAMES,
+  LAB_ANIM_KEYS, LAB_PROP_FRAMES, GDS_SCENE_KEYS,
 } from './office-asset-keys'
 import { CHAR_FRAME_W, CHAR_FRAME_H, OFFICE_TILE_SIZE, ROOM_TILE_SIZE, LAB_TILE_SIZE, scaledFontSize } from './office-constants'
 
@@ -360,6 +360,9 @@ export class BootScene extends BaseScene {
 
     // GDS-exported medium lab scene — composited scene image
     this.load.image(SPRITESHEET_KEYS.GDS_MEDIUM, './sprites/gds-medium-scene.png')
+
+    // Lab map config — barista positions + future cafe layout data
+    this.load.json(GDS_SCENE_KEYS.LAB_MAP, './sprites/lab-map.json')
 
     // GDS world map — default start scene
     this.load.image(SPRITESHEET_KEYS.GDS_WORLDMAP, './sprites/gds-worldmap.png')
