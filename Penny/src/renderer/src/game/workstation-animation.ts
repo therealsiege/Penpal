@@ -181,6 +181,9 @@ export class WorkstationAnimator {
     if (ws.pulseTween)       { ws.pulseTween.destroy();       ws.pulseTween       = undefined }
     if (ws.ledPulseTween)    { ws.ledPulseTween.destroy();    ws.ledPulseTween    = undefined }
     if (ws.kbGlowTween)     { ws.kbGlowTween.destroy();     ws.kbGlowTween     = undefined }
+    if (ws.kbPulseTween)      { ws.kbPulseTween.destroy();      ws.kbPulseTween      = undefined; if (ws.keyboard) { ws.keyboard.scaleX = 1; ws.keyboard.scaleY = 1 } }
+    if (ws.screenScrollTween) { ws.screenScrollTween.destroy();  ws.screenScrollTween = undefined }
+    if (ws.cursorBlinkTimer)  { ws.cursorBlinkTimer.destroy();   ws.cursorBlinkTimer  = undefined }
     if (ws.lampLightTween)   { ws.lampLightTween.destroy();   ws.lampLightTween   = undefined }
     if (ws.lampFlickerTimer) { ws.lampFlickerTimer.destroy();  ws.lampFlickerTimer = undefined }
     if (ws.walkBreakTween)   { ws.walkBreakTween.destroy();   ws.walkBreakTween   = undefined }
@@ -199,6 +202,10 @@ export class WorkstationAnimator {
     if (ws.chairSprite) ws.chairSprite.setAngle(0)
     // Clear typing note timer
     if (ws.typingNoteTimer) { ws.typingNoteTimer.destroy(); ws.typingNoteTimer = undefined }
+    // Pause screen tween and hide content on every mode transition; each branch re-activates it
+    if (ws.screenTween && !ws.screenTween.isPaused()) ws.screenTween.pause()
+    if (ws.screenLines) ws.screenLines.setVisible(false)
+    if (ws.monitorText) { ws.monitorText.setText('').setVisible(false) }
     // Clear speech bubble
     if (ws.speechBubbleTween) { ws.speechBubbleTween.destroy(); ws.speechBubbleTween = undefined }
     if (ws.speechBubbleTimer) { ws.speechBubbleTimer.destroy(); ws.speechBubbleTimer = undefined }
@@ -277,13 +284,21 @@ export class WorkstationAnimator {
         targets: ws.statusDot, alpha: AnimConfig.waiting.dotPulseAlphaMin,
         duration: AnimConfig.waiting.dotPulseDuration, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
       })
-      // LED: waiting — amber steady glow
+      // LED: blocked — fast amber blink
       if (ws.ledGlow) {
         ws.ledGlow.clear()
         ws.ledGlow.fillStyle(activeTheme.deskStrokeWaiting, 1)
         ws.ledGlow.fillRoundedRect(-26, WS_DESK_Y + 4, 52, 2, 1)
-        this.scene.tweens.add({ targets: ws.ledGlow, alpha: 0.5, duration: 300, ease: 'Sine.easeOut' })
+        ws.ledGlow.setAlpha(AnimConfig.working.ledPulseAlphaBase)
+        ws.ledPulseTween = this.scene.tweens.add({
+          targets: ws.ledGlow, alpha: 0.7,
+          duration: 300, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
+        })
       }
+      // Screen: blocked amber flash
+      if (ws.screenState) ws.screenState.mode = 'blocked'
+      if (ws.screenTween?.isPaused()) ws.screenTween.resume()
+      if (ws.screenLines) ws.screenLines.setVisible(true)
       // Lamp light cone: dim when waiting
       if (ws.lampLight) {
         ws.lampLightTween = this.scene.tweens.add({
@@ -319,6 +334,37 @@ export class WorkstationAnimator {
             yoyo: true,
             repeat: -1,
             ease: 'Sine.easeInOut',
+          })
+        }
+      }
+
+      // Screen: activate scrolling lines
+      if (ws.screenState) ws.screenState.mode = 'working'
+      if (ws.screenTween?.isPaused()) ws.screenTween.resume()
+      if (ws.screenLines) ws.screenLines.setVisible(true)
+
+      // Keyboard: tiny scale pulse (key-press feel)
+      if (ws.keyboard && !ws.kbPulseTween) {
+        ws.kbPulseTween = this.scene.tweens.add({
+          targets: ws.keyboard,
+          scaleX: AnimConfig.working.kbPulseScale,
+          scaleY: AnimConfig.working.kbPulseScale,
+          duration: AnimConfig.working.kbPulseDuration,
+          yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
+        })
+      }
+
+      // Terminal text: truncated blurb with slow upward scroll
+      if (ws.monitorText) {
+        const blurb = agent.lastAssistantBlurb ?? agent.taskTitle ?? ''
+        const truncated = blurb.slice(0, 20).trim()
+        if (truncated) {
+          ws.monitorText.setText(truncated).setVisible(true)
+          const baseY = ws.monitorText.y
+          ws.screenScrollTween = this.scene.tweens.add({
+            targets: ws.monitorText,
+            y: baseY - 3,
+            duration: 4000, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
           })
         }
       }
@@ -542,12 +588,34 @@ export class WorkstationAnimator {
       if (ws.kbGlowTween) { ws.kbGlowTween.destroy(); ws.kbGlowTween = undefined }
       if (ws.keyboard) ws.keyboard.setStrokeStyle(0, 0, 0).setAlpha(0.8)
 
-      // LED: idle — muted dim glow
+      // LED: idle — very slow dim blink
       if (ws.ledGlow) {
         ws.ledGlow.clear()
         ws.ledGlow.fillStyle(activeTheme.deskStrokeIdle, 1)
         ws.ledGlow.fillRoundedRect(-26, WS_DESK_Y + 4, 52, 2, 1)
-        this.scene.tweens.add({ targets: ws.ledGlow, alpha: 0.1, duration: 600, ease: 'Sine.easeOut' })
+        ws.ledGlow.setAlpha(0.04)
+        ws.ledPulseTween = this.scene.tweens.add({
+          targets: ws.ledGlow, alpha: AnimConfig.idle.ledBlinkAlphaPeak,
+          duration: AnimConfig.idle.ledBlinkDuration, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
+        })
+      }
+      // Screen: slow dim screensaver lines
+      if (ws.screenState) ws.screenState.mode = 'idle'
+      if (ws.screenTween?.isPaused()) ws.screenTween.resume()
+      if (ws.screenLines) ws.screenLines.setVisible(true)
+
+      // Terminal text: cursor blink when idle
+      if (ws.monitorText) {
+        ws.monitorText.setText('_').setVisible(true)
+        let cursorOn = true
+        ws.cursorBlinkTimer = this.scene.time.addEvent({
+          delay: 600, loop: true,
+          callback: () => {
+            if (!ws.monitorText?.active || ws.lastAnimMode !== 'idle') return
+            cursorOn = !cursorOn
+            ws.monitorText.setText(cursorOn ? '_' : ' ')
+          },
+        })
       }
       // Lamp light cone: dim when idle
       if (ws.lampLight) {
@@ -1813,6 +1881,7 @@ export class WorkstationAnimator {
         if (ws.speechBubbleTimer)   ws.speechBubbleTimer.paused   = true
         if (ws.flameTimer)          ws.flameTimer.paused          = true
         if (ws.blurbFadeTimer)      ws.blurbFadeTimer.paused      = true
+        if (ws.cursorBlinkTimer)    ws.cursorBlinkTimer.paused    = true
         ws.walkBreakTween?.pause()
       }
     }
@@ -1831,6 +1900,7 @@ export class WorkstationAnimator {
         if (ws.speechBubbleTimer)   ws.speechBubbleTimer.paused   = false
         if (ws.flameTimer)          ws.flameTimer.paused          = false
         if (ws.blurbFadeTimer)      ws.blurbFadeTimer.paused      = false
+        if (ws.cursorBlinkTimer)    ws.cursorBlinkTimer.paused    = false
         ws.walkBreakTween?.resume()
       }
     }
