@@ -225,6 +225,17 @@ export class OfficeBackground {
   /** Get world bounds of the GDS scene (for camera centering). */
   getGdsSceneBounds(): { x: number; y: number; width: number; height: number } | null { return this.gdsRenderer.getWorldBounds() }
 
+  /** Update proximity-triggered laser doors in the GDS scene. */
+  updateGdsLaserDoors(positions: { x: number; y: number }[]): void {
+    this.gdsRenderer.updateLaserDoors(positions)
+  }
+
+  /** Get current state of all GDS laser doors (alpha, open, world position). */
+  getGdsLaserDoorStates(): { alpha: number; open: boolean; worldX: number; worldY: number; worldW: number; worldH: number }[] {
+    if (!this.gdsRenderer.isRendered()) return []
+    return this.gdsRenderer.getLaserDoorStates()
+  }
+
   // ---------------------------------------------------------------------------
   // calcRoomSize
   // ---------------------------------------------------------------------------

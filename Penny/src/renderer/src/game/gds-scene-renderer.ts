@@ -212,6 +212,114 @@ export class GdsSceneRenderer {
   }
 
   // -------------------------------------------------------------------------
+  // Laser doors — proximity-triggered animated barriers
+  // -------------------------------------------------------------------------
+
+  // Door positions in GDS scene space (3840×2160)
+  private static readonly LASER_DOOR_DEFS = [
+    { gdsX: 1824, gdsY:  120, gdsW: 280, gdsH: 36 }, // top room entrance
+    { gdsX: 1478, gdsY:  770, gdsW: 240, gdsH: 36 }, // mid console entrance
+    { gdsX:  877, gdsY: 1190, gdsW: 220, gdsH: 36 }, // mid-left entrance
+    { gdsX: 1680, gdsY: 1510, gdsW: 260, gdsH: 36 }, // bottom cluster entrance
+    { gdsX: 2200, gdsY:  960, gdsW:  36, gdsH: 300 }, // cafe corridor gate
+  ]
+
+  private static readonly LASER_DOOR_ALPHA_INITIAL = 0.5
+  private static readonly LASER_DOOR_ALPHA_OPEN    = 0
+  private static readonly LASER_DOOR_ALPHA_CLOSED  = 1.0
+  private static readonly LASER_DOOR_OPEN_MS       = 200
+  private static readonly LASER_DOOR_CLOSE_MS      = 400
+
+  private laserDoors: Array<{
+    gfx: Phaser.GameObjects.Graphics
+    open: boolean
+    worldX: number
+    worldY: number
+    worldW: number
+    worldH: number
+    openTween: Phaser.Tweens.Tween | null
+    closeTween: Phaser.Tweens.Tween | null
+  }> = []
+
+  private buildLaserDoors(): void {
+    for (const d of this.laserDoors) d.gfx.destroy()
+    this.laserDoors = []
+
+    for (const def of GdsSceneRenderer.LASER_DOOR_DEFS) {
+      const wx = this.originX + def.gdsX * this.scale
+      const wy = this.originY + def.gdsY * this.scale
+      const ww = def.gdsW * this.scale
+      const wh = def.gdsH * this.scale
+
+      const gfx = this.scene.add.graphics()
+      gfx.setDepth(SCENE_DEPTH + 0.5)
+      gfx.fillStyle(0x00ffff, 1)
+      gfx.fillRect(-ww / 2, -wh / 2, ww, wh)
+      gfx.setPosition(wx, wy)
+      gfx.setAlpha(GdsSceneRenderer.LASER_DOOR_ALPHA_INITIAL)
+
+      this.laserDoors.push({
+        gfx,
+        open: false,
+        worldX: wx,
+        worldY: wy,
+        worldW: ww,
+        worldH: wh,
+        openTween: null,
+        closeTween: null,
+      })
+    }
+  }
+
+  updateLaserDoors(positions: { x: number; y: number }[]): void {
+    if (!this.rendered) return
+    if (this.laserDoors.length === 0) this.buildLaserDoors()
+
+    for (const door of this.laserDoors) {
+      const nearbyCount = positions.filter(p => {
+        const dx = Math.abs(p.x - door.worldX)
+        const dy = Math.abs(p.y - door.worldY)
+        return dx < door.worldW / 2 + 50 && dy < door.worldH / 2 + 50
+      }).length
+
+      const shouldOpen = nearbyCount > 0
+
+      if (shouldOpen && !door.open) {
+        door.open = true
+        if (door.closeTween) { door.closeTween.stop(); door.closeTween = null }
+        door.openTween = this.scene.tweens.add({
+          targets: door.gfx,
+          alpha: GdsSceneRenderer.LASER_DOOR_ALPHA_OPEN,
+          duration: GdsSceneRenderer.LASER_DOOR_OPEN_MS,
+          ease: 'Linear',
+          onComplete: () => { door.openTween = null },
+        })
+      } else if (!shouldOpen && door.open) {
+        door.open = false
+        if (door.openTween) { door.openTween.stop(); door.openTween = null }
+        door.closeTween = this.scene.tweens.add({
+          targets: door.gfx,
+          alpha: GdsSceneRenderer.LASER_DOOR_ALPHA_CLOSED,
+          duration: GdsSceneRenderer.LASER_DOOR_CLOSE_MS,
+          ease: 'Linear',
+          onComplete: () => { door.closeTween = null },
+        })
+      }
+    }
+  }
+
+  getLaserDoorStates(): { alpha: number; open: boolean; worldX: number; worldY: number; worldW: number; worldH: number }[] {
+    return this.laserDoors.map(d => ({
+      alpha: d.gfx.alpha,
+      open: d.open,
+      worldX: d.worldX,
+      worldY: d.worldY,
+      worldW: d.worldW,
+      worldH: d.worldH,
+    }))
+  }
+
+  // -------------------------------------------------------------------------
   // World bounds
   // -------------------------------------------------------------------------
 
@@ -243,6 +351,8 @@ export class GdsSceneRenderer {
     if (this.backdrop) { this.backdrop.destroy(); this.backdrop = null }
     for (const c of this.baristaContainers) c.destroy(true)
     this.baristaContainers = []
+    for (const d of this.laserDoors) d.gfx.destroy()
+    this.laserDoors = []
     this.rendered = false
   }
 
