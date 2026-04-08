@@ -156,6 +156,13 @@ contextBridge.exposeInMainWorld('api', {
     ipcRenderer.invoke('config:remove-profile-mcp', profile, serverName),
   updateAgentTools: (agentId: string, tools: string[]) =>
     ipcRenderer.invoke('config:update-agent-tools', agentId, tools),
+  // MCP Manager
+  mcpList: () => ipcRenderer.invoke('mcp:list'),
+  mcpImport: () => ipcRenderer.invoke('mcp:import'),
+  mcpSave: (config: unknown) => ipcRenderer.invoke('mcp:save', config),
+  mcpSync: () => ipcRenderer.invoke('mcp:sync'),
+  mcpHealthCheck: (serverId: string) => ipcRenderer.invoke('mcp:health-check', serverId),
+  mcpTemplates: () => ipcRenderer.invoke('mcp:templates'),
   // Session Health
   getITermStatus: () => ipcRenderer.invoke('sessions:iterm-status'),
   // Opencode Sessions

@@ -1,4 +1,13 @@
 import { ipcMain, shell, dialog, BrowserWindow } from 'electron'
+import {
+  readMasterConfig,
+  writeMasterConfig,
+  importFromExisting,
+  syncToTargets,
+  healthCheckServer,
+  getTemplates,
+  type MasterConfig,
+} from './mcp-manager'
 import { EventEmitter } from 'events'
 import fs from 'fs'
 import path from 'path'
@@ -1436,6 +1445,31 @@ export function registerIpcHandlers() {
     if (!Array.isArray(tools)) throw new Error('tools must be an array')
     return updateAgentTools(agentId, tools as string[])
   }))
+
+  // ── MCP Manager ───────────────────────────────────────────────────────
+  ipcMain.handle('mcp:list', wrapHandler(() => readMasterConfig()))
+
+  ipcMain.handle('mcp:import', wrapHandler(() => importFromExisting()))
+
+  ipcMain.handle('mcp:save', wrapHandler((config: unknown) => {
+    writeMasterConfig(config as MasterConfig)
+    return { ok: true }
+  }))
+
+  ipcMain.handle('mcp:sync', wrapHandler(async () => {
+    const cfg = readMasterConfig()
+    return syncToTargets(cfg)
+  }))
+
+  ipcMain.handle('mcp:health-check', wrapHandler(async (serverId: unknown) => {
+    if (typeof serverId !== 'string') throw new Error('serverId must be a string')
+    const cfg = readMasterConfig()
+    const server = cfg.servers.find((s) => s.id === serverId)
+    if (!server) throw new Error(`Server not found: ${serverId}`)
+    return healthCheckServer(server)
+  }))
+
+  ipcMain.handle('mcp:templates', wrapHandler(() => getTemplates()))
 
   // ── Data Scripts ──────────────────────────────────────────────────────
   registerDataScriptHandlers()

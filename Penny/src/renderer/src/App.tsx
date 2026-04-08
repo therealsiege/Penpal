@@ -12,6 +12,7 @@ import { OrchestratorModal, TasksPanel } from './components/OrchestratorModal'
 import { CommandCenter } from './panels/CommandCenter'
 import { VaultPanel } from './panels/VaultPanel'
 import { SettingsPanel } from './panels/SettingsPanel'
+import { McpPanel } from './panels/McpPanel'
 import { SoundboardPanel } from './panels/SoundboardPanel'
 import { EvalsPanel } from './panels/EvalsPanel'
 import { DataPanel } from './panels/DataPanel'
@@ -118,6 +119,13 @@ function AppContent() {
       description: 'Run ETL, ingestion, and enrichment scripts',
       category: 'Navigation',
       action: () => setActivePanel('data'),
+    },
+    {
+      id: 'open-mcp',
+      label: 'Open MCP Servers',
+      description: 'Manage all MCP server configurations',
+      category: 'Navigation',
+      action: () => setActivePanel('mcp'),
     },
     {
       id: 'open-soundboard',
@@ -346,6 +354,7 @@ function AppContent() {
         {activePanel === 'evals' && <EvalsPanel />}
         {activePanel === 'soundboard' && <SoundboardPanel />}
         {activePanel === 'settings' && <SettingsPanel />}
+        {activePanel === 'mcp' && <McpPanel />}
       </Layout>
     </>
   )
