@@ -40,10 +40,13 @@ export interface WorkstationSprite {
   dotPulseTween?: Phaser.Tweens.Tween
   keyboard?: Phaser.GameObjects.Rectangle
   kbGlowTween?: Phaser.Tweens.Tween
+  kbPulseTween?: Phaser.Tweens.Tween          // scale pulse on keyboard when working
+  screenScrollTween?: Phaser.Tweens.Tween     // terminal text Y scroll when working
+  cursorBlinkTimer?: Phaser.Time.TimerEvent   // cursor blink in idle mode
   monitorGlowTween?: Phaser.Tweens.Tween
   screenTween?: Phaser.Tweens.Tween
   /** Mutable ref shared with screenTween callback — set .mode to update screen animation */
-  screenState?: { mode: string }
+  screenState?: { mode: string; brightness?: number }
   typingTween?: Phaser.Tweens.Tween
   headTiltTween?: Phaser.Tweens.Tween
   pulseTween?: Phaser.Tweens.Tween

@@ -93,6 +93,10 @@ export interface AnimationConfig {
     typingNoteRiseDuration: number
     /** Total duration (ms) for the progress ring counter to reach 100. */
     progressRingDuration: number
+    /** Max scaleX/Y for keyboard scale pulse (working). */
+    kbPulseScale: number
+    /** Half-cycle ms for keyboard scale pulse (working). */
+    kbPulseDuration: number
   }
 
   /** Parameters for the 'idle' animation state. */
@@ -130,6 +134,10 @@ export interface AnimationConfig {
     yawnIntervalMin: number
     /** Variable range (ms) added to yawnIntervalMin via Math.random(). */
     yawnIntervalVar: number
+    /** Idle LED slow blink half-cycle ms. */
+    ledBlinkDuration: number
+    /** Idle LED peak alpha. */
+    ledBlinkAlphaPeak: number
   }
 
   /** Durations used during mode-transition cleanup / setup. */
@@ -264,6 +272,8 @@ function makeDefaults(): AnimationConfig {
       typingNoteSpawnInterval: 500,
       typingNoteRiseDuration:  800,   // duration of the note fly-up tween
       progressRingDuration:    60_000,
+      kbPulseScale:            1.04,
+      kbPulseDuration:         300,
     },
 
     // -----------------------------------------------------------------------
@@ -284,6 +294,8 @@ function makeDefaults(): AnimationConfig {
       walkBreakVar:           7000,
       yawnIntervalMin:        65000,
       yawnIntervalVar:        10000, // delay: 65000 + Math.random() * 10000
+      ledBlinkDuration:        3000,
+      ledBlinkAlphaPeak:       0.18,
     },
 
     // -----------------------------------------------------------------------

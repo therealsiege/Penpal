@@ -299,9 +299,19 @@ export class WorkstationFactory {
             }
           } else if (mode === 'idle') {
             // Slow dim screensaver lines
+            const br = screenState.brightness ?? 1
             for (let i = 0; i < 4; i++) {
               const y = WS_MONITOR_Y + ((v * 13 + i * 3.25) % 13) - 6.5
-              screenLines.fillStyle(lineColorsWork[i], 0.2)
+              screenLines.fillStyle(lineColorsWork[i], 0.2 * br)
+              screenLines.fillRect(-lineWidths[i] / 2, y, lineWidths[i], 1)
+            }
+          } else if (mode === 'blocked') {
+            // Alternating amber bars — fast warning flash pattern
+            const flash = Math.floor(v * 6) % 2 === 0
+            const amberAlpha = flash ? 0.55 : 0.12
+            for (let i = 0; i < 4; i++) {
+              const y = WS_MONITOR_Y - 4.5 + i * 3
+              screenLines.fillStyle(0xfbbf24, amberAlpha)
               screenLines.fillRect(-lineWidths[i] / 2, y, lineWidths[i], 1)
             }
           } else {
@@ -1299,6 +1309,9 @@ export class WorkstationFactory {
     if (ws.soundWaveSpeaker) ws.soundWaveSpeaker.destroy()
     if (ws.kbGlowTween)      ws.kbGlowTween.destroy()
     if (ws.typingNoteTimer)  ws.typingNoteTimer.destroy()
+    if (ws.kbPulseTween)      ws.kbPulseTween.destroy()
+    if (ws.screenScrollTween) ws.screenScrollTween.destroy()
+    if (ws.cursorBlinkTimer)  ws.cursorBlinkTimer.destroy()
     if (ws.speechBubbleTween) { ws.speechBubbleTween.destroy(); ws.speechBubbleTween = undefined }
     if (ws.speechBubbleTimer) { ws.speechBubbleTimer.destroy(); ws.speechBubbleTimer = undefined }
     if (ws.shadow)           ws.shadow.destroy()
