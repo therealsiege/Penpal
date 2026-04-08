@@ -358,6 +358,11 @@ export class BootScene extends BaseScene {
     // Lab props atlas — variable-size sprites from GDS editor (135 named frames)
     this.load.atlas(SPRITESHEET_KEYS.LAB_PROPS, './sprites/lab-props-atlas.png', './sprites/lab-props-atlas.json')
 
+    // Lab furniture spritesheet — 64x64 cells, workstation furniture variants (issue #127)
+    this.load.spritesheet('lab-furniture', './sprites/lab-furniture.png', {
+      frameWidth: 64, frameHeight: 64,
+    })
+
     // GDS-exported medium lab scene — composited scene image
     this.load.image(SPRITESHEET_KEYS.GDS_MEDIUM, './sprites/gds-medium-scene.png')
 

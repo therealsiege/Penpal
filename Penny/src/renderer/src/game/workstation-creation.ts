@@ -44,6 +44,8 @@ import {
 } from './office-constants'
 import type { WorkstationHost } from './office-workstation'
 import { isDeskItemUnlocked, isFlairUnlocked, getRankColor } from './cosmetic-tiers'
+import { LabWorkstationFactory, getLabSignatureItem } from './lab-workstation'
+import type { WorkstationVariant } from './lab-workstation'
 
 // ---------------------------------------------------------------------------
 // Signature item — deterministic per-agent personality item on desk
@@ -129,6 +131,12 @@ export class WorkstationFactory {
    *  pointerout handler wired during creation. */
   private restoreDeskStrokeCallback: (ws: WorkstationSprite) => void
 
+  /** Current workstation furniture variant — 'lab' uses LAB_PROPS sheet. */
+  variant: WorkstationVariant = 'lab'
+
+  /** Lab furniture factory — lazy-initialized when variant is 'lab'. */
+  private labFactory: LabWorkstationFactory | null = null
+
   constructor(
     scene: Phaser.Scene,
     host: WorkstationHost,
@@ -139,6 +147,12 @@ export class WorkstationFactory {
     this.host = host
     this.updateCallback = updateCallback
     this.restoreDeskStrokeCallback = restoreDeskStrokeCallback
+    this.labFactory = new LabWorkstationFactory(scene)
+  }
+
+  /** Whether the current variant should use lab furniture. */
+  private get useLabVariant(): boolean {
+    return this.variant === 'lab' && (this.labFactory?.isAvailable ?? false)
   }
 
   // ---------------------------------------------------------------------------
@@ -492,10 +506,16 @@ export class WorkstationFactory {
       }
 
       // Signature item — unique per-agent personality item on the desk surface
-      if (this.scene.textures.exists(SPRITESHEET_KEYS.GAME_ITEMS)) {
+      // Lab variant uses science items (microscope, beaker, etc.) from LAB_PROPS sheet
+      const sigX = -28
+      if (this.useLabVariant && this.labFactory) {
+        signatureItemSprite = this.labFactory.createSignatureItem(sigX, WS_DESK_Y - 12, nameHash)
+        if (signatureItemSprite) {
+          wsContainer.add(signatureItemSprite)
+          extraDecos.push(signatureItemSprite)
+        }
+      } else if (this.scene.textures.exists(SPRITESHEET_KEYS.GAME_ITEMS)) {
         const sigFrame = getSignatureItem(nameHash)
-        // Place on the opposite side from the sticky note
-        const sigX = -28
         signatureItemSprite = this.scene.add.sprite(sigX, WS_DESK_Y - 12, SPRITESHEET_KEYS.GAME_ITEMS, sigFrame)
           .setScale(0.40)
           .setAlpha(0.65)
@@ -512,6 +532,15 @@ export class WorkstationFactory {
           .setAlpha(0.7)
         wsContainer.add(roomPropSprite)
         extraDecos.push(roomPropSprite)
+      }
+
+      // Lab desk drawer prop — visible only in lab variant
+      if (this.useLabVariant && this.labFactory) {
+        const deskDrawerSprite = this.labFactory.createDeskDrawer(34, WS_DESK_Y + 2)
+        if (deskDrawerSprite) {
+          wsContainer.add(deskDrawerSprite)
+          extraDecos.push(deskDrawerSprite)
+        }
       }
 
       // LED underglow strip — color based on rank

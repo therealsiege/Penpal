@@ -745,6 +745,19 @@ async function main() {
   ]
   await buildStrip(smoothFrames, 'lab-smooth.png')
 
+  // LAB_ENV_PROPS — 8 frames (environmental props, separate from furniture)
+  const propFrames = [
+    makeVentGrate(),     // 0
+    makePipeSection(),   // 1
+    makeFloorPanel(),    // 2
+    makeHazardStripe(),  // 3
+    makeConsolePanel(),  // 4
+    makeCableConduit(),  // 5
+    makeWarningLight(),  // 6
+    makeDrainageGrate(), // 7
+  ]
+  await buildStrip(propFrames, 'lab-env-props.png')
+
   console.log('\nDone. (lab-props.png: run scripts/build-lab-props.mjs)')
 }
 
