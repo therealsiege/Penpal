@@ -148,6 +148,11 @@ export const EVENTS = {
   NAVIGATE_BUILDING: 'navigate-building',
   /** Fired when agent/pod counts update for campus display. Payload: (agents: number, pods: number) */
   CAMPUS_COUNTS_UPDATED: 'campus-counts-updated',
+
+  // --- Cafe ---
+  /** Fired when a patron transitions to a new phase of the coffee service flow.
+   *  Payload: (agentId: string, phase: PatronPhase) */
+  CAFE_PATRON_PHASE: 'cafe:patron-phase',
 } as const
 
 /**
@@ -235,4 +240,8 @@ export interface EventPayloadMap {
   [EVENTS.NAVIGATE_CAMPUS]: []
   [EVENTS.NAVIGATE_BUILDING]: [building: 'office' | 'pod-foundry']
   [EVENTS.CAMPUS_COUNTS_UPDATED]: [agents: number, pods: number]
+
+  // --- Cafe ---
+  /** (agentId: string, phase: string) */
+  [EVENTS.CAFE_PATRON_PHASE]: [agentId: string, phase: string]
 }

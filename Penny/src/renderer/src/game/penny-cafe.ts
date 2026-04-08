@@ -91,6 +91,8 @@ export class PennyCafe implements CoffeeRunHost, ChatHost {
   readonly baristas: Phaser.GameObjects.Container[] = []
   /** Public so CafeCoffeeRunManager can look up home positions. */
   readonly baristaHomeX: number[] = []
+  /** Barista occupancy — true while a barista is actively serving a patron. */
+  readonly baristasBusy: boolean[] = []
   private visitorTimer: Phaser.Time.TimerEvent | null = null
   private steamTimer: Phaser.Time.TimerEvent | null = null
 
@@ -121,9 +123,23 @@ export class PennyCafe implements CoffeeRunHost, ChatHost {
   get width(): number { return CAFE_W }
   get height(): number { return CAFE_H }
 
+  /**
+   * World-space Y where patrons stand to order (the serving counter side).
+   * Local Y = BARISTA_Y(120) + 40 = 160 — just in front of the desk_top_long divider.
+   * Satisfies CoffeeRunHost.
+   */
+  get counterWorldY(): number {
+    return this.container ? this.container.y + 160 : this.worldY - 30
+  }
+
   /** Convert a stool index to world-space X. Satisfies CoffeeRunHost + ChatHost. */
   stoolWorldX(stoolIdx: number): number {
     return (this.worldX - CAFE_W / 2) + STOOL_START_X + stoolIdx * STOOL_GAP
+  }
+
+  /** Expose the coffee run manager for testing. */
+  getCoffeeRunManager(): CafeCoffeeRunManager {
+    return this.coffeeRunManager
   }
 
   /** Attempt to start a chat for a newly seated agent. Satisfies CoffeeRunHost. */
@@ -193,6 +209,7 @@ export class PennyCafe implements CoffeeRunHost, ChatHost {
     // ── Baristas — walk between back counter and serving counter ──
     this.baristaHomeX.length = 0
     this.baristas.length = 0
+    this.baristasBusy.length = 0
     for (const cfg of [
       { homeX: CAFE_W * 0.35, charIdx: 1, name: 'Latte Larry' },
       { homeX: CAFE_W * 0.65, charIdx: 0, name: 'Mocha Maya' },
@@ -208,6 +225,7 @@ export class PennyCafe implements CoffeeRunHost, ChatHost {
       }).setOrigin(0.5, 0))
       this.baristas.push(bc)
       this.baristaHomeX.push(cfg.homeX)
+      this.baristasBusy.push(false)
       scene.tweens.add({ targets: bc, angle: { from: -3, to: 3 }, duration: 800, yoyo: true, repeat: -1, ease: 'Sine.easeInOut', delay: Math.random() * 500 })
       scene.tweens.add({ targets: bc, x: cfg.homeX + 12, duration: 1800, yoyo: true, repeat: -1, ease: 'Sine.easeInOut', delay: Math.random() * 800 })
     }
@@ -294,6 +312,7 @@ export class PennyCafe implements CoffeeRunHost, ChatHost {
   private destroyVisuals(): void {
     this.baristas.length = 0
     this.baristaHomeX.length = 0
+    this.baristasBusy.length = 0
     if (this.visitorTimer) { this.visitorTimer.destroy(); this.visitorTimer = null }
     if (this.steamTimer) { this.steamTimer.destroy(); this.steamTimer = null }
     if (this.container) {
