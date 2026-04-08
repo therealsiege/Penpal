@@ -197,6 +197,10 @@ contextBridge.exposeInMainWorld('api', {
   // Context Health
   contextHealth: () => ipcRenderer.invoke('evals:context-health'),
   contextHealthAgent: (agentId: string) => ipcRenderer.invoke('evals:context-health-agent', agentId),
+  // Claude Usage
+  getClaudeUsage: () => ipcRenderer.invoke('claude-usage:get') as Promise<import('../renderer/src/types').ClaudeUsageData | null>,
+  refreshClaudeUsage: () => ipcRenderer.invoke('claude-usage:refresh') as Promise<import('../renderer/src/types').ClaudeUsageData>,
+  showClaudeLogin: () => ipcRenderer.invoke('claude-usage:login') as Promise<boolean>,
   // Context-Engineered Rich APIs (full ContextEngineeredResponse shape)
   getAgentStatusesRich: () => ipcRenderer.invoke('agents:statuses'),
   getClaudeSessionsRich: () => ipcRenderer.invoke('sessions:list'),
