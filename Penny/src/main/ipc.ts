@@ -44,6 +44,7 @@ import {
   focusCursorIDE,
 } from './cursor-sessions'
 import { getOpencodeSessions } from './opencode-sessions'
+import { getClaudeUsage, showClaudeLogin, refreshClaudeUsage } from './claude-usage'
 import {
   getAgentConfigs,
   getAgentConfig,
@@ -179,7 +180,7 @@ import {
 } from './config-reader'
 import type { PreferenceStore } from './preferences'
 import { contextResponse } from './context-response'
-import { getClaudeUsage, refreshClaudeUsage, showClaudeLogin } from './claude-usage'
+// claude-usage already imported above
 
 export const ipcEvents = new EventEmitter()
 
@@ -1506,4 +1507,5 @@ export function registerPreferenceIpc(store: PreferenceStore) {
     const count = await generator.export(outPath, 'jsonl')
     return { count, path: outPath }
   }))
+
 }

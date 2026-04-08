@@ -1,3 +1,11 @@
+export interface ClaudeUsageData {
+  tokensUsed: number
+  tokensLimit: number
+  resetAt: string | null
+  plan: string | null
+  lastFetched: string
+}
+
 export interface HealthCheck {
   name: string
   status: 'ok' | 'fail'
