@@ -1245,7 +1245,17 @@ export class OfficeScene extends Phaser.Scene {
     // Reactor glow + ambient pulse VFX (both internally throttled)
     this.background.tickReactorGlow(time)
     // GDS prop overlay animations (rotating knobs, LEDs, pulse glows)
-    if (this.background.hasGdsScene()) this.background.updateGdsPropOverlays(_delta)
+    if (this.background.hasGdsScene()) {
+      this.background.updateGdsPropOverlays(_delta)
+      // Laser door proximity — collect agent world positions and pass to door system
+      const agentPositions: { x: number; y: number }[] = []
+      for (const room of this.rooms.values()) {
+        for (const ws of room.workstations.values()) {
+          agentPositions.push({ x: ws.container.x + room.x, y: ws.container.y + room.y })
+        }
+      }
+      this.background.updateGdsLaserDoors(agentPositions)
+    }
     // Keep particle system informed about active agent state for corridor particles
     if (this.particles) {
       const hasActiveAgent = this.agents.some(
