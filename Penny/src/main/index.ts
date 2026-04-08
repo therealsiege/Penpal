@@ -24,6 +24,7 @@ import { PreferenceCollector, PreferenceStore, connectCollector } from './prefer
 import { initAutoUpdater } from './auto-updater'
 import { infraUp, infraDown } from './data-scripts'
 import { taskOutcomeCollector } from './evals/collectors/task-outcomes'
+import { initClaudeUsageScraper, destroyClaudeUsageScraper } from './claude-usage'
 
 // Electron apps launched from Dock/Finder get a minimal PATH (/usr/bin:/bin:/usr/sbin:/sbin).
 // Ensure common tool locations are reachable (homebrew, nvm, local bin, etc.)
@@ -122,6 +123,7 @@ app.whenReady().then(() => {
   connectCollector(preferenceCollector, preferenceStore)
   registerPreferenceIpc(preferenceStore)
   createWindow()
+  initClaudeUsageScraper()
   startSlackBridge()
   startFileWatcher()
   taskOutcomeCollector.start()
@@ -149,6 +151,7 @@ app.on('before-quit', async () => {
   stopOrchestrator()
   stopPtySweep()
   destroyAllPtys()
+  destroyClaudeUsageScraper()
   await stopSlackBridge()
   await closeGraph()
   await infraDown()

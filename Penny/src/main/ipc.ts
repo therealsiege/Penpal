@@ -35,6 +35,7 @@ import {
   focusCursorIDE,
 } from './cursor-sessions'
 import { getOpencodeSessions } from './opencode-sessions'
+import { getClaudeUsage, showClaudeLogin, refreshClaudeUsage } from './claude-usage'
 import {
   getAgentConfigs,
   getAgentConfig,
@@ -1465,4 +1466,8 @@ export function registerPreferenceIpc(store: PreferenceStore) {
     const count = await generator.export(outPath, 'jsonl')
     return { count, path: outPath }
   }))
+
+  ipcMain.handle('claude:usage', wrapHandler(() => getClaudeUsage()))
+  ipcMain.handle('claude:login', wrapHandler(() => showClaudeLogin()))
+  ipcMain.handle('claude:refresh', wrapHandler(() => refreshClaudeUsage()))
 }

@@ -29,6 +29,7 @@ import type {
   EvalStats,
   PreferenceStats,
   PreferenceEvent,
+  ClaudeUsageData,
 } from './types'
 
 interface ContextEngineeredResponse<T> {
@@ -217,6 +218,9 @@ declare global {
       vaultSearchRich: (query: string, glob?: string, limit?: number) => Promise<ContextEngineeredResponse<VaultSearchResult[]>>
       orchestratorQueueRich: () => Promise<ContextEngineeredResponse<Task[]>>
       orchestratorAgentHealthRich: () => Promise<ContextEngineeredResponse<AgentHealthStatus[]>>
+      claudeUsage: () => Promise<ClaudeUsageData | null>
+      claudeLogin: () => Promise<boolean>
+      claudeRefreshUsage: () => Promise<ClaudeUsageData | null>
     }
   }
 }
