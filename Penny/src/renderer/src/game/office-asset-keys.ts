@@ -599,44 +599,6 @@ export const CABLE_FRAMES = Object.freeze({
 } as const)
 
 // ---------------------------------------------------------------------------
-// Lab tileset frame indices (48x48 cells in LAB_MAIN_TILESET spritesheet)
-// ---------------------------------------------------------------------------
-
-export const LAB_TILESET_FRAMES = Object.freeze({
-  WALL_TOP:      0,
-  WALL_RIGHT:    1,
-  WALL_BOTTOM:   2,
-  WALL_LEFT:     3,
-  CORNER_TL:     4,
-  CORNER_TR:     5,
-  CORNER_BL:     6,
-  CORNER_BR:     7,
-  INNER_TOP:     8,
-  INNER_RIGHT:   9,
-  INNER_BOTTOM: 10,
-  INNER_LEFT:   11,
-  HEX_FLOOR_A:  12,
-  HEX_FLOOR_B:  13,
-  PLAIN_FLOOR:  14,
-  GRATED_FLOOR: 15,
-} as const)
-
-// ---------------------------------------------------------------------------
-// Lab smooth corner frame indices (48x48 cells in LAB_SMOOTH spritesheet)
-// ---------------------------------------------------------------------------
-
-export const LAB_SMOOTH_FRAMES = Object.freeze({
-  OUTER_TL: 0,
-  OUTER_TR: 1,
-  OUTER_BL: 2,
-  OUTER_BR: 3,
-  INNER_TL: 4,
-  INNER_TR: 5,
-  INNER_BL: 6,
-  INNER_BR: 7,
-} as const)
-
-// ---------------------------------------------------------------------------
 // Lab environment props frame indices (48x48 cells in lab-env-props.png)
 // ---------------------------------------------------------------------------
 
