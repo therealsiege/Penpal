@@ -2165,3 +2165,33 @@ broken
 - Result: PASS (2/2 iterations)
 - Key output: RESULT: PASS
 
+
+### Workflow: single candidate task (2026-04-09)
+- Task: single candidate task
+- Team: solver-a / reviewer-b / executor-c
+- Result: PASS (1/1 iterations)
+- Key output: RESULT: PASS
+
+### Workflow: pod quality pass (2026-04-09)
+- Task: pod quality pass
+- Team: nextjs-frontend / ui-designer / electron-dev
+- Result: PASS (1/1 iterations)
+- Key output: RESULT: PASS
+
+### Workflow: multi candidate task (2026-04-09)
+- Task: multi candidate task
+- Team: solver-a / reviewer-b / executor-c
+- Result: PASS (1/1 iterations)
+- Key output: RESULT: PASS
+
+### Workflow: invalid self eval task (2026-04-09)
+- Task: invalid self eval task
+- Team: solver-a / reviewer-b / executor-c
+- Result: PASS (1/1 iterations)
+- Key output: RESULT: PASS
+
+### Workflow: rejected (2026-04-09)
+- Task: rejected
+- Team: fullstack-dev / backend-arch / electron-dev
+- Result: FAIL (1/2 iterations)
+- Key output: solver output
