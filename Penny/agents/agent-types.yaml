@@ -543,33 +543,54 @@ runtime_profiles:
   default_profile: max
 
   max:
-    model: opus
+    description: "Max plan — Opus for plan+execute, Sonnet for validate"
     timeout_multiplier: 1
-    description: "Max plan Opus — fast, uses subscription quota"
+    phases:
+      plan:
+        model: opus
+      execute:
+        model: opus
+      validate:
+        model: sonnet
 
   economic:
-    model: ollama:coder:30b
+    description: "Local Ollama coder:30b — slow, zero cost, unlimited"
     timeout_multiplier: 5
     ollama_url: "http://localhost:11434"
-    description: "Local Ollama coder:30b — slow, zero cost, unlimited"
+    phases:
+      plan:
+        model: ollama:coder:30b
+      execute:
+        model: ollama:coder:30b
+      validate:
+        model: ollama:coder:30b
 
   sonnet:
-    model: sonnet
+    description: "Balanced — Sonnet for all three phases"
     timeout_multiplier: 1.5
-    description: "Sonnet — faster output than Opus, lower quota usage"
+    phases:
+      plan:
+        model: sonnet
+      execute:
+        model: sonnet
+      validate:
+        model: sonnet
 
 # ── Per-Phase MCP Tool Allowlisting ───────────────────────────────────
 # Restricts which MCP profiles are available per pod phase.
 # If not specified, agents use their own default mcpProfile.
 phase_tools:
-  solver:
+  plan:
     - developer
     - serena
     - context7
     - github
-  reviewer:
+  execute:
     - developer
-  executor:
+    - serena
+    - context7
+    - github
+  validate:
     - qa-executor
     - playwright
     - github
