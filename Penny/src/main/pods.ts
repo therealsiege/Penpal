@@ -14,6 +14,7 @@ import { getPhaseConfig, type PhaseConfig } from './pods/phase-config'
 import { podQualityCollector, type PodQualityEvent } from './evals/collectors/pod-quality'
 import { evalHarness } from './evals/harness'
 import { resolveProjectPath } from './project-paths'
+import { addEntry, updateEntry, getActiveEntries, type FlightBoardEntry } from './flight-board'
 
 export type { PhaseConfig } from './pods/phase-config'
 
@@ -496,19 +497,125 @@ export function formatReviewerRejectError(c: ReviewerCritique): string {
   return `Reviewer rejected: ${c.summary}${tail}`
 }
 
+// ── Planning broadcast helpers (exported for tests) ─────────────────────────
+
+const FILE_PATH_PREFIXES = ['src/', 'public/', 'tests/', 'test/', 'scripts/', 'agents/', 'data/']
+const FILE_EXTENSIONS = ['.ts', '.tsx', '.js', '.jsx', '.json', '.yaml', '.yml', '.md']
+const ROOT_CONFIG_PATTERNS = /^[\w.-]+\.(json|yaml|yml|ts|tsx|js|md)$/
+
+/**
+ * Heuristic extractor: scan output for path-like tokens.
+ * Returns deduplicated list of paths, capped at 20.
+ */
+export function extractFilesFromOutput(output: string): string[] {
+  const seen = new Set<string>()
+  const results: string[] = []
+
+  // Match path-like tokens: word chars, slashes, dots, dashes
+  const tokenRe = /[\w./\\-]+/g
+  let match: RegExpExecArray | null
+  while ((match = tokenRe.exec(output)) !== null) {
+    // Strip trailing punctuation (periods, commas, etc.) that may be sentence punctuation
+    const token = match[0].replace(/[.,;:!?]+$/, '')
+    if (token.length < 3 || token.length > 200) continue
+
+    const isPathPrefixed = FILE_PATH_PREFIXES.some(p => token.startsWith(p))
+    const hasKnownExt = FILE_EXTENSIONS.some(e => token.endsWith(e))
+    const isRootConfig = ROOT_CONFIG_PATTERNS.test(token)
+
+    if ((isPathPrefixed && hasKnownExt) || (isRootConfig && !token.includes('/'))) {
+      if (!seen.has(token)) {
+        seen.add(token)
+        results.push(token)
+        if (results.length >= 20) break
+      }
+    }
+  }
+  return results
+}
+
+/**
+ * Extract the first 2–3 meaningful sentences from solver output as a plan summary.
+ * Caps at 400 chars.
+ */
+export function extractPlanSummary(output: string): string {
+  if (!output.trim()) return ''
+
+  const lines = output.split('\n')
+  const sentences: string[] = []
+  let charCount = 0
+
+  for (const line of lines) {
+    const trimmed = line.trim()
+    // Skip empty lines and markdown headers
+    if (!trimmed || trimmed.startsWith('#') || trimmed.startsWith('```') || trimmed.startsWith('---')) continue
+
+    if (charCount + trimmed.length > 400) {
+      const remaining = 400 - charCount
+      if (remaining > 20 && sentences.length === 0) {
+        sentences.push(trimmed.slice(0, remaining))
+      }
+      break
+    }
+    sentences.push(trimmed)
+    charCount += trimmed.length + 1
+    if (sentences.length >= 3) break
+  }
+
+  return sentences.join(' ').slice(0, 400)
+}
+
+const MAX_FLIGHT_BOARD_BLOCK_CHARS = 2000
+
+/**
+ * Format the flight board context block for injection into solver prompts.
+ * Returns '' if entries is empty. Stays under 2000 chars.
+ */
+export function formatFlightBoardContext(entries: FlightBoardEntry[]): string {
+  if (entries.length === 0) return ''
+
+  const lines: string[] = ['--- ACTIVE POD WORK (DO NOT CONFLICT) ---']
+  let totalChars = lines[0].length
+
+  for (const entry of entries) {
+    const files = entry.filesInFlight
+    let fileList: string
+    if (files.length === 0) {
+      fileList = '(no files claimed yet)'
+    } else if (files.length <= 5) {
+      fileList = files.join(', ')
+    } else {
+      fileList = files.slice(0, 5).join(', ') + `, ...${files.length - 5} more`
+    }
+    const line = `Pod "${entry.task}" (${entry.podId}): editing ${fileList}`
+    if (totalChars + line.length + 1 > MAX_FLIGHT_BOARD_BLOCK_CHARS - 100) break
+    lines.push(line)
+    totalChars += line.length + 1
+  }
+
+  lines.push('---')
+  lines.push('Plan your approach to avoid modifying these files if possible.')
+  lines.push('If you must edit a file another pod is touching, note the overlap in your plan.')
+
+  return lines.join('\n')
+}
+
 // ── Message formatting ──────────────────────────────────────────────────────
 
 function formatSolverMessage(
   wf: PodWorkflow,
   feedbackFromExecutor?: string,
   feedbackFromReviewer?: string,
+  flightBoardContext?: string,
 ): string {
   const header = `## Pod Workflow: ${wf.name}\n### Stage: Solve (Iteration ${wf.iteration}/${wf.maxIterations})\n`
   const projectSection = `**Project Directory**: \`${wf.cwd}\`\n`
   const taskSection = `${projectSection}**Task**: ${wf.task}\n`
+  const contextBlock = flightBoardContext ? `\n${flightBoardContext}\n` : ''
 
   if (feedbackFromReviewer || feedbackFromExecutor) {
     const blocks: string[] = [header, taskSection]
+    if (contextBlock) blocks.push(contextBlock)
     if (feedbackFromReviewer) {
       blocks.push(`**Feedback from Reviewer (requested changes)**:\n${feedbackFromReviewer}\n`)
     }
@@ -534,8 +641,9 @@ function formatSolverMessage(
   return [
     header,
     taskSection,
+    contextBlock,
     '**Instructions**: Implement this task completely. When finished, provide a summary of what you built and which files were changed.',
-  ].join('\n')
+  ].filter(s => s !== '').join('\n')
 }
 
 function formatReviewerMessage(wf: PodWorkflow): string {
@@ -887,9 +995,13 @@ async function runSolveStage(wf: PodWorkflow, feedback?: string): Promise<boolea
 
   const candidateCount = wf.solverCandidateCount
 
+  // Build flight board context from other active pods
+  const otherEntries = getActiveEntries().filter(e => e.podId !== wf.id)
+  const flightBoardContext = formatFlightBoardContext(otherEntries)
+
   if (candidateCount <= 1) {
     // ── Single candidate path (original behavior) ──
-    const prompt = formatSolverMessage(wf, feedback, reviewerFeedback)
+    const prompt = formatSolverMessage(wf, feedback, reviewerFeedback, flightBoardContext)
     console.log(`[pods] Running solver ${wf.solver.agentId} headless in ${wf.cwd}`)
     const startMs = Date.now()
     const result = await runAgentHeadless(wf.solver.agentId, wf.cwd, prompt, {
@@ -912,13 +1024,21 @@ async function runSolveStage(wf: PodWorkflow, feedback?: string): Promise<boolea
       agentId: wf.solver.agentId,
       durationMs: result.durationMs ?? (Date.now() - startMs),
     }]
+
+    // Broadcast files + plan summary to flight board after first iteration solve
+    if (wf.iteration === 1) {
+      const filesInFlight = extractFilesFromOutput(wf.solver.output || '')
+      const planSummary = extractPlanSummary(wf.solver.output || '')
+      updateEntry(wf.id, { planSummary, filesInFlight, status: 'solving' })
+    }
+
     console.log(`[pods] Solver done (${Math.round((result.durationMs ?? 0) / 1000)}s)`)
     return true
   }
 
   // ── Multi-candidate path (best-of-N) ──
   console.log(`[pods] Running ${candidateCount} solver candidates in parallel`)
-  const prompt = formatSolverMessage(wf, feedback, reviewerFeedback)
+  const prompt = formatSolverMessage(wf, feedback, reviewerFeedback, flightBoardContext)
   const startMs = Date.now()
 
   const promises = Array.from({ length: candidateCount }, (_, i) =>
@@ -1015,6 +1135,13 @@ async function runSolveStage(wf: PodWorkflow, feedback?: string): Promise<boolea
     // Single candidate survived or self-eval disabled
     wf.solver.output = candidates[0].output
     wf.solver.status = 'complete'
+  }
+
+  // Broadcast files + plan summary to flight board after first iteration solve
+  if (wf.iteration === 1) {
+    const filesInFlight = extractFilesFromOutput(wf.solver.output || '')
+    const planSummary = extractPlanSummary(wf.solver.output || '')
+    updateEntry(wf.id, { planSummary, filesInFlight, status: 'solving' })
   }
 
   console.log(`[pods] Solver done with ${candidates.length}/${candidateCount} candidates`)
@@ -1232,6 +1359,9 @@ async function runWorkflow(wf: PodWorkflow): Promise<void> {
       finalizePodQuality(wf)
     }
     activeWorkflowPromises.delete(wf.id)
+    if (process.env.VITEST !== 'true') {
+      updateEntry(wf.id, { status: wf.status === 'complete' ? 'merged' : 'failed' })
+    }
   }
 }
 
@@ -1323,6 +1453,11 @@ export function createPod(task: string, opts: CreatePodOpts = {}): PodWorkflow {
   if (cwdErr) {
     finalizePodQuality(wf)
     return wf
+  }
+
+  // Register on flight board (skip during Vitest to avoid writing real data files in tests)
+  if (process.env.VITEST !== 'true') {
+    addEntry({ podId: wf.id, task: wf.task, cwd: wf.cwd })
   }
 
   // Avoid appending to real Penny/data during Vitest (createPod is used heavily in tests).
