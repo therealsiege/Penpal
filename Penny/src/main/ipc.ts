@@ -53,6 +53,7 @@ import {
   getPodPresets,
   type CreatePodOpts,
 } from './pods'
+import { getActiveEntries, getFilesInFlight } from './flight-board'
 
 function parsePodCreateOpts(opts: unknown): CreatePodOpts {
   const raw = opts && typeof opts === 'object' && !Array.isArray(opts) ? (opts as Record<string, unknown>) : {}
@@ -972,6 +973,12 @@ export function registerIpcHandlers() {
   }))
 
   ipcMain.handle('pod:presets', wrapHandler(() => getPodPresets()))
+
+  // ── Flight Board ──────────────────────────────────────────────────────────
+  ipcMain.handle('flight-board:list', wrapHandler(() => getActiveEntries()))
+  ipcMain.handle('flight-board:files-in-flight', wrapHandler(() =>
+    Object.fromEntries(getFilesInFlight()),
+  ))
 
   // ── Vault File Manager ───────────────────────────────────────────────────
   ipcMain.handle('vault:list', wrapHandler((relativePath: unknown) => {
