@@ -17,7 +17,7 @@ const IGNORED_DIRS = new Set([
 ])
 
 /** Absolute paths checked before relative candidates. */
-const VAULT_SFX_DIR = path.join(HOME_DIR, 'Documents', 'Vault', 'Sound Effects')
+const VAULT_SFX_DIR = path.join(HOME_DIR, 'Documents', 'Sound Effects')
 
 const CANDIDATE_DIRS = [
   'sound-effects',
