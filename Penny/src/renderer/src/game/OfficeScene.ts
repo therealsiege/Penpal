@@ -1043,6 +1043,9 @@ export class OfficeScene extends Phaser.Scene {
     }
   }
 
+  /** Expose the workstation subsystem for test harness access (scene.wsAnimator). */
+  get wsAnimator(): OfficeWorkstations { return this.wsManager }
+
   // wsManager lazy initializer — workstation lifecycle subsystem
   private ensureWsManager(): void {
     if (!this.wsManager) {
