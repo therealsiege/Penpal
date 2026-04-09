@@ -91,6 +91,14 @@ export class OfficePods {
     this.rivalryGraphics?.clear()
   }
 
+  /** Hide all pod visuals (lines, dots, rivalry). */
+  setVisible(visible: boolean): void {
+    if (!visible) {
+      this.clearPodLineVisuals()
+      this.clearRivalryVisuals()
+    }
+  }
+
   hasAnimatedPods(): boolean {
     return this.podLines.some(t => this.isPodAnimatedStatus(t.status))
   }

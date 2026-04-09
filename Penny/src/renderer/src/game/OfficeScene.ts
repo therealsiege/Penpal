@@ -1216,28 +1216,32 @@ export class OfficeScene extends Phaser.Scene {
       }
     }
 
-    if (
-      lodLevel >= 2 &&
-      this.pods.podLines.length > 0 &&
-      (this.pods.isDirty() || this.pods.hasAnimatedPods()) &&
-      time - this.pods.getLastDrawAt() >= POD_REFRESH_MS
-    ) {
-      this.pods.drawPodLines(time, this.rooms)
-      this.pods.setLastDrawAt(time)
-      this.pods.clearDirty()
-    }
-    // MCP server connection lines — skip in GDS mode (room positions are 0,0)
-    if (!this.background.hasGdsScene() && lodLevel >= 2 && (this.mcp.isDirty() || this.mcp.hasActiveConnections(this.rooms)) && time - this.mcp.getLastDrawAt() >= MCP_REFRESH_MS) {
-      this.mcp.drawMcpLines(time, this.rooms)
-      this.mcp.setLastDrawAt(time)
-      this.mcp.clearDirty()
-    }
-    // Hide MCP lines at L1 overview zoom or in GDS mode
-    if ((lodLevel < 2 || this.background.hasGdsScene()) && this.mcp) this.mcp.setVisible(false)
-    else if (lodLevel >= 2 && this.mcp) this.mcp.setVisible(true)
-    // Rivalry connecting lines — electric blue dashes between rival agents (every 2.5s)
-    if (lodLevel >= 2 && this.pods.hasRivalries() && time - this.pods.getLastRivalryDrawAt() >= 2500) {
-      this.pods.drawRivalryLines(time, this.rooms)
+    // Pod lines, MCP lines, rivalry lines — skip entirely in GDS mode (sessions only)
+    if (!this.background.hasGdsScene()) {
+      if (
+        lodLevel >= 2 &&
+        this.pods.podLines.length > 0 &&
+        (this.pods.isDirty() || this.pods.hasAnimatedPods()) &&
+        time - this.pods.getLastDrawAt() >= POD_REFRESH_MS
+      ) {
+        this.pods.drawPodLines(time, this.rooms)
+        this.pods.setLastDrawAt(time)
+        this.pods.clearDirty()
+      }
+      if (lodLevel >= 2 && (this.mcp.isDirty() || this.mcp.hasActiveConnections(this.rooms)) && time - this.mcp.getLastDrawAt() >= MCP_REFRESH_MS) {
+        this.mcp.drawMcpLines(time, this.rooms)
+        this.mcp.setLastDrawAt(time)
+        this.mcp.clearDirty()
+      }
+      if (lodLevel < 2 && this.mcp) this.mcp.setVisible(false)
+      else if (lodLevel >= 2 && this.mcp) this.mcp.setVisible(true)
+      if (lodLevel >= 2 && this.pods.hasRivalries() && time - this.pods.getLastRivalryDrawAt() >= 2500) {
+        this.pods.drawRivalryLines(time, this.rooms)
+      }
+    } else {
+      // GDS mode: hide all overlay lines
+      if (this.mcp) this.mcp.setVisible(false)
+      this.pods.setVisible(false)
     }
     if (this.background.getCorridorSegments().length > 0 && time - this.lastHallwayPulseAt >= 90) {
       this.background.drawHallwayIndicators(time)
@@ -1571,7 +1575,9 @@ export class OfficeScene extends Phaser.Scene {
   setPodWorkflows(workflows: PodLineInfo[]): void {
     if (!this.pods) return
     this.pods.setPodLines(workflows)
-    if (this.lastLodLevel >= 2) {
+    if (this.background.hasGdsScene()) {
+      this.pods.setVisible(false)
+    } else if (this.lastLodLevel >= 2) {
       this.pods.drawPodLines(this.time.now, this.rooms)
       this.pods.setLastDrawAt(this.time.now)
       this.pods.clearDirty()
@@ -1698,7 +1704,7 @@ export class OfficeScene extends Phaser.Scene {
       }
     }
     this.pods.markDirty()
-    if (this.lastLodLevel >= 2) {
+    if (!this.background.hasGdsScene() && this.lastLodLevel >= 2) {
       this.pods.drawPodLines(this.time.now, this.rooms)
       this.pods.setLastDrawAt(this.time.now)
       this.pods.clearDirty()
