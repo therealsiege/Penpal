@@ -1154,15 +1154,14 @@ export class WorkstationFactory {
         if (slot) {
           cx = slot.x - room.x
           cy = slot.y - room.y
+          ws.container.setVisible(true)
           // Apply directional sit frame (may not have been available at creation time)
           const charIdx = this.host.getAgentCharacterIndex(ws.state ?? { config: { name: agentId } } as AgentState)
           const sitKey = charIdx === 1 ? ANIM_KEYS.SIT_2 : ANIM_KEYS.SIT_1
           ws.sprite.setTexture(sitKey, slot.sitFrame)
-        } else if (i < layout.deskPositions.length) {
-          // Fall back to grid if all GDS slots taken
-          cx = layout.deskPositions[i].x
-          cy = layout.deskPositions[i].y
         } else {
+          // No GDS desk slot available — hide this workstation entirely
+          ws.container.setVisible(false)
           return
         }
       } else {
