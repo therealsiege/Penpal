@@ -253,17 +253,16 @@ export function buildAgentTaggedSystemPrompt(agentId: string, opts: BuildCliOpts
 
   const isDispatch = opts.dispatch || agent.autonomy === 'dispatch'
 
-  // Headless agents get a lean prompt — skip shared memory and verbose persona
+  // All agents receive shared team knowledge (CLAUDE.md)
   let sharedMemoryNote = ''
-  if (!opts.headless) {
-    const sharedMemoryPath = path.join(getAgentsDir(), 'CLAUDE.md')
-    if (fs.existsSync(sharedMemoryPath)) {
-      try {
-        const sharedContent = fs.readFileSync(sharedMemoryPath, 'utf-8')
-        sharedMemoryNote = `\n\n--- SHARED TEAM KNOWLEDGE ---\n${sharedContent}\n--- END SHARED TEAM KNOWLEDGE ---`
-      } catch {
-        sharedMemoryNote = ''
-      }
+  const sharedMemoryPath = path.join(getAgentsDir(), 'CLAUDE.md')
+  if (fs.existsSync(sharedMemoryPath)) {
+    try {
+      const sharedContent = fs.readFileSync(sharedMemoryPath, 'utf-8')
+      sharedMemoryNote = `\n\n--- SHARED TEAM KNOWLEDGE ---\n${sharedContent}\n--- END SHARED TEAM KNOWLEDGE ---`
+      console.log('[agent] injected shared memory:', sharedMemoryNote.length, 'chars')
+    } catch {
+      sharedMemoryNote = ''
     }
   }
 
