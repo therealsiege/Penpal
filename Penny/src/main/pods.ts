@@ -19,11 +19,28 @@ export type { PhaseConfig } from './pods/phase-config'
 
 // ── Runtime Profiles ────────────────────────────────────────────────────────
 
-export interface RuntimeProfile {
+export type PodPhase = 'plan' | 'execute' | 'validate'
+
+export interface PhaseModel {
   model: string
+}
+
+export interface RuntimeProfile {
+  /** Per-phase model configuration. */
+  phases: Record<PodPhase, PhaseModel>
   timeoutMultiplier: number
   ollamaUrl?: string
   description: string
+}
+
+const DEFAULT_PROFILE: RuntimeProfile = {
+  phases: {
+    plan: { model: 'opus' },
+    execute: { model: 'opus' },
+    validate: { model: 'sonnet' },
+  },
+  timeoutMultiplier: 1,
+  description: 'default',
 }
 
 /** Load runtime profiles from agent-types.yaml. Returns profile map + default profile ID. */
@@ -41,8 +58,14 @@ function loadRuntimeProfiles(): { profiles: Record<string, RuntimeProfile>; defa
     for (const [key, val] of Object.entries(rp)) {
       if (key === 'default_profile' || typeof val !== 'object' || !val) continue
       const v = val as Record<string, unknown>
+      const phases = v.phases as Record<string, Record<string, string>> | undefined
+
       profiles[key] = {
-        model: (v.model as string) || 'opus',
+        phases: {
+          plan: { model: phases?.plan?.model || 'opus' },
+          execute: { model: phases?.execute?.model || 'opus' },
+          validate: { model: phases?.validate?.model || 'sonnet' },
+        },
         timeoutMultiplier: (v.timeout_multiplier as number) || 1,
         ollamaUrl: v.ollama_url as string | undefined,
         description: (v.description as string) || '',
@@ -58,7 +81,7 @@ function loadRuntimeProfiles(): { profiles: Record<string, RuntimeProfile>; defa
 export function resolveRuntimeProfile(profileName?: string): RuntimeProfile {
   const { profiles, defaultProfile } = loadRuntimeProfiles()
   const name = profileName || defaultProfile
-  return profiles[name] ?? { model: 'opus', timeoutMultiplier: 1, description: 'default' }
+  return profiles[name] ?? DEFAULT_PROFILE
 }
 
 // ── Types ───────────────────────────────────────────────────────────────────
@@ -301,11 +324,10 @@ function getTimeout(wf: PodWorkflow, baseMs: number): number {
   return Math.round(baseMs * mult)
 }
 
-/** Get the model override for a workflow, or undefined to use the agent's default. */
-function getModelOverride(wf: PodWorkflow): string | undefined {
-  const model = wf.resolvedProfile?.model
-  // Only override if it's not the agent's default ('opus' is the default for most agents)
-  return model && model !== 'opus' ? model : undefined
+/** Get the model override for a specific pod phase. */
+function getModelOverride(wf: PodWorkflow, phase: PodPhase): string | undefined {
+  const model = wf.resolvedProfile?.phases?.[phase]?.model
+  return model || undefined
 }
 
 // ── Self-Eval Helpers (exported for tests) ──────────────────────────────────
@@ -813,7 +835,7 @@ async function runSelfFixStage(wf: PodWorkflow): Promise<boolean> {
     const result = await runAgentHeadless(wf.executor.agentId, wf.cwd, prompt, {
       timeoutMs: getTimeout(wf, EXECUTE_TIMEOUT_MS),
       phase: 'executing',
-      modelOverride: getModelOverride(wf),
+      modelOverride: getModelOverride(wf, 'validate'),
     })
 
     wf.selfFixAttempts += 1
@@ -873,7 +895,7 @@ async function runSolveStage(wf: PodWorkflow, feedback?: string): Promise<boolea
     const result = await runAgentHeadless(wf.solver.agentId, wf.cwd, prompt, {
       timeoutMs: getTimeout(wf, EXECUTE_TIMEOUT_MS),
       phase: 'executing',
-      modelOverride: getModelOverride(wf),
+      modelOverride: getModelOverride(wf, 'execute'),
     })
 
     if (!result.success) {
@@ -903,7 +925,7 @@ async function runSolveStage(wf: PodWorkflow, feedback?: string): Promise<boolea
     runAgentHeadless(wf.solver.agentId, wf.cwd, prompt, {
       timeoutMs: getTimeout(wf, EXECUTE_TIMEOUT_MS),
       phase: 'executing',
-      modelOverride: getModelOverride(wf),
+      modelOverride: getModelOverride(wf, 'execute'),
     }).then(result => ({
       index: i + 1,
       result,
@@ -954,7 +976,7 @@ async function runSolveStage(wf: PodWorkflow, feedback?: string): Promise<boolea
       permissionMode: 'plan',
       timeoutMs: getTimeout(wf, PLAN_TIMEOUT_MS),
       phase: 'planning',
-      modelOverride: getModelOverride(wf),
+      modelOverride: getModelOverride(wf, 'plan'),
     })
 
     let selection: SelfEvalResult | null = null
@@ -1009,7 +1031,7 @@ async function runReviewStage(wf: PodWorkflow): Promise<boolean> {
     permissionMode: 'plan',
     timeoutMs: getTimeout(wf, PLAN_TIMEOUT_MS),
     phase: 'reviewing',
-    modelOverride: getModelOverride(wf),
+    modelOverride: getModelOverride(wf, 'plan'),
   })
 
   if (!result.success) {
@@ -1046,8 +1068,9 @@ async function runExecuteStage(wf: PodWorkflow): Promise<{ passed: boolean }> {
   const prompt = formatExecutorMessage(wf, wf.solver.output, wf.reviewer.output, wf.critique)
   console.log(`[pods] Running executor ${wf.executor.agentId} headless in ${wf.cwd}`)
   const result = await runAgentHeadless(wf.executor.agentId, wf.cwd, prompt, {
-    timeoutMs: EXECUTE_TIMEOUT_MS,
+    timeoutMs: getTimeout(wf, EXECUTE_TIMEOUT_MS),
     phase: 'executing',
+    modelOverride: getModelOverride(wf, 'validate'),
   })
 
   if (!result.success) {

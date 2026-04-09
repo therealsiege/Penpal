@@ -120,37 +120,29 @@ function getSizeProfile(size: TShirtSize): SizeProfile {
   return SIZE_PROFILES[size] ?? SIZE_PROFILES[DEFAULT_SIZE]
 }
 
-/** Apply runtime profile override to a size profile. 'economic' label routes to local model with 5x timeout. */
+/** Apply runtime profile override to a size profile. Labels route to per-phase models from agent-types.yaml. */
 function applyRuntimeOverride(profile: SizeProfile, labels: { name: string }[]): SizeProfile {
   const labelNames = labels.map(l => l.name.toLowerCase())
-  let runtimeModel: string | undefined
-  let timeoutMult = 1
+  let profileName: string | undefined
 
-  if (labelNames.includes('economic')) {
-    // Resolve from agent-types.yaml
-    try {
-      const { resolveRuntimeProfile } = require('./pods')
-      const rp = resolveRuntimeProfile('economic')
-      runtimeModel = rp.model
-      timeoutMult = rp.timeoutMultiplier
-    } catch {
-      runtimeModel = 'ollama:coder:30b'
-      timeoutMult = 5
+  if (labelNames.includes('economic')) profileName = 'economic'
+  else if (labelNames.includes('sonnet')) profileName = 'sonnet'
+  else if (labelNames.includes('max')) profileName = 'max'
+
+  if (!profileName) return profile
+
+  try {
+    const { resolveRuntimeProfile } = require('./pods')
+    const rp = resolveRuntimeProfile(profileName)
+    return {
+      ...profile,
+      plannerModel: rp.phases.plan.model,
+      executorModel: rp.phases.execute.model,
+      plannerTimeoutMs: Math.round(profile.plannerTimeoutMs * rp.timeoutMultiplier),
+      executorTimeoutMs: Math.round(profile.executorTimeoutMs * rp.timeoutMultiplier),
     }
-  } else if (labelNames.includes('sonnet')) {
-    runtimeModel = 'sonnet'
-    timeoutMult = 1.5
-  }
-  // 'max' label = no override, use size profile defaults
-
-  if (!runtimeModel) return profile
-
-  return {
-    ...profile,
-    plannerModel: runtimeModel,
-    executorModel: runtimeModel,
-    plannerTimeoutMs: Math.round(profile.plannerTimeoutMs * timeoutMult),
-    executorTimeoutMs: Math.round(profile.executorTimeoutMs * timeoutMult),
+  } catch {
+    return profile
   }
 }
 
