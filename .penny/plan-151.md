@@ -1,184 +1,104 @@
-Now I have all the context needed. Here's the implementation plan:
+Now I have everything needed. Here is the implementation plan:
 
 ---
 
-## Implementation Plan: `tests/e2e/navmesh-walking.spec.ts`
+## Implementation Plan — therealsiege/sidekick#151
 
-**Only one file needs to be created.** All required APIs already exist:
-- `scene.wsManager.triggerWalkBreak(agentId)` → `office-workstation.ts:1260`
-- `scene.getNavMesh().isWalkable(x, y)` → `OfficeScene.ts:1716`, `nav-mesh.ts`
-- NavMesh enabled/disabled flag → `nav-mesh.ts`
-- Walk sprite at depth 9000 → `workstation-animation.ts:1882-1883`
-- `ws.walkBreakTween` sentinel → `workstation-animation.ts:1887` (undefined = walk complete)
+### 1. Extract walk break body into a private method (`Penny/src/renderer/src/game/workstation-animation.ts`)
 
----
+**Where:** In `WorkstationAnimator`, add a new private method below the existing `setupIdleAnimations` method:
 
-### 1. Create `Penny/tests/e2e/navmesh-walking.spec.ts`
-
-Follow the exact pattern of `cafe-automation.spec.ts`. Structure:
-
-**a) Imports & shared context**
-```ts
-import { launchApp, waitForPhaser, evalInScene, type AppContext } from '../electron.setup'
-// ctx, beforeAll (launchApp + waitForPhaser), afterAll (app.close)
+```typescript
+private _executeWalkBreak(ws: WorkstationSprite, agent: AgentState): void
 ```
 
-**b) `patchNavMesh()` helper** — called after `PH.addAgents()`. Unlike `patchForCoffeeRun`, do NOT mock `findPath` (we want real pathfinding):
-```ts
-async function patchNavMesh(): Promise<void> {
-  await ctx.window.evaluate(() => {
-    const scene = (window as any).__PENNY_SCENE__
-    const navMesh = (scene as any).navMesh
-    if (navMesh) navMesh.disabled = false
-  })
+Move the entire body of the `walkBreakTimer` callback (the code after the `stillIdle` guard — finding navMesh, owner room, computing world/target coords, clamp, pathfind, create walkSprite, PathWalker, finishWalk) into this method. The timer callback becomes:
+
+```typescript
+callback: () => {
+  if (!ws.state || ws.walkBreakTween || !ws.sprite.visible) return
+  const stillIdle = !ws.state.needsInteraction &&
+    ws.state.sessionMode !== 'working' && ...
+  if (!stillIdle) return
+  this._executeWalkBreak(ws, agent)
 }
 ```
 
-**c) `triggerWalkBreakFor(agentId)` helper**:
-```ts
-// returns true if walk started
-await ctx.window.evaluate((id) => {
-  const scene = (window as any).__PENNY_SCENE__
-  return !!(scene as any).wsManager?.triggerWalkBreak(id)
-}, agentId)
-```
+Inside `_executeWalkBreak`, `gdsLock` is recomputed as `this.host.getOrAssignGdsDeskSlot != null` and `base` via `getAgentCharacterIndex(agent) === 1 ? FRAME_WALK_2_BASE : FRAME_WALK_1_BASE` (same as the existing timer body).
 
-**d) `pollWalkSpritePositions(durationMs, intervalMs)` helper** — polls scene children for sprites at depth 9000 (the walk sprite), collects `{x, y}` samples:
-```ts
-// Use page.waitForTimeout in a loop, evalInScene each iteration:
-// (scene as any).children.list.filter(c => c.depth === 9000 && c.active && c.type === 'Sprite')
-//   .map(s => ({ x: s.x, y: s.y }))
-```
+### 2. Add `triggerWalkBreak(agentId: string): boolean` to `WorkstationAnimator`
 
-**e) `waitForWalkComplete(agentId, timeoutMs=8000)` helper** — polls until `ws.walkBreakTween === undefined`:
-```ts
-await ctx.window.waitForFunction((id) => {
-  const scene = (window as any).__PENNY_SCENE__
-  for (const room of (scene as any).wsManager?.getRooms?.()?.values() ?? []) {
-    const ws = room.workstations?.get(id)
-    if (ws) return !ws.walkBreakTween
+```typescript
+triggerWalkBreak(agentId: string): boolean {
+  for (const room of this.host.getRooms().values()) {
+    const ws = room.workstations.get(agentId)
+    if (!ws?.state || ws.walkBreakTween) continue
+    this._executeWalkBreak(ws, ws.state)
+    return true
   }
   return false
-}, agentId, { timeout: timeoutMs })
+}
 ```
 
-**f) `getAgentWorldPos(agentId)` helper** — reads `room.x + ws.container.x`, `room.y + ws.container.y`:
-```ts
-return evalInScene(ctx.window, (scene) => {
-  for (const room of (scene as any).wsManager?.rooms?.values() ?? []) {
-    const ws = room.workstations?.get(agentId)
-    if (ws) return { x: room.x + ws.container.x, y: room.y + ws.container.y }
-  }
-  return null
-})
+### 3. Delegate in `OfficeWorkstations` (`Penny/src/renderer/src/game/office-workstation.ts`)
+
+Add after the existing delegation block:
+
+```typescript
+triggerWalkBreak(agentId: string): boolean {
+  return this.animator.triggerWalkBreak(agentId)
+}
 ```
 
----
+### 4. Expose `wsAnimator` getter on `OfficeScene` (`Penny/src/renderer/src/game/OfficeScene.ts`)
 
-### 2. Test cases (in `test.describe('NavMesh Pathfinding')`)
+Add a getter so `scene.wsAnimator` works in `evalInScene`:
 
-**Test 1 — Agent spawns at walkable desk position:**
-```
-addAgents(1, { sessionMode: 'idle' })
-patchNavMesh()
-pos = getAgentWorldPos(id)
-walkable = evalInScene(scene => scene.getNavMesh().isWalkable(pos.x, pos.y))
-expect(walkable).toBe(true)
-```
-Skip gracefully if `PH` unavailable.
-
-**Test 2 — triggerWalkBreak returns true (navMesh functional):**
-```
-addAgents(1, { sessionMode: 'idle' })
-patchNavMesh()
-result = triggerWalkBreakFor(id)
-expect(result).toBe(true)
+```typescript
+get wsAnimator(): OfficeWorkstations { return this.wsManager }
 ```
 
-**Test 3 — Walk path stays within walkable tiles:**
-```
-addAgents(1, { sessionMode: 'idle' })
-patchNavMesh()
-triggerWalkBreakFor(id)
-// Poll walkSprite position every 150ms for 4s
-// At each sample: navMesh.isWalkable(sprite.x, sprite.y) must be true
-// Collect any violations; expect violations.length === 0
-```
-Uses `ctx.window.evaluate` loop with depth-9000 sprite scan.
+(Return type is `OfficeWorkstations` since it's the public surface. The issue's test API `scene.wsAnimator.triggerWalkBreak(id)` will resolve correctly.)
 
-**Test 4 — Agent returns to original desk position:**
-```
-addAgents(1, { sessionMode: 'idle' })
-patchNavMesh()
-startPos = getAgentWorldPos(id)
-triggerWalkBreakFor(id)
-waitForWalkComplete(id, 10000)
-endPos = getAgentWorldPos(id)
-// Allow ±8px tolerance (sprite snaps to WS_SPRITE_Y offset)
-expect(Math.abs(endPos.x - startPos.x)).toBeLessThan(8)
-expect(Math.abs(endPos.y - startPos.y)).toBeLessThan(8)
-```
+### 5. Create `Penny/tests/e2e/navmesh-walking.spec.ts`
 
-**Test 5 — Walk frame is a valid directional frame (not spinning/wrong index):**
-```
-addAgents(1, { sessionMode: 'idle' })
-patchNavMesh()
-triggerWalkBreakFor(id)
-await page.waitForTimeout(400)  // mid-walk
-frameName = evalInScene(scene =>
-  scene.children.list.find(c => c.depth===9000 && c.active && c.type==='Sprite')?.frame?.name
-)
-// PathWalker uses frames: 0,1 (down), 3,4 (right), 6,7 (up), 9,10 (left)
-const validFrames = [0,1,3,4,6,7,9,10].map(String)
-expect(validFrames).toContain(String(frameName))
-```
+Full test file structure:
 
-**Test 6 — Two agents walking simultaneously don't share the same position:**
-```
-ids = addAgents(2, { sessionMode: 'idle' })
-patchNavMesh()
-triggerWalkBreakFor(ids[0])
-triggerWalkBreakFor(ids[1])
-// Poll both walkSprites for 3s; at each frame check distance between them
-// Expect minimum distance > 8px (they're never at exact same spot)
-```
+**Imports / setup** — same pattern as `cafe-automation.spec.ts`: `launchApp`, `waitForPhaser`, `evalInScene`, single `beforeAll`/`afterAll`, 2s settle.
 
-**Test 7 — Visual regression: agents at desks after walk complete:**
-```
-addAgents(3, { sessionMode: 'idle' })
-patchNavMesh()
-// Trigger all 3, wait for all to complete
-// Screenshot matches baseline (Playwright visual comparison)
-await expect(page).toHaveScreenshot('navmesh-agents-at-desks.png', { maxDiffPixels: 200 })
-```
-This goes in the `visual` project (filename matches `visual-regression` glob from `playwright.config.ts`). Rename to `navmesh-walking.visual-regression.spec.ts` OR add the screenshot assertion in a separate `test.describe('Visual Regression')` inside the file if the config uses `grep` patterns.
+**Helper: `patchForNavMesh()`** — mirrors `patchForCoffeeRun`. Re-enables `navMesh.disabled = false`, rebuilds navmesh if `gridW === 0`, ensures the scene is not in GDS mode (or sets up minimal building bounds). Called before each navigation test.
+
+**Helper: `triggerWalkBreak(agentId)`** — calls `evalInScene` with `scene.wsAnimator.triggerWalkBreak(agentId)`.
+
+**Helper: `getWalkState(agentId)`** — returns `{ isWalking, worldX, worldY, frameName, walkBreakActive }` by reading `ws.container.x/y` relative to owner room + `ws.sprite.frame.name` + `!!ws.walkBreakTween`.
+
+**Tests (7):**
+
+1. **`NavMesh grid is built with walkable cells`** — `evalInScene` to call `navMesh.getStats()`, assert `walkable > 0` and `gridW > 0`. Skips if PH unavailable.
+
+2. **`Agent spawns at valid desk position`** — `addAgents([idle agent])`, read `ws.container.x/y` + owner room position, check `navMesh.isPointWalkable(worldX, worldY)` returns true OR is within a walkable room rect (uses `buildOwnRoomRect` logic). Skip if PH unavailable.
+
+3. **`triggerWalkBreak sets walkBreakTween sentinel`** — patch navmesh, `addAgents([idle agent])`, call `triggerWalkBreak`, poll 500ms, assert `ws.walkBreakTween !== undefined`. Skip if PH unavailable.
+
+4. **`Walk path stays within room bounds`** — patch navmesh, trigger walk break, capture agent world position every 100ms for 3s (via `getWalkState` in a polling loop), assert all captured positions are within the owner room bounds clamped rect (same `roomLeft/Top/Right/Bottom` formula as in `_executeWalkBreak`). Skip if PH unavailable.
+
+5. **`Agent returns to desk after walk break`** — trigger walk break, wait up to 8s polling every 200ms for `walkBreakTween` to clear AND `sprite.visible === true`, then assert position is near original desk position (within 4px). Skip if PH unavailable.
+
+6. **`Walk animation uses directional frames (not frame 0 exclusively)`** — patch navmesh, trigger walk break, collect `ws.sprite.frame.name` over 1.5s, assert that at least 2 distinct frames appear (rules out spinning stuck on frame 0). Skip if PH unavailable.
+
+7. **`Multiple agents walking simultaneously do not share world position`** — `addAgents([idle-A, idle-B])`, trigger walk break on both, poll positions for 2s, assert that at no sample do both agents share the same `(Math.round(worldX/10), Math.round(worldY/10))` bucket. Skip if PH unavailable.
+
+**Visual regression test** (separate `projects: visual` match):
+
+8. **`Lab screenshot with agents at desks matches baseline`** — `addAgents([working, working])`, wait 1s for settle, take `window.screenshot({ path: 'tests/screenshots/navmesh-baseline.png' })`, assert file exists. On subsequent runs, compare pixel-level diff (Playwright built-in `toHaveScreenshot`). Tagged `@visual`.
 
 ---
 
-### 3. Access pattern for `wsManager.getRooms()`
-
-The `getRooms()` method is on `WorkstationAnimator`'s host interface, not directly on `wsManager`. Use `(scene as any).wsManager` — since `triggerWalkBreak` is public on `OfficeWorkstations`, it's safe to call. For room iteration to read `ws.walkBreakTween`, access `(scene as any).wsManager` private rooms map via `(scene as any).wsManager.rooms` or use a helper that calls `triggerWalkBreak` and checks via the private internal path `(scene as any).wsManager.animator` if needed.
-
-**Simplest safe alternative for `waitForWalkComplete`:** check `ws.sprite.visible` — it's set to `false` during walk and `true` again on `finishWalk()`:
-```ts
-await ctx.window.waitForFunction((id) => {
-  const scene = (window as any).__PENNY_SCENE__
-  const wsManager = (scene as any).wsManager
-  if (!wsManager) return false
-  for (const room of wsManager.rooms?.values() ?? []) {
-    const ws = room.workstations?.get(id)
-    if (ws) return ws.sprite.visible === true  // true when walk is done
-  }
-  return false
-}, agentId)
-```
-
----
-
-### Summary
+### File Summary
 
 | # | File | Change |
 |---|------|--------|
-| 1 | `Penny/tests/e2e/navmesh-walking.spec.ts` | **Create** — 7 test cases + 5 helpers |
-
-No source modifications needed. All test infrastructure (`triggerWalkBreak`, `getNavMesh`, `isWalkable`, walk sprite at depth 9000, `ws.sprite.visible` sentinel) is already in place.
+| 1 | `Penny/src/renderer/src/game/workstation-animation.ts` | Add `_executeWalkBreak(ws, agent)` private method; refactor timer callback to call it; add `triggerWalkBreak(agentId)` public method |
+| 2 | `Penny/src/renderer/src/game/office-workstation.ts` | Add `triggerWalkBreak(agentId)` delegation to `animator` |
+| 3 | `Penny/src/renderer/src/game/OfficeScene.ts` | Add `get wsAnimator()` getter returning `this.wsManager` |
+| 4 | `Penny/tests/e2e/navmesh-walking.spec.ts` | New file — 7 behavioral tests + 1 visual regression test |
