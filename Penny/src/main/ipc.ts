@@ -89,6 +89,8 @@ function parsePodCreateOpts(opts: unknown): CreatePodOpts {
     out.maxSelfFixes = raw.maxSelfFixes
   }
 
+  if (typeof raw.runtimeProfile === 'string') out.runtimeProfile = raw.runtimeProfile
+
   return out
 }
 import {

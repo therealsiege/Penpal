@@ -362,6 +362,15 @@ function derivePriority(issue: GHIssue): TaskPriority {
   return 'normal'
 }
 
+/** Derive runtime profile from issue labels. 'economic' or 'max' label overrides default. */
+export function deriveRuntimeProfile(issue: GHIssue): string | undefined {
+  const labels = issue.labels.map(l => l.name.toLowerCase())
+  if (labels.includes('economic')) return 'economic'
+  if (labels.includes('max')) return 'max'
+  if (labels.includes('sonnet')) return 'sonnet'
+  return undefined // use default_profile from agent-types.yaml
+}
+
 function deriveSkills(issue: GHIssue): string[] {
   const labels = issue.labels.map(l => l.name.toLowerCase())
   const skills: string[] = []

@@ -534,3 +534,42 @@ pod_presets:
     reviewer: product-mgr
     executor: exec-assistant
     description: "Create, review, and validate marketing content"
+
+# ── Runtime Profiles ──────────────────────────────────────────────────
+# Controls model selection and timeout multipliers for pod execution.
+# Default profile is applied to all new issues unless overridden by
+# GitHub labels (economic, max) on the issue.
+runtime_profiles:
+  default_profile: max
+
+  max:
+    model: opus
+    timeout_multiplier: 1
+    description: "Max plan Opus — fast, uses subscription quota"
+
+  economic:
+    model: ollama:coder:30b
+    timeout_multiplier: 5
+    ollama_url: "http://localhost:11434"
+    description: "Local Ollama coder:30b — slow, zero cost, unlimited"
+
+  sonnet:
+    model: sonnet
+    timeout_multiplier: 1.5
+    description: "Sonnet — faster output than Opus, lower quota usage"
+
+# ── Per-Phase MCP Tool Allowlisting ───────────────────────────────────
+# Restricts which MCP profiles are available per pod phase.
+# If not specified, agents use their own default mcpProfile.
+phase_tools:
+  solver:
+    - developer
+    - serena
+    - context7
+    - github
+  reviewer:
+    - developer
+  executor:
+    - qa-executor
+    - playwright
+    - github

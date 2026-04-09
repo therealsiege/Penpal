@@ -43,6 +43,8 @@ export interface PipelineIssue {
   questionPostedAt?: number
   executorAttempts: number
   lastError?: string
+  /** Runtime profile derived from issue labels ('economic', 'max', 'sonnet'). */
+  runtimeProfile?: string
   // Guards against concurrent runs
   plannerRunning: boolean
   executorRunning: boolean
@@ -116,6 +118,40 @@ function detectTShirtSize(labels: { name: string }[]): TShirtSize {
 
 function getSizeProfile(size: TShirtSize): SizeProfile {
   return SIZE_PROFILES[size] ?? SIZE_PROFILES[DEFAULT_SIZE]
+}
+
+/** Apply runtime profile override to a size profile. 'economic' label routes to local model with 5x timeout. */
+function applyRuntimeOverride(profile: SizeProfile, labels: { name: string }[]): SizeProfile {
+  const labelNames = labels.map(l => l.name.toLowerCase())
+  let runtimeModel: string | undefined
+  let timeoutMult = 1
+
+  if (labelNames.includes('economic')) {
+    // Resolve from agent-types.yaml
+    try {
+      const { resolveRuntimeProfile } = require('./pods')
+      const rp = resolveRuntimeProfile('economic')
+      runtimeModel = rp.model
+      timeoutMult = rp.timeoutMultiplier
+    } catch {
+      runtimeModel = 'ollama:coder:30b'
+      timeoutMult = 5
+    }
+  } else if (labelNames.includes('sonnet')) {
+    runtimeModel = 'sonnet'
+    timeoutMult = 1.5
+  }
+  // 'max' label = no override, use size profile defaults
+
+  if (!runtimeModel) return profile
+
+  return {
+    ...profile,
+    plannerModel: runtimeModel,
+    executorModel: runtimeModel,
+    plannerTimeoutMs: Math.round(profile.plannerTimeoutMs * timeoutMult),
+    executorTimeoutMs: Math.round(profile.executorTimeoutMs * timeoutMult),
+  }
 }
 
 // ── Constants ────────────────────────────────────────────────────────────────
@@ -517,7 +553,7 @@ async function runPlannerAgent(
 ): Promise<'done' | 'question' | 'failed'> {
   const repoKey = `${config.owner}/${config.repo}`
   const prompt = buildPlannerPrompt(issue, repoKey, answerContext)
-  const profile = getSizeProfile(tracked.size)
+  const profile = applyRuntimeOverride(getSizeProfile(tracked.size), issue.labels)
 
   console.log(`[github-pipeline] Running planner for ${repoKey}#${tracked.number} (size=${tracked.size}, model=${profile.plannerModel})`)
   const result = await runAgentHeadless('issue-planner', config.localPath, prompt, {
@@ -565,7 +601,11 @@ async function runExecutorAgent(
   const repoKey = `${config.owner}/${config.repo}`
   const agentCwd = tracked.worktreePath || config.localPath
   const prompt = buildExecutorPrompt(tracked, repoKey)
-  const profile = getSizeProfile(tracked.size)
+  // Apply runtime override if issue had economic/sonnet/max label
+  const runtimeLabels = tracked.runtimeProfile
+    ? [{ name: tracked.runtimeProfile }]
+    : []
+  const profile = applyRuntimeOverride(getSizeProfile(tracked.size), runtimeLabels)
   const maxAttempts = profile.maxAttempts
 
   console.log(`[github-pipeline] Running executor for ${repoKey}#${tracked.number} (size=${tracked.size}, model=${profile.executorModel}, attempt ${tracked.executorAttempts + 1}/${maxAttempts})`)
@@ -628,7 +668,14 @@ export async function ingestIssue(config: RepoConfig, issue: GHIssue): Promise<P
   }
 
   const size = detectTShirtSize(issue.labels)
-  const profile = getSizeProfile(size)
+  const profile = applyRuntimeOverride(getSizeProfile(size), issue.labels)
+
+  // Derive runtime profile from labels (economic, max, sonnet)
+  const labelNames = issue.labels.map(l => l.name.toLowerCase())
+  const runtimeProfile = labelNames.includes('economic') ? 'economic'
+    : labelNames.includes('sonnet') ? 'sonnet'
+    : labelNames.includes('max') ? 'max'
+    : undefined
 
   const entry: PipelineIssue = {
     number: issue.number,
@@ -638,6 +685,7 @@ export async function ingestIssue(config: RepoConfig, issue: GHIssue): Promise<P
     stage: 'planning',
     priority: 'normal',
     size,
+    runtimeProfile,
     ingestedAt: Date.now(),
     updatedAt: Date.now(),
     executorAttempts: 0,
@@ -653,7 +701,7 @@ export async function ingestIssue(config: RepoConfig, issue: GHIssue): Promise<P
   await Promise.allSettled([
     setLabel(config, issue.number, ['agent-ready'], 'agent-planning'),
     addComment(config, issue.number,
-      `🤖 **Picked up by Penny** (2-agent pipeline, size **${size}**)\n\nPlanner: \`${profile.plannerModel}\` · Executor: \`${profile.executorModel}\`\n\nPlanner agent is designing the approach...`,
+      `🤖 **Picked up by Penny** (2-agent pipeline, size **${size}**${runtimeProfile ? `, runtime: **${runtimeProfile}**` : ''})\n\nPlanner: \`${profile.plannerModel}\` · Executor: \`${profile.executorModel}\`\n\nPlanner agent is designing the approach...`,
     ),
   ])
 
