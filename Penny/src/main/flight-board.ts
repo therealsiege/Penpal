@@ -30,6 +30,7 @@ export interface FlightBoardEntry {
   startedAt: string   // ISO 8601
   updatedAt: string   // ISO 8601
   cwd?: string
+  planSummary?: string
 }
 
 export interface FlightBoard {
