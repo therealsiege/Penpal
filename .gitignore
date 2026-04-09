@@ -157,3 +157,4 @@ forge-out/
 # Local agent / Penny worktrees (never commit)
 .claude/worktrees/
 .penny-worktrees/
+analytics/data/game-state.json
