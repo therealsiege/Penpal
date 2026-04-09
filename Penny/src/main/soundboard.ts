@@ -16,6 +16,9 @@ const IGNORED_DIRS = new Set([
   'coverage',
 ])
 
+/** Absolute paths checked before relative candidates. */
+const VAULT_SFX_DIR = path.join(HOME_DIR, 'Documents', 'Vault', 'Sound Effects')
+
 const CANDIDATE_DIRS = [
   'sound-effects',
   'sound effects',
@@ -140,6 +143,11 @@ function resolveScanRoot(): { directory: string; source: SoundboardListing['sour
   const configured = getConfiguredSfxDir()
   if (configured && isDirectory(configured)) {
     return { directory: configured, source: 'configured' }
+  }
+
+  // Vault location (iCloud synced) — check before relative candidates
+  if (isDirectory(VAULT_SFX_DIR) && walkAudioFiles(VAULT_SFX_DIR).length > 0) {
+    return { directory: VAULT_SFX_DIR, source: 'candidate' }
   }
 
   const roots = getRootCandidates()
