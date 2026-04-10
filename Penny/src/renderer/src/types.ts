@@ -397,6 +397,9 @@ export interface PodWorkflow {
   updatedAt: number
   error?: string
   stageHistory: { stage: PodStatus; enteredAt: number }[]
+  runtimeProfile?: string
+  resolvedProfile?: { phases: Record<string, { model: string }>; timeoutMultiplier: number }
+  phaseOverrides?: Partial<Record<'plan' | 'execute' | 'validate', { model?: string; timeoutMultiplier?: number }>>
 }
 
 export interface PodPreset {

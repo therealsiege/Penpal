@@ -7,6 +7,7 @@ import { Terminal } from '../components/Terminal'
 import type { AgentConfig, AgentState, ContextHealth, HealthResult, HotLead, JobStatus, PodWorkflow, PodPreset, ProjectLeaderboardEntry, OpencodeSession, AgentXP, OpenClawInfo, ConfigSnapshot, McpServerEntry, AgentToolSummary, getRankForXP, Task } from '../types'
 import { mergeAgentContextFromHealth } from '../utils/contextHealthMerge'
 import { PodLauncherModal, PodStatusModal, PodListModal } from '../components/PodModal'
+import { KanbanBoard } from '../components/KanbanBoard'
 import { createOfficeGame } from '../game/OfficeGame'
 import { OfficeScene } from '../game/OfficeScene'
 import { EventBus, EVENTS } from '../game/events'
@@ -1715,6 +1716,11 @@ export function CommandCenter(props: CommandCenterProps) {
     if (wf) setViewingPod(wf)
   }, [podWorkflows])
 
+  const handleOverride = useCallback(async (workflowId: string, phase: string, override: { model?: string; timeoutMultiplier?: number }) => {
+    await window.api.overridePod(workflowId, phase, override)
+    toast(`Override set for ${phase} phase`, 'success')
+  }, [toast])
+
   const handleShare = useCallback(async (source: AgentState, target: AgentState) => {
     if (!target.tty || !source.lastAssistantBlurb) return
     const msg = `Context shared from ${source.config.name}:\n\n${source.lastAssistantBlurb}`
@@ -1927,6 +1933,24 @@ export function CommandCenter(props: CommandCenterProps) {
           />
         </div>
       </div>
+
+      {/* ------------------------------------------------------------------ */}
+      {/* Dispatch Board (Kanban)                                             */}
+      {/* ------------------------------------------------------------------ */}
+      {podWorkflows && podWorkflows.length > 0 && (
+        <div className="flex-none border-t border-[var(--c-bg-hover)] bg-[var(--c-bg-deep)] px-3 py-2">
+          <div className="text-[10px] uppercase tracking-widest text-[var(--c-text-faint)] mb-2 font-medium">
+            Dispatch Board
+          </div>
+          <KanbanBoard
+            workflows={podWorkflows}
+            onPause={async (id) => { await window.api.pausePod(id); toast('Workflow paused', 'success') }}
+            onResume={async (id) => { await window.api.resumePod(id); toast('Workflow resumed', 'success') }}
+            onCancel={async (id) => { await window.api.cancelPod(id); toast('Workflow cancelled', 'success') }}
+            onOverride={handleOverride}
+          />
+        </div>
+      )}
 
       {/* ------------------------------------------------------------------ */}
       {/* Embedded Terminal                                                   */}
