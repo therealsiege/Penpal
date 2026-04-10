@@ -1,4 +1,4 @@
-# Sidekick
+# Penpal
 
 AI-powered venture intelligence platform built on an Obsidian vault. Parses markdown notes into a knowledge graph (Memgraph + Qdrant), orchestrates teams of Claude Code agents, and surfaces everything through **Penpal** -- an Electron dashboard with a pixel-art agent office, dispatch kanban, and real-time session monitoring.
 
