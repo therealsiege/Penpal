@@ -85,6 +85,16 @@ export function resolveRuntimeProfile(profileName?: string): RuntimeProfile {
   return profiles[name] ?? DEFAULT_PROFILE
 }
 
+// ── Rebase types (exported for testing) ─────────────────────────────────────
+
+export type RebaseStatus = 'clean' | 'conflict-resolved' | 'conflict-aborted'
+
+export interface RebaseResult {
+  status: RebaseStatus
+  conflictedFiles?: string[]
+  resolvedFiles?: string[]
+}
+
 // ── Types ───────────────────────────────────────────────────────────────────
 
 export type PodStatus =
@@ -173,7 +183,8 @@ export interface PodWorkflow {
   pendingReviewerFeedback?: string
   lastExecutorPassed?: boolean
   qualityRecorded?: boolean
-  phaseOverrides?: Partial<Record<PodPhase, { model?: string; timeoutMultiplier?: number }>>
+  prUrl?: string
+  rebaseConflict?: boolean
 }
 
 export interface PodPreset {
@@ -757,6 +768,96 @@ export function getWorkingTreeDiff(cwd: string): string {
   }
 }
 
+const LOCK_FILES = new Set(['package-lock.json', 'yarn.lock', 'pnpm-lock.yaml'])
+const GENERATED_RE = /\.generated\.ts$|sprites[\\/][^/]+\.json$/
+
+/**
+ * Rebase the current branch onto origin/main, auto-resolving lock/generated file conflicts.
+ * Exported for unit testing.
+ */
+export function rebaseBeforePR(cwd: string): RebaseResult {
+  const opts = { cwd, stdio: 'pipe' as const, encoding: 'utf8' as const }
+
+  // Guard: skip silently if not a git repo
+  try {
+    execSync('git rev-parse --is-inside-work-tree', opts)
+  } catch {
+    return { status: 'clean' }
+  }
+
+  execSync('git fetch origin main', opts)
+
+  try {
+    execSync('git rebase origin/main', opts)
+    return { status: 'clean' }
+  } catch {
+    // rebase exited non-zero — check for conflicts
+  }
+
+  try {
+    const conflictedRaw = execSync('git diff --name-only --diff-filter=U', opts).trim()
+    const conflictedFiles = conflictedRaw ? conflictedRaw.split('\n').map(f => f.trim()).filter(Boolean) : []
+
+    const resolvedFiles: string[] = []
+    const unsafeFiles: string[] = []
+
+    for (const file of conflictedFiles) {
+      const base = path.basename(file)
+      if (LOCK_FILES.has(base)) {
+        execSync(`git checkout --theirs -- "${file}"`, opts)
+        execSync(`git add -- "${file}"`, opts)
+        resolvedFiles.push(file)
+      } else if (GENERATED_RE.test(file)) {
+        execSync(`git checkout --ours -- "${file}"`, opts)
+        execSync(`git add -- "${file}"`, opts)
+        resolvedFiles.push(file)
+      } else {
+        unsafeFiles.push(file)
+      }
+    }
+
+    if (unsafeFiles.length === 0) {
+      execSync('git rebase --continue', { ...opts, env: { ...process.env, GIT_EDITOR: 'true' } })
+      return { status: 'conflict-resolved', resolvedFiles }
+    }
+
+    execSync('git rebase --abort', opts)
+    return { status: 'conflict-aborted', conflictedFiles: unsafeFiles }
+  } catch (err) {
+    try { execSync('git rebase --abort', opts) } catch { /* ignore */ }
+    return { status: 'conflict-aborted', conflictedFiles: [] }
+  }
+}
+
+/**
+ * Create a GitHub PR for the completed pod workflow. Returns the PR URL or '' on failure.
+ */
+function createPodPR(wf: PodWorkflow, label?: string): string {
+  try {
+    const opts = { cwd: wf.cwd, stdio: 'pipe' as const, encoding: 'utf8' as const }
+    const branch = execSync('git rev-parse --abbrev-ref HEAD', opts).trim()
+
+    if (branch === 'main' || branch === 'master') {
+      console.warn('[pods] createPodPR: branch is main/master — skipping PR creation')
+      return ''
+    }
+
+    const title = wf.task.slice(0, 72)
+    const rebaseNote = wf.rebaseConflict ? '\n\n⚠️ Rebase conflict detected — manual resolution required.' : ''
+    const body = `Pod workflow: ${wf.name}\n\nTask: ${wf.task}${rebaseNote}`
+
+    const labelArg = label ? `--label "${label}"` : ''
+    const cmd = `gh pr create --title "${title.replace(/"/g, '\\"')}" --body "${body.replace(/"/g, '\\"')}" ${labelArg}`.trim()
+
+    const url = execSync(cmd, opts).trim()
+    console.log(`[pods] PR created: ${url}`)
+    return url
+  } catch (err) {
+    console.warn('[pods] PR creation failed:', err)
+    return ''
+  }
+}
+
 /**
  * Strict pass detection for executor QA output.
  * The first explicit `RESULT: PASS|FAIL` line wins; otherwise Vitest-style `Test Case N: …` lines are evaluated.
@@ -1272,6 +1373,55 @@ function appendWorkflowSummary(wf: PodWorkflow): void {
   }
 }
 
+async function completePodWithPR(wf: PodWorkflow): Promise<void> {
+  // In the test environment, skip real git/gh operations unless the test explicitly
+  // opts in by setting PENNY_TEST_REBASE (used in rebase-specific integration tests
+  // that mock child_process.execSync themselves).
+  if (process.env.VITEST === 'true' && !process.env.PENNY_TEST_REBASE) {
+    setStatus(wf, 'complete')
+    appendWorkflowSummary(wf)
+    return
+  }
+
+  let rebaseResult: RebaseResult
+  try {
+    rebaseResult = rebaseBeforePR(wf.cwd)
+  } catch (err) {
+    console.warn('[pods] Rebase step threw unexpectedly, skipping PR:', err)
+    setStatus(wf, 'complete')
+    appendWorkflowSummary(wf)
+    return
+  }
+
+  if (rebaseResult.status === 'clean' || rebaseResult.status === 'conflict-resolved') {
+    if (rebaseResult.status === 'conflict-resolved') {
+      // Files changed during rebase — re-validate to catch regressions
+      console.log(`[pods] Auto-resolved ${rebaseResult.resolvedFiles?.length} files (lock/generated), re-validating`)
+      const { passed: revalidated } = await runExecuteStage(wf)
+      if (!revalidated) {
+        console.warn('[pods] Post-rebase validation failed — returning to feedback loop')
+        return
+      }
+    }
+    const prUrl = createPodPR(wf)
+    wf.prUrl = prUrl
+    if (process.env.VITEST !== 'true') {
+      updateEntry(wf.id, { status: 'pr-created' })
+    }
+  } else {
+    console.warn(`[pods] Rebase conflict on: ${rebaseResult.conflictedFiles?.join(', ')} — creating PR with needs-rebase label`)
+    wf.rebaseConflict = true
+    const prUrl = createPodPR(wf, 'needs-rebase')
+    wf.prUrl = prUrl
+    if (process.env.VITEST !== 'true') {
+      updateEntry(wf.id, { status: 'pr-created' })
+    }
+  }
+
+  setStatus(wf, 'complete')
+  appendWorkflowSummary(wf)
+}
+
 async function runWorkflow(wf: PodWorkflow): Promise<void> {
   try {
     const cwdErr = validatePodCwd(wf.cwd)
@@ -1326,16 +1476,14 @@ async function runWorkflow(wf: PodWorkflow): Promise<void> {
       if (wf.status === 'failed' || isPodPaused(wf)) return
 
       if (passed) {
-        setStatus(wf, 'complete')
-        appendWorkflowSummary(wf)
+        await completePodWithPR(wf)
         return
       }
 
       const selfFixed = await runSelfFixStage(wf)
       if (wf.status === 'failed' || isPodPaused(wf)) return
       if (selfFixed) {
-        setStatus(wf, 'complete')
-        appendWorkflowSummary(wf)
+        await completePodWithPR(wf)
         return
       }
 
@@ -1364,7 +1512,11 @@ async function runWorkflow(wf: PodWorkflow): Promise<void> {
     }
     activeWorkflowPromises.delete(wf.id)
     if (process.env.VITEST !== 'true') {
-      updateEntry(wf.id, { status: wf.status === 'complete' ? 'merged' : 'failed' })
+      const currentEntry = getActiveEntries().find(e => e.podId === wf.id)
+      const finalStatus = wf.status === 'complete'
+        ? (currentEntry?.status === 'pr-created' ? 'pr-created' : 'merged')
+        : 'failed'
+      updateEntry(wf.id, { status: finalStatus })
     }
   }
 }
