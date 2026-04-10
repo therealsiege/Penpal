@@ -4,29 +4,30 @@ An AI Operating System for Product Engineers. Orchestrates teams of autonomous C
 
 ![World Map](docs/screenshots/Landing.png)
 
-## Penpal — Visual Command Center
+## Run Your Business Like an RPG
 
-Penpal is the dashboard. A pixel-art lab where your AI agents sit at desks, take coffee breaks, and ship code. Every Claude Code session becomes a character you can watch, interact with, and dispatch work to.
+Penpal turns your engineering operation into a game you actually want to play. Your AI agents are characters in a pixel-art world, your GitHub issues are quests, and shipping code earns XP.
 
 ### World Map
 
-Click a location marker to enter the lab. Double-click empty space to return to the map.
+The overworld. Each pin is a Penpal instance -- your lab, a teammate's lab, a remote service. Click a location to enter it. The vision: multiple Penpal instances communicating across users and machines.
 
 ![Lab View](docs/screenshots/Location.png)
 
-### Lab Scene
+### The Lab
 
-A GDS-exported pixel-art backdrop with 10 workstation positions, a cafe with animated baristas, and purple laser doorways that open as agents walk through.
+Your R&D headquarters. Agents ("duders") sit at desks, take coffee breaks at the cafe, and walk through laser doorways. Every Claude Code session is a living character in the lab. The more you ship, the more the lab comes alive.
 
-- **Live agent sessions** rendered as animated characters at assigned desks
-- **Baristas** (Latte Larry & Mocha Maya) run choreographed work loops in the cafe
-- **Laser doors** fade open/closed based on agent proximity
-- **NavMesh pathfinding** -- agents walk only on valid floor tiles
-- **lab-map.json** -- single JSON config for desks, rooms, walk tracks, and animations
+- Agents work at assigned desks with directional sit animations
+- Baristas run the cafe -- Latte Larry and Mocha Maya serve the team
+- Laser doors open as agents walk through corridors
+- Idle agents take walk breaks on the NavMesh floor
+- Scene layout driven by `lab-map.json` -- edit positions, rooms, and animations without touching code
+- XP, ranks, seasons, leaderboards, cosmetic rewards -- gamification built into every workflow
 
 ### Dispatch Board
 
-Kanban board tracking GitHub issues through the agent pipeline. Label an issue `agent-ready` and the system picks it up automatically.
+Your quest log. GitHub issues flow through a kanban pipeline: Planning, Executing, Validating, Done, Failed. Label an issue `agent-ready` and a pod picks it up automatically.
 
 ![Dispatch](docs/screenshots/Dispatch.png)
 
@@ -34,8 +35,8 @@ Kanban board tracking GitHub issues through the agent pipeline. Label an issue `
 
 | Panel | Description |
 |-------|-------------|
-| **Lab** | Pixel-art agent lab with live session status |
-| **Dispatch** | Kanban board for the GitHub issue pipeline |
+| **Lab** | Pixel-art agent headquarters with live session status |
+| **Dispatch** | Kanban quest board for the GitHub issue pipeline |
 | **Tasks** | Orchestrator queue, Veritas board, GitHub issues |
 | **Data** | ETL pipeline controls, ingestion scripts |
 | **Vault** | CodeMirror 6 editor with wikilinks, tags, graph viz |
