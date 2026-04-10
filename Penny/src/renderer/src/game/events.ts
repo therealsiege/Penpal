@@ -66,6 +66,8 @@ export const EVENTS = {
   AGENT_CLICKED: 'agent:clicked',
   /** Fired when an agent sprite is double-clicked. Payload: (agentId: string, state: AgentState) */
   AGENT_DOUBLE_CLICKED: 'agent:doubleClicked',
+  /** Fired when a pod agent desk is clicked — opens detail modal instead of terminal. Payload: (agentId: string, state: AgentState) */
+  POD_AGENT_CLICKED: 'agent:podClicked',
   /** Fired when an agent sprite is right-clicked. Payload: (agentId: string, state: AgentState) */
   AGENT_RIGHT_CLICKED: 'agent:rightClicked',
   /** Fired when the active agent selection is cleared. No payload. */
@@ -163,6 +165,8 @@ export interface EventPayloadMap {
   // --- Agent interaction ---
   /** (agentId: string, state: AgentState) */
   [EVENTS.AGENT_CLICKED]: [agentId: string, state: AgentState]
+  /** (agentId: string, state: AgentState) */
+  [EVENTS.POD_AGENT_CLICKED]: [agentId: string, state: AgentState]
   /** (agentId: string, state: AgentState) */
   [EVENTS.AGENT_DOUBLE_CLICKED]: [agentId: string, state: AgentState]
   /** (agentId: string, state: AgentState) */
