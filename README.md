@@ -2,21 +2,33 @@
 
 An AI Operating System for Product Engineers. Orchestrates teams of autonomous Claude Code agents through a visual command center, manages knowledge via a graph database, and ships code through a three-phase pod pipeline with built-in quality gates.
 
-![World Map](docs/screenshots/Landing.png)
+> This is 💯 a work in progress, but with that being said I use this tool to run my development workflow.
+> I refer to agents as duders.
 
-## Run Your Business Like an RPG
+## Current Utility and Workflow
+
+1. I plan with claude-code agents and use the lab view to quickly locate and focus on terminal windows that belong to a specific instance. Clicking a desk focuses on the terminal session no matter where it is. I was getting lost in terminal windows previously. It surfaces all of my llm sessions no matter their flavor (claude code, cursor agent, nemoclaw, opencode) to one place.
+2. My planning creates github issues. I make sure claude-code or cursor agent (whatever I'm using at the time) creates small issues that have a solid definition of done. I even allow this agent to provide a execution strategy for the github issues as some of them can depend on each other. The pod system has mechanisms to help from collisions and pod to pod communication.
+3. Agents from the pods are split into triplets (planning, executing and validating), they are connected to slack. This connection gives them the ability to DM me when they have questions (usually the planning agent).
+4. While interacting with the issues and the pods, I am often toggling the github labels to retrigger the planning duder after answering a question, this allows me to simulate revving an agent in plan mode, but through the github issue comments, or slack.
+5. Execution creates a branch, does the work, writes a test to validate, then sets the issue to the label our validation triplet is waiting for. The validator runs playwright e2e tests, then raises a PR or labels the issue as a failure and notifies me.
+- When pods finish the validation pod raises a pull request into the default branch usually `main`.
+
+## Vision: Run Your Business Like an RPG
 
 Penpal turns your engineering operation into a game you actually want to play. Your AI agents are characters in a pixel-art world, your GitHub issues are quests, and shipping code earns XP.
 
 ### World Map
 
-The overworld. Each pin is a Penpal instance -- your lab, a teammate's lab, a remote service. Click a location to enter it. The vision: multiple Penpal instances communicating across users and machines.
+![World Map](docs/screenshots/Landing.png)
 
-![Lab View](docs/screenshots/Location.png)
+The overworld. Each pin is a Penpal instance -- your lab, a teammate's lab, a remote service. Click a location to enter it. The vision: multiple Penpal instances communicating across users and machines.
 
 ### The Lab
 
-Your R&D headquarters. Agents ("duders") sit at desks, take coffee breaks at the cafe, and walk through laser doorways. Every Claude Code session is a living character in the lab. The more you ship, the more the lab comes alive.
+![Lab View](docs/screenshots/Location.png)
+
+The R&D headquarters. Agents ("duders") sit at desks, take coffee breaks at the cafe, and walk through laser doorways. Every Claude Code session is a living character in the lab. The more you ship, the more the lab comes alive.
 
 - Agents work at assigned desks with directional sit animations
 - Baristas run the cafe -- Latte Larry and Mocha Maya serve the team
@@ -25,24 +37,13 @@ Your R&D headquarters. Agents ("duders") sit at desks, take coffee breaks at the
 - Scene layout driven by `lab-map.json` -- edit positions, rooms, and animations without touching code
 - XP, ranks, seasons, leaderboards, cosmetic rewards -- gamification built into every workflow
 
+### More game scenes to come (utility first)
+
 ### Dispatch Board
 
 Your quest log. GitHub issues flow through a kanban pipeline: Planning, Executing, Validating, Done, Failed. Label an issue `agent-ready` and a pod picks it up automatically.
 
 ![Dispatch](docs/screenshots/Dispatch.png)
-
-### Panels
-
-| Panel | Description |
-|-------|-------------|
-| **Lab** | Pixel-art agent headquarters with live session status |
-| **Dispatch** | Kanban quest board for the GitHub issue pipeline |
-| **Tasks** | Orchestrator queue, Veritas board, GitHub issues |
-| **Data** | ETL pipeline controls, ingestion scripts |
-| **Vault** | CodeMirror 6 editor with wikilinks, tags, graph viz |
-| **Evals** | Agent evaluation metrics and quality tracking |
-| **Soundboard** | Audio clip player (synced via ~/Documents/Sound Effects/) |
-| **Settings** | Appearance, theme controls, service config |
 
 ## Agent Personas
 
@@ -127,6 +128,19 @@ The result is a queryable web of your entire knowledge base. Agents use it via M
 
 - **Scheduler** runs cron jobs: RSS ingestion from healthcare feeds, daily briefings, NPI enrichment
 - **Multi-project** support: each project gets its own ETL config, scoring profile, and pipeline
+
+### Panels
+
+| Panel | Description |
+|-------|-------------|
+| **Lab** | Pixel-art agent headquarters with live session status |
+| **Dispatch** | Kanban quest board for the GitHub issue pipeline |
+| **Tasks** | Orchestrator queue, Veritas board, GitHub issues |
+| **Data** | ETL pipeline controls, ingestion scripts |
+| **Vault** | CodeMirror 6 editor with wikilinks, tags, graph viz |
+| **Evals** | Agent evaluation metrics and quality tracking |
+| **Soundboard** | Audio clip player (synced via ~/Documents/Sound Effects/) |
+| **Settings** | Appearance, theme controls, service config |
 
 ## Repository Structure
 
