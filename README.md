@@ -97,6 +97,9 @@ Multiple pods running in parallel share a **flight board** that prevents collisi
 
 Your markdown files aren't just documents -- they're a living knowledge network. The ETL pipeline in `analytics/` reads every file in the vault and builds a structured graph of everything it finds: people, companies, technologies, regulations, sales leads, and how they all connect.
 
+![Knowledge Graph](docs/screenshots/knowledgegraph.png)
+*3,281 nodes, 8,582 relationships — queryable by agents via MCP tools*
+
 **How it works:**
 
 1. **Parse** -- Walk every markdown file. Extract frontmatter, wikilinks, tags, and prose.
