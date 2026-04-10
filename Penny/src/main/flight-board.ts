@@ -19,6 +19,7 @@ export type FlightBoardStatus =
   | 'solving'
   | 'reviewing'
   | 'executing'
+  | 'pr-created'
   | 'merged'
   | 'failed'
 
