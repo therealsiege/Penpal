@@ -16,13 +16,24 @@ An AI Operating System for Product Engineers. Orchestrates teams of autonomous C
 
 ## Vision: Run Your Business Like an RPG
 
-Penpal turns your engineering operation into a game you actually want to play. Your AI agents are characters in a pixel-art world, your GitHub issues are quests, and shipping code earns XP.
+Penpal turns your entire operation into a game. Your AI agents are characters in a pixel-art world. Your GitHub issues are quests. Shipping code earns XP. Every department is a scene on the world map, staffed by specialized duders who share a single knowledge graph — the company's brain.
 
 ### World Map
 
 ![World Map](docs/screenshots/Landing.png)
 
-The overworld. Each pin is a Penpal instance -- your lab, a teammate's lab, a remote service. Click a location to enter it. The vision: multiple Penpal instances communicating across users and machines.
+The overworld. Each pin is a department, a Penpal instance, or a remote service. Click a location to enter it. The vision: multiple Penpal instances communicating across users and machines, each one a different part of the business.
+
+### Departments (Scenes)
+
+Each department is a pixel-art scene with its own agents, tools, and purpose. They all read from and write to the same knowledge graph.
+
+| Department | Status | What it does |
+|-----------|--------|-------------|
+| **The Lab** | Live | R&D headquarters — agents ship code, run tests, raise PRs |
+| **Call Center** | Planned | Outreach — agents handle lead follow-up, appointment setting, email campaigns |
+| **Marketing Studio** | Planned | Content — agents create blog posts, social media, design assets, messaging |
+| **War Room** | Planned | Strategy — competitive intelligence, pipeline reviews, quarterly planning |
 
 ### The Lab
 
@@ -36,8 +47,6 @@ The R&D headquarters. Agents ("duders") sit at desks, take coffee breaks at the 
 - Idle agents take walk breaks on the NavMesh floor
 - Scene layout driven by `lab-map.json` -- edit positions, rooms, and animations without touching code
 - XP, ranks, seasons, leaderboards, cosmetic rewards -- gamification built into every workflow
-
-### More game scenes to come (utility first)
 
 ### Dispatch Board
 
@@ -94,23 +103,25 @@ Multiple pods running in parallel share a **flight board** that prevents collisi
 - **File-level gating** -- dispatch queues pods that would touch overlapping files
 - **Rebase-before-PR** -- pods rebase onto latest main before creating PRs
 
-## Knowledge Graph — The Vault's Nervous System
+## Knowledge Graph — The Company Brain
 
-Your markdown files aren't just documents -- they're a living knowledge network. The ETL pipeline in `analytics/` reads every file in the vault and builds a structured graph of everything it finds: people, companies, technologies, regulations, sales leads, and how they all connect.
+Every department, every agent, every decision draws from the same knowledge graph. It's the flow of all knowledge through the business — not a static database, but a living network that grows as agents work.
 
 ![Knowledge Graph](docs/screenshots/knowledgegraph.png)
-*3,281 nodes, 8,582 relationships — queryable by agents via MCP tools*
+*3,281 nodes, 8,582 relationships — queryable by every agent via MCP tools*
+
+Your markdown files, emails, RSS feeds, and alerts all feed into a structured graph. When a lab agent builds a feature, it knows which customers asked for it. When a marketing agent writes a blog post, it pulls competitive context from the same graph. Every department reads from and writes to the same brain.
 
 **How it works:**
 
-1. **Parse** -- Walk every markdown file. Extract frontmatter, wikilinks, tags, and prose.
-2. **Extract** -- Claude identifies entities in the text: people, companies, EHR systems, billing codes, technologies.
-3. **Connect** -- Build a relationship graph in Memgraph. Documents link to entities. Entities link to each other (WORKS_AT, COMPETES_WITH, USES_EHR, MENTIONS).
+1. **Parse** -- Walk every markdown file. Extract frontmatter, links, tags, and prose.
+2. **Extract** -- Claude identifies entities in the text: people, companies, technologies, regulations, sales leads.
+3. **Connect** -- Build a relationship graph in Memgraph. Documents link to entities. Entities link to each other (WORKS_AT, COMPETES_WITH, MENTIONS).
 4. **Embed** -- Chunk content and embed into Qdrant vectors for semantic similarity search.
 5. **Analyze** -- Run graph algorithms (PageRank, community detection, betweenness centrality) to surface the most important nodes and hidden connections.
 6. **Refresh** -- Scheduler runs cron jobs to ingest Google Alerts, RSS feeds, email mining (via [gog CLI](https://gogcli.sh/)), and daily briefings. The graph stays current automatically.
 
-The result is a queryable, self-updating web of your entire knowledge base. Agents use it via MCP tools to answer questions, find connections, and make decisions with full context.
+The result is a self-updating web of your entire knowledge base that every agent in every department can query.
 
 **What agents can do with it:**
 
