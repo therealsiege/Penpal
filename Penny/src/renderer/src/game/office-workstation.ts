@@ -335,6 +335,14 @@ export class OfficeWorkstations {
     this.animator.updateThoughtBubble(ws, agent, shouldShow, accentColor, isWorking)
   }
 
+  /**
+   * Programmatically trigger a walk break for the given agent.
+   * Returns true if the walk was started, false if not found / already walking.
+   */
+  triggerWalkBreak(agentId: string): boolean {
+    return this.animator.triggerWalkBreak(agentId)
+  }
+
   /** Pause all per-workstation timers/tweens (scene sleep). */
   pauseAll(): void {
     this.animator.pauseAll()
