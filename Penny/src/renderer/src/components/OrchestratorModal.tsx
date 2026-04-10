@@ -17,6 +17,23 @@ import type {
 } from '../types'
 import { GithubPollStatusBadge, SourcesModal } from './SourcesModal'
 
+// ── Agent avatar lookup — maps agent IDs to Journey to the West portrait PNGs
+// ---------------------------------------------------------------------------
+const AGENT_AVATARS: Record<string, string> = {
+  'fullstack-dev': './sprites/avatars/WuKong.png',
+  'nextjs-frontend': './sprites/avatars/ErlangShen.png',
+  'electron-dev': './sprites/avatars/ShaWujing.png',
+  'backend-arch': './sprites/avatars/Guanyin.png',
+  'expo-mobile': './sprites/avatars/Nezha.png',
+  'embedded-dev': './sprites/avatars/BullDemonKing.png',
+  'videogame-dev': './sprites/avatars/RedBoy.png',
+  'ui-designer': './sprites/avatars/AoGuang.png',
+  'product-mgr': './sprites/avatars/Tripitaka.png',
+  'product-marketer': './sprites/avatars/AoRun.png',
+  'exec-assistant': './sprites/avatars/ZhuBajie.png',
+  'issue-planner': './sprites/avatars/Tripitaka.png',
+}
+
 // ── GitHub issue board — lanes by pod / pipeline stage (not a separate “Queued” column)
 // ---------------------------------------------------------------------------
 
@@ -163,7 +180,12 @@ export function TasksPanel() {
                           <span>{tasksTimeAgo(card.ingestedAt)}</span>
                         </div>
                         {card.assignedAgent && (
-                          <div className="text-[length:var(--penny-task-fs-11)] text-[color-mix(in_srgb,var(--c-accent-blue)_70%,transparent)] truncate">{card.assignedAgent}</div>
+                          <div className="flex items-center gap-1.5 text-[length:var(--penny-task-fs-11)] text-[color-mix(in_srgb,var(--c-accent-blue)_70%,transparent)]">
+                            {AGENT_AVATARS[card.assignedAgent] && (
+                              <img src={AGENT_AVATARS[card.assignedAgent]} alt="" className="w-4 h-4 rounded-full object-cover" />
+                            )}
+                            <span className="truncate">{card.assignedAgent}</span>
+                          </div>
                         )}
                         <div className="flex gap-1 pt-1">
                           {(card.taskStatus === 'queued' || card.taskStatus === 'assigned' || card.taskStatus === 'active') && (
@@ -1198,7 +1220,10 @@ function GitHubIssueCardItem({ card, onRefresh }: { card: GitHubIssueCard; onRef
           </span>
         )}
         {card.assignedAgent && (
-          <span className="text-[length:var(--penny-task-fs-10)] text-[var(--c-border-hover)] truncate max-w-[calc(80px*var(--penny-ui-nav-scale))]" title={card.assignedAgent}>
+          <span className="inline-flex items-center gap-1 text-[length:var(--penny-task-fs-10)] text-[var(--c-border-hover)] truncate max-w-[calc(100px*var(--penny-ui-nav-scale))]" title={card.assignedAgent}>
+            {AGENT_AVATARS[card.assignedAgent] && (
+              <img src={AGENT_AVATARS[card.assignedAgent]} alt="" className="w-3.5 h-3.5 rounded-full object-cover shrink-0" />
+            )}
             {card.assignedAgent}
           </span>
         )}

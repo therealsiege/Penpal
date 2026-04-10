@@ -58,19 +58,19 @@ Your quest log. GitHub issues flow through a kanban pipeline: Planning, Executin
 
 Pod worker agents have the personas below and the configurations. Configurability here is evolving for economic and speed modes.
 
-| Agent | Title | Role | Model | Specialty |
-|-------|-------|------|-------|-----------|
-| **Sun Wukong** | The Monkey King | Solver | Opus | Full-stack — transforms into whatever the codebase needs |
-| **Erlang Shen** | The Three-Eyed God | Solver | Opus | Frontend — third eye sees broken layouts |
-| **Guanyin** | Bodhisattva of Compassion | Reviewer | Opus | Backend architecture — sees the whole system |
-| **Tang Sanzang** | The Monk Tripitaka | Reviewer | Opus | Product management — keeps the mission on track |
-| **Dragon King Ao Guang** | King of the East Sea | Reviewer | Opus | UI/UX — every pixel intentional |
-| **Sha Wujing** | Curtain-Lifting General | Executor | Sonnet | Validation & QA — if he says it passes, it passes |
-| **Zhu Bajie** | Marshal of the Heavenly Canopy | Executor | Sonnet | Executive ops — brute-force effective |
-| **Nezha** | The Third Lotus Prince | Solver | Opus | Mobile — everything must be instant |
-| **Red Boy** | Holy Child King | Solver | Opus | Game dev — creative fire, playful destruction |
-| **Bull Demon King** | Great Sage Who Pacifies Heaven | Solver | Opus | Embedded/systems — zero waste, low-level mastery |
-| **White Dragon Horse** | Third Prince of the West Sea | Solver | Opus | Content & marketing — carries the message |
+| | Agent | Title | Role | Model | Specialty |
+|---|-------|-------|------|-------|-----------|
+| <img src="Penny/public/sprites/avatars/WuKong.png" width="40"> | **Sun Wukong** | The Monkey King | Solver | Opus | Full-stack — transforms into whatever the codebase needs |
+| <img src="Penny/public/sprites/avatars/ErlangShen.png" width="40"> | **Erlang Shen** | The Three-Eyed God | Solver | Opus | Frontend — third eye sees broken layouts |
+| <img src="Penny/public/sprites/avatars/Guanyin.png" width="40"> | **Guanyin** | Bodhisattva of Compassion | Reviewer | Opus | Backend architecture — sees the whole system |
+| <img src="Penny/public/sprites/avatars/Tripitaka.png" width="40"> | **Tang Sanzang** | The Monk Tripitaka | Reviewer | Opus | Product management — keeps the mission on track |
+| <img src="Penny/public/sprites/avatars/AoGuang.png" width="40"> | **Dragon King Ao Guang** | King of the East Sea | Reviewer | Opus | UI/UX — every pixel intentional |
+| <img src="Penny/public/sprites/avatars/ShaWujing.png" width="40"> | **Sha Wujing** | Curtain-Lifting General | Executor | Sonnet | Validation & QA — if he says it passes, it passes |
+| <img src="Penny/public/sprites/avatars/ZhuBajie.png" width="40"> | **Zhu Bajie** | Marshal of the Heavenly Canopy | Executor | Sonnet | Executive ops — brute-force effective |
+| <img src="Penny/public/sprites/avatars/Nezha.png" width="40"> | **Nezha** | The Third Lotus Prince | Solver | Opus | Mobile — everything must be instant |
+| <img src="Penny/public/sprites/avatars/RedBoy.png" width="40"> | **Red Boy** | Holy Child King | Solver | Opus | Game dev — creative fire, playful destruction |
+| <img src="Penny/public/sprites/avatars/BullDemonKing.png" width="40"> | **Bull Demon King** | Great Sage Who Pacifies Heaven | Solver | Opus | Embedded/systems — zero waste, low-level mastery |
+| <img src="Penny/public/sprites/avatars/AoRun.png" width="40"> | **White Dragon Horse** | Third Prince of the West Sea | Solver | Opus | Content & marketing — carries the message |
 
 Executor agents default to Sonnet with 1.5x timeout -- validation doesn't need Opus-level reasoning.
 
