@@ -44,9 +44,9 @@ Your quest log. GitHub issues flow through a kanban pipeline: Planning, Executin
 | **Soundboard** | Audio clip player (synced via ~/Documents/Sound Effects/) |
 | **Settings** | Appearance, theme controls, service config |
 
-## Agent Personas — Journey to the West
+## Agent Personas
 
-Every agent is a character from the Chinese epic *Journey to the West*, with a specialty, backstory, and assigned desk in the lab.
+Pod worker agents have the personas below and the configurations. Configurability here is evolving for economic and speed modes.
 
 | Agent | Title | Role | Model | Specialty |
 |-------|-------|------|-------|-----------|
