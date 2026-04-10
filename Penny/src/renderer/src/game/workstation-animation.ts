@@ -784,76 +784,101 @@ export class WorkstationAnimator {
             ws.state.sessionMode !== 'plan' &&
             ws.state.sessionMode !== 'compressing'
           if (!stillIdle) return
-
-          // Find the room this workstation belongs to for world coords
-          const navMesh = this.host.getNavMesh()
-          if (!navMesh) return
-          let ownerRoom: Room | null = null
-          for (const room of this.host.getRooms().values()) {
-            if (room.workstations.has(agent.config.id)) { ownerRoom = room; break }
-          }
-          if (!ownerRoom) return
-
-          const worldX = ownerRoom.x + ws.container.x
-          const worldY = ownerRoom.y + ws.container.y + WS_SPRITE_Y
-
-          // Pick a random nearby walkable point (30-60px away), clamped to own room
-          const angle = Math.random() * Math.PI * 2
-          const dist = 30 + Math.random() * 30
-          const targetX = worldX + Math.cos(angle) * dist
-          const targetY = worldY + Math.sin(angle) * dist
-
-          // Clamp target to own room bounds so agents never aim for another room
-          const roomLeft = ownerRoom.x - ownerRoom.width / 2 + 14
-          const roomTop = ownerRoom.y - ownerRoom.height / 2 + 14
-          const roomRight = ownerRoom.x + ownerRoom.width / 2 - 14
-          const roomBottom = ownerRoom.y + ownerRoom.height / 2 - 14 - ROOM_HEADER_H
-          if (targetX < roomLeft || targetX > roomRight || targetY < roomTop || targetY > roomBottom) return
-
-          // Pass own room so agent can walk within it (base grid has corridors only)
-          const ownRoomRect = buildOwnRoomRect(ownerRoom)
-
-          const goPath = navMesh.findPath({ x: worldX, y: worldY }, { x: targetX, y: targetY }, ownRoomRect)
-          if (!goPath || goPath.length < 2) return
-
-          // Create a temporary world-space walk sprite
-          const charIdx = getAgentCharacterIndex(agent)
-          const walkSheetKey = charIdx === 1 ? ANIM_KEYS.WALK_2 : ANIM_KEYS.WALK_1
-          const walkSprite = this.scene.add.sprite(worldX, worldY, walkSheetKey, 0)
-            .setScale(CHAR_SCALE).setOrigin(0.5, 1).setDepth(9000)
-          const walkShadow = this.scene.add.ellipse(worldX, worldY + 2, 16, 5, 0x000000, 0.15).setDepth(8999)
-
-          ws.sprite.setVisible(false)
-
-          const pathWalker = new PathWalker(this.scene, walkSprite, walkShadow, walkSheetKey)
-
-          // Use a dummy tween as the walkBreakTween sentinel to prevent overlapping walks
-          ws.walkBreakTween = this.scene.tweens.addCounter({ duration: 999999 })
-
-          const returnPath = navMesh.findPath({ x: targetX, y: targetY }, { x: worldX, y: worldY }, ownRoomRect)
-            ?? [...goPath].reverse()
-
-          const finishWalk = () => {
-            pathWalker.destroy()
-            walkSprite.destroy()
-            walkShadow.destroy()
-            ws.sprite.setVisible(true)
-            if (ws.walkBreakTween) { ws.walkBreakTween.destroy(); ws.walkBreakTween = undefined }
-            ws.sprite.x = 0
-            ws.sprite.y = WS_SPRITE_Y
-            if (!gdsLock) ws.sprite.setFrame(base + POSE_SIT)
-          }
-
-          pathWalker.startPath(goPath, () => {
-            // Brief pause at destination, then walk back
-            this.scene.time.delayedCall(800 + Math.random() * 600, () => {
-              if (!walkSprite.active) { finishWalk(); return }
-              pathWalker.startPath(returnPath, finishWalk)
-            })
-          })
+          this._executeWalkBreak(ws, agent)
         },
       })
     }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Walk break — extracted so it can be triggered programmatically in tests
+  // ---------------------------------------------------------------------------
+
+  private _executeWalkBreak(ws: WorkstationSprite, agent: AgentState): void {
+    const navMesh = this.host.getNavMesh()
+    if (!navMesh) return
+    let ownerRoom: Room | null = null
+    for (const room of this.host.getRooms().values()) {
+      if (room.workstations.has(agent.config.id)) { ownerRoom = room; break }
+    }
+    if (!ownerRoom) return
+
+    const worldX = ownerRoom.x + ws.container.x
+    const worldY = ownerRoom.y + ws.container.y + WS_SPRITE_Y
+
+    // Pick a random nearby walkable point (30-60px away), clamped to own room
+    const angle = Math.random() * Math.PI * 2
+    const dist = 30 + Math.random() * 30
+    const targetX = worldX + Math.cos(angle) * dist
+    const targetY = worldY + Math.sin(angle) * dist
+
+    // Clamp target to own room bounds so agents never aim for another room
+    const roomLeft = ownerRoom.x - ownerRoom.width / 2 + 14
+    const roomTop = ownerRoom.y - ownerRoom.height / 2 + 14
+    const roomRight = ownerRoom.x + ownerRoom.width / 2 - 14
+    const roomBottom = ownerRoom.y + ownerRoom.height / 2 - 14 - ROOM_HEADER_H
+    if (targetX < roomLeft || targetX > roomRight || targetY < roomTop || targetY > roomBottom) return
+
+    // Pass own room so agent can walk within it (base grid has corridors only)
+    const ownRoomRect = buildOwnRoomRect(ownerRoom)
+
+    const goPath = navMesh.findPath({ x: worldX, y: worldY }, { x: targetX, y: targetY }, ownRoomRect)
+    if (!goPath || goPath.length < 2) return
+
+    // Create a temporary world-space walk sprite
+    const charIdx = getAgentCharacterIndex(agent)
+    const walkSheetKey = charIdx === 1 ? ANIM_KEYS.WALK_2 : ANIM_KEYS.WALK_1
+    const walkSprite = this.scene.add.sprite(worldX, worldY, walkSheetKey, 0)
+      .setScale(CHAR_SCALE).setOrigin(0.5, 1).setDepth(9000)
+    const walkShadow = this.scene.add.ellipse(worldX, worldY + 2, 16, 5, 0x000000, 0.15).setDepth(8999)
+
+    ws.sprite.setVisible(false)
+
+    const pathWalker = new PathWalker(this.scene, walkSprite, walkShadow, walkSheetKey)
+
+    // Use a dummy tween as the walkBreakTween sentinel to prevent overlapping walks
+    ws.walkBreakTween = this.scene.tweens.addCounter({ duration: 999999 })
+
+    const returnPath = navMesh.findPath({ x: targetX, y: targetY }, { x: worldX, y: worldY }, ownRoomRect)
+      ?? [...goPath].reverse()
+
+    // gdsLock and base are recomputed since this method may be called outside the idle closure
+    const gdsLock = this.host.getOrAssignGdsDeskSlot != null
+    const base = getAgentCharacterIndex(agent) * CHAR_COLS
+
+    const finishWalk = () => {
+      pathWalker.destroy()
+      walkSprite.destroy()
+      walkShadow.destroy()
+      ws.sprite.setVisible(true)
+      if (ws.walkBreakTween) { ws.walkBreakTween.destroy(); ws.walkBreakTween = undefined }
+      ws.sprite.x = 0
+      ws.sprite.y = WS_SPRITE_Y
+      if (!gdsLock) ws.sprite.setFrame(base + POSE_SIT)
+    }
+
+    pathWalker.startPath(goPath, () => {
+      // Brief pause at destination, then walk back
+      this.scene.time.delayedCall(800 + Math.random() * 600, () => {
+        if (!walkSprite.active) { finishWalk(); return }
+        pathWalker.startPath(returnPath, finishWalk)
+      })
+    })
+  }
+
+  /**
+   * Programmatically trigger a walk break for the agent with the given id.
+   * Returns true if the walk was started, false if the agent was not found,
+   * already walking, or has no state.
+   */
+  triggerWalkBreak(agentId: string): boolean {
+    for (const room of this.host.getRooms().values()) {
+      const ws = room.workstations.get(agentId)
+      if (!ws?.state || ws.walkBreakTween) continue
+      this._executeWalkBreak(ws, ws.state)
+      return true
+    }
+    return false
   }
 
   // ---------------------------------------------------------------------------
