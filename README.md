@@ -128,15 +128,32 @@ The result is a queryable web of your entire knowledge base. Agents use it via M
 ## Repository Structure
 
 ```
-sidekick/
-  Penny/              # Electron dashboard (React + Tailwind + Phaser)
-    agents/           # Agent personas, shared memory, MCP profiles
-    public/sprites/   # Sprite sheets, lab-map.json, GDS scene assets
-    src/main/         # Main process (IPC, pods, flight board, sessions)
-    src/renderer/     # React shell + Phaser game (50+ game modules)
-  analytics/          # Graph ETL pipeline, MCP server, scheduler
-  Docs/               # Documentation and knowledge bases
-  tools/              # Utility scripts (dispatch, etc.)
+Penpal/
+  Penny/                # Electron dashboard (React + Tailwind + Phaser)
+    agents/             # Agent personas (Journey to the West), shared memory, MCP profiles
+    public/sprites/     # Sprite sheets, lab-map.json, GDS scene assets
+    src/main/           # Main process (IPC, pods, flight board, sessions, soundboard)
+    src/renderer/       # React shell + Phaser game (50+ game modules)
+    tests/              # Playwright E2E + Vitest unit tests
+    data/               # Runtime state (flight-board.json, pod-workflows.json)
+  analytics/            # Graph ETL pipeline, MCP server, scheduler
+    src/etl/            # Entity extraction, sales pipeline, RSS ingestion
+    src/mcp/            # MCP server (8 tools for graph + vector queries)
+    schedule.yaml       # Cron job definitions
+  scripts/              # Vault utilities (image automation, transcription, cleanup)
+  tools/                # Dispatch scripts
+  data/                 # Eval outcomes
+  macos/                # macOS service installers (Finder automations, Whisper)
+  docs/                 # Screenshots and documentation
+```
+
+### External Directories
+
+These live outside the repo and are synced via iCloud across devices:
+
+```
+~/Documents/Sound Effects/    # Soundboard audio clips (mp3)
+~/Documents/Vault/            # Obsidian vault (knowledge base source for ETL)
 ```
 
 ## Quick Start
