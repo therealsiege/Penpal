@@ -9,6 +9,8 @@ import { BriefingModal } from './components/BriefingModal'
 import { PipelineModal } from './components/PipelineModal'
 import { ActivityModal } from './components/ActivityModal'
 import { OrchestratorModal, TasksPanel } from './components/OrchestratorModal'
+import { PodAgentModal } from './components/PodAgentModal'
+import type { AgentState } from './types'
 import { CommandCenter } from './panels/CommandCenter'
 import { VaultPanel } from './panels/VaultPanel'
 import { SettingsPanel } from './panels/SettingsPanel'
@@ -30,6 +32,7 @@ function AppContent() {
   const [showPipelineModal, setShowPipelineModal] = useState(false)
   const [showActivityModal, setShowActivityModal] = useState(false)
   const [showTasksModal, setShowTasksModal] = useState(false)
+  const [podAgentDetail, setPodAgentDetail] = useState<AgentState | null>(null)
   const [systemPaths, setSystemPaths] = useState<SystemPaths | null>(null)
   const { toast } = useToast()
   const hasRunVeritasStartupCheck = useRef(false)
@@ -44,6 +47,15 @@ function AppContent() {
         // Keep UI functional with fallback presets if IPC fails.
       })
     return () => { cancelled = true }
+  }, [])
+
+  // Listen for pod agent clicks from the Phaser game
+  useEffect(() => {
+    const handler = (_agentId: string, state: AgentState) => {
+      setPodAgentDetail(state)
+    }
+    EventBus.on(EVENTS.POD_AGENT_CLICKED, handler)
+    return () => { EventBus.off(EVENTS.POD_AGENT_CLICKED, handler) }
   }, [])
 
   const resolvePathPresets = async () => {
@@ -325,6 +337,7 @@ function AppContent() {
       {showPipelineModal && <PipelineModal onClose={() => setShowPipelineModal(false)} />}
       {showActivityModal && <ActivityModal onClose={() => setShowActivityModal(false)} />}
       {showTasksModal && <OrchestratorModal onClose={() => setShowTasksModal(false)} />}
+      {podAgentDetail && <PodAgentModal agent={podAgentDetail} onClose={() => setPodAgentDetail(null)} />}
       <Layout
         activePanel={activePanel}
         onNavigate={setActivePanel}

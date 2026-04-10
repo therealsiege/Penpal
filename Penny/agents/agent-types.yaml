@@ -49,7 +49,7 @@ agents:
     defaultRepos:
       - ~/sidekick
       - ~/ComSci/Workspace/1putthealth/medscrub
-    avatar: fullstack
+    avatar: avatars/WuKong.png
     desk: { row: 0, col: 0 }
     autonomy: default
 
@@ -97,7 +97,7 @@ agents:
         prompt: "You are an accessibility expert. Audit components for WCAG 2.1 AA compliance, keyboard navigation, screen reader support, and color contrast."
     defaultRepos:
       - ~/ComSci/Workspace/1putthealth/1putthealth.com
-    avatar: frontend
+    avatar: avatars/ErlangShen.png
     desk: { row: 0, col: 1 }
     autonomy: default
 
@@ -148,7 +148,7 @@ agents:
       - mcp__veritas-kanban__*
     defaultRepos:
       - ~/sidekick/Penny
-    avatar: electron
+    avatar: avatars/ShaWujing.png
     desk: { row: 0, col: 2 }
     autonomy: default
 
@@ -196,7 +196,7 @@ agents:
         prompt: "You are a database query optimizer. Analyze queries for performance, suggest indexes, and rewrite for efficiency."
     defaultRepos:
       - ~/sidekick/analytics
-    avatar: backend
+    avatar: avatars/Guanyin.png
     desk: { row: 1, col: 0 }
     autonomy: default
 
@@ -240,7 +240,7 @@ agents:
       - mcp__Neon__*
       - mcp__veritas-kanban__*
     defaultRepos: []
-    avatar: mobile
+    avatar: avatars/Nezha.png
     desk: { row: 1, col: 1 }
     autonomy: default
 
@@ -288,7 +288,7 @@ agents:
       - mcp__Neon__*
       - mcp__veritas-kanban__*
     defaultRepos: []
-    avatar: embedded
+    avatar: avatars/BullDemonKing.png
     desk: { row: 1, col: 2 }
     autonomy: default
 
@@ -330,7 +330,7 @@ agents:
       - mcp__Neon__*
       - mcp__veritas-kanban__*
     defaultRepos: []
-    avatar: gamedev
+    avatar: avatars/RedBoy.png
     desk: { row: 2, col: 0 }
     autonomy: default
 
@@ -377,7 +377,7 @@ agents:
         prompt: "You are a design critic. Evaluate UI for visual hierarchy, consistency, whitespace usage, typography, and user flow clarity."
     defaultRepos:
       - ~/ComSci/Workspace/1putthealth/1putthealth.com
-    avatar: designer
+    avatar: avatars/AoGuang.png
     desk: { row: 2, col: 1 }
     autonomy: default
 
@@ -426,7 +426,7 @@ agents:
         prompt: "You are a market researcher. Find competitive intelligence, market sizing data, and industry trends in healthcare IT."
     defaultRepos:
       - ~/sidekick
-    avatar: pm
+    avatar: avatars/Tripitaka.png
     desk: { row: 3, col: 0 }
     autonomy: default
 
@@ -469,7 +469,7 @@ agents:
       - mcp__veritas-kanban__*
     defaultRepos:
       - ~/ComSci/Workspace/1putthealth/1putthealth.com
-    avatar: marketer
+    avatar: avatars/AoRun.png
     desk: { row: 3, col: 1 }
     autonomy: default
 
@@ -513,7 +513,7 @@ agents:
       - mcp__veritas-kanban__*
     defaultRepos:
       - ~/sidekick
-    avatar: executive
+    avatar: avatars/ZhuBajie.png
     desk: { row: 3, col: 2 }
     autonomy: default
 

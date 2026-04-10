@@ -70,6 +70,8 @@ contextBridge.exposeInMainWorld('api', {
   resumePod: (workflowId: string) => ipcRenderer.invoke('pod:resume', workflowId),
   cancelPod: (workflowId: string) => ipcRenderer.invoke('pod:cancel', workflowId),
   getPodPresets: () => ipcRenderer.invoke('pod:presets'),
+  overridePod: (workflowId: string, phase: string, override: { model?: string; timeoutMultiplier?: number }) =>
+    ipcRenderer.invoke('pod:override', workflowId, phase, override),
   // Vault File Manager
   vaultList: (relativePath: string) => ipcRenderer.invoke('vault:list', relativePath),
   vaultRead: (relativePath: string) => ipcRenderer.invoke('vault:read', relativePath).then(unwrap),

@@ -331,16 +331,19 @@ function setStatus(wf: PodWorkflow, status: PodStatus): void {
 const PLAN_TIMEOUT_MS = 600_000
 const EXECUTE_TIMEOUT_MS = 1_800_000
 
-/** Get the effective timeout for a workflow phase, scaled by runtime profile. */
-function getTimeout(wf: PodWorkflow, baseMs: number): number {
-  const mult = wf.resolvedProfile?.timeoutMultiplier ?? 1
+/** Get the effective timeout for a workflow phase, scaled by runtime profile and optional phaseOverride. */
+function getTimeout(wf: PodWorkflow, baseMs: number, phase?: PodPhase): number {
+  const mult = (phase && wf.phaseOverrides?.[phase]?.timeoutMultiplier)
+    ?? wf.resolvedProfile?.timeoutMultiplier
+    ?? 1
   return Math.round(baseMs * mult)
 }
 
-/** Get the model override for a specific pod phase. */
+/** Get the model override for a specific pod phase, checking phaseOverrides first. */
 function getModelOverride(wf: PodWorkflow, phase: PodPhase): string | undefined {
-  const model = wf.resolvedProfile?.phases?.[phase]?.model
-  return model || undefined
+  const override = wf.phaseOverrides?.[phase]?.model
+  if (override) return override
+  return wf.resolvedProfile?.phases?.[phase]?.model || undefined
 }
 
 // ── Self-Eval Helpers (exported for tests) ──────────────────────────────────
@@ -1043,7 +1046,7 @@ async function runSelfFixStage(wf: PodWorkflow): Promise<boolean> {
     wf.executor.status = 'active'
     console.log(`[pods] Executor self-fix ${wf.selfFixAttempts + 1}/${wf.maxSelfFixes} in ${wf.cwd}`)
     const result = await runAgentHeadless(wf.executor.agentId, wf.cwd, prompt, {
-      timeoutMs: getTimeout(wf, EXECUTE_TIMEOUT_MS),
+      timeoutMs: getTimeout(wf, EXECUTE_TIMEOUT_MS, 'validate'),
       phase: 'executing',
       modelOverride: getModelOverride(wf, 'validate'),
     })
@@ -1107,7 +1110,7 @@ async function runSolveStage(wf: PodWorkflow, feedback?: string): Promise<boolea
     console.log(`[pods] Running solver ${wf.solver.agentId} headless in ${wf.cwd}`)
     const startMs = Date.now()
     const result = await runAgentHeadless(wf.solver.agentId, wf.cwd, prompt, {
-      timeoutMs: getTimeout(wf, EXECUTE_TIMEOUT_MS),
+      timeoutMs: getTimeout(wf, EXECUTE_TIMEOUT_MS, 'execute'),
       phase: 'executing',
       modelOverride: getModelOverride(wf, 'execute'),
     })
@@ -1145,7 +1148,7 @@ async function runSolveStage(wf: PodWorkflow, feedback?: string): Promise<boolea
 
   const promises = Array.from({ length: candidateCount }, (_, i) =>
     runAgentHeadless(wf.solver.agentId, wf.cwd, prompt, {
-      timeoutMs: getTimeout(wf, EXECUTE_TIMEOUT_MS),
+      timeoutMs: getTimeout(wf, EXECUTE_TIMEOUT_MS, 'execute'),
       phase: 'executing',
       modelOverride: getModelOverride(wf, 'execute'),
     }).then(result => ({
@@ -1196,7 +1199,7 @@ async function runSolveStage(wf: PodWorkflow, feedback?: string): Promise<boolea
 
     const evalResult = await runAgentHeadless(wf.solver.agentId, wf.cwd, evalPrompt, {
       permissionMode: 'plan',
-      timeoutMs: getTimeout(wf, PLAN_TIMEOUT_MS),
+      timeoutMs: getTimeout(wf, PLAN_TIMEOUT_MS, 'plan'),
       phase: 'planning',
       modelOverride: getModelOverride(wf, 'plan'),
     })
@@ -1258,7 +1261,7 @@ async function runReviewStage(wf: PodWorkflow): Promise<boolean> {
   console.log(`[pods] Running reviewer ${wf.reviewer.agentId} headless (plan mode) in ${wf.cwd}`)
   const result = await runAgentHeadless(wf.reviewer.agentId, wf.cwd, prompt, {
     permissionMode: 'plan',
-    timeoutMs: getTimeout(wf, PLAN_TIMEOUT_MS),
+    timeoutMs: getTimeout(wf, PLAN_TIMEOUT_MS, 'plan'),
     phase: 'reviewing',
     modelOverride: getModelOverride(wf, 'plan'),
   })
@@ -1297,7 +1300,7 @@ async function runExecuteStage(wf: PodWorkflow): Promise<{ passed: boolean }> {
   const prompt = formatExecutorMessage(wf, wf.solver.output, wf.reviewer.output, wf.critique)
   console.log(`[pods] Running executor ${wf.executor.agentId} headless in ${wf.cwd}`)
   const result = await runAgentHeadless(wf.executor.agentId, wf.cwd, prompt, {
-    timeoutMs: getTimeout(wf, EXECUTE_TIMEOUT_MS),
+    timeoutMs: getTimeout(wf, EXECUTE_TIMEOUT_MS, 'validate'),
     phase: 'executing',
     modelOverride: getModelOverride(wf, 'validate'),
   })
@@ -1635,6 +1638,19 @@ export function getPodStatus(workflowId: string): PodWorkflow | null {
 
 export function listPods(): PodWorkflow[] {
   return Array.from(workflows.values()).sort((a, b) => b.updatedAt - a.updatedAt)
+}
+
+export function overridePod(
+  workflowId: string,
+  phase: PodPhase,
+  override: { model?: string; timeoutMultiplier?: number },
+): boolean {
+  const wf = workflows.get(workflowId)
+  if (!wf) return false
+  wf.phaseOverrides = { ...wf.phaseOverrides, [phase]: override }
+  wf.updatedAt = Date.now()
+  savePods()
+  return true
 }
 
 export function pausePod(workflowId: string): boolean {

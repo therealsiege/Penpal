@@ -1,59 +1,70 @@
-# Sidekick
+# Penpal
 
-AI-powered venture intelligence platform built on an Obsidian vault. Parses markdown notes into a knowledge graph (Memgraph + Qdrant), orchestrates teams of Claude Code agents, and surfaces everything through **Penpal** -- an Electron dashboard with a pixel-art agent office, dispatch kanban, and real-time session monitoring.
+An AI Operating System for Product Engineers. Orchestrates teams of autonomous Claude Code agents through a visual command center, manages knowledge via a graph database, and ships code through a three-phase pod pipeline with built-in quality gates.
 
-![World Map](docs/screenshots/Landing.png)
+> This is 💯 a work in progress, but with that being said I use this tool to run my development workflow.
+> I refer to agents as duders.
 
-## Penpal Dashboard
+## Current Utility and Workflow
 
-Penpal is the visual command center. It turns your Claude Code agent sessions into an interactive pixel-art lab where agents sit at desks, baristas serve coffee, and laser doors animate as agents walk through them.
+1. I plan with claude-code agents and use the lab view to quickly locate and focus on terminal windows that belong to a specific instance. Clicking a desk focuses on the terminal session no matter where it is. I was getting lost in terminal windows previously. It surfaces all of my llm sessions no matter their flavor (claude code, cursor agent, nemoclaw, opencode) to one place.
+2. My planning creates github issues. I make sure claude-code or cursor agent (whatever I'm using at the time) creates small issues that have a solid definition of done. I even allow this agent to provide a execution strategy for the github issues as some of them can depend on each other. The pod system has mechanisms to help from collisions and pod to pod communication.
+3. Agents from the pods are split into triplets (planning, executing and validating), they are connected to slack. This connection gives them the ability to DM me when they have questions (usually the planning agent).
+4. While interacting with the issues and the pods, I am often toggling the github labels to retrigger the planning duder after answering a question, this allows me to simulate revving an agent in plan mode, but through the github issue comments, or slack.
+5. Execution creates a branch, does the work, writes a test to validate, then sets the issue to the label our validation triplet is waiting for. The validator runs playwright e2e tests, then raises a PR or labels the issue as a failure and notifies me.
+- When pods finish the validation pod raises a pull request into the default branch usually `main`.
+
+## Vision: Run Your Business Like an RPG
+
+Penpal turns your entire operation into a game. Your AI agents are characters in a pixel-art world. Your GitHub issues are quests. Shipping code earns XP. Every department is a scene on the world map, staffed by specialized duders who share a single knowledge graph — the company's brain.
 
 ### World Map
 
-Click a location marker to enter the lab. Agents are shown as characters at their assigned desks. Double-click empty space to return to the map.
+![World Map](docs/screenshots/Landing.png)
+
+The overworld. Each pin is a department, a Penpal instance, or a remote service. Click a location to enter it. The vision: multiple Penpal instances communicating across users and machines, each one a different part of the business.
+
+### Departments (Scenes)
+
+Each department is a pixel-art scene with its own agents, tools, and purpose. They all read from and write to the same knowledge graph.
+
+| Department | Status | What it does |
+|-----------|--------|-------------|
+| **The Lab** | Live | R&D headquarters — agents ship code, run tests, raise PRs |
+| **Call Center** | Planned | Outreach — agents handle lead follow-up, appointment setting, email campaigns |
+| **Marketing Studio** | Planned | Content — agents create blog posts, social media, design assets, messaging |
+| **War Room** | Planned | Strategy — competitive intelligence, pipeline reviews, quarterly planning |
+
+### The Lab
 
 ![Lab View](docs/screenshots/Location.png)
 
-### Lab Scene
+The R&D headquarters. Agents ("duders") sit at desks, take coffee breaks at the cafe, and walk through laser doorways. Every Claude Code session is a living character in the lab. The more you ship, the more the lab comes alive.
 
-A GDS-exported pixel-art backdrop with 10 workstation positions, a cafe with animated baristas, and purple laser doorways. Each agent sits at a pre-designed desk facing the correct direction, with idle walk breaks on the NavMesh floor.
+- Agents work at assigned desks with directional sit animations
+- Baristas run the cafe -- Latte Larry and Mocha Maya serve the team
+- Laser doors open as agents walk through corridors
+- Idle agents take walk breaks on the NavMesh floor
+- Scene layout driven by `lab-map.json` -- edit positions, rooms, and animations without touching code
+- XP, ranks, seasons, leaderboards, cosmetic rewards -- gamification built into every workflow
 
-- **Agent sessions** rendered as animated characters at desks
-- **Baristas** (Latte Larry & Mocha Maya) run a choreographed work loop in the cafe
-- **Laser doors** fade open/closed based on agent proximity
-- **NavMesh pathfinding** -- agents only walk on valid floor tiles
-- **lab-map.json** -- single JSON config for all desk positions, rooms, walk tracks, and animations
+### Dispatch Board & Pod System
 
-### Dispatch Board
-
-A kanban board that tracks GitHub issues through the agent pipeline: Planning, Executing, Validating, Done, Failed. Issues labeled `agent-ready` are picked up automatically.
+Your quest log. GitHub issues flow through a three-phase pipeline — **Plan, Execute, Validate** — powered by agent pods. Label an issue `agent-ready` and the system picks it up automatically.
 
 ![Dispatch](docs/screenshots/Dispatch.png)
 
-### Panels
+Agents work in **pods** — triplets of specialized roles that take an issue from plan to merged PR:
 
-| Panel | Description |
-|-------|-------------|
-| **Lab** | Pixel-art agent office with live session status |
-| **Dispatch** | Kanban board for GitHub issue pipeline |
-| **Tasks** | Orchestrator queue, Veritas board, GitHub issues |
-| **Data** | ETL pipeline controls, ingestion scripts |
-| **Vault** | CodeMirror 6 editor with wikilinks, tags, graph viz |
-| **Evals** | Agent evaluation metrics and quality tracking |
-| **Soundboard** | Audio clip player (reads from ~/Documents/Sound Effects/) |
-| **Settings** | Appearance, theme controls, service config |
+1. **Plan** — Explore the codebase, design the implementation approach
+2. **Execute** — Implement the code in an isolated git worktree
+3. **Validate** — Run Playwright E2E tests, assert pass/fail, raise PR or report failure
 
-## Agent Teams & Pod System
-
-Agents work in **pods** -- three-phase workflows inspired by AgentCoder:
-
-1. **Plan** -- Designs the implementation approach
-2. **Execute** -- Implements the code in an isolated git worktree
-3. **Validate** -- Runs tests (Playwright E2E) and asserts pass/fail
+Each phase is a column on the dispatch board. Pods advance automatically. If validation fails, the solver gets feedback and iterates (up to 3 rounds).
 
 ### Runtime Profiles
 
-Pods support configurable model routing to balance speed vs cost:
+Route pods between frontier cloud models and local inference to balance speed vs cost:
 
 | Profile | Plan | Execute | Validate | Timeout | Cost |
 |---------|------|---------|----------|---------|------|
@@ -61,57 +72,108 @@ Pods support configurable model routing to balance speed vs cost:
 | **economic** | coder:30b | coder:30b | coder:30b | 5x | $0 (local Ollama) |
 | **sonnet** | Sonnet | Sonnet | Sonnet | 1.5x | Lower quota |
 
-Set the default in `agents/agent-types.yaml` or override per-issue with `economic` / `max` GitHub labels.
+Set the system default in `agents/agent-types.yaml` or override per-issue with `economic` / `max` GitHub labels.
 
-### Pod Coordination
+### Pod Coordination — Flight Board
 
-Multiple pods running in parallel share a **flight board** (`data/flight-board.json`) that tracks:
-- Which files each pod is modifying
-- Plan summaries for cross-pod awareness
-- Dispatch gating to prevent file-level collisions
+Multiple pods running in parallel share a **flight board** that prevents collisions:
 
-### Agent Personas
+- **Planning broadcast** — when a pod's planner finishes, it publishes its plan summary and file manifest
+- **Cross-pod awareness** — new pods see what's already in flight before they start planning
+- **File-level gating** — dispatch queues pods that would touch overlapping files
+- **Rebase-before-PR** — pods rebase onto latest main before creating PRs
 
-11 named agents with specialties, backstories, and desk assignments:
+## Agent Personas
 
-| Agent | Role | Specialty |
-|-------|------|-----------|
-| Marcus Chen | Fullstack Dev | Solver -- end-to-end features |
-| Lena Park | Next.js Frontend | Solver -- React/Next.js |
-| Kai Tanaka | Electron Dev | Executor -- testing & validation |
-| Ravi Patel | Backend Architect | Reviewer -- architecture critique |
-| Sofia Ruiz | Expo Mobile | Solver -- React Native |
-| + 6 more | Various | Marketing, product, QA |
+| | Agent | Title | Role | Specialty |
+|---|-------|-------|------|-----------|
+| <img src="Penny/public/sprites/avatars/WuKong.png" width="256"> | **Sun Wukong** | The Monkey King | Solver | Full-stack — transforms into whatever the codebase needs |
+| <img src="Penny/public/sprites/avatars/ErlangShen.png" width="256"> | **Erlang Shen** | The Three-Eyed God | Solver | Frontend — third eye sees broken layouts |
+| <img src="Penny/public/sprites/avatars/Guanyin.png" width="256"> | **Guanyin** | Bodhisattva of Compassion | Reviewer | Backend architecture — sees the whole system |
+| <img src="Penny/public/sprites/avatars/Tripitaka.png" width="256"> | **Tang Sanzang** | The Monk Tripitaka | Reviewer | Product management — keeps the mission on track |
+| <img src="Penny/public/sprites/avatars/AoGuang.png" width="256"> | **Ao Guang** | King of the East Sea | Reviewer | UI/UX — every pixel intentional |
+| <img src="Penny/public/sprites/avatars/ShaWujing.png" width="256"> | **Sha Wujing** | Curtain-Lifting General | Executor | Validation & QA — if he says it passes, it passes |
+| <img src="Penny/public/sprites/avatars/ZhuBajie.png" width="256"> | **Zhu Bajie** | Marshal of the Heavenly Canopy | Executor | Executive ops — brute-force effective |
+| <img src="Penny/public/sprites/avatars/Nezha.png" width="256"> | **Nezha** | The Third Lotus Prince | Solver | Mobile — everything must be instant |
+| <img src="Penny/public/sprites/avatars/RedBoy.png" width="256"> | **Red Boy** | Holy Child King | Solver | Game dev — creative fire, playful destruction |
+| <img src="Penny/public/sprites/avatars/BullDemonKing.png" width="256"> | **Bull Demon King** | Great Sage Who Pacifies Heaven | Solver | Embedded/systems — zero waste, low-level mastery |
+| <img src="Penny/public/sprites/avatars/AoRun.png" width="256"> | **Ao Run** | Third Prince of the West Sea | Solver | Content & marketing — carries the message |
 
-## Knowledge Graph & ETL
+## Knowledge Graph — The Company Brain
 
-The `analytics/` directory houses a graph ETL pipeline that parses an Obsidian vault into a queryable knowledge graph:
+Every department, every agent, every decision draws from the same knowledge graph. It's the flow of all knowledge through the business — not a static database, but a living network that grows as agents work.
 
-- **Memgraph** -- 20+ node types (Documents, People, Companies, Technologies, Leads, etc.)
-- **Qdrant** -- Vector embeddings for semantic search
-- **MCP Server** -- 8 tools for graph queries, semantic search, RAG-powered Q&A
-- **Scheduler** -- Cron jobs for RSS ingestion, daily briefings, NPI enrichment
+![Knowledge Graph](docs/screenshots/knowledgegraph.png)
+*3,281 nodes, 8,582 relationships — queryable by every agent via MCP tools*
 
-### Ventures
+Your markdown files, emails, RSS feeds, and alerts all feed into a structured graph. When a lab agent builds a feature, it knows which customers asked for it. When a marketing agent writes a blog post, it pulls competitive context from the same graph. Every department reads from and writes to the same brain.
 
-| Venture | Focus | Scoring Profile |
-|---------|-------|-----------------|
-| MedScrub | Clinical screening compliance (CRC/MIPS #113) | Clinical |
-| MedHook | EHR integration platform | Integration |
-| 1Putt Health | Healthcare IT consulting | Consulting |
+**How it works:**
+
+1. **Parse** -- Walk every markdown file. Extract frontmatter, links, tags, and prose.
+2. **Extract** -- Claude identifies entities in the text: people, companies, technologies, regulations, sales leads.
+3. **Connect** -- Build a relationship graph in Memgraph. Documents link to entities. Entities link to each other (WORKS_AT, COMPETES_WITH, MENTIONS).
+4. **Embed** -- Chunk content and embed into Qdrant vectors for semantic similarity search.
+5. **Analyze** -- Run graph algorithms (PageRank, community detection, betweenness centrality) to surface the most important nodes and hidden connections.
+6. **Refresh** -- Scheduler runs cron jobs to ingest Google Alerts, RSS feeds, email mining (via [gog CLI](https://gogcli.sh/)), and daily briefings. The graph stays current automatically.
+
+The result is a self-updating web of your entire knowledge base that every agent in every department can query.
+
+**What agents can do with it:**
+
+| MCP Tool | What it does |
+|----------|-------------|
+| `search_knowledge` | Semantic search across all document chunks |
+| `query_graph` | Run Cypher queries against the full graph |
+| `find_entity` | Look up any entity and its relationships |
+| `ask_knowledge` | RAG-powered Q&A with source citations |
+| `find_similar` | Find related documents by vector similarity |
+| `pipeline_status` | Sales analytics by stage, territory, EHR, score |
+| `discover_connections` | Find paths between two entities in the graph |
+| `list_communities` | Show entity clusters from community detection |
+
+### Panels
+
+| Panel | Description |
+|-------|-------------|
+| **Lab** | Pixel-art agent headquarters with live session status |
+| **Dispatch** | Kanban quest board for the GitHub issue pipeline |
+| **Tasks** | Orchestrator queue, Veritas board, GitHub issues |
+| **Data** | ETL pipeline controls, ingestion scripts |
+| **Vault** | Knowledge base editor with linked documents, tags, and graph viz |
+| **Evals** | Agent evaluation metrics and quality tracking |
+| **Soundboard** | Audio clip player (synced via ~/Documents/Sound Effects/) |
+| **Settings** | Appearance, theme controls, service config |
 
 ## Repository Structure
 
 ```
-sidekick/
-  Penny/              # Electron dashboard (React + Tailwind + Phaser)
-    agents/           # Agent personas, shared memory, MCP profiles
-    public/sprites/   # Sprite sheets, lab-map.json, GDS scene assets
-    src/main/         # Electron main process (IPC, pods, sessions, flight board)
-    src/renderer/     # React shell + Phaser game (50+ game modules)
-  analytics/          # Graph ETL pipeline, MCP server, scheduler
-  Docs/               # Per-venture documentation and knowledge bases
-  tools/              # Utility scripts (dispatch, etc.)
+Penpal/
+  Penny/                # Electron dashboard (React + Tailwind + Phaser)
+    agents/             # Agent personas (Journey to the West), shared memory, MCP profiles
+    public/sprites/     # Sprite sheets, lab-map.json, GDS scene assets
+    src/main/           # Main process (IPC, pods, flight board, sessions, soundboard)
+    src/renderer/       # React shell + Phaser game (50+ game modules)
+    tests/              # Playwright E2E + Vitest unit tests
+    data/               # Runtime state (flight-board.json, pod-workflows.json)
+  analytics/            # Graph ETL pipeline, MCP server, scheduler
+    src/etl/            # Entity extraction, sales pipeline, RSS ingestion
+    src/mcp/            # MCP server (8 tools for graph + vector queries)
+    schedule.yaml       # Cron job definitions
+  scripts/              # Vault utilities (image automation, transcription, cleanup)
+  tools/                # Dispatch scripts
+  data/                 # Eval outcomes
+  macos/                # macOS service installers (Finder automations, Whisper)
+  docs/                 # Screenshots and documentation
+```
+
+### External Directories
+
+These live outside the repo and are synced via iCloud across devices:
+
+```
+~/Documents/Sound Effects/    # Soundboard audio clips (mp3)
+~/Documents/Vault/            # Knowledge base (markdown files — source for ETL)
 ```
 
 ## Quick Start
@@ -124,7 +186,7 @@ npm run infra:up          # Start Memgraph + Qdrant via Docker
 
 # ETL
 npm run etl               # Run full pipeline
-npm run etl -- --venture 1putt   # Single venture
+npm run etl -- --project myapp   # Single project
 
 # MCP Server
 npm run mcp:dev           # Start MCP server

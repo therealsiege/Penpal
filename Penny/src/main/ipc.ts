@@ -51,6 +51,7 @@ import {
   resumePod,
   cancelPod,
   getPodPresets,
+  overridePod,
   type CreatePodOpts,
 } from './pods'
 import { getActiveEntries, getFilesInFlight } from './flight-board'
@@ -972,6 +973,14 @@ export function registerIpcHandlers() {
   ipcMain.handle('pod:cancel', wrapHandler((workflowId: unknown) => {
     if (typeof workflowId !== 'string') throw new Error('workflowId must be a string')
     return cancelPod(workflowId)
+  }))
+
+  ipcMain.handle('pod:override', wrapHandler((workflowId: unknown, phase: unknown, override: unknown) => {
+    if (typeof workflowId !== 'string') throw new Error('workflowId must be a string')
+    if (typeof phase !== 'string' || !['plan', 'execute', 'validate'].includes(phase)) throw new Error('invalid phase')
+    if (typeof override !== 'object' || override === null) throw new Error('override must be object')
+    const ok = overridePod(workflowId, phase as 'plan' | 'execute' | 'validate', override as { model?: string; timeoutMultiplier?: number })
+    return { success: ok }
   }))
 
   ipcMain.handle('pod:presets', wrapHandler(() => getPodPresets()))
