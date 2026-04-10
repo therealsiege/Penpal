@@ -83,9 +83,7 @@ Multiple pods running in parallel share a **flight board** that prevents collisi
 - **File-level gating** — dispatch queues pods that would touch overlapping files
 - **Rebase-before-PR** — pods rebase onto latest main before creating PRs
 
-## Agent Personas — Journey to the West
-
-Every pod agent is a character from the Chinese epic *Journey to the West*. The persona defines who they are — role, specialty, personality. Which model and timeout they run with is determined by the runtime profile above, not the persona.
+## Agent Personas
 
 | | Agent | Title | Role | Specialty |
 |---|-------|-------|------|-----------|
