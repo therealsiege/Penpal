@@ -108,8 +108,9 @@ Your markdown files aren't just documents -- they're a living knowledge network.
 3. **Connect** -- Build a relationship graph in Memgraph. Documents link to entities. Entities link to each other (WORKS_AT, COMPETES_WITH, USES_EHR, MENTIONS).
 4. **Embed** -- Chunk content and embed into Qdrant vectors for semantic similarity search.
 5. **Analyze** -- Run graph algorithms (PageRank, community detection, betweenness centrality) to surface the most important nodes and hidden connections.
+6. **Refresh** -- Scheduler runs cron jobs to ingest Google Alerts, RSS feeds, email mining (via [gog CLI](https://gogcli.sh/)), and daily briefings. The graph stays current automatically.
 
-The result is a queryable web of your entire knowledge base. Agents use it via MCP tools to answer questions, find connections, and make decisions with full context.
+The result is a queryable, self-updating web of your entire knowledge base. Agents use it via MCP tools to answer questions, find connections, and make decisions with full context.
 
 **What agents can do with it:**
 
@@ -124,11 +125,6 @@ The result is a queryable web of your entire knowledge base. Agents use it via M
 | `discover_connections` | Find paths between two entities in the graph |
 | `list_communities` | Show entity clusters from community detection |
 
-**Keeps itself fresh:**
-
-- **Scheduler** runs cron jobs: RSS ingestion from healthcare feeds, daily briefings, NPI enrichment
-- **Multi-project** support: each project gets its own ETL config, scoring profile, and pipeline
-
 ### Panels
 
 | Panel | Description |
@@ -137,7 +133,7 @@ The result is a queryable web of your entire knowledge base. Agents use it via M
 | **Dispatch** | Kanban quest board for the GitHub issue pipeline |
 | **Tasks** | Orchestrator queue, Veritas board, GitHub issues |
 | **Data** | ETL pipeline controls, ingestion scripts |
-| **Vault** | CodeMirror 6 editor with wikilinks, tags, graph viz |
+| **Vault** | Knowledge base editor with linked documents, tags, and graph viz |
 | **Evals** | Agent evaluation metrics and quality tracking |
 | **Soundboard** | Audio clip player (synced via ~/Documents/Sound Effects/) |
 | **Settings** | Appearance, theme controls, service config |
@@ -170,7 +166,7 @@ These live outside the repo and are synced via iCloud across devices:
 
 ```
 ~/Documents/Sound Effects/    # Soundboard audio clips (mp3)
-~/Documents/Vault/            # Obsidian vault (knowledge base source for ETL)
+~/Documents/Vault/            # Knowledge base (markdown files — source for ETL)
 ```
 
 ## Quick Start
