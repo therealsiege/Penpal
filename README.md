@@ -92,22 +92,37 @@ Multiple pods running in parallel share a **flight board** that prevents collisi
 - **File-level gating** -- dispatch queues pods that would touch overlapping files
 - **Rebase-before-PR** -- pods rebase onto latest main before creating PRs
 
-## Knowledge Graph & Intelligence
+## Knowledge Graph — The Vault's Nervous System
 
-The `analytics/` directory houses a graph ETL pipeline that parses markdown documents into a queryable knowledge graph:
+Your markdown files aren't just documents -- they're a living knowledge network. The ETL pipeline in `analytics/` reads every file in the vault and builds a structured graph of everything it finds: people, companies, technologies, regulations, sales leads, and how they all connect.
 
-- **Memgraph** -- 20+ node types (Documents, People, Companies, Technologies, Leads, etc.)
-- **Qdrant** -- Vector embeddings for semantic search
-- **MCP Server** -- 8 tools for graph queries, semantic search, RAG-powered Q&A
-- **Scheduler** -- Cron jobs for RSS ingestion, daily briefings, NPI enrichment
+**How it works:**
 
-### Ventures
+1. **Parse** -- Walk every markdown file. Extract frontmatter, wikilinks, tags, and prose.
+2. **Extract** -- Claude identifies entities in the text: people, companies, EHR systems, billing codes, technologies.
+3. **Connect** -- Build a relationship graph in Memgraph. Documents link to entities. Entities link to each other (WORKS_AT, COMPETES_WITH, USES_EHR, MENTIONS).
+4. **Embed** -- Chunk content and embed into Qdrant vectors for semantic similarity search.
+5. **Analyze** -- Run graph algorithms (PageRank, community detection, betweenness centrality) to surface the most important nodes and hidden connections.
 
-| Venture | Focus | Scoring Profile |
-|---------|-------|-----------------|
-| MedScrub | Clinical screening compliance (CRC/MIPS #113) | Clinical |
-| MedHook | EHR integration platform | Integration |
-| 1Putt Health | Healthcare IT consulting | Consulting |
+The result is a queryable web of your entire knowledge base. Agents use it via MCP tools to answer questions, find connections, and make decisions with full context.
+
+**What agents can do with it:**
+
+| MCP Tool | What it does |
+|----------|-------------|
+| `search_knowledge` | Semantic search across all document chunks |
+| `query_graph` | Run Cypher queries against the full graph |
+| `find_entity` | Look up any entity and its relationships |
+| `ask_knowledge` | RAG-powered Q&A with source citations |
+| `find_similar` | Find related documents by vector similarity |
+| `pipeline_status` | Sales analytics by stage, territory, EHR, score |
+| `discover_connections` | Find paths between two entities in the graph |
+| `list_communities` | Show entity clusters from community detection |
+
+**Keeps itself fresh:**
+
+- **Scheduler** runs cron jobs: RSS ingestion from healthcare feeds, daily briefings, NPI enrichment
+- **Multi-project** support: each project gets its own ETL config, scoring profile, and pipeline
 
 ## Repository Structure
 
@@ -119,7 +134,7 @@ sidekick/
     src/main/         # Main process (IPC, pods, flight board, sessions)
     src/renderer/     # React shell + Phaser game (50+ game modules)
   analytics/          # Graph ETL pipeline, MCP server, scheduler
-  Docs/               # Per-venture documentation and knowledge bases
+  Docs/               # Documentation and knowledge bases
   tools/              # Utility scripts (dispatch, etc.)
 ```
 
@@ -133,7 +148,7 @@ npm run infra:up          # Start Memgraph + Qdrant via Docker
 
 # ETL
 npm run etl               # Run full pipeline
-npm run etl -- --venture 1putt   # Single venture
+npm run etl -- --project myapp   # Single project
 
 # MCP Server
 npm run mcp:dev           # Start MCP server
