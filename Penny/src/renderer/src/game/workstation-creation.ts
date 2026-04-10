@@ -1057,7 +1057,11 @@ export class WorkstationFactory {
     let lastClickTime = 0
     hitArea.on('pointerdown', () => {
       const now = Date.now()
-      if (now - lastClickTime < 350) {
+      const isPod = ws.state?.isOrchestratorTask === true
+      if (isPod) {
+        // Pod agents: show detail modal instead of terminal focus
+        EventBus.emit(EVENTS.POD_AGENT_CLICKED, agent.config.id, ws.state)
+      } else if (now - lastClickTime < 350) {
         EventBus.emit(EVENTS.AGENT_DOUBLE_CLICKED, agent.config.id, ws.state)
         this.host.enterFocusMode(agent.config.id)
       } else {
