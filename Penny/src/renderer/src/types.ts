@@ -530,6 +530,7 @@ export interface GitHubIssueCard {
   taskStage: string | null
   priority: string
   assignedAgent: string | null
+  podAgents?: { role: 'solver' | 'reviewer' | 'executor'; agentId: string; active: boolean }[]
   ingestedAt: number
   url: string
 }

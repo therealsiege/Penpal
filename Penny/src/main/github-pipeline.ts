@@ -1,12 +1,11 @@
 /**
- * 2-Agent GitHub Issue Pipeline
+ * 3-Agent GitHub Issue Pipeline (Pod-based)
  *
- * Drives GitHub issues through a planner→executor flow:
- *   agent-ready → agent-planning → [agent-question]* → agent-executing → pr-ready | agent-failed
+ * Drives GitHub issues through the full Solver → Reviewer → Executor pod workflow:
+ *   agent-ready → agent-executing (pod running) → pr-ready | agent-failed
  *
- * The planner agent explores the codebase and designs an implementation plan.
- * The executor agent implements the plan in an isolated worktree, writes tests, and commits.
- * The system pushes the branch and creates the PR.
+ * On pickup: creates a worktree, spawns a pod (3 headless agents), and tracks status.
+ * On completion: pushes the branch, creates the PR, and labels the issue.
  */
 
 import { execFile } from 'child_process'
@@ -16,13 +15,13 @@ import path from 'path'
 import os from 'os'
 
 const execFileAsync = promisify(execFile)
-import { runAgentHeadless } from './sessions'
+import { createPod, getPodStatus, type PodWorkflow } from './pods'
 import { atomicWrite } from './atomic-store'
 import { postPipelineNotification, dmOwner } from './slack-bridge'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
-export type PipelineStage = 'planning' | 'awaiting-answer' | 'executing' | 'done' | 'failed'
+export type PipelineStage = 'executing' | 'done' | 'failed'
 
 export interface PipelineIssue {
   number: number
@@ -31,23 +30,16 @@ export interface PipelineIssue {
   body: string
   stage: PipelineStage
   priority: string
-  size: TShirtSize
   ingestedAt: number
   updatedAt: number
   branch?: string
   worktreePath?: string
-  /** Set when worktree + fallback branch creation both fail (shown on "no branch" issue comment). */
   branchCreationError?: string
-  plannerOutput?: string
-  questionComment?: string
-  questionPostedAt?: number
-  executorAttempts: number
   lastError?: string
-  /** Runtime profile derived from issue labels ('economic', 'max', 'sonnet'). */
   runtimeProfile?: string
-  // Guards against concurrent runs
-  plannerRunning: boolean
-  executorRunning: boolean
+  podWorkflowId?: string
+  /** Last pod status we saw — used to detect transitions for comments. */
+  lastPodStatus?: string
 }
 
 interface RepoConfig {
@@ -62,94 +54,6 @@ interface GHIssue {
   body: string
   labels: { name: string }[]
 }
-
-// ── T-shirt sizing ──────────────────────────────────────────────────────────
-
-export type TShirtSize = 'S' | 'M' | 'L' | 'XL'
-
-interface SizeProfile {
-  plannerModel: string
-  executorModel: string
-  plannerTimeoutMs: number
-  executorTimeoutMs: number
-  maxAttempts: number
-}
-
-const SIZE_PROFILES: Record<TShirtSize, SizeProfile> = {
-  S: {
-    plannerModel: 'haiku',
-    executorModel: 'sonnet',
-    plannerTimeoutMs: 300_000,   // 5 min
-    executorTimeoutMs: 300_000,  // 5 min
-    maxAttempts: 2,
-  },
-  M: {
-    plannerModel: 'sonnet',
-    executorModel: 'sonnet',
-    plannerTimeoutMs: 600_000,   // 10 min
-    executorTimeoutMs: 600_000,  // 10 min
-    maxAttempts: 3,
-  },
-  L: {
-    plannerModel: 'sonnet',
-    executorModel: 'opus',
-    plannerTimeoutMs: 900_000,   // 15 min
-    executorTimeoutMs: 900_000,  // 15 min
-    maxAttempts: 3,
-  },
-  XL: {
-    plannerModel: 'opus',
-    executorModel: 'opus',
-    plannerTimeoutMs: 900_000,   // 15 min
-    executorTimeoutMs: 900_000,  // 15 min
-    maxAttempts: 3,
-  },
-}
-
-const DEFAULT_SIZE: TShirtSize = 'M'
-
-function detectTShirtSize(labels: { name: string }[]): TShirtSize {
-  for (const l of labels) {
-    const m = l.name.match(/^size[:\/]?\s*(XL|L|M|S)$/i)
-    if (m) return m[1].toUpperCase() as TShirtSize
-  }
-  return DEFAULT_SIZE
-}
-
-function getSizeProfile(size: TShirtSize): SizeProfile {
-  return SIZE_PROFILES[size] ?? SIZE_PROFILES[DEFAULT_SIZE]
-}
-
-/** Apply runtime profile override to a size profile. Labels route to per-phase models from agent-types.yaml. */
-function applyRuntimeOverride(profile: SizeProfile, labels: { name: string }[]): SizeProfile {
-  const labelNames = labels.map(l => l.name.toLowerCase())
-  let profileName: string | undefined
-
-  if (labelNames.includes('economic')) profileName = 'economic'
-  else if (labelNames.includes('sonnet')) profileName = 'sonnet'
-  else if (labelNames.includes('max')) profileName = 'max'
-
-  if (!profileName) return profile
-
-  try {
-    const { resolveRuntimeProfile } = require('./pods')
-    const rp = resolveRuntimeProfile(profileName)
-    return {
-      ...profile,
-      plannerModel: rp.phases.plan.model,
-      executorModel: rp.phases.execute.model,
-      plannerTimeoutMs: Math.round(profile.plannerTimeoutMs * rp.timeoutMultiplier),
-      executorTimeoutMs: Math.round(profile.executorTimeoutMs * rp.timeoutMultiplier),
-    }
-  } catch {
-    return profile
-  }
-}
-
-// ── Constants ────────────────────────────────────────────────────────────────
-
-const QUESTION_TIMEOUT_MS = 7 * 24 * 60 * 60 * 1000 // 7 days
-const MAX_EXECUTOR_ATTEMPTS = 3
 
 // ── Label helpers ────────────────────────────────────────────────────────────
 
@@ -176,37 +80,6 @@ async function addComment(config: RepoConfig, issueNumber: number, body: string)
   }
 }
 
-async function hasLabel(config: RepoConfig, issueNumber: number, label: string): Promise<boolean> {
-  try {
-    const { stdout } = await execFileAsync('gh', [
-      'issue', 'view', String(issueNumber),
-      '--repo', `${config.owner}/${config.repo}`,
-      '--json', 'labels',
-    ], { encoding: 'utf-8', timeout: 15_000 })
-    const data = JSON.parse(stdout) as { labels: { name: string }[] }
-    return data.labels.some(l => l.name === label)
-  } catch {
-    return true // assume still present on error
-  }
-}
-
-async function fetchIssueComments(config: RepoConfig, issueNumber: number, limit = 5): Promise<string> {
-  try {
-    const { stdout } = await execFileAsync('gh', [
-      'issue', 'view', String(issueNumber),
-      '--repo', `${config.owner}/${config.repo}`,
-      '--json', 'comments',
-    ], { encoding: 'utf-8', timeout: 15_000 })
-    const data = JSON.parse(stdout) as { comments: { body: string; author: { login: string }; createdAt: string }[] }
-    return data.comments
-      .slice(-limit)
-      .map(c => `**${c.author.login}** (${c.createdAt}):\n${c.body}`)
-      .join('\n\n---\n\n')
-  } catch {
-    return '(could not fetch comments)'
-  }
-}
-
 // ── Git helpers ──────────────────────────────────────────────────────────────
 
 function expandHome(p: string): string {
@@ -214,7 +87,6 @@ function expandHome(p: string): string {
   return p
 }
 
-/** stderr/stdout from failed git child processes (execFile puts stderr on the error object). */
 function formatGitError(err: unknown): string {
   if (err && typeof err === 'object') {
     const e = err as { message?: string; stderr?: string; stdout?: string }
@@ -234,10 +106,6 @@ async function remoteTrackingBranchExists(repoPath: string, branch: string): Pro
   }
 }
 
-/**
- * Resolve origin's default branch. Prefer Git's own pointers (origin/HEAD, ls-remote),
- * then try common branch names. Stale clones may lack refs/remotes/origin/HEAD.
- */
 async function resolveRemoteDefaultBranch(repoPath: string): Promise<string> {
   try {
     const { stdout } = await execFileAsync('git', ['symbolic-ref', 'refs/remotes/origin/HEAD'], {
@@ -269,7 +137,6 @@ async function resolveRemoteDefaultBranch(repoPath: string): Promise<string> {
   return 'main'
 }
 
-/** Update remote refs; failures must not be swallowed (stale/missing refs cause "no branch"). */
 async function fetchOriginOrFail(repoPath: string): Promise<{ ok: true } | { ok: false; error: string }> {
   try {
     await execFileAsync('git', ['fetch', 'origin', '--prune'], {
@@ -281,7 +148,6 @@ async function fetchOriginOrFail(repoPath: string): Promise<{ ok: true } | { ok:
   }
 }
 
-/** Ensure refs/remotes/origin/<branch> exists after fetch (required for worktree add / checkout). */
 async function ensureOriginRemoteRef(
   repoPath: string,
   baseBranch: string,
@@ -363,12 +229,10 @@ async function createIssueWorktree(
       }
     }
 
-    // Delete stale branch from previous failed attempts
     await execFileAsync('git', ['branch', '-D', branch], {
       cwd: mainRepoPath, encoding: 'utf-8', timeout: 10_000,
     }).catch(() => { /* branch didn't exist — fine */ })
 
-    // --force: checkout branch even if already checked out in another worktree
     await execFileAsync('git', ['worktree', 'add', '--force', '-b', branch, worktreePath, `origin/${baseBranch}`], {
       cwd: mainRepoPath, encoding: 'utf-8', timeout: 60_000,
     })
@@ -418,12 +282,10 @@ async function createIssueBranch(localPath: string, issueNumber: number, slug: s
       }
     }
 
-    // Delete stale branch from previous failed attempts
     await execFileAsync('git', ['branch', '-D', branch], {
       cwd: localPath, encoding: 'utf-8', timeout: 10_000,
     }).catch(() => { /* branch didn't exist — fine */ })
 
-    // -B: create or reset issue branch to match remote base (handles leftover local branch)
     await execFileAsync('git', ['checkout', '-B', branch, `origin/${baseBranch}`], {
       cwd: localPath, encoding: 'utf-8', timeout: 15_000,
     })
@@ -444,19 +306,17 @@ async function pushBranchAndCreatePR(
 ): Promise<boolean> {
   localPath = expandHome(localPath)
   try {
-    // Commit any uncommitted changes left by the executor
     await execFileAsync('git', ['add', '-A'], { cwd: localPath, encoding: 'utf-8', timeout: 15_000 })
     const { stdout: status } = await execFileAsync('git', ['status', '--porcelain'], {
       cwd: localPath, encoding: 'utf-8', timeout: 10_000,
     })
     if (status.trim()) {
-      const commitMsg = `${title}\n\nCloses #${issueNumber}\n\nCo-Authored-By: Penny Orchestrator <noreply@penny.dev>`
+      const commitMsg = `${title}\n\nCloses #${issueNumber}\n\nCo-Authored-By: Penny Pod <noreply@penny.dev>`
       await execFileAsync('git', ['commit', '-m', commitMsg], {
         cwd: localPath, encoding: 'utf-8', timeout: 15_000,
       })
     }
 
-    // Check if the branch has any commits ahead of origin (executor may have committed already)
     const baseBranch = await resolveRemoteDefaultBranch(localPath)
     const { stdout: revList } = await execFileAsync('git', ['rev-list', '--count', `origin/${baseBranch}..HEAD`], {
       cwd: localPath, encoding: 'utf-8', timeout: 10_000,
@@ -469,7 +329,7 @@ async function pushBranchAndCreatePR(
     await execFileAsync('git', ['push', '-u', 'origin', branch], {
       cwd: localPath, encoding: 'utf-8', timeout: 60_000,
     })
-    const prBody = `Closes #${issueNumber}\n\nAutomated implementation by Penny orchestrator (2-agent pipeline).`
+    const prBody = `Closes #${issueNumber}\n\nAutomated implementation by Penny pod (solver + reviewer + executor).`
     await execFileAsync('gh', [
       'pr', 'create',
       '--repo', `${config.owner}/${config.repo}`,
@@ -494,131 +354,24 @@ async function cleanupWorktree(mainRepoPath: string, worktreePath: string): Prom
   } catch { /* best effort */ }
 }
 
-// ── Prompt builders ──────────────────────────────────────────────────────────
+// ── Preset derivation from labels ──────────────────────────────────────────
 
-function buildPlannerPrompt(issue: GHIssue, repoKey: string, answerContext?: string): string {
-  const parts = [
-    `Plan the implementation for ${repoKey}#${issue.number}: ${issue.title}`,
-    '',
-    issue.body || '(no description)',
-    '',
-    'Output a numbered plan with exact file paths and changes. Be concise — the executor agent implements from your plan.',
-    'Only output QUESTION: if you genuinely cannot proceed without an answer (e.g. ambiguous requirements, missing context about business logic).',
-    'Do NOT ask about tests, tooling, or things you can discover by reading the code. Just plan the fix.',
-  ]
-  if (answerContext) {
-    parts.push('', '## Previous Question Context', '', answerContext)
-  }
-  return parts.join('\n')
+function derivePresetFromLabels(labels: { name: string }[]): string {
+  const names = labels.map(l => l.name.toLowerCase())
+  if (names.includes('frontend') || names.includes('ui')) return 'frontend-feature'
+  if (names.includes('backend') || names.includes('api')) return 'backend-feature'
+  return 'full-stack'
 }
 
-function buildExecutorPrompt(issue: PipelineIssue, repoKey: string): string {
-  return [
-    `You are implementing GitHub issue ${repoKey}#${issue.number}.`,
-    `You are on branch \`${issue.branch}\`. Commit all work to this branch.`,
-    '',
-    '## Implementation Plan',
-    '',
-    issue.plannerOutput || '(no plan provided)',
-    '',
-    '## Instructions',
-    '',
-    '1. Implement the changes described in the plan above.',
-    '2. Write tests to validate your work. Use the project\'s existing test framework.',
-    '   If Playwright is available, write an e2e test. Otherwise use the project\'s unit test setup.',
-    '3. Run the tests and fix any failures.',
-    '4. Commit your changes with a descriptive message referencing the issue number.',
-    '5. Do NOT push or create PRs — that will be handled automatically.',
-    issue.lastError
-      ? `\n## Previous Attempt Failed\n\nError from last attempt:\n${issue.lastError}\n\nFix the issues and try again.`
-      : '',
-  ].join('\n')
+function deriveRuntimeProfile(labels: { name: string }[]): string | undefined {
+  const names = labels.map(l => l.name.toLowerCase())
+  if (names.includes('economic')) return 'economic'
+  if (names.includes('max')) return 'max'
+  if (names.includes('sonnet')) return 'sonnet'
+  return undefined
 }
 
-// ── Agent runners ────────────────────────────────────────────────────────────
-
-async function runPlannerAgent(
-  config: RepoConfig,
-  tracked: PipelineIssue,
-  issue: GHIssue,
-  answerContext?: string,
-): Promise<'done' | 'question' | 'failed'> {
-  const repoKey = `${config.owner}/${config.repo}`
-  const prompt = buildPlannerPrompt(issue, repoKey, answerContext)
-  const profile = applyRuntimeOverride(getSizeProfile(tracked.size), issue.labels)
-
-  console.log(`[github-pipeline] Running planner for ${repoKey}#${tracked.number} (size=${tracked.size}, model=${profile.plannerModel})`)
-  const result = await runAgentHeadless('issue-planner', config.localPath, prompt, {
-    timeoutMs: profile.plannerTimeoutMs,
-    phase: 'planning',
-    modelOverride: profile.plannerModel,
-  })
-
-  if (!result.success) {
-    const errorDetail = [result.error, result.output?.slice(-300)].filter(Boolean).join('\n\n')
-    tracked.lastError = errorDetail || 'Planner exited with error'
-    console.error(`[github-pipeline] Planner failed for #${tracked.number}:`, errorDetail)
-    return 'failed'
-  }
-
-  const output = result.output.trim()
-  if (!output) {
-    tracked.lastError = 'Planner produced empty output'
-    console.error(`[github-pipeline] Planner empty output for #${tracked.number}`)
-    return 'failed'
-  }
-
-  // Check for question
-  const questionMatch = output.match(/^QUESTION:\s*(.+)$/m)
-  if (questionMatch) {
-    tracked.questionComment = questionMatch[1].trim()
-    return 'question'
-  }
-
-  // Save plan
-  tracked.plannerOutput = output
-  try {
-    const pennyDir = path.join(config.localPath, '.penny')
-    if (!fs.existsSync(pennyDir)) fs.mkdirSync(pennyDir, { recursive: true })
-    fs.writeFileSync(path.join(pennyDir, `plan-${tracked.number}.md`), output)
-  } catch { /* best effort */ }
-
-  return 'done'
-}
-
-async function runExecutorAgent(
-  config: RepoConfig,
-  tracked: PipelineIssue,
-): Promise<'done' | 'failed'> {
-  const repoKey = `${config.owner}/${config.repo}`
-  const agentCwd = tracked.worktreePath || config.localPath
-  const prompt = buildExecutorPrompt(tracked, repoKey)
-  // Apply runtime override if issue had economic/sonnet/max label
-  const runtimeLabels = tracked.runtimeProfile
-    ? [{ name: tracked.runtimeProfile }]
-    : []
-  const profile = applyRuntimeOverride(getSizeProfile(tracked.size), runtimeLabels)
-  const maxAttempts = profile.maxAttempts
-
-  console.log(`[github-pipeline] Running executor for ${repoKey}#${tracked.number} (size=${tracked.size}, model=${profile.executorModel}, attempt ${tracked.executorAttempts + 1}/${maxAttempts})`)
-  const result = await runAgentHeadless('electron-dev', agentCwd, prompt, {
-    timeoutMs: profile.executorTimeoutMs,
-    phase: 'executing',
-    modelOverride: profile.executorModel,
-  })
-
-  if (!result.success) {
-    const errorDetail = [result.error, result.output?.slice(-500)].filter(Boolean).join('\n\n')
-    tracked.lastError = errorDetail || 'Executor exited with error'
-    tracked.executorAttempts += 1
-    console.error(`[github-pipeline] Executor failed for #${tracked.number} (attempt ${tracked.executorAttempts}):`, errorDetail)
-    return 'failed'
-  }
-
-  return 'done'
-}
-
-// ── Pipeline driver ──────────────────────────────────────────────────────────
+// ── Pipeline state ──────────────────────────────────────────────────────────
 
 export interface PipelineState {
   issues: PipelineIssue[]
@@ -633,10 +386,6 @@ function loadState(): void {
   try {
     if (fs.existsSync(STATE_PATH)) {
       state = JSON.parse(fs.readFileSync(STATE_PATH, 'utf-8'))
-      // Backfill size for issues created before t-shirt sizing
-      for (const issue of state.issues) {
-        if (!issue.size) issue.size = DEFAULT_SIZE
-      }
     }
   } catch { state = { issues: [] } }
 }
@@ -649,51 +398,121 @@ function saveState(): void {
   }
 }
 
-/** Ingest a new issue into the 2-agent pipeline. Called from github-issues.ts pollOnce(). */
+// ── Ingest ──────────────────────────────────────────────────────────────────
+
+/** Build the task prompt for the pod solver from the GitHub issue. */
+function buildPodTask(repoKey: string, issue: GHIssue, branch?: string): string {
+  const lines = [
+    `Implement GitHub issue ${repoKey}#${issue.number}: ${issue.title}`,
+    '',
+    issue.body || '(no description)',
+  ]
+  if (branch) {
+    lines.push('', `You are on branch \`${branch}\`. Commit all work to this branch.`)
+  }
+  lines.push(
+    '',
+    'Commit your changes with a descriptive message referencing the issue number.',
+    'Do NOT push or create PRs — that will be handled automatically.',
+  )
+  return lines.join('\n')
+}
+
+/** Ingest a new issue into the 3-agent pod pipeline. Called from github-issues.ts pollOnce(). */
 export async function ingestIssue(config: RepoConfig, issue: GHIssue): Promise<PipelineIssue> {
   const repoKey = `${config.owner}/${config.repo}`
 
   // Check for existing entry
   const existing = state.issues.find(i => i.repo === repoKey && i.number === issue.number)
   if (existing && existing.stage !== 'done' && existing.stage !== 'failed') {
-    return existing // already in pipeline
+    return existing
   }
 
-  const size = detectTShirtSize(issue.labels)
-  const profile = applyRuntimeOverride(getSizeProfile(size), issue.labels)
-
-  // Derive runtime profile from labels (economic, max, sonnet)
-  const labelNames = issue.labels.map(l => l.name.toLowerCase())
-  const runtimeProfile = labelNames.includes('economic') ? 'economic'
-    : labelNames.includes('sonnet') ? 'sonnet'
-    : labelNames.includes('max') ? 'max'
-    : undefined
+  const runtimeProfile = deriveRuntimeProfile(issue.labels)
+  const presetId = derivePresetFromLabels(issue.labels)
 
   const entry: PipelineIssue = {
     number: issue.number,
     repo: repoKey,
     title: issue.title,
     body: issue.body || '',
-    stage: 'planning',
+    stage: 'executing',
     priority: 'normal',
-    size,
     runtimeProfile,
     ingestedAt: Date.now(),
     updatedAt: Date.now(),
-    executorAttempts: 0,
-    plannerRunning: false,
-    executorRunning: false,
   }
 
   // Remove stale entry if re-ingesting
   state.issues = state.issues.filter(i => !(i.repo === repoKey && i.number === issue.number))
   state.issues.push(entry)
 
-  // Swap label (non-blocking, concurrent)
+  // Create worktree/branch first
+  const slug = issue.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 40).replace(/-$/, '')
+  const resolvedPath = expandHome(config.localPath)
+  console.log(`[github-pipeline] Creating worktree for #${issue.number} in ${resolvedPath}`)
+
+  const wt = await createIssueWorktree(resolvedPath, issue.number, slug)
+  if (wt.ok) {
+    entry.branch = wt.branch
+    entry.worktreePath = wt.worktreePath
+    console.log(`[github-pipeline] Worktree created: ${wt.branch} at ${wt.worktreePath}`)
+  } else {
+    const br = await createIssueBranch(resolvedPath, issue.number, slug)
+    if (br.ok) {
+      entry.branch = br.branch
+      console.log(`[github-pipeline] Branch created: ${br.branch}`)
+    } else {
+      entry.branchCreationError = `Worktree failed:\n${wt.error}\n\nFallback branch failed:\n${br.error}`
+      console.error(`[github-pipeline] Branch creation failed for #${issue.number}:`, entry.branchCreationError)
+    }
+  }
+
+  // If no branch, fail immediately
+  if (!entry.branch) {
+    entry.stage = 'failed'
+    entry.lastError = 'Branch creation failed'
+    saveState()
+    const gitDetail = entry.branchCreationError
+      ? `\n\n<details><summary>Git error</summary>\n\n\`\`\`\n${entry.branchCreationError.slice(0, 3500)}\n\`\`\`\n\n</details>`
+      : ''
+    await Promise.allSettled([
+      setLabel(config, issue.number, ['agent-ready'], 'agent-failed'),
+      addComment(config, issue.number, `No branch was created — cannot proceed.${gitDetail}\n\nTo retry, remove \`agent-failed\` and add \`agent-ready\`.`),
+    ])
+    return entry
+  }
+
+  // Create the 3-agent pod
+  const podCwd = entry.worktreePath || resolvedPath
+  const task = buildPodTask(repoKey, issue, entry.branch)
+  try {
+    const wf = createPod(task, {
+      name: `${repoKey}#${issue.number}`,
+      cwd: podCwd,
+      presetId,
+      runtimeProfile,
+      priority: entry.priority,
+    })
+    entry.podWorkflowId = wf.id
+    entry.lastPodStatus = wf.status
+    console.log(`[github-pipeline] Pod ${wf.id} created for #${issue.number} (preset=${presetId}, solver=${wf.solver.agentId}, reviewer=${wf.reviewer.agentId}, executor=${wf.executor.agentId})`)
+  } catch (err) {
+    entry.stage = 'failed'
+    entry.lastError = `Pod creation failed: ${(err as Error).message}`
+    saveState()
+    await Promise.allSettled([
+      setLabel(config, issue.number, ['agent-ready'], 'agent-failed'),
+      addComment(config, issue.number, `Pod creation failed: ${(err as Error).message}\n\nTo retry, remove \`agent-failed\` and add \`agent-ready\`.`),
+    ])
+    return entry
+  }
+
+  // Update labels and comment
   await Promise.allSettled([
-    setLabel(config, issue.number, ['agent-ready'], 'agent-planning'),
+    setLabel(config, issue.number, ['agent-ready'], 'agent-executing'),
     addComment(config, issue.number,
-      `🤖 **Picked up by Penny** (2-agent pipeline, size **${size}**${runtimeProfile ? `, runtime: **${runtimeProfile}**` : ''})\n\nPlanner: \`${profile.plannerModel}\` · Executor: \`${profile.executorModel}\`\n\nPlanner agent is designing the approach...`,
+      `**Picked up by Penny** (3-agent pod: solver + reviewer + executor)${runtimeProfile ? `\nRuntime: **${runtimeProfile}**` : ''}\nPreset: **${presetId}**\nPod: \`${entry.podWorkflowId}\``,
     ),
   ])
 
@@ -702,198 +521,98 @@ export async function ingestIssue(config: RepoConfig, issue: GHIssue): Promise<P
   return entry
 }
 
+// ── Pipeline driver ─────────────────────────────────────────────────────────
+
+/** Map pod status to a human-readable stage name for comments. */
+function podStageLabel(status: string): string {
+  switch (status) {
+    case 'solving': return 'Solver implementing'
+    case 'reviewing': return 'Reviewer evaluating'
+    case 'executing': return 'Executor testing'
+    case 'self-fixing': return 'Executor self-fixing'
+    case 'feedback': return 'Feedback loop (solver re-iterating)'
+    default: return status
+  }
+}
+
 /** Drive all active pipeline issues. Called every 15s. */
 export async function drivePipeline(repos: RepoConfig[]): Promise<void> {
   for (const tracked of state.issues) {
     if (tracked.stage === 'done' || tracked.stage === 'failed') continue
+    if (!tracked.podWorkflowId) continue
 
     const config = repos.find(r => `${r.owner}/${r.repo}` === tracked.repo)
     if (!config) continue
 
-    // ── Planning ──
-    if (tracked.stage === 'planning' && !tracked.plannerRunning) {
-      tracked.plannerRunning = true
-      saveState()
+    const pod = getPodStatus(tracked.podWorkflowId)
+    if (!pod) continue
 
-      const ghIssue: GHIssue = {
-        number: tracked.number,
-        title: tracked.title,
-        body: tracked.body,
-        labels: [],
-      }
+    // Post a comment when the pod transitions between major stages
+    if (tracked.lastPodStatus !== pod.status) {
+      const prev = tracked.lastPodStatus
+      tracked.lastPodStatus = pod.status
+      tracked.updatedAt = Date.now()
 
-      try {
-        const answerCtx = tracked.questionComment?.startsWith('**') ? tracked.questionComment : undefined
-        const result = await runPlannerAgent(config, tracked, ghIssue, answerCtx)
-
-        if (result === 'done') {
-          tracked.stage = 'executing'
-          tracked.updatedAt = Date.now()
-          await Promise.allSettled([
-            setLabel(config, tracked.number, ['agent-planning'], 'agent-executing'),
-            addComment(config, tracked.number,
-              `📋 **Plan complete** — handing off to executor.\n\n<details><summary>Plan</summary>\n\n${tracked.plannerOutput?.slice(0, 3000) ?? ''}\n\n</details>`,
-            ),
-          ])
-
-          // Create branch/worktree now
-          const slug = tracked.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 40).replace(/-$/, '')
-          const resolvedPath = expandHome(config.localPath)
-          console.log(`[github-pipeline] Creating branch for #${tracked.number} in ${resolvedPath} (raw: ${config.localPath})`)
-          const wt = await createIssueWorktree(resolvedPath, tracked.number, slug)
-          if (wt.ok) {
-            tracked.branch = wt.branch
-            tracked.worktreePath = wt.worktreePath
-            tracked.branchCreationError = undefined
-            console.log(`[github-pipeline] Worktree created: ${wt.branch} at ${wt.worktreePath}`)
-          } else {
-            const br = await createIssueBranch(resolvedPath, tracked.number, slug)
-            if (br.ok) {
-              tracked.branch = br.branch
-              tracked.branchCreationError = undefined
-              console.log(`[github-pipeline] Branch created: ${br.branch}`)
-            } else {
-              tracked.branch = undefined
-              tracked.branchCreationError = `Worktree failed:\n${wt.error}\n\nFallback branch failed:\n${br.error}`
-              console.error(`[github-pipeline] Branch creation failed for #${tracked.number}:`, tracked.branchCreationError)
-            }
-          }
-        } else if (result === 'question') {
-          tracked.stage = 'awaiting-answer'
-          tracked.questionPostedAt = Date.now()
-          tracked.updatedAt = Date.now()
-          const repoKey = `${config.owner}/${config.repo}`
-          await Promise.allSettled([
-            setLabel(config, tracked.number, ['agent-planning'], 'agent-question'),
-            addComment(config, tracked.number,
-              `❓ **Agent question:**\n\n${tracked.questionComment}\n\n_Remove the \`agent-question\` label when you've answered to resume planning._`,
-            ),
-            dmOwner(
-              `:question: *${repoKey}#${tracked.number}* needs your input:\n>${tracked.questionComment}\n\n<https://github.com/${repoKey}/issues/${tracked.number}|Answer on GitHub>`,
-              ':question:',
-            ),
-          ])
-        } else {
-          tracked.stage = 'failed'
-          tracked.updatedAt = Date.now()
-          const errorBody = tracked.lastError
-            ? `\`\`\`\n${tracked.lastError.slice(0, 1000)}\n\`\`\``
-            : 'Unknown error'
-          await Promise.allSettled([
-            setLabel(config, tracked.number, ['agent-planning'], 'agent-failed'),
-            addComment(config, tracked.number,
-              `❌ **Planning failed**\n\n${errorBody}\n\nTo retry, remove \`agent-failed\` and add \`agent-ready\`.`,
-            ),
-            postPipelineNotification(
-              `:x: *${config.owner}/${config.repo}#${tracked.number}* planning failed\n<https://github.com/${config.owner}/${config.repo}/issues/${tracked.number}|View issue>`,
-              ':x:',
-            ),
-          ])
-        }
-      } catch (err) {
-        console.error(`[github-pipeline] Planner error for #${tracked.number}:`, err)
-      } finally {
-        tracked.plannerRunning = false
-        saveState()
-      }
-    }
-
-    // ── Awaiting answer ──
-    if (tracked.stage === 'awaiting-answer') {
-      if (tracked.questionPostedAt && Date.now() - tracked.questionPostedAt > QUESTION_TIMEOUT_MS) {
-        tracked.stage = 'failed'
-        tracked.updatedAt = Date.now()
-        await Promise.allSettled([
-          setLabel(config, tracked.number, ['agent-question'], 'agent-failed'),
-          addComment(config, tracked.number, '⏰ **Question timed out** (7 days). To retry, remove `agent-failed` and add `agent-ready`.'),
-        ])
-        saveState()
-        continue
-      }
-
-      if (!(await hasLabel(config, tracked.number, 'agent-question'))) {
-        tracked.questionComment = await fetchIssueComments(config, tracked.number)
-        tracked.stage = 'planning'
-        tracked.updatedAt = Date.now()
-        await setLabel(config, tracked.number, [], 'agent-planning')
-        saveState()
-      }
-    }
-
-    // ── Executing ──
-    if (tracked.stage === 'executing' && !tracked.executorRunning) {
-      if (!tracked.branch) {
-        tracked.stage = 'failed'
-        tracked.updatedAt = Date.now()
-        const gitDetail = tracked.branchCreationError
-          ? `\n\n<details><summary>Git error (from Penny)</summary>\n\n\`\`\`\n${tracked.branchCreationError.slice(0, 3500)}\n\`\`\`\n\n</details>\n\n_Check the Electron **main process** console for \`[github-pipeline]\` / \`git\` lines if this persists._`
-          : ''
-        await Promise.allSettled([
-          setLabel(config, tracked.number, ['agent-executing'], 'agent-failed'),
-          addComment(config, tracked.number, `❌ **Executor failed** — no branch was created.${gitDetail}`),
-        ])
-        saveState()
-        continue
-      }
-
-      tracked.executorRunning = true
-      saveState()
-
-      try {
-        const result = await runExecutorAgent(config, tracked)
-
-        if (result === 'done') {
-          const gitCwd = tracked.worktreePath ?? config.localPath
-          const prCreated = await pushBranchAndCreatePR(
-            config, gitCwd, tracked.branch, tracked.number,
-            `[${tracked.repo.split('/')[1]}#${tracked.number}] ${tracked.title}`,
+      if (pod.status !== 'complete' && pod.status !== 'failed' && pod.status !== 'pending') {
+        // Only comment on major transitions to avoid noise
+        if (prev !== pod.status) {
+          await addComment(config, tracked.number,
+            `**${podStageLabel(pod.status)}** (iteration ${pod.iteration}/${pod.maxIterations})`,
           )
-          if (tracked.worktreePath) await cleanupWorktree(config.localPath, tracked.worktreePath)
-
-          tracked.stage = 'done'
-          tracked.updatedAt = Date.now()
-          const doneLabel = prCreated ? 'pr-ready' : 'agent-done'
-          await Promise.allSettled([
-            setLabel(config, tracked.number, ['agent-executing'], doneLabel),
-            addComment(config, tracked.number,
-              `✅ **Implementation complete**${prCreated ? '\nA pull request has been created for review.' : ''}`,
-            ),
-            postPipelineNotification(
-              `:white_check_mark: *${tracked.repo}#${tracked.number}* done (size ${tracked.size})${prCreated ? ' — PR created' : ''}\n<https://github.com/${tracked.repo}/issues/${tracked.number}|View issue>`,
-              ':white_check_mark:',
-            ),
-          ])
-        } else if (tracked.executorAttempts < getSizeProfile(tracked.size).maxAttempts) {
-          console.log(`[github-pipeline] Executor retry for #${tracked.number} (${tracked.executorAttempts}/${getSizeProfile(tracked.size).maxAttempts})`)
-        } else {
-          if (tracked.worktreePath) await cleanupWorktree(config.localPath, tracked.worktreePath)
-          tracked.stage = 'failed'
-          tracked.updatedAt = Date.now()
-          const execErrorBody = tracked.lastError
-            ? `\`\`\`\n${tracked.lastError.slice(0, 1000)}\n\`\`\``
-            : ''
-          const maxAtt = getSizeProfile(tracked.size).maxAttempts
-          await Promise.allSettled([
-            setLabel(config, tracked.number, ['agent-executing'], 'agent-failed'),
-            addComment(config, tracked.number,
-              `❌ **Executor failed** after ${maxAtt} attempts.\n\n${execErrorBody}\n\nTo retry, remove \`agent-failed\` and add \`agent-ready\`.`,
-            ),
-            postPipelineNotification(
-              `:x: *${tracked.repo}#${tracked.number}* failed after ${maxAtt} attempts (size ${tracked.size})\n<https://github.com/${tracked.repo}/issues/${tracked.number}|View issue>`,
-              ':x:',
-            ),
-            dmOwner(
-              `:x: *${tracked.repo}#${tracked.number}* executor failed after ${maxAtt} attempts (size ${tracked.size})\n<https://github.com/${tracked.repo}/issues/${tracked.number}|View issue>`,
-              ':x:',
-            ),
-          ])
         }
-      } catch (err) {
-        console.error(`[github-pipeline] Executor error for #${tracked.number}:`, err)
-      } finally {
-        tracked.executorRunning = false
-        saveState()
       }
+    }
+
+    // ── Pod complete: push + PR ──
+    if (pod.status === 'complete') {
+      const gitCwd = tracked.worktreePath ?? expandHome(config.localPath)
+      const prCreated = await pushBranchAndCreatePR(
+        config, gitCwd, tracked.branch!, tracked.number,
+        `[${tracked.repo.split('/')[1]}#${tracked.number}] ${tracked.title}`,
+      )
+      if (tracked.worktreePath) await cleanupWorktree(config.localPath, tracked.worktreePath)
+
+      tracked.stage = 'done'
+      tracked.updatedAt = Date.now()
+      const doneLabel = prCreated ? 'pr-ready' : 'agent-done'
+      await Promise.allSettled([
+        setLabel(config, tracked.number, ['agent-executing'], doneLabel),
+        addComment(config, tracked.number,
+          `**Implementation complete** (${pod.iteration} iteration${pod.iteration > 1 ? 's' : ''})${prCreated ? '\nA pull request has been created for review.' : ''}`,
+        ),
+        postPipelineNotification(
+          `:white_check_mark: *${tracked.repo}#${tracked.number}* done (pod ${pod.id})${prCreated ? ' — PR created' : ''}\n<https://github.com/${tracked.repo}/issues/${tracked.number}|View issue>`,
+          ':white_check_mark:',
+        ),
+      ])
+      saveState()
+    }
+
+    // ── Pod failed ──
+    if (pod.status === 'failed') {
+      if (tracked.worktreePath) await cleanupWorktree(config.localPath, tracked.worktreePath)
+
+      tracked.stage = 'failed'
+      tracked.lastError = pod.error || 'Pod failed without error message'
+      tracked.updatedAt = Date.now()
+      const errorBody = pod.error
+        ? `\`\`\`\n${pod.error.slice(0, 1000)}\n\`\`\``
+        : ''
+      await Promise.allSettled([
+        setLabel(config, tracked.number, ['agent-executing'], 'agent-failed'),
+        addComment(config, tracked.number,
+          `**Pod failed** (${pod.iteration}/${pod.maxIterations} iterations)\n\n${errorBody}\n\nTo retry, remove \`agent-failed\` and add \`agent-ready\`.`,
+        ),
+        postPipelineNotification(
+          `:x: *${tracked.repo}#${tracked.number}* pod failed\n<https://github.com/${tracked.repo}/issues/${tracked.number}|View issue>`,
+          ':x:',
+        ),
+        dmOwner(
+          `:x: *${tracked.repo}#${tracked.number}* pod failed: ${(pod.error || '').slice(0, 200)}\n<https://github.com/${tracked.repo}/issues/${tracked.number}|View issue>`,
+          ':x:',
+        ),
+      ])
+      saveState()
     }
   }
 }
@@ -903,18 +622,27 @@ export function getPipelineIssues(): PipelineIssue[] {
   return state.issues
 }
 
-/** Initialize — load persisted state and reset stale running flags. */
+/** Initialize — load persisted state and migrate old 2-agent entries. */
 export function initPipeline(): void {
   loadState()
-  // On startup, no agents are actually running — clear stale flags from previous process
-  let reset = 0
-  for (const issue of state.issues) {
-    if (issue.plannerRunning) { issue.plannerRunning = false; reset++ }
-    if (issue.executorRunning) { issue.executorRunning = false; reset++ }
-  }
-  if (reset > 0) {
+
+  // Migrate stale entries from the old 2-agent pipeline.
+  // Old stages 'planning' and 'awaiting-answer' no longer exist — clear them so the
+  // issues can be re-picked-up via `agent-ready` label on next poll cycle.
+  let migrated = 0
+  state.issues = state.issues.filter(issue => {
+    const stage = issue.stage as string
+    if (stage === 'planning' || stage === 'awaiting-answer') {
+      console.log(`[github-pipeline] Dropping stale ${stage} entry for ${issue.repo}#${issue.number}`)
+      migrated++
+      return false
+    }
+    return true
+  })
+  if (migrated > 0) {
     saveState()
-    console.log(`[github-pipeline] Reset ${reset} stale running flag(s)`)
+    console.log(`[github-pipeline] Migrated ${migrated} stale entries (removed)`)
   }
+
   console.log(`[github-pipeline] Loaded ${state.issues.length} pipeline issues`)
 }

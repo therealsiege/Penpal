@@ -1,6 +1,5 @@
 import type { AgentState } from '../types'
 
-// Same avatar map as OrchestratorModal — maps agent IDs to portrait PNGs
 const AGENT_AVATARS: Record<string, string> = {
   'fullstack-dev': './sprites/avatars/WuKong.png',
   'nextjs-frontend': './sprites/avatars/ErlangShen.png',
@@ -16,25 +15,11 @@ const AGENT_AVATARS: Record<string, string> = {
   'issue-planner': './sprites/avatars/Tripitaka.png',
 }
 
-const ROLE_COLORS: Record<string, { bg: string; text: string; label: string }> = {
-  solver: { bg: 'bg-emerald-500/15', text: 'text-emerald-400', label: 'Solver' },
-  reviewer: { bg: 'bg-violet-500/15', text: 'text-violet-400', label: 'Reviewer' },
-  executor: { bg: 'bg-sky-500/15', text: 'text-sky-400', label: 'Executor' },
-}
-
-const STAGE_COLORS: Record<string, { bg: string; text: string }> = {
-  planning: { bg: 'bg-amber-500/15', text: 'text-amber-400' },
-  executing: { bg: 'bg-blue-500/15', text: 'text-blue-400' },
-  validating: { bg: 'bg-cyan-500/15', text: 'text-cyan-400' },
-}
-
-function elapsed(startMs: number): string {
-  const diff = Date.now() - startMs
-  const mins = Math.floor(diff / 60000)
-  if (mins < 1) return 'just now'
-  if (mins < 60) return `${mins}m`
-  const hrs = Math.floor(mins / 60)
-  return `${hrs}h ${mins % 60}m`
+const STATUS_DOT: Record<string, { color: string; label: string }> = {
+  working: { color: 'bg-emerald-400', label: 'Working' },
+  idle: { color: 'bg-amber-400', label: 'Idle' },
+  blocked: { color: 'bg-red-400', label: 'Blocked' },
+  done: { color: 'bg-sky-400', label: 'Done' },
 }
 
 interface Props {
@@ -45,94 +30,41 @@ interface Props {
 export function PodAgentModal({ agent, onClose }: Props) {
   const config = agent.config
   const avatarSrc = AGENT_AVATARS[config.id]
-  const role = ROLE_COLORS[config.podRole] ?? ROLE_COLORS.solver
-  const stage = agent.taskStage ? STAGE_COLORS[agent.taskStage] : null
+  const status = STATUS_DOT[agent.status] ?? STATUS_DOT.idle
 
   return (
     <div
-      className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm"
+      className="fixed inset-0 z-[9999] flex items-center justify-center"
       onClick={onClose}
     >
+      {/* Card — no full-screen dim, just the card with its own shadow */}
       <div
-        className="bg-gradient-to-b from-[var(--c-bg-surface)] to-[var(--c-bg-app)] border border-[var(--c-border)] rounded-xl p-5 w-[420px] shadow-2xl ring-1 ring-[color-mix(in_srgb,var(--c-accent)_10%,transparent)]"
+        className="relative rounded-2xl overflow-hidden shadow-2xl shadow-black/50 ring-1 ring-white/10"
+        style={{ width: 320, height: 400 }}
         onClick={e => e.stopPropagation()}
       >
-        {/* Header: Avatar + Name */}
-        <div className="flex items-start gap-4 mb-4">
-          {avatarSrc && (
-            <img
-              src={avatarSrc}
-              alt={config.name}
-              className="w-16 h-16 rounded-lg object-cover border border-[var(--c-border)]/40 shrink-0"
-            />
-          )}
-          <div className="flex-1 min-w-0">
-            <h2 className="text-base font-bold text-[var(--c-text-heading)]">{config.name}</h2>
-            {config.title && (
-              <p className="text-xs text-[var(--c-text-muted)] mt-0.5">{config.title}</p>
-            )}
-            <div className="flex items-center gap-2 mt-1.5">
-              <span className={`text-[10px] px-2 py-0.5 rounded-full border ${role.bg} ${role.text} border-current/20 font-medium`}>
-                {role.label}
-              </span>
-              {agent.taskStage && stage && (
-                <span className={`text-[10px] px-2 py-0.5 rounded-full border ${stage.bg} ${stage.text} border-current/20`}>
-                  {agent.taskStage}
-                </span>
-              )}
-              {config.model && (
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-[var(--c-bg-elevated)] text-[var(--c-text-secondary)] border border-[var(--c-border)]/30">
-                  {config.model}
-                </span>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Task Info */}
-        {agent.taskTitle && (
-          <div className="mb-3 p-3 rounded-lg bg-[var(--c-bg-elevated)] border border-[var(--c-border)]/30">
-            <p className="text-xs text-[var(--c-text-muted)] mb-1">Current Task</p>
-            <p className="text-sm text-[var(--c-text-primary)] leading-snug">{agent.taskTitle}</p>
-          </div>
+        {/* Avatar fills the card */}
+        {avatarSrc ? (
+          <img
+            src={avatarSrc}
+            alt={config.name}
+            className="absolute inset-0 w-full h-full object-cover"
+          />
+        ) : (
+          <div className="absolute inset-0 bg-gradient-to-b from-[var(--c-bg-elevated)] to-[var(--c-bg-app)]" />
         )}
 
-        {/* Stats Row */}
-        <div className="flex items-center gap-4 mb-3 text-xs text-[var(--c-text-secondary)]">
-          {agent.uptime && (
-            <div>
-              <span className="text-[var(--c-text-muted)]">Uptime: </span>
-              <span className="font-mono">{agent.uptime}</span>
-            </div>
-          )}
-          {agent.sessionMode && (
-            <div>
-              <span className="text-[var(--c-text-muted)]">Mode: </span>
-              <span>{agent.sessionMode}</span>
-            </div>
-          )}
-          {agent.cwd && (
-            <div className="truncate">
-              <span className="text-[var(--c-text-muted)]">Dir: </span>
-              <span className="font-mono">{agent.cwd.split('/').pop()}</span>
-            </div>
-          )}
+        {/* Gradient fade at bottom for text legibility */}
+        <div className="absolute inset-x-0 bottom-0 h-28 bg-gradient-to-t from-black/80 via-black/50 to-transparent" />
+
+        {/* Name + status pinned to bottom */}
+        <div className="absolute inset-x-0 bottom-0 p-5 text-center">
+          <h2 className="text-lg font-bold text-white drop-shadow-lg">{config.name}</h2>
+          <div className="flex items-center justify-center gap-1.5 mt-1">
+            <span className={`w-2 h-2 rounded-full ${status.color} shadow-sm`} />
+            <span className="text-sm text-white/70">{status.label}</span>
+          </div>
         </div>
-
-        {/* Persona */}
-        {config.persona?.catchphrase && (
-          <p className="text-xs italic text-[var(--c-text-muted)] mb-3">
-            &ldquo;{config.persona.catchphrase}&rdquo;
-          </p>
-        )}
-
-        {/* Close */}
-        <button
-          onClick={onClose}
-          className="w-full mt-2 px-4 py-2 text-xs rounded-lg bg-[var(--c-bg-elevated)] hover:bg-[var(--c-bg-hover)] border border-[var(--c-border)]/40 text-[var(--c-text-secondary)] transition-colors"
-        >
-          Close
-        </button>
       </div>
     </div>
   )

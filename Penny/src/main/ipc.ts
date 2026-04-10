@@ -729,18 +729,18 @@ export function registerIpcHandlers() {
       })
     }
 
-    // ── Surface active 2-agent pipeline issues as synthetic agents ──
+    // ── Surface active pod pipeline issues as synthetic agents ──
     const pipelineIssues = getPipelineIssues().filter(
-      p => p.stage === 'planning' || p.stage === 'executing',
+      p => p.stage === 'executing',
     )
     for (const pi of pipelineIssues) {
       const piName = pi.title.length > 25 ? pi.title.slice(0, 24) + '..' : pi.title
-      const piStage = pi.stage === 'planning' ? 'planning' : 'executing'
+      const podStage = pi.lastPodStatus || 'executing'
       const piConfig: AgentConfig = {
         id: `pipeline-${pi.repo.replace('/', '-')}-${pi.number}`,
         name: piName,
-        title: pi.stage === 'planning' ? 'Planner' : 'Executor',
-        podRole: pi.stage === 'planning' ? 'reviewer' : 'executor',
+        title: `Pod (${podStage})`,
+        podRole: 'solver',
         systemPrompt: '',
         model: 'orchestrator-task',
         mcpProfile: '',
@@ -754,12 +754,12 @@ export function registerIpcHandlers() {
       }
       agentStates.push({
         config: piConfig,
-        status: (pi.plannerRunning || pi.executorRunning) ? 'active' : 'idle',
+        status: 'active',
         needsInteraction: false,
-        sessionMode: piStage === 'planning' ? 'plan' : 'working',
-        cwd: pi.repo.includes('/') ? undefined : undefined, // no cwd for pipeline agents
+        sessionMode: 'working',
+        cwd: undefined,
         isOrchestratorTask: true,
-        taskStage: piStage as 'planning' | 'executing',
+        taskStage: 'executing',
         taskTitle: `[${pi.repo.split('/')[1]}#${pi.number}] ${pi.title}`,
       })
     }

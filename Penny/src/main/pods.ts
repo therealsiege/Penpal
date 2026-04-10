@@ -12,7 +12,6 @@ import {
 import { runAgentHeadless } from './sessions'
 import { getPhaseConfig, type PhaseConfig } from './pods/phase-config'
 import { podQualityCollector, type PodQualityEvent } from './evals/collectors/pod-quality'
-import { evalHarness } from './evals/harness'
 import { resolveProjectPath } from './project-paths'
 import { addEntry, updateEntry, getActiveEntries, type FlightBoardEntry } from './flight-board'
 
@@ -1348,26 +1347,35 @@ function finalizePodQuality(wf: PodWorkflow): void {
 
 // ── CLAUDE.md auto-update ───────────────────────────────────────────────────
 
+const MAX_WORKFLOW_LOG_ENTRIES = 5
+
 function appendWorkflowSummary(wf: PodWorkflow): void {
   const sharedMemoryPath = path.resolve(__dirname, '..', '..', 'agents', 'CLAUDE.md')
   if (!fs.existsSync(sharedMemoryPath)) return
 
   try {
+    const content = fs.readFileSync(sharedMemoryPath, 'utf-8')
     const date = new Date().toISOString().split('T')[0]
     const result = wf.status === 'complete' ? 'PASS' : 'FAIL'
-    const summary = [
-      '',
+    const newEntry = [
       `### Workflow: ${wf.name} (${date})`,
       `- Task: ${wf.task.slice(0, 200)}`,
       `- Team: ${wf.solver.agentId} / ${wf.reviewer.agentId} / ${wf.executor.agentId}`,
       `- Result: ${result} (${wf.iteration}/${wf.maxIterations} iterations)`,
       ...(wf.selfFixAttempts > 0 ? [`- Self-fix attempts: ${wf.selfFixAttempts}`] : []),
       `- Key output: ${(wf.executor.output || wf.solver.output || 'N/A').slice(0, 150)}`,
-      '',
     ].join('\n')
 
-    fs.appendFileSync(sharedMemoryPath, summary)
-    console.log(`[pods] Appended workflow summary to CLAUDE.md`)
+    // Split on workflow entries, keep only the most recent N-1 (new one makes N)
+    const marker = '### Workflow:'
+    const parts = content.split(marker)
+    const header = parts[0] // everything before the first entry
+    const entries = parts.slice(1).map(p => marker + p.trimEnd())
+    entries.push(newEntry)
+    const kept = entries.slice(-MAX_WORKFLOW_LOG_ENTRIES)
+
+    fs.writeFileSync(sharedMemoryPath, header + '\n' + kept.join('\n\n') + '\n')
+    console.log(`[pods] Updated CLAUDE.md workflow log (${kept.length} entries)`)
   } catch (err) {
     console.error('[pods] Failed to update CLAUDE.md:', err)
   }
@@ -1616,14 +1624,11 @@ export function createPod(task: string, opts: CreatePodOpts = {}): PodWorkflow {
     addEntry({ podId: wf.id, task: wf.task, cwd: wf.cwd })
   }
 
-  // Avoid appending to real Penny/data during Vitest (createPod is used heavily in tests).
   if (process.env.VITEST !== 'true') {
-    void evalHarness.recordConfigChange(new Date(), {
-      kind: 'pod-workflow',
-      message:
-        `Pod workflow started — preset \`${presetId}\`, priority ${opts.priority ?? '(default)'}, `
-        + `maxSelfFixes ${maxSelfFixes}, solver candidates ${candidateCount}`,
-    })
+    console.log(
+      `[pods] Workflow started — preset \`${presetId}\`, priority ${opts.priority ?? '(default)'}, `
+      + `maxSelfFixes ${maxSelfFixes}, solver candidates ${candidateCount}`,
+    )
   }
 
   const promise = runWorkflow(wf)

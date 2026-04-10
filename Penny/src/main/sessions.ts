@@ -1559,10 +1559,10 @@ async function runSingleHeadlessBackend(
   agentId: string,
   cwd: string,
   prompt: string,
-  opts: { permissionMode?: string; timeoutMs: number; modelOverride?: string },
+  opts: { permissionMode?: string; timeoutMs: number; modelOverride?: string; ollamaModel?: string },
 ): Promise<HeadlessResult> {
   if (backend === 'ollama') {
-    const r = await runOllama(prompt, { timeoutMs: opts.timeoutMs })
+    const r = await runOllama(prompt, { timeoutMs: opts.timeoutMs, model: opts.ollamaModel })
     return {
       success: r.success,
       output: r.output,
@@ -1593,6 +1593,18 @@ export async function runAgentHeadless(
   opts: RunHeadlessOptions = {},
 ): Promise<HeadlessResult> {
   const timeoutMs = opts.timeoutMs ?? 600_000
+
+  // If modelOverride is ollama:*, force the ollama backend directly
+  if (opts.modelOverride?.startsWith('ollama:')) {
+    const ollamaModel = opts.modelOverride.slice('ollama:'.length)
+    console.log(`[headless] ollama model override: ${ollamaModel} (phase=${opts.phase ?? 'default'})`)
+    return runSingleHeadlessBackend('ollama', agentId, cwd, prompt, {
+      permissionMode: opts.permissionMode,
+      timeoutMs,
+      ollamaModel,
+    })
+  }
+
   const chain: HeadlessBackend[] = opts.phase
     ? getHeadlessBackendChain(opts.phase)
     : [getTaskRunnerKind()]

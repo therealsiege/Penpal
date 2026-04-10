@@ -81,14 +81,14 @@ export async function checkOllamaAvailable(): Promise<boolean> {
 
 export async function runOllama(
   prompt: string,
-  opts?: { systemPrompt?: string; timeoutMs?: number },
+  opts?: { systemPrompt?: string; timeoutMs?: number; model?: string },
 ): Promise<OllamaResult> {
   const timeoutMs = opts?.timeoutMs ?? 300_000 // 5 min default
   const start = Date.now()
   const base = getOllamaApiBase()
 
   try {
-    const model = process.env.PENNY_OLLAMA_MODEL?.trim() || 'qwen3-coder:30b'
+    const model = opts?.model || process.env.PENNY_OLLAMA_MODEL?.trim() || 'qwen3-coder:30b'
     const body = JSON.stringify({
       model,
       prompt,

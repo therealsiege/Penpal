@@ -53,12 +53,16 @@ function cardPodLane(card: GitHubIssueCard): PodLaneId {
   const stage = (card.taskStage || '').toLowerCase()
 
   if (status === 'failed' || status === 'cancelled' || stage === 'failed') return 'failed'
-  if (status === 'completed' || stage === 'done') return 'done'
+  if (status === 'completed' || stage === 'done' || stage === 'complete') return 'done'
+  // Pod statuses → canonical lanes
+  if (stage === 'solving' || stage === 'feedback' || stage === 'planning') return 'planning'
+  if (stage === 'reviewing') return 'validating'
+  if (stage === 'executing' || stage === 'self-fixing') return 'executing'
   if (stage === 'validating') return 'validating'
-  if (stage === 'executing') return 'executing'
-  if (stage === 'planning') return 'planning'
+  // Orchestrator statuses
   if (stage === 'awaiting-answer' || stage === 'queued') return 'question'
-  if (status === 'queued' || status === 'assigned' || status === 'active') return 'question'
+  if (status === 'queued' || status === 'assigned') return 'question'
+  if (status === 'active') return 'executing'
   return 'question'
 }
 
@@ -146,7 +150,7 @@ export function TasksPanel() {
             {POD_LANES.map(col => {
               const colCards = cards.filter(c => cardPodLane(c) === col.key)
               return (
-                <div key={col.key} className="w-[min(13rem,calc(11rem*var(--penny-ui-nav-scale)))] shrink-0 flex flex-col">
+                <div key={col.key} className="flex-1 min-w-[14rem] flex flex-col">
                   <div className="flex items-center gap-2 px-2 py-2 mb-2">
                     <span className={`w-2 h-2 rounded-full shrink-0 ${col.dot}`} />
                     <span className="text-[length:var(--penny-task-fs-14)] font-medium text-[var(--c-text-secondary)] truncate">{col.label}</span>
@@ -156,37 +160,127 @@ export function TasksPanel() {
                     {colCards.map(card => (
                       <div
                         key={card.taskId}
-                        className="bg-[color-mix(in_srgb,var(--c-bg-elevated)_60%,transparent)] border border-[color-mix(in_srgb,var(--c-border)_40%,transparent)] rounded-lg p-3 space-y-1.5 hover:border-[color-mix(in_srgb,var(--c-border)_60%,transparent)] transition-colors"
+                        className="bg-[color-mix(in_srgb,var(--c-bg-elevated)_60%,transparent)] border border-[color-mix(in_srgb,var(--c-border)_40%,transparent)] rounded-lg overflow-hidden hover:border-[color-mix(in_srgb,var(--c-border)_60%,transparent)] transition-colors"
                       >
-                        <div className="flex items-start justify-between gap-2">
-                          <a
-                            href={card.url}
-                            onClick={e => { e.preventDefault(); window.open(card.url, '_blank') }}
-                            className="text-[length:var(--penny-task-fs-12)] text-blue-400 hover:text-blue-300 font-mono"
-                          >
-                            #{card.issueNumber}
-                          </a>
-                          <span className={`text-[length:var(--penny-task-fs-10)] px-1.5 py-0.5 rounded border ${
-                            card.priority === 'critical' ? 'bg-red-500/20 text-red-300 border-red-500/30' :
-                            card.priority === 'high' ? 'bg-orange-500/20 text-orange-300 border-orange-500/30' :
-                            'bg-[color-mix(in_srgb,var(--c-border-hover)_20%,transparent)] text-[var(--c-text-secondary)] border-[color-mix(in_srgb,var(--c-border)_30%,transparent)]'
-                          }`}>
-                            {card.priority}
-                          </span>
-                        </div>
-                        <p className="text-[length:var(--penny-task-fs-14)] text-[var(--c-text-primary)] leading-snug line-clamp-2">{card.title}</p>
-                        <div className="flex items-center justify-between text-[length:var(--penny-task-fs-11)] text-[var(--c-border-hover)]">
-                          <span className="truncate max-w-[calc(120px*var(--penny-ui-nav-scale))]">{card.repo}</span>
-                          <span>{tasksTimeAgo(card.ingestedAt)}</span>
-                        </div>
-                        {card.assignedAgent && (
-                          <div className="flex items-center gap-1.5 text-[length:var(--penny-task-fs-11)] text-[color-mix(in_srgb,var(--c-accent-blue)_70%,transparent)]">
-                            {AGENT_AVATARS[card.assignedAgent] && (
-                              <img src={AGENT_AVATARS[card.assignedAgent]} alt="" className="w-4 h-4 rounded-full object-cover" />
-                            )}
-                            <span className="truncate">{card.assignedAgent}</span>
+                        <div className="p-3 space-y-1.5">
+                          <div className="flex items-start justify-between gap-2">
+                            <a
+                              href={card.url}
+                              onClick={e => { e.preventDefault(); window.open(card.url, '_blank') }}
+                              className="text-[length:var(--penny-task-fs-12)] text-blue-400 hover:text-blue-300 font-mono"
+                            >
+                              #{card.issueNumber}
+                            </a>
+                            <span className={`text-[length:var(--penny-task-fs-10)] px-1.5 py-0.5 rounded border ${
+                              card.priority === 'critical' ? 'bg-red-500/20 text-red-300 border-red-500/30' :
+                              card.priority === 'high' ? 'bg-orange-500/20 text-orange-300 border-orange-500/30' :
+                              'bg-[color-mix(in_srgb,var(--c-border-hover)_20%,transparent)] text-[var(--c-text-secondary)] border-[color-mix(in_srgb,var(--c-border)_30%,transparent)]'
+                            }`}>
+                              {card.priority}
+                            </span>
                           </div>
-                        )}
+                          <p className="text-[length:var(--penny-task-fs-14)] text-[var(--c-text-primary)] leading-snug line-clamp-2">{card.title}</p>
+                          <div className="flex items-center justify-between text-[length:var(--penny-task-fs-11)] text-[var(--c-border-hover)]">
+                            <span className="truncate max-w-[calc(120px*var(--penny-ui-nav-scale))]">{card.repo}</span>
+                            <span>{tasksTimeAgo(card.ingestedAt)}</span>
+                          </div>
+                        </div>
+                        {card.podAgents ? (() => {
+                          const lane = cardPodLane(card)
+                          const showAgents = lane === 'validating'
+                            ? card.podAgents.filter(a => a.active)
+                            : card.podAgents
+                          const solo = showAgents.length === 1
+                          return (
+                            <div className="flex items-center gap-1 pt-1">
+                              {showAgents.map((a, i) => (
+                                <div
+                                key={a.role}
+                                className="group/avatar relative"
+                                onMouseEnter={e => {
+                                  const tip = e.currentTarget.querySelector<HTMLElement>('[data-tip]')
+                                  if (!tip) return
+                                  const rect = e.currentTarget.getBoundingClientRect()
+                                  tip.style.left = `${rect.left + rect.width / 2}px`
+                                  tip.style.top = `${rect.top - 8}px`
+                                }}
+                              >
+                                  <div
+                                    className={`relative rounded-full transition-all ${
+                                      a.active ? 'ring-2 ring-[var(--c-accent-blue)]' : 'opacity-40'
+                                    }`}
+                                  >
+                                    {AGENT_AVATARS[a.agentId] ? (
+                                      <img src={AGENT_AVATARS[a.agentId]} alt={a.agentId} className="w-32 h-32 rounded-full object-cover" />
+                                    ) : (
+                                      <div className="w-32 h-32 rounded-full bg-[var(--c-bg-elevated)] flex items-center justify-center text-2xl text-[var(--c-text-muted)]">
+                                        {a.role[0].toUpperCase()}
+                                      </div>
+                                    )}
+                                    <span className={`absolute -bottom-0.5 -right-0.5 text-sm font-bold w-7 h-7 flex items-center justify-center rounded-full ${
+                                      a.role === 'solver' ? 'bg-amber-500 text-black' :
+                                      a.role === 'reviewer' ? 'bg-violet-500 text-white' :
+                                      'bg-blue-500 text-white'
+                                    }`}>
+                                      {a.role === 'solver' ? 'S' : a.role === 'reviewer' ? 'R' : 'E'}
+                                    </span>
+                                  </div>
+                                  <div data-tip className="pointer-events-none fixed -translate-x-1/2 -translate-y-full opacity-0 group-hover/avatar:opacity-100 transition-opacity duration-150 z-[9999]">
+                                    <div className="bg-[var(--c-bg-surface)] border border-[var(--c-border)] rounded-xl shadow-2xl w-64 overflow-hidden">
+                                      {AGENT_AVATARS[a.agentId] && (
+                                        <img src={AGENT_AVATARS[a.agentId]} alt={a.agentId} className="w-64 h-64 object-cover" />
+                                      )}
+                                      <div className="p-3">
+                                        <div className="flex items-center justify-between mb-1.5">
+                                          <p className="text-sm font-semibold text-[var(--c-text-heading)] truncate">{a.agentId}</p>
+                                          <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${
+                                            a.role === 'solver' ? 'bg-amber-500/20 text-amber-400' :
+                                            a.role === 'reviewer' ? 'bg-violet-500/20 text-violet-400' :
+                                            'bg-blue-500/20 text-blue-400'
+                                          }`}>
+                                            {a.role.toUpperCase()}
+                                          </span>
+                                        </div>
+                                        <div className="space-y-1 text-[11px] text-[var(--c-text-muted)]">
+                                          <div className="flex justify-between"><span>Status</span><span className={a.active ? 'text-emerald-400' : 'text-[var(--c-text-secondary)]'}>{a.active ? 'Active' : 'Waiting'}</span></div>
+                                          <div className="flex justify-between"><span>Tasks</span><span className="text-[var(--c-text-secondary)]">—</span></div>
+                                          <div className="flex justify-between"><span>Pass rate</span><span className="text-[var(--c-text-secondary)]">—</span></div>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )
+                        })() : card.assignedAgent ? (
+                          <div
+                            className="group/avatar relative inline-flex pt-1"
+                            onMouseEnter={e => {
+                              const tip = e.currentTarget.querySelector<HTMLElement>('[data-tip]')
+                              if (!tip) return
+                              const rect = e.currentTarget.getBoundingClientRect()
+                              tip.style.left = `${rect.left + rect.width / 2}px`
+                              tip.style.top = `${rect.top - 8}px`
+                            }}
+                          >
+                            <div className="relative rounded-full ring-2 ring-[var(--c-accent-blue)]">
+                              {AGENT_AVATARS[card.assignedAgent] && (
+                                <img src={AGENT_AVATARS[card.assignedAgent]} alt="" className="w-32 h-32 rounded-full object-cover" />
+                              )}
+                            </div>
+                            <div data-tip className="pointer-events-none fixed -translate-x-1/2 -translate-y-full opacity-0 group-hover/avatar:opacity-100 transition-opacity duration-150 z-[9999]">
+                              <div className="bg-[var(--c-bg-surface)] border border-[var(--c-border)] rounded-xl shadow-2xl w-64 overflow-hidden">
+                                {AGENT_AVATARS[card.assignedAgent] && (
+                                  <img src={AGENT_AVATARS[card.assignedAgent]} alt="" className="w-64 h-64 object-cover" />
+                                )}
+                                <div className="p-3">
+                                  <p className="text-sm font-semibold text-[var(--c-text-heading)]">{card.assignedAgent}</p>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        ) : null}
                         <div className="flex gap-1 pt-1">
                           {(card.taskStatus === 'queued' || card.taskStatus === 'assigned' || card.taskStatus === 'active') && (
                             <button

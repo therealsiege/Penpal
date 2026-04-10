@@ -117,7 +117,7 @@ export function Layout({ activePanel, onNavigate, children }: LayoutProps) {
                   PenPal
                 </span>
                 <span className="mt-1 block text-[length:calc(8.925px*var(--penny-ui-nav-scale))] text-[var(--c-accent-blue)] tracking-[0.18em] uppercase font-semibold">
-                  Mission Control
+                  AI Sidekick
                 </span>
               </div>
             </div>
@@ -128,7 +128,7 @@ export function Layout({ activePanel, onNavigate, children }: LayoutProps) {
           >
           <NavSectionLabel>Workspace</NavSectionLabel>
           <NavButton
-            label="Lab"
+            label="Mission Control"
             active={activePanel === 'office'}
             onClick={() => onNavigate('office')}
             icon={

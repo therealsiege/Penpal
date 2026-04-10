@@ -145,7 +145,7 @@ export function buildCombinedLabTeamDraft(
     labRooms,
     preferredTeamWidth,
     LAB_COMBINED_TEAM_KEY,
-    'Lab',
+    'Mission Control',
   )
 }
 
@@ -158,6 +158,6 @@ export function buildCombinedOfficeTeamDraft(
     campusRooms,
     preferredTeamWidth,
     OFFICE_COMBINED_TEAM_KEY,
-    'Lab',
+    'Mission Control',
   )
 }

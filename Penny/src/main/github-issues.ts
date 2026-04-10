@@ -19,6 +19,7 @@ import os from 'os'
 const execFileAsync = promisify(execFile)
 import { enqueueTask, getTaskQueue, getTask, type TaskPriority } from './orchestrator'
 import { ingestIssue, drivePipeline, initPipeline, getPipelineIssues } from './github-pipeline'
+import { getPodStatus } from './pods'
 import { atomicWrite } from './atomic-store'
 import { getAtlasRoot } from './project-paths'
 
@@ -408,7 +409,7 @@ async function pollOnce(): Promise<number> {
         trackedIssues = trackedIssues.filter(t => !(t.repo === repoKey && t.number === issue.number))
       }
 
-      // Route to 2-agent pipeline
+      // Route to 3-agent pod pipeline
       await ingestIssue(
         { owner: config.owner, repo: config.repo, localPath: config.localPath },
         { number: issue.number, title: issue.title, body: issue.body, labels: issue.labels },
@@ -530,7 +531,7 @@ export function startGithubIssuePoller(): void {
 
   pollTimer = setInterval(() => { executePollOnce().catch(console.error) }, POLL_INTERVAL)
 
-  // Task status → label sync loop + 2-agent pipeline driver
+  // Task status → label sync loop + 3-agent pod pipeline driver
   const repoConfigs = REPOS.map(r => ({ owner: r.owner, repo: r.repo, localPath: r.localPath }))
   syncTimer = setInterval(() => {
     syncTaskStatuses().catch(console.error)
@@ -619,6 +620,8 @@ export interface GitHubIssueCard {
   taskStage: string | null
   priority: string
   assignedAgent: string | null
+  /** All 3 pod agents with their roles. Present when the card comes from a pod pipeline. */
+  podAgents?: { role: 'solver' | 'reviewer' | 'executor'; agentId: string; active: boolean }[]
   ingestedAt: number
   url: string
 }
@@ -641,14 +644,33 @@ export function getGithubIssueCards(): GitHubIssueCard[] {
     })
   }
 
-  // 2-agent pipeline issues (getPipelineIssues imported at top level)
+  // Pod pipeline issues (getPipelineIssues imported at top level)
   for (const pi of getPipelineIssues()) {
+    let activeAgent: string | null = null
+    let podAgents: GitHubIssueCard['podAgents']
+    if (pi.podWorkflowId) {
+      const pod = getPodStatus(pi.podWorkflowId)
+      if (pod) {
+        const isSolving = pod.status === 'solving' || pod.status === 'feedback'
+        const isReviewing = pod.status === 'reviewing'
+        const isTesting = pod.status === 'executing' || pod.status === 'self-fixing'
+        if (isSolving) activeAgent = pod.solver.agentId
+        else if (isReviewing) activeAgent = pod.reviewer.agentId
+        else if (isTesting) activeAgent = pod.executor.agentId
+        else activeAgent = pod.solver.agentId
+        podAgents = [
+          { role: 'solver', agentId: pod.solver.agentId, active: isSolving },
+          { role: 'reviewer', agentId: pod.reviewer.agentId, active: isReviewing },
+          { role: 'executor', agentId: pod.executor.agentId, active: isTesting },
+        ]
+      }
+    }
     cards.push({
       issueNumber: pi.number, repo: pi.repo, title: pi.title,
       taskId: `pipeline-${pi.repo}-${pi.number}`,
       taskStatus: pi.stage === 'done' ? 'completed' : pi.stage === 'failed' ? 'failed' : 'active',
-      taskStage: pi.stage, priority: pi.priority,
-      assignedAgent: pi.plannerRunning ? 'issue-planner' : pi.executorRunning ? 'executor' : null,
+      taskStage: pi.lastPodStatus || pi.stage, priority: pi.priority,
+      assignedAgent: activeAgent, podAgents,
       ingestedAt: pi.ingestedAt, url: `https://github.com/${pi.repo}/issues/${pi.number}`,
     })
   }
