@@ -48,39 +48,19 @@ The R&D headquarters. Agents ("duders") sit at desks, take coffee breaks at the 
 - Scene layout driven by `lab-map.json` -- edit positions, rooms, and animations without touching code
 - XP, ranks, seasons, leaderboards, cosmetic rewards -- gamification built into every workflow
 
-### Dispatch Board
+### Dispatch Board & Pod System
 
-Your quest log. GitHub issues flow through a kanban pipeline: Planning, Executing, Validating, Done, Failed. Label an issue `agent-ready` and a pod picks it up automatically.
+Your quest log. GitHub issues flow through a three-phase pipeline — **Plan, Execute, Validate** — powered by agent pods. Label an issue `agent-ready` and the system picks it up automatically.
 
 ![Dispatch](docs/screenshots/Dispatch.png)
 
-## Agent Personas
+Agents work in **pods** — triplets of specialized roles that take an issue from plan to merged PR:
 
-Pod worker agents have the personas below and the configurations. Configurability here is evolving for economic and speed modes.
+1. **Plan** — Explore the codebase, design the implementation approach
+2. **Execute** — Implement the code in an isolated git worktree
+3. **Validate** — Run Playwright E2E tests, assert pass/fail, raise PR or report failure
 
-| | Agent | Title | Role | Model | Specialty |
-|---|-------|-------|------|-------|-----------|
-| <img src="Penny/public/sprites/avatars/WuKong.png" width="256"> | **Sun Wukong** | The Monkey King | Solver | Opus | Full-stack — transforms into whatever the codebase needs |
-| <img src="Penny/public/sprites/avatars/ErlangShen.png" width="256"> | **Erlang Shen** | The Three-Eyed God | Solver | Opus | Frontend — third eye sees broken layouts |
-| <img src="Penny/public/sprites/avatars/Guanyin.png" width="256"> | **Guanyin** | Bodhisattva of Compassion | Reviewer | Opus | Backend architecture — sees the whole system |
-| <img src="Penny/public/sprites/avatars/Tripitaka.png" width="256"> | **Tang Sanzang** | The Monk Tripitaka | Reviewer | Opus | Product management — keeps the mission on track |
-| <img src="Penny/public/sprites/avatars/AoGuang.png" width="256"> | **Ao Guang** | King of the East Sea | Reviewer | Opus | UI/UX — every pixel intentional |
-| <img src="Penny/public/sprites/avatars/ShaWujing.png" width="256"> | **Sha Wujing** | Curtain-Lifting General | Executor | Sonnet | Validation & QA — if he says it passes, it passes |
-| <img src="Penny/public/sprites/avatars/ZhuBajie.png" width="256"> | **Zhu Bajie** | Marshal of the Heavenly Canopy | Executor | Sonnet | Executive ops — brute-force effective |
-| <img src="Penny/public/sprites/avatars/Nezha.png" width="256"> | **Nezha** | The Third Lotus Prince | Solver | Opus | Mobile — everything must be instant |
-| <img src="Penny/public/sprites/avatars/RedBoy.png" width="256"> | **Red Boy** | Holy Child King | Solver | Opus | Game dev — creative fire, playful destruction |
-| <img src="Penny/public/sprites/avatars/BullDemonKing.png" width="256"> | **Demon King** | Great Sage Who Pacifies Heaven | Solver | Opus | Embedded/systems — zero waste, low-level mastery |
-| <img src="Penny/public/sprites/avatars/AoRun.png" width="256"> | **Ao Run** | Third Prince of the West Sea | Solver | Opus | Content & marketing — carries the message |
-
-Executor agents default to Sonnet with 1.5x timeout -- validation doesn't need Opus-level reasoning.
-
-## Pod System — Three-Phase Pipeline
-
-Agents work in **pods** -- three-phase workflows inspired by AgentCoder:
-
-1. **Plan** -- Explore the codebase, design the approach
-2. **Execute** -- Implement in an isolated git worktree
-3. **Validate** -- Run Playwright E2E tests, assert pass/fail
+Each phase is a column on the dispatch board. Pods advance automatically. If validation fails, the solver gets feedback and iterates (up to 3 rounds).
 
 ### Runtime Profiles
 
@@ -98,10 +78,28 @@ Set the system default in `agents/agent-types.yaml` or override per-issue with `
 
 Multiple pods running in parallel share a **flight board** that prevents collisions:
 
-- **Planning broadcast** -- when a pod's planner finishes, it publishes its plan summary and file manifest
-- **Cross-pod awareness** -- new pods see what's already in flight before they start planning
-- **File-level gating** -- dispatch queues pods that would touch overlapping files
-- **Rebase-before-PR** -- pods rebase onto latest main before creating PRs
+- **Planning broadcast** — when a pod's planner finishes, it publishes its plan summary and file manifest
+- **Cross-pod awareness** — new pods see what's already in flight before they start planning
+- **File-level gating** — dispatch queues pods that would touch overlapping files
+- **Rebase-before-PR** — pods rebase onto latest main before creating PRs
+
+## Agent Personas — Journey to the West
+
+Every pod agent is a character from the Chinese epic *Journey to the West*. The persona defines who they are — role, specialty, personality. Which model and timeout they run with is determined by the runtime profile above, not the persona.
+
+| | Agent | Title | Role | Specialty |
+|---|-------|-------|------|-----------|
+| <img src="Penny/public/sprites/avatars/WuKong.png" width="256"> | **Sun Wukong** | The Monkey King | Solver | Full-stack — transforms into whatever the codebase needs |
+| <img src="Penny/public/sprites/avatars/ErlangShen.png" width="256"> | **Erlang Shen** | The Three-Eyed God | Solver | Frontend — third eye sees broken layouts |
+| <img src="Penny/public/sprites/avatars/Guanyin.png" width="256"> | **Guanyin** | Bodhisattva of Compassion | Reviewer | Backend architecture — sees the whole system |
+| <img src="Penny/public/sprites/avatars/Tripitaka.png" width="256"> | **Tang Sanzang** | The Monk Tripitaka | Reviewer | Product management — keeps the mission on track |
+| <img src="Penny/public/sprites/avatars/AoGuang.png" width="256"> | **Ao Guang** | King of the East Sea | Reviewer | UI/UX — every pixel intentional |
+| <img src="Penny/public/sprites/avatars/ShaWujing.png" width="256"> | **Sha Wujing** | Curtain-Lifting General | Executor | Validation & QA — if he says it passes, it passes |
+| <img src="Penny/public/sprites/avatars/ZhuBajie.png" width="256"> | **Zhu Bajie** | Marshal of the Heavenly Canopy | Executor | Executive ops — brute-force effective |
+| <img src="Penny/public/sprites/avatars/Nezha.png" width="256"> | **Nezha** | The Third Lotus Prince | Solver | Mobile — everything must be instant |
+| <img src="Penny/public/sprites/avatars/RedBoy.png" width="256"> | **Red Boy** | Holy Child King | Solver | Game dev — creative fire, playful destruction |
+| <img src="Penny/public/sprites/avatars/BullDemonKing.png" width="256"> | **Bull Demon King** | Great Sage Who Pacifies Heaven | Solver | Embedded/systems — zero waste, low-level mastery |
+| <img src="Penny/public/sprites/avatars/AoRun.png" width="256"> | **Ao Run** | Third Prince of the West Sea | Solver | Content & marketing — carries the message |
 
 ## Knowledge Graph — The Company Brain
 
