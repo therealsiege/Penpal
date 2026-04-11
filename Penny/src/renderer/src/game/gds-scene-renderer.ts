@@ -146,7 +146,7 @@ export class GdsSceneRenderer {
     for (const cfg of BARISTAS) {
       const wx = this.originX + cfg.gdsX * this.scale
       const wy = this.originY + cfg.gdsY * this.scale
-      const containerScale = this.scale * 1.5  // match workstation duder size (gdsScale * 1.5)
+      const containerScale = this.scale * 1.0  // match workstation duder size
 
       const bc = this.scene.add.container(wx, wy).setDepth(0).setScale(containerScale)
 
