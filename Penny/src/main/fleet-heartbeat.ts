@@ -20,6 +20,7 @@ import { listPods } from './pods'
 export interface FleetHeartbeat {
   instanceId: string
   hostname: string
+  user: string
   platform: string
   timestamp: string
   health: 'healthy' | 'degraded' | 'down'
@@ -35,6 +36,7 @@ export interface FleetHeartbeat {
 export interface FleetInstance {
   instanceId: string
   hostname: string
+  user: string
   platform: string
   lastSeen: string
   stale: boolean
@@ -173,6 +175,7 @@ async function gatherHeartbeat(): Promise<FleetHeartbeat> {
   return {
     instanceId,
     hostname: os.hostname(),
+    user: os.userInfo().username,
     platform: process.platform,
     timestamp: new Date().toISOString(),
     health: healthResult.overall as FleetHeartbeat['health'],

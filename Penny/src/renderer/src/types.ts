@@ -553,6 +553,7 @@ export interface GithubPollerStatus {
 export interface FleetInstance {
   instanceId: string
   hostname: string
+  user: string
   platform: string
   lastSeen: string
   stale: boolean

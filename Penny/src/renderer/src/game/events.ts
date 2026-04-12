@@ -241,5 +241,5 @@ export interface EventPayloadMap {
   [EVENTS.NAVIGATE_CAMPUS]: []
   [EVENTS.NAVIGATE_BUILDING]: [building: 'office' | 'pod-foundry']
   [EVENTS.CAMPUS_COUNTS_UPDATED]: [agents: number, pods: number]
-  [EVENTS.FLEET_UPDATED]: [instances: { instanceId: string; hostname: string; stale: boolean; health: string; sessions: { total: number; active: number }; pods: { active: number }; repos: string[]; isSelf: boolean; lat?: number; lon?: number; city?: string }[]]
+  [EVENTS.FLEET_UPDATED]: [instances: { instanceId: string; hostname: string; user?: string; stale: boolean; health: string; sessions: { total: number; active: number }; pods: { active: number }; repos: string[]; isSelf: boolean; lat?: number; lon?: number; city?: string }[]]
 }

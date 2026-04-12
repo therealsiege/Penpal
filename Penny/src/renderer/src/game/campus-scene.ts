@@ -16,11 +16,11 @@ const MAP_W = 3840
 const MAP_H = 2160
 
 // Geographic bounds calibrated to THIS illustrated map (not standard Mercator)
-// Tuned so Nashville (36.16, -86.78) lands at ~(771, 878) in map space
-const MIN_LAT = -32
+// Tuned by visual inspection — Nashville should land in southeastern US
+const MIN_LAT = -45
 const MAX_LAT = 83
-const MIN_LON = -159
-const MAX_LON = 201
+const MIN_LON = -168
+const MAX_LON = 192
 
 // Fallback: Nashville, TN
 const FALLBACK_LAT = 36.16
@@ -29,6 +29,7 @@ const FALLBACK_LON = -86.78
 interface FleetPinData {
   instanceId: string
   hostname: string
+  user?: string
   stale: boolean
   health: string
   sessions: { total: number; active: number }
@@ -43,7 +44,6 @@ interface FleetPinData {
 interface FleetPin {
   instanceId: string
   container: Phaser.GameObjects.Container
-  countText: Phaser.GameObjects.Text
   labelText: Phaser.GameObjects.Text
   pinSprite: Phaser.GameObjects.Image
   healthDot: Phaser.GameObjects.Graphics
@@ -185,8 +185,8 @@ export class CampusScene extends BaseScene {
     this.drawHealthDot(healthDot, pinScale, inst)
     container.add(healthDot)
 
-    // Label — city or hostname
-    const labelStr = inst.city || inst.hostname
+    // Label — home dir username
+    const labelStr = inst.user || inst.hostname
     const labelText = this.add.text(0, 8, labelStr, {
       fontSize: scaledFontSize(11),
       fontFamily: "'Monogram', system-ui, monospace",
@@ -196,16 +196,6 @@ export class CampusScene extends BaseScene {
       resolution: 2,
     }).setOrigin(0.5, 0)
     container.add(labelText)
-
-    // Count text
-    const countStr = `${inst.sessions.total} agents` + (inst.pods.active > 0 ? ` \u00b7 ${inst.pods.active} pods` : '')
-    const countText = this.add.text(0, 8 + labelText.height + 4, countStr, {
-      fontSize: scaledFontSize(9),
-      fontFamily: 'system-ui, monospace',
-      color: inst.stale ? '#4b5563' : '#94a3b8',
-      resolution: 2,
-    }).setOrigin(0.5, 0)
-    container.add(countText)
 
     if (inst.stale) container.setAlpha(0.5)
 
@@ -246,15 +236,12 @@ export class CampusScene extends BaseScene {
     })
 
     return {
-      instanceId: inst.instanceId, container, countText, labelText,
+      instanceId: inst.instanceId, container, labelText,
       pinSprite, healthDot, screenX: finalX, screenY: finalY,
     }
   }
 
   private updatePin(pin: FleetPin, inst: FleetPinData): void {
-    const countStr = `${inst.sessions.total} agents` + (inst.pods.active > 0 ? ` \u00b7 ${inst.pods.active} pods` : '')
-    pin.countText.setText(countStr)
-
     pin.healthDot.clear()
     this.drawHealthDot(pin.healthDot, this.mapScale * 0.5, inst)
 
@@ -266,7 +253,6 @@ export class CampusScene extends BaseScene {
     }
     pin.container.setAlpha(inst.stale ? 0.5 : 1)
     pin.labelText.setColor(inst.stale ? '#6b7280' : '#ffffff')
-    pin.countText.setColor(inst.stale ? '#4b5563' : '#94a3b8')
   }
 
   private drawHealthDot(g: Phaser.GameObjects.Graphics, pinScale: number, inst: FleetPinData): void {
