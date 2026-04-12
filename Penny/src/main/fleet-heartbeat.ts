@@ -89,10 +89,12 @@ async function resolveFleetChannel(): Promise<string | null> {
     if (ch?.id) {
       fleetChannelId = ch.id
       await client.conversations.join({ channel: ch.id }).catch(() => {})
+      console.log(`[fleet] Resolved existing channel #${FLEET_CHANNEL_NAME} (${ch.id})`)
       return fleetChannelId
     }
 
     // Create it
+    console.log(`[fleet] Channel #${FLEET_CHANNEL_NAME} not found, creating...`)
     const created = await client.conversations.create({ name: FLEET_CHANNEL_NAME, is_private: false })
     if (created.channel?.id) {
       fleetChannelId = created.channel.id
@@ -182,7 +184,10 @@ async function postOrUpdateHeartbeat(): Promise<void> {
         username: `Penny @ ${hb.hostname}`,
         icon_emoji: ':satellite:',
       })
-      if (result.ts) fleetMessageTs = result.ts
+      if (result.ts) {
+        fleetMessageTs = result.ts
+        console.log(`[fleet] Posted heartbeat (ts=${result.ts})`)
+      }
     }
   } catch (err: unknown) {
     const code = (err as { data?: { error?: string } })?.data?.error
@@ -254,6 +259,8 @@ async function pollFleetChannel(): Promise<void> {
 async function tick(): Promise<void> {
   await postOrUpdateHeartbeat()
   await pollFleetChannel()
+  const count = lastFleetStatus.instances.length
+  console.log(`[fleet] tick complete — ${count} instance(s) found, channel=${fleetChannelId ?? 'none'}, ownMsg=${fleetMessageTs ?? 'none'}`)
 }
 
 // ── Public API ─────────────────────────────────────────────────────────────
