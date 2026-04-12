@@ -19,7 +19,7 @@ const MAP_H = 2160
 // This was visually confirmed as correct in the original hardcoded version
 const ANCHOR_LAT = 36.16
 const ANCHOR_LON = -86.78
-const ANCHOR_PX_X = 680   // pixel X in 3840-space where Nashville sits
+const ANCHOR_PX_X = 820   // pixel X in 3840-space where Nashville sits
 const ANCHOR_PX_Y = 1020  // pixel Y in 3840-space where Nashville sits
 
 // Approximate pixels-per-degree for this illustrated map
@@ -193,23 +193,23 @@ export class CampusScene extends BaseScene {
     this.drawHealthDot(healthDot, pinScale, inst)
     container.add(healthDot)
 
-    // Label — home dir username
+    // Label — home dir username (hidden by default, shown on hover)
     const labelStr = inst.user || inst.hostname
     const labelText = this.add.text(0, 8, labelStr, {
       fontSize: scaledFontSize(11),
       fontFamily: "'Monogram', system-ui, monospace",
-      color: inst.stale ? '#6b7280' : '#ffffff',
+      color: '#ffffff',
       backgroundColor: 'rgba(15,23,42,0.85)',
       padding: { x: 8, y: 4 },
       resolution: 2,
-    }).setOrigin(0.5, 0)
+    }).setOrigin(0.5, 0).setAlpha(0)
     container.add(labelText)
 
     if (inst.stale) container.setAlpha(0.5)
 
     // Hit area
-    const hitW = Math.max(80, labelText.width + 24)
-    const hitH = 100 * pinScale + labelText.height + 20
+    const hitW = Math.max(80, 60 * pinScale)
+    const hitH = 80 * pinScale
     const hit = this.add.rectangle(0, -30 * pinScale, hitW, hitH, 0x000000, 0)
       .setInteractive({ useHandCursor: true })
     container.add(hit)
@@ -220,12 +220,14 @@ export class CampusScene extends BaseScene {
       yoyo: true, repeat: -1, ease: 'Sine.easeInOut', delay: index * 200,
     })
 
-    // Hover — scale up
+    // Hover — scale up + show label
     hit.on('pointerover', () => {
       this.tweens.add({ targets: container, scaleX: 1.15, scaleY: 1.15, duration: 120, ease: 'Back.easeOut' })
+      this.tweens.add({ targets: labelText, alpha: 1, duration: 150 })
     })
     hit.on('pointerout', () => {
       this.tweens.add({ targets: container, scaleX: 1, scaleY: 1, duration: 120, ease: 'Power1' })
+      this.tweens.add({ targets: labelText, alpha: 0, duration: 150 })
     })
 
     // Single click — zoom camera to pin
