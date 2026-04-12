@@ -1,6 +1,7 @@
 import { EventEmitter } from 'events'
 import { execSync } from 'child_process'
 import fs from 'fs'
+import os from 'os'
 import path from 'path'
 import {
   getAgentConfig,
@@ -175,6 +176,7 @@ export interface PodWorkflow {
   phaseConfig?: PhaseConfig
   runtimeProfile?: string
   resolvedProfile?: RuntimeProfile
+  phaseOverrides?: Partial<Record<'plan' | 'execute' | 'validate', { model?: string; timeoutMultiplier?: number }>>
   createdAt: number
   updatedAt: number
   error?: string
@@ -184,6 +186,9 @@ export interface PodWorkflow {
   qualityRecorded?: boolean
   prUrl?: string
   rebaseConflict?: boolean
+  /** GitHub issue tracking — set when pod is created from a pipeline issue */
+  issueNumber?: number
+  issueRepo?: string
 }
 
 export interface PodPreset {
@@ -402,11 +407,16 @@ const VALID_SEVERITIES = ['critical', 'major', 'minor', 'nitpick'] as const
 
 function makeFallbackCritique(reason: string): ReviewerCritique {
   return {
-    verdict: 'approve',
-    confidence: 0.5,
-    issues: [],
+    verdict: 'reject',
+    confidence: 0,
+    issues: [{
+      severity: 'critical' as const,
+      location: 'reviewer',
+      description: `Reviewer output could not be parsed: ${reason}`,
+      suggestion: 'Check reviewer agent logs and retry.',
+    }],
     strengths: [],
-    summary: `Could not parse reviewer output — falling back to auto-approve. ${reason}`,
+    summary: `Reviewer output unparseable — rejecting to prevent unreviewed code from passing. ${reason}`,
   }
 }
 
@@ -1544,6 +1554,9 @@ export interface CreatePodOpts {
   maxSelfFixes?: number
   /** Runtime profile name: 'max' | 'economic' | 'sonnet'. Overrides default_profile from agent-types.yaml. */
   runtimeProfile?: string
+  /** GitHub issue tracking — set when creating from pipeline */
+  issueNumber?: number
+  issueRepo?: string
 }
 
 export function createPod(task: string, opts: CreatePodOpts = {}): PodWorkflow {
@@ -1609,6 +1622,8 @@ export function createPod(task: string, opts: CreatePodOpts = {}): PodWorkflow {
     stageHistory: [{ stage: cwdErr ? 'failed' : 'pending', enteredAt: Date.now() }],
     qualityRecorded: false,
     error: cwdErr ?? undefined,
+    issueNumber: opts.issueNumber,
+    issueRepo: opts.issueRepo,
   }
 
   workflows.set(wf.id, wf)

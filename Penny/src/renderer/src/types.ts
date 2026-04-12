@@ -400,6 +400,8 @@ export interface PodWorkflow {
   runtimeProfile?: string
   resolvedProfile?: { phases: Record<string, { model: string }>; timeoutMultiplier: number }
   phaseOverrides?: Partial<Record<'plan' | 'execute' | 'validate', { model?: string; timeoutMultiplier?: number }>>
+  issueNumber?: number
+  issueRepo?: string
 }
 
 export interface PodPreset {

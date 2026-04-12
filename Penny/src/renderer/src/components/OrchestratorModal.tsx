@@ -127,36 +127,49 @@ function DispatchContent({ onClose }: { onClose?: () => void }) {
 
   // ── Pod controls ──
   const handlePodPause = useCallback(async (id: string) => {
-    await window.api.pausePod(id); toast('Paused', 'success')
+    try { await window.api.pausePod(id); toast('Paused', 'success') }
+    catch { toast('Failed to pause', 'error') }
   }, [toast])
   const handlePodResume = useCallback(async (id: string) => {
-    await window.api.resumePod(id); toast('Resumed', 'success')
+    try { await window.api.resumePod(id); toast('Resumed', 'success') }
+    catch { toast('Failed to resume', 'error') }
   }, [toast])
   const handlePodCancel = useCallback(async (id: string) => {
-    await window.api.cancelPod(id); toast('Cancelled', 'success')
+    try { await window.api.cancelPod(id); toast('Cancelled', 'success') }
+    catch { toast('Failed to cancel', 'error') }
   }, [toast])
   const handlePodOverride = useCallback(async (
     wfId: string, phase: string, override: { model?: string; timeoutMultiplier?: number },
   ) => {
-    await window.api.overridePod(wfId, phase, override)
-    toast(`Override set for ${phase}`, 'success')
+    try { await window.api.overridePod(wfId, phase, override); toast(`Override set for ${phase}`, 'success') }
+    catch { toast('Failed to set override', 'error') }
   }, [toast])
 
   // Build a map from taskId → PodWorkflow for enrichment
+  // Primary: match on pod.issueNumber === card.issueNumber (explicit link)
+  // Fallback: match on pod.name containing #issueNumber (legacy pods)
   const podByTask = new Map<string, PodWorkflow>()
+  const matchedPodIds = new Set<string>()
   if (podWorkflows) {
     for (const card of cards) {
-      // Match pod workflow by name or task content
       const pod = podWorkflows.find(p =>
-        card.title && p.name && (
-          p.name.includes(`#${card.issueNumber}`) ||
-          p.task.includes(`#${card.issueNumber}`) ||
-          p.name === card.title
-        )
+        // Explicit match (new pods)
+        (p.issueNumber === card.issueNumber && p.issueRepo && card.repo.endsWith(p.issueRepo)) ||
+        // Fallback: name/task contains issue number (legacy)
+        p.name?.includes(`#${card.issueNumber}`) ||
+        p.task?.includes(`#${card.issueNumber}`)
       )
-      if (pod) podByTask.set(card.taskId, pod)
+      if (pod) {
+        podByTask.set(card.taskId, pod)
+        matchedPodIds.add(pod.id)
+      }
     }
   }
+
+  // Orphaned pods — active pods not linked to any GitHub issue
+  const orphanedPods = (podWorkflows ?? []).filter(p =>
+    !matchedPodIds.has(p.id) && !['complete', 'failed'].includes(p.status)
+  )
 
   const activeCount = cards.filter(c => !['done', 'failed'].includes(cardLane(c))).length
 
@@ -243,6 +256,45 @@ function DispatchContent({ onClose }: { onClose?: () => void }) {
                 </div>
               )
             })}
+          </div>
+        )}
+
+        {/* Orphaned pods — active pods not linked to any GitHub issue */}
+        {orphanedPods.length > 0 && (
+          <div className="mt-4 border-t border-[var(--c-border)] pt-4">
+            <div className="text-[14px] font-medium text-[var(--c-text-muted)] mb-3">
+              Standalone Pods ({orphanedPods.length})
+            </div>
+            <div className="space-y-3">
+              {orphanedPods.map(pod => (
+                <IssueCard
+                  key={pod.id}
+                  card={{
+                    issueNumber: pod.issueNumber ?? 0,
+                    repo: pod.issueRepo ?? pod.cwd.split('/').pop() ?? '',
+                    title: pod.name,
+                    taskId: pod.id,
+                    taskStatus: pod.status === 'complete' ? 'completed' : pod.status === 'failed' ? 'failed' : 'active',
+                    taskStage: pod.status,
+                    priority: pod.priority ?? 'normal',
+                    assignedAgent: pod.solver.agentId,
+                    podAgents: [
+                      { role: 'solver', agentId: pod.solver.agentId, active: pod.status === 'solving' || pod.status === 'feedback' },
+                      { role: 'reviewer', agentId: pod.reviewer.agentId, active: pod.status === 'reviewing' },
+                      { role: 'executor', agentId: pod.executor.agentId, active: pod.status === 'executing' || pod.status === 'self-fixing' },
+                    ],
+                    ingestedAt: pod.createdAt,
+                    url: '',
+                  }}
+                  pod={pod}
+                  onRefresh={loadGithub}
+                  onPodPause={handlePodPause}
+                  onPodResume={handlePodResume}
+                  onPodCancel={handlePodCancel}
+                  onPodOverride={handlePodOverride}
+                />
+              ))}
+            </div>
           </div>
         )}
       </div>

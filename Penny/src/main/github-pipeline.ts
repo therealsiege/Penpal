@@ -493,6 +493,8 @@ export async function ingestIssue(config: RepoConfig, issue: GHIssue): Promise<P
       presetId,
       runtimeProfile,
       priority: entry.priority,
+      issueNumber: issue.number,
+      issueRepo: repoKey,
     })
     entry.podWorkflowId = wf.id
     entry.lastPodStatus = wf.status
