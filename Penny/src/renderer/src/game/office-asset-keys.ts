@@ -78,6 +78,11 @@ export const SPRITESHEET_KEYS = Object.freeze({
   GDS_MEDIUM: 'gds-medium',
   /** GDS world map — default start scene backdrop */
   GDS_WORLDMAP: 'gds-worldmap',
+  /** Map marker sprites for fleet/campus pins */
+  MAP_MARKER: 'map-marker',
+  MAP_PIN: 'map-pin',
+  MAP_FLAG: 'map-flag',
+  MAP_TACK: 'map-tack',
 } as const)
 
 // ---------------------------------------------------------------------------

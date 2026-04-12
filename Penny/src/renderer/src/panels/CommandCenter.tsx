@@ -1433,6 +1433,13 @@ export function CommandCenter(props: CommandCenterProps) {
   // --- Fleet popover state ---
   const [showFleetPopover, setShowFleetPopover] = useState(false)
 
+  // Push fleet data to game scene via EventBus
+  useEffect(() => {
+    if (fleetStatus && fleetStatus.instances.length > 0) {
+      EventBus.emit(EVENTS.FLEET_UPDATED, fleetStatus.instances)
+    }
+  }, [fleetStatus])
+
   // --- Embedded terminal ---
   const [terminal, setTerminal] = useState<{ ptyId: string; title: string } | null>(null)
 

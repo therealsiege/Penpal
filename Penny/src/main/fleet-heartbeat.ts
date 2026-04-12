@@ -25,6 +25,8 @@ export interface FleetHeartbeat {
   pods: { active: number; total: number }
   repos: string[]
   uptime: number
+  mapX?: number   // position on 3840x2160 world map
+  mapY?: number
 }
 
 export interface FleetInstance {
@@ -39,6 +41,8 @@ export interface FleetInstance {
   repos: string[]
   uptime: number
   isSelf: boolean
+  mapX?: number
+  mapY?: number
 }
 
 export interface FleetStatus {
@@ -124,6 +128,9 @@ async function gatherHeartbeat(): Promise<FleetHeartbeat> {
     return parts[parts.length - 1] || s.cwd
   }))]
 
+  const mapX = process.env.FLEET_MAP_X ? Number(process.env.FLEET_MAP_X) : undefined
+  const mapY = process.env.FLEET_MAP_Y ? Number(process.env.FLEET_MAP_Y) : undefined
+
   return {
     instanceId,
     hostname: os.hostname(),
@@ -134,6 +141,7 @@ async function gatherHeartbeat(): Promise<FleetHeartbeat> {
     pods: { active: activePods, total: pods.length },
     repos,
     uptime: Math.round(process.uptime()),
+    ...(mapX != null && mapY != null ? { mapX, mapY } : {}),
   }
 }
 

@@ -367,6 +367,12 @@ export class BootScene extends BaseScene {
     // GDS world map — default start scene
     this.load.image(SPRITESHEET_KEYS.GDS_WORLDMAP, './sprites/gds-worldmap.png')
 
+    // Map marker sprites for fleet/campus pins
+    this.load.image(SPRITESHEET_KEYS.MAP_MARKER, './sprites/map-marker.png')
+    this.load.image(SPRITESHEET_KEYS.MAP_PIN, './sprites/map-pin.png')
+    this.load.image(SPRITESHEET_KEYS.MAP_FLAG, './sprites/map-flag.png')
+    this.load.image(SPRITESHEET_KEYS.MAP_TACK, './sprites/map-tack.png')
+
     // Lab pipes — 128x128 cells, 7 cols × 5 rows (pipe runs, connectors, valves)
     this.load.spritesheet(SPRITESHEET_KEYS.LAB_PIPES, './sprites/lab-pipes.png', {
       frameWidth: 128, frameHeight: 128,
