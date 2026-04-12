@@ -1933,7 +1933,17 @@ export function CommandCenter(props: CommandCenterProps) {
                             )}
                           </div>
                         ))}
+                        {total === 0 && (
+                          <div className="px-3 py-4 text-center text-[12px] text-[var(--c-text-faint)]">
+                            {fleetStatus.debug ?? 'No instances found'}
+                          </div>
+                        )}
                       </div>
+                      {fleetStatus.debug && (
+                        <div className="px-4 py-2 border-t border-[var(--c-border)] text-[10px] text-[var(--c-text-faint)] font-mono">
+                          {fleetStatus.debug}
+                        </div>
+                      )}
                     </div>
                   </>
                 )}
