@@ -15,11 +15,12 @@ import { scaledFontSize } from './office-constants'
 const MAP_W = 3840
 const MAP_H = 2160
 
-// Geographic bounds of the world map (standard Mercator-ish)
-const MIN_LAT = -60   // Antarctica edge
-const MAX_LAT = 85    // Arctic
-const MIN_LON = -180  // date line left
-const MAX_LON = 180   // date line right
+// Geographic bounds calibrated to THIS illustrated map (not standard Mercator)
+// Tuned so Nashville (36.16, -86.78) lands at ~(771, 878) in map space
+const MIN_LAT = -32
+const MAX_LAT = 83
+const MIN_LON = -159
+const MAX_LON = 201
 
 // Fallback: Nashville, TN
 const FALLBACK_LAT = 36.16
