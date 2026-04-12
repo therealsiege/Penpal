@@ -238,26 +238,26 @@ Overall good work.`
     expect(result.issues[0].severity).toBe('nitpick')
   })
 
-  it('falls back on malformed JSON', () => {
+  it('rejects on malformed JSON', () => {
     const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const result = parseReviewerCritique('This is not JSON at all { broken }')
-    expect(result.verdict).toBe('approve')
-    expect(result.confidence).toBe(0.5)
-    expect(result.summary).toContain('falling back')
+    expect(result.verdict).toBe('reject')
+    expect(result.confidence).toBe(0)
+    expect(result.summary).toContain('rejecting')
     consoleSpy.mockRestore()
   })
 
-  it('falls back on missing required fields', () => {
+  it('rejects on missing required fields', () => {
     const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const raw = JSON.stringify({ verdict: 'approve' }) // missing summary
     const result = parseReviewerCritique(raw)
-    expect(result.verdict).toBe('approve')
-    expect(result.confidence).toBe(0.5)
-    expect(result.summary).toContain('falling back')
+    expect(result.verdict).toBe('reject')
+    expect(result.confidence).toBe(0)
+    expect(result.summary).toContain('rejecting')
     consoleSpy.mockRestore()
   })
 
-  it('falls back on invalid verdict value', () => {
+  it('rejects on invalid verdict value', () => {
     const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const raw = JSON.stringify({
       verdict: 'maybe',
@@ -267,8 +267,8 @@ Overall good work.`
       summary: 'Unsure.',
     })
     const result = parseReviewerCritique(raw)
-    expect(result.verdict).toBe('approve')
-    expect(result.summary).toContain('falling back')
+    expect(result.verdict).toBe('reject')
+    expect(result.summary).toContain('rejecting')
     consoleSpy.mockRestore()
   })
 
@@ -292,11 +292,11 @@ Overall good work.`
     expect(parseReviewerCritique(underRaw).confidence).toBe(0)
   })
 
-  it('falls back on undefined input', () => {
+  it('rejects on undefined input', () => {
     const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const result = parseReviewerCritique(undefined)
-    expect(result.verdict).toBe('approve')
-    expect(result.confidence).toBe(0.5)
+    expect(result.verdict).toBe('reject')
+    expect(result.confidence).toBe(0)
     consoleSpy.mockRestore()
   })
 

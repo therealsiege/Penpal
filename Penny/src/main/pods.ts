@@ -1665,6 +1665,8 @@ export function overridePod(
   phase: PodPhase,
   override: { model?: string; timeoutMultiplier?: number },
 ): boolean {
+  const VALID_PHASES: PodPhase[] = ['plan', 'execute', 'validate']
+  if (!VALID_PHASES.includes(phase)) return false
   const wf = workflows.get(workflowId)
   if (!wf) return false
   wf.phaseOverrides = { ...wf.phaseOverrides, [phase]: override }
@@ -1675,7 +1677,7 @@ export function overridePod(
 
 export function pausePod(workflowId: string): boolean {
   const wf = workflows.get(workflowId)
-  if (!wf || wf.status === 'complete' || wf.status === 'failed') return false
+  if (!wf || wf.status === 'complete' || wf.status === 'failed' || wf.status === 'paused') return false
   setStatus(wf, 'paused')
   return true
 }

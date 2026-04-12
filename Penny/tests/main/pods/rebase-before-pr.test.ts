@@ -31,6 +31,8 @@ function ok(output: string) {
   return { success: true, output, durationMs: 25 }
 }
 
+const APPROVE_REVIEW = '```json\n{"verdict":"approve","confidence":0.9,"issues":[],"strengths":[],"summary":"Looks good."}\n```'
+
 async function waitForTerminalStatus(workflowId: string): Promise<NonNullable<ReturnType<typeof getPodStatus>>> {
   const deadline = Date.now() + 5000
   while (Date.now() < deadline) {
@@ -144,7 +146,7 @@ describe('runWorkflow rebase + PR integration', () => {
     // solver, reviewer, executor — no extra re-validate call on clean rebase
     runAgentHeadlessMock
       .mockResolvedValueOnce(ok('solver output'))
-      .mockResolvedValueOnce(ok('review output'))
+      .mockResolvedValueOnce(ok(APPROVE_REVIEW))
       .mockResolvedValueOnce(ok('RESULT: PASS'))
 
     const wf = createPod('rebase pr task', {
@@ -174,7 +176,7 @@ describe('runWorkflow rebase + PR integration', () => {
 
     runAgentHeadlessMock
       .mockResolvedValueOnce(ok('solver output'))
-      .mockResolvedValueOnce(ok('review output'))
+      .mockResolvedValueOnce(ok(APPROVE_REVIEW))
       .mockResolvedValueOnce(ok('RESULT: PASS'))
 
     const wf = createPod('rebase conflict task', {

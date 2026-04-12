@@ -177,7 +177,7 @@ describe('runWorkflow reviewer routing (mocked agents)', () => {
     }
   })
 
-  it('malformed reviewer JSON falls back to approve and still reaches executor', async () => {
+  it('malformed reviewer JSON rejects and fails the pod', async () => {
     runAgentHeadlessMock.mockImplementation(async (agentId: string) => {
       if (agentId === 'fullstack-dev') return { success: true, output: 'solver', durationMs: 1 }
       if (agentId === 'backend-arch')
@@ -189,11 +189,10 @@ describe('runWorkflow reviewer routing (mocked agents)', () => {
     const wf = createPod('task', { maxIterations: 1, cwd: process.cwd() })
     try {
       const done = await waitForTerminal(wf.id)
-      expect(done?.status).toBe('complete')
-      expect(runAgentHeadlessMock).toHaveBeenCalledTimes(3)
+      expect(done?.status).toBe('failed')
       const final = getPodStatus(wf.id)
-      expect(final?.critique?.verdict).toBe('approve')
-      expect(final?.critique?.summary).toContain('falling back')
+      expect(final?.critique?.verdict).toBe('reject')
+      expect(final?.critique?.summary).toContain('rejecting')
     } finally {
       removeCritiqueArtifact(wf.id)
     }

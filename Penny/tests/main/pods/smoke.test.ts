@@ -36,6 +36,8 @@ function fail(error: string): HeadlessResult {
   return { success: false, output: '', error, durationMs: 25 }
 }
 
+const APPROVE_REVIEW = '```json\n{"verdict":"approve","confidence":0.9,"issues":[],"strengths":[],"summary":"Looks good."}\n```'
+
 describe('solver best-of-N flow', () => {
   beforeEach(() => {
     runAgentHeadlessMock.mockReset()
@@ -44,7 +46,7 @@ describe('solver best-of-N flow', () => {
   it('keeps candidates=1 behavior and uses single solve output', async () => {
     runAgentHeadlessMock
       .mockResolvedValueOnce(ok('single-solver-output'))
-      .mockResolvedValueOnce(ok('review-plan'))
+      .mockResolvedValueOnce(ok(APPROVE_REVIEW))
       .mockResolvedValueOnce(ok('RESULT: PASS'))
 
     const wf = createPod('single candidate task', {
@@ -71,7 +73,7 @@ describe('solver best-of-N flow', () => {
       .mockResolvedValueOnce(ok('candidate-2-output'))
       .mockResolvedValueOnce(ok('candidate-3-output'))
       .mockResolvedValueOnce(ok('{ "selected": 2, "confidence": 0.9, "reasoning": "best" }'))
-      .mockResolvedValueOnce(ok('review-plan'))
+      .mockResolvedValueOnce(ok(APPROVE_REVIEW))
       .mockResolvedValueOnce(ok('RESULT: PASS'))
 
     const wf = createPod('multi candidate task', {
@@ -102,7 +104,7 @@ describe('solver best-of-N flow', () => {
       .mockResolvedValueOnce(ok('candidate-2-output'))
       .mockResolvedValueOnce(ok('candidate-3-output'))
       .mockResolvedValueOnce(ok('not valid json'))
-      .mockResolvedValueOnce(ok('review-plan'))
+      .mockResolvedValueOnce(ok(APPROVE_REVIEW))
       .mockResolvedValueOnce(ok('RESULT: PASS'))
 
     const wf = createPod('invalid self eval task', {

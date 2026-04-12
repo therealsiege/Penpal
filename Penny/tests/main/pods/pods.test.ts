@@ -58,7 +58,7 @@ describe('pods', () => {
   it('records terminal pod-quality event on first-pass completion', async () => {
     runAgentHeadlessMock
       .mockResolvedValueOnce({ success: true, output: 'solver output', durationMs: 10 })
-      .mockResolvedValueOnce({ success: true, output: 'review output', durationMs: 10 })
+      .mockResolvedValueOnce({ success: true, output: '```json\n{"verdict":"approve","confidence":0.9,"issues":[],"strengths":[],"summary":"Looks good."}\n```', durationMs: 10 })
       .mockResolvedValueOnce({ success: true, output: 'RESULT: PASS', durationMs: 10 })
 
     const wf = createPod('pod quality pass', {
