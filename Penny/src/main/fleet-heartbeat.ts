@@ -4,6 +4,8 @@
  * Each Penpal instance posts a structured heartbeat message to #sk-fleet every 60s.
  * Other instances read the channel to discover peers. One message per instance,
  * updated in-place via chat.update to keep the channel clean.
+ *
+ * Location is determined automatically via IP geolocation on startup.
  */
 
 import os from 'os'
@@ -25,8 +27,9 @@ export interface FleetHeartbeat {
   pods: { active: number; total: number }
   repos: string[]
   uptime: number
-  mapX?: number   // position on 3840x2160 world map
-  mapY?: number
+  lat?: number
+  lon?: number
+  city?: string
 }
 
 export interface FleetInstance {
@@ -41,8 +44,9 @@ export interface FleetInstance {
   repos: string[]
   uptime: number
   isSelf: boolean
-  mapX?: number
-  mapY?: number
+  lat?: number
+  lon?: number
+  city?: string
 }
 
 export interface FleetStatus {
@@ -53,8 +57,8 @@ export interface FleetStatus {
 
 // ── Constants ──────────────────────────────────────────────────────────────
 
-const HEARTBEAT_INTERVAL = 60_000 // 60 seconds
-const STALE_THRESHOLD = 180_000   // 3 minutes
+const HEARTBEAT_INTERVAL = 60_000
+const STALE_THRESHOLD = 180_000
 const SENTINEL = '```penpal-heartbeat'
 const CHANNEL_PREFIX = process.env.SLACK_CHANNEL_PREFIX || 'sk'
 const FLEET_CHANNEL_NAME = `${CHANNEL_PREFIX}-fleet`
@@ -67,10 +71,46 @@ let fleetMessageTs: string | null = null
 let fleetTimer: ReturnType<typeof setInterval> | null = null
 let client: WebClient | null = null
 
+let cachedLocation: { lat: number; lon: number; city: string } | null = null
+
 let lastFleetStatus: FleetStatus = {
   instances: [],
   channelName: FLEET_CHANNEL_NAME,
   lastPollAt: null,
+}
+
+// ── IP Geolocation ────────────────────────────────────────────────────────
+
+async function geolocate(): Promise<{ lat: number; lon: number; city: string }> {
+  if (cachedLocation) return cachedLocation
+
+  try {
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 5000)
+    const res = await fetch('http://ip-api.com/json/?fields=lat,lon,city,regionName', {
+      signal: controller.signal,
+    })
+    clearTimeout(timeout)
+
+    if (res.ok) {
+      const data = await res.json() as { lat?: number; lon?: number; city?: string; regionName?: string }
+      if (typeof data.lat === 'number' && typeof data.lon === 'number') {
+        cachedLocation = {
+          lat: data.lat,
+          lon: data.lon,
+          city: data.city ? `${data.city}, ${data.regionName ?? ''}`.trim() : 'Unknown',
+        }
+        console.log(`[fleet] Geolocated: ${cachedLocation.city} (${cachedLocation.lat.toFixed(2)}, ${cachedLocation.lon.toFixed(2)})`)
+        return cachedLocation
+      }
+    }
+  } catch (err) {
+    console.warn('[fleet] Geolocation failed, using default:', err)
+  }
+
+  // Fallback: Nashville
+  cachedLocation = { lat: 36.16, lon: -86.78, city: 'Nashville, TN' }
+  return cachedLocation
 }
 
 // ── Channel resolution ─────────────────────────────────────────────────────
@@ -93,7 +133,6 @@ async function resolveFleetChannel(): Promise<string | null> {
       return fleetChannelId
     }
 
-    // Create it
     console.log(`[fleet] Channel #${FLEET_CHANNEL_NAME} not found, creating...`)
     const created = await client.conversations.create({ name: FLEET_CHANNEL_NAME, is_private: false })
     if (created.channel?.id) {
@@ -114,10 +153,11 @@ async function resolveFleetChannel(): Promise<string | null> {
 // ── Heartbeat gathering ────────────────────────────────────────────────────
 
 async function gatherHeartbeat(): Promise<FleetHeartbeat> {
-  const [sessions, healthResult, pods] = await Promise.all([
+  const [sessions, healthResult, pods, location] = await Promise.all([
     getClaudeSessions().catch(() => []),
     checkHealth().catch(() => ({ overall: 'down' as const })),
     Promise.resolve(listPods()),
+    geolocate(),
   ])
 
   const active = sessions.filter(s => s.alive && s.sessionMode === 'working').length
@@ -130,9 +170,6 @@ async function gatherHeartbeat(): Promise<FleetHeartbeat> {
     return parts[parts.length - 1] || s.cwd
   }))]
 
-  const mapX = process.env.FLEET_MAP_X ? Number(process.env.FLEET_MAP_X) : undefined
-  const mapY = process.env.FLEET_MAP_Y ? Number(process.env.FLEET_MAP_Y) : undefined
-
   return {
     instanceId,
     hostname: os.hostname(),
@@ -143,7 +180,9 @@ async function gatherHeartbeat(): Promise<FleetHeartbeat> {
     pods: { active: activePods, total: pods.length },
     repos,
     uptime: Math.round(process.uptime()),
-    ...(mapX != null && mapY != null ? { mapX, mapY } : {}),
+    lat: location.lat,
+    lon: location.lon,
+    city: location.city,
   }
 }
 
@@ -151,8 +190,10 @@ async function gatherHeartbeat(): Promise<FleetHeartbeat> {
 
 function formatHeartbeatMessage(hb: FleetHeartbeat): string {
   const json = JSON.stringify(hb)
+  const locationStr = hb.city || `${hb.lat?.toFixed(2)}, ${hb.lon?.toFixed(2)}`
   const summary = [
     `*${hb.hostname}*`,
+    locationStr,
     `${hb.sessions.total} agents (${hb.sessions.active} active)`,
     hb.health,
     hb.repos.length > 0 ? hb.repos.join(', ') : 'no repos',
@@ -170,14 +211,8 @@ async function postOrUpdateHeartbeat(): Promise<void> {
 
   try {
     if (fleetMessageTs) {
-      // Update existing message
-      await client.chat.update({
-        channel: channelId,
-        ts: fleetMessageTs,
-        text,
-      })
+      await client.chat.update({ channel: channelId, ts: fleetMessageTs, text })
     } else {
-      // Post new message
       const result = await client.chat.postMessage({
         channel: channelId,
         text,
@@ -192,7 +227,6 @@ async function postOrUpdateHeartbeat(): Promise<void> {
   } catch (err: unknown) {
     const code = (err as { data?: { error?: string } })?.data?.error
     if (code === 'message_not_found') {
-      // Message was deleted — post fresh on next tick
       fleetMessageTs = null
     } else {
       console.error('[fleet] Failed to post heartbeat:', err)
@@ -217,7 +251,6 @@ function parseHeartbeats(messages: { text?: string; ts?: string }[]): FleetHeart
 
     try {
       const hb = JSON.parse(text.slice(jsonStart, jsonEnd).trim()) as FleetHeartbeat
-      // Skip heartbeats older than 24 hours
       const age = now - new Date(hb.timestamp).getTime()
       if (age < 86_400_000) heartbeats.push(hb)
     } catch { /* skip malformed */ }
@@ -231,11 +264,7 @@ async function pollFleetChannel(): Promise<void> {
   if (!channelId || !client) return
 
   try {
-    const result = await client.conversations.history({
-      channel: channelId,
-      limit: 30,
-    })
-
+    const result = await client.conversations.history({ channel: channelId, limit: 30 })
     const heartbeats = parseHeartbeats(result.messages || [])
     const now = Date.now()
 
@@ -269,10 +298,8 @@ export async function startFleetHeartbeat(slackClient: WebClient): Promise<void>
   client = slackClient
   console.log(`[fleet] Starting heartbeat (instance ${instanceId.slice(0, 8)}, host ${os.hostname()})`)
 
-  // Initial tick
   await tick().catch(err => console.error('[fleet] Initial tick failed:', err))
 
-  // Schedule recurring
   fleetTimer = setInterval(() => {
     void tick().catch(err => console.error('[fleet] Tick failed:', err))
   }, HEARTBEAT_INTERVAL)
@@ -284,7 +311,6 @@ export async function stopFleetHeartbeat(): Promise<void> {
     fleetTimer = null
   }
 
-  // Delete own message on graceful shutdown
   if (fleetMessageTs && fleetChannelId && client) {
     try {
       await client.chat.delete({ channel: fleetChannelId, ts: fleetMessageTs })

@@ -4,15 +4,40 @@ import { SCENE_KEYS, SPRITESHEET_KEYS } from './office-asset-keys'
 import { scaledFontSize } from './office-constants'
 
 // ---------------------------------------------------------------------------
-// CampusScene — world map with location markers
+// CampusScene — North America map with fleet instance pins
 // ---------------------------------------------------------------------------
-// Shows a world map backdrop. Local instance gets a red marker pin.
-// Fleet instances from other machines appear as additional pins (blue-tinted).
+// All Penpal instances (local + remote) are rendered as pins on the map.
+// Location is determined by IP geolocation (lat/lon in heartbeat data).
+// Single click: camera zooms to the pin. Double click: enters the lab.
 // ---------------------------------------------------------------------------
 
-// Default marker position in map space (3840×2160) — Nashville, TN
-const DEFAULT_MAP_X = 771
-const DEFAULT_MAP_Y = 878
+// World map image dimensions
+const MAP_W = 3840
+const MAP_H = 2160
+
+// Geographic bounds of the world map (standard Mercator-ish)
+const MIN_LAT = -60   // Antarctica edge
+const MAX_LAT = 85    // Arctic
+const MIN_LON = -180  // date line left
+const MAX_LON = 180   // date line right
+
+// Fallback: Nashville, TN
+const FALLBACK_LAT = 36.16
+const FALLBACK_LON = -86.78
+
+interface FleetPinData {
+  instanceId: string
+  hostname: string
+  stale: boolean
+  health: string
+  sessions: { total: number; active: number }
+  pods: { active: number }
+  repos: string[]
+  isSelf: boolean
+  lat?: number
+  lon?: number
+  city?: string
+}
 
 interface FleetPin {
   instanceId: string
@@ -21,19 +46,17 @@ interface FleetPin {
   labelText: Phaser.GameObjects.Text
   pinSprite: Phaser.GameObjects.Image
   healthDot: Phaser.GameObjects.Graphics
+  screenX: number
+  screenY: number
 }
 
 export class CampusScene extends BaseScene {
-  private agentCount = 0
-  private podCount = 0
-  private localMarker: Phaser.GameObjects.Container | null = null
-  private localCountText: Phaser.GameObjects.Text | null = null
   private mapImage: Phaser.GameObjects.Image | null = null
   private mapScale = 1
   private mapOriginX = 0
   private mapOriginY = 0
   private fleetPins: FleetPin[] = []
-  private lastFleetData: Parameters<typeof CampusScene.prototype.onFleetUpdated>[0] | null = null
+  private lastFleetData: FleetPinData[] | null = null
 
   constructor() {
     super({ key: SCENE_KEYS.CAMPUS })
@@ -47,21 +70,18 @@ export class CampusScene extends BaseScene {
 
     cam.fadeIn(300, 0, 0, 0)
 
-    // ── World map backdrop ──
+    // ── Map backdrop ──
     if (this.textures.exists(SPRITESHEET_KEYS.GDS_WORLDMAP)) {
       const img = this.add.image(camW / 2, camH / 2, SPRITESHEET_KEYS.GDS_WORLDMAP)
       img.setOrigin(0.5, 0.5)
-      const scaleX = camW / 3840
-      const scaleY = camH / 2160
+      const scaleX = camW / MAP_W
+      const scaleY = camH / MAP_H
       const scale = Math.max(scaleX, scaleY)
       img.setScale(scale)
       this.mapImage = img
       this.mapScale = scale
-      this.mapOriginX = camW / 2 - (3840 * scale) / 2
-      this.mapOriginY = camH / 2 - (2160 * scale) / 2
-
-      // ── Local marker pin (Nashville) ──
-      this.createLocalMarker(DEFAULT_MAP_X, DEFAULT_MAP_Y, 'Nashville, TN')
+      this.mapOriginX = camW / 2 - (MAP_W * scale) / 2
+      this.mapOriginY = camH / 2 - (MAP_H * scale) / 2
     } else {
       this.add.text(camW / 2, camH / 2, 'Enter Lab', {
         fontSize: scaledFontSize(24), fontFamily: 'monospace', color: '#22d3ee', resolution: 2,
@@ -73,8 +93,10 @@ export class CampusScene extends BaseScene {
     EventBus.on(EVENTS.NAVIGATE_CAMPUS, this.onNavigateCampus)
     EventBus.on(EVENTS.FLEET_UPDATED, this.onFleetUpdated)
 
-    // When scene wakes from sleep, replay cached fleet data
     this.events.on('wake', () => {
+      // Reset camera zoom when returning to campus
+      this.cameras.main.setZoom(1)
+      this.cameras.main.centerOn(this.cameras.main.width / 2, this.cameras.main.height / 2)
       if (this.lastFleetData) this.onFleetUpdated(this.lastFleetData)
     })
 
@@ -87,159 +109,73 @@ export class CampusScene extends BaseScene {
 
   onUpdate(): void { /* no per-frame logic */ }
 
-  // ── Map coordinate helpers ──
+  // ── Coordinate conversion ──
 
-  private mapToScreen(gdsX: number, gdsY: number): { x: number; y: number } {
+  private latLonToScreen(lat: number, lon: number): { x: number; y: number } {
+    const normX = (lon - MIN_LON) / (MAX_LON - MIN_LON)
+    const normY = (MAX_LAT - lat) / (MAX_LAT - MIN_LAT)
     return {
-      x: this.mapOriginX + gdsX * this.mapScale,
-      y: this.mapOriginY + gdsY * this.mapScale,
+      x: this.mapOriginX + normX * MAP_W * this.mapScale,
+      y: this.mapOriginY + normY * MAP_H * this.mapScale,
     }
   }
 
-  // ── Local marker (red marker sprite) ──
+  // ── Fleet pin management ──
 
-  private createLocalMarker(gdsX: number, gdsY: number, label: string): void {
-    const { x: cx, y: cy } = this.mapToScreen(gdsX, gdsY)
-    const pinScale = this.mapScale * 0.6
-    const container = this.add.container(cx, cy)
-
-    // Use the marker sprite (red teardrop, 86x119)
-    const useMarkerSprite = this.textures.exists(SPRITESHEET_KEYS.MAP_MARKER)
-    if (useMarkerSprite) {
-      const pin = this.add.image(0, 0, SPRITESHEET_KEYS.MAP_MARKER)
-      pin.setOrigin(0.5, 1) // anchor at bottom center (the point)
-      pin.setScale(pinScale)
-      container.add(pin)
-    } else {
-      // Fallback: programmatic pin
-      const g = this.add.graphics()
-      g.fillStyle(0xdc2626, 1)
-      g.fillCircle(0, -12 * pinScale, 14 * pinScale)
-      g.fillTriangle(-8 * pinScale, -6 * pinScale, 8 * pinScale, -6 * pinScale, 0, 12 * pinScale)
-      g.fillStyle(0xffffff, 0.9)
-      g.fillCircle(0, -12 * pinScale, 5 * pinScale)
-      container.add(g)
-    }
-
-    // Label
-    const labelText = this.add.text(0, 8, label, {
-      fontSize: scaledFontSize(12),
-      fontFamily: "'Monogram', system-ui, monospace",
-      color: '#ffffff',
-      backgroundColor: 'rgba(15,23,42,0.85)',
-      padding: { x: 8, y: 4 },
-      resolution: 2,
-    }).setOrigin(0.5, 0)
-    container.add(labelText)
-
-    // Agent count
-    const countText = this.add.text(0, 8 + labelText.height + 4, `${this.agentCount} agents`, {
-      fontSize: scaledFontSize(10),
-      fontFamily: 'system-ui, monospace',
-      color: '#94a3b8',
-      resolution: 2,
-    }).setOrigin(0.5, 0)
-    container.add(countText)
-    this.localCountText = countText
-
-    // Hit area
-    const hitW = Math.max(80, labelText.width + 24)
-    const hitH = 100 * pinScale + labelText.height + 20
-    const hit = this.add.rectangle(0, -30 * pinScale, hitW, hitH, 0x000000, 0)
-      .setInteractive({ useHandCursor: true })
-    container.add(hit)
-
-    // Idle bob
-    this.tweens.add({
-      targets: container, y: cy - 4, duration: 1200,
-      yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
-    })
-
-    // Hover
-    hit.on('pointerover', () => {
-      this.tweens.add({ targets: container, scaleX: 1.12, scaleY: 1.12, duration: 120, ease: 'Back.easeOut' })
-    })
-    hit.on('pointerout', () => {
-      this.tweens.add({ targets: container, scaleX: 1, scaleY: 1, duration: 120, ease: 'Power1' })
-    })
-    hit.on('pointerup', () => {
-      this.cameras.main.flash(150)
-      this.enterLab()
-    })
-
-    this.localMarker = container
-
-    // Keep count text updated
-    EventBus.on(EVENTS.CAMPUS_COUNTS_UPDATED, (agents: number) => {
-      if (countText?.active) countText.setText(`${agents} agents`)
-    })
-  }
-
-  // ── Fleet pins (remote instances) ──
-
-  private onFleetUpdated = (instances: {
-    instanceId: string; hostname: string; stale: boolean; health: string
-    sessions: { total: number; active: number }; pods: { active: number }
-    repos: string[]; isSelf: boolean; mapX?: number; mapY?: number
-  }[]): void => {
+  private onFleetUpdated = (instances: FleetPinData[]): void => {
     this.lastFleetData = instances
-    const remote = instances.filter(i => !i.isSelf)
-    const remoteIds = new Set(remote.map(i => i.instanceId))
+    const instanceIds = new Set(instances.map(i => i.instanceId))
 
-    // Remove gone instances
+    // Remove gone pins
     for (let idx = this.fleetPins.length - 1; idx >= 0; idx--) {
-      if (!remoteIds.has(this.fleetPins[idx].instanceId)) {
+      if (!instanceIds.has(this.fleetPins[idx].instanceId)) {
         this.fleetPins[idx].container.destroy()
         this.fleetPins.splice(idx, 1)
       }
     }
 
     // Update or create
-    for (let i = 0; i < remote.length; i++) {
-      const inst = remote[i]
+    for (let i = 0; i < instances.length; i++) {
+      const inst = instances[i]
       const existing = this.fleetPins.find(p => p.instanceId === inst.instanceId)
       if (existing) {
-        this.updateFleetPin(existing, inst)
+        this.updatePin(existing, inst)
       } else {
-        const pin = this.createFleetPin(inst, i)
+        const pin = this.createPin(inst, i)
         if (pin) this.fleetPins.push(pin)
       }
     }
   }
 
-  private createFleetPin(inst: {
-    instanceId: string; hostname: string; stale: boolean; health: string
-    sessions: { total: number; active: number }; pods: { active: number }
-    repos: string[]; mapX?: number; mapY?: number
-  }, index: number): FleetPin | null {
-    // Position: use mapX/mapY if provided, otherwise offset from Nashville
-    const gdsX = inst.mapX ?? (DEFAULT_MAP_X + 250 + index * 180)
-    const gdsY = inst.mapY ?? DEFAULT_MAP_Y
-    const { x: cx, y: cy } = this.mapToScreen(gdsX, gdsY)
-    const pinScale = this.mapScale * 0.55
+  private createPin(inst: FleetPinData, index: number): FleetPin | null {
+    const lat = inst.lat ?? FALLBACK_LAT
+    const lon = inst.lon ?? FALLBACK_LON
+    const { x: cx, y: cy } = this.latLonToScreen(lat, lon)
 
-    const container = this.add.container(cx, cy)
+    // Offset overlapping pins slightly (same location = nudge apart)
+    const sameLocationOffset = this.fleetPins.filter(p =>
+      Math.abs(p.screenX - cx) < 20 && Math.abs(p.screenY - cy) < 20
+    ).length
+    const offsetX = sameLocationOffset * 30
+    const finalX = cx + offsetX
+    const finalY = cy
 
-    // Use pin sprite (lollipop style), tinted blue for remote
-    const usePinSprite = this.textures.exists(SPRITESHEET_KEYS.MAP_PIN)
+    const pinScale = this.mapScale * 0.5
+    const container = this.add.container(finalX, finalY)
+
+    // Pin sprite — red marker for self, blue pin for remote
+    const spriteKey = inst.isSelf ? SPRITESHEET_KEYS.MAP_MARKER : SPRITESHEET_KEYS.MAP_PIN
+    const hasSpriteTexture = this.textures.exists(spriteKey)
     let pinSprite: Phaser.GameObjects.Image
-    if (usePinSprite) {
-      pinSprite = this.add.image(0, 0, SPRITESHEET_KEYS.MAP_PIN)
+
+    if (hasSpriteTexture) {
+      pinSprite = this.add.image(0, 0, spriteKey)
       pinSprite.setOrigin(0.5, 1)
       pinSprite.setScale(pinScale)
-      if (!inst.stale) pinSprite.setTint(0x60a5fa) // blue tint for remote
-      else pinSprite.setTint(0x6b7280) // gray for stale
+      if (!inst.isSelf && !inst.stale) pinSprite.setTint(0x60a5fa)
+      if (inst.stale) pinSprite.setTint(0x6b7280)
     } else {
-      // Fallback
-      pinSprite = this.add.image(0, 0, '__DEFAULT') // won't render but keeps types happy
-      const g = this.add.graphics()
-      const color = inst.stale ? 0x6b7280 : 0x3b82f6
-      g.fillStyle(color, 1)
-      g.fillCircle(0, -12 * pinScale, 14 * pinScale)
-      g.fillTriangle(-8 * pinScale, -6 * pinScale, 8 * pinScale, -6 * pinScale, 0, 12 * pinScale)
-      g.fillStyle(0xffffff, 0.9)
-      g.fillCircle(0, -12 * pinScale, 5 * pinScale)
-      container.add(g)
+      pinSprite = this.add.image(0, 0, '__DEFAULT')
     }
     container.add(pinSprite)
 
@@ -248,8 +184,9 @@ export class CampusScene extends BaseScene {
     this.drawHealthDot(healthDot, pinScale, inst)
     container.add(healthDot)
 
-    // Label
-    const labelText = this.add.text(0, 8, inst.hostname, {
+    // Label — city or hostname
+    const labelStr = inst.city || inst.hostname
+    const labelText = this.add.text(0, 8, labelStr, {
       fontSize: scaledFontSize(11),
       fontFamily: "'Monogram', system-ui, monospace",
       color: inst.stale ? '#6b7280' : '#ffffff',
@@ -259,7 +196,7 @@ export class CampusScene extends BaseScene {
     }).setOrigin(0.5, 0)
     container.add(labelText)
 
-    // Count
+    // Count text
     const countStr = `${inst.sessions.total} agents` + (inst.pods.active > 0 ? ` \u00b7 ${inst.pods.active} pods` : '')
     const countText = this.add.text(0, 8 + labelText.height + 4, countStr, {
       fontSize: scaledFontSize(9),
@@ -271,39 +208,86 @@ export class CampusScene extends BaseScene {
 
     if (inst.stale) container.setAlpha(0.5)
 
-    // Idle bob — offset phase
+    // Hit area
+    const hitW = Math.max(80, labelText.width + 24)
+    const hitH = 100 * pinScale + labelText.height + 20
+    const hit = this.add.rectangle(0, -30 * pinScale, hitW, hitH, 0x000000, 0)
+      .setInteractive({ useHandCursor: true })
+    container.add(hit)
+
+    // Idle bob
     this.tweens.add({
-      targets: container, y: cy - 3, duration: 1400,
-      yoyo: true, repeat: -1, ease: 'Sine.easeInOut', delay: 300 + index * 200,
+      targets: container, y: finalY - 4, duration: 1200,
+      yoyo: true, repeat: -1, ease: 'Sine.easeInOut', delay: index * 200,
     })
 
-    return { instanceId: inst.instanceId, container, countText, labelText, pinSprite, healthDot }
+    // Hover — scale up
+    hit.on('pointerover', () => {
+      this.tweens.add({ targets: container, scaleX: 1.15, scaleY: 1.15, duration: 120, ease: 'Back.easeOut' })
+    })
+    hit.on('pointerout', () => {
+      this.tweens.add({ targets: container, scaleX: 1, scaleY: 1, duration: 120, ease: 'Power1' })
+    })
+
+    // Single click — zoom camera to pin
+    let lastClickTime = 0
+    hit.on('pointerup', () => {
+      const now = Date.now()
+      if (now - lastClickTime < 400) {
+        // Double click — enter lab
+        this.cameras.main.flash(150)
+        this.enterLab()
+      } else {
+        // Single click — zoom to pin
+        this.zoomToPin(finalX, finalY)
+      }
+      lastClickTime = now
+    })
+
+    return {
+      instanceId: inst.instanceId, container, countText, labelText,
+      pinSprite, healthDot, screenX: finalX, screenY: finalY,
+    }
   }
 
-  private updateFleetPin(pin: FleetPin, inst: {
-    stale: boolean; health: string; sessions: { total: number; active: number }; pods: { active: number }
-  }): void {
+  private updatePin(pin: FleetPin, inst: FleetPinData): void {
     const countStr = `${inst.sessions.total} agents` + (inst.pods.active > 0 ? ` \u00b7 ${inst.pods.active} pods` : '')
     pin.countText.setText(countStr)
 
-    // Update health dot
     pin.healthDot.clear()
-    this.drawHealthDot(pin.healthDot, this.mapScale * 0.55, inst)
+    this.drawHealthDot(pin.healthDot, this.mapScale * 0.5, inst)
 
-    // Update tint + alpha
-    pin.pinSprite.setTint(inst.stale ? 0x6b7280 : 0x60a5fa)
+    if (inst.isSelf) {
+      pin.pinSprite.clearTint()
+      if (inst.stale) pin.pinSprite.setTint(0x6b7280)
+    } else {
+      pin.pinSprite.setTint(inst.stale ? 0x6b7280 : 0x60a5fa)
+    }
     pin.container.setAlpha(inst.stale ? 0.5 : 1)
     pin.labelText.setColor(inst.stale ? '#6b7280' : '#ffffff')
     pin.countText.setColor(inst.stale ? '#4b5563' : '#94a3b8')
   }
 
-  private drawHealthDot(g: Phaser.GameObjects.Graphics, pinScale: number, inst: { stale: boolean; health: string }): void {
+  private drawHealthDot(g: Phaser.GameObjects.Graphics, pinScale: number, inst: FleetPinData): void {
     const color = inst.stale ? 0x6b7280 : inst.health === 'healthy' ? 0x22c55e : inst.health === 'degraded' ? 0xf59e0b : 0xef4444
     g.fillStyle(color, 1)
     g.fillCircle(18 * pinScale, -60 * pinScale, 5 * pinScale)
-    // White border ring
     g.lineStyle(1.5 * pinScale, 0xffffff, 0.8)
     g.strokeCircle(18 * pinScale, -60 * pinScale, 5 * pinScale)
+  }
+
+  // ── Camera zoom ──
+
+  private zoomToPin(x: number, y: number): void {
+    const cam = this.cameras.main
+    this.tweens.add({
+      targets: cam,
+      scrollX: x - cam.width / 2,
+      scrollY: y - cam.height / 2,
+      zoom: 2.5,
+      duration: 600,
+      ease: 'Power2',
+    })
   }
 
   // ── Navigation ──
@@ -319,10 +303,7 @@ export class CampusScene extends BaseScene {
 
   // ── EventBus handlers ──
 
-  private onCountsUpdated = (agents: number, pods: number): void => {
-    this.agentCount = agents
-    this.podCount = pods
-  }
+  private onCountsUpdated = (): void => { /* counts shown on pins via fleet data */ }
 
   private onNavigateCampus = (): void => {
     if (this.scene.isSleeping(SCENE_KEYS.CAMPUS)) {

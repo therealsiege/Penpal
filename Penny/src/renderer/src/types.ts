@@ -560,8 +560,9 @@ export interface FleetInstance {
   repos: string[]
   uptime: number
   isSelf: boolean
-  mapX?: number   // position on 3840x2160 world map
-  mapY?: number
+  lat?: number
+  lon?: number
+  city?: string
 }
 
 export interface FleetStatus {
