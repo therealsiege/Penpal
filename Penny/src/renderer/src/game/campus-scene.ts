@@ -161,12 +161,7 @@ export class CampusScene extends BaseScene {
     const lon = inst.lon ?? FALLBACK_LON
     const { x: cx, y: cy } = this.latLonToScreen(lat, lon)
 
-    // Offset overlapping pins slightly (same location = nudge apart)
-    const sameLocationOffset = this.fleetPins.filter(p =>
-      Math.abs(p.screenX - cx) < 20 && Math.abs(p.screenY - cy) < 20
-    ).length
-    const offsetX = sameLocationOffset * 30
-    const finalX = cx + offsetX
+    const finalX = cx
     const finalY = cy
 
     const pinScale = this.mapScale * 0.5
