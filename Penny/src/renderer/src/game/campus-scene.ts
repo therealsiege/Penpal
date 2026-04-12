@@ -164,17 +164,17 @@ export class CampusScene extends BaseScene {
     const pinScale = this.mapScale * 0.5
     const container = this.add.container(finalX, finalY)
 
-    // Pin sprite — red marker for self, blue pin for remote
-    const spriteKey = inst.isSelf ? SPRITESHEET_KEYS.MAP_MARKER : SPRITESHEET_KEYS.MAP_PIN
-    const hasSpriteTexture = this.textures.exists(spriteKey)
+    // Pin sprite — same marker for all, tinted by role
+    const spriteKey = SPRITESHEET_KEYS.MAP_MARKER
     let pinSprite: Phaser.GameObjects.Image
 
-    if (hasSpriteTexture) {
+    if (this.textures.exists(spriteKey)) {
       pinSprite = this.add.image(0, 0, spriteKey)
       pinSprite.setOrigin(0.5, 1)
       pinSprite.setScale(pinScale)
-      if (!inst.isSelf && !inst.stale) pinSprite.setTint(0x60a5fa)
       if (inst.stale) pinSprite.setTint(0x6b7280)
+      else if (!inst.isSelf) pinSprite.setTint(0x60a5fa)
+      // Self keeps the default red color (no tint)
     } else {
       pinSprite = this.add.image(0, 0, '__DEFAULT')
     }
