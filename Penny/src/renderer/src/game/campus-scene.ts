@@ -229,20 +229,25 @@ export class CampusScene extends BaseScene {
       this.tweens.add({ targets: labelText, alpha: 0, duration: 150 })
     })
 
-    // Single click — zoom camera to pin
-    let lastClickTime = 0
-    hit.on('pointerup', () => {
-      const now = Date.now()
-      if (now - lastClickTime < 400) {
-        // Double click — enter lab
-        this.cameras.main.flash(150)
-        this.enterLab()
-      } else {
-        // Single click — zoom to pin
+    // Click interactions — only self pin is fully interactive
+    if (inst.isSelf) {
+      let lastClickTime = 0
+      hit.on('pointerup', () => {
+        const now = Date.now()
+        if (now - lastClickTime < 400) {
+          this.cameras.main.flash(150)
+          this.enterLab()
+        } else {
+          this.zoomToPin(finalX, finalY)
+        }
+        lastClickTime = now
+      })
+    } else {
+      // Remote pins — zoom only, no lab entry
+      hit.on('pointerup', () => {
         this.zoomToPin(finalX, finalY)
-      }
-      lastClickTime = now
-    })
+      })
+    }
 
     return {
       instanceId: inst.instanceId, container, labelText,
