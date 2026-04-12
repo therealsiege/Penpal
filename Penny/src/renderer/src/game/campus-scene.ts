@@ -161,7 +161,11 @@ export class CampusScene extends BaseScene {
     const lon = inst.lon ?? FALLBACK_LON
     const { x: cx, y: cy } = this.latLonToScreen(lat, lon)
 
-    const finalX = cx
+    // Slight offset so co-located pins are both clickable
+    const sameSpot = this.fleetPins.filter(p =>
+      Math.abs(p.screenX - cx) < 5 && Math.abs(p.screenY - cy) < 5
+    ).length
+    const finalX = cx + sameSpot * 18 * this.mapScale
     const finalY = cy
 
     const pinScale = this.mapScale * 0.5
