@@ -568,6 +568,7 @@ export interface FleetStatus {
   instances: FleetInstance[]
   channelName: string
   lastPollAt: string | null
+  debug?: string
 }
 
 export interface VeritasServiceStatus {

@@ -1137,8 +1137,10 @@ export function registerIpcHandlers() {
 
   // ── Fleet heartbeat
   ipcMain.handle('fleet:status', wrapHandler(() => {
-    if (!isSlackBridgeRunning()) return { instances: [], channelName: '', lastPollAt: null }
-    return getFleetStatus()
+    const running = isSlackBridgeRunning()
+    if (!running) return { instances: [], channelName: '', lastPollAt: null, debug: 'slack-bridge-not-running' }
+    const status = getFleetStatus()
+    return { ...status, debug: `ok-${status.instances.length}-instances` }
   }))
 
   // ── Capabilities (epic #50) — #54/#55 aggregated snapshot

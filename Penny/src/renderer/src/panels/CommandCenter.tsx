@@ -1874,11 +1874,11 @@ export function CommandCenter(props: CommandCenterProps) {
             </button>
           )}
 
-          {/* Fleet pill — only when >1 instance */}
-          {fleetStatus && fleetStatus.instances.length > 0 && (() => {
+          {/* Fleet pill */}
+          {fleetStatus && (() => {
             const online = fleetStatus.instances.filter(i => !i.stale).length
             const total = fleetStatus.instances.length
-            const allHealthy = fleetStatus.instances.every(i => i.stale || i.health === 'healthy')
+            const allHealthy = total === 0 || fleetStatus.instances.every(i => i.stale || i.health === 'healthy')
             return (
               <div className="relative">
                 <button
