@@ -15,12 +15,17 @@ import { scaledFontSize } from './office-constants'
 const MAP_W = 3840
 const MAP_H = 2160
 
-// Geographic bounds calibrated to THIS illustrated map (not standard Mercator)
-// Tuned by visual inspection — Nashville should land in southeastern US
-const MIN_LAT = -45
-const MAX_LAT = 83
-const MIN_LON = -168
-const MAX_LON = 192
+// Anchor point: Nashville's known pixel position on this illustrated map
+// This was visually confirmed as correct in the original hardcoded version
+const ANCHOR_LAT = 36.16
+const ANCHOR_LON = -86.78
+const ANCHOR_PX_X = 680   // pixel X in 3840-space where Nashville sits
+const ANCHOR_PX_Y = 1020  // pixel Y in 3840-space where Nashville sits
+
+// Approximate pixels-per-degree for this illustrated map
+// Derived from map features: US spans ~25° lat over ~400px, ~55° lon over ~600px
+const PX_PER_DEG_LON = 10.9  // ~600px / 55°
+const PX_PER_DEG_LAT = 16.0  // ~400px / 25°
 
 // Fallback: Nashville, TN
 const FALLBACK_LAT = 36.16
@@ -113,11 +118,14 @@ export class CampusScene extends BaseScene {
   // ── Coordinate conversion ──
 
   private latLonToScreen(lat: number, lon: number): { x: number; y: number } {
-    const normX = (lon - MIN_LON) / (MAX_LON - MIN_LON)
-    const normY = (MAX_LAT - lat) / (MAX_LAT - MIN_LAT)
+    // Anchor-relative: offset from Nashville's known pixel position
+    const dLon = lon - ANCHOR_LON
+    const dLat = lat - ANCHOR_LAT
+    const mapX = ANCHOR_PX_X + dLon * PX_PER_DEG_LON
+    const mapY = ANCHOR_PX_Y - dLat * PX_PER_DEG_LAT  // lat increases upward, Y increases downward
     return {
-      x: this.mapOriginX + normX * MAP_W * this.mapScale,
-      y: this.mapOriginY + normY * MAP_H * this.mapScale,
+      x: this.mapOriginX + mapX * this.mapScale,
+      y: this.mapOriginY + mapY * this.mapScale,
     }
   }
 
