@@ -129,7 +129,6 @@ function KanbanColumn({
       return () => clearTimeout(timer)
     }
     prevPodIdsRef.current = currentIds
-    // We intentionally only track id set changes
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pods.map(p => p.id).join(',')])
 
@@ -138,36 +137,36 @@ function KanbanColumn({
   return (
     <div
       className={[
-        'flex flex-col flex-1 min-w-[260px] rounded-lg border bg-[var(--c-bg-deep)] transition-all',
+        'flex flex-col flex-1 min-w-[400px] rounded-lg border bg-[var(--c-bg-deep)] transition-all',
         isCompleted ? 'opacity-60 border-gray-700/40' : `border-[var(--c-border)] ${flashClass}`,
       ].join(' ')}
     >
       {/* Column header */}
-      <div className={`flex-none px-3 py-2 border-b border-[var(--c-border)] flex items-center justify-between`}>
+      <div className="flex-none px-3 py-2.5 border-b border-[var(--c-border)] flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <span className={`text-[11px] font-bold uppercase tracking-wider ${col.accentClass.split(' ')[1]}`}>
+          <span className={`text-[13px] font-bold uppercase tracking-wider ${col.accentClass.split(' ')[1]}`}>
             {col.label}
           </span>
-          <span className="text-[10px] bg-[var(--c-bg-surface)] border border-[var(--c-border)] rounded-full px-1.5 py-0.5 text-[var(--c-text-faint)] font-mono">
+          <span className="text-[12px] bg-[var(--c-bg-surface)] border border-[var(--c-border)] rounded-full px-2 py-0.5 text-[var(--c-text-faint)] font-mono">
             {stats.count}
           </span>
         </div>
-        <div className="flex items-center gap-2 text-[10px] text-[var(--c-text-faint)] font-mono">
+        <div className="flex items-center gap-2 text-[12px] text-[var(--c-text-faint)] font-mono">
           {!isCompleted && stats.avgPhaseMs > 0 && (
-            <span title="Avg time in current phase">⏱ {formatMs(stats.avgPhaseMs)}</span>
+            <span title="Avg time in current phase">{formatMs(stats.avgPhaseMs)}</span>
           )}
           {!isCompleted && Object.entries(stats.modelBreakdown).map(([model, count]) => (
             <span key={model} title={`${count} pod(s) using ${model}`} className="opacity-70">
-              {model.split(':')[0].slice(0, 6)}×{count}
+              {model.split(':')[0].slice(0, 6)}&times;{count}
             </span>
           ))}
         </div>
       </div>
 
       {/* Cards */}
-      <div className="flex-1 overflow-y-auto max-h-[560px] p-2 flex flex-col gap-2">
+      <div className="flex-1 overflow-y-auto p-2 flex flex-col gap-2 min-h-0">
         {pods.length === 0 && (
-          <div className="text-[11px] text-[var(--c-text-faint)] text-center py-6 opacity-40">
+          <div className="text-[14px] text-[var(--c-text-faint)] text-center py-8 opacity-40">
             No pods
           </div>
         )}
@@ -201,14 +200,14 @@ export function KanbanBoard({ workflows, onPause, onResume, onCancel, onOverride
 
   if (workflows.length === 0) {
     return (
-      <div className="flex items-center justify-center py-8 text-[12px] text-[var(--c-text-faint)]">
-        No active pods — launch one to see it here
+      <div className="flex items-center justify-center py-12 text-[14px] text-[var(--c-text-faint)]">
+        No active pods &mdash; launch one to see it here
       </div>
     )
   }
 
   return (
-    <div className="flex gap-3 overflow-x-auto pb-2">
+    <div className="flex gap-3 overflow-x-auto pb-2 h-full min-h-0">
       {COLUMNS.map(col => (
         <KanbanColumn
           key={col.id}

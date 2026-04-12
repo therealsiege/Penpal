@@ -119,6 +119,7 @@ declare global {
       slackStatus: () => Promise<{ running: boolean; configured: boolean }>
       slackStart: () => Promise<boolean>
       slackStop: () => Promise<void>
+      fleetStatus: () => Promise<import('./types').FleetStatus>
       capabilitiesStatus: () => Promise<{
         updatedAt: string
         overall: string

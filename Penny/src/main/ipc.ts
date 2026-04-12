@@ -4,7 +4,7 @@ import fs from 'fs'
 import path from 'path'
 import os from 'os'
 import { checkHealth } from './health'
-import { startSlackBridge, stopSlackBridge, isSlackBridgeRunning } from './slack-bridge'
+import { startSlackBridge, stopSlackBridge, isSlackBridgeRunning, getFleetStatus } from './slack-bridge'
 import { getJobStatuses, getJobHistory, forceRunJob } from './scheduler-bridge'
 import {
   getPipelineSummary,
@@ -1134,6 +1134,12 @@ export function registerIpcHandlers() {
   })))
   ipcMain.handle('slack:start', wrapHandler(() => startSlackBridge()))
   ipcMain.handle('slack:stop', wrapHandler(() => stopSlackBridge()))
+
+  // ── Fleet heartbeat
+  ipcMain.handle('fleet:status', wrapHandler(() => {
+    if (!isSlackBridgeRunning()) return { instances: [], channelName: '', lastPollAt: null }
+    return getFleetStatus()
+  }))
 
   // ── Capabilities (epic #50) — #54/#55 aggregated snapshot
   ipcMain.handle('capabilities:status', wrapHandler(() => computeCapabilitiesStatus()))

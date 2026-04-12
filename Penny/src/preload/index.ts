@@ -99,6 +99,7 @@ contextBridge.exposeInMainWorld('api', {
   slackStatus: () => ipcRenderer.invoke('slack:status'),
   slackStart: () => ipcRenderer.invoke('slack:start'),
   slackStop: () => ipcRenderer.invoke('slack:stop'),
+  fleetStatus: () => ipcRenderer.invoke('fleet:status').then(unwrap),
   capabilitiesStatus: () => ipcRenderer.invoke('capabilities:status'),
   // Veritas Control Plane
   veritasStatus: () => ipcRenderer.invoke('veritas:status'),

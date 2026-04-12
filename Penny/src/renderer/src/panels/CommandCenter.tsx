@@ -4,10 +4,9 @@ import { usePolling } from '../hooks/usePolling'
 import { AgentAvatar } from '../components/AgentAvatar'
 import { useToast } from '../components/Toast'
 import { Terminal } from '../components/Terminal'
-import type { AgentConfig, AgentState, ContextHealth, HealthResult, HotLead, JobStatus, PodWorkflow, PodPreset, ProjectLeaderboardEntry, OpencodeSession, AgentXP, OpenClawInfo, ConfigSnapshot, McpServerEntry, AgentToolSummary, getRankForXP, Task } from '../types'
+import type { AgentConfig, AgentState, ContextHealth, HealthResult, HotLead, JobStatus, PodWorkflow, PodPreset, ProjectLeaderboardEntry, OpencodeSession, AgentXP, OpenClawInfo, ConfigSnapshot, McpServerEntry, AgentToolSummary, getRankForXP, Task, FleetStatus } from '../types'
 import { mergeAgentContextFromHealth } from '../utils/contextHealthMerge'
 import { PodLauncherModal, PodStatusModal, PodListModal } from '../components/PodModal'
-import { KanbanBoard } from '../components/KanbanBoard'
 import { createOfficeGame } from '../game/OfficeGame'
 import { OfficeScene } from '../game/OfficeScene'
 import { EventBus, EVENTS } from '../game/events'
@@ -1426,6 +1425,14 @@ export function CommandCenter(props: CommandCenterProps) {
     5000,
   )
 
+  const { data: fleetStatus } = usePolling<FleetStatus>(
+    () => window.api.fleetStatus().catch(() => ({ instances: [], channelName: '', lastPollAt: null })),
+    15000,
+  )
+
+  // --- Fleet popover state ---
+  const [showFleetPopover, setShowFleetPopover] = useState(false)
+
   // --- Embedded terminal ---
   const [terminal, setTerminal] = useState<{ ptyId: string; title: string } | null>(null)
 
@@ -1860,6 +1867,73 @@ export function CommandCenter(props: CommandCenterProps) {
             </button>
           )}
 
+          {/* Fleet pill — only when >1 instance */}
+          {fleetStatus && fleetStatus.instances.length > 0 && (() => {
+            const online = fleetStatus.instances.filter(i => !i.stale).length
+            const total = fleetStatus.instances.length
+            const allHealthy = fleetStatus.instances.every(i => i.stale || i.health === 'healthy')
+            return (
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setShowFleetPopover(v => !v)}
+                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-[13px] transition-colors ${
+                    allHealthy
+                      ? 'bg-[color-mix(in_srgb,var(--c-accent-blue)_10%,transparent)] border-[color-mix(in_srgb,var(--c-accent-blue)_22%,transparent)] text-[color-mix(in_srgb,var(--c-accent-blue)_85%,transparent)] hover:bg-[color-mix(in_srgb,var(--c-accent-blue)_18%,transparent)]'
+                      : 'bg-amber-500/10 border-amber-500/25 text-amber-400 hover:bg-amber-500/18'
+                  }`}
+                >
+                  <span className="text-[11px]">Fleet</span>
+                  <span className="font-semibold tabular-nums">{online}/{total}</span>
+                </button>
+                {showFleetPopover && (
+                  <>
+                    <div className="fixed inset-0 z-40" onClick={() => setShowFleetPopover(false)} />
+                    <div className="absolute right-0 top-full mt-2 z-50 w-80 bg-[var(--c-bg-surface)] border border-[var(--c-border)] rounded-xl shadow-2xl overflow-hidden">
+                      <div className="px-4 py-3 border-b border-[var(--c-border)]">
+                        <span className="text-[14px] font-semibold text-[var(--c-text-primary)]">Fleet Instances</span>
+                      </div>
+                      <div className="p-2 space-y-1 max-h-80 overflow-y-auto">
+                        {fleetStatus.instances.map(inst => (
+                          <div
+                            key={inst.instanceId}
+                            className={`px-3 py-2.5 rounded-lg ${inst.stale ? 'opacity-50' : 'bg-[var(--c-bg-elevated)]'}`}
+                          >
+                            <div className="flex items-center gap-2">
+                              <span className={`w-2 h-2 rounded-full shrink-0 ${
+                                inst.stale ? 'bg-[var(--c-border)]' :
+                                inst.health === 'healthy' ? 'bg-emerald-400' :
+                                inst.health === 'degraded' ? 'bg-amber-400' : 'bg-red-400'
+                              }`} />
+                              <span className="text-[14px] font-medium text-[var(--c-text-heading)] truncate">
+                                {inst.hostname}
+                              </span>
+                              {inst.isSelf && (
+                                <span className="text-[10px] px-1.5 py-0.5 rounded bg-[var(--c-accent-blue)]/15 text-[var(--c-accent-blue)] border border-[var(--c-accent-blue)]/25">you</span>
+                              )}
+                              {inst.stale && (
+                                <span className="text-[10px] text-amber-400 ml-auto">offline</span>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-3 mt-1 text-[12px] text-[var(--c-text-muted)]">
+                              <span>{inst.sessions.total} agents ({inst.sessions.active} active)</span>
+                              {inst.pods.active > 0 && <span className="text-blue-400">{inst.pods.active} pods</span>}
+                            </div>
+                            {inst.repos.length > 0 && (
+                              <div className="text-[11px] text-[var(--c-text-faint)] mt-1 truncate">
+                                {inst.repos.join(', ')}
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
+            )
+          })()}
+
           <button
             type="button"
             onClick={() => { void runOfficeSmokeCheck() }}
@@ -1933,24 +2007,6 @@ export function CommandCenter(props: CommandCenterProps) {
           />
         </div>
       </div>
-
-      {/* ------------------------------------------------------------------ */}
-      {/* Dispatch Board (Kanban)                                             */}
-      {/* ------------------------------------------------------------------ */}
-      {podWorkflows && podWorkflows.length > 0 && (
-        <div className="flex-none border-t border-[var(--c-bg-hover)] bg-[var(--c-bg-deep)] px-3 py-2">
-          <div className="text-[10px] uppercase tracking-widest text-[var(--c-text-faint)] mb-2 font-medium">
-            Dispatch Board
-          </div>
-          <KanbanBoard
-            workflows={podWorkflows}
-            onPause={async (id) => { await window.api.pausePod(id); toast('Workflow paused', 'success') }}
-            onResume={async (id) => { await window.api.resumePod(id); toast('Workflow resumed', 'success') }}
-            onCancel={async (id) => { await window.api.cancelPod(id); toast('Workflow cancelled', 'success') }}
-            onOverride={handleOverride}
-          />
-        </div>
-      )}
 
       {/* ------------------------------------------------------------------ */}
       {/* Embedded Terminal                                                   */}

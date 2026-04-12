@@ -13,6 +13,7 @@
 
 import { App, LogLevel } from '@slack/bolt'
 import { getClaudeSessions, sendToSession, getSessionConversation, type ClaudeSession } from './sessions'
+import { startFleetHeartbeat, stopFleetHeartbeat, getFleetStatus } from './fleet-heartbeat'
 import { getAgentConfigs, loadAgentSessionMap, type AgentConfig } from './agents'
 import { enqueueTask, orchestratorEvents, type Task } from './orchestrator'
 
@@ -594,6 +595,10 @@ export async function startSlackBridge(): Promise<boolean> {
     // Run initial sync
     await pollAndSync()
 
+    // Start fleet heartbeat
+    await startFleetHeartbeat(slackApp.client).catch(err =>
+      console.error('[slack-bridge] Fleet heartbeat startup failed:', err))
+
     return true
   } catch (err) {
     console.error('[slack-bridge] Failed to start:', err)
@@ -603,6 +608,7 @@ export async function startSlackBridge(): Promise<boolean> {
 }
 
 export async function stopSlackBridge(): Promise<void> {
+  await stopFleetHeartbeat().catch(() => {})
   if (pollTimer) {
     clearInterval(pollTimer)
     pollTimer = null
@@ -709,3 +715,6 @@ export async function dmOwner(text: string, emoji = ':robot_face:'): Promise<voi
     console.error('[slack-bridge] Failed to DM owner:', err)
   }
 }
+
+// Re-export fleet status for IPC
+export { getFleetStatus } from './fleet-heartbeat'

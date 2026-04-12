@@ -546,6 +546,28 @@ export interface GithubPollerStatus {
   pollIntervalMs: number
 }
 
+// ── Fleet Types ─────────────────────────────────────────────────────────────
+
+export interface FleetInstance {
+  instanceId: string
+  hostname: string
+  platform: string
+  lastSeen: string
+  stale: boolean
+  health: 'healthy' | 'degraded' | 'down'
+  sessions: { total: number; active: number; idle: number; waiting: number }
+  pods: { active: number; total: number }
+  repos: string[]
+  uptime: number
+  isSelf: boolean
+}
+
+export interface FleetStatus {
+  instances: FleetInstance[]
+  channelName: string
+  lastPollAt: string | null
+}
+
 export interface VeritasServiceStatus {
   configured: boolean
   composeFile: string
