@@ -154,7 +154,7 @@ export class WorkstationFactory {
 
     // Scale up workstation elements to match the GDS scene's zoom level
     // Scale workstations proportionally to the GDS scene size
-    const gdsWsScale = gdsScene ? (this.host.getGdsScale?.() ?? 0.37) * 1.0 : 1
+    const gdsWsScale = gdsScene ? (this.host.getGdsScale?.() ?? 0.37) * 1.5 : 1
     if (gdsScene) wsContainer.setScale(gdsWsScale)
 
     const labPropsLoaded = this.scene.textures.exists(SPRITESHEET_KEYS.LAB_PROPS)

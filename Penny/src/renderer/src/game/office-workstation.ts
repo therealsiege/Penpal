@@ -376,7 +376,7 @@ export class OfficeWorkstations {
     }
     if (ws.container.alpha < 0.9) ws.container.setAlpha(1)
     // Restore scale if it somehow shrunk — respect GDS mode's dynamic base scale
-    const gdsBaseScale = this.host.getOrAssignGdsDeskSlot ? (this.host.getGdsScale?.() ?? 0.37) * 1.0 : 1
+    const gdsBaseScale = this.host.getOrAssignGdsDeskSlot ? (this.host.getGdsScale?.() ?? 0.37) * 1.5 : 1
     if (ws.container.scaleX < gdsBaseScale * 0.9) ws.container.setScale(gdsBaseScale)
 
     // Skip redundant updates — fingerprint the fields that affect visuals
