@@ -33,6 +33,7 @@ export class CampusScene extends BaseScene {
   private mapOriginX = 0
   private mapOriginY = 0
   private fleetPins: FleetPin[] = []
+  private lastFleetData: Parameters<typeof CampusScene.prototype.onFleetUpdated>[0] | null = null
 
   constructor() {
     super({ key: SCENE_KEYS.CAMPUS })
@@ -71,6 +72,11 @@ export class CampusScene extends BaseScene {
     EventBus.on(EVENTS.CAMPUS_COUNTS_UPDATED, this.onCountsUpdated)
     EventBus.on(EVENTS.NAVIGATE_CAMPUS, this.onNavigateCampus)
     EventBus.on(EVENTS.FLEET_UPDATED, this.onFleetUpdated)
+
+    // When scene wakes from sleep, replay cached fleet data
+    this.events.on('wake', () => {
+      if (this.lastFleetData) this.onFleetUpdated(this.lastFleetData)
+    })
 
     this.events.on('shutdown', () => {
       EventBus.off(EVENTS.CAMPUS_COUNTS_UPDATED, this.onCountsUpdated)
@@ -176,6 +182,7 @@ export class CampusScene extends BaseScene {
     sessions: { total: number; active: number }; pods: { active: number }
     repos: string[]; isSelf: boolean; mapX?: number; mapY?: number
   }[]): void => {
+    this.lastFleetData = instances
     const remote = instances.filter(i => !i.isSelf)
     const remoteIds = new Set(remote.map(i => i.instanceId))
 
