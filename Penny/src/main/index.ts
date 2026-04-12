@@ -56,6 +56,12 @@ if (fs.existsSync(controlPlaneEnvPath)) {
   dotenv.config({ path: controlPlaneEnvPath, override: false })
 }
 
+// Load committed shared env as lowest-priority fallback (Slack tokens, etc.)
+const sharedEnvPath = path.join(ELECTRON_ROOT, '.env.shared')
+if (fs.existsSync(sharedEnvPath)) {
+  dotenv.config({ path: sharedEnvPath, override: false })
+}
+
 // Prevent EPIPE from Slack bridge logger crashing the app
 process.on('uncaughtException', (err) => {
   if (err.message?.includes('EPIPE')) return
