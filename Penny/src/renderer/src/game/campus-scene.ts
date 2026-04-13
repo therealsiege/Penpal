@@ -155,29 +155,31 @@ export class CampusScene extends BaseScene {
   private onFleetUpdated = (instances: FleetPinData[]): void => {
     this.lastFleetData = instances
 
-    // Remove the placeholder local pin if fleet data includes the real self
-    const hasSelf = instances.some(i => i.isSelf)
-    if (hasSelf) {
-      const localIdx = this.fleetPins.findIndex(p => p.instanceId === this.localPinId)
-      if (localIdx >= 0) {
-        this.fleetPins[localIdx].container.destroy()
-        this.fleetPins.splice(localIdx, 1)
-      }
+    // Update the local placeholder pin with real self data (don't destroy it)
+    const selfData = instances.find(i => i.isSelf)
+    const localPin = this.fleetPins.find(p => p.instanceId === this.localPinId)
+    if (selfData && localPin) {
+      this.updatePin(localPin, selfData)
+      localPin.labelText.setText(selfData.user || selfData.hostname)
     }
 
-    const instanceIds = new Set(instances.map(i => i.instanceId))
+    // Only process remote instances (skip self — local pin handles it)
+    const remoteInstances = instances.filter(i => !i.isSelf)
+    const remoteIds = new Set(remoteInstances.map(i => i.instanceId))
 
-    // Remove gone pins
+    // Remove gone remote pins (never remove the local pin)
     for (let idx = this.fleetPins.length - 1; idx >= 0; idx--) {
-      if (!instanceIds.has(this.fleetPins[idx].instanceId)) {
-        this.fleetPins[idx].container.destroy()
+      const pin = this.fleetPins[idx]
+      if (pin.instanceId === this.localPinId) continue
+      if (!remoteIds.has(pin.instanceId)) {
+        pin.container.destroy()
         this.fleetPins.splice(idx, 1)
       }
     }
 
-    // Update or create
-    for (let i = 0; i < instances.length; i++) {
-      const inst = instances[i]
+    // Update or create remote pins
+    for (let i = 0; i < remoteInstances.length; i++) {
+      const inst = remoteInstances[i]
       const existing = this.fleetPins.find(p => p.instanceId === inst.instanceId)
       if (existing) {
         this.updatePin(existing, inst)
@@ -263,6 +265,8 @@ export class CampusScene extends BaseScene {
 
     // Click interactions — only self pin is fully interactive
     if (inst.isSelf) {
+      // Self pin always on top so it's clickable even when overlapping remote pins
+      container.setDepth(100)
       let lastClickTime = 0
       hit.on('pointerup', () => {
         const now = Date.now()
