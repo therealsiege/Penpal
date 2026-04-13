@@ -204,6 +204,8 @@ contextBridge.exposeInMainWorld('api', {
   vaultSearchRich: (query: string, glob?: string, limit?: number) => ipcRenderer.invoke('vault:search', query, glob, limit),
   orchestratorQueueRich: () => ipcRenderer.invoke('orchestrator:queue'),
   orchestratorAgentHealthRich: () => ipcRenderer.invoke('orchestrator:agent-health'),
+  // Claude.ai Usage
+  claudeUsage: () => ipcRenderer.invoke('claude:usage'),
   // Flight Board
   flightBoardList: () => ipcRenderer.invoke('flight-board:list'),
   flightBoardFilesInFlight: () => ipcRenderer.invoke('flight-board:files-in-flight'),
