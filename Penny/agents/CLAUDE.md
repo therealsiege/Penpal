@@ -1,63 +1,3 @@
-# Penny Shared Agent Memory
-
-This file is shared across all agents in the Penny platform. Reference it for team-wide conventions, patterns, and decisions.
-
-## Architecture
-
-- **Git**: Allowed for normal dev and for Penny automation (branches, commits, push on feature/issue branches). Do not treat the workspace as read-only unless the user asked for analysis-only.
-
-- **Electron Dashboard**: `Penny/` — React + Tailwind + Phaser game view
-- **Graph ETL + MCP**: `analytics/` — Memgraph + Qdrant knowledge graph
-- **Vault Root**: `~/sidekick/` (Obsidian vault)
-
-## Code Conventions
-
-- TypeScript strict mode, no `any` unless absolutely necessary
-- Prefer `const` over `let`, never use `var`
-- Use functional React components with hooks
-- Tailwind for styling, no CSS modules
-- IPC pattern: main → `ipcMain.handle`, preload → `contextBridge`, renderer → `window.api.*`
-
-## Pod Workflow Protocol
-
-When working in a pod (Solver/Reviewer/Executor):
-- **Solver**: Implement the task completely. Provide a summary of changes.
-- **Reviewer**: Design test criteria independently WITHOUT seeing implementation code. Focus on expected behavior from the task description.
-- **Executor**: Verify implementation against test plan. Report structured PASS/FAIL results.
-- Feedback flows from Executor → Solver. Max 3 iterations.
-
-## Quality Standards
-
-- All new features should handle error cases gracefully
-- UI components must work with keyboard navigation
-- Performance: keep React re-renders minimal, use `useCallback` and `useMemo` where appropriate
-- Git commits should be atomic and well-described
-
-## Known Patterns
-
-- Agent sessions are tracked via `~/.claude/sessions/*.json` and JSONL transcripts
-- Agent state is polled every 5s from the renderer
-- Pod workflows are orchestrated by a state machine in `src/main/pods.ts`
-- Use `sendToSession()` for inter-agent communication via iTerm TTY
-
-## Penny MCP Tools
-
-You have access to Penny tools via MCP. Use them to:
-- Check task queue: `orchestrator:queue`
-- Create pods: `pods:create`
-- Search vault: `vault:search`
-- Check your stats: `office:leaderboard`
-
-Operational sequence (run every new session):
-1. Call `meta:list-tools`.
-2. Inspect available tool names.
-3. Run task-specific tools (`orchestrator:queue`, `pods:create`, `vault:search`, `office:leaderboard`).
-
-Tool availability is environment-dependent; always re-check with `meta:list-tools` at session start.
-
-## Workflow Log
-
-_This section is automatically updated after completed pod workflows. Keep only the 5 most recent entries._
 
 
 
@@ -90,24 +30,62 @@ _This section is automatically updated after completed pod workflows. Keep only 
 
 
 
-### Workflow: task (2026-04-13)
-- Task: task
-- Team: fullstack-dev / backend-arch / electron-dev
-- Result: PASS (2/2 iterations)
-- Key output: RESULT: PASS
 
-### Workflow: task (2026-04-13)
-- Task: task
-- Team: fullstack-dev / backend-arch / electron-dev
-- Result: PASS (1/3 iterations)
-- Self-fix attempts: 2
-- Key output: RESULT: PASS
 
-### Workflow: task (2026-04-13)
-- Task: task
-- Team: fullstack-dev / backend-arch / electron-dev
-- Result: FAIL (1/1 iterations)
-- Key output: solver
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 ### Workflow: task (2026-04-13)
 - Task: task
@@ -122,3 +100,47 @@ _This section is automatically updated after completed pod workflows. Keep only 
 - Result: PASS (2/2 iterations)
 - Key output: RESULT: PASS
 
+### Workflow: therealsiege/Penpal#196 (2026-04-13)
+- Task: Implement GitHub issue therealsiege/Penpal#196: Add .editorconfig for consistent formatting
+
+## Description
+
+Add a `.editorconfig` file to the repository root to enforce consistent code formatting acr
+- Team: fullstack-dev / backend-arch / electron-dev
+- Result: PASS (1/3 iterations)
+- Key output: ```
+RESULT: PASS
+Test Case 1: .editorconfig file exists at repo root - PASS
+  Details: The .editorconfig file has been successfully created in the rep
+
+### Workflow: therealsiege/Penpal#197 (2026-04-13)
+- Task: Implement GitHub issue therealsiege/Penpal#197: Add .nvmrc file pinning Node 22
+
+## Description
+
+Add a `.nvmrc` file to the repo root so `nvm use` picks the correct Node version.
+
+## Requirements
+
+- C
+- Team: fullstack-dev / backend-arch / electron-dev
+- Result: PASS (1/3 iterations)
+- Key output: ```
+RESULT: PASS
+Test Case 1: .nvmrc file exists at repo root - PASS
+  Details: The .nvmrc file was successfully created at the repository root as req
+
+### Workflow: therealsiege/Penpal#198 (2026-04-13)
+- Task: Implement GitHub issue therealsiege/Penpal#198: Add .node-version file pinning Node 22
+
+## Description
+
+Add a `.node-version` file to the repo root.
+
+## Requirements
+
+- Create `.node-version` at the r
+- Team: fullstack-dev / backend-arch / electron-dev
+- Result: PASS (1/5 iterations)
+- Key output: Let me first check the current directory structure to confirm where I'm working:
+I can see that the `.node-version` file already exists in the reposit
