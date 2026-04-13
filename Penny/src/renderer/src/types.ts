@@ -757,3 +757,17 @@ export interface ConfigSnapshot {
   agents: AgentToolSummary[]
   timestamp: number
 }
+
+// ── Claude.ai Usage Types ──────────────────────────────────────────────────
+
+export interface ClaudeUsageData {
+  status: 'ok' | 'not-logged-in' | 'parse-error' | 'network-error' | 'loading'
+  session: { percentUsed: number; resetLabel: string } | null
+  weeklyLimits: {
+    allModels: { percentUsed: number; resetLabel: string }
+    sonnetOnly: { percentUsed: number; resetLabel: string }
+  } | null
+  extra: { dollarsSpent: number; monthlyLimit: number; balance: number } | null
+  scrapedAt: number
+  error?: string
+}
