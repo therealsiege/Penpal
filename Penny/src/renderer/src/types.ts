@@ -757,3 +757,12 @@ export interface ConfigSnapshot {
   agents: AgentToolSummary[]
   timestamp: number
 }
+
+export interface ClaudeUsageData {
+  plan: string
+  usagePercent: number
+  usedTokens: number
+  totalTokens: number
+  resetDate: string | null
+  scrapedAt: number
+}

@@ -16,6 +16,7 @@ import { registerSoundboardProtocol } from './soundboard'
 protocol.registerSchemesAsPrivileged([
   { scheme: 'penny-sfx', privileges: { stream: true, supportFetchAPI: true, bypassCSP: true } },
 ])
+import { initClaudeUsageScraper, destroyClaudeUsageScraper } from './claude-usage'
 import { startFileWatcher, stopFileWatcher } from './file-watcher'
 import { startOrchestrator, stopOrchestrator, orchestratorEvents } from './orchestrator'
 import { podEvents } from './pods'
@@ -134,6 +135,7 @@ app.whenReady().then(() => {
   startOrchestrator()
   initAutoUpdater()
   infraUp()
+  initClaudeUsageScraper()
 
   // Write game state snapshot for MCP tools (every 5s)
   writeGameStateSnapshot()
@@ -150,6 +152,7 @@ app.on('window-all-closed', () => {
 })
 
 app.on('before-quit', async () => {
+  destroyClaudeUsageScraper()
   stopFileWatcher()
   taskOutcomeCollector.stop()
   stopOrchestrator()

@@ -174,6 +174,7 @@ import {
 } from './config-reader'
 import type { PreferenceStore } from './preferences'
 import { contextResponse } from './context-response'
+import { getClaudeUsage, showClaudeLogin, refreshClaudeUsage } from './claude-usage'
 
 export const ipcEvents = new EventEmitter()
 
@@ -1462,6 +1463,11 @@ export function registerIpcHandlers() {
     if (!Array.isArray(tools)) throw new Error('tools must be an array')
     return updateAgentTools(agentId, tools as string[])
   }))
+
+  // ── Claude.ai Usage (#163) ──────────────────────────────────────────
+  ipcMain.handle('claude:usage', wrapHandler(() => getClaudeUsage()))
+  ipcMain.handle('claude:login', wrapHandler(() => showClaudeLogin()))
+  ipcMain.handle('claude:refresh', wrapHandler(() => refreshClaudeUsage()))
 
   // ── Data Scripts ──────────────────────────────────────────────────────
   registerDataScriptHandlers()

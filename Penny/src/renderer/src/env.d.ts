@@ -218,6 +218,10 @@ declare global {
       vaultSearchRich: (query: string, glob?: string, limit?: number) => Promise<ContextEngineeredResponse<VaultSearchResult[]>>
       orchestratorQueueRich: () => Promise<ContextEngineeredResponse<Task[]>>
       orchestratorAgentHealthRich: () => Promise<ContextEngineeredResponse<AgentHealthStatus[]>>
+      // Claude.ai Usage
+      claudeUsage: () => Promise<import('./types').ClaudeUsageData | null>
+      claudeLogin: () => Promise<boolean>
+      claudeRefreshUsage: () => Promise<import('./types').ClaudeUsageData | null>
     }
   }
 }
