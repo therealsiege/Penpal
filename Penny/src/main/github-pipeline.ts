@@ -305,30 +305,38 @@ async function pushBranchAndCreatePR(
   title: string,
 ): Promise<boolean> {
   localPath = expandHome(localPath)
+  console.log(`[github-pipeline] pushBranchAndCreatePR: cwd=${localPath}, branch=${branch}`)
   try {
+    // Stage any uncommitted changes left by solver/executor
     await execFileAsync('git', ['add', '-A'], { cwd: localPath, encoding: 'utf-8', timeout: 15_000 })
     const { stdout: status } = await execFileAsync('git', ['status', '--porcelain'], {
       cwd: localPath, encoding: 'utf-8', timeout: 10_000,
     })
     if (status.trim()) {
+      console.log(`[github-pipeline] Found uncommitted changes:\n${status.trim()}`)
       const commitMsg = `${title}\n\nCloses #${issueNumber}\n\nCo-Authored-By: Penny Pod <noreply@penny.dev>`
       await execFileAsync('git', ['commit', '-m', commitMsg], {
         cwd: localPath, encoding: 'utf-8', timeout: 15_000,
       })
+    } else {
+      console.log(`[github-pipeline] No uncommitted changes in ${localPath}`)
     }
 
     const baseBranch = await resolveRemoteDefaultBranch(localPath)
     const { stdout: revList } = await execFileAsync('git', ['rev-list', '--count', `origin/${baseBranch}..HEAD`], {
       cwd: localPath, encoding: 'utf-8', timeout: 10_000,
     })
-    if (parseInt(revList.trim(), 10) === 0) {
-      console.log(`[github-pipeline] No commits ahead of origin/${baseBranch} for ${branch} — nothing to push`)
+    const ahead = parseInt(revList.trim(), 10)
+    console.log(`[github-pipeline] ${branch} is ${ahead} commits ahead of origin/${baseBranch}`)
+    if (ahead === 0) {
+      console.log(`[github-pipeline] Nothing to push for ${branch}`)
       return false
     }
 
     await execFileAsync('git', ['push', '-u', 'origin', branch], {
       cwd: localPath, encoding: 'utf-8', timeout: 60_000,
     })
+    console.log(`[github-pipeline] Pushed ${branch} to origin`)
     const prBody = `Closes #${issueNumber}\n\nAutomated implementation by Penny pod (solver + reviewer + executor).`
     await execFileAsync('gh', [
       'pr', 'create',
@@ -338,6 +346,7 @@ async function pushBranchAndCreatePR(
       '--title', title,
       '--body', prBody,
     ], { cwd: localPath, encoding: 'utf-8', timeout: 30_000 })
+    console.log(`[github-pipeline] PR created for ${branch}`)
     return true
   } catch (err) {
     console.error(`[github-pipeline] Failed to push/PR for ${branch}:`, formatGitError(err))
