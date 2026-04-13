@@ -383,7 +383,11 @@ export function mapModelToOpenCodeModel(model: string): string {
   const override = process.env.PENNY_OPENCODE_MODEL?.trim()
   if (override) return override
 
+  // Already in provider/model format
   if (model.includes('/')) return model
+
+  // Ollama models: 'ollama:qwen3-coder:30b' → 'ollama/qwen3-coder:30b'
+  if (model.startsWith('ollama:')) return `ollama/${model.slice('ollama:'.length)}`
 
   const m = model.toLowerCase()
   if (m === 'opus' || m === 'claude-opus') return 'anthropic/claude-opus-4-5-20251001'

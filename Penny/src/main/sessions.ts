@@ -1594,14 +1594,14 @@ export async function runAgentHeadless(
 ): Promise<HeadlessResult> {
   const timeoutMs = opts.timeoutMs ?? 600_000
 
-  // If modelOverride is ollama:*, force the ollama backend directly
+  // If modelOverride is ollama:*, route through OpenCode (which supports tools + file editing)
+  // rather than the raw Ollama /api/generate endpoint (text-only)
   if (opts.modelOverride?.startsWith('ollama:')) {
-    const ollamaModel = opts.modelOverride.slice('ollama:'.length)
-    console.log(`[headless] ollama model override: ${ollamaModel} (phase=${opts.phase ?? 'default'})`)
-    return runSingleHeadlessBackend('ollama', agentId, cwd, prompt, {
+    console.log(`[headless] ollama model via opencode: ${opts.modelOverride} (phase=${opts.phase ?? 'default'})`)
+    return runSingleHeadlessBackend('opencode', agentId, cwd, prompt, {
       permissionMode: opts.permissionMode,
       timeoutMs,
-      ollamaModel,
+      modelOverride: opts.modelOverride,
     })
   }
 
