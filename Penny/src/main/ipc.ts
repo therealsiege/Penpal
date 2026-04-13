@@ -52,7 +52,12 @@ import {
   cancelPod,
   getPodPresets,
   overridePod,
+  getAllProfiles,
+  saveProfile,
+  deleteProfile,
+  setDefaultProfile,
   type CreatePodOpts,
+  type RuntimeProfile,
 } from './pods'
 import { getActiveEntries, getFilesInFlight } from './flight-board'
 
@@ -984,6 +989,23 @@ export function registerIpcHandlers() {
   }))
 
   ipcMain.handle('pod:presets', wrapHandler(() => getPodPresets()))
+
+  // ── Pod Profiles ──────────────────────────────────────────────────────────
+  ipcMain.handle('pod:profiles', wrapHandler(() => getAllProfiles()))
+  ipcMain.handle('pod:save-profile', wrapHandler((name: unknown, profile: unknown) => {
+    if (typeof name !== 'string') throw new Error('name must be a string')
+    saveProfile(name, profile as RuntimeProfile)
+    return { success: true }
+  }))
+  ipcMain.handle('pod:delete-profile', wrapHandler((name: unknown) => {
+    if (typeof name !== 'string') throw new Error('name must be a string')
+    return { success: deleteProfile(name) }
+  }))
+  ipcMain.handle('pod:set-default-profile', wrapHandler((name: unknown) => {
+    if (typeof name !== 'string') throw new Error('name must be a string')
+    setDefaultProfile(name)
+    return { success: true }
+  }))
 
   // ── Flight Board ──────────────────────────────────────────────────────────
   ipcMain.handle('flight-board:list', wrapHandler(() => getActiveEntries()))

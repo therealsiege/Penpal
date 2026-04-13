@@ -17,6 +17,7 @@ import { SettingsPanel } from './panels/SettingsPanel'
 import { SoundboardPanel } from './panels/SoundboardPanel'
 import { EvalsPanel } from './panels/EvalsPanel'
 import { DataPanel } from './panels/DataPanel'
+import { ProfilesPanel } from './panels/ProfilesPanel'
 import type { SystemPaths } from './types'
 import { getPathPresets } from './utils/path-presets'
 import { EventBus, EVENTS } from './game/events'
@@ -354,6 +355,7 @@ function AppContent() {
           />
         )}
         {activePanel === 'tasks' && <TasksPanel />}
+        {activePanel === 'profiles' && <ProfilesPanel />}
         {activePanel === 'data' && <DataPanel />}
         {activePanel === 'vault' && <VaultPanel />}
         {activePanel === 'evals' && <EvalsPanel />}

@@ -96,6 +96,10 @@ declare global {
       resumePod: (workflowId: string) => Promise<boolean>
       cancelPod: (workflowId: string) => Promise<boolean>
       getPodPresets: () => Promise<import('./types').PodPreset[]>
+      podProfiles: () => Promise<import('./types').ProfilesData>
+      podSaveProfile: (name: string, profile: import('./types').RuntimeProfile) => Promise<{ success: boolean }>
+      podDeleteProfile: (name: string) => Promise<{ success: boolean }>
+      podSetDefaultProfile: (name: string) => Promise<{ success: boolean }>
       // Vault File Manager
       vaultList: (relativePath: string) => Promise<import('./types').VaultEntry[]>
       vaultRead: (relativePath: string) => Promise<import('./types').VaultFileContent | null>

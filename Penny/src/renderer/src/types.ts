@@ -404,6 +404,24 @@ export interface PodWorkflow {
   issueRepo?: string
 }
 
+// ── Pod Runtime Profiles ────────────────────────────────────────────────────
+
+export interface PhaseModel {
+  model: string
+}
+
+export interface RuntimeProfile {
+  phases: Record<'plan' | 'execute' | 'validate', PhaseModel>
+  timeoutMultiplier: number
+  ollamaUrl?: string
+  description: string
+}
+
+export interface ProfilesData {
+  profiles: Record<string, RuntimeProfile>
+  defaultProfile: string
+}
+
 export interface PodPreset {
   id: string
   solver: string

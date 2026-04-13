@@ -85,6 +85,61 @@ export function resolveRuntimeProfile(profileName?: string): RuntimeProfile {
   return profiles[name] ?? DEFAULT_PROFILE
 }
 
+// ── Profile CRUD — JSON persistence for user-defined profiles ──────────────
+
+const PROFILES_FILE = path.join(__dirname, '../../data/pod-profiles.json')
+
+function loadCustomProfiles(): Record<string, RuntimeProfile> {
+  try {
+    if (fs.existsSync(PROFILES_FILE)) {
+      return JSON.parse(fs.readFileSync(PROFILES_FILE, 'utf-8'))
+    }
+  } catch { /* ignore corrupt file */ }
+  return {}
+}
+
+function saveCustomProfiles(profiles: Record<string, RuntimeProfile>): void {
+  const dir = path.dirname(PROFILES_FILE)
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
+  fs.writeFileSync(PROFILES_FILE, JSON.stringify(profiles, null, 2))
+}
+
+/** Get all profiles (YAML built-ins merged with user JSON customs). JSON wins on conflicts. */
+export function getAllProfiles(): { profiles: Record<string, RuntimeProfile>; defaultProfile: string } {
+  const yaml = loadRuntimeProfiles()
+  const custom = loadCustomProfiles()
+  return {
+    profiles: { ...yaml.profiles, ...custom },
+    defaultProfile: yaml.defaultProfile,
+  }
+}
+
+export function saveProfile(name: string, profile: RuntimeProfile): void {
+  const custom = loadCustomProfiles()
+  custom[name] = profile
+  saveCustomProfiles(custom)
+}
+
+export function deleteProfile(name: string): boolean {
+  const custom = loadCustomProfiles()
+  if (!(name in custom)) return false
+  delete custom[name]
+  saveCustomProfiles(custom)
+  return true
+}
+
+export function setDefaultProfile(name: string): void {
+  try {
+    const yaml = require('js-yaml')
+    const agentTypesPath = path.join(__dirname, '../../agents/agent-types.yaml')
+    const content = fs.readFileSync(agentTypesPath, 'utf-8')
+    const updated = content.replace(/default_profile:\s*\S+/, `default_profile: ${name}`)
+    fs.writeFileSync(agentTypesPath, updated)
+  } catch (err) {
+    console.error('[pods] Failed to set default profile:', err)
+  }
+}
+
 // ── Rebase types (exported for testing) ─────────────────────────────────────
 
 export type RebaseStatus = 'clean' | 'conflict-resolved' | 'conflict-aborted'

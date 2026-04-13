@@ -151,6 +151,18 @@ export function Layout({ activePanel, onNavigate, children }: LayoutProps) {
             }
           />
           <NavButton
+            label="Profiles"
+            active={activePanel === 'profiles'}
+            onClick={() => onNavigate('profiles')}
+            icon={
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 20V10" />
+                <path d="M18 20V4" />
+                <path d="M6 20v-4" />
+              </svg>
+            }
+          />
+          <NavButton
             label="Data"
             active={activePanel === 'data'}
             onClick={() => onNavigate('data')}

@@ -72,6 +72,10 @@ contextBridge.exposeInMainWorld('api', {
   getPodPresets: () => ipcRenderer.invoke('pod:presets'),
   overridePod: (workflowId: string, phase: string, override: { model?: string; timeoutMultiplier?: number }) =>
     ipcRenderer.invoke('pod:override', workflowId, phase, override),
+  podProfiles: () => ipcRenderer.invoke('pod:profiles').then(unwrap),
+  podSaveProfile: (name: string, profile: unknown) => ipcRenderer.invoke('pod:save-profile', name, profile),
+  podDeleteProfile: (name: string) => ipcRenderer.invoke('pod:delete-profile', name),
+  podSetDefaultProfile: (name: string) => ipcRenderer.invoke('pod:set-default-profile', name),
   // Vault File Manager
   vaultList: (relativePath: string) => ipcRenderer.invoke('vault:list', relativePath),
   vaultRead: (relativePath: string) => ipcRenderer.invoke('vault:read', relativePath).then(unwrap),
