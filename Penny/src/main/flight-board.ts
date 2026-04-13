@@ -173,3 +173,33 @@ export function hasFileConflict(
   }
   return null
 }
+
+/** A detected file-level conflict between two pods. */
+export interface FileConflict {
+  file: string
+  ownerPodId: string
+  ownerTask: string
+}
+
+/**
+ * Find all file-level conflicts for the given files, excluding a specific pod.
+ * Returns an array of conflicts (may be empty).
+ */
+export function getFileConflicts(
+  files: string[],
+  excludePodId: string,
+  filePath = FLIGHT_BOARD_PATH,
+): FileConflict[] {
+  const conflicts: FileConflict[] = []
+  const seen = new Set<string>()
+  for (const entry of getActiveEntries(filePath)) {
+    if (entry.podId === excludePodId) continue
+    for (const file of files) {
+      if (entry.filesInFlight.includes(file) && !seen.has(`${entry.podId}:${file}`)) {
+        seen.add(`${entry.podId}:${file}`)
+        conflicts.push({ file, ownerPodId: entry.podId, ownerTask: entry.task })
+      }
+    }
+  }
+  return conflicts
+}

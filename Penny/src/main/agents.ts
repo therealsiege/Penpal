@@ -266,7 +266,9 @@ export function buildAgentTaggedSystemPrompt(agentId: string, opts: BuildCliOpts
     }
   }
 
-  const personaContext = (!opts.headless && agent.persona)
+  // Persona context is injected for ALL agents (including headless pod agents)
+  // so they retain their identity, style, and team knowledge.
+  const personaContext = agent.persona
     ? `\n\nYour name is ${agent.name}. ${agent.persona.backstory} Your working style: ${agent.persona.style}.`
     : ''
 

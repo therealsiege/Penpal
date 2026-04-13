@@ -14,7 +14,7 @@ import { runAgentHeadless } from './sessions'
 import { getPhaseConfig, type PhaseConfig } from './pods/phase-config'
 import { podQualityCollector, type PodQualityEvent } from './evals/collectors/pod-quality'
 import { resolveProjectPath } from './project-paths'
-import { addEntry, updateEntry, getActiveEntries, type FlightBoardEntry } from './flight-board'
+import { addEntry, updateEntry, getActiveEntries, getFileConflicts, type FlightBoardEntry, type FileConflict } from './flight-board'
 
 export type { PhaseConfig } from './pods/phase-config'
 
@@ -251,6 +251,8 @@ export interface PodWorkflow {
   /** GitHub issue tracking — set when pod is created from a pipeline issue */
   issueNumber?: number
   issueRepo?: string
+  /** File-level conflicts detected after solve stage (other pods editing same files). */
+  fileConflicts?: FileConflict[]
 }
 
 export interface PodPreset {
@@ -753,6 +755,24 @@ function formatReviewerMessage(wf: PodWorkflow): string {
   ].join('\n')
 }
 
+/** Format file conflict warnings for injection into agent prompts. */
+function formatConflictWarning(conflicts: FileConflict[]): string {
+  if (!conflicts.length) return ''
+  const uniqueFiles = [...new Set(conflicts.map(c => c.file))]
+  const uniquePods = [...new Set(conflicts.map(c => c.ownerPodId))]
+  return [
+    '',
+    '⚠️ **FILE CONFLICT WARNING**: The following files are also being edited by other active pods:',
+    ...uniqueFiles.map(f => {
+      const owners = conflicts.filter(c => c.file === f).map(c => c.ownerPodId)
+      return `- \`${f}\` (also edited by: ${owners.join(', ')})`
+    }),
+    `Conflicting pods: ${uniquePods.join(', ')}`,
+    'Take extra care with these files — verify changes are compatible and watch for merge conflicts.',
+    '',
+  ].join('\n')
+}
+
 function formatExecutorMessage(
   wf: PodWorkflow,
   solverOutput?: string,
@@ -785,12 +805,15 @@ function formatExecutorMessage(
       ? `**Reviewer output**: ${reviewerRawOutput}`
       : ''
 
+  const conflictWarning = wf.fileConflicts?.length ? formatConflictWarning(wf.fileConflicts) : ''
+
   return [
     `## Pod Workflow: ${wf.name}`,
     `### Stage: Execute (Iteration ${wf.iteration}/${wf.maxIterations})`,
     '',
     `**Project Directory**: \`${wf.cwd}\``,
     `**Original Task**: ${wf.task}`,
+    conflictWarning,
     '',
     solverOutput ? `**Solver Summary**: ${solverOutput}` : '',
     reviewerBlock,
@@ -1206,6 +1229,20 @@ async function runSolveStage(wf: PodWorkflow, feedback?: string): Promise<boolea
       const filesInFlight = extractFilesFromOutput(wf.solver.output || '')
       const planSummary = extractPlanSummary(wf.solver.output || '')
       updateEntry(wf.id, { planSummary, filesInFlight, status: 'solving' })
+
+      // Layer 3: File-level conflict detection
+      if (filesInFlight.length > 0) {
+        const conflicts = getFileConflicts(filesInFlight, wf.id)
+        if (conflicts.length > 0) {
+          wf.fileConflicts = conflicts
+          const conflictFiles = [...new Set(conflicts.map(c => c.file))]
+          console.warn(
+            `[pods] ⚠ File conflict detected for ${wf.id}: ${conflictFiles.join(', ')} ` +
+            `overlap with pods ${[...new Set(conflicts.map(c => c.ownerPodId))].join(', ')}`,
+          )
+          podEvents.emit('file-conflict', { workflowId: wf.id, conflicts })
+        }
+      }
     }
 
     console.log(`[pods] Solver done (${Math.round((result.durationMs ?? 0) / 1000)}s)`)
@@ -1318,6 +1355,20 @@ async function runSolveStage(wf: PodWorkflow, feedback?: string): Promise<boolea
     const filesInFlight = extractFilesFromOutput(wf.solver.output || '')
     const planSummary = extractPlanSummary(wf.solver.output || '')
     updateEntry(wf.id, { planSummary, filesInFlight, status: 'solving' })
+
+    // Layer 3: File-level conflict detection (multi-candidate path)
+    if (filesInFlight.length > 0) {
+      const conflicts = getFileConflicts(filesInFlight, wf.id)
+      if (conflicts.length > 0) {
+        wf.fileConflicts = conflicts
+        const conflictFiles = [...new Set(conflicts.map(c => c.file))]
+        console.warn(
+          `[pods] ⚠ File conflict detected for ${wf.id}: ${conflictFiles.join(', ')} ` +
+          `overlap with pods ${[...new Set(conflicts.map(c => c.ownerPodId))].join(', ')}`,
+        )
+        podEvents.emit('file-conflict', { workflowId: wf.id, conflicts })
+      }
+    }
   }
 
   console.log(`[pods] Solver done with ${candidates.length}/${candidateCount} candidates`)
@@ -1603,6 +1654,9 @@ async function runWorkflow(wf: PodWorkflow): Promise<void> {
 
 // ── Public API ──────────────────────────────────────────────────────────────
 
+/** Dispatch gating mode when file conflicts are detected at pod creation time. */
+export type ConflictMode = 'warn' | 'queue' | 'block'
+
 export interface CreatePodOpts {
   name?: string
   cwd?: string
@@ -1619,6 +1673,10 @@ export interface CreatePodOpts {
   /** GitHub issue tracking — set when creating from pipeline */
   issueNumber?: number
   issueRepo?: string
+  /** Known target files — enables pre-dispatch conflict gating. */
+  targetFiles?: string[]
+  /** What to do when pre-dispatch file conflicts are found. Default: 'warn'. */
+  conflictMode?: ConflictMode
 }
 
 export function createPod(task: string, opts: CreatePodOpts = {}): PodWorkflow {
@@ -1701,11 +1759,51 @@ export function createPod(task: string, opts: CreatePodOpts = {}): PodWorkflow {
     addEntry({ podId: wf.id, task: wf.task, cwd: wf.cwd })
   }
 
+  // Layer 3: Pre-dispatch file-level gating when target files are known
+  if (opts.targetFiles?.length && process.env.VITEST !== 'true') {
+    const conflicts = getFileConflicts(opts.targetFiles, wf.id)
+    if (conflicts.length > 0) {
+      const conflictMode = opts.conflictMode ?? 'warn'
+      const conflictFiles = [...new Set(conflicts.map(c => c.file))]
+      const conflictPods = [...new Set(conflicts.map(c => c.ownerPodId))]
+
+      if (conflictMode === 'block') {
+        wf.error = `Blocked: files ${conflictFiles.join(', ')} overlap with active pods ${conflictPods.join(', ')}`
+        wf.fileConflicts = conflicts
+        setStatus(wf, 'failed')
+        return wf
+      }
+
+      if (conflictMode === 'queue') {
+        wf.fileConflicts = conflicts
+        setStatus(wf, 'paused')
+        console.log(
+          `[pods] Queued ${wf.id} — files ${conflictFiles.join(', ')} overlap with pods ${conflictPods.join(', ')}. ` +
+          `Will resume when conflicts clear.`,
+        )
+        return wf
+      }
+
+      // conflictMode === 'warn' (default)
+      wf.fileConflicts = conflicts
+      console.warn(
+        `[pods] ⚠ Pre-dispatch conflict for ${wf.id}: files ${conflictFiles.join(', ')} ` +
+        `overlap with pods ${conflictPods.join(', ')} — proceeding with warning`,
+      )
+      podEvents.emit('file-conflict', { workflowId: wf.id, conflicts })
+    }
+  }
+
   if (process.env.VITEST !== 'true') {
     console.log(
       `[pods] Workflow started — preset \`${presetId}\`, priority ${opts.priority ?? '(default)'}, `
       + `maxSelfFixes ${maxSelfFixes}, solver candidates ${candidateCount}`,
     )
+  }
+
+  // Don't start workflow if already paused (queued due to conflicts) or failed (blocked)
+  if (wf.status !== 'pending') {
+    return wf
   }
 
   const promise = runWorkflow(wf)
