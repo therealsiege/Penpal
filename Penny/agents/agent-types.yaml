@@ -565,7 +565,7 @@ pod_presets:
 # Default profile is applied to all new issues unless overridden by
 # GitHub labels (economic, max) on the issue.
 runtime_profiles:
-  default_profile: max
+  default_profile: economic
 
   max:
     description: "Max plan — Opus for plan+execute, Sonnet for validate"
@@ -579,16 +579,16 @@ runtime_profiles:
         model: sonnet
 
   economic:
-    description: "Local Ollama coder:30b — slow, zero cost, unlimited"
+    description: "Local Ollama qwen3-coder:30b — slow, zero cost, unlimited"
     timeout_multiplier: 5
     ollama_url: "http://localhost:11434"
     phases:
       plan:
-        model: ollama:coder:30b
+        model: ollama:qwen3-coder:30b
       execute:
-        model: ollama:coder:30b
+        model: ollama:qwen3-coder:30b
       validate:
-        model: ollama:coder:30b
+        model: ollama:qwen3-coder:30b
 
   sonnet:
     description: "Balanced — Sonnet for all three phases"
