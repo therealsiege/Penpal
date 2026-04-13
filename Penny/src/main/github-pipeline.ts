@@ -236,6 +236,13 @@ async function createIssueWorktree(
     await execFileAsync('git', ['worktree', 'add', '--force', '-b', branch, worktreePath, `origin/${baseBranch}`], {
       cwd: mainRepoPath, encoding: 'utf-8', timeout: 60_000,
     })
+
+    // Copy opencode.json to worktree so OpenCode finds its provider config
+    const opencodeConfig = path.join(mainRepoPath, 'opencode.json')
+    if (fs.existsSync(opencodeConfig)) {
+      fs.copyFileSync(opencodeConfig, path.join(worktreePath, 'opencode.json'))
+    }
+
     console.log(`[github-pipeline] Worktree ${worktreePath} branch ${branch}`)
     return { ok: true, branch, worktreePath }
   } catch (err) {
