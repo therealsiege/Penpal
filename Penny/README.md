@@ -1,6 +1,6 @@
-# Penny
+# Penpal
 
-Desktop command center for managing Claude Code agents, vault knowledge, and sales intelligence. Built with Electron, React, Tailwind, and Phaser 3.
+AI Operating System — a desktop command center for orchestrating AI coding agents. Built with Electron, React, Phaser 3, and Tailwind.
 
 ## Quick Start
 
@@ -10,33 +10,40 @@ npm run dev       # electron-vite dev (hot reload)
 npm run build     # production build to out/
 ```
 
-Requires a sibling `analytics/` directory with a `.env` file containing Memgraph/Qdrant connection strings and optional Slack tokens.
+Requires a sibling `analytics/` directory with a `.env` file containing Memgraph/Qdrant connection strings. Secrets (Slack tokens, GitHub PAT, etc.) go in `Penny/.env` (gitignored). Shared non-secret config lives in `.env.shared` (committed).
 
 ## Architecture
 
 ### Main Process (`src/main/`)
 
-The main process connects directly to Memgraph, reads Claude session files, manages agent lifecycles, and bridges to Slack.
+The main process connects to Memgraph, discovers Claude/Cursor/OpenCode sessions, manages pod workflows, bridges to Slack for fleet heartbeat, and runs the GitHub issue pipeline.
 
 | Module | Purpose |
 |--------|---------|
 | `index.ts` | App lifecycle, window creation, service startup/shutdown |
 | `ipc.ts` | All `ipcMain.handle()` registrations, `wrapHandler` error boundary |
-| `sessions.ts` | Discovers running Claude Code sessions via `~/.claude/sessions/*.json`, reads JSONL transcripts, analyzes session state (idle/working/waiting), sends messages via iTerm2 AppleScript |
-| `cursor-sessions.ts` | Discovers Cursor agent processes via `ps`/`lsof`, parses `~/.cursor/projects/*/agent-transcripts/*.jsonl` transcripts, classifies session state (working/waiting/idle-prompt) |
-| `agents.ts` | Loads agent configs from `agents/agent-types.yaml`, builds CLI args, manages agent-session persistence (`data/agent-sessions.json`) |
-| `pods.ts` | Solver/Reviewer/Executor workflow engine -- deterministic state machine that chains three agents with feedback loops |
-| `orchestrator.ts` | Task queue with priority routing, agent selection scoring, dispatch loop (10s), health monitor (30s), graceful shutdown |
-| `slack-bridge.ts` | Per-project Slack channels via Socket Mode, bidirectional message routing, `!task` command parsing, orchestrator status updates |
-| `graph.ts` | Memgraph queries -- pipeline summary, hot leads, territories, graph stats, lead search/detail |
+| `sessions.ts` | Discovers Claude Code sessions via `~/.claude/sessions/*.json`, reads JSONL transcripts, analyzes session state (idle/working/waiting), sends messages via iTerm2 AppleScript |
+| `cursor-sessions.ts` | Discovers Cursor agent processes via `ps`/`lsof`, parses transcript JSONL |
+| `opencode-sessions.ts` | Discovers OpenCode (Ollama) sessions |
+| `agents.ts` | Loads agent configs from `agents/agent-types.yaml`, builds CLI args, manages agent-session persistence |
+| `pods.ts` | Solver/Reviewer/Executor workflow engine -- deterministic state machine, runtime profiles, issue tracking |
+| `orchestrator.ts` | Task queue with priority routing, agent selection scoring, dispatch loop, health monitor |
+| `github-pipeline.ts` | Issues labeled `agent-ready` routed through pod workflow in isolated worktrees, auto-PR on completion |
+| `github-issues.ts` | GitHub issue poller, watched repo management, issue card aggregation |
+| `slack-bridge.ts` | Per-project Slack channels via Socket Mode, bidirectional message routing, `!task` command parsing |
+| `fleet-heartbeat.ts` | Multi-instance discovery via Slack `#sk-fleet` channel, IP geolocation, 60s heartbeat cycle |
+| `graph.ts` | Memgraph queries -- pipeline summary, hot leads, territories, graph stats |
 | `health.ts` | Health checks for Memgraph, Qdrant, scheduler |
-| `scheduler-bridge.ts` | Reads `analytics/data/scheduler-state.json` and `schedule.yaml` for job statuses |
-| `veritas-service.ts` | Docker Compose control-plane for Veritas (status/start/stop/restart/logs helpers) |
+| `scheduler-bridge.ts` | Reads scheduler state and `schedule.yaml` for job statuses |
 | `vault.ts` | Full vault file manager -- list, read, write, create, rename, delete, search, tags, backlinks. Registers `vault://` protocol for images |
-| `vault-graph.ts` | Builds in-memory link/tag graph from vault files for visualization |
-| `search-index.ts` | MiniSearch-based full-text index over vault files |
-| `file-watcher.ts` | Chokidar watcher on vault root, pushes `vault:file-changed` events to renderer |
-| `pty.ts` | node-pty pseudo-terminals for embedded terminal in the dashboard |
+| `vault-graph.ts` | Builds in-memory link/tag graph from vault files |
+| `search-index.ts` | MiniSearch full-text index over vault files |
+| `file-watcher.ts` | Chokidar watcher on vault root, pushes file change events to renderer |
+| `flight-board.ts` | Tracks files currently being edited by agents |
+| `pty.ts` | node-pty pseudo-terminals for embedded terminal |
+| `config-reader.ts` | Loads MCP server configs from `.mcp.json` and agent profile overlays |
+| `ollama-client.ts` | Ollama HTTP client for local model access |
+| `evals.ts` | Eval reporting, harness, pod quality, context health |
 
 ### Preload (`src/preload/`)
 
@@ -50,38 +57,59 @@ React 18 + Tailwind 3 SPA. No routing -- panel switching is managed by `App.tsx`
 
 | Panel | Description |
 |-------|-------------|
-| `CommandCenter.tsx` | Default view -- Phaser office scene, agent cards with inline actions (send/approve/focus), quick-action bar, embedded terminal, pod launcher, orchestrator modal |
+| `CommandCenter.tsx` | Default view -- Phaser world map (CampusScene) with fleet pins + isometric lab (OfficeScene) with agent visualization, status bar, quick actions, embedded terminal |
+| `ProfilesPanel.tsx` | Pod runtime profile editor -- visual Plan/Execute/Validate pipeline, model dropdowns, timeout/iteration knobs, default profile selection |
+| `DataPanel.tsx` | Data exploration and graph queries |
 | `VaultPanel.tsx` | Full-featured markdown editor with file tree, tabs, wikilinks, frontmatter editor, outline, templates, search, graph view |
-| `HealthPanel.tsx` | Service health dashboard |
-| `SchedulerPanel.tsx` | Cron job status and history |
-| `PipelinePanel.tsx` | Sales pipeline -- stages, leads, territories |
+| `EvalsPanel.tsx` | Agent evaluation dashboard -- task outcomes, pod quality, spot-check queue, weekly digests |
+| `SoundboardPanel.tsx` | Sound effect browser and playback |
+| `SettingsPanel.tsx` | Appearance/theme controls, GitHub repo management, config snapshot |
+| `GitHubPanel.tsx` | GitHub issue browser and pipeline status |
 | `ActivityPanel.tsx` | Agent activity feed |
-| `SessionsPanel.tsx` | Raw Claude session browser |
 | `GraphPanel.tsx` | Vault knowledge graph visualization (react-force-graph-2d) |
-| `SettingsPanel.tsx` | Appearance/theme controls and Veritas service controls |
+| `HandbookPanel.tsx` | Team handbook and documentation browser |
+| `PipelinePanel.tsx` | Sales pipeline view (Memgraph-backed) |
 
 **Components** (`components/`):
 
 | Component | Description |
 |-----------|-------------|
-| `OrchestratorModal.tsx` | Task queue table + agent health cards, inline enqueue form |
+| `OrchestratorModal.tsx` | Dispatch board -- unified GitHub issue + pod workflow board with phase columns (Planning/Executing/Validating/Done/Failed), agent avatars, expand for pod detail, pause/resume/cancel controls |
 | `PodModal.tsx` | Pod launcher (preset picker), status viewer, workflow list |
+| `PodAgentModal.tsx` | Detailed pod agent view with persona info |
+| `SourcesModal.tsx` | GitHub poll status and watched repo management |
 | `Terminal.tsx` | xterm.js embedded terminal connected to node-pty |
 | `AgentAvatar.tsx` | Pixel-art avatar renderer for agents |
 | `BriefingModal.tsx` | Daily briefing viewer |
 | `CommandPalette.tsx` | Cmd+K command palette |
 | `Toast.tsx` | Toast notification system |
 | `StatusBadge.tsx` | Agent status indicator |
+| `Layout.tsx` | App shell with sidebar navigation and status bar |
 | `editor/` | CodeMirror 6 markdown editor with wikilink plugin, image/PDF widgets, daily notes, templates |
 | `vault/` | File tree, search panel for vault browser |
 
 **Game** (`game/`):
 
+80 files, ~20,000+ lines total. Key scenes and modules:
+
 | File | Description |
 |------|-------------|
-| `OfficeScene.ts` | Phaser 3 office scene with agent sprites, desk assignments, animated status bubbles, room decorations (plants, art, bookshelf, rugs), per-state character animations, and warm wood-floor rendering |
+| `CampusScene.ts` | World map with fleet instance pins -- illustrated map backdrop (3840x2160), sprite marker pins, IP geolocation coordinate projection, double-click to enter lab |
+| `OfficeScene.ts` | Isometric lab orchestrator (~4700 lines). Agent sync, camera, update loop, delegates to 18+ modules |
 | `OfficeGame.ts` | Phaser game bootstrap |
-| `events.ts` | EventBus for game <-> React communication |
+| `events.ts` | EventBus singleton for game-to-React communication |
+| `workstation-*.ts` | Agent desk creation, animation, idle micro-variety, mood, status bubbles |
+| `office-background.ts` | Team area rendering, terrain, corridors, interior |
+| `office-rooms.ts` | Room creation, doors, headers, animated resize |
+| `office-pods.ts` | Pod connecting lines, agent-to-agent chat dot animations |
+| `office-ui.ts` | Notification toasts, hover tooltips, debug overlay, status bar |
+| `office-atmosphere.ts` | Day/night cycle, sky gradient, starfield, clouds, shadows |
+| `office-camera.ts` | Camera management, zoom-to-fit, follow target, drag handling |
+| `celebrations.ts` | Rank-up, task-complete, milestone, error effects |
+| `penny-cafe.ts` | Cafe area with coffee run animations, social interactions |
+| `quest-system.ts` | Quest auto-wrapper with difficulty inference and XP/credit multipliers |
+| `seasons.ts` | 30-day seasonal arcs with themed challenges |
+| `leaderboard.ts` | Season XP rankings, weekly MVP, rivalry detection |
 
 **Stores** (`stores/`):
 
@@ -96,7 +124,7 @@ React 18 + Tailwind 3 SPA. No routing -- panel switching is managed by `App.tsx`
 
 | File | Description |
 |------|-------------|
-| `agent-types.yaml` | Agent definitions -- name, persona, skills, model, defaultRepos, desk position, autonomy level, pod role |
+| `agent-types.yaml` | Agent definitions -- name, persona, skills, model, defaultRepos, desk position, autonomy level, pod role, pod presets |
 | `CLAUDE.md` | Shared team memory injected into all agent system prompts |
 | `mcp-profiles/` | MCP server configurations per agent role (e.g. `qa-executor.json` with Playwright) |
 
@@ -109,28 +137,97 @@ Runtime state files (JSON). Not committed.
 | `agent-sessions.json` | Agent ID -> session/PID mapping |
 | `task-queue.json` | Orchestrator task queue (persistent) |
 | `pod-workflows.json` | Pod workflow state |
+| `pod-profiles.json` | Custom runtime profiles |
 | `agent-stats.json` | Agent statistics |
+| `spot-checks.json` | Eval spot-check queue |
 
 ## Key Systems
 
-### Office Scene (Phaser 3)
+### World Map (CampusScene)
 
-The `OfficeScene.ts` renders a live pixel-art office where each agent sits at a workstation. Agents are auto-grouped into rooms by project.
+The `CampusScene` renders an illustrated world map (3840x2160) showing all Penpal instances in the fleet as sprite marker pins.
 
-**Agent sources**: Both Claude Code (`~/.claude/sessions/`) and Cursor IDE (`~/.cursor/projects/*/agent-transcripts/`) agents are discovered and displayed. Claude agents use character sprite 0; Cursor agents use character sprite 1.
+**Pin types**:
+- Local instance: red marker, always clickable, double-click to enter the lab
+- Remote instances: blue pins from fleet heartbeat data
+- Stale instances (no heartbeat >120s): gray pins
 
-**Status bubbles** -- each agent shows a thought bubble reflecting their current state:
+**Coordinate projection**: Anchor-based system calibrated to the illustrated map. Nashville is the anchor point; lat/lon offsets are converted to pixel positions using per-degree scaling factors.
 
-| State | Icon | Color | Pose | Animation |
-|-------|------|-------|------|-----------|
-| Working (executing tools, actively processing) | ⚡ | Amber | Typing (INTERACT) | Gentle sway, soft bounce, slow lean |
-| Waiting (tool-approval, question, accept-edits) | ? | Red | Idle (IDLE) | Scale pulse, side-to-side fidget |
-| Plan mode | 📋 | Purple | Typing (INTERACT) | Same as working |
-| Accept-edits mode | ✏️ | Blue | Idle (IDLE) | Same as waiting |
-| Idle prompt (session open, no work) | ☕ | Brown | Sitting (SIT) | Slow breathing |
-| No session | *(none)* | -- | Sitting (SIT) | Slow breathing |
+**Interaction**: Single click zooms to pin. Double-click on local pin transitions to the OfficeScene (lab view). Hover shows username label tooltip.
 
-**Room decorations**: Each room has a warm wood-plank floor, a center rug, potted plants in the corners, picture frames along the top wall, and a bookshelf on the left wall (in taller rooms). Workstations include a desk lamp with a light cone, a coffee mug with animated steam, and a monitor with a glow overlay.
+### Fleet Heartbeat
+
+Multi-instance discovery system using Slack as the transport layer:
+
+- Each Penpal instance posts a structured heartbeat to `#sk-fleet` every 60 seconds
+- Heartbeat includes: hostname, active sessions, pod count, health status, IP geolocation (lat/lon/city)
+- Messages are updated in-place via `chat.update` to keep the channel clean
+- Status bar shows a Fleet pill with online/total instance count
+- Instances are considered stale after 120 seconds without a heartbeat
+
+### Dispatch (OrchestratorModal)
+
+Single unified board for GitHub issues and pod workflows. No tabs -- issues and pods are rendered as the same card type in phase columns:
+
+**Columns**: Planning -> Executing -> Validating -> Done -> Failed
+
+Each card shows:
+- Issue title, repo badge, age
+- Active agent avatar (persona artwork from Journey to the West theme)
+- Team strip showing solver/reviewer/executor assignments
+
+Expand a card for pod detail:
+- Team grid with persona avatars and role badges (S/R/E)
+- Phase config and iteration count
+- Controls: pause, resume, cancel with error toasts
+
+### Pod Workflows
+
+Three-agent workflow engine (`src/main/pods.ts`):
+
+1. **Solver** implements the task
+2. **Reviewer** independently validates (does NOT see solver's code). Rejects on parse failure -- no silent auto-approve
+3. **Executor** runs the test plan against the implementation
+
+If tests fail, feedback goes back to the solver for iteration (max configurable rounds). Results are appended to `agents/CLAUDE.md` as team knowledge.
+
+**Runtime Profiles**: Configure model + timeout + iterations per phase:
+
+| Profile | Plan | Execute | Validate | Timeout | Notes |
+|---------|------|---------|----------|---------|-------|
+| `max` | Opus | Opus | Sonnet | 1x | Full quality, cloud models |
+| `sonnet` | Sonnet | Sonnet | Sonnet | 1x | Balanced cost/quality |
+| `economic` | `ollama:qwen3-coder:30b` | `ollama:qwen3-coder:30b` | `ollama:qwen3-coder:30b` | 8x | Local Ollama via OpenCode CLI, 5 iterations, 3 self-fixes |
+
+Profiles are managed in the Profiles panel. Set a default -- all new pods use it. Custom profiles saved to `data/pod-profiles.json`.
+
+**Issue tracking**: Pods store `issueNumber` and `issueRepo` for explicit matching between GitHub issues and Dispatch board cards.
+
+### Profiles Panel
+
+Visual runtime profile editor:
+
+- Pipeline visualization: Plan -> Execute -> Validate nodes with model dropdown per phase
+- Model options: `opus`, `sonnet`, `haiku`, `ollama:qwen3-coder:30b`
+- Quality knobs: `maxIterations`, `maxSelfFixes`, `timeoutMultiplier` per profile
+- Built-in profiles (`max`, `economic`, `sonnet`) loaded from YAML -- cannot be deleted
+- Custom profiles saved to `data/pod-profiles.json`
+- Set default profile -- all new pods inherit it
+
+### GitHub Issue Pipeline
+
+Automated issue-to-PR workflow (`src/main/github-pipeline.ts`, `github-issues.ts`):
+
+1. Issues labeled `agent-ready` are picked up by the poller
+2. Labels `economic`, `max`, or `sonnet` select the runtime profile
+3. An isolated Git worktree is created for the issue branch
+4. `opencode.json` is copied to the worktree for Ollama provider access
+5. A pod is spawned (Solver -> Reviewer -> Executor) in the worktree
+6. On completion: branch is pushed, PR is created, issue is labeled `pr-ready`
+7. On failure: issue is labeled `agent-failed` with error comment
+
+`issueNumber` and `issueRepo` are tracked on the pod for Dispatch board matching. Branch and worktree creation run in the Electron main process via `child_process`, not inside the agent.
 
 ### Agent Orchestration
 
@@ -140,116 +237,93 @@ The orchestrator (`src/main/orchestrator.ts`) provides centralized task manageme
 
 **Dispatch loop** (every 10s):
 1. Pulls queued tasks sorted by priority (critical > high > normal > low), then by creation time
-2. Scores each available agent against the task:
-   - Skill match: 0-100 points (task `requiredSkills` vs agent `skills`)
-   - Project affinity: +50 (agent's `defaultRepos` contains task project)
-   - Preferred agent: +100 (explicit match)
-   - Already idle: +30 (no launch cost)
-   - Load penalty: -20 per active task already assigned
-3. Dispatches to the highest-scoring available agent (launches if sleeping, reuses if idle)
-4. Monitors active tasks -- marks completed when agent returns to idle prompt, re-queues on agent death
+2. Scores each available agent against the task (skill match, project affinity, idle bonus, load penalty)
+3. Dispatches to the highest-scoring available agent
+4. Monitors active tasks -- marks completed when agent returns to idle, re-queues on agent death
 
 **Health monitor** (every 30s):
-- Detects dead agent processes via `kill(pid, 0)`
+- Detects dead agent processes
 - Cleans up stale session mappings
-- Flags high memory usage (>2GB) and stuck tool approvals
+- Flags high memory usage and stuck tool approvals
 
-**Task sources**:
-- Dashboard: via `OrchestratorModal` -> `+ New Task`
-- Slack: `!task Fix the login bug` / `!task priority:high agent:marcus Refactor the lead scorer`
-- API: `enqueueTask()` from any main-process module
-
-### Pod Workflows
-
-Three-agent workflow engine (`src/main/pods.ts`):
-
-1. **Solver** implements the task
-2. **Reviewer** independently designs test criteria (does NOT see solver's code)
-3. **Executor** runs the test plan against the implementation
-
-If tests fail, the executor's feedback goes back to the solver for iteration (max 3 rounds). Results are appended to `agents/CLAUDE.md` as team knowledge.
-
-**Headless backends (pods, GitHub pipeline, orchestrator execute/validate):** `runAgentHeadless` can use a **per-phase** comma-separated chain. If the first backend fails with a quota/rate-limit style message (or Ollama unreachable), the next backend runs automatically.
+**Headless backends**: `runAgentHeadless` supports per-phase comma-separated backend chains. If the first backend fails with quota/rate-limit, the next backend runs automatically.
 
 | Env | Phase |
-|-----|--------|
-| `PENNY_TASK_RUNNER` | Default single runner when no phase override is set (`claude`, `cursor-agent`, `opencode`). |
-| `PENNY_TASK_RUNNER_PLAN` / `PENNY_TASK_RUNNER_PLANNING` | Planning (GitHub planner, orchestrator plan, pod self-eval). |
-| `PENNY_TASK_RUNNER_EXECUTE` / `PENNY_TASK_RUNNER_EXECUTING` | Implementation / executor / self-fix. |
-| `PENNY_TASK_RUNNER_VALIDATE` / `PENNY_TASK_RUNNER_VALIDATING` | Orchestrator validation; also used for pod **reviewer** unless `PENNY_TASK_RUNNER_REVIEW` is set. |
-| `PENNY_TASK_RUNNER_REVIEW` / `PENNY_TASK_RUNNER_REVIEWING` | Pod reviewer only (overrides validate/plan fallback). |
+|-----|-------|
+| `PENNY_TASK_RUNNER` | Default single runner (`claude`, `cursor-agent`, `opencode`) |
+| `PENNY_TASK_RUNNER_PLAN` | Planning phase |
+| `PENNY_TASK_RUNNER_EXECUTE` | Implementation / executor / self-fix |
+| `PENNY_TASK_RUNNER_VALIDATE` | Validation; also used for pod reviewer unless `PENNY_TASK_RUNNER_REVIEW` is set |
+| `PENNY_TASK_RUNNER_REVIEW` | Pod reviewer only |
 
-Chain entries: `claude`, `cursor-agent`, `opencode`, `ollama` (or `local`). Example: `PENNY_TASK_RUNNER_PLAN=claude,cursor-agent` when Claude Code hits limits. **Ollama-compatible API** (orchestrator + headless `ollama` backend): set `PENNY_OLLAMA_BASE_URL` to your NemoClaw/OpenClaw tunnel or gateway base URL (Ollama-style `/api/tags` + `/api/generate`). Aliases: `PENNY_NEMOCLAW_OLLAMA_URL`, `PENNY_OPENCLAW_OLLAMA_URL`. Default base is `http://127.0.0.1:11434`. `PENNY_OLLAMA_MODEL` selects the model name (default `qwen3-coder:30b`). Optional `PENNY_OLLAMA_API_KEY` sends `Authorization: Bearer …` if your gateway requires it. Set `PENNY_TASK_RUNNER_RETRY_ANY_FAILURE=1` to always try the next backend on any error (debugging). Orchestrator tasks with `provider: ollama` still use this HTTP client for plan/validate (unchanged, but now respect the same base URL env vars).
+### Office Scene (Phaser 3)
 
-**GitHub issue pipeline (`src/main/github-pipeline.ts`, `github-issues.ts`):** Issues labeled `agent-ready` are picked up and routed through the full 3-agent pod workflow (Solver → Reviewer → Executor) in an isolated worktree. Branch and worktree creation run in the **Electron main process** (`git` via `child_process`), not inside Claude. On pod completion, the pipeline pushes the branch and creates a PR. If an issue comment says **”No branch was created,”** the failure is local Git (clone path, `git fetch`, default branch, permissions). Watch the **main process** terminal for lines prefixed with `[github-pipeline]` for diagnostics.
+The `OfficeScene.ts` renders a live isometric lab where each agent sits at a workstation. Agents are auto-grouped into rooms by project.
 
-**Packaged app (`npm run make` / Forge):** `forge.config.ts` must include the **`agents/`** directory in the app bundle. If you see **`Unknown agent: issue-planner`** (or any agent id) only in the packaged build, the packager was excluding YAML configs — the `ignore` hook should list `/agents` (see `forge.config.ts`).
+**Agent sources**: Claude Code, Cursor IDE, and OpenCode sessions are all discovered and displayed. Headless orchestrator tasks and pipeline issues appear as synthetic agents.
+
+**Status bubbles** -- each agent shows a thought bubble reflecting their current state:
+
+| State | Icon | Color | Pose |
+|-------|------|-------|------|
+| Working | lightning | Amber | Typing |
+| Waiting (approval/question) | ? | Red | Idle |
+| Plan mode | clipboard | Purple | Typing |
+| Accept-edits | pencil | Blue | Idle |
+| Idle prompt | coffee | Brown | Sitting |
+
+**Game systems**: Quest auto-wrapper, cosmetic tiers (rank-gated desk items), XP leaderboard, 30-day seasons with themed challenges, credits economy for cosmetic purchases.
 
 ### Eval Spot-Check Queue
 
-Manual review queue for random agent output spot checks (`src/main/evals/judges/human-judge.ts`):
+Manual review queue for random agent output spot checks:
 
-- Sampling source: recent orchestrator tasks with status `completed` or `failed`
-- Automated score at sample time: `1.0` when status is `completed`, `0.0` when `failed` (for agreement vs human verdict)
-- Recency policy: last 7 days by `completedAt`
-- Uniqueness policy: a task can only be sampled once (by `taskId`)
-- Persistence: JSON-backed queue at `data/spot-checks.json` with atomic writes
-- Agreement policy: automated score `>= 0.5` maps to pass; human `partial` is treated as pass for binary agreement math
-- Operational limits: file-backed queue, no pagination yet
+- Samples recent orchestrator tasks (last 7 days)
+- Automated score at sample time: `1.0` completed, `0.0` failed
+- Human verdicts: pass/partial/fail with agreement metrics
+- Persistence: `data/spot-checks.json`
 
 ### Slack Bridge
 
-Per-project channels (`#sk-penny`, `#sk-medscrub`) via Socket Mode:
+Per-project channels (`#sk-penny`, etc.) via Socket Mode:
 
-- Outbound: polls agent JSONL transcripts every 5s, posts new assistant messages to Slack
-- Inbound: routes user messages to the correct agent (auto if single agent, `@mention` if multiple)
-- Status: posts interaction state changes (tool approval, questions, completion)
-- Tasks: `!task` prefix creates orchestrator tasks with status updates posted back as thread replies
+- Outbound: polls agent JSONL transcripts every 5s, posts new assistant messages
+- Inbound: routes user messages to correct agent (auto if single, `@mention` if multiple)
+- Tasks: `!task` prefix creates orchestrator tasks with status updates as thread replies
+- Fleet: `#sk-fleet` channel used for heartbeat-based instance discovery
 
 ### Vault Editor
 
 Full-featured markdown editor in `VaultPanel.tsx`:
 
 - CodeMirror 6 with custom wikilink plugin (`[[link]]` autocomplete + navigation)
-- File tree with drag-and-drop
-- Multi-tab editing with unsaved change tracking
-- Frontmatter editor (YAML)
-- Document outline panel
-- Template inserter
+- File tree with drag-and-drop, multi-tab editing
+- Frontmatter editor (YAML), document outline, template inserter
 - Full-text search (MiniSearch) and grep search
 - Tag browser with backlink navigation
 - Knowledge graph visualization
-- Daily notes
-- Image and PDF embedding via `vault://` protocol
+- Daily notes, image/PDF embedding via `vault://` protocol
 - Live file watching (chokidar) for external changes
 
 ## Environment Variables
 
-Set in `analytics/.env`:
+Shared config in `.env.shared` (committed). Secrets in `Penny/.env` (gitignored). Graph connection in `analytics/.env`.
 
 | Variable | Required | Description |
 |----------|----------|-------------|
 | `MEMGRAPH_URI` | For graph features | Bolt URI (e.g. `bolt://localhost:7687`) |
 | `MEMGRAPH_USER` | For graph features | Username |
 | `MEMGRAPH_PASS` | For graph features | Password |
-| `SLACK_BOT_TOKEN` | For Slack bridge | `xoxb-...` Bot User OAuth Token |
-| `SLACK_APP_TOKEN` | For Slack bridge | `xapp-...` Socket Mode token |
+| `SLACK_BOT_TOKEN` | For Slack bridge + fleet | `xoxb-...` Bot User OAuth Token |
+| `SLACK_APP_TOKEN` | For Slack bridge + fleet | `xapp-...` Socket Mode token |
 | `SLACK_CHANNEL_PREFIX` | No (default: `sk`) | Channel name prefix |
-| `SLACK_ARCHIVE_INACTIVE_CHANNELS` | No (default: `false`) | Auto-archive inactive project channels when all agents exit |
+| `GITHUB_TOKEN` | For issue pipeline | GitHub PAT with repo scope |
+| `PENNY_TASK_RUNNER` | No | Default headless backend (`claude`, `cursor-agent`, `opencode`) |
+| `PENNY_OLLAMA_BASE_URL` | No | Ollama API base URL (default `http://127.0.0.1:11434`) |
+| `PENNY_OLLAMA_MODEL` | No | Ollama model name (default `qwen3-coder:30b`) |
+| `PENNY_SFX_DIR` | No | Soundboard mp3 discovery folder |
 
-Optional Penny infra vars can be set in `Penny/docker/.env.control-plane`:
-
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `PENNY_VERITAS_COMPOSE_FILE` | No | Absolute path to compose file (defaults to `Penny/docker/compose.control-plane.yml`) |
-| `PENNY_VERITAS_ENV_FILE` | No | Env file consumed by compose and Penny status/start/stop commands |
-| `PENNY_VERITAS_SOURCE_DIR` | If building local image | Local checkout of `veritas-kanban` for Docker build context |
-| `PENNY_VERITAS_PORT` | No (default: `47832`) | Host port bound to Veritas container port `3001` |
-| `PENNY_VERITAS_API_URL` | No | URL used by MCP and status checks (default `http://127.0.0.1:47832/api`) |
-| `PENNY_VERITAS_WEB_URL` | No | Browser URL opened from Settings (default `http://127.0.0.1:47832`) |
-| `PENNY_VERITAS_ADMIN_KEY` | Yes for authenticated usage | Veritas admin key for the service |
-| `PENNY_VERITAS_AGENT_KEY` | Recommended | Non-admin key used by MCP agents (`VK_API_KEY`) |
-| `PENNY_SFX_DIR` | No | Absolute or relative folder for Soundboard mp3 discovery (default auto-detect, fallback `Penny/sound-effects`) |
+`opencode.json` (committed) configures the Ollama provider for OpenCode CLI, used by economic-mode pods.
 
 ## IPC API Reference
 
@@ -265,11 +339,6 @@ The most frequently called orchestration handlers return a context-engineered en
 - `related_tools` (adjacent tools likely needed next)
 - optional `context` (supporting state for better decisions)
 
-For lead channels, `leads:*` remains canonical in renderer APIs and `graph:*` aliases are now registered for tooling parity:
-
-- `graph:search-leads` -> `leads:search`
-- `graph:lead-detail` -> `leads:detail`
-
 <details>
 <summary>Full API list</summary>
 
@@ -279,17 +348,8 @@ For lead channels, `leads:*` remains canonical in renderer APIs and `graph:*` al
 - `getSchedulerHistory(jobName?)` -- job run history
 - `runJob(name)` -- force-run a scheduled job
 
-**Pipeline & Leads**
-- `getPipelineSummary()` -- sales stage summary
-- `getHotLeads()` -- top-scoring leads
-- `getTerritories()` -- territory breakdown
-- `getNewLeads()` -- recently added leads
-- `searchLeads(query)` -- search leads by name/company
-- `getLeadDetail(name)` -- full lead profile
-- `getGraphStats()` -- node/relationship counts
-
 **Sessions**
-- `getClaudeSessions()` -- all running Claude + Cursor sessions
+- `getClaudeSessions()` -- all running Claude + Cursor + OpenCode sessions
 - `getSessionConversation(sessionId, source?)` -- JSONL transcript as messages
 - `sendToSession(tty, message)` -- type into agent terminal
 - `focusSession(tty)` -- bring iTerm2 tab to front
@@ -297,6 +357,8 @@ For lead channels, `leads:*` remains canonical in renderer APIs and `graph:*` al
 - `broadcastToSessions(message)` -- send to all sessions
 - `approveSession(tty, choice)` -- approve tool use (y/n/1/2/3)
 - `approveAllSessions(choice)` -- approve all waiting sessions
+- `getITermStatus()` -- iTerm2 availability check
+- `pruneStaleSessions(maxIdleMinutes?)` -- kill stale sessions
 
 **Agents**
 - `getAgents()` -- agent config list
@@ -309,16 +371,41 @@ For lead channels, `leads:*` remains canonical in renderer APIs and `graph:*` al
 - `listPods()` -- all workflows
 - `getPodStatus(workflowId)` -- workflow detail
 - `pausePod(workflowId)` / `resumePod(workflowId)` / `cancelPod(workflowId)`
+- `overridePod(workflowId, phase, override)` -- override pod phase config
 - `getPodPresets()` -- available team presets
+
+**Pod Profiles**
+- `podProfiles()` -- all profiles with default
+- `podSaveProfile(name, profile)` -- create/update profile
+- `podDeleteProfile(name)` -- delete custom profile
+- `podSetDefaultProfile(name)` -- set default for new pods
 
 **Orchestrator**
 - `orchestratorQueue()` -- all tasks
-- `orchestratorEnqueue(title, description, project, priority)` -- create task
+- `orchestratorEnqueue(title, description, project, priority, provider?)` -- create task
 - `orchestratorCancelTask(taskId)` -- cancel a task
 - `orchestratorRetryTask(taskId)` -- retry a failed task
 - `orchestratorAgentHealth()` -- per-agent health status
 - `orchestratorShutdownAgent(agentId)` -- graceful agent shutdown
 - `orchestratorStats()` -- queue depth, active count, completed/failed today
+- `orchestratorXP()` -- all agent XP
+- `orchestratorCredits()` -- all agent credits
+- `orchestratorPrune()` -- prune terminal tasks from queue
+- `orchestratorSetProvider(provider)` -- set model provider (claude/ollama)
+- `orchestratorGetProvider()` -- current provider + Ollama availability
+
+**GitHub**
+- `githubStatus()` -- issue poller status
+- `githubPollNow()` -- force poll
+- `githubSeen()` -- seen issue cache
+- `githubCards()` -- aggregated issue cards for Dispatch board
+- `githubConsolidate()` -- consolidate tracked issues
+- `githubAddRepo(owner, repo, localPath)` -- add watched repo
+- `githubRemoveRepo(owner, repo)` -- remove watched repo
+- `githubListRepos()` -- list watched repos
+
+**Fleet**
+- `fleetStatus()` -- all fleet instances with heartbeat data
 
 **Vault**
 - `vaultList(path)` / `vaultRead(path)` / `vaultWrite(path, content)` / `vaultCreate(path, content?)` / `vaultCreateFolder(path)` / `vaultRename(old, new)` / `vaultDelete(path)`
@@ -334,36 +421,47 @@ For lead channels, `leads:*` remains canonical in renderer APIs and `graph:*` al
 - `slackStatus()` -- bridge running/configured state
 - `slackStart()` / `slackStop()`
 
-**Veritas**
-- `veritasStatus()` -- Docker + compose + container/API health snapshot
-- `veritasStart()` / `veritasStop()` / `veritasRestart()`
-- `veritasLogs(tail?)` -- tail container logs (no-color)
-- `veritasOpen()` -- open Veritas web URL in browser
-- `veritasListTasks(status?)` -- list Veritas board tasks (summary view)
-- `veritasTaskCounts()` -- status bucket counts from Veritas
-- `veritasCreateTask(title, description?, project?, priority?)` -- create Veritas task
-- `veritasUpdateTaskStatus(taskId, status)` -- patch task status (`todo`/`in-progress`/`blocked`/`done`)
+**Evals**
+- `evalsReportAll()` -- all eval results
+- `evalsReportAgent(agentId)` -- per-agent eval report
+- `evalsStats()` -- summary statistics
+- `evalsHarnessReportAll(since?)` / `evalsHarnessReportAgent(agentId, since?)` -- harness reports
+- `evalsWeeklyDigest(weekOverride?)` -- generate weekly digest
+- `evalsPodQuality(since?)` -- pod quality metrics
+- `evalsContextHealth()` / `evalsContextHealthAgent(agentId)` -- context usage
+- `evalsSpotCheckQueue()` -- pending spot checks
+- `evalsSpotCheckSample(count)` -- sample tasks into queue
+- `evalsSpotCheckReview(id, verdict, notes?)` -- submit human verdict
+- `evalsSpotCheckAgreement()` -- human-vs-automated agreement
+
+**Flight Board**
+- `flightBoardList()` -- active entries
+- `flightBoardFilesInFlight()` -- files currently being edited
+
+**Config**
+- `configSnapshot()` -- full config state
+- `configAddProjectMcp(server)` / `configRemoveProjectMcp(name)` -- project MCP servers
+- `configAddProfileMcp(profile, server)` / `configRemoveProfileMcp(profile, name)` -- profile MCP servers
+- `configUpdateAgentTools(agentId, tools)` -- update agent tool allowlist
 
 **Other**
 - `openDownloads()` -- open ~/Downloads in Finder
 - `pickDirectory()` -- native directory picker dialog
 - `focusCursorIDE()` -- bring Cursor to front
-
-**Spot Checks**
-- `evalsSpotCheckQueue()` -- fetch pending spot checks for manual review
-- `evalsSpotCheckSample(count)` -- sample recent task outputs into queue
-- `evalsSpotCheckReview(id, verdict, notes?)` -- submit human verdict (`pass`/`partial`/`fail`)
-- `evalsSpotCheckAgreement()` -- compute human-vs-automated agreement metrics
+- `openUrl(url)` -- open HTTPS URL in browser
+- `getSystemPaths()` -- system path info
+- `getSoundboardClips()` -- list available sound effects
+- `getCapabilitiesStatus()` -- aggregated capabilities snapshot
 
 </details>
 
 ## MCP Server
 
-Penny exposes an MCP (Model Context Protocol) server so Claude sessions can programmatically discover and invoke Penny's capabilities. The MCP process is a standalone Node child (`tsx`); tool handlers import Penny main-process modules directly (same code paths as the Electron app), not a live IPC bridge into a running app window.
+Penpal exposes an MCP (Model Context Protocol) server so Claude sessions can programmatically discover and invoke Penpal's capabilities. The MCP process is a standalone Node child (`tsx`); tool handlers import main-process modules directly (same code paths as the Electron app).
 
 ### Available Tools
 
-Call **`meta:list-tools`** first for the live catalog. Registered groups mirror main IPC domains:
+Call **`meta:list-tools`** first for the live catalog. Registered groups:
 
 | Group | Tools |
 |-------|--------|
@@ -384,23 +482,13 @@ npm run mcp:start
 npm run --prefix Penny mcp:start
 ```
 
-The server uses stdio transport — stdout is reserved for the MCP protocol; startup and errors log to stderr only.
-
-### Environment
-
-Tools that touch on-disk data or Veritas may read:
-
-| Variable | Required | Notes |
-|----------|----------|--------|
-| `PENNY_DATA_DIR` | No | Data directory (e.g. `./data` under Penny when using profile configs) |
-| `PENNY_VERITAS_API_URL` | No | Veritas API base (defaults and related keys are in **Environment Variables** above) |
-| `PENNY_VERITAS_AGENT_KEY` | Recommended | Non-admin key for Veritas-backed operations |
+The server uses stdio transport -- stdout is reserved for the MCP protocol; startup and errors log to stderr only.
 
 ### Connect Claude / Cursor
 
 `config-reader.ts` loads project MCP servers from `<sidekick-root>/.mcp.json` and profile overlays from `Penny/agents/mcp-profiles/*.json`.
 
-**Option A — npm from repo root** (cwd defaults to the project root):
+**Option A -- npm from repo root**:
 
 ```json
 {
@@ -413,7 +501,7 @@ Tools that touch on-disk data or Veritas may read:
 }
 ```
 
-**Option B — `npx tsx` with `cwd` on `Penny`** (matches agent profiles and many local setups):
+**Option B -- `npx tsx` with `cwd` on `Penny`**:
 
 ```json
 {
@@ -430,12 +518,35 @@ Tools that touch on-disk data or Veritas may read:
 }
 ```
 
-Use paths relative to your sidekick repo root; expand `cwd` to an absolute path if your client does not resolve relative `cwd` the same way.
+## Stack
 
-### Follow-ups (not in this server yet)
+| Layer | Technology |
+|-------|-----------|
+| Shell | Electron 33, electron-vite 5 |
+| UI | React 18, Tailwind 3, Zustand |
+| Game | Phaser 3.90 |
+| Editor | CodeMirror 6 |
+| Terminal | xterm.js + node-pty |
+| Graph | neo4j-driver (Memgraph) |
+| Slack | @slack/bolt (Socket Mode) |
+| Language | TypeScript 5.7 |
+| Testing | Vitest (unit), Playwright (E2E + visual) |
 
-- **Resources** — `resources/list` and resource providers (capabilities are declared; handlers can be added later)
-- **IPC-only bridge** — only if a tool must drive a single long-lived Electron main process that cannot share state with the MCP Node process
+## Scripts
+
+```bash
+npm run dev              # electron-vite dev with HMR
+npm run build            # production build
+npm run sprites:all      # rebuild all sprite sheets (9 scripts)
+npm run test             # vitest unit tests
+npm run test:e2e         # playwright E2E tests
+npm run test:visual      # visual regression tests
+npm run mcp:start        # start MCP server
+npm run pod:create       # CLI pod launcher
+npm run typecheck        # tsc --noEmit
+npm run package          # electron-forge package
+npm run make             # electron-forge make (distributable)
+```
 
 ## macOS Notes
 
