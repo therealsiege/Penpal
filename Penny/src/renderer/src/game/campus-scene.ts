@@ -63,6 +63,7 @@ export class CampusScene extends BaseScene {
   private mapOriginY = 0
   private fleetPins: FleetPin[] = []
   private lastFleetData: FleetPinData[] | null = null
+  private localPinId = '__local__'
 
   constructor() {
     super({ key: SCENE_KEYS.CAMPUS })
@@ -88,6 +89,8 @@ export class CampusScene extends BaseScene {
       this.mapScale = scale
       this.mapOriginX = camW / 2 - (MAP_W * scale) / 2
       this.mapOriginY = camH / 2 - (MAP_H * scale) / 2
+      // Create a local "self" pin immediately so the user can always enter their lab
+      this.createLocalPin()
     } else {
       this.add.text(camW / 2, camH / 2, 'Enter Lab', {
         fontSize: scaledFontSize(24), fontFamily: 'monospace', color: '#22d3ee', resolution: 2,
@@ -129,10 +132,39 @@ export class CampusScene extends BaseScene {
     }
   }
 
+  // ── Local self pin (always present so user can enter their lab) ──
+
+  private createLocalPin(): void {
+    const { x: cx, y: cy } = this.latLonToScreen(FALLBACK_LAT, FALLBACK_LON)
+    const pin = this.createPin({
+      instanceId: this.localPinId,
+      hostname: 'local',
+      user: 'My Lab',
+      stale: false,
+      health: 'healthy',
+      sessions: { total: 0, active: 0 },
+      pods: { active: 0 },
+      repos: [],
+      isSelf: true,
+    }, 0)
+    if (pin) this.fleetPins.push(pin)
+  }
+
   // ── Fleet pin management ──
 
   private onFleetUpdated = (instances: FleetPinData[]): void => {
     this.lastFleetData = instances
+
+    // Remove the placeholder local pin if fleet data includes the real self
+    const hasSelf = instances.some(i => i.isSelf)
+    if (hasSelf) {
+      const localIdx = this.fleetPins.findIndex(p => p.instanceId === this.localPinId)
+      if (localIdx >= 0) {
+        this.fleetPins[localIdx].container.destroy()
+        this.fleetPins.splice(localIdx, 1)
+      }
+    }
+
     const instanceIds = new Set(instances.map(i => i.instanceId))
 
     // Remove gone pins
