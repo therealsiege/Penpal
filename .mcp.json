@@ -7,7 +7,7 @@
         "firecrawl-mcp"
       ],
       "env": {
-        "FIRECRAWL_API_KEY": "***REMOVED***"
+        "FIRECRAWL_API_KEY": "${FIRECRAWL_API_KEY}"
       }
     },
     "sequential-thinking": {
@@ -41,8 +41,8 @@
         "@anthropic-ai/mcp-server-browserbase@latest"
       ],
       "env": {
-        "BROWSERBASE_API_KEY": "***REMOVED***",
-        "BROWSERBASE_PROJECT_ID": "***REMOVED***"
+        "BROWSERBASE_API_KEY": "${BROWSERBASE_API_KEY}",
+        "BROWSERBASE_PROJECT_ID": "${BROWSERBASE_PROJECT_ID}"
       }
     },
     "ddg-search": {
@@ -65,7 +65,7 @@
         "@modelcontextprotocol/server-github"
       ],
       "env": {
-        "GITHUB_PERSONAL_ACCESS_TOKEN": "***REMOVED***"
+        "GITHUB_PERSONAL_ACCESS_TOKEN": "${GITHUB_PERSONAL_ACCESS_TOKEN}"
       }
     },
     "notion": {
@@ -75,7 +75,7 @@
         "@notionhq/notion-mcp-server"
       ],
       "env": {
-        "OPENAPI_MCP_HEADERS": "{\"Authorization\":\"Bearer ***REMOVED***\",\"Notion-Version\":\"2022-06-28\"}"
+        "OPENAPI_MCP_HEADERS": "{\"Authorization\":\"Bearer ${NOTION_API_KEY}\",\"Notion-Version\":\"2022-06-28\"}"
       }
     },
     "serena": {
