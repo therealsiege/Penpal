@@ -415,11 +415,14 @@ export interface RuntimeProfile {
   timeoutMultiplier: number
   ollamaUrl?: string
   description: string
+  maxIterations?: number
+  maxSelfFixes?: number
 }
 
 export interface ProfilesData {
   profiles: Record<string, RuntimeProfile>
   defaultProfile: string
+  builtInNames?: string[]
 }
 
 export interface PodPreset {

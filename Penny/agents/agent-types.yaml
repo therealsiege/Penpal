@@ -579,8 +579,10 @@ runtime_profiles:
         model: sonnet
 
   economic:
-    description: "Local Ollama qwen3-coder:30b — slow, zero cost, unlimited"
-    timeout_multiplier: 5
+    description: "Local Ollama qwen3-coder:30b — zero cost, more iterations for quality"
+    timeout_multiplier: 8
+    max_iterations: 5
+    max_self_fixes: 3
     ollama_url: "http://localhost:11434"
     phases:
       plan:

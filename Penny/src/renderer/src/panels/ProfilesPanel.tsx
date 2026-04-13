@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useAppearanceStore } from '../stores/appearance-store'
 import type { RuntimeProfile, ProfilesData } from '../types'
 
-const MODEL_OPTIONS = ['opus', 'sonnet', 'haiku', 'ollama:coder:30b']
+const MODEL_OPTIONS = ['opus', 'sonnet', 'haiku', 'ollama:qwen3-coder:30b']
 const PHASES = ['plan', 'execute', 'validate'] as const
 
 const PHASE_COLORS: Record<string, { bg: string; border: string; dot: string }> = {
@@ -132,6 +132,7 @@ export function ProfilesPanel() {
                   name={name}
                   profile={profile}
                   isDefault={name === data.defaultProfile}
+                  isBuiltIn={data.builtInNames?.includes(name) ?? false}
                   onEdit={() => startEdit(name, profile)}
                   onDelete={() => void handleDelete(name)}
                   onSetDefault={() => void handleSetDefault(name)}
@@ -154,11 +155,12 @@ export function ProfilesPanel() {
 // ── Profile Card (read-only) ────────────────────────────────────────────────
 
 function ProfileCard({
-  name, profile, isDefault, onEdit, onDelete, onSetDefault,
+  name, profile, isDefault, isBuiltIn, onEdit, onDelete, onSetDefault,
 }: {
   name: string
   profile: RuntimeProfile
   isDefault: boolean
+  isBuiltIn: boolean
   onEdit: () => void
   onDelete: () => void
   onSetDefault: () => void
@@ -174,6 +176,11 @@ function ProfileCard({
               Default
             </span>
           )}
+          {isBuiltIn && (
+            <span className="text-[11px] px-1.5 py-0.5 rounded bg-[var(--c-bg-elevated)] text-[var(--c-text-faint)] border border-[var(--c-border)]">
+              Built-in
+            </span>
+          )}
         </div>
         <div className="flex items-center gap-2">
           {!isDefault && (
@@ -184,9 +191,11 @@ function ProfileCard({
           <button onClick={onEdit} className="text-[13px] px-3 py-1.5 rounded-lg bg-[var(--c-bg-elevated)] hover:bg-[var(--c-bg-hover)] border border-[var(--c-border)] text-[var(--c-text-secondary)] transition-colors">
             Edit
           </button>
-          <button onClick={onDelete} className="text-[13px] px-3 py-1.5 rounded-lg bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 text-red-400 transition-colors">
-            Delete
-          </button>
+          {!isBuiltIn && (
+            <button onClick={onDelete} className="text-[13px] px-3 py-1.5 rounded-lg bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 text-red-400 transition-colors">
+              Delete
+            </button>
+          )}
         </div>
       </div>
 
@@ -217,6 +226,13 @@ function ProfileCard({
             </div>
           )
         })}
+      </div>
+
+      {/* Quality knobs */}
+      <div className="flex items-center gap-4 mt-3 text-[13px] text-[var(--c-text-muted)]">
+        <span>Max iterations: <strong className="text-[var(--c-text-primary)]">{profile.maxIterations ?? 3}</strong></span>
+        <span>Self-fix attempts: <strong className="text-[var(--c-text-primary)]">{profile.maxSelfFixes ?? 1}</strong></span>
+        <span>Timeout: <strong className="text-[var(--c-text-primary)]">{profile.timeoutMultiplier}x</strong></span>
       </div>
     </div>
   )
@@ -290,19 +306,33 @@ function ProfileEditor({
         })}
       </div>
 
-      {/* Timeout multiplier */}
-      <div className="flex items-center gap-3 mb-5">
-        <span className="text-[14px] text-[var(--c-text-secondary)]">Timeout multiplier:</span>
-        <input
-          type="number"
-          min={0.5}
-          max={10}
-          step={0.5}
-          value={profile.timeoutMultiplier}
-          onChange={e => onProfileChange({ ...profile, timeoutMultiplier: Number(e.target.value) || 1 })}
-          className="w-20 px-2 py-1.5 bg-[var(--c-bg-elevated)] border border-[var(--c-border)] rounded-lg text-[14px] text-[var(--c-text-primary)] focus:outline-none focus:border-[var(--c-accent-blue)] text-center"
-        />
-        <span className="text-[13px] text-[var(--c-text-faint)]">x base timeout</span>
+      {/* Quality + timeout knobs */}
+      <div className="flex items-center gap-6 mb-5 flex-wrap">
+        <div className="flex items-center gap-2">
+          <span className="text-[14px] text-[var(--c-text-secondary)]">Timeout:</span>
+          <input type="number" min={0.5} max={10} step={0.5}
+            value={profile.timeoutMultiplier}
+            onChange={e => onProfileChange({ ...profile, timeoutMultiplier: Number(e.target.value) || 1 })}
+            className="w-16 px-2 py-1.5 bg-[var(--c-bg-elevated)] border border-[var(--c-border)] rounded-lg text-[14px] text-[var(--c-text-primary)] focus:outline-none focus:border-[var(--c-accent-blue)] text-center"
+          />
+          <span className="text-[13px] text-[var(--c-text-faint)]">x</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-[14px] text-[var(--c-text-secondary)]">Max iterations:</span>
+          <input type="number" min={1} max={10} step={1}
+            value={profile.maxIterations ?? 3}
+            onChange={e => onProfileChange({ ...profile, maxIterations: Number(e.target.value) || 3 })}
+            className="w-16 px-2 py-1.5 bg-[var(--c-bg-elevated)] border border-[var(--c-border)] rounded-lg text-[14px] text-[var(--c-text-primary)] focus:outline-none focus:border-[var(--c-accent-blue)] text-center"
+          />
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-[14px] text-[var(--c-text-secondary)]">Self-fixes:</span>
+          <input type="number" min={0} max={5} step={1}
+            value={profile.maxSelfFixes ?? 1}
+            onChange={e => onProfileChange({ ...profile, maxSelfFixes: Number(e.target.value) || 0 })}
+            className="w-16 px-2 py-1.5 bg-[var(--c-bg-elevated)] border border-[var(--c-border)] rounded-lg text-[14px] text-[var(--c-text-primary)] focus:outline-none focus:border-[var(--c-accent-blue)] text-center"
+          />
+        </div>
       </div>
 
       {/* Actions */}

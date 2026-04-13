@@ -32,6 +32,10 @@ export interface RuntimeProfile {
   timeoutMultiplier: number
   ollamaUrl?: string
   description: string
+  /** Override max solver→reviewer→executor iterations (default: 3) */
+  maxIterations?: number
+  /** Override max self-fix attempts per executor run */
+  maxSelfFixes?: number
 }
 
 const DEFAULT_PROFILE: RuntimeProfile = {
@@ -70,6 +74,8 @@ function loadRuntimeProfiles(): { profiles: Record<string, RuntimeProfile>; defa
         timeoutMultiplier: (v.timeout_multiplier as number) || 1,
         ollamaUrl: v.ollama_url as string | undefined,
         description: (v.description as string) || '',
+        maxIterations: typeof v.max_iterations === 'number' ? v.max_iterations : undefined,
+        maxSelfFixes: typeof v.max_self_fixes === 'number' ? v.max_self_fixes : undefined,
       }
     }
     return { profiles, defaultProfile }
@@ -105,12 +111,13 @@ function saveCustomProfiles(profiles: Record<string, RuntimeProfile>): void {
 }
 
 /** Get all profiles (YAML built-ins merged with user JSON customs). JSON wins on conflicts. */
-export function getAllProfiles(): { profiles: Record<string, RuntimeProfile>; defaultProfile: string } {
+export function getAllProfiles(): { profiles: Record<string, RuntimeProfile>; defaultProfile: string; builtInNames: string[] } {
   const yaml = loadRuntimeProfiles()
   const custom = loadCustomProfiles()
   return {
     profiles: { ...yaml.profiles, ...custom },
     defaultProfile: yaml.defaultProfile,
+    builtInNames: Object.keys(yaml.profiles),
   }
 }
 
@@ -1663,11 +1670,11 @@ export function createPod(task: string, opts: CreatePodOpts = {}): PodWorkflow {
     reviewer: { agentId: reviewer, status: 'waiting' },
     executor: { agentId: executor, status: 'waiting' },
     iteration: 1,
-    maxIterations: opts.maxIterations ?? 3,
+    maxIterations: opts.maxIterations ?? profile.maxIterations ?? 3,
     artifacts: [],
     solverCandidateCount: candidateCount,
     selfFixAttempts: 0,
-    maxSelfFixes,
+    maxSelfFixes: opts.maxSelfFixes ?? Math.max(profile.maxSelfFixes ?? 0, maxSelfFixes),
     priority: opts.priority,
     phaseConfig,
     runtimeProfile: opts.runtimeProfile,

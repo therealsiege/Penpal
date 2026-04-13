@@ -49,6 +49,7 @@ describe('pods', () => {
       maxIterations: 1,
       presetId: 'frontend-feature',
       priority: 'critical',
+      runtimeProfile: 'max',
     })
     expect(wf.phaseConfig).toEqual(PHASE_CONFIGS.critical)
     expect(wf.solverCandidateCount).toBe(3)

@@ -89,7 +89,7 @@ function formatElapsedMs(ms: number): string {
 }
 
 type Phase = 'plan' | 'execute' | 'validate'
-const MODEL_OPTIONS = ['opus', 'sonnet', 'haiku', 'coder:30b']
+const MODEL_OPTIONS = ['opus', 'sonnet', 'haiku', 'ollama:qwen3-coder:30b']
 const TIMEOUT_MULTIPLIERS = [1, 2, 5]
 
 // ── DispatchContent — unified issue + pod board ─────────────────────────────

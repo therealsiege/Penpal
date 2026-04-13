@@ -75,6 +75,8 @@ let client: WebClient | null = null
 
 let cachedLocation: { lat: number; lon: number; city: string } | null = null
 
+let lastLoggedCount = -1
+
 let lastFleetStatus: FleetStatus = {
   instances: [],
   channelName: FLEET_CHANNEL_NAME,
@@ -291,8 +293,12 @@ async function pollFleetChannel(): Promise<void> {
 async function tick(): Promise<void> {
   await postOrUpdateHeartbeat()
   await pollFleetChannel()
+  // Debug logging only on first tick or instance count change
   const count = lastFleetStatus.instances.length
-  console.log(`[fleet] tick complete — ${count} instance(s) found, channel=${fleetChannelId ?? 'none'}, ownMsg=${fleetMessageTs ?? 'none'}`)
+  if (!fleetMessageTs || count !== lastLoggedCount) {
+    console.log(`[fleet] ${count} instance(s), channel=${fleetChannelId ?? 'none'}`)
+    lastLoggedCount = count
+  }
 }
 
 // ── Public API ─────────────────────────────────────────────────────────────
