@@ -51,11 +51,20 @@ Sound effects for meetings and fun. Vault and soundboard files live in your home
 
 Agents are characters with personas from *Journey to the West*. Pods are quests. The office is a scene. XP, leaderboards, seasons, and cosmetic rewards make the work visible and engaging.
 
+The long-term goal: manage the operations of an entire business through Slack, GitHub Issues, and Linear — with Penpal as the operating system that turns those inputs into coordinated agent work, visible in real-time through game scenes.
+
 ### Current Scene: Development Lab
 
 We're eating our own dogfood — Penpal's pod system is used to build Penpal itself. The lab scene shows an isometric office where agent characters work at desks, take coffee breaks in the cafe, and celebrate task completions with particle effects.
 
-### Future Scenes
+### Roadmap
+
+**Dispatch evolution:**
+- **Linear integration** — pull tasks from Linear alongside GitHub Issues. Same dispatch board, same pod system, another source of work
+- **Dispatch in the game** — weave the dispatch board into Mission Control itself. Issues appear as quest markers in the lab. Click an agent's desk to see their current pod. The game IS the control surface
+- **Slack-first operations** — manage everything from Slack. `!task`, `!pod status`, `!dispatch`. The desktop app is the visual layer; Slack is the command line
+
+**Future scenes:**
 
 | Scene | Purpose |
 |-------|---------|
