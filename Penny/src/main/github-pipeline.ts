@@ -455,7 +455,9 @@ export async function ingestIssue(config: RepoConfig, issue: GHIssue): Promise<P
     return existing
   }
 
-  const runtimeProfile = deriveRuntimeProfile(issue.labels)
+  // Preserve escalated profile from previous retry, fall back to label-derived
+  const runtimeProfile = existing?.runtimeProfile || deriveRuntimeProfile(issue.labels)
+  const retryCount = existing?.retryCount ?? 0
   const presetId = derivePresetFromLabels(issue.labels)
 
   const entry: PipelineIssue = {
@@ -466,6 +468,8 @@ export async function ingestIssue(config: RepoConfig, issue: GHIssue): Promise<P
     stage: 'executing',
     priority: 'normal',
     runtimeProfile,
+    retryCount,
+    maxRetries: 2,
     ingestedAt: Date.now(),
     updatedAt: Date.now(),
   }
@@ -627,10 +631,19 @@ export async function drivePipeline(repos: RepoConfig[]): Promise<void> {
       const isBranchError = errorMsg.includes('already exists') || errorMsg.includes('worktree')
 
       if (retries < maxRetries) {
-        // ── Auto-retry: clean up stale branches and re-queue ──
+        // ── Auto-retry: clean up + escalate profile ──
         tracked.retryCount = retries + 1
         tracked.lastError = errorMsg
         tracked.updatedAt = Date.now()
+
+        // Escalate profile on retry: economic → sonnet → max
+        const prevProfile = tracked.runtimeProfile || 'economic'
+        const escalation: Record<string, string> = { economic: 'sonnet', sonnet: 'max' }
+        const nextProfile = isBranchError ? prevProfile : (escalation[prevProfile] || prevProfile)
+        if (nextProfile !== prevProfile) {
+          tracked.runtimeProfile = nextProfile
+          console.log(`[github-pipeline] Escalating #${tracked.number} profile: ${prevProfile} → ${nextProfile}`)
+        }
 
         // Clean up stale branch that might block the next attempt
         if (tracked.branch) {
@@ -649,13 +662,13 @@ export async function drivePipeline(repos: RepoConfig[]): Promise<void> {
         tracked.worktreePath = undefined
         tracked.podWorkflowId = undefined
 
-        console.log(`[github-pipeline] Auto-retry #${tracked.number} (attempt ${tracked.retryCount}/${maxRetries})${isBranchError ? ' — cleaned stale branch' : ''}`)
+        const escalateNote = nextProfile !== prevProfile ? ` — escalating to **${nextProfile}**` : ''
+        console.log(`[github-pipeline] Auto-retry #${tracked.number} (attempt ${tracked.retryCount}/${maxRetries})${isBranchError ? ' — cleaned stale branch' : ''}${escalateNote}`)
 
         await Promise.allSettled([
           addComment(config, tracked.number,
-            `**Auto-retrying** (attempt ${tracked.retryCount}/${maxRetries})${isBranchError ? ' — cleaned stale branch/worktree' : ''}\n\n\`\`\`\n${errorMsg.slice(0, 500)}\n\`\`\``,
+            `**Auto-retrying** (attempt ${tracked.retryCount}/${maxRetries})${escalateNote}${isBranchError ? ' — cleaned stale branch/worktree' : ''}\n\n\`\`\`\n${errorMsg.slice(0, 500)}\n\`\`\``,
           ),
-          // Re-add agent-ready so the poller picks it up again
           setLabel(config, tracked.number, ['agent-executing'], 'agent-ready'),
         ])
         saveState()
