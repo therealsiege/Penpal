@@ -102,10 +102,7 @@ test.describe('Laser Door Proximity Animation Tests', () => {
   });
 
   test('Door fades open (alpha → 0) when agent walks within 50px', async ({ page }) => {
-    // Get initial alpha values
-    const initialAlphas = await getLaserDoorAlphas(page);
-    
-    // Move agent to within 50px of the first door (assuming door at position 0)
+    // Move agent to within 50px of the first door
     const doorPosition = await page.evaluate(() => {
       // @ts-ignore
       const doors = window.scene?.background?.gdsRenderer?.laserDoors;
@@ -115,7 +112,7 @@ test.describe('Laser Door Proximity Animation Tests', () => {
     expect(doorPosition).not.toBeNull();
     
     if (doorPosition) {
-      // Move agent to within 50px range of the door - place it at door position to trigger full close
+      // Move agent closer than 50px (exactly at door position to definitely trigger)
       await moveAgentToPosition(page, doorPosition.x, doorPosition.y);
       
       // Wait for animation to complete (200ms for open animation)
