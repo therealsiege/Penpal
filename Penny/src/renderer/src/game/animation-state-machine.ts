@@ -102,19 +102,21 @@ export class AnimationStateMachine {
         const frameTime = 1000 / currentState.frameRate;
         const frameCount = currentState.frames.length;
         
-        // Calculate current frame index
-        const frameIndex = Math.floor(this.currentTime / frameTime) % (currentState.loop ? frameCount : frameCount + 1);
+        // Calculate current frame index properly
+        const frameIndex = Math.floor(this.currentTime / frameTime);
         
         // Handle loop behavior
         if (frameIndex >= frameCount) {
           if (currentState.loop) {
-            this.currentTime = 0; // Reset to beginning if looping
+            this.currentTime = (frameIndex % frameCount) * frameTime; // Reset to correct frame if looping
+            this.currentFrameIndex = frameIndex % frameCount;
           } else {
-            this.currentTime = (frameCount - 1) * frameTime; // Stay on last frame
+            this.currentFrameIndex = frameCount - 1; // Stay on last frame
+            this.currentTime = (frameCount - 1) * frameTime; // Freeze at last frame
           }
+        } else {
+          this.currentFrameIndex = frameIndex;
         }
-        
-        this.currentFrameIndex = frameIndex;
       }
     }
   }
