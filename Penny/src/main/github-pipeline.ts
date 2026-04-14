@@ -40,6 +40,9 @@ export interface PipelineIssue {
   podWorkflowId?: string
   /** Last pod status we saw — used to detect transitions for comments. */
   lastPodStatus?: string
+  /** Auto-retry tracking */
+  retryCount?: number
+  maxRetries?: number
 }
 
 interface RepoConfig {
@@ -229,9 +232,17 @@ async function createIssueWorktree(
       }
     }
 
+    // Proactive cleanup: prune stale worktrees and delete the branch if it exists
+    await execFileAsync('git', ['worktree', 'prune'], {
+      cwd: mainRepoPath, encoding: 'utf-8', timeout: 10_000,
+    }).catch(() => {})
     await execFileAsync('git', ['branch', '-D', branch], {
       cwd: mainRepoPath, encoding: 'utf-8', timeout: 10_000,
-    }).catch(() => { /* branch didn't exist — fine */ })
+    }).catch(() => {})
+    // Also try deleting the remote branch (leftover from previous failed attempt)
+    await execFileAsync('git', ['push', 'origin', '--delete', branch], {
+      cwd: mainRepoPath, encoding: 'utf-8', timeout: 15_000,
+    }).catch(() => {})
 
     await execFileAsync('git', ['worktree', 'add', '--force', '-b', branch, worktreePath, `origin/${baseBranch}`], {
       cwd: mainRepoPath, encoding: 'utf-8', timeout: 60_000,
@@ -606,31 +617,71 @@ export async function drivePipeline(repos: RepoConfig[]): Promise<void> {
       saveState()
     }
 
-    // ── Pod failed ──
+    // ── Pod failed — auto-retry or give up ──
     if (pod.status === 'failed') {
       if (tracked.worktreePath) await cleanupWorktree(config.localPath, tracked.worktreePath)
 
-      tracked.stage = 'failed'
-      tracked.lastError = pod.error || 'Pod failed without error message'
-      tracked.updatedAt = Date.now()
-      const errorBody = pod.error
-        ? `\`\`\`\n${pod.error.slice(0, 1000)}\n\`\`\``
-        : ''
-      await Promise.allSettled([
-        setLabel(config, tracked.number, ['agent-executing'], 'agent-failed'),
-        addComment(config, tracked.number,
-          `**Pod failed** (${pod.iteration}/${pod.maxIterations} iterations)\n\n${errorBody}\n\nTo retry, remove \`agent-failed\` and add \`agent-ready\`.`,
-        ),
-        postPipelineNotification(
-          `:x: *${tracked.repo}#${tracked.number}* pod failed\n<https://github.com/${tracked.repo}/issues/${tracked.number}|View issue>`,
-          ':x:',
-        ),
-        dmOwner(
-          `:x: *${tracked.repo}#${tracked.number}* pod failed: ${(pod.error || '').slice(0, 200)}\n<https://github.com/${tracked.repo}/issues/${tracked.number}|View issue>`,
-          ':x:',
-        ),
-      ])
-      saveState()
+      const retries = tracked.retryCount ?? 0
+      const maxRetries = tracked.maxRetries ?? 2
+      const errorMsg = pod.error || 'Pod failed without error message'
+      const isBranchError = errorMsg.includes('already exists') || errorMsg.includes('worktree')
+
+      if (retries < maxRetries) {
+        // ── Auto-retry: clean up stale branches and re-queue ──
+        tracked.retryCount = retries + 1
+        tracked.lastError = errorMsg
+        tracked.updatedAt = Date.now()
+
+        // Clean up stale branch that might block the next attempt
+        if (tracked.branch) {
+          const localPath = expandHome(config.localPath)
+          await execFileAsync('git', ['branch', '-D', tracked.branch], {
+            cwd: localPath, encoding: 'utf-8', timeout: 10_000,
+          }).catch(() => {})
+          await execFileAsync('git', ['worktree', 'prune'], {
+            cwd: localPath, encoding: 'utf-8', timeout: 10_000,
+          }).catch(() => {})
+        }
+
+        // Re-queue: reset stage so ingestIssue picks it up again
+        tracked.stage = 'failed'
+        tracked.branch = undefined
+        tracked.worktreePath = undefined
+        tracked.podWorkflowId = undefined
+
+        console.log(`[github-pipeline] Auto-retry #${tracked.number} (attempt ${tracked.retryCount}/${maxRetries})${isBranchError ? ' — cleaned stale branch' : ''}`)
+
+        await Promise.allSettled([
+          addComment(config, tracked.number,
+            `**Auto-retrying** (attempt ${tracked.retryCount}/${maxRetries})${isBranchError ? ' — cleaned stale branch/worktree' : ''}\n\n\`\`\`\n${errorMsg.slice(0, 500)}\n\`\`\``,
+          ),
+          // Re-add agent-ready so the poller picks it up again
+          setLabel(config, tracked.number, ['agent-executing'], 'agent-ready'),
+        ])
+        saveState()
+      } else {
+        // ── Max retries exceeded — give up ──
+        tracked.stage = 'failed'
+        tracked.lastError = errorMsg
+        tracked.updatedAt = Date.now()
+        const errorBody = `\`\`\`\n${errorMsg.slice(0, 1000)}\n\`\`\``
+
+        await Promise.allSettled([
+          setLabel(config, tracked.number, ['agent-executing'], 'agent-failed'),
+          addComment(config, tracked.number,
+            `**Pod failed** after ${retries + 1} attempts (${pod.iteration}/${pod.maxIterations} iterations)\n\n${errorBody}\n\nTo retry, remove \`agent-failed\` and add \`agent-ready\`.`,
+          ),
+          postPipelineNotification(
+            `:x: *${tracked.repo}#${tracked.number}* pod failed after ${retries + 1} attempts\n<https://github.com/${tracked.repo}/issues/${tracked.number}|View issue>`,
+            ':x:',
+          ),
+          dmOwner(
+            `:x: *${tracked.repo}#${tracked.number}* pod failed after ${retries + 1} attempts: ${errorMsg.slice(0, 200)}\n<https://github.com/${tracked.repo}/issues/${tracked.number}|View issue>`,
+            ':x:',
+          ),
+        ])
+        saveState()
+      }
     }
   }
 }
