@@ -60,6 +60,7 @@ import {
   type RuntimeProfile,
 } from './pods'
 import { getActiveEntries, getFilesInFlight } from './flight-board'
+import { startWaveDispatcher, stopWaveDispatcher, isWaveDispatcherEnabled } from './wave-dispatcher'
 
 function parsePodCreateOpts(opts: unknown): CreatePodOpts {
   const raw = opts && typeof opts === 'object' && !Array.isArray(opts) ? (opts as Record<string, unknown>) : {}
@@ -1166,6 +1167,20 @@ export function registerIpcHandlers() {
     console.log(`[sessions:prune] ${summary}`)
     return contextResponse(result, summary, [], ['sessions:list'])
   }))
+
+  // ── Wave Dispatcher ────────────────────────────────────────────────────────
+  ipcMain.handle('wave:start', wrapHandler((repo: unknown) => {
+    if (typeof repo !== 'string') throw new Error('repo must be a string')
+    startWaveDispatcher(repo)
+    return { success: true }
+  }))
+  ipcMain.handle('wave:stop', wrapHandler(() => {
+    stopWaveDispatcher()
+    return { success: true }
+  }))
+  ipcMain.handle('wave:status', wrapHandler(() => ({
+    enabled: isWaveDispatcherEnabled(),
+  })))
 
   // ── Opencode Sessions ──────────────────────────────────────────────────────
   ipcMain.handle('opencode:sessions', wrapHandler(async () => {
