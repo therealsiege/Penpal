@@ -51,6 +51,35 @@ import { buildOwnRoomRect } from './nav-mesh'
 import { PathWalker } from './path-walker'
 
 // ---------------------------------------------------------------------------
+// Persona archetype mapping (Living Lab 1 — idle personality variety)
+// ---------------------------------------------------------------------------
+
+export type PersonaArchetype = 'focused' | 'creative' | 'social'
+
+/** Map agent persona names to behavioral archetypes for idle micro-animations. */
+const PERSONA_ARCHETYPE: Record<string, PersonaArchetype> = {
+  'Marcus Chen':  'focused',
+  'Ravi Patel':   'focused',
+  'Oleg Volkov':  'focused',
+  'Lena Park':    'creative',
+  'Zara Kim':     'creative',
+  'Ava Reyes':    'creative',
+  'Jordan Miles': 'social',
+  'Dana Webb':    'social',
+  'Sam Torres':   'social',
+  'Sofia Ruiz':   'social',
+  'Kai Tanaka':   'social',
+}
+
+/** Timestamp of last micro-animation play, keyed by animation name.
+ *  Used to stagger so no two agents play the same anim simultaneously. */
+const lastMicroAnimAt: Record<string, number> = {}
+
+function getPersonaArchetype(agentName: string): PersonaArchetype {
+  return PERSONA_ARCHETYPE[agentName] ?? 'focused'
+}
+
+// ---------------------------------------------------------------------------
 // Eval glow color helper
 // ---------------------------------------------------------------------------
 
@@ -257,6 +286,39 @@ export class WorkstationAnimator {
     ws.sprite.x = 0
     ws.sprite.setScale(CHAR_SCALE)
     if (!gdsLock) ws.sprite.setAngle(0)
+
+    // ── State transition blending (Living Lab 1) ──
+    const trans = AnimConfig.stateTransitions
+    if (prevMode && prevMode !== mode) {
+      if (prevMode === 'idle' && mode === 'working') {
+        // Settle compression: brief squish then return
+        this.scene.tweens.add({
+          targets: ws.sprite,
+          scaleY: CHAR_SCALE * trans.idleToWorkingSettleScaleY,
+          duration: trans.idleToWorkingMs / 2,
+          yoyo: true,
+          ease: 'Back.easeOut',
+        })
+      } else if (prevMode === 'working' && mode === 'idle') {
+        // Hands lift + lean back
+        this.scene.tweens.add({
+          targets: ws.sprite,
+          y: WS_SPRITE_Y + trans.workingToIdleLiftY,
+          duration: trans.workingToIdleMs * 0.4,
+          yoyo: true,
+          ease: 'Cubic.easeOut',
+        })
+      } else if (prevMode === 'idle' && mode === 'waiting') {
+        // Gradual alpha shift for waiting transition
+        ws.sprite.setAlpha(0.85)
+        this.scene.tweens.add({
+          targets: ws.sprite,
+          alpha: 1,
+          duration: trans.toWaitingMs,
+          ease: 'Sine.easeInOut',
+        })
+      }
+    }
 
     this.updateMonitorGlow(ws, isWorking, isWaiting)
 
@@ -512,10 +574,37 @@ export class WorkstationAnimator {
 
     } else {
       if (!gdsLock) ws.sprite.setFrame(base + POSE_SIT)
+
+      // ── Enhanced breathing (Living Lab 1) ──
+      // Scale pulse + Y-offset for chest rise, state-responsive rate
+      const breathCfg = AnimConfig.breathing
+      const breathDuration = breathCfg.idleCycleMs
       ws.breathTween = this.scene.tweens.add({
         targets: ws.sprite, scaleY: CHAR_SCALE * AnimConfig.idle.breathScaleFactor,
-        duration: AnimConfig.idle.breathDuration, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
+        duration: breathDuration, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
       })
+      // Chest rise Y-offset (complements scale breath)
+      this.scene.tweens.add({
+        targets: ws.sprite,
+        y: WS_SPRITE_Y - breathCfg.chestRiseY,
+        duration: breathDuration,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut',
+      })
+
+      // ── Sit-down squash (Living Lab 1) ──
+      if (prevMode && prevMode !== 'idle') {
+        const ss = AnimConfig.squashStretch
+        this.scene.tweens.add({
+          targets: ws.sprite,
+          scaleY: CHAR_SCALE * ss.sitScaleY,
+          scaleX: CHAR_SCALE * (2 - ss.sitScaleY), // inverse to preserve volume
+          duration: ss.sitDuration,
+          yoyo: true,
+          ease: 'Back.easeOut',
+        })
+      }
 
       // Idle chair rocking — very subtle lean-back oscillation
       if (ws.chairSprite?.visible) {
@@ -558,12 +647,28 @@ export class WorkstationAnimator {
       }
       this.restoreDeskStrokeCallback(ws)
 
-      // "Just finished" bounce + confetti when transitioning from working→idle
+      // "Just finished" bounce + squash/stretch + confetti when transitioning from working→idle
       if (prevMode === 'working') {
+        const ss = AnimConfig.squashStretch
+        // Task-complete hop with squash/stretch
         this.scene.tweens.add({
-          targets: ws.sprite, y: WS_SPRITE_Y - 6,
-          duration: 200, yoyo: true, ease: 'Back.easeOut',
-          onComplete: () => { ws.sprite.y = WS_SPRITE_Y },
+          targets: ws.sprite,
+          y: WS_SPRITE_Y + ss.taskHopY,
+          scaleY: CHAR_SCALE * ss.taskHopScaleY,
+          scaleX: CHAR_SCALE * (2 - ss.taskHopScaleY),
+          duration: ss.taskHopDuration * 0.4,
+          ease: 'Back.easeOut',
+          onComplete: () => {
+            this.scene.tweens.add({
+              targets: ws.sprite,
+              y: WS_SPRITE_Y,
+              scaleY: CHAR_SCALE,
+              scaleX: CHAR_SCALE,
+              duration: ss.taskHopDuration * 0.6,
+              ease: 'Bounce.easeOut',
+              onComplete: () => { ws.sprite.y = WS_SPRITE_Y },
+            })
+          },
         })
         // Find the room that owns this workstation to compute world position
         for (const room of this.host.getRooms().values()) {
@@ -773,6 +878,31 @@ export class WorkstationAnimator {
         },
       })
 
+      // ── Personality micro-animations (Living Lab 1) ──
+      const archetype = getPersonaArchetype(agent.config.name)
+      const pCfg = AnimConfig.personality
+      this.scene.time.addEvent({
+        delay: pCfg.microAnimIntervalMin + Math.random() * pCfg.microAnimIntervalVar,
+        loop: true,
+        callback: () => {
+          if (gdsLock) return
+          if (ws.walkBreakTween || ws.headTiltTween || ws.lastAnimMode !== 'idle') return
+
+          const microAnims = this._getMicroAnimsForArchetype(archetype)
+          // Pick a random one that hasn't been played recently by another agent
+          const now = Date.now()
+          const available = microAnims.filter(a => {
+            const lastAt = lastMicroAnimAt[a.name] ?? 0
+            return now - lastAt > pCfg.staggerGapMs
+          })
+          if (available.length === 0) return
+
+          const chosen = available[Math.floor(Math.random() * available.length)]
+          lastMicroAnimAt[chosen.name] = now
+          chosen.play(this.scene, ws)
+        },
+      })
+
       ws.walkBreakTimer = this.scene.time.addEvent({
         delay: IDLE_WALK_BREAK_MIN_MS + Math.random() * IDLE_WALK_BREAK_VAR_MS,
         loop: true,
@@ -864,6 +994,216 @@ export class WorkstationAnimator {
         pathWalker.startPath(returnPath, finishWalk)
       })
     })
+  }
+
+  // ---------------------------------------------------------------------------
+  // Personality micro-animations (Living Lab 1)
+  // ---------------------------------------------------------------------------
+
+  private _getMicroAnimsForArchetype(archetype: PersonaArchetype): Array<{
+    name: string
+    play: (scene: Phaser.Scene, ws: WorkstationSprite) => void
+  }> {
+    const pCfg = AnimConfig.personality
+    const focused = [
+      {
+        name: 'chin-rest',
+        play: (scene: Phaser.Scene, ws: WorkstationSprite) => {
+          // Head tilts slightly, hand-on-chin feel via angle + subtle scale
+          scene.tweens.add({
+            targets: ws.sprite, angle: 5,
+            duration: 300, ease: 'Sine.easeOut',
+            onComplete: () => {
+              scene.time.delayedCall(pCfg.chinRestDuration, () => {
+                scene.tweens.add({
+                  targets: ws.sprite, angle: 0,
+                  duration: 300, ease: 'Sine.easeIn',
+                })
+              })
+            },
+          })
+        },
+      },
+      {
+        name: 'screen-lean',
+        play: (scene: Phaser.Scene, ws: WorkstationSprite) => {
+          // Lean forward: slight scale increase + y shift up
+          scene.tweens.add({
+            targets: ws.sprite,
+            scaleX: CHAR_SCALE * 1.03, scaleY: CHAR_SCALE * 1.02,
+            y: WS_SPRITE_Y - 2,
+            duration: 400, ease: 'Sine.easeOut',
+            onComplete: () => {
+              scene.time.delayedCall(pCfg.screenLeanDuration, () => {
+                scene.tweens.add({
+                  targets: ws.sprite,
+                  scaleX: CHAR_SCALE, scaleY: CHAR_SCALE,
+                  y: WS_SPRITE_Y,
+                  duration: 400, ease: 'Sine.easeIn',
+                })
+              })
+            },
+          })
+        },
+      },
+      {
+        name: 'note-jot',
+        play: (scene: Phaser.Scene, ws: WorkstationSprite) => {
+          // Quick hand wiggle to the side: x offset oscillation
+          scene.tweens.add({
+            targets: ws.sprite,
+            x: 2,
+            duration: 120, yoyo: true, repeat: 3,
+            ease: 'Sine.easeInOut',
+            onComplete: () => { ws.sprite.x = 0 },
+          })
+        },
+      },
+    ]
+
+    const creative = [
+      {
+        name: 'stretch-micro',
+        play: (scene: Phaser.Scene, ws: WorkstationSprite) => {
+          // Arms up: scaleY stretch + y offset up
+          scene.tweens.add({
+            targets: ws.sprite,
+            scaleY: CHAR_SCALE * 1.06,
+            y: WS_SPRITE_Y - 3,
+            duration: 500, ease: 'Back.easeOut',
+            onComplete: () => {
+              scene.time.delayedCall(pCfg.stretchMicroDuration * 0.4, () => {
+                scene.tweens.add({
+                  targets: ws.sprite,
+                  scaleY: CHAR_SCALE, y: WS_SPRITE_Y,
+                  duration: 400, ease: 'Sine.easeIn',
+                })
+              })
+            },
+          })
+        },
+      },
+      {
+        name: 'head-bob',
+        play: (scene: Phaser.Scene, ws: WorkstationSprite) => {
+          // Rhythmic head tilt — as if listening to music
+          let count = 0
+          const bobOnce = () => {
+            if (count >= 4 || ws.lastAnimMode !== 'idle') return
+            count++
+            scene.tweens.add({
+              targets: ws.sprite,
+              angle: count % 2 === 0 ? 3 : -3,
+              duration: pCfg.headBobDuration / 4,
+              ease: 'Sine.easeInOut',
+              onComplete: bobOnce,
+            })
+          }
+          bobOnce()
+          // Reset angle after all bobs
+          scene.time.delayedCall(pCfg.headBobDuration + 100, () => {
+            scene.tweens.add({
+              targets: ws.sprite, angle: 0,
+              duration: 200, ease: 'Sine.easeOut',
+            })
+          })
+        },
+      },
+      {
+        name: 'doodle',
+        play: (scene: Phaser.Scene, ws: WorkstationSprite) => {
+          // Hand circle motion: small circular x/y offset
+          const startX = ws.sprite.x
+          const startY = ws.sprite.y
+          const radius = 1.5
+          let elapsed = 0
+          const timer = scene.time.addEvent({
+            delay: 30,
+            repeat: 50,
+            callback: () => {
+              elapsed += 30
+              const t = (elapsed / 1500) * Math.PI * 2
+              ws.sprite.x = startX + Math.cos(t) * radius
+              ws.sprite.y = startY + Math.sin(t) * radius
+            },
+          })
+          scene.time.delayedCall(1600, () => {
+            timer.destroy()
+            ws.sprite.x = 0
+            ws.sprite.y = WS_SPRITE_Y
+          })
+        },
+      },
+    ]
+
+    const social = [
+      {
+        name: 'phone-check',
+        play: (scene: Phaser.Scene, ws: WorkstationSprite) => {
+          // Glance down at side: angle tilt + brief hold
+          scene.tweens.add({
+            targets: ws.sprite,
+            angle: -6, y: WS_SPRITE_Y + 1,
+            duration: 250, ease: 'Sine.easeOut',
+            onComplete: () => {
+              scene.time.delayedCall(pCfg.phoneCheckDuration, () => {
+                scene.tweens.add({
+                  targets: ws.sprite,
+                  angle: 0, y: WS_SPRITE_Y,
+                  duration: 300, ease: 'Sine.easeIn',
+                })
+              })
+            },
+          })
+        },
+      },
+      {
+        name: 'lean-back',
+        play: (scene: Phaser.Scene, ws: WorkstationSprite) => {
+          // Recline: slight backward tilt + scale shift
+          scene.tweens.add({
+            targets: ws.sprite,
+            scaleY: CHAR_SCALE * 0.98,
+            y: WS_SPRITE_Y + 1,
+            angle: -2,
+            duration: 400, ease: 'Cubic.easeOut',
+            onComplete: () => {
+              scene.time.delayedCall(pCfg.leanBackDuration, () => {
+                scene.tweens.add({
+                  targets: ws.sprite,
+                  scaleY: CHAR_SCALE, y: WS_SPRITE_Y, angle: 0,
+                  duration: 400, ease: 'Cubic.easeOut',
+                })
+              })
+            },
+          })
+        },
+      },
+      {
+        name: 'wave',
+        play: (scene: Phaser.Scene, ws: WorkstationSprite) => {
+          // Brief hand raise: y offset up then back
+          scene.tweens.add({
+            targets: ws.sprite,
+            y: WS_SPRITE_Y - 3,
+            scaleX: CHAR_SCALE * 1.04,
+            duration: 200, ease: 'Back.easeOut',
+            yoyo: true,
+            hold: 400,
+            onComplete: () => {
+              ws.sprite.y = WS_SPRITE_Y
+              ws.sprite.setScale(CHAR_SCALE)
+            },
+          })
+        },
+      },
+    ]
+
+    switch (archetype) {
+      case 'focused': return focused
+      case 'creative': return creative
+      case 'social': return social
+    }
   }
 
   /**

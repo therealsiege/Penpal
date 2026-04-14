@@ -192,6 +192,96 @@ export interface AnimationConfig {
     comboTierFireMin: number
   }
 
+  /** Squash & stretch parameters for character deformation on actions. */
+  squashStretch: {
+    /** Walk footfall compression: scaleY multiplier (e.g. 0.97 = 3% squish). */
+    walkScaleY: number
+    /** Walk footfall stretch: scaleX multiplier (e.g. 1.03 = 3% stretch). */
+    walkScaleX: number
+    /** Duration (ms) of one footfall squash pulse. */
+    walkDuration: number
+    /** Celebration wind-up crouch scaleY (e.g. 0.85). */
+    celebrateCrouchScaleY: number
+    /** Duration (ms) of celebration crouch. */
+    celebrateCrouchDuration: number
+    /** Celebration stretch scaleY (e.g. 1.15). */
+    celebrateStretchScaleY: number
+    /** Duration (ms) of celebration stretch. */
+    celebrateStretchDuration: number
+    /** Number of decaying bounce oscillations after celebration stretch. */
+    celebrateBounceCount: number
+    /** Sitting-down compression scaleY (e.g. 0.93). */
+    sitScaleY: number
+    /** Duration (ms) of sit compression. */
+    sitDuration: number
+    /** Task-complete hop: y offset (px, negative = up). */
+    taskHopY: number
+    /** Task-complete hop: peak scaleY. */
+    taskHopScaleY: number
+    /** Task-complete hop: total duration (ms). */
+    taskHopDuration: number
+  }
+
+  /** State transition blending parameters. */
+  stateTransitions: {
+    /** Duration (ms) of idle→working blend. */
+    idleToWorkingMs: number
+    /** Scale compression during idle→working settle (scaleY factor). */
+    idleToWorkingSettleScaleY: number
+    /** Duration (ms) of working→idle blend. */
+    workingToIdleMs: number
+    /** Y offset (px) for hands-lift during working→idle. */
+    workingToIdleLiftY: number
+    /** Duration (ms) of idle→walking anticipation lean. */
+    idleToWalkingMs: number
+    /** Duration (ms) of walking→idle momentum settle. */
+    walkingToIdleMs: number
+    /** Overshoot distance (px) for walking→idle momentum. */
+    walkingToIdleOvershoot: number
+    /** Duration (ms) of any→waiting gradual transition. */
+    toWaitingMs: number
+  }
+
+  /** Idle personality micro-animation parameters. */
+  personality: {
+    /** Minimum interval (ms) between micro-animation triggers. */
+    microAnimIntervalMin: number
+    /** Variable range (ms) added to microAnimIntervalMin. */
+    microAnimIntervalVar: number
+    /** Minimum gap (ms) between any two agents playing the same micro-anim. */
+    staggerGapMs: number
+    /** Duration (ms) for chin-rest micro-animation. */
+    chinRestDuration: number
+    /** Duration (ms) for screen-lean micro-animation. */
+    screenLeanDuration: number
+    /** Duration (ms) for head-bob micro-animation. */
+    headBobDuration: number
+    /** Duration (ms) for stretch micro-animation. */
+    stretchMicroDuration: number
+    /** Duration (ms) for phone-check micro-animation. */
+    phoneCheckDuration: number
+    /** Duration (ms) for lean-back micro-animation. */
+    leanBackDuration: number
+  }
+
+  /** Enhanced breathing parameters (supplements idle.breathScaleFactor/breathDuration). */
+  breathing: {
+    /** Y offset (px) for chest rise during breath. */
+    chestRiseY: number
+    /** Breath cycle duration (ms) when idle (overrides idle.breathDuration contextually). */
+    idleCycleMs: number
+    /** Breath cycle duration (ms) when working. */
+    workingCycleMs: number
+    /** Minimum breath cycle (ms) when waiting (irregular). */
+    waitingCycleMin: number
+    /** Maximum breath cycle (ms) when waiting (irregular). */
+    waitingCycleMax: number
+    /** Deep sigh probability (0-1, e.g. 0.2 = 1 in 5 cycles). */
+    sighChance: number
+    /** Scale multiplier for deep sigh (larger amplitude). */
+    sighAmplitude: number
+  }
+
   /** Camera juice: zoom pulses, scripted pans, slow zoom-to-fit (sidekick#79). */
   camera: {
     pulse: Record<
@@ -307,6 +397,67 @@ function makeDefaults(): AnimationConfig {
       idlePulseDuration:   2400,
       glowDistance:        6,
       glowQuality:         0.25,
+    },
+
+    // -----------------------------------------------------------------------
+    // Squash & stretch (Living Lab 1)
+    // -----------------------------------------------------------------------
+    squashStretch: {
+      walkScaleY:                0.97,
+      walkScaleX:                1.03,
+      walkDuration:              80,
+      celebrateCrouchScaleY:     0.85,
+      celebrateCrouchDuration:   120,
+      celebrateStretchScaleY:    1.15,
+      celebrateStretchDuration:  100,
+      celebrateBounceCount:      3,
+      sitScaleY:                 0.93,
+      sitDuration:               60,
+      taskHopY:                  -4,
+      taskHopScaleY:             1.1,
+      taskHopDuration:           150,
+    },
+
+    // -----------------------------------------------------------------------
+    // State transition blending (Living Lab 1)
+    // -----------------------------------------------------------------------
+    stateTransitions: {
+      idleToWorkingMs:              200,
+      idleToWorkingSettleScaleY:    0.95,
+      workingToIdleMs:              300,
+      workingToIdleLiftY:           -3,
+      idleToWalkingMs:              150,
+      walkingToIdleMs:              200,
+      walkingToIdleOvershoot:       2,
+      toWaitingMs:                  400,
+    },
+
+    // -----------------------------------------------------------------------
+    // Idle personality micro-animations (Living Lab 1)
+    // -----------------------------------------------------------------------
+    personality: {
+      microAnimIntervalMin:   8000,
+      microAnimIntervalVar:   7000,
+      staggerGapMs:           2000,
+      chinRestDuration:       2500,
+      screenLeanDuration:     2000,
+      headBobDuration:        1800,
+      stretchMicroDuration:   2200,
+      phoneCheckDuration:     1500,
+      leanBackDuration:       2800,
+    },
+
+    // -----------------------------------------------------------------------
+    // Enhanced breathing (Living Lab 1)
+    // -----------------------------------------------------------------------
+    breathing: {
+      chestRiseY:       1,
+      idleCycleMs:      3000,
+      workingCycleMs:   2000,
+      waitingCycleMin:  2000,
+      waitingCycleMax:  4000,
+      sighChance:       0.2,
+      sighAmplitude:    1.5,
     },
 
     celebrations: {
