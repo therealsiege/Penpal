@@ -144,13 +144,6 @@ import {
   consolidateTrackedIssues,
 } from './github-issues'
 import { getPipelineIssues } from './github-pipeline'
-import {
-  getVeritasStatus,
-  startVeritasService,
-  stopVeritasService,
-  restartVeritasService,
-  getVeritasLogs,
-} from './veritas-service'
 import { getEvalReportAll, getEvalReportAgent, getEvalStats } from './evals'
 import { computeCapabilitiesStatus } from './capabilities-status'
 import { taskOutcomeCollector } from './evals/collectors/task-outcomes'
@@ -160,13 +153,6 @@ import { generateWeeklyDigest } from './evals/reports/weekly-digest'
 import { contextMonitor } from './evals/collectors/context-usage'
 import { spotCheckQueue } from './evals/judges/human-judge'
 import { listSoundboardClips } from './soundboard'
-import {
-  listVeritasTasks,
-  getVeritasTaskCounts,
-  createVeritasTask,
-  updateVeritasTaskStatus,
-  type VeritasTaskStatus,
-} from './veritas-api'
 import { DOCS_ROOT, getSystemPaths } from './paths'
 import { registerDataScriptHandlers } from './data-scripts'
 import {
@@ -1167,75 +1153,6 @@ export function registerIpcHandlers() {
 
   // ── Capabilities (epic #50) — #54/#55 aggregated snapshot
   ipcMain.handle('capabilities:status', wrapHandler(() => computeCapabilitiesStatus()))
-
-  // ── Veritas Control Plane ──────────────────────────────────────────────
-  ipcMain.handle('veritas:status', wrapHandler(() => getVeritasStatus()))
-  ipcMain.handle('veritas:start', wrapHandler(() => startVeritasService()))
-  ipcMain.handle('veritas:stop', wrapHandler(() => stopVeritasService()))
-  ipcMain.handle('veritas:restart', wrapHandler(() => restartVeritasService()))
-  ipcMain.handle('veritas:logs', wrapHandler((tail: unknown) => {
-    const num = typeof tail === 'number' ? tail : 120
-    return getVeritasLogs(num)
-  }))
-  ipcMain.handle('veritas:open', wrapHandler(async () => {
-    const status = await getVeritasStatus()
-    await shell.openExternal(status.webUrl)
-    return { success: true, url: status.webUrl }
-  }))
-  ipcMain.handle('veritas:tasks', wrapHandler((status: unknown) => {
-    if (status !== undefined && typeof status !== 'string') {
-      throw new Error('status must be a string when provided')
-    }
-    const parsedStatus = status as VeritasTaskStatus | undefined
-    if (
-      parsedStatus &&
-      !['todo', 'in-progress', 'blocked', 'done'].includes(parsedStatus)
-    ) {
-      throw new Error('status must be one of: todo, in-progress, blocked, done')
-    }
-    return listVeritasTasks(parsedStatus)
-  }))
-  ipcMain.handle('veritas:task-counts', wrapHandler(() => getVeritasTaskCounts()))
-  ipcMain.handle('veritas:create-task', wrapHandler((
-    title: unknown,
-    description: unknown,
-    project: unknown,
-    priority: unknown,
-  ) => {
-    if (typeof title !== 'string' || !title.trim()) {
-      throw new Error('title must be a non-empty string')
-    }
-    if (description !== undefined && typeof description !== 'string') {
-      throw new Error('description must be a string when provided')
-    }
-    if (project !== undefined && typeof project !== 'string') {
-      throw new Error('project must be a string when provided')
-    }
-    if (
-      priority !== undefined &&
-      (typeof priority !== 'string' || !['low', 'medium', 'high'].includes(priority))
-    ) {
-      throw new Error('priority must be one of: low, medium, high')
-    }
-    return createVeritasTask({
-      title: title.trim(),
-      description: typeof description === 'string' ? description : '',
-      project: typeof project === 'string' && project.trim() ? project.trim() : undefined,
-      priority: (typeof priority === 'string' ? priority : 'medium') as 'low' | 'medium' | 'high',
-    })
-  }))
-  ipcMain.handle('veritas:update-task-status', wrapHandler((taskId: unknown, status: unknown) => {
-    if (typeof taskId !== 'string' || !taskId.trim()) {
-      throw new Error('taskId must be a non-empty string')
-    }
-    if (
-      typeof status !== 'string' ||
-      !['todo', 'in-progress', 'blocked', 'done'].includes(status)
-    ) {
-      throw new Error('status must be one of: todo, in-progress, blocked, done')
-    }
-    return updateVeritasTaskStatus(taskId.trim(), status as VeritasTaskStatus)
-  }))
 
   // ── iTerm2 / Session Health ──────────────────────────────────────────────
   ipcMain.handle('sessions:iterm-status', wrapHandler(() => getITermStatus()))

@@ -596,52 +596,6 @@ export interface FleetStatus {
   debug?: string
 }
 
-export interface VeritasServiceStatus {
-  configured: boolean
-  composeFile: string
-  envFile?: string
-  projectName: string
-  serviceName: string
-  sourceDir: string
-  sourceDirConfigured: boolean
-  sourceDirValid: boolean
-  dockerAvailable: boolean
-  composeAvailable: boolean
-  running: boolean
-  healthy: boolean
-  apiReachable: boolean
-  state: string
-  health: string
-  apiUrl: string
-  webUrl: string
-  warnings: string[]
-  error?: string
-}
-
-export interface VeritasCommandResult {
-  success: boolean
-  output?: string
-  error?: string
-}
-
-export type VeritasTaskStatus = 'todo' | 'in-progress' | 'blocked' | 'done'
-export type VeritasTaskPriority = 'low' | 'medium' | 'high'
-
-export interface VeritasTaskSummary {
-  id: string
-  title: string
-  description?: string
-  status: VeritasTaskStatus
-  priority: VeritasTaskPriority
-  type?: string
-  project?: string
-  sprint?: string
-  agent?: string
-  created?: string
-  updated?: string
-  blockedBy?: string[]
-}
-
 // ── Context Health Types ──────────────────────────────────────────────────
 
 export interface ContextHealth {
@@ -673,15 +627,6 @@ export interface EvalStats {
   overallSuccessRate: number
   experimentVelocity: number
   weekStart: string
-}
-
-export interface VeritasTaskCounts {
-  backlog: number
-  todo: number
-  'in-progress': number
-  blocked: number
-  done: number
-  archived: number
 }
 
 // ── Spot-Check Types ─────────────────────────────────────────────────────────

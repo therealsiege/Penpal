@@ -83,28 +83,12 @@ Multiple pods running in parallel share a **flight board** that prevents collisi
 - **File-level gating** — dispatch queues pods that would touch overlapping files
 - **Rebase-before-PR** — pods rebase onto latest main before creating PRs
 
-## Agent Personas
-
-| | Agent | Title | Role | Specialty |
-|---|-------|-------|------|-----------|
-| <img src="Penny/public/sprites/avatars/WuKong.png" width="256"> | **Sun Wukong** | The Monkey King | Solver | Full-stack — transforms into whatever the codebase needs |
-| <img src="Penny/public/sprites/avatars/ErlangShen.png" width="256"> | **Erlang Shen** | The Three-Eyed God | Solver | Frontend — third eye sees broken layouts |
-| <img src="Penny/public/sprites/avatars/Guanyin.png" width="256"> | **Guanyin** | Bodhisattva of Compassion | Reviewer | Backend architecture — sees the whole system |
-| <img src="Penny/public/sprites/avatars/Tripitaka.png" width="256"> | **Tang Sanzang** | The Monk Tripitaka | Reviewer | Product management — keeps the mission on track |
-| <img src="Penny/public/sprites/avatars/AoGuang.png" width="256"> | **Ao Guang** | King of the East Sea | Reviewer | UI/UX — every pixel intentional |
-| <img src="Penny/public/sprites/avatars/ShaWujing.png" width="256"> | **Sha Wujing** | Curtain-Lifting General | Executor | Validation & QA — if he says it passes, it passes |
-| <img src="Penny/public/sprites/avatars/ZhuBajie.png" width="256"> | **Zhu Bajie** | Marshal of the Heavenly Canopy | Executor | Executive ops — brute-force effective |
-| <img src="Penny/public/sprites/avatars/Nezha.png" width="256"> | **Nezha** | The Third Lotus Prince | Solver | Mobile — everything must be instant |
-| <img src="Penny/public/sprites/avatars/RedBoy.png" width="256"> | **Red Boy** | Holy Child King | Solver | Game dev — creative fire, playful destruction |
-| <img src="Penny/public/sprites/avatars/BullDemonKing.png" width="256"> | **Bull Demon King** | Great Sage Who Pacifies Heaven | Solver | Embedded/systems — zero waste, low-level mastery |
-| <img src="Penny/public/sprites/avatars/AoRun.png" width="256"> | **Ao Run** | Third Prince of the West Sea | Solver | Content & marketing — carries the message |
-
-## Knowledge Graph — The Company Brain
+## Knowledge Graph
 
 Every department, every agent, every decision draws from the same knowledge graph. It's the flow of all knowledge through the business — not a static database, but a living network that grows as agents work.
 
 ![Knowledge Graph](docs/screenshots/knowledgegraph.png)
-*3,281 nodes, 8,582 relationships — queryable by every agent via MCP tools*
+*queryable by every agent via MCP tools*
 
 Your markdown files, emails, RSS feeds, and alerts all feed into a structured graph. When a lab agent builds a feature, it knows which customers asked for it. When a marketing agent writes a blog post, it pulls competitive context from the same graph. Every department reads from and writes to the same brain.
 
@@ -138,7 +122,6 @@ The result is a self-updating web of your entire knowledge base that every agent
 |-------|-------------|
 | **Lab** | Pixel-art agent headquarters with live session status |
 | **Dispatch** | Kanban quest board for the GitHub issue pipeline |
-| **Tasks** | Orchestrator queue, Veritas board, GitHub issues |
 | **Data** | ETL pipeline controls, ingestion scripts |
 | **Vault** | Knowledge base editor with linked documents, tags, and graph viz |
 | **Evals** | Agent evaluation metrics and quality tracking |

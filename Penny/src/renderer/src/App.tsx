@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { Layout } from './components/Layout'
 import { ToastProvider, useToast } from './components/Toast'
 import { CommandPalette, type CommandAction } from './components/CommandPalette'
@@ -22,8 +22,6 @@ import type { SystemPaths } from './types'
 import { getPathPresets } from './utils/path-presets'
 import { EventBus, EVENTS } from './game/events'
 
-let veritasStartupCheckDone = false
-
 function AppContent() {
   const [activePanel, setActivePanel] = useState('office')
   const [showHealthModal, setShowHealthModal] = useState(false)
@@ -36,7 +34,6 @@ function AppContent() {
   const [podAgentDetail, setPodAgentDetail] = useState<AgentState | null>(null)
   const [systemPaths, setSystemPaths] = useState<SystemPaths | null>(null)
   const { toast } = useToast()
-  const hasRunVeritasStartupCheck = useRef(false)
 
   useEffect(() => {
     let cancelled = false
@@ -69,38 +66,6 @@ function AppContent() {
       return getPathPresets(null)
     }
   }
-
-  useEffect(() => {
-    if (veritasStartupCheckDone || hasRunVeritasStartupCheck.current) return
-    veritasStartupCheckDone = true
-    hasRunVeritasStartupCheck.current = true
-
-    let cancelled = false
-    ;(async () => {
-      try {
-        const result = await window.api.veritasStatus()
-        if (cancelled) return
-
-        if (!result || typeof result !== 'object' || !('configured' in result)) {
-          return
-        }
-
-        const status = result as import('./types').VeritasServiceStatus
-        if (!status.sourceDirConfigured || !status.sourceDirValid) {
-          toast(
-            'Veritas source path missing/invalid. Set PENNY_VERITAS_SOURCE_DIR in Penny/docker/.env.control-plane.',
-            'error',
-          )
-        }
-      } catch {
-        // Keep startup resilient if Veritas status probing fails.
-      }
-    })()
-
-    return () => {
-      cancelled = true
-    }
-  }, [toast])
 
   const actions = useMemo<CommandAction[]>(() => [
     // Modals / navigation
@@ -142,7 +107,7 @@ function AppContent() {
     {
       id: 'open-tasks',
       label: 'Open Dispatch',
-      description: 'Open orchestrator queue, Veritas board, and GitHub issues',
+      description: 'View dispatch board',
       category: 'Navigation',
       action: () => setShowTasksModal(true),
     },

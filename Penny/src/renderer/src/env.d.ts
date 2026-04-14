@@ -133,25 +133,6 @@ declare global {
           evals_vault: Record<string, string>
         }
       }>
-      // Veritas Control Plane
-      veritasStatus: () => Promise<import('./types').VeritasServiceStatus>
-      veritasStart: () => Promise<import('./types').VeritasServiceStatus>
-      veritasStop: () => Promise<import('./types').VeritasServiceStatus>
-      veritasRestart: () => Promise<import('./types').VeritasServiceStatus>
-      veritasLogs: (tail?: number) => Promise<import('./types').VeritasCommandResult>
-      veritasOpen: () => Promise<{ success: boolean; url: string }>
-      veritasListTasks: (status?: import('./types').VeritasTaskStatus) => Promise<import('./types').VeritasTaskSummary[]>
-      veritasTaskCounts: () => Promise<import('./types').VeritasTaskCounts>
-      veritasCreateTask: (
-        title: string,
-        description?: string,
-        project?: string,
-        priority?: import('./types').VeritasTaskPriority,
-      ) => Promise<import('./types').VeritasTaskSummary>
-      veritasUpdateTaskStatus: (
-        taskId: string,
-        status: import('./types').VeritasTaskStatus,
-      ) => Promise<import('./types').VeritasTaskSummary>
       // Orchestrator
       orchestratorQueue: () => Promise<import('./types').Task[]>
       orchestratorEnqueue: (title: string, description: string, project: string, priority: string) => Promise<import('./types').Task>

@@ -105,19 +105,6 @@ contextBridge.exposeInMainWorld('api', {
   slackStop: () => ipcRenderer.invoke('slack:stop'),
   fleetStatus: () => ipcRenderer.invoke('fleet:status').then(unwrap),
   capabilitiesStatus: () => ipcRenderer.invoke('capabilities:status'),
-  // Veritas Control Plane
-  veritasStatus: () => ipcRenderer.invoke('veritas:status'),
-  veritasStart: () => ipcRenderer.invoke('veritas:start'),
-  veritasStop: () => ipcRenderer.invoke('veritas:stop'),
-  veritasRestart: () => ipcRenderer.invoke('veritas:restart'),
-  veritasLogs: (tail?: number) => ipcRenderer.invoke('veritas:logs', tail),
-  veritasOpen: () => ipcRenderer.invoke('veritas:open'),
-  veritasListTasks: (status?: string) => ipcRenderer.invoke('veritas:tasks', status),
-  veritasTaskCounts: () => ipcRenderer.invoke('veritas:task-counts'),
-  veritasCreateTask: (title: string, description?: string, project?: string, priority?: string) =>
-    ipcRenderer.invoke('veritas:create-task', title, description, project, priority),
-  veritasUpdateTaskStatus: (taskId: string, status: string) =>
-    ipcRenderer.invoke('veritas:update-task-status', taskId, status),
   // Orchestrator
   orchestratorQueue: () => ipcRenderer.invoke('orchestrator:queue').then(unwrap),
   orchestratorEnqueue: (title: string, description: string, project: string, priority: string) =>

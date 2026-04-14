@@ -517,7 +517,7 @@ export class OfficeScene extends Phaser.Scene {
     // -----------------------------------------------------------------------
     if (this.input.keyboard) {
       const shouldIgnoreKeyboardShortcuts = (evt?: KeyboardEvent) => {
-        // Modal surfaces (e.g. Tasks/Veritas creator) can opt out of office hotkeys.
+        // Modal surfaces can opt out of office hotkeys.
         if (document.querySelector('[data-disable-office-hotkeys="true"]')) {
           return true
         }
