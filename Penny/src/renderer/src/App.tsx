@@ -18,6 +18,7 @@ import { SoundboardPanel } from './panels/SoundboardPanel'
 import { EvalsPanel } from './panels/EvalsPanel'
 import { DataPanel } from './panels/DataPanel'
 import { ProfilesPanel } from './panels/ProfilesPanel'
+import { McpPanel } from './panels/McpPanel'
 import type { SystemPaths } from './types'
 import { getPathPresets } from './utils/path-presets'
 import { EventBus, EVENTS } from './game/events'
@@ -361,6 +362,7 @@ function AppContent() {
         {activePanel === 'evals' && <EvalsPanel />}
         {activePanel === 'soundboard' && <SoundboardPanel />}
         {activePanel === 'settings' && <SettingsPanel />}
+        {activePanel === 'mcp' && <McpPanel />}
       </Layout>
     </>
   )
