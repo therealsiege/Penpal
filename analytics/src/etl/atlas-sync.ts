@@ -199,12 +199,12 @@ async function extractPaths(): Promise<AtlasPath[]> {
       MATCH (cp:CompetitorProduct)-[:COMPETES_WITH]->(cp2:CompetitorProduct) RETURN cp.name AS from, cp2.name AS to, 'COMPETES_WITH' AS type
     `);
 
-    const typeToTargetType: Record<string, string> = {
-      CURRENT_STAGE: "SalesStage",
-      USES_EHR: "EHRSystem",
-      LOCATED_IN: "Territory",
-      WORKS_AT: "Company",
-      COMPETES_WITH: "CompetitorProduct",
+    const relMeta: Record<string, { sourceType: string; targetType: string }> = {
+      CURRENT_STAGE: { sourceType: "Lead", targetType: "SalesStage" },
+      USES_EHR: { sourceType: "Lead", targetType: "EHRSystem" },
+      LOCATED_IN: { sourceType: "Lead", targetType: "Territory" },
+      WORKS_AT: { sourceType: "Lead", targetType: "Company" },
+      COMPETES_WITH: { sourceType: "CompetitorProduct", targetType: "CompetitorProduct" },
     };
 
     for (const r of relResult.records) {
@@ -213,12 +213,15 @@ async function extractPaths(): Promise<AtlasPath[]> {
       const type = r.get("type");
       if (!from || !to || !type) continue;
 
+      const meta = relMeta[type];
+      if (!meta) continue;
+
       paths.push({
         type,
         source_name: from,
-        source_type: "Lead",
+        source_type: meta.sourceType,
         target_name: to,
-        target_type: typeToTargetType[type] || "Unknown",
+        target_type: meta.targetType,
         properties: { syncedAt: new Date().toISOString() },
       });
     }
@@ -229,46 +232,97 @@ async function extractPaths(): Promise<AtlasPath[]> {
   return paths;
 }
 
+// ── Atlas API helpers ────────────────────────────────────────────────────────
+
+const ATLAS_HEADERS = {
+  "Content-Type": "application/json",
+  Authorization: `Bearer ${ATLAS_TOKEN}`,
+  "User-Agent": "sidekick-atlas-sync/1.0",
+  "X-Graphite-Source": "etl",
+};
+
+const ATLAS_NAME = process.env.GRAPHITE_ATLAS_NAME || "Sidekick Sales";
+
+async function atlasGet(path: string): Promise<unknown> {
+  const res = await fetch(`${ATLAS_API_URL}${path}`, { headers: ATLAS_HEADERS });
+  if (!res.ok) throw new Error(`Atlas GET ${path} failed (${res.status}): ${await res.text()}`);
+  const json = await res.json() as { data?: unknown };
+  return json.data ?? json;
+}
+
+async function atlasPost(path: string, body: unknown): Promise<unknown> {
+  const res = await fetch(`${ATLAS_API_URL}${path}`, {
+    method: "POST",
+    headers: ATLAS_HEADERS,
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error(`Atlas POST ${path} failed (${res.status}): ${await res.text()}`);
+  const json = await res.json() as { data?: unknown };
+  return json.data ?? json;
+}
+
+/** Find or create the target atlas, return its ID. */
+async function resolveAtlasId(): Promise<string> {
+  // List atlases
+  const data = await atlasGet("/api/atlas") as { owned?: { id: string; name: string }[]; shared?: { id: string; name: string }[] } | { id: string; name: string }[];
+  const atlases = Array.isArray(data) ? data : [...(data.owned || []), ...(data.shared || [])];
+
+  const existing = atlases.find((a) => a.name === ATLAS_NAME);
+  if (existing) {
+    console.log(`  Using atlas: "${existing.name}" (${existing.id})`);
+    return existing.id;
+  }
+
+  // Create new atlas
+  console.log(`  Creating atlas: "${ATLAS_NAME}"`);
+  const created = await atlasPost("/api/atlas", { name: ATLAS_NAME, description: "Sales intelligence graph synced from Memgraph ETL" }) as { id: string };
+  console.log(`  Created atlas: ${created.id}`);
+  return created.id;
+}
+
 // ── Push to Atlas ───────────────────────────────────────────────────────────
 
 async function pushToAtlas(points: AtlasPoint[], paths: AtlasPath[]): Promise<void> {
-  const batchSize = 100;
+  const atlasId = await resolveAtlasId();
+  const batchSize = 50;
 
-  // Push points in batches
+  // Push points first (all of them)
   for (let i = 0; i < points.length; i += batchSize) {
     const batch = points.slice(i, i + batchSize);
-    const res = await fetch(`${ATLAS_API_URL}/api/v1/graph/batch`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${ATLAS_TOKEN}`,
-      },
-      body: JSON.stringify({ points: batch, paths: [] }),
-    });
-    if (!res.ok) {
-      const body = await res.text();
-      throw new Error(`Atlas batch points failed (${res.status}): ${body}`);
-    }
+    const formatted = batch.map((p) => ({
+      name: p.name,
+      type: p.type,
+      properties: p.properties,
+    }));
+    await atlasPost(`/api/atlas/${atlasId}/graph/batch`, { points: formatted, paths: [] });
     console.log(`  Points batch ${Math.floor(i / batchSize) + 1}: ${batch.length} upserted`);
   }
+  console.log(`  All ${points.length} points pushed.`);
 
-  // Push paths in batches
-  for (let i = 0; i < paths.length; i += batchSize) {
-    const batch = paths.slice(i, i + batchSize);
-    const res = await fetch(`${ATLAS_API_URL}/api/v1/graph/batch`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${ATLAS_TOKEN}`,
-      },
-      body: JSON.stringify({ points: [], paths: batch }),
-    });
-    if (!res.ok) {
-      const body = await res.text();
-      throw new Error(`Atlas batch paths failed (${res.status}): ${body}`);
+  // Filter paths to only include references to points we actually pushed (by name+type)
+  const pointKeys = new Set(points.map((p) => `${p.type}:${p.name}`));
+  const validPaths = paths.filter((p) =>
+    pointKeys.has(`${p.source_type}:${p.source_name}`) &&
+    pointKeys.has(`${p.target_type}:${p.target_name}`)
+  );
+  const skipped = paths.length - validPaths.length;
+  if (skipped > 0) console.log(`  Skipping ${skipped} paths with missing endpoints`);
+
+  // Push paths in small batches, skip failures gracefully
+  let pathsCreated = 0;
+  let pathsFailed = 0;
+  for (let i = 0; i < validPaths.length; i += batchSize) {
+    const batch = validPaths.slice(i, i + batchSize);
+    try {
+      await atlasPost(`/api/atlas/${atlasId}/graph/batch`, { points: [], paths: batch });
+      pathsCreated += batch.length;
+      console.log(`  Paths batch ${Math.floor(i / batchSize) + 1}: ${batch.length} upserted`);
+    } catch (err) {
+      pathsFailed += batch.length;
+      console.warn(`  Paths batch ${Math.floor(i / batchSize) + 1}: FAILED (${(err as Error).message.slice(0, 120)})`);
     }
-    console.log(`  Paths batch ${Math.floor(i / batchSize) + 1}: ${batch.length} upserted`);
   }
+  console.log(`  Paths: ${pathsCreated} created, ${pathsFailed} failed`);
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
