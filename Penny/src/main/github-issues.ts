@@ -18,7 +18,7 @@ import os from 'os'
 
 const execFileAsync = promisify(execFile)
 import { enqueueTask, getTaskQueue, getTask, type TaskPriority } from './orchestrator'
-import { ingestIssue, drivePipeline, initPipeline, getPipelineIssues } from './github-pipeline'
+import { ingestIssue, drivePipeline, initPipeline, getPipelineIssues, getActivePodCount, MAX_CONCURRENT_PODS } from './github-pipeline'
 import { getPodStatus } from './pods'
 import { atomicWrite } from './atomic-store'
 import { getAtlasRoot } from './project-paths'
@@ -398,6 +398,12 @@ async function pollOnce(): Promise<number> {
     }
 
     for (const issue of issues) {
+      // Concurrency cap — skip if at max active pods
+      if (getActivePodCount() >= MAX_CONCURRENT_PODS) {
+        console.log(`[github-issues] Concurrency cap reached (${MAX_CONCURRENT_PODS} active pods), deferring remaining issues`)
+        break
+      }
+
       // Already in pipeline? Skip unless terminal
       const pipelineIssues = getPipelineIssues()
       const inPipeline = pipelineIssues.find(p => p.repo === repoKey && p.number === issue.number)

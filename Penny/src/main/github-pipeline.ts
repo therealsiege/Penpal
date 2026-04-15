@@ -58,6 +58,15 @@ interface GHIssue {
   labels: { name: string }[]
 }
 
+// ── Concurrency ─────────────────────────────────────────────────────────────
+
+/** Max pods running at once. Prevents resource starvation from too many Claude sessions. */
+export const MAX_CONCURRENT_PODS = 3
+
+export function getActivePodCount(): number {
+  return state.issues.filter(p => p.stage === 'executing').length
+}
+
 // ── Label helpers ────────────────────────────────────────────────────────────
 
 async function setLabel(config: RepoConfig, issueNumber: number, removeLabels: string[], addLabel: string): Promise<void> {
@@ -449,6 +458,14 @@ function buildPodTask(repoKey: string, issue: GHIssue, branch?: string): string 
 export async function ingestIssue(config: RepoConfig, issue: GHIssue): Promise<PipelineIssue> {
   const repoKey = `${config.owner}/${config.repo}`
 
+  // Concurrency guard — don't launch if already at cap
+  if (getActivePodCount() >= MAX_CONCURRENT_PODS) {
+    console.log(`[github-pipeline] Concurrency cap (${MAX_CONCURRENT_PODS}) reached, deferring #${issue.number}`)
+    const deferred = state.issues.find(i => i.repo === repoKey && i.number === issue.number)
+    if (deferred) return deferred
+    return { number: issue.number, repo: repoKey, title: issue.title, body: issue.body || '', stage: 'failed', priority: 'normal', ingestedAt: Date.now(), updatedAt: Date.now() }
+  }
+
   // Check for existing entry
   const existing = state.issues.find(i => i.repo === repoKey && i.number === issue.number)
   if (existing && existing.stage !== 'done' && existing.stage !== 'failed') {
@@ -456,8 +473,9 @@ export async function ingestIssue(config: RepoConfig, issue: GHIssue): Promise<P
   }
 
   // Preserve escalated profile from previous retry, fall back to label-derived
+  // Reset retryCount on manual re-queue so issues get fresh attempts
   const runtimeProfile = existing?.runtimeProfile || deriveRuntimeProfile(issue.labels)
-  const retryCount = existing?.retryCount ?? 0
+  const retryCount = 0
   const presetId = derivePresetFromLabels(issue.labels)
 
   const entry: PipelineIssue = {
