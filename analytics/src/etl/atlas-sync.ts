@@ -325,6 +325,227 @@ async function pushToAtlas(points: AtlasPoint[], paths: AtlasPath[]): Promise<vo
   console.log(`  Paths: ${pathsCreated} created, ${pathsFailed} failed`);
 }
 
+// ── Composable Views ────────────────────────────────────────────────────────
+
+interface ViewDef {
+  name: string;
+  description: string;
+  viewType: "map" | "table" | "combo";
+  layout?: string;
+  filter: (p: { id: string; name: string; type: string; properties?: Record<string, unknown> }) => boolean;
+  folder?: string;
+}
+
+const VIEW_DEFS: ViewDef[] = [
+  // Pipeline views
+  {
+    name: "Hot Leads",
+    description: "Leads with score >= 45 — ready for outreach",
+    viewType: "combo",
+    layout: "force",
+    filter: (p) => p.type === "Lead" && typeof p.properties?.score === "number" && p.properties.score >= 45,
+    folder: "Pipeline",
+  },
+  {
+    name: "Pipeline by Stage",
+    description: "All leads with their current sales stage — full funnel view",
+    viewType: "map",
+    layout: "hierarchical",
+    filter: (p) => p.type === "Lead" || p.type === "SalesStage",
+    folder: "Pipeline",
+  },
+  {
+    name: "New Leads (Recent)",
+    description: "Recently created leads for triage",
+    viewType: "table",
+    filter: (p) => p.type === "Lead",
+    folder: "Pipeline",
+  },
+
+  // Territory views
+  {
+    name: "Territory Map",
+    description: "Leads organized by territory — geographic coverage",
+    viewType: "map",
+    layout: "force",
+    filter: (p) => p.type === "Lead" || p.type === "Territory",
+    folder: "Territories",
+  },
+
+  // EHR / Technology views
+  {
+    name: "EHR Landscape",
+    description: "Which leads use which EHR systems — technology distribution",
+    viewType: "map",
+    layout: "force",
+    filter: (p) => p.type === "Lead" || p.type === "EHRSystem",
+    folder: "Technology",
+  },
+
+  // Competitive views
+  {
+    name: "Competitive Landscape",
+    description: "Competitor products and their relationships",
+    viewType: "map",
+    layout: "force",
+    filter: (p) => p.type === "CompetitorProduct",
+    folder: "Intelligence",
+  },
+  {
+    name: "Companies & Leads",
+    description: "Leads mapped to their employer companies",
+    viewType: "map",
+    layout: "force",
+    filter: (p) => p.type === "Lead" || p.type === "Company",
+    folder: "Intelligence",
+  },
+
+  // Business arm views
+  {
+    name: "MedScrub Leads",
+    description: "Clinical screening product leads",
+    viewType: "combo",
+    filter: (p) => p.type === "Lead" && String(p.properties?.businessArm || "").toLowerCase() === "medscrub",
+    folder: "Ventures",
+  },
+  {
+    name: "MedHook Leads",
+    description: "Integration product leads",
+    viewType: "combo",
+    filter: (p) => p.type === "Lead" && String(p.properties?.businessArm || "").toLowerCase() === "medhook",
+    folder: "Ventures",
+  },
+  {
+    name: "1Putt Consulting Leads",
+    description: "Health IT consulting leads",
+    viewType: "combo",
+    filter: (p) => p.type === "Lead" && String(p.properties?.businessArm || "").toLowerCase() === "1putt",
+    folder: "Ventures",
+  },
+];
+
+async function createComposableViews(atlasId: string): Promise<void> {
+  console.log("\nCreating composable views...");
+
+  // Fetch all points via Cypher (bypasses 100-item list limit)
+  type PointRecord = { id: string; name: string; type: string; properties?: Record<string, unknown> };
+  const cypherResult = await atlasPost(`/api/atlas/${atlasId}/graph/query/cypher`, {
+    query: "MATCH (n:Point {atlasId: $atlasId}) RETURN n.id AS id, n.name AS name, n.type AS type, n.properties AS properties",
+    parameters: { atlasId },
+  }) as { results?: PointRecord[] } | PointRecord[];
+  const rawList: PointRecord[] = Array.isArray(cypherResult) ? cypherResult : ((cypherResult as { results?: PointRecord[] }).results || []);
+
+  // Parse stringified properties and merge into top-level for filter access
+  const pointList = rawList.map((p) => {
+    let props = p.properties;
+    if (typeof props === "string") {
+      try { props = JSON.parse(props); } catch { props = {}; }
+    }
+    return { ...p, properties: (props || {}) as Record<string, unknown> };
+  });
+  console.log(`  Fetched ${pointList.length} points for view filtering`);
+
+  // Get existing views to avoid duplicates
+  const existingViews = await atlasGet(`/api/atlas/${atlasId}/views`) as
+    | { id: string; name: string }[]
+    | { views?: { id: string; name: string }[] };
+  const viewList = Array.isArray(existingViews) ? existingViews : (existingViews.views || []);
+  const existingNames = new Set(viewList.map((v) => v.name));
+
+  // Collect folder names we need
+  const folderNames = [...new Set(VIEW_DEFS.map((v) => v.folder).filter(Boolean))] as string[];
+
+  // Create folders first
+  const folderIds: Record<string, string> = {};
+  for (const folderName of folderNames) {
+    // Get current hierarchy to check if folder exists
+    const hierarchy = await atlasGet(`/api/atlas/${atlasId}/views/hierarchy`) as
+      { nodes?: { id: string; name: string; type: string }[] } | { hierarchy?: { nodes?: { id: string; name: string; type: string }[] } };
+    const nodes = (hierarchy as { hierarchy?: { nodes?: unknown[] } }).hierarchy?.nodes
+      || (hierarchy as { nodes?: unknown[] }).nodes
+      || [];
+    const existing = (nodes as { id: string; name: string; type: string }[]).find(
+      (n) => n.type === "group" && n.name === folderName
+    );
+    if (existing) {
+      folderIds[folderName] = existing.id;
+    } else {
+      // Create folder via hierarchy update
+      const folderId = `group_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      const maxOrder = (nodes as { order?: number }[]).reduce((max, n) => Math.max(max, n.order || 0), 0);
+      const updated = [
+        ...(nodes as unknown[]),
+        { id: folderId, name: folderName, type: "group", order: maxOrder + 1, children: [], expanded: true, isExpanded: true },
+      ];
+      await fetch(`${ATLAS_API_URL}/api/atlas/${atlasId}/views/hierarchy`, {
+        method: "PUT",
+        headers: ATLAS_HEADERS,
+        body: JSON.stringify({ hierarchy: { nodes: updated } }),
+      });
+      folderIds[folderName] = folderId;
+      console.log(`  Created folder: "${folderName}"`);
+    }
+  }
+
+  // Create each view
+  for (const def of VIEW_DEFS) {
+    if (existingNames.has(def.name)) {
+      console.log(`  Skipping "${def.name}" (already exists)`);
+      continue;
+    }
+
+    // Filter points for this view
+    const matching = pointList.filter(def.filter);
+    if (matching.length === 0) {
+      console.log(`  Skipping "${def.name}" (0 matching points)`);
+      continue;
+    }
+
+    const pointIds = matching.map((p) => p.id);
+
+    // Create view
+    const view = await atlasPost(`/api/atlas/${atlasId}/views`, {
+      name: def.name,
+      description: def.description,
+      viewType: def.viewType,
+      settings: { layout: def.layout || "force" },
+      pointIds,
+    }) as { id: string; name: string };
+
+    const viewId = view.id || (view as unknown as { view: { id: string } }).view?.id;
+    console.log(`  Created "${def.name}" — ${matching.length} points (${def.viewType})`);
+
+    // Move to folder if specified
+    if (def.folder && folderIds[def.folder] && viewId) {
+      const hierarchy = await atlasGet(`/api/atlas/${atlasId}/views/hierarchy`) as
+        { nodes?: unknown[] } | { hierarchy?: { nodes?: unknown[] } };
+      const nodes = ((hierarchy as { hierarchy?: { nodes?: unknown[] } }).hierarchy?.nodes
+        || (hierarchy as { nodes?: unknown[] }).nodes
+        || []) as { id: string; type?: string; children?: string[]; parentId?: string }[];
+
+      const updated = nodes.map((n) => {
+        if (n.id === viewId) return { ...n, parentId: folderIds[def.folder!] };
+        if (n.type === "group" && n.id === folderIds[def.folder!]) {
+          const children = n.children || [];
+          if (!children.includes(viewId)) return { ...n, children: [...children, viewId] };
+        }
+        return n;
+      });
+
+      // Add view node if not in hierarchy yet
+      if (!updated.some((n) => n.id === viewId)) {
+        updated.push({ id: viewId, type: "view", parentId: folderIds[def.folder!], children: [] } as unknown as typeof nodes[0]);
+      }
+
+      await fetch(`${ATLAS_API_URL}/api/atlas/${atlasId}/views/hierarchy`, {
+        method: "PUT",
+        headers: ATLAS_HEADERS,
+        body: JSON.stringify({ hierarchy: { nodes: updated } }),
+      });
+    }
+  }
+}
+
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 function toNum(val: unknown): number | null {
@@ -373,6 +594,10 @@ export async function syncToAtlas(opts?: { dryRun?: boolean }): Promise<void> {
 
   console.log("\nPushing to Atlas...");
   await pushToAtlas(points, paths);
+
+  // Create composable views after data is pushed
+  const atlasId = await resolveAtlasId();
+  await createComposableViews(atlasId);
 
   console.log(`\nAtlas sync complete: ${points.length} points, ${paths.length} paths.`);
 }
