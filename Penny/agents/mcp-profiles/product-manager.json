@@ -13,6 +13,14 @@
         "VK_API_KEY": "${PENNY_VERITAS_AGENT_KEY}",
         "VERITAS_ADMIN_KEY": "${PENNY_VERITAS_AGENT_KEY}"
       }
+    },
+    "graphite-atlas": {
+      "command": "npx",
+      "args": ["-y", "@graphite-atlas/mcp-server"],
+      "env": {
+        "GRAPHITE_ACCESS_TOKEN": "${GRAPHITE_ACCESS_TOKEN}",
+        "GRAPHITE_API_URL": "https://www.graphiteatlas.com"
+      }
     }
   }
 }

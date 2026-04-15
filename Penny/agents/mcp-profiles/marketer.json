@@ -16,6 +16,14 @@
     "ddg-search": {
       "command": "uvx",
       "args": ["duckduckgo-mcp-server"]
+    },
+    "graphite-atlas": {
+      "command": "npx",
+      "args": ["-y", "@graphite-atlas/mcp-server"],
+      "env": {
+        "GRAPHITE_ACCESS_TOKEN": "${GRAPHITE_ACCESS_TOKEN}",
+        "GRAPHITE_API_URL": "https://www.graphiteatlas.com"
+      }
     }
   }
 }

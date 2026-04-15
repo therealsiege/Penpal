@@ -87,8 +87,14 @@
 
 
 
+## Graph Access
 
+Two graph databases are available. Use the right one for the job:
 
+- **Quick lookups** (dashboard, fast local queries): use Penny MCP tools `graph:search-leads`, `graph:lead-detail`, `graph:stats`
+- **Research & intelligence** (rich queries, graph algorithms): use `mcp__graphite-atlas__search_points`, `mcp__graphite-atlas__query_cypher`
+- **Graph algorithms** (PageRank, community detection): use `mcp__graphite-atlas__mage_pagerank`, `mcp__graphite-atlas__mage_detect_communities`
+- **Record findings** (enrich the knowledge graph): use `mcp__graphite-atlas__batch_create` or `mcp__graphite-atlas__brain_dump`
 
 ### Workflow: therealsiege/Penpal#197 (2026-04-13)
 - Task: Implement GitHub issue therealsiege/Penpal#197: Add .nvmrc file pinning Node 22

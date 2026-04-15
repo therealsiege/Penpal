@@ -768,6 +768,13 @@ async function main() {
   // 17. Print stats
   importer.printStats();
 
+  // 18. Optional: sync to Graphite Atlas
+  if (process.argv.includes("--sync-atlas") && process.env.GRAPHITE_ACCESS_TOKEN) {
+    console.log("\n--- Syncing to Graphite Atlas ---");
+    const { syncToAtlas } = await import("./atlas-sync.js");
+    await syncToAtlas();
+  }
+
   // Cleanup
   await closeConnections();
   console.log("\nImport complete.");

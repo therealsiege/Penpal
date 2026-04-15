@@ -39,6 +39,7 @@ agents:
       - mcp__magic__*
       - mcp__linear__*
       - mcp__veritas-kanban__*
+      - mcp__graphite-atlas__*
     subAgents:
       reviewer:
         description: "Reviews code for bugs, security issues, and style"
@@ -91,6 +92,7 @@ agents:
       - mcp__linear__*
       - mcp__Neon__*
       - mcp__veritas-kanban__*
+      - mcp__graphite-atlas__*
     subAgents:
       a11y-checker:
         description: "Checks accessibility compliance"
@@ -146,6 +148,7 @@ agents:
       - mcp__linear__*
       - mcp__Neon__*
       - mcp__veritas-kanban__*
+      - mcp__graphite-atlas__*
     defaultRepos:
       - ~/sidekick/Penny
     avatar: avatars/ShaWujing.png
@@ -190,6 +193,7 @@ agents:
       - mcp__magic__*
       - mcp__linear__*
       - mcp__veritas-kanban__*
+      - mcp__graphite-atlas__*
     subAgents:
       query-optimizer:
         description: "Optimizes Cypher and SQL queries"
@@ -239,6 +243,7 @@ agents:
       - mcp__linear__*
       - mcp__Neon__*
       - mcp__veritas-kanban__*
+      - mcp__graphite-atlas__*
     defaultRepos: []
     avatar: avatars/Nezha.png
     desk: { row: 1, col: 1 }
@@ -287,6 +292,7 @@ agents:
       - mcp__linear__*
       - mcp__Neon__*
       - mcp__veritas-kanban__*
+      - mcp__graphite-atlas__*
     defaultRepos: []
     avatar: avatars/BullDemonKing.png
     desk: { row: 1, col: 2 }
@@ -329,6 +335,7 @@ agents:
       - mcp__linear__*
       - mcp__Neon__*
       - mcp__veritas-kanban__*
+      - mcp__graphite-atlas__*
     defaultRepos: []
     avatar: avatars/RedBoy.png
     desk: { row: 2, col: 0 }
@@ -371,6 +378,7 @@ agents:
       - mcp__linear__*
       - mcp__Neon__*
       - mcp__veritas-kanban__*
+      - mcp__graphite-atlas__*
     subAgents:
       design-critic:
         description: "Critiques designs for usability and aesthetics"
@@ -420,6 +428,7 @@ agents:
       - mcp__linear__*
       - mcp__Neon__*
       - mcp__veritas-kanban__*
+      - mcp__graphite-atlas__*
     subAgents:
       researcher:
         description: "Researches market trends and competitors"
@@ -467,6 +476,7 @@ agents:
       - mcp__linear__*
       - mcp__Neon__*
       - mcp__veritas-kanban__*
+      - mcp__graphite-atlas__*
     defaultRepos:
       - ~/ComSci/Workspace/1putthealth/1putthealth.com
     avatar: avatars/AoRun.png
@@ -511,6 +521,7 @@ agents:
       - mcp__linear__*
       - mcp__Neon__*
       - mcp__veritas-kanban__*
+      - mcp__graphite-atlas__*
     defaultRepos:
       - ~/sidekick
     avatar: avatars/ZhuBajie.png
@@ -612,11 +623,13 @@ phase_tools:
     - serena
     - context7
     - github
+    - graphite-atlas
   execute:
     - developer
     - serena
     - context7
     - github
+    - graphite-atlas
   validate:
     - qa-executor
     - playwright
