@@ -83,12 +83,15 @@ async function searchPrograms(
   stateId: string,
   specialtyId: string,
 ): Promise<{ orgCode: string; name: string; specialty: string; city: string; href: string }[]> {
-  await page.goto(SEARCH_URL, { waitUntil: "networkidle" });
+  await page.goto(SEARCH_URL, { waitUntil: "networkidle", timeout: 20000 });
+  // Wait for any loading overlay to clear
+  await page.waitForSelector(".loading-indicator-overlay", { state: "hidden", timeout: 10000 }).catch(() => {});
   await page.selectOption("#stateFilter", stateId);
   await page.waitForTimeout(1500);
   await page.selectOption("#specialtyFilter", specialtyId);
   await page.waitForTimeout(500);
-  await page.click('button[type="submit"]:not(#searchByOrgBtn)');
+  await page.waitForSelector(".loading-indicator-overlay", { state: "hidden", timeout: 10000 }).catch(() => {});
+  await page.click('button[type="submit"]:not(#searchByOrgBtn)', { force: true });
   await page.waitForTimeout(5000);
 
   return page.$$eval("#programsListView-listview tbody tr", (trs) =>
@@ -266,7 +269,7 @@ export async function scrapeACGME(opts?: {
           continue;
         }
 
-        const page = await browser.newPage();
+        let page = await browser.newPage();
         console.log(`\n  Searching: ${stateKey} / ${spec.label}...`);
 
         const listings = await searchPrograms(page, stateId, spec.id);
@@ -278,85 +281,158 @@ export async function scrapeACGME(opts?: {
           continue;
         }
 
-        // Scrape each detail page by clicking within the search session
+        // Scrape detail pages: one search per detail click (ACGME kills session on goBack).
+        // Slower (~7s per program) but 100% reliable.
+        const stateAbbr = STATE_ABBRS[stateId] || stateKey;
+
         for (let i = 0; i < listings.length; i++) {
           const listing = listings[i];
           console.log(`    [${i + 1}/${listings.length}] ${listing.orgCode} - ${listing.name}`);
 
-          // Click the View Program link via JS (unhide disabled columns first)
           let detail: ACGMEProgram | null = null;
           try {
-            await page.evaluate((h) => {
-              // Unhide all hidden cells/links so we can click them
-              document.querySelectorAll("td, a").forEach((el) => {
-                (el as HTMLElement).style.display = "";
-                (el as HTMLElement).style.visibility = "visible";
-              });
-              const a = document.querySelector(`a[href="${h}"]`) as HTMLAnchorElement;
-              if (a) {
-                a.style.display = "inline";
-                a.click();
-              }
-            }, listing.href);
-            await page.waitForURL("**/Detail**", { timeout: 10000 });
-            await page.waitForTimeout(1500);
-
-            const bodyText = await page.evaluate(() => document.body.innerText);
-            if (!bodyText.includes("Please return to the search page") && bodyText.length > 200) {
-              detail = parseDetailText(bodyText, STATE_ABBRS[stateId] || stateKey);
+            // Fresh page + search for each detail (ACGME session is single-use)
+            if (i > 0) {
+              // Polite delay — increases for later programs to avoid rate limiting
+              await page.waitForTimeout(i < 20 ? 2000 : 4000);
+              await page.close();
+              page = await browser.newPage();
+              await searchPrograms(page, stateId, spec.id);
             }
 
-            // Go back to search results
-            await page.goBack({ waitUntil: "networkidle", timeout: 10000 });
+            // Wait for table rows to be present before clicking
+            await page.waitForSelector('#programsListView-listview tbody tr', { timeout: 10000 });
+            await page.waitForTimeout(500);
+
+            // Verify link exists before attempting click
+            const linkExists = await page.evaluate((orgCode) => {
+              return !!Array.from(document.querySelectorAll('a[href*="Detail"]')).find(
+                a => a.getAttribute('href')?.includes(orgCode)
+              );
+            }, listing.orgCode);
+
+            if (!linkExists) throw new Error('link not found for ' + listing.orgCode);
+
+            // Fire the click and wait for navigation as separate steps
+            await Promise.all([
+              page.waitForNavigation({ waitUntil: 'networkidle', timeout: 30000 }),
+              page.evaluate((orgCode) => {
+                document.querySelectorAll('td, a').forEach(el => {
+                  (el as HTMLElement).style.cssText = 'display:revert!important;visibility:visible!important;';
+                });
+                const links = document.querySelectorAll('a[href*="Detail"]');
+                for (const a of links) {
+                  if (a.getAttribute('href')?.includes(orgCode)) {
+                    (a as HTMLAnchorElement).click();
+                    return;
+                  }
+                }
+              }, listing.orgCode),
+            ]);
             await page.waitForTimeout(1000);
-          } catch {
-            // Navigation failed — re-do the search to get back to results
-            try {
-              await searchPrograms(page, stateId, spec.id);
-            } catch { /* give up on this one */ }
+
+            const bodyText = await page.evaluate(() => document.body.innerText);
+            if (!bodyText.includes('Please return to the search page') && bodyText.length > 200) {
+              detail = parseDetailText(bodyText, stateAbbr);
+            }
+          } catch (err) {
+            console.log(`      (failed: ${(err as Error).message?.slice(0, 60)})`);
           }
 
-          if (detail) {
-            // Fill in from listing if detail parsing missed it
+          if (detail && detail.directorName) {
             if (!detail.orgCode) detail.orgCode = listing.orgCode;
             if (!detail.programName) detail.programName = listing.name;
-            if (!detail.specialty) detail.specialty = listing.specialty;
-            if (!detail.city) detail.city = listing.city;
             allPrograms.push(detail);
           } else {
-            console.log(`      (detail page blocked, using listing data)`);
             allPrograms.push({
-              orgCode: listing.orgCode,
-              programName: listing.name,
-              specialty: listing.specialty,
-              city: listing.city,
-              state: STATE_ABBRS[stateId] || stateKey,
-              address: "",
-              zip: "",
-              website: "",
-              phone: "",
-              email: "",
-              directorName: "",
-              directorSince: "",
-              coordinatorName: "",
-              coordinatorPhone: "",
-              coordinatorEmail: "",
-              accreditationStatus: "",
-              accreditationDate: "",
-              approvedPositions: 0,
-              filledPositions: 0,
-              trainYears: 0,
-              participatingSites: [],
-              sponsoringInstitution: "",
+              orgCode: listing.orgCode, programName: listing.name,
+              specialty: listing.specialty, city: listing.city, state: stateAbbr,
+              address: detail?.address || '', zip: detail?.zip || '',
+              website: detail?.website || '', phone: detail?.phone || '',
+              email: detail?.email || '', directorName: detail?.directorName || '',
+              directorSince: detail?.directorSince || '',
+              coordinatorName: detail?.coordinatorName || '',
+              coordinatorPhone: detail?.coordinatorPhone || '',
+              coordinatorEmail: detail?.coordinatorEmail || '',
+              accreditationStatus: detail?.accreditationStatus || '',
+              accreditationDate: detail?.accreditationDate || '',
+              approvedPositions: detail?.approvedPositions || 0,
+              filledPositions: detail?.filledPositions || 0,
+              trainYears: detail?.trainYears || 0,
+              participatingSites: detail?.participatingSites || [],
+              sponsoringInstitution: detail?.sponsoringInstitution || '',
               scrapedAt: new Date().toISOString(),
             });
           }
+        }
+        let detailedCount = allPrograms.filter(p => p.directorName).length;
+        console.log(`    Detail success: ${detailedCount}/${listings.length}`);
 
-          // Polite delay between requests
-          await page.waitForTimeout(DELAY_BETWEEN_DETAIL);
+        // Retry pass for missing details after a cooldown
+        const missing = allPrograms.filter(p => !p.directorName).map(p => p.orgCode);
+        if (missing.length > 0 && missing.length < listings.length) {
+          console.log(`    Cooling down 30s before retrying ${missing.length} missing...`);
+          await page.close();
+          await new Promise(r => setTimeout(r, 30000));
+
+          for (const orgCode of missing) {
+            const listing = listings.find(l => l.orgCode === orgCode);
+            if (!listing) continue;
+
+            try {
+              page = await browser.newPage();
+              await searchPrograms(page, stateId, spec.id);
+              await page.waitForSelector('#programsListView-listview tbody tr', { timeout: 10000 });
+              await page.waitForTimeout(500);
+
+              const linkExists = await page.evaluate((oc) => {
+                return !!Array.from(document.querySelectorAll('a[href*="Detail"]')).find(
+                  a => a.getAttribute('href')?.includes(oc)
+                );
+              }, orgCode);
+
+              if (!linkExists) { await page.close(); continue; }
+
+              await Promise.all([
+                page.waitForNavigation({ waitUntil: 'networkidle', timeout: 30000 }),
+                page.evaluate((oc) => {
+                  document.querySelectorAll('td, a').forEach(el => {
+                    (el as HTMLElement).style.cssText = 'display:revert!important;visibility:visible!important;';
+                  });
+                  const links = document.querySelectorAll('a[href*="Detail"]');
+                  for (const a of links) {
+                    if (a.getAttribute('href')?.includes(oc)) { (a as HTMLAnchorElement).click(); return; }
+                  }
+                }, orgCode),
+              ]);
+              await page.waitForTimeout(1000);
+
+              const bodyText = await page.evaluate(() => document.body.innerText);
+              if (!bodyText.includes('Please return to the search page') && bodyText.length > 200) {
+                const detail = parseDetailText(bodyText, stateAbbr);
+                if (detail.directorName) {
+                  // Replace the listing-only entry
+                  const idx = allPrograms.findIndex(p => p.orgCode === orgCode);
+                  if (idx >= 0) {
+                    detail.orgCode = orgCode;
+                    detail.programName = detail.programName || listing.name;
+                    allPrograms[idx] = detail;
+                    console.log(`      ✓ ${orgCode} — ${detail.directorName}`);
+                  }
+                }
+              }
+              await page.close();
+              await new Promise(r => setTimeout(r, 3000));
+            } catch {
+              try { await page.close(); } catch {}
+            }
+          }
+
+          detailedCount = allPrograms.filter(p => p.directorName).length;
+          console.log(`    After retry: ${detailedCount}/${listings.length}`);
         }
 
-        await page.close();
+        try { await page.close(); } catch {}
       }
     }
   } finally {
