@@ -21,6 +21,7 @@
     "wiki:clean": "tsx src/etl/wiki/index.ts --clean",
     "memory:sync": "tsx src/etl/memory-sync.ts",
     "atlas:sync": "tsx src/etl/atlas-sync.ts",
+    "acgme:scrape": "tsx src/etl/parsers/acgme-scraper.ts",
     "health": "tsx src/scheduler/health.ts",
     "scheduler": "tsx src/scheduler/runner.ts",
     "scheduler:status": "tsx src/scheduler/runner.ts --status",
@@ -38,6 +39,7 @@
     "glob": "^11.0.1",
     "neo4j-driver": "^5.27.0",
     "openai": "^4.77.0",
+    "playwright": "^1.59.1",
     "rss-parser": "^3.13.0",
     "tiktoken": "^1.0.18"
   },
