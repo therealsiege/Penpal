@@ -685,6 +685,16 @@ export class OfficeScene extends Phaser.Scene {
         this.showToast(`Theme: ${nextName}`, 'info')
       })
 
+      // BACKSLASH — toggle minimap (Tab is used for agent cycling)
+      this.input.keyboard.on('keydown-BACKSLASH', (e: KeyboardEvent) => {
+        if (shouldIgnoreKeyboardShortcuts(e)) return
+        e.preventDefault()
+        if (this.minimap) {
+          this.minimap.toggleCollapse()
+          this.showToast(this.minimap.isCollapsed ? 'Minimap hidden' : 'Minimap shown', 'info')
+        }
+      })
+
       // O — toggle ops / capabilities board
       this.input.keyboard.on('keydown-O', (e: KeyboardEvent) => {
         if (shouldIgnoreKeyboardShortcuts(e)) return
