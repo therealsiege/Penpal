@@ -86,6 +86,7 @@ const skipEmbeddings = process.argv.includes("--skip-embeddings");
 const skipLLM = process.argv.includes("--skip-llm");
 const skipAnalytics = process.argv.includes("--skip-analytics");
 const skipNPI = process.argv.includes("--skip-npi");
+const skipWiki = process.argv.includes("--skip-wiki");
 
 // Parse --venture flags: e.g. --venture openloop --venture 1putt
 const ventureFilter: string[] = [];
@@ -111,6 +112,7 @@ async function main() {
   if (skipLLM) console.log("  Skipping LLM extraction (--skip-llm)");
   if (skipAnalytics) console.log("  Skipping MAGE analytics (--skip-analytics)");
   if (skipNPI) console.log("  Skipping NPI enrichment (--skip-npi)");
+  if (skipWiki) console.log("  Skipping wiki generation (--skip-wiki)");
   console.log();
 
   // 1. Connect
@@ -768,7 +770,15 @@ async function main() {
   // 17. Print stats
   importer.printStats();
 
-  // 18. Optional: sync to Graphite Atlas
+  // 18. Knowledge Wiki — Claude-synthesized entity pages
+  if (!skipWiki) {
+    const { runWikiGeneration } = await import("./wiki/index.js");
+    await runWikiGeneration({ clean: isClean });
+  } else {
+    console.log("\n--- Skipping wiki generation (--skip-wiki) ---");
+  }
+
+  // 19. Optional: sync to Graphite Atlas
   if (process.argv.includes("--sync-atlas") && process.env.GRAPHITE_ACCESS_TOKEN) {
     console.log("\n--- Syncing to Graphite Atlas ---");
     const { syncToAtlas } = await import("./atlas-sync.js");

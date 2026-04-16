@@ -17,6 +17,8 @@
     "npi:activate": "tsx src/etl/sales/npi-activator.ts",
     "npi:enrich": "tsx src/etl/sales/npi-enricher.ts",
     "briefing": "tsx src/etl/sales/daily-briefing.ts",
+    "wiki:generate": "tsx src/etl/wiki/index.ts",
+    "wiki:clean": "tsx src/etl/wiki/index.ts --clean",
     "memory:sync": "tsx src/etl/memory-sync.ts",
     "atlas:sync": "tsx src/etl/atlas-sync.ts",
     "health": "tsx src/scheduler/health.ts",
