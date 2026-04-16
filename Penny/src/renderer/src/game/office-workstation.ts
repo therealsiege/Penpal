@@ -118,6 +118,24 @@ export class OfficeWorkstations {
   private animator: WorkstationAnimator
   private _onApproved: (...args: unknown[]) => void
 
+  /**
+   * Optional hook called immediately after a new workstation is created.
+   * Set by AgentScheduler to play the arrival walk animation.
+   */
+  onAgentArrived?: (ws: WorkstationSprite, agent: AgentState, room: Room) => void
+
+  /**
+   * Optional hook called when an agent departs. Receives a `proceed` callback
+   * that must be invoked to complete the destruction sequence. When set, the
+   * default flash + 500ms destroy is replaced by this hook.
+   */
+  onAgentDeparting?: (
+    ws: WorkstationSprite,
+    agent: AgentState,
+    room: Room,
+    proceed: () => void,
+  ) => void
+
   constructor(scene: Phaser.Scene, host: WorkstationHost) {
     this.scene = scene
     this.host = host
@@ -195,19 +213,27 @@ export class OfficeWorkstations {
 
     for (const [id, ws] of room.workstations) {
       if (!currentIds.has(id)) {
-        // Flash red before destroying (crash/departure visibility)
         const name = ws.state?.config?.name?.split(' ')[0] || id
         this.host.showToast(`${name} session ended`, 'warning')
-        flash(ws.sprite, this.scene, { tint: 0xff4444, duration: 150, repeat: 2 })
-        // Red flash on the desk (Rectangle cast — setTint exists at runtime)
-        flash(ws.deskBody as unknown as Parameters<typeof flash>[0], this.scene, { tint: 0xff4444, duration: 150, repeat: 1 })
-        // Delay destruction by 500ms so the flash is visible
-        const wsRef = ws
-        this.scene.time.delayedCall(500, () => {
-          this.destroyWorkstation(wsRef)
-        })
         room.workstations.delete(id)
         EventBus.emit(EVENTS.AGENT_DEPARTED, id)
+
+        const wsRef = ws
+        const agentSnapshot = ws.state
+
+        if (this.onAgentDeparting && agentSnapshot) {
+          // Departure hook: play animation then destroy
+          this.onAgentDeparting(wsRef, agentSnapshot, room, () => {
+            this.destroyWorkstation(wsRef)
+          })
+        } else {
+          // Default: flash red then destroy after 500ms
+          flash(wsRef.sprite, this.scene, { tint: 0xff4444, duration: 150, repeat: 2 })
+          flash(wsRef.deskBody as unknown as Parameters<typeof flash>[0], this.scene, { tint: 0xff4444, duration: 150, repeat: 1 })
+          this.scene.time.delayedCall(500, () => {
+            this.destroyWorkstation(wsRef)
+          })
+        }
       }
     }
 
@@ -219,6 +245,10 @@ export class OfficeWorkstations {
         const ws = this.createWorkstation(room, agent)
         room.workstations.set(agent.config.id, ws)
         EventBus.emit(EVENTS.AGENT_ARRIVED, agent.config.id, agent)
+        // Arrival hook: play walk-in animation
+        if (this.onAgentArrived) {
+          this.onAgentArrived(ws, agent, room)
+        }
       }
     }
 

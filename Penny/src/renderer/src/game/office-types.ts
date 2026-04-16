@@ -194,6 +194,15 @@ export interface WorkstationSprite {
   contextRotShakeTween?: Phaser.Tweens.Tween
   lastContextRotState?: boolean
   contextRotMonitorBaseX?: number
+  // ---------------------------------------------------------------------------
+  // Schedule-driven animation state (agent-schedule.ts)
+  // ---------------------------------------------------------------------------
+  /** True while the arrival walk animation is playing — suppresses other animations */
+  isArriving?: boolean
+  /** True while the departure walk animation is playing — suppresses other animations */
+  isDeparting?: boolean
+  /** True while the agent is participating in a standup meeting */
+  isInStandup?: boolean
 }
 
 export interface Room {
