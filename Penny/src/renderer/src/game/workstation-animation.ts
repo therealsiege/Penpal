@@ -201,6 +201,7 @@ export class WorkstationAnimator {
     if (ws.typingNoteTimer) { ws.typingNoteTimer.destroy(); ws.typingNoteTimer = undefined }
     // Clear speech bubble
     if (ws.speechBubbleTween) { ws.speechBubbleTween.destroy(); ws.speechBubbleTween = undefined }
+    if (ws.speechBubbleBobTween) { ws.speechBubbleBobTween.destroy(); ws.speechBubbleBobTween = undefined }
     if (ws.speechBubbleTimer) { ws.speechBubbleTimer.destroy(); ws.speechBubbleTimer = undefined }
     if (ws.speechBubble) { ws.speechBubble.setVisible(false).setAlpha(0) }
     // Fade out progress ring when leaving working mode; working branch re-starts it
@@ -972,6 +973,10 @@ export class WorkstationAnimator {
       ws.blockedIndicatorTween.destroy()
       ws.blockedIndicatorTween = undefined
     }
+    if (ws.blockedBobTween) {
+      ws.blockedBobTween.destroy()
+      ws.blockedBobTween = undefined
+    }
 
     // Phone light: stop and hide on every re-evaluation before deciding state
     if (ws.phoneLightTween) {
@@ -1018,6 +1023,17 @@ export class WorkstationAnimator {
       scaleY: 1.08,
       alpha: 0.78,
       duration: 520,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
+    })
+
+    // Gentle bob animation (y ±2px, 2s cycle) on the blocked indicator
+    const baseBlockedY = ws.blockedIndicator.y
+    ws.blockedBobTween = this.scene.tweens.add({
+      targets: ws.blockedIndicator,
+      y: { from: baseBlockedY - 2, to: baseBlockedY + 2 },
+      duration: 2000,
       yoyo: true,
       repeat: -1,
       ease: 'Sine.easeInOut',
@@ -1277,6 +1293,7 @@ export class WorkstationAnimator {
 
     // Avoid duplicate repeat timers if this path runs again before mode teardown
     if (ws.speechBubbleTween) { ws.speechBubbleTween.destroy(); ws.speechBubbleTween = undefined }
+    if (ws.speechBubbleBobTween) { ws.speechBubbleBobTween.destroy(); ws.speechBubbleBobTween = undefined }
     if (ws.speechBubbleTimer) { ws.speechBubbleTimer.destroy(); ws.speechBubbleTimer = undefined }
 
     const BUBBLE_Y = WS_SPRITE_Y - 40
@@ -1377,6 +1394,21 @@ export class WorkstationAnimator {
 
     // Show the first blurb immediately
     typewriterCycle(displayText)
+
+    // Gentle bob animation (y ±2px, 2s cycle) on the speech bubble
+    const bobTarget = { val: 0 }
+    ws.speechBubbleBobTween = this.scene.tweens.add({
+      targets: bobTarget,
+      val: 1,
+      duration: 2000,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
+      onUpdate: () => {
+        if (!ws.speechBubble?.active) return
+        ws.speechBubble.y = BUBBLE_Y + (bobTarget.val * 4 - 2) // ±2px
+      },
+    })
 
     // Repeat every 8-12 seconds with the latest blurb
     ws.speechBubbleTimer = this.scene.time.addEvent({

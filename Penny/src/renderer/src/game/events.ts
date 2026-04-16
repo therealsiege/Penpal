@@ -203,8 +203,8 @@ export interface EventPayloadMap {
   // --- UI / HUD ---
   /** (barId: string, value: number, max: number) */
   [EVENTS.BAR_UPDATED]: [barId: string, value: number, max: number]
-  /** (message: string, level: 'info' | 'warn' | 'error') */
-  [EVENTS.NOTIFICATION]: [message: string, level: 'info' | 'warn' | 'error']
+  /** (message: string, level: 'info' | 'warn' | 'error' | 'success') */
+  [EVENTS.NOTIFICATION]: [message: string, level: 'info' | 'warn' | 'error' | 'success']
   /** No payload */
   [EVENTS.ADD_WORKER_CLICKED]: []
   /** (deskId: string, worldX: number, worldY: number) */

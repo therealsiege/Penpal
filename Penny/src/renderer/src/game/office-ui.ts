@@ -28,6 +28,7 @@ export class OfficeUI {
   private tooltipContainer: Phaser.GameObjects.Container | null = null
   private tooltipGraphics: Phaser.GameObjects.Graphics | null = null
   private tooltipFadeTween: Phaser.Tweens.Tween | null = null
+  private tooltipDelayTimer: Phaser.Time.TimerEvent | null = null
 
   // World-space highlight ring around hovered desk
   private hoverRingGraphics: Phaser.GameObjects.Graphics | null = null
@@ -108,6 +109,7 @@ export class OfficeUI {
     if (this.lodLabelFadeTween) { this.lodLabelFadeTween.destroy(); this.lodLabelFadeTween = null }
     if (this.lodLabelContainer) { this.lodLabelContainer.destroy(); this.lodLabelContainer = null }
 
+    if (this.tooltipDelayTimer) { this.tooltipDelayTimer.destroy(); this.tooltipDelayTimer = null }
     if (this.tooltipFadeTween) { this.tooltipFadeTween.destroy(); this.tooltipFadeTween = null }
     if (this.tooltipContainer) { this.tooltipContainer.destroy(); this.tooltipContainer = null }
     if (this.tooltipGraphics)  { this.tooltipGraphics.destroy(); this.tooltipGraphics = null }
@@ -181,10 +183,12 @@ export class OfficeUI {
     const startX    = this.viewWidth - TOAST_W - 16
     const startY    = 16 + slotIndex * (TOAST_H + TOAST_MARGIN)
 
-    // Background panel
+    // Background panel with color-coded border
     const bg = this.scene.add.graphics()
     bg.fillStyle(bgColor, 0.92)
     bg.fillRoundedRect(0, 0, TOAST_W, TOAST_H, 6)
+    bg.lineStyle(1.5, iconColor, 0.7)
+    bg.strokeRoundedRect(0, 0, TOAST_W, TOAST_H, 6)
 
     // Type-indicator icon — sprite from game-icons sheet, vertically centred
     const iconFrame = TOAST_ICON_FRAMES[type] ?? ICON_FRAMES.CIRCLE_BLUE
@@ -236,12 +240,14 @@ export class OfficeUI {
       ease: 'Back.easeOut',
     })
 
-    // Auto-dismiss: slide back out to the right and fade
+    // Auto-dismiss: shrink + slide back out to the right and fade
     this.scene.time.delayedCall(3500, () => {
       this.scene.tweens.add({
         targets: toast,
         x: startX + SLIDE_OFFSET,
         alpha: 0,
+        scaleX: 0.85,
+        scaleY: 0.85,
         duration: 250,
         ease: 'Power2',
         onComplete: () => {
@@ -272,6 +278,21 @@ export class OfficeUI {
   // ---------------------------------------------------------------------------
 
   showRichTooltip(agent: AgentState, screenX: number, screenY: number): void {
+    // Cancel any pending tooltip delay
+    if (this.tooltipDelayTimer) { this.tooltipDelayTimer.destroy(); this.tooltipDelayTimer = null }
+    // If tooltip already visible, update immediately (pointer moved within same target)
+    if (this.tooltipContainer) {
+      this._renderTooltip(agent, screenX, screenY)
+      return
+    }
+    // Delay 500ms before first appearance
+    this.tooltipDelayTimer = this.scene.time.delayedCall(500, () => {
+      this.tooltipDelayTimer = null
+      this._renderTooltip(agent, screenX, screenY)
+    })
+  }
+
+  private _renderTooltip(agent: AgentState, screenX: number, screenY: number): void {
     if (this.tooltipFadeTween) { this.tooltipFadeTween.destroy(); this.tooltipFadeTween = null }
     if (this.tooltipContainer) { this.tooltipContainer.destroy(); this.tooltipContainer = null }
     if (this.tooltipGraphics)  { this.tooltipGraphics.destroy();  this.tooltipGraphics  = null }
@@ -324,10 +345,11 @@ export class OfficeUI {
       tooltipSigFrame = sigItems2[nh2 % sigItems2.length]
     }
     const hasPetPreview = this.scene.textures.exists(SPRITESHEET_KEYS.DESK_PETS) && this.scene.textures.exists(SPRITESHEET_KEYS.GAME_ITEMS)
+    const HOTKEY_HINT = 'Click select · Dbl-click focus · Enter open'
     const TW = 220, PX = 10, PY = 8, LH = 16, AH = 7
     const hasR = resources.length > 0, hasS = sub.length > 0
     const subL = hasS ? Math.max(1, Math.ceil(sub.length / 26)) : 0
-    const tH = PY + LH + (title ? LH : 0) + 4 + LH + (hasR ? LH : 0) + (hasTrait ? LH : 0) + (hasPetPreview ? LH + 2 : 0) + (hasS ? 6 + subL * LH : 0) + PY, tW = TW + PX * 2
+    const tH = PY + LH + (title ? LH : 0) + 4 + LH + (hasR ? LH : 0) + (hasTrait ? LH : 0) + (hasPetPreview ? LH + 2 : 0) + (hasS ? 6 + subL * LH : 0) + LH + PY, tW = TW + PX * 2
     const flip = screenY < tH + AH + 20
     const aY = flip ? screenY + AH + 2 : screenY - AH - 2 - tH
     const cX = Math.max(8, Math.min(screenX - tW / 2, this.viewWidth - tW - 8))
@@ -359,12 +381,15 @@ export class OfficeUI {
       ct.add(this.scene.add.sprite(tx + 24, ty + 6, SPRITESHEET_KEYS.GAME_ITEMS, tooltipSigFrame).setScale(0.4).setOrigin(0.5))
       ty += LH
     }
-    if (hasS) { ty += 2; const dg = this.scene.add.graphics(); dg.setScrollFactor(0); dg.lineStyle(1, activeTheme.panelStroke, 0.6); dg.lineBetween(tx, ty, cX + tW - PX, ty); ct.add(dg); ty += 4; ct.add(this.scene.add.text(tx, ty, sub, { fontSize: scaledFontSize(10), color: activeTheme.subtleText, fontFamily: 'system-ui, sans-serif', wordWrap: { width: TW }, resolution: 2 })) }
+    if (hasS) { ty += 2; const dg = this.scene.add.graphics(); dg.setScrollFactor(0); dg.lineStyle(1, activeTheme.panelStroke, 0.6); dg.lineBetween(tx, ty, cX + tW - PX, ty); ct.add(dg); ty += 4; ct.add(this.scene.add.text(tx, ty, sub, { fontSize: scaledFontSize(10), color: activeTheme.subtleText, fontFamily: 'system-ui, sans-serif', wordWrap: { width: TW }, resolution: 2 })); ty += subL * LH }
+    // Hotkey hint line
+    ct.add(this.scene.add.text(tx, ty + 2, HOTKEY_HINT, { fontSize: scaledFontSize(8), color: '#3a4858', fontFamily: 'system-ui, monospace', resolution: 2 }))
     ct.setAlpha(0); g.setAlpha(0)
-    this.tooltipFadeTween = this.scene.tweens.add({ targets: [ct, g], alpha: 1, duration: 150, ease: 'Quad.easeOut' })
+    this.tooltipFadeTween = this.scene.tweens.add({ targets: [ct, g], alpha: 1, duration: 200, ease: 'Quad.easeOut' })
   }
 
   hideTooltip(): void {
+    if (this.tooltipDelayTimer) { this.tooltipDelayTimer.destroy(); this.tooltipDelayTimer = null }
     if (this.tooltipFadeTween) { this.tooltipFadeTween.destroy(); this.tooltipFadeTween = null }
     if (this.tooltipContainer) {
       const c = this.tooltipContainer, gfx = this.tooltipGraphics

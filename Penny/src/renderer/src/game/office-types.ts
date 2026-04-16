@@ -62,6 +62,7 @@ export interface WorkstationSprite {
   lookAtNeighborTimer?: Phaser.Time.TimerEvent
   yawnTimer?: Phaser.Time.TimerEvent
   blockedIndicatorTween?: Phaser.Tweens.Tween
+  blockedBobTween?: Phaser.Tweens.Tween
   ledGlow?: Phaser.GameObjects.Graphics
   ledPulseTween?: Phaser.Tweens.Tween
   lastShownBlurb?: string
@@ -150,6 +151,7 @@ export interface WorkstationSprite {
   speechBubbleText?: Phaser.GameObjects.Text
   speechBubbleBg?: Phaser.GameObjects.Graphics
   speechBubbleTween?: Phaser.Tweens.Tween
+  speechBubbleBobTween?: Phaser.Tweens.Tween
   speechBubbleTimer?: Phaser.Time.TimerEvent
   /** Lego exclamation sprite — shown when agent needs interaction */
   exclamationSprite?: Phaser.GameObjects.Sprite

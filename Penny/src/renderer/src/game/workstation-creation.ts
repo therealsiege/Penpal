@@ -1262,6 +1262,7 @@ export class WorkstationFactory {
     if (ws.bounceTween)      ws.bounceTween.destroy()
     if (ws.dotPulseTween)    ws.dotPulseTween.destroy()
     if (ws.blockedIndicatorTween) ws.blockedIndicatorTween.destroy()
+    if (ws.blockedBobTween) ws.blockedBobTween.destroy()
     if (ws.walkBreakTween)   ws.walkBreakTween.destroy()
     if (ws.typingTween)      ws.typingTween.destroy()
     if (ws.headTiltTween)    ws.headTiltTween.destroy()
@@ -1303,6 +1304,7 @@ export class WorkstationFactory {
     if (ws.kbGlowTween)      ws.kbGlowTween.destroy()
     if (ws.typingNoteTimer)  ws.typingNoteTimer.destroy()
     if (ws.speechBubbleTween) { ws.speechBubbleTween.destroy(); ws.speechBubbleTween = undefined }
+    if (ws.speechBubbleBobTween) { ws.speechBubbleBobTween.destroy(); ws.speechBubbleBobTween = undefined }
     if (ws.speechBubbleTimer) { ws.speechBubbleTimer.destroy(); ws.speechBubbleTimer = undefined }
     if (ws.shadow)           ws.shadow.destroy()
     if (ws.sparklineGfx)     { ws.sparklineGfx.clear(); ws.sparklineGfx.destroy() }
