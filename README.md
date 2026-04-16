@@ -35,9 +35,10 @@ Each department is a pixel-art scene with its own agents, tools, and purpose. Th
 | Department | Status | What it does |
 |-----------|--------|-------------|
 | **The Lab** | Live | R&D headquarters — agents ship code, run tests, raise PRs |
-| **Call Center** | Planned | Outreach — agents handle lead follow-up, appointment setting, email campaigns |
-| **Marketing Studio** | Planned | Content — agents create blog posts, social media, design assets, messaging |
-| **War Room** | Planned | Strategy — competitive intelligence, pipeline reviews, quarterly planning |
+| **Marketing Studio** | Next | Content creation, SEO, social distribution, competitive research |
+| **Design Studio** | Planned | Visual asset generation — images, video, brand management |
+| **Call Center** | Planned | AI voice agents with scripted call flows, appointment booking, CRM updates |
+| **War Room** | Planned | Strategy — pipeline reviews, competitive response, quarterly planning |
 
 ### The Lab
 
@@ -51,6 +52,47 @@ The R&D headquarters. Agents ("duders") sit at desks, take coffee breaks at the 
 - Idle agents take walk breaks on the NavMesh floor
 - Scene layout driven by `lab-map.json` -- edit positions, rooms, and animations without touching code
 - XP, ranks, seasons, leaderboards, cosmetic rewards -- gamification built into every workflow
+
+### Marketing Studio
+
+The content factory. Marketing agents draft blog posts informed by the knowledge graph — pulling competitive positioning, customer pain points, and product messaging from the same brain the lab uses to build features. They distribute across channels, track performance, and feed results back into the graph. Competitive intel agents scrape competitor blogs and pricing pages, summarize changes, and auto-update Knowledge Wiki pages so your positioning stays current.
+
+- Blog pipeline: Obsidian draft → MDX → ship to 1putthealth.com → social distribution
+- Email campaigns and drip sequences via Resend
+- Social scheduling across LinkedIn, X, and threads
+- SEO optimization with keyword tracking and content gap analysis
+- Competitive content scraping via Firecrawl — auto-updates Knowledge Wiki
+- Performance tracking via Fathom analytics — close the loop on what works
+
+### Design Studio
+
+The creative department. Agents generate images, produce video, and manage brand assets. AI image generation via Nano Banana and Replicate for everything from hero images to social graphics. Video production via Runway and Kling for product demos and social clips. Sharp and FFmpeg handle processing. Brand guidelines live in the knowledge graph so every generated asset stays on-brand without manual review.
+
+- AI image generation — concepts, social graphics, hero images, icon sets
+- Video production — product demos, social clips, explainer animations
+- Asset processing — resize, crop, format conversion, sprite sheet generation
+- Brand consistency enforced by graph-stored guidelines and style rules
+- CDN publishing — assets optimized and deployed to Cloudflare R2
+
+### Call Center
+
+The virtual phone bank. AI voice agents handle inbound and outbound calls using decision-tree scripts stored in the knowledge graph. Twilio routes calls to Bland.ai or Vapi voice agents. Scripts branch by caller intent — book a demo via Cal.com, answer pricing from the product graph, or route support issues to the lab as GitHub issues. Every call is transcribed, the lead's graph node is updated with the outcome, and call metrics flow into the daily briefing.
+
+- Scripted call flows stored as graph entities — A/B testable, version-controlled
+- Real-time transcription via Deepgram, saved to the Vault
+- Appointment booking via Cal.com — confirmation emails via Resend
+- Automatic CRM updates — call outcomes write back to lead nodes in the graph
+- Call metrics in daily briefings — volume, conversion, script performance
+
+### War Room
+
+The situation room. The heaviest consumer of the knowledge graph. Agents run pipeline reviews by querying lead data across territories and stages. They model revenue from lead scores, analyze competitive shifts flagged by marketing, and draft quarterly plans. Graphite Atlas provides the visual exploration layer for strategy sessions. Every other department feeds intelligence in; the War Room synthesizes it into decisions.
+
+- Pipeline analysis — lead flow by stage, territory, EHR, venture
+- Revenue modeling — lead scores x conversion rates x ACV projections
+- Competitive response playbooks — triggered by Knowledge Wiki updates
+- Territory planning — coverage gaps, expansion targets, resource allocation
+- Cross-department synthesis — connects lab velocity, marketing performance, and call center conversion
 
 ### Dispatch Board & Pod System
 
@@ -86,6 +128,22 @@ Multiple pods running in parallel share a **flight board** that prevents collisi
 - **Cross-pod awareness** — new pods see what's already in flight before they start planning
 - **File-level gating** — dispatch queues pods that would touch overlapping files
 - **Rebase-before-PR** — pods rebase onto latest main before creating PRs
+
+## Roadmap
+
+| Phase | Focus | Status |
+|-------|-------|--------|
+| 1 | The Lab + Knowledge Graph + Dispatch + Pods | Live |
+| 2 | Living Lab — animation polish, dynamic lighting, sound design, VFX | In Progress |
+| 3 | Marketing Studio — content pipeline, competitive intel, social distribution | Next |
+| 4 | Design Studio — AI asset generation, video production, brand management | Planned |
+| 5 | Call Center — AI voice agents, scripted call flows, CRM integration | Planned |
+| 6 | War Room — strategy synthesis, pipeline modeling, cross-department intelligence | Planned |
+| 7 | Multi-instance — Penpal instances communicating across machines and users | Vision |
+
+### Shared Infrastructure
+
+Every department plugs into the same foundation. The knowledge graph (Memgraph + Qdrant + Graphite Atlas) is the shared brain. The pod system (Plan → Execute → Validate) is the shared workflow. Gamification (XP, ranks, seasons, leaderboards) applies to every agent in every department. The Slack bridge lets any agent DM you regardless of which scene they're in. The Knowledge Wiki compiles intelligence that all departments consume. The scheduler keeps everything fresh automatically.
 
 ## Knowledge Graph
 
