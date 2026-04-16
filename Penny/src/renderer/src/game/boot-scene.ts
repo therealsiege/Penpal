@@ -452,6 +452,12 @@ export class BootScene extends BaseScene {
     this.load.audio(AUDIO_KEYS.SWITCH_B, './sounds/switch-b.ogg')
     this.load.audio(AUDIO_KEYS.TAP_A, './sounds/tap-a.ogg')
     this.load.audio(AUDIO_KEYS.TAP_B, './sounds/tap-b.ogg')
+
+    // Music track stems (OGG)
+    this.load.audio(AUDIO_KEYS.MUSIC_BASE, './audio/music/base.ogg')
+    this.load.audio(AUDIO_KEYS.MUSIC_RHYTHM, './audio/music/rhythm.ogg')
+    this.load.audio(AUDIO_KEYS.MUSIC_MELODY, './audio/music/melody.ogg')
+    this.load.audio(AUDIO_KEYS.MUSIC_INTENSITY, './audio/music/intensity.ogg')
   }
 
   // -------------------------------------------------------------------------
