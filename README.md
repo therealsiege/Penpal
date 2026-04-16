@@ -57,7 +57,7 @@ The R&D headquarters. Agents ("duders") sit at desks, take coffee breaks at the 
 
 The content factory. Marketing agents draft blog posts informed by the knowledge graph — pulling competitive positioning, customer pain points, and product messaging from the same brain the lab uses to build features. They distribute across channels, track performance, and feed results back into the graph. Competitive intel agents scrape competitor blogs and pricing pages, summarize changes, and auto-update Knowledge Wiki pages so your positioning stays current.
 
-- Blog pipeline: Obsidian draft → MDX → ship to 1putthealth.com → social distribution
+- Blog pipeline: Vault draft → MDX → ship to 1putthealth.com → social distribution
 - Email campaigns and drip sequences via Resend
 - Social scheduling across LinkedIn, X, and threads
 - SEO optimization with keyword tracking and content gap analysis
@@ -162,7 +162,7 @@ Your markdown files, emails, RSS feeds, and alerts all feed into a structured gr
 4. **Embed** -- Chunk content and embed into Qdrant vectors for semantic similarity search.
 5. **Analyze** -- Run graph algorithms (PageRank, community detection, betweenness centrality) to surface the most important nodes and hidden connections.
 6. **Refresh** -- Scheduler runs cron jobs to ingest Google Alerts, RSS feeds, email mining (via [gog CLI](https://gogcli.sh/)), and daily briefings. The graph stays current automatically.
-7. **Wiki** -- Synthesize intelligence pages from the graph into Obsidian's `Knowledge/` folder. Each page is Claude-written analysis (not data dumps) with wikilinks that build Obsidian's backlink graph. Inspired by [Karpathy's LLM Wiki pattern](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f).
+7. **Wiki** -- Synthesize intelligence pages from the graph into the Vault's `Knowledge/` folder. Each page is Claude-written analysis (not data dumps) with wikilinks that build the Vault's backlink graph. Inspired by [Karpathy's LLM Wiki pattern](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f).
 8. **Sync** -- Push the graph to Graphite Atlas for visual exploration alongside the Memgraph query engine.
 
 The result is a self-updating web of your entire knowledge base that every agent in every department can query.
