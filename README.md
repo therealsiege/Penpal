@@ -20,9 +20,9 @@ Penpal turns your entire operation into a game. Your AI agents are characters in
 
 ### World Map
 
-![World Map](docs/screenshots/Landing.png)
+![World Map](docs/screenshots/map-us.png)
 
-The overworld. Each pin is a department, a Penpal instance, or a remote service. Click a location to enter it. The vision: multiple Penpal instances communicating across users and machines, each one a different part of the business.
+The overworld. The map auto-zooms to the continent where your fleet instances are pinned. Each pin is a Penpal instance — click it to enter that lab. The sidebar gives quick access to every workspace panel: Mission Control, Dispatch, Profiles, Data, Vault, Evals, Soundboard, and Settings. The vision: multiple Penpal instances communicating across users and machines, each one a different part of the business.
 
 ### Departments (Scenes)
 
@@ -100,8 +100,16 @@ Your markdown files, emails, RSS feeds, and alerts all feed into a structured gr
 4. **Embed** -- Chunk content and embed into Qdrant vectors for semantic similarity search.
 5. **Analyze** -- Run graph algorithms (PageRank, community detection, betweenness centrality) to surface the most important nodes and hidden connections.
 6. **Refresh** -- Scheduler runs cron jobs to ingest Google Alerts, RSS feeds, email mining (via [gog CLI](https://gogcli.sh/)), and daily briefings. The graph stays current automatically.
+7. **Wiki** -- Synthesize intelligence pages from the graph into Obsidian's `Knowledge/` folder. Each page is Claude-written analysis (not data dumps) with wikilinks that build Obsidian's backlink graph. Inspired by [Karpathy's LLM Wiki pattern](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f).
+8. **Sync** -- Push the graph to Graphite Atlas for visual exploration alongside the Memgraph query engine.
 
 The result is a self-updating web of your entire knowledge base that every agent in every department can query.
+
+### Graphite Atlas
+
+![Graphite Atlas](docs/screenshots/atlas.png)
+
+The knowledge graph syncs to [Graphite Atlas](https://graphiteatlas.com) — a visual graph workspace that makes the Memgraph data browsable and explorable. Workspaces organize views by domain: Pipeline, Hot Leads, Territories, Technology landscape, Intelligence (companies and competitive analysis), and Ventures. The dual-graph architecture keeps Memgraph as the fast query engine while Atlas provides the visual layer for exploring entity relationships, running path queries, and spotting patterns that raw Cypher can't surface.
 
 **What agents can do with it:**
 
@@ -141,6 +149,7 @@ Penpal/
     data/               # Runtime state (flight-board.json, pod-workflows.json)
   analytics/            # Graph ETL pipeline, MCP server, scheduler
     src/etl/            # Entity extraction, sales pipeline, RSS ingestion
+    src/etl/wiki/       # Knowledge Wiki generator (Claude-synthesized entity pages)
     src/mcp/            # MCP server (8 tools for graph + vector queries)
     schedule.yaml       # Cron job definitions
   scripts/              # Vault utilities (image automation, transcription, cleanup)
@@ -168,8 +177,10 @@ npm install
 npm run infra:up          # Start Memgraph + Qdrant via Docker
 
 # ETL
-npm run etl               # Run full pipeline
-npm run etl -- --project myapp   # Single project
+npm run etl               # Run full pipeline (parse, extract, embed, analyze, wiki, sync)
+npm run etl -- --venture 1putt   # Single venture
+npm run wiki:generate     # Regenerate Knowledge Wiki pages only
+npm run atlas:sync        # Sync graph to Graphite Atlas only
 
 # MCP Server
 npm run mcp:dev           # Start MCP server
@@ -194,3 +205,4 @@ npm run build             # Production build
 - `OPENAI_API_KEY` -- embeddings
 - Optional: Ollama with `coder:30b` for economic mode
 - Optional: `SLACK_BOT_TOKEN` + `SLACK_APP_TOKEN` for Slack bridge
+- Optional: `GRAPHITE_ACCESS_TOKEN` for Graphite Atlas visual graph sync
