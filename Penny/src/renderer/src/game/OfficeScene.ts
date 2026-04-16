@@ -191,6 +191,20 @@ export class OfficeScene extends Phaser.Scene {
   get atmosphereManager() { return this.atmosphere }
   get roomMap() { return this.rooms }
 
+  // ---------------------------------------------------------------------------
+  // Thunderstorm management
+  // ---------------------------------------------------------------------------
+
+  setThunderstormActive(active: boolean): void {
+    if (this.particles) {
+      if (active) {
+        this.particles.activateThunderstorm();
+      } else {
+        this.particles.deactivateThunderstorm();
+      }
+    }
+  }
+
   get targetZoom() { return this.officeCamera.targetZoom }
   set targetZoom(z: number) { this.officeCamera.targetZoom = z }
   get followTarget() { return this.officeCamera.followTarget }
