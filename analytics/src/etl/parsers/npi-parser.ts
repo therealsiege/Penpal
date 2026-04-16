@@ -1,4 +1,4 @@
-import { createReadStream } from "fs";
+import { createReadStream, existsSync } from "fs";
 import { parse } from "csv-parse";
 import { config } from "../../shared/config.js";
 
@@ -64,6 +64,10 @@ export async function streamNPIProspects(): Promise<NPIRecord[]> {
     console.log("  NPI file path not configured, skipping NPI prospect sourcing");
     return [];
   }
+  if (!existsSync(npiFilePath)) {
+    console.log(`  NPPES CSV not found at ${npiFilePath}, skipping NPI prospect sourcing`);
+    return [];
+  }
 
   console.log(`  Streaming NPPES CSV: ${npiFilePath}`);
   const prospects: NPIRecord[] = [];
@@ -101,6 +105,10 @@ export async function enrichLeadsFromNPI(
   const npiFilePath = config.npiFilePath;
   if (!npiFilePath) {
     console.log("  NPI file path not configured, skipping NPI enrichment");
+    return new Map();
+  }
+  if (!existsSync(npiFilePath)) {
+    console.log(`  NPPES CSV not found at ${npiFilePath}, skipping NPI enrichment`);
     return new Map();
   }
 

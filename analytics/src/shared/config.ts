@@ -119,7 +119,7 @@ export const config = {
   ),
 
   // NPI Registry
-  npiFilePath: process.env.NPI_FILE_PATH || path.join(homeDir, "Downloads", "NPPES", "npidata_pfile_20050523-20260308.csv"),
+  npiFilePath: process.env.NPI_FILE_PATH || path.join(defaultVaultPath, "Data", "NPPES", "npidata_pfile_20050523-20260308.csv"),
   npiCachePath: path.join(
     homeDir,
     ".sidekick",
