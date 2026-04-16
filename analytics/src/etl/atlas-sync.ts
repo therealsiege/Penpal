@@ -487,13 +487,10 @@ async function createComposableViews(atlasId: string): Promise<void> {
     }
   }
 
-  // Create each view
-  for (const def of VIEW_DEFS) {
-    if (existingNames.has(def.name)) {
-      console.log(`  Skipping "${def.name}" (already exists)`);
-      continue;
-    }
+  // Create or update each view
+  const existingViewMap = new Map(viewList.map((v) => [v.name, v.id]));
 
+  for (const def of VIEW_DEFS) {
     // Filter points for this view
     const matching = pointList.filter(def.filter);
     if (matching.length === 0) {
@@ -502,46 +499,56 @@ async function createComposableViews(atlasId: string): Promise<void> {
     }
 
     const pointIds = matching.map((p) => p.id);
+    let viewId = existingViewMap.get(def.name);
 
-    // Create view
-    const view = await atlasPost(`/api/atlas/${atlasId}/views`, {
-      name: def.name,
-      description: def.description,
-      viewType: def.viewType,
-      settings: { layout: def.layout || "force" },
-      pointIds,
-    }) as { id: string; name: string };
+    // Create view if it doesn't exist
+    if (!viewId) {
+      const view = await atlasPost(`/api/atlas/${atlasId}/views`, {
+        name: def.name,
+        description: def.description,
+        viewType: def.viewType,
+        settings: { layout: def.layout || "force" },
+      }) as { id: string; name: string; view?: { id: string } };
 
-    const viewId = view.id || (view as unknown as { view: { id: string } }).view?.id;
-    console.log(`  Created "${def.name}" — ${matching.length} points (${def.viewType})`);
+      viewId = view.id || view.view?.id;
+      console.log(`  Created "${def.name}" (${def.viewType})`);
 
-    // Move to folder if specified
-    if (def.folder && folderIds[def.folder] && viewId) {
-      const hierarchy = await atlasGet(`/api/atlas/${atlasId}/views/hierarchy`) as
-        { nodes?: unknown[] } | { hierarchy?: { nodes?: unknown[] } };
-      const nodes = ((hierarchy as { hierarchy?: { nodes?: unknown[] } }).hierarchy?.nodes
-        || (hierarchy as { nodes?: unknown[] }).nodes
-        || []) as { id: string; type?: string; children?: string[]; parentId?: string }[];
+      // Move to folder if specified
+      if (def.folder && folderIds[def.folder] && viewId) {
+        const hierarchy = await atlasGet(`/api/atlas/${atlasId}/views/hierarchy`) as
+          { nodes?: unknown[] } | { hierarchy?: { nodes?: unknown[] } };
+        const nodes = ((hierarchy as { hierarchy?: { nodes?: unknown[] } }).hierarchy?.nodes
+          || (hierarchy as { nodes?: unknown[] }).nodes
+          || []) as { id: string; type?: string; children?: string[]; parentId?: string }[];
 
-      const updated = nodes.map((n) => {
-        if (n.id === viewId) return { ...n, parentId: folderIds[def.folder!] };
-        if (n.type === "group" && n.id === folderIds[def.folder!]) {
-          const children = n.children || [];
-          if (!children.includes(viewId)) return { ...n, children: [...children, viewId] };
+        const updated = nodes.map((n) => {
+          if (n.id === viewId) return { ...n, parentId: folderIds[def.folder!] };
+          if (n.type === "group" && n.id === folderIds[def.folder!]) {
+            const children = n.children || [];
+            if (!children.includes(viewId!)) return { ...n, children: [...children, viewId!] };
+          }
+          return n;
+        });
+
+        if (!updated.some((n) => n.id === viewId)) {
+          updated.push({ id: viewId!, type: "view", parentId: folderIds[def.folder!], children: [] } as unknown as typeof nodes[0]);
         }
-        return n;
-      });
 
-      // Add view node if not in hierarchy yet
-      if (!updated.some((n) => n.id === viewId)) {
-        updated.push({ id: viewId, type: "view", parentId: folderIds[def.folder!], children: [] } as unknown as typeof nodes[0]);
+        await fetch(`${ATLAS_API_URL}/api/atlas/${atlasId}/views/hierarchy`, {
+          method: "PUT",
+          headers: ATLAS_HEADERS,
+          body: JSON.stringify({ hierarchy: { nodes: updated } }),
+        });
       }
+    }
 
-      await fetch(`${ATLAS_API_URL}/api/atlas/${atlasId}/views/hierarchy`, {
-        method: "PUT",
-        headers: ATLAS_HEADERS,
-        body: JSON.stringify({ hierarchy: { nodes: updated } }),
-      });
+    // Populate view with points (batch in chunks of 100)
+    if (viewId) {
+      for (let i = 0; i < pointIds.length; i += 100) {
+        const batch = pointIds.slice(i, i + 100);
+        await atlasPost(`/api/atlas/${atlasId}/views/${viewId}/points`, { pointIds: batch });
+      }
+      console.log(`  Populated "${def.name}" — ${pointIds.length} points`);
     }
   }
 }
