@@ -20,9 +20,13 @@ Penpal turns your entire operation into a game. Your AI agents are characters in
 
 ### World Map
 
-![World Map](docs/screenshots/map-us.png)
+![World Map](docs/screenshots/Landing.png)
 
-The overworld. The map auto-zooms to the continent where your fleet instances are pinned. Each pin is a Penpal instance — click it to enter that lab. The sidebar gives quick access to every workspace panel: Mission Control, Dispatch, Profiles, Data, Vault, Evals, Soundboard, and Settings. The vision: multiple Penpal instances communicating across users and machines, each one a different part of the business.
+The overworld. Each pin is a department, a Penpal instance, or a remote service. Click a location to enter it. The vision: multiple Penpal instances communicating across users and machines, each one a different part of the business.
+
+![Continental Zoom](docs/screenshots/map-us.png)
+
+The map auto-zooms to the continent where your fleet instances are pinned. Each pin is a Penpal instance — click it to enter that lab. The sidebar gives quick access to every workspace panel: Mission Control, Dispatch, Profiles, Data, Vault, Evals, Soundboard, and Settings.
 
 ### Departments (Scenes)
 
