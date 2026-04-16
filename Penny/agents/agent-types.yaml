@@ -576,7 +576,7 @@ pod_presets:
 # Default profile is applied to all new issues unless overridden by
 # GitHub labels (economic, max) on the issue.
 runtime_profiles:
-  default_profile: economic
+  default_profile: sonnet
 
   max:
     description: "Max plan — Opus for plan+execute, Sonnet for validate"
