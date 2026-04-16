@@ -56,6 +56,8 @@ export class OfficeCamera {
   private _panTween: Phaser.Tweens.Tween | null = null
   private _pulseTween: Phaser.Tweens.Tween | null = null
   private _slowFitTween: Phaser.Tweens.Tween | null = null
+  /** True while CameraCinematics owns a zoom tween — suppresses the targetZoom lerp. */
+  private _cinematicZoomLock = false
 
   constructor(scene: Phaser.Scene, host: CameraHostScene) {
     this.scene = scene
@@ -67,8 +69,14 @@ export class OfficeCamera {
   }
 
   private _scriptedZoomActive(): boolean {
-    return (this._pulseTween != null && this._pulseTween.isPlaying()) ||
+    return this._cinematicZoomLock ||
+      (this._pulseTween != null && this._pulseTween.isPlaying()) ||
       (this._slowFitTween != null && this._slowFitTween.isPlaying())
+  }
+
+  /** Called by CameraCinematics to suppress the targetZoom lerp during scripted zoom sequences. */
+  setCinematicZoomLock(locked: boolean): void {
+    this._cinematicZoomLock = locked
   }
 
   private _stopPanTween(): void {
@@ -92,7 +100,7 @@ export class OfficeCamera {
     }
   }
 
-  smoothPanTo(worldX: number, worldY: number, durationMs: number, onComplete?: () => void): void {
+  smoothPanTo(worldX: number, worldY: number, durationMs: number, onComplete?: () => void, ease?: string): void {
     const cam = this.scene.cameras.main
     this.followTarget = null
     this._stopPanTween()
@@ -112,7 +120,7 @@ export class OfficeCamera {
       scrollX: tx,
       scrollY: ty,
       duration: durationMs,
-      ease: AnimConfig.camera.pan.ease,
+      ease: ease ?? AnimConfig.camera.pan.ease,
       onComplete: () => {
         this._panTween = null
         this.lastCamScrollX = cam.scrollX

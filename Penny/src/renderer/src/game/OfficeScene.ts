@@ -17,6 +17,7 @@ import { OfficeBackground } from './office-background'
 import { LabEditor } from './lab-editor'
 import { OfficeBroadcast } from './office-broadcast'
 import { OfficeCamera, panDurationFromDistance, getWorkstationWorldPos } from './office-camera'
+import { CameraCinematics } from './camera-cinematics'
 import { AnimConfig } from './animation-config'
 import type { WorkstationSprite, Room, PodLineInfo, OfficeDebugSnapshot, OrchestratorTaskOfficeInfo } from './office-types'
 import {
@@ -118,6 +119,10 @@ export class OfficeScene extends Phaser.Scene {
 
   // Camera & navigation — extracted to OfficeCamera
   private officeCamera!: OfficeCamera
+  // Event-driven auto-pan with priority queue
+  private cinematics!: CameraCinematics
+  /** Pod workflow IDs seen so far — used to detect newly launched pods for POD_LAUNCHED event. */
+  private _knownPodWorkflowIds = new Set<string>()
   private resizeTimer: ReturnType<typeof setTimeout> | null = null
   private _cameraJuiceLockDepth = 0
   private _workstationRefitTimer: ReturnType<typeof setTimeout> | null = null
@@ -307,6 +312,20 @@ export class OfficeScene extends Phaser.Scene {
       getGdsSceneBounds: () => this.background?.hasGdsScene() ? this.background.getGdsSceneBounds() : null,
     })
     this.officeCamera.init()
+
+    // Event-driven auto-pan with priority queue
+    this.cinematics = new CameraCinematics(this, {
+      getRooms: () => this.rooms,
+      getOfficeCamera: () => this.officeCamera,
+      lockCinematicInput: () => this.lockCameraJuiceInput(),
+      unlockCinematicInput: () => this.unlockCameraJuiceInput(),
+      cameras: this.cameras,
+      tweens: this.tweens,
+      time: this.time,
+      input: this.input,
+      add: this.add,
+    })
+    this.cinematics.init()
 
     // Office background — extracted to OfficeBackground
     this.background = new OfficeBackground(this, {
@@ -861,9 +880,17 @@ export class OfficeScene extends Phaser.Scene {
       this.celebrations.challengeCompleted(description)
     })
 
+    // Wire quest start to auto-pan task-dispatch sequence
+    EventBus.on(EVENTS.QUEST_STARTED, (...args: unknown[]) => {
+      const [, agentId] = args as [string, string, string]
+      if (agentId) EventBus.emit(EVENTS.TASK_DISPATCHED, agentId)
+    })
+
     // Wire quest completion to reward popup VFX
     EventBus.on(EVENTS.QUEST_COMPLETED, (...args: unknown[]) => {
       const [, agentId, xpReward, creditReward, difficulty] = args as [string, string, number, number, string]
+      // Trigger auto-pan task-complete sequence
+      EventBus.emit(EVENTS.TASK_COMPLETED, agentId)
       // Find the workstation for this agent and show quest reward VFX
       for (const room of this.rooms.values()) {
         const ws = room.workstations.get(agentId)
@@ -897,6 +924,8 @@ export class OfficeScene extends Phaser.Scene {
     // Wire quest failure to error VFX
     EventBus.on(EVENTS.QUEST_FAILED, (...args: unknown[]) => {
       const [, agentId] = args as [string, string]
+      // Trigger auto-pan agent-error sequence
+      EventBus.emit(EVENTS.AGENT_ERROR, agentId)
       // Find the workstation for this agent and show error VFX
       for (const room of this.rooms.values()) {
         const ws = room.workstations.get(agentId)
@@ -1577,6 +1606,23 @@ export class OfficeScene extends Phaser.Scene {
   /** Update active pod workflows for connecting lines (Fix 11) */
   setPodWorkflows(workflows: PodLineInfo[]): void {
     if (!this.pods) return
+
+    // Detect newly launched pods and emit POD_LAUNCHED for auto-pan
+    for (const wf of workflows) {
+      if (!this._knownPodWorkflowIds.has(wf.workflowId)) {
+        this._knownPodWorkflowIds.add(wf.workflowId)
+        const agentIds = [wf.solverAgentId, wf.reviewerAgentId, wf.executorAgentId].filter(Boolean)
+        if (agentIds.length > 0) {
+          EventBus.emit(EVENTS.POD_LAUNCHED, agentIds)
+        }
+      }
+    }
+    // Prune completed pods from the known set
+    const activeIds = new Set(workflows.map(wf => wf.workflowId))
+    for (const id of this._knownPodWorkflowIds) {
+      if (!activeIds.has(id)) this._knownPodWorkflowIds.delete(id)
+    }
+
     this.pods.setPodLines(workflows)
     if (this.background.hasGdsScene()) {
       this.pods.setVisible(false)
