@@ -47,7 +47,8 @@ import { questSystem } from './quest-system'
 import { creditManager } from './credits'
 import { leaderboardManager } from './leaderboard'
 import { seasonManager } from './seasons'
-import { SceneTransition } from './scene-transition'
+import { OfficeMinimap } from './office-minimap'
+import type { MinimapHostScene } from './office-minimap'
 
 import {
   KB_ZOOM_STEP,
@@ -159,6 +160,9 @@ export class OfficeScene extends Phaser.Scene {
   private seasonHud!: SeasonHUD
   private questPanel!: QuestPanel
   private achievementPanel!: AchievementPanel
+  // Minimap — room layout, agent dots, viewport rect, click-to-pan
+  private minimap!: OfficeMinimap
+  private lastMinimapUpdateAt = 0
   private lastQuestPanelUpdateAt = 0
   private lastAchievementPanelUpdateAt = 0
   private lastMoodUpdateAt = 0
@@ -477,7 +481,7 @@ export class OfficeScene extends Phaser.Scene {
           // GDS mode: double-click empty space → back to world map
           if (this.background.hasGdsScene()) {
             EventBus.emit(EVENTS.NAVIGATE_CAMPUS)
-            SceneTransition.fadeToScene(this, SCENE_KEYS.CAMPUS)
+            this.scene.sleep(SCENE_KEYS.OFFICE)
           } else {
             this.zoomToFit(true)
           }
@@ -498,6 +502,7 @@ export class OfficeScene extends Phaser.Scene {
       if (this.seasonHud) { this.seasonHud.setViewSize(gameSize.width, gameSize.height) }
       if (this.questPanel) { this.questPanel.setViewSize(gameSize.width, gameSize.height) }
       if (this.achievementPanel) { this.achievementPanel.setViewSize(gameSize.width, gameSize.height) }
+      if (this.minimap) { this.minimap.setViewSize(gameSize.width, gameSize.height) }
 
       if (this.resizeTimer) clearTimeout(this.resizeTimer)
       this.resizeTimer = setTimeout(() => {
@@ -680,6 +685,16 @@ export class OfficeScene extends Phaser.Scene {
         this.showToast(`Theme: ${nextName}`, 'info')
       })
 
+      // BACKSLASH — toggle minimap (Tab is used for agent cycling)
+      this.input.keyboard.on('keydown-BACKSLASH', (e: KeyboardEvent) => {
+        if (shouldIgnoreKeyboardShortcuts(e)) return
+        e.preventDefault()
+        if (this.minimap) {
+          this.minimap.toggleCollapse()
+          this.showToast(this.minimap.isCollapsed ? 'Minimap hidden' : 'Minimap shown', 'info')
+        }
+      })
+
       // O — toggle ops / capabilities board
       this.input.keyboard.on('keydown-O', (e: KeyboardEvent) => {
         if (shouldIgnoreKeyboardShortcuts(e)) return
@@ -747,6 +762,10 @@ export class OfficeScene extends Phaser.Scene {
     this.questPanel.init(this.viewWidth, this.viewHeight)
     this.achievementPanel = new AchievementPanel(this)
     this.achievementPanel.init(this.viewWidth, this.viewHeight)
+
+    // Minimap — bottom-right corner, screen-space overlay
+    this.minimap = new OfficeMinimap(this, this as unknown as MinimapHostScene)
+    this.minimap.init(this.viewWidth, this.viewHeight)
 
     soundEngine.setScene(this)
     soundEngine.wireEvents()
@@ -916,8 +935,8 @@ export class OfficeScene extends Phaser.Scene {
     // Navigate back to campus when NAVIGATE_BUILDING requests it
     EventBus.on(EVENTS.NAVIGATE_BUILDING, (building: string) => {
       if (building === 'campus') {
+        this.scene.sleep(SCENE_KEYS.OFFICE)
         EventBus.emit(EVENTS.NAVIGATE_CAMPUS)
-        SceneTransition.fadeToScene(this, SCENE_KEYS.CAMPUS)
       }
     })
 
@@ -930,7 +949,6 @@ export class OfficeScene extends Phaser.Scene {
     this.events.on(Phaser.Scenes.Events.WAKE, this._onWake, this)
 
     this.cafe.startCoffeeRunTimer()
-    ;(window as any).__cafeCoffeeRunManager = this.cafe.getCoffeeRunManager()
     if (this.pendingAgents) {
       this.setAgents(this.pendingAgents)
       this.pendingAgents = null
@@ -1356,6 +1374,9 @@ export class OfficeScene extends Phaser.Scene {
       this.lastQuestPanelUpdateAt = time
       this.questPanel.update()
     }
+
+    // Minimap — throttled redraw every 150ms (internally managed)
+    if (this.minimap) { this.minimap.update(time) }
 
     // Performance auto-reducer — check avg FPS every 3s
     this._perfFrameCount++
@@ -2017,6 +2038,7 @@ export class OfficeScene extends Phaser.Scene {
     this.seasonHud.destroy()
     this.questPanel.destroy()
     this.achievementPanel.destroy()
+    if (this.minimap) { this.minimap.destroy() }
 
     if (this.roomRenderer) {
       for (const room of this.rooms.values()) {
