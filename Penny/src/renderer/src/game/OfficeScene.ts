@@ -930,6 +930,7 @@ export class OfficeScene extends Phaser.Scene {
     this.events.on(Phaser.Scenes.Events.WAKE, this._onWake, this)
 
     this.cafe.startCoffeeRunTimer()
+    ;(window as any).__cafeCoffeeRunManager = this.cafe.getCoffeeRunManager()
     if (this.pendingAgents) {
       this.setAgents(this.pendingAgents)
       this.pendingAgents = null
