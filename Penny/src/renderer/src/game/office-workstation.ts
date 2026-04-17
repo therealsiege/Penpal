@@ -772,12 +772,16 @@ export class OfficeWorkstations {
 
     // Screen content — set mode-specific pattern and timeScale
     if (ws.screenLines && ws.screenTween) {
-      const screenMode = isWorking ? (isPlan ? 'plan' : 'working') : isCompressing ? 'compressing' : 'idle'
+      const screenMode = isWaiting ? 'blocked'
+        : isWorking ? (isPlan ? 'plan' : 'working')
+        : isCompressing ? 'compressing'
+        : 'idle'
       if (ws.screenState) ws.screenState.mode = screenMode
       ws.screenLines.setVisible(true)
       ws.screenTween.resume()
       if (screenMode === 'compressing') ws.screenTween.setTimeScale(2)
       else if (screenMode === 'idle') ws.screenTween.setTimeScale(0.3)
+      else if (screenMode === 'blocked') ws.screenTween.setTimeScale(1.5)
       else ws.screenTween.setTimeScale(1)
     }
 

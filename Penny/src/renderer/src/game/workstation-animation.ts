@@ -181,6 +181,7 @@ export class WorkstationAnimator {
     if (ws.pulseTween)       { ws.pulseTween.destroy();       ws.pulseTween       = undefined }
     if (ws.ledPulseTween)    { ws.ledPulseTween.destroy();    ws.ledPulseTween    = undefined }
     if (ws.kbGlowTween)     { ws.kbGlowTween.destroy();     ws.kbGlowTween     = undefined }
+    if (ws.kbScaleTween)    { ws.kbScaleTween.destroy();    ws.kbScaleTween    = undefined; if (ws.keyboard) { ws.keyboard.scaleX = 1; ws.keyboard.scaleY = 1 } }
     if (ws.lampLightTween)   { ws.lampLightTween.destroy();   ws.lampLightTween   = undefined }
     if (ws.lampFlickerTimer) { ws.lampFlickerTimer.destroy();  ws.lampFlickerTimer = undefined }
     if (ws.walkBreakTween)   { ws.walkBreakTween.destroy();   ws.walkBreakTween   = undefined }
@@ -277,12 +278,16 @@ export class WorkstationAnimator {
         targets: ws.statusDot, alpha: AnimConfig.waiting.dotPulseAlphaMin,
         duration: AnimConfig.waiting.dotPulseDuration, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
       })
-      // LED: waiting — amber steady glow
+      // LED: waiting — amber fast-blink loop to signal attention needed
       if (ws.ledGlow) {
         ws.ledGlow.clear()
         ws.ledGlow.fillStyle(activeTheme.deskStrokeWaiting, 1)
         ws.ledGlow.fillRoundedRect(-26, WS_DESK_Y + 4, 52, 2, 1)
-        this.scene.tweens.add({ targets: ws.ledGlow, alpha: 0.5, duration: 300, ease: 'Sine.easeOut' })
+        ws.ledGlow.setAlpha(0.2)
+        ws.ledPulseTween = this.scene.tweens.add({
+          targets: ws.ledGlow, alpha: 0.75,
+          duration: 450, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
+        })
       }
       // Lamp light cone: dim when waiting
       if (ws.lampLight) {
@@ -319,6 +324,18 @@ export class WorkstationAnimator {
             yoyo: true,
             repeat: -1,
             ease: 'Sine.easeInOut',
+          })
+        }
+        // Keyboard scale pulse — tiny key-press simulation (scaleY squish)
+        if (!ws.kbScaleTween) {
+          ws.kbScaleTween = this.scene.tweens.add({
+            targets: ws.keyboard,
+            scaleY: { from: 1, to: 0.94 },
+            duration: 180,
+            yoyo: true,
+            repeat: -1,
+            ease: 'Sine.easeInOut',
+            delay: 180, // offset from glow for organic feel
           })
         }
       }
@@ -538,16 +555,19 @@ export class WorkstationAnimator {
         fart.once('animationcomplete', () => fart.destroy())
       }
 
-      // Remove keyboard glow
-      if (ws.kbGlowTween) { ws.kbGlowTween.destroy(); ws.kbGlowTween = undefined }
+      // Remove keyboard glow (already torn down at top; just restore visuals)
       if (ws.keyboard) ws.keyboard.setStrokeStyle(0, 0, 0).setAlpha(0.8)
 
-      // LED: idle — muted dim glow
+      // LED: idle — slow dim blink loop (breathing glow)
       if (ws.ledGlow) {
         ws.ledGlow.clear()
         ws.ledGlow.fillStyle(activeTheme.deskStrokeIdle, 1)
         ws.ledGlow.fillRoundedRect(-26, WS_DESK_Y + 4, 52, 2, 1)
-        this.scene.tweens.add({ targets: ws.ledGlow, alpha: 0.1, duration: 600, ease: 'Sine.easeOut' })
+        ws.ledGlow.setAlpha(0.03)
+        ws.ledPulseTween = this.scene.tweens.add({
+          targets: ws.ledGlow, alpha: 0.18,
+          duration: 2200, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
+        })
       }
       // Lamp light cone: dim when idle
       if (ws.lampLight) {
