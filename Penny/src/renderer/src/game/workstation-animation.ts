@@ -528,7 +528,18 @@ export class WorkstationAnimator {
       this.showSpeechBubble(ws, agent)
 
     } else {
-      if (!gdsLock) ws.sprite.setFrame(base + POSE_SIT)
+      if (!gdsLock) {
+        ws.sprite.setFrame(base + POSE_SIT)
+        // Sitting-down compression on chair contact (squash & stretch principle)
+        const ssSit = AnimConfig.squashStretch
+        this.scene.tweens.add({
+          targets: ws.sprite,
+          scaleY: CHAR_SCALE * ssSit.sitCompressScaleY,
+          duration: ssSit.sitCompressDuration,
+          yoyo: true,
+          ease: 'Sine.easeOut',
+        })
+      }
       ws.breathTween = this.scene.tweens.add({
         targets: ws.sprite, scaleY: CHAR_SCALE * AnimConfig.idle.breathScaleFactor,
         duration: AnimConfig.idle.breathDuration, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
@@ -578,12 +589,39 @@ export class WorkstationAnimator {
       }
       this.restoreDeskStrokeCallback(ws)
 
-      // "Just finished" bounce + confetti when transitioning from working→idle
+      // Task complete reaction: squash-stretch hop when transitioning from working→idle
       if (prevMode === 'working') {
+        const ssHop = AnimConfig.squashStretch
+        // Phase 1: pre-launch squash (character coils down)
         this.scene.tweens.add({
-          targets: ws.sprite, y: WS_SPRITE_Y - 6,
-          duration: 200, yoyo: true, ease: 'Back.easeOut',
-          onComplete: () => { ws.sprite.y = WS_SPRITE_Y },
+          targets: ws.sprite,
+          scaleY: CHAR_SCALE * ssHop.taskHopScaleSquash,
+          duration: Math.round(ssHop.taskHopDuration * 0.27),
+          ease: 'Sine.easeIn',
+          onComplete: () => {
+            // Phase 2: hop up + stretch (character pops upward, elongates)
+            this.scene.tweens.add({
+              targets: ws.sprite,
+              y: WS_SPRITE_Y + ssHop.taskHopY,
+              scaleY: CHAR_SCALE * ssHop.taskHopScaleStretch,
+              duration: Math.round(ssHop.taskHopDuration * 0.4),
+              ease: 'Sine.easeOut',
+              onComplete: () => {
+                // Phase 3: land + settle back to rest scale
+                this.scene.tweens.add({
+                  targets: ws.sprite,
+                  y: WS_SPRITE_Y,
+                  scaleY: CHAR_SCALE,
+                  duration: Math.round(ssHop.taskHopDuration * 0.33),
+                  ease: 'Bounce.easeOut',
+                  onComplete: () => {
+                    ws.sprite.y = WS_SPRITE_Y
+                    ws.sprite.scaleY = CHAR_SCALE
+                  },
+                })
+              },
+            })
+          },
         })
         // Find the room that owns this workstation to compute world position
         for (const room of this.host.getRooms().values()) {
@@ -874,7 +912,18 @@ export class WorkstationAnimator {
       if (ws.walkBreakTween) { ws.walkBreakTween.destroy(); ws.walkBreakTween = undefined }
       ws.sprite.x = 0
       ws.sprite.y = WS_SPRITE_Y
-      if (!gdsLock) ws.sprite.setFrame(base + POSE_SIT)
+      if (!gdsLock) {
+        ws.sprite.setFrame(base + POSE_SIT)
+        // Sitting-down compression on return from walk break
+        const ssFW = AnimConfig.squashStretch
+        this.scene.tweens.add({
+          targets: ws.sprite,
+          scaleY: CHAR_SCALE * ssFW.sitCompressScaleY,
+          duration: ssFW.sitCompressDuration,
+          yoyo: true,
+          ease: 'Sine.easeOut',
+        })
+      }
     }
 
     pathWalker.startPath(goPath, () => {
@@ -899,6 +948,83 @@ export class WorkstationAnimator {
       return true
     }
     return false
+  }
+
+  // ---------------------------------------------------------------------------
+  // Squash & stretch — celebration sequence (Living Lab 1b)
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Recursive helper: runs `count` decaying scale oscillations on a sprite.
+   * Each oscillation compresses scaleY by `amplitude` and widens scaleX by half that,
+   * then restores, with `amplitude` multiplied by `decay` each time.
+   */
+  private _runDecayingOscillations(
+    sprite: Phaser.GameObjects.Sprite,
+    count: number,
+    amplitude: number,
+    duration: number,
+    decay: number,
+  ): void {
+    if (count <= 0 || !sprite.active) {
+      sprite.setScale(CHAR_SCALE)
+      return
+    }
+    this.scene.tweens.add({
+      targets: sprite,
+      scaleY: CHAR_SCALE * (1 - amplitude),
+      scaleX: CHAR_SCALE * (1 + amplitude * 0.5),
+      duration,
+      yoyo: true,
+      ease: 'Sine.easeInOut',
+      onComplete: () => {
+        sprite.setScale(CHAR_SCALE)
+        this._runDecayingOscillations(sprite, count - 1, amplitude * decay, duration, decay)
+      },
+    })
+  }
+
+  /**
+   * Play the full squash-stretch celebration sequence on an agent's sprite:
+   * wind-up crouch → stretch pop → 3 decaying settle oscillations.
+   * Callable externally (e.g. from CelebrationManager for rank-up events).
+   */
+  triggerCelebrationSquash(agentId: string): void {
+    for (const room of this.host.getRooms().values()) {
+      const ws = room.workstations.get(agentId)
+      if (!ws?.sprite?.active) continue
+      const ss = AnimConfig.squashStretch
+      // Step 1: wind-up crouch
+      this.scene.tweens.add({
+        targets: ws.sprite,
+        scaleY: CHAR_SCALE * ss.celebWindupScaleY,
+        scaleX: CHAR_SCALE * (2 - ss.celebWindupScaleY),  // inverse X for volume conservation
+        duration: ss.celebWindupDuration,
+        ease: 'Sine.easeIn',
+        onComplete: () => {
+          // Step 2: stretch pop
+          this.scene.tweens.add({
+            targets: ws.sprite,
+            scaleY: CHAR_SCALE * ss.celebStretchScaleY,
+            scaleX: CHAR_SCALE * (2 - ss.celebStretchScaleY),
+            duration: ss.celebStretchDuration,
+            ease: 'Back.easeOut',
+            onComplete: () => {
+              // Step 3: decaying settle oscillations
+              ws.sprite.setScale(CHAR_SCALE)
+              this._runDecayingOscillations(
+                ws.sprite,
+                ss.celebSettleCount,
+                ss.celebSettleAmplitude,
+                ss.celebSettleDuration,
+                ss.celebSettleDecay,
+              )
+            },
+          })
+        },
+      })
+      return
+    }
   }
 
   // ---------------------------------------------------------------------------

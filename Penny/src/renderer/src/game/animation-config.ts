@@ -239,6 +239,50 @@ export interface AnimationConfig {
     comboTierFireMin: number
   }
 
+  /**
+   * Squash & stretch — the classic animation principle applied to character tweens.
+   * All parameters here are hot-patchable at runtime via patchAnimConfig().
+   */
+  squashStretch: {
+    /** scaleY applied to sprite on each walk footfall (< 1 = compression). */
+    walkFootfallScaleY: number
+    /** scaleX applied to sprite on each walk footfall (> 1 = widening). */
+    walkFootfallScaleX: number
+    /** Duration (ms) of one footfall squash half-cycle (yoyo back to original). */
+    walkFootfallDuration: number
+
+    /** scaleY during celebration wind-up crouch (< 1). */
+    celebWindupScaleY: number
+    /** Duration (ms) of the wind-up crouch tween. */
+    celebWindupDuration: number
+    /** scaleY during celebration stretch pop (> 1). */
+    celebStretchScaleY: number
+    /** Duration (ms) of the stretch pop tween. */
+    celebStretchDuration: number
+    /** Number of decaying oscillations after the stretch pop. */
+    celebSettleCount: number
+    /** Starting scale deviation amplitude for the first settle oscillation. */
+    celebSettleAmplitude: number
+    /** Duration (ms) of each settle oscillation half-cycle. */
+    celebSettleDuration: number
+    /** Multiplier applied to amplitude each successive oscillation (0–1). */
+    celebSettleDecay: number
+
+    /** scaleY squash applied when character sits down on contact (< 1). */
+    sitCompressScaleY: number
+    /** Duration (ms) of the sitting compression tween (yoyo back to original). */
+    sitCompressDuration: number
+
+    /** Y offset (px, negative = upward) of the task complete hop. */
+    taskHopY: number
+    /** scaleY squash just before the hop (pre-launch compression). */
+    taskHopScaleSquash: number
+    /** scaleY stretch at the apex of the hop. */
+    taskHopScaleStretch: number
+    /** Total duration (ms) of the full task complete hop sequence. */
+    taskHopDuration: number
+  }
+
   /** Camera juice: zoom pulses, scripted pans, slow zoom-to-fit (sidekick#79). */
   camera: {
     pulse: Record<
@@ -412,6 +456,32 @@ function makeDefaults(): AnimationConfig {
       comboTier2Min:           2,
       comboTier3Min:           3,
       comboTierFireMin:        5,
+    },
+
+    // -----------------------------------------------------------------------
+    // Squash & stretch (Living Lab 1b)
+    // -----------------------------------------------------------------------
+    squashStretch: {
+      walkFootfallScaleY:      0.97,  // subtle Y compression on each footfall
+      walkFootfallScaleX:      1.03,  // matching X widening (volume conservation)
+      walkFootfallDuration:    80,    // ms per half-cycle (yoyo)
+
+      celebWindupScaleY:       0.85,  // wind-up crouch before big pop
+      celebWindupDuration:     120,
+      celebStretchScaleY:      1.15,  // upward stretch at peak
+      celebStretchDuration:    100,
+      celebSettleCount:        3,     // decaying oscillations after pop
+      celebSettleAmplitude:    0.06,  // first oscillation scale deviation
+      celebSettleDuration:     80,    // ms per settle half-cycle
+      celebSettleDecay:        0.5,   // amplitude multiplier per oscillation
+
+      sitCompressScaleY:       0.93,  // compression on chair contact
+      sitCompressDuration:     60,    // ms per half-cycle (yoyo)
+
+      taskHopY:               -4,     // px upward at hop apex
+      taskHopScaleSquash:      0.9,   // pre-launch squash
+      taskHopScaleStretch:     1.1,   // apex stretch
+      taskHopDuration:         150,   // ms total for full 3-phase sequence
     },
 
     camera: {

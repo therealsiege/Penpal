@@ -7,6 +7,7 @@
 import Phaser from 'phaser'
 import type { NavPoint } from './nav-mesh'
 import { SPRITESHEET_KEYS, ICON_FRAMES } from './office-asset-keys'
+import { AnimConfig } from './animation-config'
 
 const DEFAULT_WALK_SPEED = 55 // px/sec
 const WALK_CYCLE_MS = 200
@@ -37,8 +38,6 @@ export class PathWalker {
   private trailDots: Phaser.GameObjects.Sprite[] = []
   private lastDirection = -1 // last startFrame direction used
   private lastStartFrame = -1 // previous waypoint's startFrame for direction change detection
-  /** Optional callback fired on every 2nd walk cycle (left foot). Receives world-space position. */
-  private onFootstep: ((worldX: number, worldY: number) => void) | null = null
 
   constructor(
     scene: Phaser.Scene,
@@ -46,14 +45,12 @@ export class PathWalker {
     shadow: Phaser.GameObjects.Ellipse | null,
     sheetKey: string,
     speed = DEFAULT_WALK_SPEED,
-    onFootstep?: (worldX: number, worldY: number) => void,
   ) {
     this.scene = scene
     this.sprite = sprite
     this.shadow = shadow
     this.sheetKey = sheetKey
     this.speed = speed
-    this.onFootstep = onFootstep ?? null
   }
 
   startPath(waypoints: NavPoint[], onComplete: () => void): void {
@@ -201,10 +198,20 @@ export class PathWalker {
           },
         })
 
-        // Footstep sound — every 2nd walk frame (cycleIdx === 0 = left foot down)
-        if (cycleIdx === 0 && this.onFootstep) {
-          this.onFootstep(this.sprite.x, this.sprite.y)
-        }
+        // ── Footfall squash & stretch ──
+        // Brief Y-compression + X-widening on each step (volume conservation principle).
+        // Runs independently of the bounce tween on the scale properties.
+        const ss = AnimConfig.squashStretch
+        const baseSY = this.sprite.scaleY
+        const baseSX = this.sprite.scaleX
+        this.scene.tweens.add({
+          targets: this.sprite,
+          scaleY: baseSY * ss.walkFootfallScaleY,
+          scaleX: baseSX * ss.walkFootfallScaleX,
+          duration: ss.walkFootfallDuration,
+          yoyo: true,
+          ease: 'Sine.easeInOut',
+        })
 
         // Footstep dust puffs every few steps
         this.dustStepCounter++
