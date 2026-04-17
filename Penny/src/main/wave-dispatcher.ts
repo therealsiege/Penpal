@@ -45,15 +45,17 @@ export async function driveWaves(): Promise<void> {
   if (!enabled || !repo) return
 
   try {
-    // Fetch all open issues with wave-* labels
+    // Fetch all issues with any wave-* label.
+    // `--label` uses AND logic (all labels must match), so we use `--search`
+    // with GitHub's comma-separated label syntax which is OR.
     const { stdout } = await execFileAsync('gh', [
       'issue', 'list',
       '--repo', repo,
       '--state', 'all',
-      '--label', 'wave-1,wave-2,wave-3,wave-4,wave-5',
+      '--search', 'label:wave-1,wave-2,wave-3,wave-4,wave-5',
       '--json', 'number,labels,state',
-      '--limit', '50',
-    ], { encoding: 'utf-8', timeout: 15_000 })
+      '--limit', '200',
+    ], { encoding: 'utf-8', timeout: 30_000 })
 
     const issues: { number: number; labels: { name: string }[]; state: string }[] = JSON.parse(stdout || '[]')
 

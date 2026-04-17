@@ -60,8 +60,8 @@ interface GHIssue {
 
 // ── Concurrency ─────────────────────────────────────────────────────────────
 
-/** Max pods running at once. Prevents resource starvation from too many Claude sessions. */
-export const MAX_CONCURRENT_PODS = 3
+/** Max pods running at once. Set to Infinity to disable the cap. */
+export const MAX_CONCURRENT_PODS = Infinity
 
 export function getActivePodCount(): number {
   return state.issues.filter(p => p.stage === 'executing').length
