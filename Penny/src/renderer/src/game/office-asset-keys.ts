@@ -591,6 +591,11 @@ export const AUDIO_KEYS = Object.freeze({
   SWITCH_B: 'sfx-switch-b',
   TAP_A: 'sfx-tap-a',
   TAP_B: 'sfx-tap-b',
+  // Music track stems
+  MUSIC_BASE: 'music-base',
+  MUSIC_RHYTHM: 'music-rhythm',
+  MUSIC_MELODY: 'music-melody',
+  MUSIC_INTENSITY: 'music-intensity',
 } as const)
 
 /** Map quest difficulty to the corresponding star frame index. */
