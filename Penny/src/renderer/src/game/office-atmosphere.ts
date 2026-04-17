@@ -52,6 +52,10 @@ export class OfficeAtmosphere {
   private lastClockTick = 0
   private lastChimeHour = -1
 
+  // Ambient Light2D color — RGB components for smooth tween interpolation
+  private ambientLightRGB = { r: 0xff, g: 0xf5, b: 0xe6 }
+  private ambientLightTween: Phaser.Tweens.Tween | null = null
+
   // Ceiling lights
   ceilingLights: Phaser.GameObjects.Container[] = []
 
@@ -146,6 +150,8 @@ export class OfficeAtmosphere {
   // ---------------------------------------------------------------------------
 
   destroy(): void {
+    this.ambientLightTween?.stop()
+    this.ambientLightTween = null
     this.dayNightTimer?.destroy()
     this.dayNightTimer = null
     this.dayNightOverlay?.destroy()
@@ -194,6 +200,51 @@ export class OfficeAtmosphere {
       return { phase: 'evening', color: 0xff6a00, alpha: 0.08, bgColor: 0x14161f, glowMultiplier: 1.2 }
     } else {
       return { phase: 'night', color: 0x1a3a6a, alpha: 0.14, bgColor: 0x0a0e18, glowMultiplier: 1.6 }
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Ambient Light2D — smooth color lerp between day/night stops
+  // ---------------------------------------------------------------------------
+
+  private static readonly AMBIENT_STOPS: Record<string, { r: number; g: number; b: number }> = {
+    // Warm white dawn — 0xfff5e6
+    morning:  { r: 0xff, g: 0xf5, b: 0xe6 },
+    // Neutral midday — 0xffffff
+    day:      { r: 0xff, g: 0xff, b: 0xff },
+    // Amber dusk — 0xffcc80
+    evening:  { r: 0xff, g: 0xcc, b: 0x80 },
+    // Cool blue night — 0x8899bb at 40% reduced intensity (×0.6)
+    night:    { r: 0x52, g: 0x5c, b: 0x70 },
+  }
+
+  private applyAmbientLight(phase: string, animate: boolean): void {
+    const lights = this.scene.lights
+    if (!lights) return
+
+    const target = OfficeAtmosphere.AMBIENT_STOPS[phase] ?? OfficeAtmosphere.AMBIENT_STOPS.day
+
+    if (animate) {
+      const from = { ...this.ambientLightRGB }
+      this.ambientLightTween?.stop()
+      this.ambientLightTween = this.scene.tweens.addCounter({
+        from: 0,
+        to: 1,
+        duration: 3000,
+        ease: 'Sine.easeInOut',
+        onUpdate: (tw) => {
+          const t = tw.getValue() ?? 0
+          const r = Math.round(Phaser.Math.Linear(from.r, target.r, t))
+          const g = Math.round(Phaser.Math.Linear(from.g, target.g, t))
+          const b = Math.round(Phaser.Math.Linear(from.b, target.b, t))
+          this.ambientLightRGB = { r, g, b }
+          lights.setAmbientColor((r << 16) | (g << 8) | b)
+        },
+        onComplete: () => { this.ambientLightTween = null },
+      })
+    } else {
+      this.ambientLightRGB = { ...target }
+      lights.setAmbientColor((target.r << 16) | (target.g << 8) | target.b)
     }
   }
 
@@ -363,6 +414,9 @@ export class OfficeAtmosphere {
         hazeOverlay.setAlpha(targetScale)
       }
     }
+
+    // Light2D ambient color — smooth lerp to time-of-day stop
+    this.applyAmbientLight(phase, animate)
   }
 
   // ---------------------------------------------------------------------------
