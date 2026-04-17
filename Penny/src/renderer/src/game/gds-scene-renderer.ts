@@ -54,12 +54,28 @@ export interface LabMapRoom {
   bounds?: { x: number; y: number; w: number; h: number }
 }
 
+export interface LabMapDoor {
+  id: string
+  /** Door mechanism type — supports future types like "sliding" */
+  type: 'laser' | 'sliding'
+  /** Position and dimensions in GDS scene coordinates */
+  gdsX: number
+  gdsY: number
+  width: number
+  height: number
+  /** Beam color as hex string e.g. "0xc084fc" */
+  color?: string
+  /** Radius in GDS px within which an agent triggers open animation */
+  proximityPx?: number
+}
+
 export interface LabMapJson {
   scene?: { width: number; height: number; backdrop: string; stoolYNudge?: number }
   rooms?: LabMapRoom[]
   desks?: LabMapDesk[]
   cafeSttools?: { id: string; gdsX: number; gdsY: number }[]
   walkableTiles?: { x: number; y: number; w: number; h: number }[]
+  doors?: LabMapDoor[]
 }
 
 function loadLabMap(scene: Phaser.Scene): LabMapJson {
@@ -79,6 +95,9 @@ const SCENE_DEPTH = -3
 // GdsSceneRenderer
 // ---------------------------------------------------------------------------
 
+// Depth for door overlay graphics — just above the backdrop
+const DOOR_DEPTH = SCENE_DEPTH + 1
+
 export class GdsSceneRenderer {
   private scene: Phaser.Scene
   private backdrop: Phaser.GameObjects.Image | null = null
@@ -88,6 +107,11 @@ export class GdsSceneRenderer {
   private scale = 1
   private originX = 0
   private originY = 0
+
+  /** Graphics objects for each door beam, keyed by door id */
+  private doorGraphics = new Map<string, Phaser.GameObjects.Graphics>()
+  /** Current alpha per door (1 = closed/visible, 0 = open/invisible) */
+  private doorAlpha = new Map<string, number>()
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene
@@ -125,6 +149,7 @@ export class GdsSceneRenderer {
     this.labMap = loadLabMap(this.scene)
 
     this.placeBaristas()
+    this.renderDoors()
   }
 
   // -------------------------------------------------------------------------
@@ -181,6 +206,71 @@ export class GdsSceneRenderer {
       this.baristaContainers.push(bc)
     }
   }
+
+  // -------------------------------------------------------------------------
+  // Laser doors — read from lab-map.json `doors` array
+  // -------------------------------------------------------------------------
+
+  private renderDoors(): void {
+    for (const g of this.doorGraphics.values()) g.destroy()
+    this.doorGraphics.clear()
+    this.doorAlpha.clear()
+
+    const doors = this.labMap.doors ?? []
+    for (const door of doors) {
+      const color = door.color ? parseInt(door.color, 16) : 0xc084fc
+      const wx = this.originX + door.gdsX * this.scale
+      const wy = this.originY + door.gdsY * this.scale
+      const w = door.width * this.scale
+      const h = door.height * this.scale
+
+      const g = this.scene.add.graphics()
+      g.setDepth(DOOR_DEPTH)
+
+      // Glow layer (wider, low alpha)
+      g.fillStyle(color, 0.18)
+      g.fillRect(wx - 2, wy - 2, w + 4, h + 4)
+      // Core beam
+      g.fillStyle(color, 0.72)
+      g.fillRect(wx, wy, w, h)
+
+      this.doorGraphics.set(door.id, g)
+      this.doorAlpha.set(door.id, 1)
+    }
+  }
+
+  /**
+   * Call each frame with the world-space positions of all agents.
+   * Doors within `proximityPx` (scaled) of any agent fade open; others stay closed.
+   */
+  updateDoors(agentWorldPositions: { x: number; y: number }[]): void {
+    if (!this.rendered) return
+    const doors = this.labMap.doors ?? []
+    for (const door of doors) {
+      const g = this.doorGraphics.get(door.id)
+      if (!g) continue
+
+      const cx = this.originX + (door.gdsX + door.width / 2) * this.scale
+      const cy = this.originY + (door.gdsY + door.height / 2) * this.scale
+      const thresholdPx = (door.proximityPx ?? 150) * this.scale
+
+      const agentNear = agentWorldPositions.some(
+        p => Math.hypot(p.x - cx, p.y - cy) <= thresholdPx,
+      )
+
+      const current = this.doorAlpha.get(door.id) ?? 1
+      const target = agentNear ? 0 : 1
+      if (current === target) continue
+
+      const next = current + (target - current) * 0.12
+      const snapped = Math.abs(next - target) < 0.01 ? target : next
+      this.doorAlpha.set(door.id, snapped)
+      g.setAlpha(snapped)
+    }
+  }
+
+  /** Expose the door config for external use (e.g. E2E tests, collision masks). */
+  getDoors(): LabMapDoor[] { return this.labMap.doors ?? [] }
 
   // -------------------------------------------------------------------------
   // Desk slot allocation
@@ -273,6 +363,9 @@ export class GdsSceneRenderer {
     if (this.backdrop) { this.backdrop.destroy(); this.backdrop = null }
     for (const c of this.baristaContainers) c.destroy(true)
     this.baristaContainers = []
+    for (const g of this.doorGraphics.values()) g.destroy()
+    this.doorGraphics.clear()
+    this.doorAlpha.clear()
     this.rendered = false
   }
 

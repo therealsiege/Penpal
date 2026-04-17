@@ -231,6 +231,58 @@
       "gdsY": 1200
     }
   ],
+  "doors": [
+    {
+      "id": "door-top-room",
+      "type": "laser",
+      "gdsX": 1596,
+      "gdsY": 203,
+      "width": 30,
+      "height": 260,
+      "color": "0xc084fc",
+      "proximityPx": 150
+    },
+    {
+      "id": "door-bottom-center",
+      "type": "laser",
+      "gdsX": 1811,
+      "gdsY": 1821,
+      "width": 30,
+      "height": 151,
+      "color": "0xc084fc",
+      "proximityPx": 150
+    },
+    {
+      "id": "door-bottom-left",
+      "type": "laser",
+      "gdsX": 973,
+      "gdsY": 1397,
+      "width": 179,
+      "height": 30,
+      "color": "0xc084fc",
+      "proximityPx": 150
+    },
+    {
+      "id": "door-mid-right",
+      "type": "laser",
+      "gdsX": 2324,
+      "gdsY": 579,
+      "width": 30,
+      "height": 169,
+      "color": "0xc084fc",
+      "proximityPx": 150
+    },
+    {
+      "id": "door-mid-horizontal",
+      "type": "laser",
+      "gdsX": 1857,
+      "gdsY": 510,
+      "width": 185,
+      "height": 30,
+      "color": "0xc084fc",
+      "proximityPx": 150
+    }
+  ],
   "walkableTiles": [
     {
       "x": 1761,
