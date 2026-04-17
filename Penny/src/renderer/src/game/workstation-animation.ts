@@ -199,6 +199,9 @@ export class WorkstationAnimator {
     if (ws.chairSprite) ws.chairSprite.setAngle(0)
     // Clear typing note timer
     if (ws.typingNoteTimer) { ws.typingNoteTimer.destroy(); ws.typingNoteTimer = undefined }
+    // Clear task-review ring (accept-edits waiting state)
+    if (ws.taskReviewRingTween) { ws.taskReviewRingTween.destroy(); ws.taskReviewRingTween = undefined }
+    if (ws.taskReviewRing) { ws.taskReviewRing.destroy(); ws.taskReviewRing = undefined }
     // Clear speech bubble
     if (ws.speechBubbleTween) { ws.speechBubbleTween.destroy(); ws.speechBubbleTween = undefined }
     if (ws.speechBubbleTimer) { ws.speechBubbleTimer.destroy(); ws.speechBubbleTimer = undefined }
@@ -291,6 +294,29 @@ export class WorkstationAnimator {
           duration: AnimConfig.waiting.ledFadeDuration, ease: 'Sine.easeOut',
         })
       }
+      // Task review ring — yellow rotating arc during accept-edits review phase
+      if (agent.interactionType === 'accept-edits') {
+        const reviewRing = this.scene.add.graphics()
+        ws.container.add(reviewRing)
+        ws.taskReviewRing = reviewRing
+        const REVIEW_RING_R = 14
+        ws.taskReviewRingTween = this.scene.tweens.addCounter({
+          from: 0,
+          to: Math.PI * 2,
+          duration: 1600,
+          repeat: -1,
+          ease: 'Linear',
+          onUpdate: (tween) => {
+            if (!reviewRing.active) return
+            const a = tween.getValue() ?? 0
+            reviewRing.clear()
+            reviewRing.lineStyle(1.5, 0xfbbf24, 0.75)
+            reviewRing.beginPath()
+            reviewRing.arc(0, WS_SPRITE_Y, REVIEW_RING_R, a, a + Math.PI * 1.1, false)
+            reviewRing.strokePath()
+          },
+        })
+      }
       this.restoreDeskStrokeCallback(ws)
     } else if (isWorking) {
       if (!gdsLock) ws.sprite.setFrame(base + POSE_INTERACT)
@@ -349,6 +375,16 @@ export class WorkstationAnimator {
           if (ws.questIconTween) { ws.questIconTween.destroy(); ws.questIconTween = undefined }
           if (ws.questIconPulseTween) { ws.questIconPulseTween.destroy(); ws.questIconPulseTween = undefined }
           this._applyQuestStarStyle(ws, activeQ.difficulty as QuestDifficulty)
+        }
+
+        // Task start VFX: expanding white ring + sparkles (idle→working)
+        for (const room of this.host.getRooms().values()) {
+          if (room.workstations.has(agent.config.id)) {
+            const worldX = room.x + ws.container.x
+            const worldY = room.y + ws.container.y + WS_SPRITE_Y
+            this.host.celebrations.taskStart(worldX, worldY)
+            break
+          }
         }
       }
       // LED: working — green pulsing glow
@@ -570,7 +606,12 @@ export class WorkstationAnimator {
           if (room.workstations.has(agent.config.id)) {
             const worldX = room.x + ws.container.x
             const worldY = room.y + ws.container.y - 16  // slightly above the agent head
-            this.host.burstConfetti(worldX, worldY)
+            if (agent.sessionMode === 'error' || agent.sessionMode === 'crashed') {
+              // Task failed — play fail VFX instead of confetti
+              this.host.celebrations.taskFail(worldX, worldY + 16, { agentId: agent.config.id })
+            } else {
+              this.host.burstConfetti(worldX, worldY)
+            }
             break
           }
         }
