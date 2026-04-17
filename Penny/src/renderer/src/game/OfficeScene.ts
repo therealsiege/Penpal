@@ -36,6 +36,7 @@ import {
 import { LAB_DECORATION_PIPELINE_ID, LAB_STRATEGIC_LAYOUT_LINKS, LAB_STRATEGIC_LAYOUT_VERSION } from './lab-decoration'
 import { RoomVisibilityManager } from './room-visibility'
 import { soundEngine } from './sound-engine'
+import { audioManager } from './audio-manager'
 import { achievements } from './achievements'
 import { CelebrationManager, themeIconFrameForTheme, type CameraJuiceHint } from './celebrations'
 import { AgentMoodManager } from './agent-mood'
@@ -532,6 +533,7 @@ export class OfficeScene extends Phaser.Scene {
       this.input.keyboard.on('keydown-TAB', (e: KeyboardEvent) => {
         if (shouldIgnoreKeyboardShortcuts(e)) return
         e.preventDefault()
+        audioManager.tabSwitch()
         this.selection.cycleSelectedAgent(e.shiftKey ? -1 : 1)
       })
 
@@ -749,6 +751,7 @@ export class OfficeScene extends Phaser.Scene {
 
     soundEngine.setScene(this)
     soundEngine.wireEvents()
+    audioManager.wireEvents()
     achievements.load()
 
     // Wire achievement unlock to visual celebration

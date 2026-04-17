@@ -7,6 +7,7 @@ import { WS_DESK_Y, scaledFontSize } from './office-constants'
 import { activeTheme } from './office-theme'
 import { SPRITESHEET_KEYS, TOAST_ICON_FRAMES, ICON_FRAMES, ITEM_FRAMES, PET_COUNT, IMAGE_KEYS } from './office-asset-keys'
 import { SIGNATURE_ITEM_NAMES } from './workstation-creation'
+import { audioManager } from './audio-manager'
 
 // ---------------------------------------------------------------------------
 // OfficeUI — owns all screen-space UI state for OfficeScene
@@ -137,6 +138,9 @@ export class OfficeUI {
       if (now - ts >= 2000) this.recentToasts.delete(key)
     }
     this.recentToasts.set(text, now)
+
+    // Play severity-matched UI sound
+    audioManager.toastSound(type)
 
     const TOAST_W = 220
     const TOAST_H = 28
@@ -410,6 +414,7 @@ export class OfficeUI {
   showHelpOverlay(): void {
     if (this.helpOverlay) return
     this.helpVisible = true
+    audioManager.panelOpen()
 
     const { width, height } = this.scene.scale
     const PW = 280
@@ -531,6 +536,7 @@ export class OfficeUI {
   hideHelpOverlay(): void {
     if (!this.helpOverlay) return
     this.helpVisible = false
+    audioManager.panelClose()
     const overlay = this.helpOverlay
     this.helpOverlay = null
     // Fade out then destroy
@@ -555,6 +561,7 @@ export class OfficeUI {
       this.opsOverlay = null
     }
     this.opsVisible = true
+    audioManager.panelOpen()
 
     const { width, height } = this.scene.scale
     const ROW_H = 28
@@ -681,6 +688,7 @@ export class OfficeUI {
   hideOpsBoardOverlay(): void {
     if (!this.opsOverlay) return
     this.opsVisible = false
+    audioManager.panelClose()
     const overlay = this.opsOverlay
     this.opsOverlay = null
     this.scene.tweens.add({
