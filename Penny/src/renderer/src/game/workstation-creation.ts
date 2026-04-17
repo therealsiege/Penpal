@@ -13,6 +13,7 @@ import type { AgentState } from '../types'
 import type { WorkstationSprite, Room } from './office-types'
 import { activeTheme } from './office-theme'
 import { AnimatedBar } from './animated-bar'
+import { audioManager } from './audio-manager'
 import { computeRoomLayout, detectRoomType } from './office-layout'
 import {
   FRAME_CHAIR_DARK,
@@ -1075,6 +1076,7 @@ export class WorkstationFactory {
 
     let lastClickTime = 0
     hitArea.on('pointerdown', () => {
+      audioManager.buttonClick()
       const now = Date.now()
       const isPod = ws.state?.isOrchestratorTask === true
       if (isPod) {
@@ -1090,6 +1092,7 @@ export class WorkstationFactory {
     })
 
     hitArea.on('pointerover', () => {
+      audioManager.buttonHover()
       const baseScale = gdsScene ? gdsWsScale : 1
       this.scene.tweens.killTweensOf(wsContainer)
       this.scene.tweens.add({ targets: wsContainer, scaleX: baseScale * 1.07, scaleY: baseScale * 1.07, duration: 140, ease: 'Back.easeOut' })
