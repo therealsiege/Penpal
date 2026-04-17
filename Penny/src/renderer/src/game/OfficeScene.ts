@@ -135,6 +135,26 @@ export class OfficeScene extends Phaser.Scene {
   private labFacilityPropsLayer: Phaser.GameObjects.Container | null = null
   /** Matches WorkspaceUnifiedFloor.drawFloor bbox — snap per-room strategic hex to these cell centers. */
   private labHexSlabRect: { x: number; y: number; width: number; height: number } | null = null
+  /** Idle camera timer */
+  private idleCameraTimer: number = 0
+  /** Idle camera state */
+  private isIdleCameraActive: boolean = false
+  /** Idle camera room index */
+  private idleCameraRoomIndex: number = 0
+  /** Last time an input was received */
+  private lastInputTime: number = 0
+  /** Last idle room visit time */
+  private lastIdleRoomVisitTime: number = 0
+  /** Current zoom oscillation phase */
+  private zoomOscillationPhase: number = 0
+  /** Follow target agent ID */
+  private followTargetAgentId: string | null = null
+  /** Last follow offset */
+  private followOffset: { x: number; y: number } = { x: 0, y: 0 }
+  /** Follow offset lerp time */
+  private followOffsetLerpTime: number = 0
+  /** Previous agent position */
+  private lastAgentPosition: { x: number; y: number } | null = null
   // Room rendering subsystem (extracted to OfficeRooms)
   private roomRenderer!: OfficeRooms
   // Workstation lifecycle subsystem (extracted to OfficeWorkstations)
@@ -1232,6 +1252,9 @@ export class OfficeScene extends Phaser.Scene {
     // Camera smooth zoom + follow + recovery
     this.officeCamera.updateZoomAndFollow(time)
 
+    // Handle idle camera mode
+    this.handleIdleCamera(time);
+
     // Zoom-dependent multi-level LOD
     const lodLevel = cam.zoom < LOD_L1_MAX ? 1 : cam.zoom <= LOD_L2_MAX ? 2 : 3
     if (lodLevel !== this.lastLodLevel) {
@@ -1412,6 +1435,154 @@ export class OfficeScene extends Phaser.Scene {
     }
   }
 
+  /**
+   * Handle the idle camera mode behavior
+   * When no events or user input for 30+ seconds:
+   * - Slow panoramic drift across the lab (visit each room, 10s per room)
+   * - Gentle zoom oscillation (1.0x to 1.1x, 20s cycle)
+   * - Any user input cancels idle mode immediately
+   * - Resume idle after 30s of inactivity again
+   */
+  private handleIdleCamera(time: number): void {
+    // Update idle camera timer
+    this.idleCameraTimer += 16; // Assuming ~60fps
+    
+    // Check for user input
+    if (this.input?.mouse?.isDown || this.input?.pointer?.isDown || 
+        this.input?.keyboard?.isDown) {
+      // Reset timer and cancel idle mode
+      this.idleCameraTimer = 0;
+      this.isIdleCameraActive = false;
+      this.lastInputTime = time;
+      return;
+    }
+    
+    // Check if we've been inactive for 30 seconds
+    if (time - this.lastInputTime > 30000 && !this.isIdleCameraActive) {
+      this.isIdleCameraActive = true;
+      this.idleCameraTimer = 0;
+      this.lastIdleRoomVisitTime = time;
+      this.zoomOscillationPhase = 0;
+      // Start panning to first room
+      this.panToNextRoom();
+    }
+    
+    if (this.isIdleCameraActive) {
+      // Update zoom oscillation phase (20s cycle)
+      this.zoomOscillationPhase = (time - this.lastIdleRoomVisitTime) / 20000;
+      const oscillation = Math.sin(this.zoomOscillationPhase * 2 * Math.PI) * 0.1;
+      const targetZoom = 1.0 + oscillation;
+      
+      // Apply zoom (lerp to target)
+      this.officeCamera.targetZoom = Phaser.Math.Lerp(this.officeCamera.targetZoom, targetZoom, 0.02);
+      
+      // Check if it's time to visit next room (10s per room)
+      if (time - this.lastIdleRoomVisitTime > 10000) {
+        this.panToNextRoom();
+      }
+    }
+  }
+  
+  /**
+   * Pan camera to the next room in the sequence
+   */
+  private panToNextRoom(): void {
+    const roomList = Array.from(this.rooms.values());
+    if (roomList.length === 0) return;
+    
+    // Find next room index
+    this.idleCameraRoomIndex = (this.idleCameraRoomIndex + 1) % roomList.length;
+    
+    const room = roomList[this.idleCameraRoomIndex];
+    if (!room) return;
+    
+    // Center camera on room with slight zoom (zoom in slightly on room)
+    this.officeCamera.smoothPanTo(
+      room.x + room.width / 2,
+      room.y + room.height / 2,
+      2000 // 2 second pan to next room
+    );
+    
+    // Set target zoom to slightly zoomed in (1.02x) for more focus on the room
+    this.officeCamera.targetZoom = 1.02;
+    
+    this.lastIdleRoomVisitTime = this.time.now;
+  }
+
+  /**
+   * Update smooth follow behavior for an agent
+   */
+  private updateFollowTarget(agentId: string, agentPosition: { x: number; y: number }, time: number): void {
+    // Check if we're following this agent
+    if (this.followTargetAgentId !== agentId) {
+      return;
+    }
+    
+    // Calculate deadzone (60x40px)
+    const deadzoneLeft = -30;
+    const deadzoneRight = 30;
+    const deadzoneTop = -20;
+    const deadzoneBottom = 20;
+    
+    // Determine if agent's position is outside the deadzone
+    if (agentPosition.x < this.lastAgentPosition?.x + deadzoneLeft || 
+        agentPosition.x > this.lastAgentPosition?.x + deadzoneRight ||
+        agentPosition.y < this.lastAgentPosition?.y + deadzoneTop ||
+        agentPosition.y > this.lastAgentPosition?.y + deadzoneBottom) {
+      
+      // Apply look-ahead
+      const lookAheadX = 40; // 40px offset in walking direction
+      
+      // We need to determine the walking direction...
+      // For now, we'll use a simple approximation
+      const dx = agentPosition.x - (this.lastAgentPosition?.x || agentPosition.x);
+      const dy = agentPosition.y - (this.lastAgentPosition?.y || agentPosition.y);
+      
+      // Calculate offset based on movement direction (simplified)
+      const followX = agentPosition.x + (dx > 0 ? lookAheadX : -lookAheadX);
+      const followY = agentPosition.y;
+      
+      // Store current offset target
+      const targetOffset = { x: followX, y: followY };
+      
+      // Apply lerp transition on direction change (300ms)
+      if (this.followOffsetLerpTime > 0) {
+        // Smooth transition to new offset
+        this.followOffset.x += (targetOffset.x - this.followOffset.x) * (0.3 * (1000 / 60)); // ~300ms lerp
+        this.followOffset.y += (targetOffset.y - this.followOffset.y) * (0.3 * (1000 / 60));
+      } else {
+        // If we don't have a lerp time yet, set to the target immediately
+        this.followOffset = targetOffset;
+      }
+      
+      // Store the follow target with the offset applied
+      this.officeCamera.followTarget = {
+        x: followX,
+        y: followY
+      };
+      
+      this.followOffsetLerpTime = 300; // Reset lerp timer
+    } else {
+      // Inside deadzone, just return to 0 offset over 500ms
+      if (this.followOffsetLerpTime > 0) {
+        this.followOffset.x += (0 - this.followOffset.x) * (0.2 * (1000 / 60)); // 500ms lerp
+        this.followOffset.y += (0 - this.followOffset.y) * (0.2 * (1000 / 60));
+        this.followOffsetLerpTime -= 16; // 60fps update
+      } else {
+        this.followOffset = { x: 0, y: 0 };
+      }
+      
+      // Update follow target without offset
+      this.officeCamera.followTarget = {
+        x: agentPosition.x,
+        y: agentPosition.y
+      };
+    }
+    
+    // Update last position
+    this.lastAgentPosition = agentPosition;
+  }
+  
   // ---------------------------------------------------------------------------
   // Public API
   // ---------------------------------------------------------------------------
