@@ -17,7 +17,6 @@ import { OfficeBackground } from './office-background'
 import { LabEditor } from './lab-editor'
 import { OfficeBroadcast } from './office-broadcast'
 import { OfficeCamera, panDurationFromDistance, getWorkstationWorldPos } from './office-camera'
-import { CameraCinematics } from './camera-cinematics'
 import { AnimConfig } from './animation-config'
 import type { WorkstationSprite, Room, PodLineInfo, OfficeDebugSnapshot, OrchestratorTaskOfficeInfo } from './office-types'
 import {
@@ -49,7 +48,6 @@ import { questSystem } from './quest-system'
 import { creditManager } from './credits'
 import { leaderboardManager } from './leaderboard'
 import { seasonManager } from './seasons'
-import { NpcInteractionManager } from './npc-interaction'
 
 import {
   KB_ZOOM_STEP,
@@ -121,10 +119,6 @@ export class OfficeScene extends Phaser.Scene {
 
   // Camera & navigation — extracted to OfficeCamera
   private officeCamera!: OfficeCamera
-  // Event-driven auto-pan with priority queue
-  private cinematics!: CameraCinematics
-  /** Pod workflow IDs seen so far — used to detect newly launched pods for POD_LAUNCHED event. */
-  private _knownPodWorkflowIds = new Set<string>()
   private resizeTimer: ReturnType<typeof setTimeout> | null = null
   private _cameraJuiceLockDepth = 0
   private _workstationRefitTimer: ReturnType<typeof setTimeout> | null = null
@@ -170,9 +164,6 @@ export class OfficeScene extends Phaser.Scene {
   private lastMoodUpdateAt = 0
   private lastSeasonHudUpdateAt = 0
 
-
-  // NPC interaction prompts — RPG Layer 3a
-  private npcInteraction!: NpcInteractionManager
 
   // Screen-space UI overlays (toasts, tooltip, hover ring, help, debug, LOD label, status bar)
   private ui!: OfficeUI
@@ -318,20 +309,6 @@ export class OfficeScene extends Phaser.Scene {
     })
     this.officeCamera.init()
 
-    // Event-driven auto-pan with priority queue
-    this.cinematics = new CameraCinematics(this, {
-      getRooms: () => this.rooms,
-      getOfficeCamera: () => this.officeCamera,
-      lockCinematicInput: () => this.lockCameraJuiceInput(),
-      unlockCinematicInput: () => this.unlockCameraJuiceInput(),
-      cameras: this.cameras,
-      tweens: this.tweens,
-      time: this.time,
-      input: this.input,
-      add: this.add,
-    })
-    this.cinematics.init()
-
     // Office background — extracted to OfficeBackground
     this.background = new OfficeBackground(this, {
       getRooms: () => this.rooms,
@@ -402,6 +379,7 @@ export class OfficeScene extends Phaser.Scene {
       onPhaseChange: (phase, _animate, _rainDropPool, _snowPool, _vw, _vh) => {
         // Guard: particles may not yet be initialized during create() (called from atmosphere.init)
         if (this.particles) this.particles.setWeather(phase, this.viewWidth, this.viewHeight)
+        audioManager.setTimePhase(phase)
       },
       invalidateOfficeBgCache: () => { this.background.invalidateBgCache() },
       showToast: (msg, type) => this.showToast(msg, type === 'warn' ? 'warning' : type),
@@ -556,7 +534,6 @@ export class OfficeScene extends Phaser.Scene {
       this.input.keyboard.on('keydown-TAB', (e: KeyboardEvent) => {
         if (shouldIgnoreKeyboardShortcuts(e)) return
         e.preventDefault()
-        audioManager.tabSwitch()
         this.selection.cycleSelectedAgent(e.shiftKey ? -1 : 1)
       })
 
@@ -665,11 +642,12 @@ export class OfficeScene extends Phaser.Scene {
         this.ui.toggleDebugOverlay(this.navMesh, this.rooms, this.agents, this.cafe)
       })
 
-      // M — toggle sound mute
+      // M — toggle sound mute (soundEngine + audioManager)
       this.input.keyboard.on('keydown-M', (e: KeyboardEvent) => {
         if (shouldIgnoreKeyboardShortcuts(e)) return
         e.preventDefault()
         soundEngine.toggleMute()
+        audioManager.toggleMute()
         this.showToast(soundEngine.isMuted ? 'Sound OFF' : 'Sound ON', 'info')
       })
 
@@ -774,7 +752,12 @@ export class OfficeScene extends Phaser.Scene {
 
     soundEngine.setScene(this)
     soundEngine.wireEvents()
-    audioManager.wireEvents()
+
+    // AudioManager — initialize on first user gesture (browser autoplay policy).
+    // Both pointerdown and keydown qualify. Subsequent calls are no-ops.
+    const _initAudio = () => audioManager.init()
+    this.input.once('pointerdown', _initAudio)
+    this.input.keyboard?.once('keydown', _initAudio)
     achievements.load()
 
     // Wire achievement unlock to visual celebration
@@ -887,17 +870,9 @@ export class OfficeScene extends Phaser.Scene {
       this.celebrations.challengeCompleted(description)
     })
 
-    // Wire quest start to auto-pan task-dispatch sequence
-    EventBus.on(EVENTS.QUEST_STARTED, (...args: unknown[]) => {
-      const [, agentId] = args as [string, string, string]
-      if (agentId) EventBus.emit(EVENTS.TASK_DISPATCHED, agentId)
-    })
-
     // Wire quest completion to reward popup VFX
     EventBus.on(EVENTS.QUEST_COMPLETED, (...args: unknown[]) => {
       const [, agentId, xpReward, creditReward, difficulty] = args as [string, string, number, number, string]
-      // Trigger auto-pan task-complete sequence
-      EventBus.emit(EVENTS.TASK_COMPLETED, agentId)
       // Find the workstation for this agent and show quest reward VFX
       for (const room of this.rooms.values()) {
         const ws = room.workstations.get(agentId)
@@ -931,8 +906,6 @@ export class OfficeScene extends Phaser.Scene {
     // Wire quest failure to error VFX
     EventBus.on(EVENTS.QUEST_FAILED, (...args: unknown[]) => {
       const [, agentId] = args as [string, string]
-      // Trigger auto-pan agent-error sequence
-      EventBus.emit(EVENTS.AGENT_ERROR, agentId)
       // Find the workstation for this agent and show error VFX
       for (const room of this.rooms.values()) {
         const ws = room.workstations.get(agentId)
@@ -954,13 +927,6 @@ export class OfficeScene extends Phaser.Scene {
         this.scene.sleep(SCENE_KEYS.OFFICE)
         EventBus.emit(EVENTS.NAVIGATE_CAMPUS)
       }
-    })
-
-    // NPC interaction prompts — RPG Layer 3a
-    this.npcInteraction = new NpcInteractionManager(this)
-    EventBus.on(EVENTS.AGENT_INTERACT, (...args: unknown[]) => {
-      const agentId = args[0] as string
-      this.showToast(`Interact with agent: ${agentId}`, 'info')
     })
 
     this.isReady = true
@@ -1398,16 +1364,6 @@ export class OfficeScene extends Phaser.Scene {
       this.questPanel.update()
     }
 
-    // NPC interaction radius — update every frame with camera-centre as player proxy
-    if (this.npcInteraction) {
-      const camCtr = this.getCameraWorldCenter()
-      const allWorkstations: import('./office-types').WorkstationSprite[] = []
-      for (const room of this.rooms.values()) {
-        for (const ws of room.workstations.values()) allWorkstations.push(ws)
-      }
-      this.npcInteraction.update(camCtr.x, camCtr.y, allWorkstations)
-    }
-
     // Performance auto-reducer — check avg FPS every 3s
     this._perfFrameCount++
     if (time - this._perfLastCheckAt >= 3000) {
@@ -1478,6 +1434,10 @@ export class OfficeScene extends Phaser.Scene {
     }
 
     this.agents = allAgents
+
+    // Update keyboard clatter rate based on how many agents are actively working
+    const workingCount = allAgents.filter(a => a.sessionMode === 'working' || a.status === 'active').length
+    audioManager.setWorkingAgentCount(workingCount)
 
     const grouped = new Map<string, AgentState[]>()
     for (const agent of allAgents) {
@@ -1630,23 +1590,6 @@ export class OfficeScene extends Phaser.Scene {
   /** Update active pod workflows for connecting lines (Fix 11) */
   setPodWorkflows(workflows: PodLineInfo[]): void {
     if (!this.pods) return
-
-    // Detect newly launched pods and emit POD_LAUNCHED for auto-pan
-    for (const wf of workflows) {
-      if (!this._knownPodWorkflowIds.has(wf.workflowId)) {
-        this._knownPodWorkflowIds.add(wf.workflowId)
-        const agentIds = [wf.solverAgentId, wf.reviewerAgentId, wf.executorAgentId].filter(Boolean)
-        if (agentIds.length > 0) {
-          EventBus.emit(EVENTS.POD_LAUNCHED, agentIds)
-        }
-      }
-    }
-    // Prune completed pods from the known set
-    const activeIds = new Set(workflows.map(wf => wf.workflowId))
-    for (const id of this._knownPodWorkflowIds) {
-      if (!activeIds.has(id)) this._knownPodWorkflowIds.delete(id)
-    }
-
     this.pods.setPodLines(workflows)
     if (this.background.hasGdsScene()) {
       this.pods.setVisible(false)

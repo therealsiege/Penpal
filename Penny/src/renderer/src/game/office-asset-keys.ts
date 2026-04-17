@@ -591,11 +591,16 @@ export const AUDIO_KEYS = Object.freeze({
   SWITCH_B: 'sfx-switch-b',
   TAP_A: 'sfx-tap-a',
   TAP_B: 'sfx-tap-b',
-  // Music track stems
-  MUSIC_BASE: 'music-base',
-  MUSIC_RHYTHM: 'music-rhythm',
-  MUSIC_MELODY: 'music-melody',
-  MUSIC_INTENSITY: 'music-intensity',
+  // Ambient soundscape (OGG + MP3 fallback, optional — synthesized if absent)
+  AMBIENT_LAB_HUM:     'ambient-lab-hum',
+  AMBIENT_NIGHT_LAYER: 'ambient-night-layer',
+  SFX_KEY_1: 'sfx-key-1',
+  SFX_KEY_2: 'sfx-key-2',
+  SFX_KEY_3: 'sfx-key-3',
+  SFX_KEY_4: 'sfx-key-4',
+  SFX_CHIRP_1: 'sfx-chirp-1',
+  SFX_CHIRP_2: 'sfx-chirp-2',
+  SFX_CHIRP_3: 'sfx-chirp-3',
 } as const)
 
 /** Map quest difficulty to the corresponding star frame index. */
