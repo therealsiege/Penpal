@@ -194,6 +194,12 @@ export interface WorkstationSprite {
   contextRotShakeTween?: Phaser.Tweens.Tween
   lastContextRotState?: boolean
   contextRotMonitorBaseX?: number
+  /** Phaser Light2D point light from the monitor — color and intensity reflect agent state */
+  monitorPointLight?: Phaser.GameObjects.Light
+  /** Tween for monitor point light intensity pulse (working/waiting pulse) */
+  monitorPointLightTween?: Phaser.Tweens.Tween
+  /** Phaser Light2D point light from the desk lamp — warm ambient light for L4+ agents */
+  lampPointLight?: Phaser.GameObjects.Light
 }
 
 export interface Room {

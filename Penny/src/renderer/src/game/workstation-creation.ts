@@ -905,6 +905,31 @@ export class WorkstationFactory {
       .setInteractive({ useHandCursor: true })
     wsContainer.add(hitArea)
 
+    // ── Point lights (Phaser Light2D pipeline) ────────────────────────────────
+    // Enable the lights system once per scene — idempotent.
+    if (!this.scene.lights.active) {
+      this.scene.lights.enable().setAmbientColor(0x111111)
+    }
+
+    // Monitor point light — starts at intensity 0 (idle warm tint).
+    // State-driven color/intensity set in workstation-animation.ts updateAnimation().
+    // World position is synced after layout() tween completes.
+    let monitorPointLight: Phaser.GameObjects.Light | undefined
+    if (!gdsScene && monitorSprite) {
+      monitorPointLight = this.scene.lights.addLight(
+        room.x, room.y + WS_MONITOR_Y, 80, 0xffddaa, 0,
+      )
+    }
+
+    // Desk lamp point light — warm ambient glow, L4+ only.
+    // Toggles on/off with agent presence; off during walk breaks.
+    let lampPointLight: Phaser.GameObjects.Light | undefined
+    if (!gdsScene && lampVisible) {
+      lampPointLight = this.scene.lights.addLight(
+        room.x - 34, room.y + WS_DESK_Y - 4, 50, 0xffeedd, 0,
+      )
+    }
+
     const ws: WorkstationSprite = {
       container: wsContainer, sprite, nameText, statusDot, roleBadge,
       deskBody, deskTop, monitorSprite, chairSprite,
@@ -953,6 +978,8 @@ export class WorkstationFactory {
       evalGlow,
       contextMeter,
       contextRotMonitorBaseX: monitorSprite?.x ?? 0,
+      monitorPointLight,
+      lampPointLight,
     }
 
     // Eval glow breathing pulse tween (must match facility dim range or the pulse undoes base alpha)
@@ -1175,7 +1202,10 @@ export class WorkstationFactory {
       }
 
       this.scene.tweens.killTweensOf(ws.container)
-      this.scene.tweens.add({ targets: ws.container, x: cx, y: cy, duration: 280, ease: 'Power2' })
+      this.scene.tweens.add({
+        targets: ws.container, x: cx, y: cy, duration: 280, ease: 'Power2',
+        onComplete: () => { this._syncPointLightPositions(ws, room) },
+      })
       ws.container.setDepth(cy + room.y)
     })
 
@@ -1250,6 +1280,23 @@ export class WorkstationFactory {
       }
     } else if (skipInteractiveStrip) {
       room.propsPlaced = true
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // _syncPointLightPositions — update world-space Light positions after layout
+  // ---------------------------------------------------------------------------
+
+  private _syncPointLightPositions(ws: WorkstationSprite, room: Room): void {
+    const wx = room.x + ws.container.x
+    const wy = room.y + ws.container.y
+    if (ws.monitorPointLight) {
+      ws.monitorPointLight.x = wx
+      ws.monitorPointLight.y = wy + WS_MONITOR_Y
+    }
+    if (ws.lampPointLight) {
+      ws.lampPointLight.x = wx - 34
+      ws.lampPointLight.y = wy + WS_DESK_Y - 4
     }
   }
 
@@ -1341,6 +1388,9 @@ export class WorkstationFactory {
     if (ws.flameContainer) { ws.flameContainer.removeAll(true); ws.flameContainer.destroy() }
     if (ws.evalGlowTween)        ws.evalGlowTween.destroy()
     if (ws.evalGlow)             ws.evalGlow.destroy()
+    if (ws.monitorPointLightTween) ws.monitorPointLightTween.destroy()
+    if (ws.monitorPointLight) this.scene.lights.removeLight(ws.monitorPointLight)
+    if (ws.lampPointLight)    this.scene.lights.removeLight(ws.lampPointLight)
     if (ws.contextMeterPulseTween) ws.contextMeterPulseTween.destroy()
     if (ws.contextRotShakeTween)   ws.contextRotShakeTween.destroy()
     if (ws.contextMeter)           ws.contextMeter.destroy()

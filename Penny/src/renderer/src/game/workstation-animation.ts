@@ -183,6 +183,7 @@ export class WorkstationAnimator {
     if (ws.kbGlowTween)     { ws.kbGlowTween.destroy();     ws.kbGlowTween     = undefined }
     if (ws.lampLightTween)   { ws.lampLightTween.destroy();   ws.lampLightTween   = undefined }
     if (ws.lampFlickerTimer) { ws.lampFlickerTimer.destroy();  ws.lampFlickerTimer = undefined }
+    if (ws.monitorPointLightTween) { ws.monitorPointLightTween.destroy(); ws.monitorPointLightTween = undefined }
     if (ws.walkBreakTween)   { ws.walkBreakTween.destroy();   ws.walkBreakTween   = undefined }
     if (ws.lookAroundTimer)     { ws.lookAroundTimer.destroy();     ws.lookAroundTimer     = undefined }
     if (ws.stretchTimer)        { ws.stretchTimer.destroy();        ws.stretchTimer        = undefined }
@@ -291,6 +292,16 @@ export class WorkstationAnimator {
           duration: AnimConfig.waiting.ledFadeDuration, ease: 'Sine.easeOut',
         })
       }
+      // Monitor point light: amber slow pulse when waiting
+      if (ws.monitorPointLight) {
+        ws.monitorPointLight.setColor(0xffaa44).setIntensity(0.6)
+        ws.monitorPointLightTween = this.scene.tweens.add({
+          targets: ws.monitorPointLight, intensity: 0.3,
+          duration: 1500, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
+        })
+      }
+      // Lamp point light: on when agent is at desk
+      if (ws.lampPointLight) ws.lampPointLight.setIntensity(0.5)
       this.restoreDeskStrokeCallback(ws)
     } else if (isWorking) {
       if (!gdsLock) ws.sprite.setFrame(base + POSE_INTERACT)
@@ -367,6 +378,17 @@ export class WorkstationAnimator {
           },
         })
       }
+      // Monitor point light: bright blue-white with subtle intensity pulse when working
+      if (ws.monitorPointLight) {
+        ws.monitorPointLight.setColor(0x88bbff).setIntensity(1.0)
+        ws.monitorPointLightTween = this.scene.tweens.add({
+          targets: ws.monitorPointLight, intensity: 0.9,
+          duration: 2000, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
+        })
+      }
+      // Lamp point light: on when agent is at desk
+      if (ws.lampPointLight) ws.lampPointLight.setIntensity(0.5)
+
       // Lamp light cone: brighten when working with a warm glow
       if (ws.lampLight) {
         ws.lampLightTween = this.scene.tweens.add({
@@ -556,6 +578,12 @@ export class WorkstationAnimator {
           duration: AnimConfig.waiting.ledFadeDuration, ease: 'Sine.easeOut',
         })
       }
+      // Monitor point light: dim warm screensaver tint when idle
+      if (ws.monitorPointLight) {
+        ws.monitorPointLight.setColor(0xffddaa).setIntensity(0.3)
+      }
+      // Lamp point light: on when agent is at desk
+      if (ws.lampPointLight) ws.lampPointLight.setIntensity(0.5)
       this.restoreDeskStrokeCallback(ws)
 
       // "Just finished" bounce + confetti when transitioning from working→idle
@@ -833,6 +861,13 @@ export class WorkstationAnimator {
     const walkShadow = this.scene.add.ellipse(worldX, worldY + 2, 16, 5, 0x000000, 0.15).setDepth(8999)
 
     ws.sprite.setVisible(false)
+    // Fade lamp point light out while agent is away from desk
+    if (ws.lampPointLight) {
+      this.scene.tweens.add({
+        targets: ws.lampPointLight, intensity: 0,
+        duration: 200, ease: 'Sine.easeOut',
+      })
+    }
 
     const pathWalker = new PathWalker(this.scene, walkSprite, walkShadow, walkSheetKey)
 
@@ -855,6 +890,13 @@ export class WorkstationAnimator {
       ws.sprite.x = 0
       ws.sprite.y = WS_SPRITE_Y
       if (!gdsLock) ws.sprite.setFrame(base + POSE_SIT)
+      // Restore lamp point light when agent returns to desk
+      if (ws.lampPointLight) {
+        this.scene.tweens.add({
+          targets: ws.lampPointLight, intensity: 0.5,
+          duration: 300, ease: 'Sine.easeOut',
+        })
+      }
     }
 
     pathWalker.startPath(goPath, () => {
