@@ -49,6 +49,7 @@ import type { WorkstationHost } from './office-workstation'
 import type { NavMesh } from './nav-mesh'
 import { buildOwnRoomRect } from './nav-mesh'
 import { PathWalker } from './path-walker'
+import { getCurrentActivity, getGameHour } from './agent-schedule'
 
 // ---------------------------------------------------------------------------
 // Eval glow color helper
@@ -673,6 +674,34 @@ export class WorkstationAnimator {
 
       // Stamp idleSince so later timers can detect prolonged boredom
       ws.sprite.setData('idleSince', Date.now())
+
+      // Schedule-driven idle activity — real session state already overrides via the
+      // mode guard above; we only reach here when the agent is genuinely idle.
+      const scheduledActivity = getCurrentActivity(agent.config.id, getGameHour())
+      ws.sprite.setData('scheduleActivity', scheduledActivity)
+
+      // Adjust idle micro-behaviour based on schedule:
+      // coffee/break → agent is more restless (shorter walk-break interval)
+      // standup → slight lean-in (head tilt fires quickly once)
+      // arrive/leave → agent looks around attentively
+      if (scheduledActivity === 'coffee' || scheduledActivity === 'break') {
+        // Trigger an early walk break to simulate heading to the break area
+        this.scene.time.delayedCall(3000 + Math.random() * 4000, () => {
+          if (ws.lastAnimMode !== 'idle' || ws.walkBreakTween) return
+          this._executeWalkBreak(ws, agent)
+        })
+      } else if (scheduledActivity === 'standup' || scheduledActivity === 'meeting') {
+        // Quick look-around to simulate engaging with peers
+        this.scene.time.delayedCall(1000 + Math.random() * 1500, () => {
+          if (ws.lastAnimMode !== 'idle' || ws.headTiltTween || gdsLock) return
+          const angle = (Math.random() - 0.5) * 10
+          ws.headTiltTween = this.scene.tweens.add({
+            targets: ws.sprite, angle,
+            duration: 350, hold: 800, yoyo: true, ease: 'Sine.easeInOut',
+            onComplete: () => { ws.sprite.setAngle(0); ws.headTiltTween = undefined },
+          })
+        })
+      }
 
       // Head tilt: tween angle -4..+4 degrees every 8-15s, hold 1s, return to 0
       // Skip in GDS mode — sprite angle is locked to stool rotation
