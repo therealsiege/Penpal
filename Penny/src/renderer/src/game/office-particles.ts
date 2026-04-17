@@ -4,6 +4,8 @@ import { WS_DESK_Y, scaledFontSize } from './office-constants'
 import { SPRITESHEET_KEYS } from './office-asset-keys'
 import { WeatherParticles } from './particles-weather'
 import { AmbientParticles } from './particles-ambient'
+import { EventBus, EVENTS } from './events'
+import { FLOAT_AMBIENT, TRAIL_FADE, BURST_RADIAL } from './particle-profiles'
 
 // ---------------------------------------------------------------------------
 // Minimal interface for workstation steam particle host
@@ -87,6 +89,15 @@ export class OfficeParticles {
   // Streak flame particle pool
   private streakFlamePool: Phaser.GameObjects.Arc[] = []
 
+  // Ambient data flow mote pool — cyan dots drifting between workstations per room
+  private dataMotePool: Phaser.GameObjects.Arc[] = []
+  private dataMoteTimer: Phaser.Time.TimerEvent | null = null
+
+  // Task assignment trail — dot + ghost trail spawned on task-dispatched event
+  private taskTrailDotPool: Phaser.GameObjects.Arc[] = []
+  private taskTrailGhostPool: Phaser.GameObjects.Arc[] = []
+  private taskDispatchListener: ((...args: unknown[]) => void) | null = null
+
   constructor(scene: Phaser.Scene) {
     this.scene = scene
     this.weather = new WeatherParticles(scene)
@@ -116,6 +127,7 @@ export class OfficeParticles {
     this._sleeping = true
     if (this.typingParticleTimer) this.typingParticleTimer.paused = true
     if (this.corridorParticleTimer) this.corridorParticleTimer.paused = true
+    if (this.dataMoteTimer) this.dataMoteTimer.paused = true
     this.weather.pause()
     this.ambient.pause()
   }
@@ -125,6 +137,7 @@ export class OfficeParticles {
     this._sleeping = false
     if (this.typingParticleTimer) this.typingParticleTimer.paused = false
     if (this.corridorParticleTimer) this.corridorParticleTimer.paused = false
+    if (this.dataMoteTimer) this.dataMoteTimer.paused = false
     this.weather.resume()
     this.ambient.resume()
   }
@@ -152,6 +165,11 @@ export class OfficeParticles {
     this.initEmojiReactionPool()
     this.initSpriteReactionPool()
     this.initMouseTrailPool()
+
+    this.initDataMotePools()
+    this.initTaskTrailPools()
+    this.startAmbientMoteTimer()
+    this.subscribeTaskDispatched()
 
     // Confetti burst emitter
     const confettiGfx = this.scene.make.graphics({ x: 0, y: 0, add: false } as Phaser.Types.GameObjects.Graphics.Options)
@@ -212,6 +230,21 @@ export class OfficeParticles {
     if (this.confettiEmitter) {
       this.confettiEmitter.destroy()
       this.confettiEmitter = null
+    }
+
+    this.dataMoteTimer?.destroy()
+    this.dataMoteTimer = null
+    for (const m of this.dataMotePool) { this.scene.tweens.killTweensOf(m); m.destroy() }
+    this.dataMotePool = []
+
+    for (const d of this.taskTrailDotPool) { this.scene.tweens.killTweensOf(d); d.destroy() }
+    this.taskTrailDotPool = []
+    for (const g of this.taskTrailGhostPool) { this.scene.tweens.killTweensOf(g); g.destroy() }
+    this.taskTrailGhostPool = []
+
+    if (this.taskDispatchListener) {
+      EventBus.off(EVENTS.TASK_DISPATCHED, this.taskDispatchListener)
+      this.taskDispatchListener = null
     }
   }
 
@@ -722,6 +755,256 @@ export class OfficeParticles {
         .setVisible(false)
       circle.setData('busy', false)
       this.chimeRipplePool.push(circle)
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Ambient data flow motes — cyan dots drifting between workstation desks
+  // ---------------------------------------------------------------------------
+
+  private initDataMotePools(): void {
+    for (let i = 0; i < 20; i++) {
+      const radius = 2 + Math.random()
+      const arc = this.scene.add.circle(0, 0, radius, 0x22d3ee, 0)
+        .setDepth(20)
+        .setVisible(false)
+        .setBlendMode(Phaser.BlendModes.ADD)
+      arc.setData('busy', false)
+      this.dataMotePool.push(arc)
+    }
+  }
+
+  private startAmbientMoteTimer(): void {
+    this.dataMoteTimer = this.scene.time.addEvent({
+      delay: 2200,
+      callback: () => this.tickAmbientDataMotes(),
+      loop: true,
+    })
+  }
+
+  private tickAmbientDataMotes(): void {
+    if (this._sleeping || this._reducedMode) return
+    if (!this.roomsRef) return
+
+    for (const room of this.roomsRef.values()) {
+      const wsArray = Array.from(room.workstations.values())
+      if (wsArray.length < 2) continue
+      // 1-2 motes per room, with some random skipping for variety
+      const moteCount = Math.random() < 0.55 ? 1 : 2
+      for (let i = 0; i < moteCount; i++) {
+        if (Math.random() < 0.35) continue
+        this.spawnDataFlowMote(room, wsArray)
+      }
+    }
+  }
+
+  private spawnDataFlowMote(room: ParticleRoom, workstations: ParticleWorkstation[]): void {
+    const mote = this.dataMotePool.find(m => !m.getData('busy'))
+    if (!mote) return
+
+    // Pick two distinct random desks as source + destination
+    const shuffled = workstations.slice().sort(() => Math.random() - 0.5)
+    const srcWs = shuffled[0]
+    const dstWs = shuffled[1]
+
+    const startX = room.x + srcWs.container.x
+    const startY = room.y + srcWs.container.y
+    const endX   = room.x + dstWs.container.x
+    const endY   = room.y + dstWs.container.y
+
+    // Randomize bezier control point perpendicular to the travel axis
+    const midX = (startX + endX) / 2
+    const midY = (startY + endY) / 2
+    const perpScale = 0.25 + Math.random() * 0.3
+    const sign = Math.random() > 0.5 ? 1 : -1
+    const ctrlX = midX - (endY - startY) * perpScale * sign
+    const ctrlY = midY + (endX - startX) * perpScale * sign
+
+    const dist = Math.hypot(endX - startX, endY - startY)
+    const speed = FLOAT_AMBIENT.driftMin + Math.random() * (FLOAT_AMBIENT.driftMax - FLOAT_AMBIENT.driftMin)
+    // At 15-25px/sec over a typical inter-desk distance of 80-200px: 3-13 seconds
+    const duration = Math.max(1500, (dist / speed) * 1000)
+
+    mote.setRadius(2 + Math.random())
+    mote.setPosition(startX, startY)
+    mote.setFillStyle(0x22d3ee)
+    mote.setAlpha(FLOAT_AMBIENT.alpha)
+    mote.setVisible(true)
+    mote.setData('busy', true)
+
+    const bezierState = { t: 0 }
+    this.scene.tweens.add({
+      targets: bezierState,
+      t: 1,
+      duration,
+      ease: 'Sine.easeInOut',
+      onUpdate: () => {
+        const t = bezierState.t
+        const mt = 1 - t
+        mote.x = mt * mt * startX + 2 * mt * t * ctrlX + t * t * endX
+        mote.y = mt * mt * startY + 2 * mt * t * ctrlY + t * t * endY
+        // Fade out in the final 20% of the journey
+        if (t > 0.8) {
+          mote.setAlpha(FLOAT_AMBIENT.alpha * (1 - (t - 0.8) / 0.2))
+        }
+      },
+      onComplete: () => {
+        mote.setVisible(false)
+        mote.setAlpha(FLOAT_AMBIENT.alpha)
+        mote.setData('busy', false)
+      },
+    })
+  }
+
+  // ---------------------------------------------------------------------------
+  // Task assignment trail — triggered by TASK_DISPATCHED event on EventBus
+  // ---------------------------------------------------------------------------
+
+  private initTaskTrailPools(): void {
+    // Head dots traveling from room center to target desk
+    for (let i = 0; i < 5; i++) {
+      const dot = this.scene.add.circle(0, 0, 3, 0xffffff, 0)
+        .setDepth(501)
+        .setVisible(false)
+        .setBlendMode(Phaser.BlendModes.ADD)
+      dot.setData('busy', false)
+      this.taskTrailDotPool.push(dot)
+    }
+    // Ghost + burst particles shared pool
+    for (let i = 0; i < 80; i++) {
+      const ghost = this.scene.add.circle(0, 0, 2, 0xffffff, 0)
+        .setDepth(500)
+        .setVisible(false)
+        .setBlendMode(Phaser.BlendModes.ADD)
+      ghost.setData('busy', false)
+      this.taskTrailGhostPool.push(ghost)
+    }
+  }
+
+  private subscribeTaskDispatched(): void {
+    this.taskDispatchListener = (...args: unknown[]) => {
+      const [_agentId, roomCenterX, roomCenterY, deskX, deskY, rankLevel] =
+        args as [string, number, number, number, number, number]
+      this.spawnTaskAssignmentTrail(roomCenterX, roomCenterY, deskX, deskY, rankLevel)
+    }
+    EventBus.on(EVENTS.TASK_DISPATCHED, this.taskDispatchListener)
+  }
+
+  /** Animate a glowing dot from room center to the target agent's desk with a fading ghost trail. */
+  spawnTaskAssignmentTrail(fromX: number, fromY: number, toX: number, toY: number, rankLevel: number): void {
+    if (this._sleeping) return
+
+    const dot = this.taskTrailDotPool.find(d => !d.getData('busy'))
+    if (!dot) return
+
+    // Pick rank tier color: gold (Expert+), blue (Agent+), slate (below)
+    const rankColor = rankLevel >= 7 ? 0xfbbf24 : rankLevel >= 4 ? 0x3b82f6 : 0x64748b
+
+    // Randomize bezier control point
+    const midX = (fromX + toX) / 2
+    const midY = (fromY + toY) / 2
+    const sign = Math.random() > 0.5 ? 1 : -1
+    const ctrlX = midX - (toY - fromY) * 0.4 * sign
+    const ctrlY = midY + (toX - fromX) * 0.4 * sign
+
+    dot.setRadius(3)
+    dot.setPosition(fromX, fromY)
+    dot.setFillStyle(rankColor)
+    dot.setAlpha(0.9)
+    dot.setVisible(true)
+    dot.setData('busy', true)
+
+    const TRAVEL_MS = 800
+    const ghostCount = TRAIL_FADE.ghostCount.min + Math.floor(Math.random() * (TRAIL_FADE.ghostCount.max - TRAIL_FADE.ghostCount.min + 1))
+    const ghostInterval = TRAVEL_MS / ghostCount
+
+    // Schedule ghost spawns at regular intervals while the dot travels
+    const ghostTimer = this.scene.time.addEvent({
+      delay: ghostInterval,
+      repeat: ghostCount - 1,
+      callback: () => {
+        this.spawnTrailGhost(dot.x, dot.y, rankColor)
+      },
+    })
+
+    const bezierState = { t: 0 }
+    this.scene.tweens.add({
+      targets: bezierState,
+      t: 1,
+      duration: TRAVEL_MS,
+      ease: 'Sine.easeIn',
+      onUpdate: () => {
+        const t = bezierState.t
+        const mt = 1 - t
+        dot.x = mt * mt * fromX + 2 * mt * t * ctrlX + t * t * toX
+        dot.y = mt * mt * fromY + 2 * mt * t * ctrlY + t * t * toY
+        if (t > 0.8) dot.setAlpha(0.9 * (1 - (t - 0.8) / 0.2))
+      },
+      onComplete: () => {
+        ghostTimer.remove()
+        dot.setVisible(false)
+        dot.setAlpha(0.9)
+        dot.setData('busy', false)
+        this.spawnArrivalBurst(toX, toY, rankColor)
+      },
+    })
+  }
+
+  private spawnTrailGhost(x: number, y: number, color: number): void {
+    const ghost = this.taskTrailGhostPool.find(g => !g.getData('busy'))
+    if (!ghost) return
+
+    ghost.setRadius(2)
+    ghost.setPosition(x, y)
+    ghost.setFillStyle(color)
+    ghost.setAlpha(TRAIL_FADE.alphaStart)
+    ghost.setVisible(true)
+    ghost.setData('busy', true)
+
+    this.scene.tweens.add({
+      targets: ghost,
+      alpha: 0,
+      duration: TRAIL_FADE.lifespan,
+      ease: 'Linear',
+      onComplete: () => {
+        ghost.setVisible(false)
+        ghost.setData('busy', false)
+      },
+    })
+  }
+
+  private spawnArrivalBurst(x: number, y: number, color: number): void {
+    const count = BURST_RADIAL.count.min
+    for (let i = 0; i < count; i++) {
+      const p = this.taskTrailGhostPool.find(g => !g.getData('busy'))
+      if (!p) break
+
+      const angle = (i / count) * Math.PI * 2
+      const speed = BURST_RADIAL.speedMin + Math.random() * (BURST_RADIAL.speedMax - BURST_RADIAL.speedMin)
+      // Distance traveled = speed (px/sec) * duration (sec)
+      const travelDuration = BURST_RADIAL.lifespan
+      const dx = Math.cos(angle) * speed * (travelDuration / 1000)
+      const dy = Math.sin(angle) * speed * (travelDuration / 1000)
+
+      p.setRadius(2)
+      p.setPosition(x, y)
+      p.setFillStyle(color)
+      p.setAlpha(0.8)
+      p.setVisible(true)
+      p.setData('busy', true)
+
+      this.scene.tweens.add({
+        targets: p,
+        x: x + dx,
+        y: y + dy + (BURST_RADIAL.gravity * (travelDuration / 1000) * (travelDuration / 1000)) / 2,
+        alpha: 0,
+        duration: travelDuration,
+        ease: 'Quad.easeOut',
+        onComplete: () => {
+          p.setVisible(false)
+          p.setData('busy', false)
+        },
+      })
     }
   }
 

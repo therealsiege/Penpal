@@ -143,6 +143,10 @@ export const EVENTS = {
   /** Fired when an achievement is unlocked. Payload: (achievementId: string, title: string, iconFrame: number) */
   ACHIEVEMENT_UNLOCKED: 'achievement:unlocked',
 
+  // --- Particles / VFX ---
+  /** Fired when the orchestrator dispatches a task to an agent. Payload: (agentId, roomCenterX, roomCenterY, deskX, deskY, rankLevel) */
+  TASK_DISPATCHED: 'task:dispatched',
+
   // --- Navigation ---
   /** Fired to navigate to the campus overview scene. No payload. */
   NAVIGATE_CAMPUS: 'navigate-campus',
@@ -236,6 +240,10 @@ export interface EventPayloadMap {
   [EVENTS.SEASON_ENDED]: [payload: SeasonEndedEventPayload]
   [EVENTS.SEASON_STARTED]: [payload: SeasonStartedEventPayload]
   [EVENTS.ACHIEVEMENT_UNLOCKED]: [achievementId: string, title: string, iconFrame: number]
+
+  // --- Particles / VFX ---
+  /** (agentId: string, roomCenterX: number, roomCenterY: number, deskX: number, deskY: number, rankLevel: number) */
+  [EVENTS.TASK_DISPATCHED]: [agentId: string, roomCenterX: number, roomCenterY: number, deskX: number, deskY: number, rankLevel: number]
 
   // --- Navigation ---
   [EVENTS.NAVIGATE_CAMPUS]: []
