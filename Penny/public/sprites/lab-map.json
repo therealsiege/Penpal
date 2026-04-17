@@ -231,6 +231,34 @@
       "gdsY": 1200
     }
   ],
+  "cafe": {
+    "baristas": [
+      {
+        "id": "latte-larry",
+        "name": "Latte Larry",
+        "charIdx": 1,
+        "gdsX": 2580,
+        "gdsY": 800,
+        "startFacing": "left",
+        "walkRange": 8,
+        "walkDurationMs": 1800,
+        "workPulses": 5,
+        "startDelayMs": 0
+      },
+      {
+        "id": "mocha-maya",
+        "name": "Mocha Maya",
+        "charIdx": 0,
+        "gdsX": 2580,
+        "gdsY": 1050,
+        "startFacing": "right",
+        "walkRange": 8,
+        "walkDurationMs": 1800,
+        "workPulses": 5,
+        "startDelayMs": 2000
+      }
+    ]
+  },
   "walkableTiles": [
     {
       "x": 1761,
