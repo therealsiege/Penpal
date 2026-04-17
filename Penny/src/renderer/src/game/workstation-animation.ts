@@ -272,16 +272,30 @@ export class WorkstationAnimator {
       if (!gdsLock) ws.sprite.setFrame(base + POSE_IDLE)
       ws.pulseTween = this.scene.tweens.add({
         targets: ws.sprite, scaleX: CHAR_SCALE * AnimConfig.waiting.pulseScaleFactor, scaleY: CHAR_SCALE * AnimConfig.waiting.pulseScaleFactor,
-        duration: AnimConfig.waiting.pulseDuration, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
+        duration: AnimConfig.waiting.pulseDuration, yoyo: true, repeat: -1, ease: AnimConfig.easing.scalePop,
       })
       ws.typingTween = this.scene.tweens.add({
         targets: ws.sprite, x: AnimConfig.waiting.swayAmplitude,
-        duration: AnimConfig.waiting.swayDuration, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
+        duration: AnimConfig.waiting.swayDuration, yoyo: true, repeat: -1, ease: AnimConfig.easing.waitingSway,
       })
       ws.dotPulseTween = this.scene.tweens.add({
         targets: ws.statusDot, alpha: AnimConfig.waiting.dotPulseAlphaMin,
         duration: AnimConfig.waiting.dotPulseDuration, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
       })
+      // Irregular breathing — Y-offset only (pulseTween handles scale); re-schedules itself each cycle
+      const waitBreath = () => {
+        if (!ws.sprite.active || ws.lastAnimMode !== 'waiting') return
+        const dur = AnimConfig.waiting.breathDuration + Math.random() * AnimConfig.waiting.breathDurationVar
+        ws.breathTween = this.scene.tweens.add({
+          targets: ws.sprite,
+          y: WS_SPRITE_Y - AnimConfig.waiting.breathYOffset,
+          duration: dur,
+          yoyo: true,
+          ease: 'Sine.easeInOut',
+          onComplete: waitBreath,
+        })
+      }
+      waitBreath()
       // LED: waiting — amber steady glow
       if (ws.ledGlow) {
         ws.ledGlow.clear()
@@ -301,7 +315,7 @@ export class WorkstationAnimator {
       if (!gdsLock) ws.sprite.setFrame(base + POSE_INTERACT)
       ws.typingTween = this.scene.tweens.add({
         targets: ws.sprite, x: AnimConfig.working.typingAmplitude,
-        duration: AnimConfig.working.typingDuration, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
+        duration: AnimConfig.working.typingDuration, yoyo: true, repeat: -1, ease: AnimConfig.easing.workingTyping,
       })
       ws.bounceTween = this.scene.tweens.add({
         targets: ws.sprite, y: WS_SPRITE_Y - AnimConfig.working.bounceOffset,
@@ -310,6 +324,15 @@ export class WorkstationAnimator {
       ws.headTiltTween = this.scene.tweens.add({
         targets: ws.sprite, angle: AnimConfig.working.headTiltAngle,
         duration: AnimConfig.working.headTiltDuration, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
+      })
+      // Working breath — scaleY only (bounceTween owns Y); faster 2s cycle
+      ws.breathTween = this.scene.tweens.add({
+        targets: ws.sprite,
+        scaleY: CHAR_SCALE * AnimConfig.working.breathScaleFactor,
+        duration: AnimConfig.working.breathDuration,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut',
       })
       if (!this.host.getOrAssignGdsDeskSlot) ws.deskBody.setStrokeStyle(1, 0x34d399, 0.55)
 
@@ -522,9 +545,32 @@ export class WorkstationAnimator {
 
     } else {
       if (!gdsLock) ws.sprite.setFrame(base + POSE_SIT)
+      // Enhanced idle breathing: scaleY + Y-offset (chest rise), with occasional sigh.
+      // sighNext toggles every ~5 cycles on average (sighChance = 0.2).
+      let sighNext = false
       ws.breathTween = this.scene.tweens.add({
-        targets: ws.sprite, scaleY: CHAR_SCALE * AnimConfig.idle.breathScaleFactor,
-        duration: AnimConfig.idle.breathDuration, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
+        targets: ws.sprite,
+        scaleY: CHAR_SCALE * AnimConfig.idle.breathScaleFactor,
+        y: WS_SPRITE_Y - AnimConfig.idle.breathYOffset,
+        duration: AnimConfig.idle.breathDuration,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut',
+        onRepeat: () => {
+          const t = ws.breathTween
+          if (!t) return
+          if (sighNext) {
+            // Reset to normal breath values after the sigh cycle
+            t.updateTo('scaleY', CHAR_SCALE * AnimConfig.idle.breathScaleFactor)
+            t.updateTo('y', WS_SPRITE_Y - AnimConfig.idle.breathYOffset)
+            sighNext = false
+          } else if (Math.random() < AnimConfig.idle.sighChance) {
+            // Next cycle is a deeper sigh: larger amplitude + more Y rise
+            t.updateTo('scaleY', CHAR_SCALE * AnimConfig.idle.sighScaleFactor)
+            t.updateTo('y', WS_SPRITE_Y - AnimConfig.idle.sighYOffset)
+            sighNext = true
+          }
+        },
       })
 
       // Idle chair rocking — very subtle lean-back oscillation
@@ -573,7 +619,7 @@ export class WorkstationAnimator {
         soundEngine.taskComplete()
         this.scene.tweens.add({
           targets: ws.sprite, y: WS_SPRITE_Y - 6,
-          duration: 200, yoyo: true, ease: 'Back.easeOut',
+          duration: 200, yoyo: true, ease: AnimConfig.easing.celebration,
           onComplete: () => { ws.sprite.y = WS_SPRITE_Y },
         })
         // Find the room that owns this workstation to compute world position

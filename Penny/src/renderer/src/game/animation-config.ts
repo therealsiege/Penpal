@@ -51,6 +51,12 @@ export interface AnimationConfig {
     lampDimAlpha: number
     /** Duration (ms) of the lamp fade-to-dim tween. */
     ledFadeDuration: number
+    /** Base half-cycle duration (ms) for the irregular waiting breath (randomised each cycle). */
+    breathDuration: number
+    /** Random range (ms) added to breathDuration each cycle (total cycle = breathDuration + rand * breathDurationVar). */
+    breathDurationVar: number
+    /** Upward Y shift (px) during each waiting breath cycle. */
+    breathYOffset: number
   }
 
   /** Parameters for the 'working' animation state. */
@@ -93,14 +99,26 @@ export interface AnimationConfig {
     typingNoteRiseDuration: number
     /** Total duration (ms) for the progress ring counter to reach 100. */
     progressRingDuration: number
+    /** Duration (ms) of one half-cycle of the subtle working breath tween (2s full cycle → 1000ms half). */
+    breathDuration: number
+    /** ScaleY multiplier for the subtle working-state breath tween. */
+    breathScaleFactor: number
   }
 
   /** Parameters for the 'idle' animation state. */
   idle: {
     /** ScaleY multiplier applied on top of CHAR_SCALE for the breath tween. */
     breathScaleFactor: number
-    /** Duration (ms) of one half-cycle of the breath tween. */
+    /** Duration (ms) of one half-cycle of the breath tween (idle = 3s full cycle → 1500ms half). */
     breathDuration: number
+    /** Upward Y shift (px) applied during each breath cycle (chest rise). */
+    breathYOffset: number
+    /** Probability per cycle (0–1) that the agent will emit a sigh. */
+    sighChance: number
+    /** ScaleY multiplier for the deeper sigh breath (larger excursion than normal breath). */
+    sighScaleFactor: number
+    /** Upward Y shift (px) during a sigh cycle (larger than breathYOffset). */
+    sighYOffset: number
     /** Angle (degrees) for each end of the chair-rock oscillation. */
     chairRockAngle: number
     /** Duration (ms) of one half-cycle of the chair-rock tween. */
@@ -211,6 +229,25 @@ export interface AnimationConfig {
     workstationRefitThreshold: number
     workstationRefitDebounceMs: number
   }
+
+  /**
+   * Expressive ease-curve registry.  All tween `ease` strings are stored here so
+   * runtime patches and debug panels can swap curves without touching rendering code.
+   */
+  easing: {
+    /** Ease for walk-start motion — slight overshoot at the first step. */
+    walkStart: string
+    /** Ease for walk-stop motion — natural deceleration into the destination. */
+    walkStop: string
+    /** Ease for the working typing-shake tween (rhythmic). */
+    workingTyping: string
+    /** Ease for celebration / reward bounce tweens (bouncy landing). */
+    celebration: string
+    /** Ease for the waiting sway tween (rhythmic). */
+    waitingSway: string
+    /** Ease applied to all scale-pop tweens (slight overshoot pop). */
+    scalePop: string
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -239,6 +276,9 @@ function makeDefaults(): AnimationConfig {
       dotPulseDuration:    600,
       lampDimAlpha:        0.02,
       ledFadeDuration:     500,
+      breathDuration:      1000,  // base half-cycle (2–4s full cycle when var added)
+      breathDurationVar:   1000,  // random range added each cycle
+      breathYOffset:       1,     // chest rises 1 px during breath
     },
 
     // -----------------------------------------------------------------------
@@ -264,6 +304,8 @@ function makeDefaults(): AnimationConfig {
       typingNoteSpawnInterval: 500,
       typingNoteRiseDuration:  800,   // duration of the note fly-up tween
       progressRingDuration:    60_000,
+      breathDuration:          1000,  // half-cycle for working breath (2s full cycle)
+      breathScaleFactor:       0.98,  // subtle scaleY compression during working breath
     },
 
     // -----------------------------------------------------------------------
@@ -271,7 +313,11 @@ function makeDefaults(): AnimationConfig {
     // -----------------------------------------------------------------------
     idle: {
       breathScaleFactor:      0.97,  // scaleY = CHAR_SCALE * 0.97
-      breathDuration:         2800,
+      breathDuration:         1500,  // half-cycle for idle breath (3s full cycle)
+      breathYOffset:          1,     // chest rises 1 px on each inhale
+      sighChance:             0.2,   // probability per cycle (1-in-5) of a sigh
+      sighScaleFactor:        0.94,  // deeper scaleY compression during a sigh
+      sighYOffset:            2,     // larger Y rise during a sigh (px)
       chairRockAngle:         1.5,   // from: -1.5 to: 1.5 degrees
       chairRockDuration:      4000,
       lookAroundIntervalMin:  8000,
@@ -342,6 +388,18 @@ function makeDefaults(): AnimationConfig {
       epicQuestHoldMs: 500,
       workstationRefitThreshold: 3,
       workstationRefitDebounceMs: 400,
+    },
+
+    // -----------------------------------------------------------------------
+    // Expressive ease curves — used throughout workstation-animation.ts
+    // -----------------------------------------------------------------------
+    easing: {
+      walkStart:      'Back.easeOut',    // slight overshoot at first step
+      walkStop:       'Cubic.easeOut',   // natural deceleration to desk
+      workingTyping:  'Sine.easeInOut',  // rhythmic typing shake
+      celebration:    'Bounce.easeOut',  // reward/task-complete landing
+      waitingSway:    'Sine.easeInOut',  // gentle waiting oscillation
+      scalePop:       'Back.easeOut',    // all scale tweens — slight pop
     },
   }
 }
