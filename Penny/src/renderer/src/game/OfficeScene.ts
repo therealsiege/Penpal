@@ -43,6 +43,7 @@ import { InteractivePropsManager } from './interactive-props'
 import { SeasonHUD } from './season-hud'
 import { QuestPanel } from './quest-panel'
 import { AchievementPanel } from './achievement-panel'
+import { NpcDialogPanel } from './npc-dialog'
 import { questSystem } from './quest-system'
 import { creditManager } from './credits'
 import { leaderboardManager } from './leaderboard'
@@ -158,6 +159,7 @@ export class OfficeScene extends Phaser.Scene {
   private seasonHud!: SeasonHUD
   private questPanel!: QuestPanel
   private achievementPanel!: AchievementPanel
+  private npcDialog!: NpcDialogPanel
   private lastQuestPanelUpdateAt = 0
   private lastAchievementPanelUpdateAt = 0
   private lastMoodUpdateAt = 0
@@ -497,6 +499,7 @@ export class OfficeScene extends Phaser.Scene {
       if (this.seasonHud) { this.seasonHud.setViewSize(gameSize.width, gameSize.height) }
       if (this.questPanel) { this.questPanel.setViewSize(gameSize.width, gameSize.height) }
       if (this.achievementPanel) { this.achievementPanel.setViewSize(gameSize.width, gameSize.height) }
+      if (this.npcDialog) { this.npcDialog.setViewSize(gameSize.width, gameSize.height) }
 
       if (this.resizeTimer) clearTimeout(this.resizeTimer)
       this.resizeTimer = setTimeout(() => {
@@ -541,10 +544,11 @@ export class OfficeScene extends Phaser.Scene {
         this.selection.confirmSelectedAgent()
       })
 
-      // ESC document order: ops board → achievements → help → focus → deselect
+      // ESC document order: npc dialog → ops board → achievements → help → focus → deselect
       this.input.keyboard.on('keydown-ESC', (e: KeyboardEvent) => {
         if (shouldIgnoreKeyboardShortcuts(e)) return
         e.preventDefault()
+        if (this.npcDialog?.isVisible()) { this.npcDialog.hide(); return }
         if (this.ui.opsVisible) { this.ui.hideOpsBoardOverlay(); return }
         if (this.achievementPanel?.isVisible) { this.achievementPanel.hide(); return }
         if (this.ui.helpVisible) { this.ui.hideHelpOverlay(); return }
@@ -689,6 +693,18 @@ export class OfficeScene extends Phaser.Scene {
           this.ui.showOpsBoardOverlay(this._capRows)
         }
       })
+
+      // E — interact with selected agent (show NPC dialog). LabEditor also listens
+      // to E but only activates its own mode; we emit AGENT_INTERACT here only when
+      // an agent is selected and the lab editor is not active.
+      this.input.keyboard.on('keydown-E', (e: KeyboardEvent) => {
+        if (shouldIgnoreKeyboardShortcuts(e)) return
+        if (this.labEditor.isActive) return
+        // If dialog already open, close it
+        if (this.npcDialog.isVisible()) { this.npcDialog.hide(); return }
+        // Find the currently selected agent
+        this._emitInteractForSelectedAgent()
+      })
     }
 
     // Vignette — subtle edge framing only (strong strength + tight radius read as “too dark” on wide labs)
@@ -746,6 +762,8 @@ export class OfficeScene extends Phaser.Scene {
     this.questPanel.init(this.viewWidth, this.viewHeight)
     this.achievementPanel = new AchievementPanel(this)
     this.achievementPanel.init(this.viewWidth, this.viewHeight)
+    this.npcDialog = new NpcDialogPanel(this)
+    this.npcDialog.init(this.viewWidth, this.viewHeight)
 
     soundEngine.setScene(this)
     soundEngine.wireEvents()
@@ -1754,6 +1772,24 @@ export class OfficeScene extends Phaser.Scene {
 
 
   // ---------------------------------------------------------------------------
+  // NPC dialog interaction
+  // ---------------------------------------------------------------------------
+
+  /** Emit AGENT_INTERACT for the currently keyboard-selected agent (E key handler). */
+  private _emitInteractForSelectedAgent(): void {
+    const ids = this.selection.getFlatAgentIds()
+    const idx = this.selection.selectedAgentIndex
+    if (idx < 0 || idx >= ids.length) return
+    const agentId = ids[idx]
+    for (const room of this.rooms.values()) {
+      const ws = room.workstations.get(agentId)
+      if (ws?.state) {
+        EventBus.emit(EVENTS.AGENT_INTERACT, agentId, ws.state)
+        return
+      }
+    }
+  }
+
   // Notification toasts
   // ---------------------------------------------------------------------------
 
@@ -2015,6 +2051,7 @@ export class OfficeScene extends Phaser.Scene {
     this.seasonHud.destroy()
     this.questPanel.destroy()
     this.achievementPanel.destroy()
+    this.npcDialog.destroy()
 
     if (this.roomRenderer) {
       for (const room of this.rooms.values()) {

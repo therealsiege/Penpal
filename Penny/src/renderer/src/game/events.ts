@@ -62,6 +62,8 @@ export interface SeasonStartedEventPayload {
 
 export const EVENTS = {
   // --- Agent interaction ---
+  /** Fired when the player interacts with an agent (E key near workstation). Payload: (agentId: string, state: AgentState) */
+  AGENT_INTERACT: 'agent:interact',
   /** Fired when an agent sprite is single-clicked. Payload: (agentId: string, state: AgentState) */
   AGENT_CLICKED: 'agent:clicked',
   /** Fired when an agent sprite is double-clicked. Payload: (agentId: string, state: AgentState) */
@@ -165,6 +167,8 @@ export const EVENTS = {
  */
 export interface EventPayloadMap {
   // --- Agent interaction ---
+  /** (agentId: string, state: AgentState) */
+  [EVENTS.AGENT_INTERACT]: [agentId: string, state: AgentState]
   /** (agentId: string, state: AgentState) */
   [EVENTS.AGENT_CLICKED]: [agentId: string, state: AgentState]
   /** (agentId: string, state: AgentState) */

@@ -61,6 +61,8 @@ export class LabEditor {
   private infoText: Phaser.GameObjects.Text | null = null
   private paletteScroll = 0
 
+  get isActive(): boolean { return this.active }
+
   constructor(scene: Phaser.Scene) {
     this.scene = scene
 
