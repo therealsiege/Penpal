@@ -661,6 +661,16 @@ export class WorkstationFactory {
     }
     wsContainer.add(sprite)
 
+    // Apply Light2D pipeline so sprites react to the ambient day/night color (WebGL only).
+    // GDS background image is excluded — it has baked lighting and is handled separately.
+    if (this.scene.sys.renderer.type === Phaser.WEBGL) {
+      sprite.setPipeline('Light2D')
+      if (!gdsScene) deskBody.setPipeline('Light2D')
+      if (consoleDeskSprite) consoleDeskSprite.setPipeline('Light2D')
+      if (monitorSprite) monitorSprite.setPipeline('Light2D')
+      if (chairSprite) chairSprite.setPipeline('Light2D')
+    }
+
     // Thought bubble — dark card with accent border and live blurb text
     const thoughtBubbleBg = this.scene.add.graphics()
     let thoughtBubbleBgSprite: Phaser.GameObjects.Image | undefined
