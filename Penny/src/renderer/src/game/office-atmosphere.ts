@@ -1,29 +1,6 @@
 import Phaser from 'phaser'
 import { AtmosphereSky } from './atmosphere-sky'
 import { AtmosphereLighting } from './atmosphere-lighting'
-import { WeatherSystem, type WeatherType } from './weather-system'
-
-// ---------------------------------------------------------------------------
-// Ambient light color stops for the Light2D pipeline.
-// Night color is pre-scaled to 60% (40% intensity reduction as required).
-// ---------------------------------------------------------------------------
-const AMBIENT_STOPS: [number, number][] = [
-  [6,  0xfff5e6], // morning — warm white
-  [10, 0xffffff], // midday  — neutral white
-  [14, 0xffe8cc], // afternoon — warm
-  [18, 0xffcc80], // evening — amber
-  [22, 0x525c70], // night — cool blue @ 60% intensity (40% reduction)
-]
-
-/** Linear interpolation between two packed RGB colors. */
-function lerpColor(a: number, b: number, t: number): number {
-  const ar = (a >> 16) & 0xff, ag = (a >> 8) & 0xff, ab = a & 0xff
-  const br = (b >> 16) & 0xff, bg = (b >> 8) & 0xff, bb = b & 0xff
-  const r = Math.round(ar + (br - ar) * t)
-  const g = Math.round(ag + (bg - ag) * t)
-  const bl = Math.round(ab + (bb - ab) * t)
-  return (r << 16) | (g << 8) | bl
-}
 
 // ---------------------------------------------------------------------------
 // OfficeAtmosphere
@@ -34,8 +11,6 @@ function lerpColor(a: number, b: number, t: number): number {
 export interface AtmosphereCallbacks {
   /** Called when day/night phase changes — lets OfficeScene update rain/snow state */
   onPhaseChange(phase: 'morning' | 'day' | 'evening' | 'night', animate: boolean, rainDropPool: Phaser.GameObjects.Line[], snowPool: Phaser.GameObjects.Arc[], viewWidth: number, viewHeight: number): void
-  /** Called when the time-of-day phase changes — lets PostFXManager update vignette/bloom/color grading */
-  onPostFXPhaseChange?(phase: 'morning' | 'day' | 'evening' | 'night', animate: boolean): void
   /** Called when atmosphere needs to invalidate the office background cache */
   invalidateOfficeBgCache(): void
   /** Called to show a toast notification */
@@ -55,7 +30,6 @@ export class OfficeAtmosphere {
   // Sub-modules
   private sky: AtmosphereSky
   private lighting: AtmosphereLighting
-  private weatherSystem: WeatherSystem
 
   // Day/night cycle
   private dayNightOverlay: Phaser.GameObjects.Rectangle | null = null
@@ -78,9 +52,9 @@ export class OfficeAtmosphere {
   private lastClockTick = 0
   private lastChimeHour = -1
 
-  // Light2D ambient lighting
-  private _lightsEnabled = false
-  private _lastAmbientUpdate = 0
+  // Ambient Light2D color — RGB components for smooth tween interpolation
+  private ambientLightRGB = { r: 0xff, g: 0xf5, b: 0xe6 }
+  private ambientLightTween: Phaser.Tweens.Tween | null = null
 
   // Ceiling lights
   ceilingLights: Phaser.GameObjects.Container[] = []
@@ -97,7 +71,6 @@ export class OfficeAtmosphere {
     this.callbacks = callbacks
     this.sky = new AtmosphereSky(scene)
     this.lighting = new AtmosphereLighting(scene)
-    this.weatherSystem = new WeatherSystem(scene)
   }
 
   // ---------------------------------------------------------------------------
@@ -111,8 +84,6 @@ export class OfficeAtmosphere {
     worldWidth: number,
     worldHeight: number,
     vignetteFx: Phaser.FX.Vignette | null,
-    viewWidth = 800,
-    viewHeight = 600,
   ): void {
     this.dayNightOverlay = dayNightOverlay
     this.windowGlintGfx = windowGlintGfx
@@ -121,13 +92,6 @@ export class OfficeAtmosphere {
 
     this.sky.init(skyGradient, worldWidth, worldHeight)
     this.lighting.initChimeRipplePool()
-
-    // Enable Phaser Light2D pipeline for ambient day/night lighting (WebGL only)
-    if (this.scene.sys.renderer.type === Phaser.WEBGL) {
-      this.scene.lights.enable()
-      this._lightsEnabled = true
-      this._updateAmbientLight()
-    }
 
     this.applyDayNightCycle(false)
 
@@ -138,8 +102,6 @@ export class OfficeAtmosphere {
       callback: () => this.applyDayNightCycle(true),
       loop: true,
     })
-
-    this.weatherSystem.init(viewWidth, viewHeight)
   }
 
   updateWorldSize(w: number, h: number): void {
@@ -152,17 +114,11 @@ export class OfficeAtmosphere {
   // Tick — called from OfficeScene.update()
   // ---------------------------------------------------------------------------
 
-  tick(time: number, rainActive: boolean, snowActive: boolean, dt = 16): void {
+  tick(time: number, rainActive: boolean, snowActive: boolean): void {
     if (rainActive) { /* tickRain lives in OfficeScene (particles module) */ }
     if (snowActive) { /* tickSnow lives in OfficeScene (particles module) */ }
-    this.weatherSystem.update(dt)
     this.lighting.tickWindowGlint(time, this.windowGlintGfx, this.windowPositions)
     this.sky.tick(time)
-    // Smooth ambient light update — lerp color every 10s based on exact wall-clock time
-    if (this._lightsEnabled && time - this._lastAmbientUpdate >= 10_000) {
-      this._lastAmbientUpdate = time
-      this._updateAmbientLight()
-    }
     if (this.wallClockContainer && time - this.lastClockTick >= 1000) {
       this.lastClockTick = time
       this.tickWallClock()
@@ -179,13 +135,11 @@ export class OfficeAtmosphere {
 
   pause(): void {
     if (this.dayNightTimer) this.dayNightTimer.paused = true
-    this.weatherSystem.pause()
     this.scene.tweens.pauseAll()
   }
 
   resume(): void {
     if (this.dayNightTimer) this.dayNightTimer.paused = false
-    this.weatherSystem.resume()
     this.scene.tweens.resumeAll()
     // Re-sync day/night to wall-clock time so the office sky isn't frozen at the pre-sleep moment
     this.applyDayNightCycle(false)
@@ -196,16 +150,13 @@ export class OfficeAtmosphere {
   // ---------------------------------------------------------------------------
 
   destroy(): void {
-    if (this._lightsEnabled) {
-      this.scene.lights.shutdown()
-      this._lightsEnabled = false
-    }
+    this.ambientLightTween?.stop()
+    this.ambientLightTween = null
     this.dayNightTimer?.destroy()
     this.dayNightTimer = null
     this.dayNightOverlay?.destroy()
     this.dayNightOverlay = null
 
-    this.weatherSystem.destroy()
     this.sky.destroy()
 
     this.lighting.destroyCeilingLights(this.ceilingLights)
@@ -230,37 +181,6 @@ export class OfficeAtmosphere {
   }
 
   // ---------------------------------------------------------------------------
-  // Light2D ambient lighting helpers
-  // ---------------------------------------------------------------------------
-
-  /** Returns a smoothly lerped ambient color based on exact current wall-clock time. */
-  private _getAmbientColorForTime(): number {
-    const now = new Date()
-    const t = now.getHours() + now.getMinutes() / 60
-
-    // Before morning → night color
-    if (t < AMBIENT_STOPS[0][0]) return AMBIENT_STOPS[AMBIENT_STOPS.length - 1][1]
-
-    for (let i = 0; i < AMBIENT_STOPS.length - 1; i++) {
-      const [h0, c0] = AMBIENT_STOPS[i]
-      const [h1, c1] = AMBIENT_STOPS[i + 1]
-      if (t >= h0 && t < h1) {
-        const frac = (t - h0) / (h1 - h0)
-        return lerpColor(c0, c1, frac)
-      }
-    }
-
-    // After last stop (t >= 22) → night color
-    return AMBIENT_STOPS[AMBIENT_STOPS.length - 1][1]
-  }
-
-  /** Push the current ambient color to the Light2D pipeline. */
-  private _updateAmbientLight(): void {
-    if (!this._lightsEnabled) return
-    this.scene.lights.setAmbientColor(this._getAmbientColorForTime())
-  }
-
-  // ---------------------------------------------------------------------------
   // Day/night cycle
   // ---------------------------------------------------------------------------
 
@@ -280,6 +200,51 @@ export class OfficeAtmosphere {
       return { phase: 'evening', color: 0xff6a00, alpha: 0.08, bgColor: 0x14161f, glowMultiplier: 1.2 }
     } else {
       return { phase: 'night', color: 0x1a3a6a, alpha: 0.14, bgColor: 0x0a0e18, glowMultiplier: 1.6 }
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Ambient Light2D — smooth color lerp between day/night stops
+  // ---------------------------------------------------------------------------
+
+  private static readonly AMBIENT_STOPS: Record<string, { r: number; g: number; b: number }> = {
+    // Warm white dawn — 0xfff5e6
+    morning:  { r: 0xff, g: 0xf5, b: 0xe6 },
+    // Neutral midday — 0xffffff
+    day:      { r: 0xff, g: 0xff, b: 0xff },
+    // Amber dusk — 0xffcc80
+    evening:  { r: 0xff, g: 0xcc, b: 0x80 },
+    // Cool blue night — 0x8899bb at 40% reduced intensity (×0.6)
+    night:    { r: 0x52, g: 0x5c, b: 0x70 },
+  }
+
+  private applyAmbientLight(phase: string, animate: boolean): void {
+    const lights = this.scene.lights
+    if (!lights) return
+
+    const target = OfficeAtmosphere.AMBIENT_STOPS[phase] ?? OfficeAtmosphere.AMBIENT_STOPS.day
+
+    if (animate) {
+      const from = { ...this.ambientLightRGB }
+      this.ambientLightTween?.stop()
+      this.ambientLightTween = this.scene.tweens.addCounter({
+        from: 0,
+        to: 1,
+        duration: 3000,
+        ease: 'Sine.easeInOut',
+        onUpdate: (tw) => {
+          const t = tw.getValue() ?? 0
+          const r = Math.round(Phaser.Math.Linear(from.r, target.r, t))
+          const g = Math.round(Phaser.Math.Linear(from.g, target.g, t))
+          const b = Math.round(Phaser.Math.Linear(from.b, target.b, t))
+          this.ambientLightRGB = { r, g, b }
+          lights.setAmbientColor((r << 16) | (g << 8) | b)
+        },
+        onComplete: () => { this.ambientLightTween = null },
+      })
+    } else {
+      this.ambientLightRGB = { ...target }
+      lights.setAmbientColor((target.r << 16) | (target.g << 8) | target.b)
     }
   }
 
@@ -401,14 +366,8 @@ export class OfficeAtmosphere {
       }
     }
 
-    // Sync Light2D ambient color to new phase immediately
-    this._updateAmbientLight()
-
     // Delegate rain/snow updates to OfficeScene via callback
     this.callbacks.onPhaseChange(phase, animate, [], [], 0, 0)
-
-    // Delegate postFX (vignette/bloom/color-grade) updates
-    this.callbacks.onPostFXPhaseChange?.(phase, animate)
 
     // Exterior lights — tween container alpha so all child fixtures change together.
     if (this.exteriorLights) {
@@ -455,20 +414,9 @@ export class OfficeAtmosphere {
         hazeOverlay.setAlpha(targetScale)
       }
     }
-  }
 
-  // ---------------------------------------------------------------------------
-  // Weather system — public API
-  // ---------------------------------------------------------------------------
-
-  /** Set the active weather state, with optional transition duration in ms. */
-  setWeather(type: WeatherType, transition?: number): void {
-    this.weatherSystem.setWeather(type, transition)
-  }
-
-  /** Ambient light multiplier from weather (0.85 for overcast, 1.0 otherwise). */
-  getWeatherAmbientMultiplier(): number {
-    return this.weatherSystem.getAmbientMultiplier()
+    // Light2D ambient color — smooth lerp to time-of-day stop
+    this.applyAmbientLight(phase, animate)
   }
 
   // ---------------------------------------------------------------------------

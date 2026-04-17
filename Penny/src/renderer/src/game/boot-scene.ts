@@ -135,6 +135,15 @@ export class BootScene extends BaseScene {
       barGlow.width = barW * value
     })
 
+    // Error handler — audio files are non-critical; warn and continue loading
+    this.load.on('loaderror', (file: Phaser.Loader.File) => {
+      if (file.type === 'audio') {
+        console.warn(`[BootScene] Audio asset failed to load: ${file.key} (${String(file.src)}) — continuing without it`)
+        loadedCount++
+        counterText.setText(`${loadedCount} / ${totalAssets} assets`)
+      }
+    })
+
     // File complete handler — update counter, asset name, and sprite preview
     this.load.on('filecomplete', (key: string) => {
       loadedCount++
@@ -453,27 +462,11 @@ export class BootScene extends BaseScene {
     this.load.audio(AUDIO_KEYS.TAP_A, './sounds/tap-a.ogg')
     this.load.audio(AUDIO_KEYS.TAP_B, './sounds/tap-b.ogg')
 
-    // Ambient soundscape — OGG primary, MP3 fallback.
-    // AudioManager synthesizes these procedurally when files are absent;
-    // adding preload here lets real recordings drop in without code changes.
-    this.load.audio(AUDIO_KEYS.AMBIENT_LAB_HUM,
-      ['./audio/ambient/lab-hum.ogg', './audio/ambient/lab-hum.mp3'])
-    this.load.audio(AUDIO_KEYS.AMBIENT_NIGHT_LAYER,
-      ['./audio/ambient/night-layer.ogg', './audio/ambient/night-layer.mp3'])
-    this.load.audio(AUDIO_KEYS.SFX_KEY_1,
-      ['./audio/sfx/key-1.ogg', './audio/sfx/key-1.mp3'])
-    this.load.audio(AUDIO_KEYS.SFX_KEY_2,
-      ['./audio/sfx/key-2.ogg', './audio/sfx/key-2.mp3'])
-    this.load.audio(AUDIO_KEYS.SFX_KEY_3,
-      ['./audio/sfx/key-3.ogg', './audio/sfx/key-3.mp3'])
-    this.load.audio(AUDIO_KEYS.SFX_KEY_4,
-      ['./audio/sfx/key-4.ogg', './audio/sfx/key-4.mp3'])
-    this.load.audio(AUDIO_KEYS.SFX_CHIRP_1,
-      ['./audio/sfx/chirp-1.ogg', './audio/sfx/chirp-1.mp3'])
-    this.load.audio(AUDIO_KEYS.SFX_CHIRP_2,
-      ['./audio/sfx/chirp-2.ogg', './audio/sfx/chirp-2.mp3'])
-    this.load.audio(AUDIO_KEYS.SFX_CHIRP_3,
-      ['./audio/sfx/chirp-3.ogg', './audio/sfx/chirp-3.mp3'])
+    // Ambient audio — procedurally generated via AudioManager (audio-manager.ts).
+    // When OGG ambient files are added to public/audio/ambient/, load them here:
+    //   this.load.audio(AUDIO_KEYS.AMBIENT_HUM,  './audio/ambient/lab-hum.ogg')
+    //   this.load.audio(AUDIO_KEYS.AMBIENT_NOISE, './audio/ambient/lab-noise.ogg')
+    // Until then, AudioManager synthesises all ambient sounds via Web Audio API.
   }
 
   // -------------------------------------------------------------------------

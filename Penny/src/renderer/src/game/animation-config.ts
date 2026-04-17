@@ -51,12 +51,6 @@ export interface AnimationConfig {
     lampDimAlpha: number
     /** Duration (ms) of the lamp fade-to-dim tween. */
     ledFadeDuration: number
-    /** Base half-cycle duration (ms) for the irregular waiting breath (randomised each cycle). */
-    breathDuration: number
-    /** Random range (ms) added to breathDuration each cycle (total cycle = breathDuration + rand * breathDurationVar). */
-    breathDurationVar: number
-    /** Upward Y shift (px) during each waiting breath cycle. */
-    breathYOffset: number
   }
 
   /** Parameters for the 'working' animation state. */
@@ -99,26 +93,14 @@ export interface AnimationConfig {
     typingNoteRiseDuration: number
     /** Total duration (ms) for the progress ring counter to reach 100. */
     progressRingDuration: number
-    /** Duration (ms) of one half-cycle of the subtle working breath tween (2s full cycle → 1000ms half). */
-    breathDuration: number
-    /** ScaleY multiplier for the subtle working-state breath tween. */
-    breathScaleFactor: number
   }
 
   /** Parameters for the 'idle' animation state. */
   idle: {
     /** ScaleY multiplier applied on top of CHAR_SCALE for the breath tween. */
     breathScaleFactor: number
-    /** Duration (ms) of one half-cycle of the breath tween (idle = 3s full cycle → 1500ms half). */
+    /** Duration (ms) of one half-cycle of the breath tween. */
     breathDuration: number
-    /** Upward Y shift (px) applied during each breath cycle (chest rise). */
-    breathYOffset: number
-    /** Probability per cycle (0–1) that the agent will emit a sigh. */
-    sighChance: number
-    /** ScaleY multiplier for the deeper sigh breath (larger excursion than normal breath). */
-    sighScaleFactor: number
-    /** Upward Y shift (px) during a sigh cycle (larger than breathYOffset). */
-    sighYOffset: number
     /** Angle (degrees) for each end of the chair-rock oscillation. */
     chairRockAngle: number
     /** Duration (ms) of one half-cycle of the chair-rock tween. */
@@ -158,35 +140,6 @@ export interface AnimationConfig {
     progressRingFadeMs: number
     /** Duration (ms) for the quest icon fade-out on mode transition. */
     questIconFadeMs: number
-
-    // ── Crossfade blending (Living Lab 1a) ──
-
-    /** idle → working: total blend duration (ms). */
-    idleToWorkingMs: number
-    /** idle → working: scaleY compression factor during settle (e.g. 0.95). */
-    idleToWorkingScaleY: number
-    /** idle → working: duration (ms) of the compression half before bounce-back. */
-    idleToWorkingCompressMs: number
-
-    /** working → idle: total blend duration (ms). */
-    workingToIdleMs: number
-    /** working → idle: y-offset (px) for "hands lift off keyboard" motion. */
-    workingToIdleLiftY: number
-    /** working → idle: x-tilt angle (degrees) for "lean back" motion. */
-    workingToIdleTiltAngle: number
-
-    /** idle → walking: anticipation lean duration (ms) before walk begins. */
-    idleToWalkingMs: number
-    /** idle → walking: lean distance (px) in the movement direction. */
-    idleToWalkingLeanX: number
-
-    /** walking → idle: overshoot distance (px) past the stop point. */
-    walkingToIdleOvershootPx: number
-    /** walking → idle: settle tween duration (ms) after overshoot. */
-    walkingToIdleSettleMs: number
-
-    /** any → waiting: slow crossfade duration (ms). */
-    anyToWaitingMs: number
   }
 
   /** Parameters for the monitor glow post-processing effect. */
@@ -240,47 +193,47 @@ export interface AnimationConfig {
   }
 
   /**
-   * Squash & stretch — the classic animation principle applied to character tweens.
-   * All parameters here are hot-patchable at runtime via patchAnimConfig().
+   * State transition blending — crossfade durations and motion parameters for
+   * each animation-mode switch in WorkstationAnimator.
+   * All durationMs values are the total crossfade window; main-loop tweens are
+   * delayed by this amount so they don't clash with the entry motion.
    */
-  squashStretch: {
-    /** scaleY applied to sprite on each walk footfall (< 1 = compression). */
-    walkFootfallScaleY: number
-    /** scaleX applied to sprite on each walk footfall (> 1 = widening). */
-    walkFootfallScaleX: number
-    /** Duration (ms) of one footfall squash half-cycle (yoyo back to original). */
-    walkFootfallDuration: number
-
-    /** scaleY during celebration wind-up crouch (< 1). */
-    celebWindupScaleY: number
-    /** Duration (ms) of the wind-up crouch tween. */
-    celebWindupDuration: number
-    /** scaleY during celebration stretch pop (> 1). */
-    celebStretchScaleY: number
-    /** Duration (ms) of the stretch pop tween. */
-    celebStretchDuration: number
-    /** Number of decaying oscillations after the stretch pop. */
-    celebSettleCount: number
-    /** Starting scale deviation amplitude for the first settle oscillation. */
-    celebSettleAmplitude: number
-    /** Duration (ms) of each settle oscillation half-cycle. */
-    celebSettleDuration: number
-    /** Multiplier applied to amplitude each successive oscillation (0–1). */
-    celebSettleDecay: number
-
-    /** scaleY squash applied when character sits down on contact (< 1). */
-    sitCompressScaleY: number
-    /** Duration (ms) of the sitting compression tween (yoyo back to original). */
-    sitCompressDuration: number
-
-    /** Y offset (px, negative = upward) of the task complete hop. */
-    taskHopY: number
-    /** scaleY squash just before the hop (pre-launch compression). */
-    taskHopScaleSquash: number
-    /** scaleY stretch at the apex of the hop. */
-    taskHopScaleStretch: number
-    /** Total duration (ms) of the full task complete hop sequence. */
-    taskHopDuration: number
+  stateTransitions: {
+    /** idle → working: sprite squash-compression burst before typing starts. */
+    idleToWorking: {
+      /** Total crossfade duration (ms). Sprite motion tweens are delayed by this. */
+      durationMs: number
+      /** ScaleY multiplier at peak compression (0.95 = 5% squash). */
+      compressionScale: number
+    }
+    /** working → idle: hands-lift + backward lean on task completion. */
+    workingToIdle: {
+      /** Total crossfade duration (ms). Breath / rock loops delayed by this. */
+      durationMs: number
+      /** Y lift amount (px) — sprite rises before settling back to WS_SPRITE_Y. */
+      liftPx: number
+      /** Lean-back angle (degrees, negative = tilt away from monitor). */
+      leanAngle: number
+    }
+    /** idle → walking: forward anticipation lean before the walk begins. */
+    idleToWalking: {
+      /** Duration (ms) of the lean-forward beat. Walk begins after this. */
+      durationMs: number
+      /** Forward lean angle (degrees, negative = tilt toward destination). */
+      leanAngle: number
+    }
+    /** walking → idle: momentum overshoot + settle when the agent returns. */
+    walkingToIdle: {
+      /** Total duration (ms) of the overshoot + settle animation. */
+      durationMs: number
+      /** X overshoot distance (px) in the direction of travel. */
+      overshootPx: number
+    }
+    /** any → waiting: gradual fade-in of the waiting pose. */
+    anyToWaiting: {
+      /** Duration (ms) for the sprite to fade from alpha 0 to 1. */
+      durationMs: number
+    }
   }
 
   /** Camera juice: zoom pulses, scripted pans, slow zoom-to-fit (sidekick#79). */
@@ -301,25 +254,6 @@ export interface AnimationConfig {
     epicQuestHoldMs: number
     workstationRefitThreshold: number
     workstationRefitDebounceMs: number
-  }
-
-  /**
-   * Expressive ease-curve registry.  All tween `ease` strings are stored here so
-   * runtime patches and debug panels can swap curves without touching rendering code.
-   */
-  easing: {
-    /** Ease for walk-start motion — slight overshoot at the first step. */
-    walkStart: string
-    /** Ease for walk-stop motion — natural deceleration into the destination. */
-    walkStop: string
-    /** Ease for the working typing-shake tween (rhythmic). */
-    workingTyping: string
-    /** Ease for celebration / reward bounce tweens (bouncy landing). */
-    celebration: string
-    /** Ease for the waiting sway tween (rhythmic). */
-    waitingSway: string
-    /** Ease applied to all scale-pop tweens (slight overshoot pop). */
-    scalePop: string
   }
 }
 
@@ -349,9 +283,6 @@ function makeDefaults(): AnimationConfig {
       dotPulseDuration:    600,
       lampDimAlpha:        0.02,
       ledFadeDuration:     500,
-      breathDuration:      1000,  // base half-cycle (2–4s full cycle when var added)
-      breathDurationVar:   1000,  // random range added each cycle
-      breathYOffset:       1,     // chest rises 1 px during breath
     },
 
     // -----------------------------------------------------------------------
@@ -377,8 +308,6 @@ function makeDefaults(): AnimationConfig {
       typingNoteSpawnInterval: 500,
       typingNoteRiseDuration:  800,   // duration of the note fly-up tween
       progressRingDuration:    60_000,
-      breathDuration:          1000,  // half-cycle for working breath (2s full cycle)
-      breathScaleFactor:       0.98,  // subtle scaleY compression during working breath
     },
 
     // -----------------------------------------------------------------------
@@ -386,11 +315,7 @@ function makeDefaults(): AnimationConfig {
     // -----------------------------------------------------------------------
     idle: {
       breathScaleFactor:      0.97,  // scaleY = CHAR_SCALE * 0.97
-      breathDuration:         1500,  // half-cycle for idle breath (3s full cycle)
-      breathYOffset:          1,     // chest rises 1 px on each inhale
-      sighChance:             0.2,   // probability per cycle (1-in-5) of a sigh
-      sighScaleFactor:        0.94,  // deeper scaleY compression during a sigh
-      sighYOffset:            2,     // larger Y rise during a sigh (px)
+      breathDuration:         2800,
       chairRockAngle:         1.5,   // from: -1.5 to: 1.5 degrees
       chairRockDuration:      4000,
       lookAroundIntervalMin:  8000,
@@ -412,23 +337,6 @@ function makeDefaults(): AnimationConfig {
       moodFadeOutDuration:    200,
       progressRingFadeMs:     300,
       questIconFadeMs:        200,
-
-      // Crossfade blending (Living Lab 1a)
-      idleToWorkingMs:            200,
-      idleToWorkingScaleY:        0.95,
-      idleToWorkingCompressMs:    100,
-
-      workingToIdleMs:            300,
-      workingToIdleLiftY:         4,
-      workingToIdleTiltAngle:     3,
-
-      idleToWalkingMs:            150,
-      idleToWalkingLeanX:         3,
-
-      walkingToIdleOvershootPx:   2,
-      walkingToIdleSettleMs:      200,
-
-      anyToWaitingMs:             400,
     },
 
     // -----------------------------------------------------------------------
@@ -459,29 +367,14 @@ function makeDefaults(): AnimationConfig {
     },
 
     // -----------------------------------------------------------------------
-    // Squash & stretch (Living Lab 1b)
+    // State transition blending (crossfade durations + motion params)
     // -----------------------------------------------------------------------
-    squashStretch: {
-      walkFootfallScaleY:      0.97,  // subtle Y compression on each footfall
-      walkFootfallScaleX:      1.03,  // matching X widening (volume conservation)
-      walkFootfallDuration:    80,    // ms per half-cycle (yoyo)
-
-      celebWindupScaleY:       0.85,  // wind-up crouch before big pop
-      celebWindupDuration:     120,
-      celebStretchScaleY:      1.15,  // upward stretch at peak
-      celebStretchDuration:    100,
-      celebSettleCount:        3,     // decaying oscillations after pop
-      celebSettleAmplitude:    0.06,  // first oscillation scale deviation
-      celebSettleDuration:     80,    // ms per settle half-cycle
-      celebSettleDecay:        0.5,   // amplitude multiplier per oscillation
-
-      sitCompressScaleY:       0.93,  // compression on chair contact
-      sitCompressDuration:     60,    // ms per half-cycle (yoyo)
-
-      taskHopY:               -4,     // px upward at hop apex
-      taskHopScaleSquash:      0.9,   // pre-launch squash
-      taskHopScaleStretch:     1.1,   // apex stretch
-      taskHopDuration:         150,   // ms total for full 3-phase sequence
+    stateTransitions: {
+      idleToWorking: { durationMs: 200, compressionScale: 0.95 },
+      workingToIdle: { durationMs: 300, liftPx: 6, leanAngle: -3 },
+      idleToWalking: { durationMs: 150, leanAngle: -4 },
+      walkingToIdle: { durationMs: 200, overshootPx: 3 },
+      anyToWaiting:  { durationMs: 400 },
     },
 
     camera: {
@@ -504,18 +397,6 @@ function makeDefaults(): AnimationConfig {
       epicQuestHoldMs: 500,
       workstationRefitThreshold: 3,
       workstationRefitDebounceMs: 400,
-    },
-
-    // -----------------------------------------------------------------------
-    // Expressive ease curves — used throughout workstation-animation.ts
-    // -----------------------------------------------------------------------
-    easing: {
-      walkStart:      'Back.easeOut',    // slight overshoot at first step
-      walkStop:       'Cubic.easeOut',   // natural deceleration to desk
-      workingTyping:  'Sine.easeInOut',  // rhythmic typing shake
-      celebration:    'Bounce.easeOut',  // reward/task-complete landing
-      waitingSway:    'Sine.easeInOut',  // gentle waiting oscillation
-      scalePop:       'Back.easeOut',    // all scale tweens — slight pop
     },
   }
 }

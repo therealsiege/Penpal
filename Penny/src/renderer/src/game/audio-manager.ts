@@ -1,28 +1,69 @@
 // ---------------------------------------------------------------------------
 // audio-manager.ts
-// Singleton audio manager with channel system + procedural ambient soundscape.
-// All ambient sounds are synthesized via Web Audio API — no audio files required.
-// Respects browser autoplay policy: AudioContext is created on first user gesture.
+// AudioManager singleton — ambient soundscape engine for the lab.
+//
+// Provides a channel-based Web Audio API wrapper with:
+//   - Lazy AudioContext init (triggers on first user interaction)
+//   - 4 named channels: ambient / sfx / ui / music
+//   - Master volume + per-channel volumes
+//   - M key mute toggle with localStorage persistence
+//   - Fade helpers (fadeIn / fadeOut / crossfade)
+//   - Procedural ambient soundscape:
+//     - Lab hum loop (low-frequency drone)
+//     - Keyboard clatter (scales with working agent count)
+//     - Equipment chirps (random, ~30s interval)
+//     - Day/night audio shift (phase affects hum frequency + ambient gain)
 // ---------------------------------------------------------------------------
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
-export type AudioChannel = 'ambient' | 'sfx' | 'ui' | 'music'
+export type ChannelName = 'ambient' | 'sfx' | 'ui' | 'music'
+export type TimePhase = 'morning' | 'day' | 'evening' | 'night'
 
-type TimePhase = 'morning' | 'day' | 'evening' | 'night'
-
-const STORAGE_KEY = 'penny_audio_volumes'
-
-const CHANNEL_DEFAULTS: Record<AudioChannel, number> = {
-  ambient: 0.3,
-  sfx:     0.4,
-  ui:      0.5,
-  music:   0.3,
+interface AudioState {
+  masterVolume: number
+  muted: boolean
+  channelVolumes: Record<ChannelName, number>
 }
 
-const MASTER_DEFAULT = 0.5
+// ---------------------------------------------------------------------------
+// Constants
+// ---------------------------------------------------------------------------
+
+const STORAGE_KEY = 'penny-audio-state'
+
+const CHANNEL_DEFAULTS: Record<ChannelName, number> = {
+  ambient: 0.35,
+  sfx:     0.80,
+  ui:      0.60,
+  music:   0.25,
+}
+
+// Hum base frequency per phase (Hz)
+const PHASE_HUM_FREQ: Record<TimePhase, number> = {
+  morning: 55,   // brighter, higher hum
+  day:     48,   // standard lab drone
+  evening: 42,   // slightly mellower
+  night:   36,   // low, quiet rumble
+}
+
+// Ambient gain multiplier per phase (multiplied on top of channel volume)
+const PHASE_AMBIENT_GAIN: Record<TimePhase, number> = {
+  morning: 0.90,
+  day:     1.00,
+  evening: 0.80,
+  night:   0.55,
+}
+
+// Keyboard clatter interval range ms — scales by working agent count
+const KB_MIN_INTERVAL = 180
+const KB_MAX_INTERVAL = 800
+
+// Equipment chirp interval range ms
+const CHIRP_MIN_INTERVAL = 18_000
+const CHIRP_MAX_INTERVAL = 45_000
 
 // ---------------------------------------------------------------------------
 // AudioManager
@@ -32,117 +73,128 @@ export class AudioManager {
   private _ctx: AudioContext | null = null
   private _masterGain: GainNode | null = null
 
-  // Per-channel gain nodes (created after AudioContext init)
-  private _channelGains: Partial<Record<AudioChannel, GainNode>> = {}
-  private _channelVolumes: Record<AudioChannel, number> = { ...CHANNEL_DEFAULTS }
-  private _masterVolume = MASTER_DEFAULT
-  private _muted = false
+  // Per-channel gain nodes (connected to master)
+  private _channelGains: Record<ChannelName, GainNode | null> = {
+    ambient: null,
+    sfx:     null,
+    ui:      null,
+    music:   null,
+  }
 
-  // Ambient state
+  // State
+  private _muted = false
+  private _masterVolume = 0.7
+  private _channelVolumes: Record<ChannelName, number> = { ...CHANNEL_DEFAULTS }
+
+  // Ambient soundscape nodes
   private _labHumOsc: OscillatorNode | null = null
   private _labHumGain: GainNode | null = null
-  private _labHumNoiseSource: AudioBufferSourceNode | null = null
-  private _labHumNoiseGain: GainNode | null = null
-  private _labHumPitchTimer: ReturnType<typeof setInterval> | null = null
+  private _labNoiseSource: AudioBufferSourceNode | null = null
+  private _labNoiseGain: GainNode | null = null
+  private _ambientRunning = false
 
-  private _nightLayerOsc: OscillatorNode | null = null
-  private _nightLayerGain: GainNode | null = null
+  // Timing handles
+  private _kbClatterTimeout: ReturnType<typeof setTimeout> | null = null
+  private _chirpTimeout: ReturnType<typeof setTimeout> | null = null
 
-  private _keyboardIntervalId: ReturnType<typeof setInterval> | null = null
-  private _chirpTimerId: ReturnType<typeof setTimeout> | null = null
-
+  // Reactive state
   private _workingAgentCount = 0
-  private _currentPhase: TimePhase = 'day'
+  private _timePhase: TimePhase = 'day'
 
-  private _initialized = false
+  // Set to true if AudioContext is permanently unavailable (policy block, old browser, etc.)
+  private _disabled = false
 
-  // ---------------------------------------------------------------------------
+  // -------------------------------------------------------------------------
   // Singleton
-  // ---------------------------------------------------------------------------
+  // -------------------------------------------------------------------------
 
   private static _instance: AudioManager | null = null
-  static get(): AudioManager {
+  static getInstance(): AudioManager {
     if (!AudioManager._instance) AudioManager._instance = new AudioManager()
     return AudioManager._instance
   }
 
   private constructor() {
-    this._loadFromStorage()
+    this._loadState()
   }
 
-  // ---------------------------------------------------------------------------
-  // Init — call once after first user interaction (click/keypress)
-  // ---------------------------------------------------------------------------
+  // -------------------------------------------------------------------------
+  // AudioContext — lazy init after user gesture
+  // -------------------------------------------------------------------------
 
-  /** Must be called after a user gesture to satisfy browser autoplay policy. */
-  init(): void {
-    if (this._initialized) {
-      if (this._ctx?.state === 'suspended') void this._ctx.resume()
-      return
-    }
-    this._initialized = true
-    try {
-      this._ctx = new AudioContext()
+  private _ensureContext(): AudioContext | null {
+    if (this._disabled) return null
+    if (!this._ctx) {
+      try {
+        this._ctx = new AudioContext()
+      } catch (err) {
+        // AudioContext can be blocked by browser autoplay policy, sandboxed iframes,
+        // or missing platform support. Degrade gracefully — silence all audio.
+        console.warn('[AudioManager] AudioContext init failed — audio disabled:', err)
+        this._disabled = true
+        return null
+      }
+
       this._masterGain = this._ctx.createGain()
       this._masterGain.gain.value = this._muted ? 0 : this._masterVolume
       this._masterGain.connect(this._ctx.destination)
 
-      // Create per-channel gain nodes
-      const channels: AudioChannel[] = ['ambient', 'sfx', 'ui', 'music']
-      for (const ch of channels) {
+      // Create channel gains
+      for (const name of ['ambient', 'sfx', 'ui', 'music'] as ChannelName[]) {
         const g = this._ctx.createGain()
-        g.gain.value = this._channelVolumes[ch]
+        g.gain.value = this._channelVolumes[name]
         g.connect(this._masterGain)
-        this._channelGains[ch] = g
+        this._channelGains[name] = g
       }
-
-      if (this._ctx.state === 'suspended') void this._ctx.resume()
-
-      this._startLabHum()
-      this._scheduleNextChirp()
-    } catch (e) {
-      console.warn('[AudioManager] AudioContext init failed:', e)
     }
+    if (this._ctx.state === 'suspended') void this._ctx.resume()
+    return this._ctx
   }
 
-  // ---------------------------------------------------------------------------
-  // Channel volume API
-  // ---------------------------------------------------------------------------
-
-  setVolume(channel: AudioChannel, value: number): void {
-    const clamped = Math.max(0, Math.min(1, value))
-    this._channelVolumes[channel] = clamped
-    const gainNode = this._channelGains[channel]
-    if (gainNode) gainNode.gain.value = this._muted ? 0 : clamped
-    this._saveToStorage()
+  /** Returns the GainNode for the given channel, or null if audio is unavailable. */
+  getChannel(name: ChannelName): GainNode | null {
+    this._ensureContext()
+    return this._channelGains[name]
   }
 
-  getVolume(channel: AudioChannel): number {
-    return this._channelVolumes[channel]
-  }
+  /** True if AudioContext failed to initialize (policy block, unsupported platform, etc.). */
+  get isDisabled(): boolean { return this._disabled }
 
-  setMasterVolume(value: number): void {
-    this._masterVolume = Math.max(0, Math.min(1, value))
-    if (this._masterGain && !this._muted) {
-      this._masterGain.gain.value = this._masterVolume
+  // -------------------------------------------------------------------------
+  // Volume & mute
+  // -------------------------------------------------------------------------
+
+  setMasterVolume(v: number): void {
+    this._masterVolume = Math.max(0, Math.min(1, v))
+    if (this._masterGain && this._ctx && !this._muted) {
+      this._masterGain.gain.setTargetAtTime(this._masterVolume, this._ctx.currentTime, 0.05)
     }
-    this._saveToStorage()
+    this._saveState()
   }
 
-  get masterVolume(): number { return this._masterVolume }
-
-  // ---------------------------------------------------------------------------
-  // Mute / unmute
-  // ---------------------------------------------------------------------------
+  setChannelVolume(name: ChannelName, v: number): void {
+    this._channelVolumes[name] = Math.max(0, Math.min(1, v))
+    const g = this._channelGains[name]
+    if (g && this._ctx) {
+      g.gain.setTargetAtTime(this._channelVolumes[name], this._ctx.currentTime, 0.05)
+    }
+    this._saveState()
+  }
 
   mute(): void {
     this._muted = true
-    if (this._masterGain) this._masterGain.gain.value = 0
+    if (this._masterGain && this._ctx) {
+      this._masterGain.gain.setTargetAtTime(0, this._ctx.currentTime, 0.05)
+    }
+    this._saveState()
   }
 
   unmute(): void {
     this._muted = false
-    if (this._masterGain) this._masterGain.gain.value = this._masterVolume
+    if (this._masterGain && this._ctx) {
+      this._masterGain.gain.setTargetAtTime(this._masterVolume, this._ctx.currentTime, 0.05)
+    }
+    this._saveState()
   }
 
   toggleMute(): void {
@@ -150,384 +202,353 @@ export class AudioManager {
   }
 
   get isMuted(): boolean { return this._muted }
+  get masterVolume(): number { return this._masterVolume }
 
-  // ---------------------------------------------------------------------------
+  // -------------------------------------------------------------------------
   // Fade helpers
-  // ---------------------------------------------------------------------------
+  // -------------------------------------------------------------------------
 
-  /** Fade a GainNode from 0 to its current value over `duration` ms. */
-  fadeIn(gainNode: GainNode, duration: number): void {
-    if (!this._ctx) return
+  /** Fade a channel from 0 → its stored volume over `ms` milliseconds. */
+  fadeChannelIn(name: ChannelName, ms = 1000): void {
+    const g = this._channelGains[name]
+    if (!g || !this._ctx) return
     const now = this._ctx.currentTime
-    const target = gainNode.gain.value
-    gainNode.gain.setValueAtTime(0, now)
-    gainNode.gain.linearRampToValueAtTime(target, now + duration / 1000)
+    g.gain.setValueAtTime(0, now)
+    g.gain.linearRampToValueAtTime(this._channelVolumes[name], now + ms / 1000)
   }
 
-  /** Fade a GainNode to 0 over `duration` ms. */
-  fadeOut(gainNode: GainNode, duration: number): void {
-    if (!this._ctx) return
+  /** Fade a channel to 0 over `ms` milliseconds. */
+  fadeChannelOut(name: ChannelName, ms = 1000): void {
+    const g = this._channelGains[name]
+    if (!g || !this._ctx) return
     const now = this._ctx.currentTime
-    gainNode.gain.linearRampToValueAtTime(0, now + duration / 1000)
+    g.gain.setValueAtTime(g.gain.value, now)
+    g.gain.linearRampToValueAtTime(0, now + ms / 1000)
   }
 
-  // ---------------------------------------------------------------------------
-  // Day/night phase
-  // ---------------------------------------------------------------------------
+  /**
+   * Cross-fade from channelA → channelB over `ms` milliseconds.
+   * Restores channelA's stored volume after fade.
+   */
+  crossfade(from: ChannelName, to: ChannelName, ms = 1500): void {
+    this.fadeChannelOut(from, ms)
+    setTimeout(() => {
+      const g = this._channelGains[from]
+      if (g) g.gain.value = this._channelVolumes[from]
+    }, ms + 50)
+    this.fadeChannelIn(to, ms)
+  }
+
+  // -------------------------------------------------------------------------
+  // Time phase — day/night audio shift
+  // -------------------------------------------------------------------------
 
   setTimePhase(phase: TimePhase): void {
-    if (this._currentPhase === phase) return
-    this._currentPhase = phase
-    this._applyPhaseAmbient()
+    if (this._timePhase === phase) return
+    this._timePhase = phase
+    this._applyPhaseAudio()
   }
 
-  // ---------------------------------------------------------------------------
-  // Working agent count — drives keyboard clatter rate
-  // ---------------------------------------------------------------------------
+  /**
+   * Day/night audio shift — called whenever `_timePhase` changes.
+   *
+   * Two parameters transition smoothly via Web Audio `setTargetAtTime`:
+   *   - Hum oscillator frequency: lower at night (36 Hz rumble) → higher at morning (55 Hz).
+   *     `setTargetAtTime(target, now, 1.2)` reaches ~95% of target in ~3.6 s (time-constant × 3).
+   *   - Ambient gain: night is at 55% of day level; transitions over ~6 s (time-constant 2.0).
+   *     Both the primary hum gain and the HVAC noise gain track the same scale factor.
+   *
+   * PHASE_HUM_FREQ and PHASE_AMBIENT_GAIN tables at the top of this file define each phase's
+   * target values — edit those to tune the soundscape without touching this method.
+   */
+  private _applyPhaseAudio(): void {
+    if (!this._ctx || !this._labHumOsc || !this._labHumGain) return
+
+    const targetFreq = PHASE_HUM_FREQ[this._timePhase]
+    const ambientScale = PHASE_AMBIENT_GAIN[this._timePhase]
+    const now = this._ctx.currentTime
+
+    // Smooth pitch shift: time-constant 1.2 s → ~95% of target in ~3.6 s
+    this._labHumOsc.frequency.setTargetAtTime(targetFreq, now, 1.2)
+
+    // Smooth gain shift: time-constant 2.0 s → ~95% of target in ~6 s
+    const targetGain = this._channelVolumes.ambient * ambientScale
+    this._labHumGain.gain.setTargetAtTime(targetGain * 0.45, now, 2.0)
+
+    if (this._labNoiseGain) {
+      this._labNoiseGain.gain.setTargetAtTime(targetGain * 0.12, now, 2.0)
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // Working agent count — scales keyboard clatter intensity
+  // -------------------------------------------------------------------------
 
   setWorkingAgentCount(count: number): void {
-    this._workingAgentCount = count
-    this._restartKeyboardClatter()
+    const prev = this._workingAgentCount
+    this._workingAgentCount = Math.max(0, count)
+    // Re-schedule clatter if count changed meaningfully
+    if (Math.abs(prev - this._workingAgentCount) >= 1 && this._ambientRunning) {
+      this._scheduleKbClatter()
+    }
   }
 
-  // ---------------------------------------------------------------------------
-  // Lab Hum — HVAC/server room drone, always playing after init
-  // ---------------------------------------------------------------------------
+  // -------------------------------------------------------------------------
+  // Ambient soundscape — start / stop
+  // -------------------------------------------------------------------------
 
-  private _startLabHum(): void {
-    const ctx = this._ctx
+  /** Start ambient soundscape. Call after first user interaction. No-op if audio is disabled. */
+  startAmbient(): void {
+    if (this._ambientRunning || this._disabled) return
+    const ctx = this._ensureContext()
+    if (!ctx) return  // AudioContext unavailable — silent degradation
+    this._ambientRunning = true
+
+    this._startLabHum(ctx)
+    this._startLabNoise(ctx)
+    this._scheduleKbClatter()
+    this._scheduleChirp()
+  }
+
+  /** Stop and release all ambient nodes. */
+  stopAmbient(): void {
+    this._ambientRunning = false
+
+    if (this._labHumOsc) {
+      try { this._labHumOsc.stop() } catch { /* already stopped */ }
+      this._labHumOsc = null
+      this._labHumGain = null
+    }
+    if (this._labNoiseSource) {
+      try { this._labNoiseSource.stop() } catch { /* already stopped */ }
+      this._labNoiseSource = null
+      this._labNoiseGain = null
+    }
+    if (this._kbClatterTimeout) { clearTimeout(this._kbClatterTimeout); this._kbClatterTimeout = null }
+    if (this._chirpTimeout) { clearTimeout(this._chirpTimeout); this._chirpTimeout = null }
+  }
+
+  // -------------------------------------------------------------------------
+  // Ambient internals
+  // -------------------------------------------------------------------------
+
+  /** Low-frequency lab drone: dual oscillators (fundamental + 5th above). */
+  private _startLabHum(ctx: AudioContext): void {
     const ambientGain = this._channelGains.ambient
-    if (!ctx || !ambientGain) return
+    if (!ambientGain) return
+    const phaseScale = PHASE_AMBIENT_GAIN[this._timePhase]
+    const baseFreq = PHASE_HUM_FREQ[this._timePhase]
 
-    // Oscillator drone at 60 Hz (fundamental) — sine + small detuned triangle layer
-    const hum = ctx.createOscillator()
-    hum.type = 'sine'
-    hum.frequency.value = 60
-
-    const subHum = ctx.createOscillator()
-    subHum.type = 'triangle'
-    subHum.frequency.value = 120
-    subHum.detune.value = 8
-
+    // Primary drone
     const humGain = ctx.createGain()
-    humGain.gain.value = 0.15
-
-    // LFO for subtle tremolo
-    const lfo = ctx.createOscillator()
-    lfo.type = 'sine'
-    lfo.frequency.value = 0.3
-    const lfoGain = ctx.createGain()
-    lfoGain.gain.value = 0.015
-
-    lfo.connect(lfoGain)
-    lfoGain.connect(humGain.gain)
-
-    hum.connect(humGain)
-    subHum.connect(humGain)
+    humGain.gain.value = this._channelVolumes.ambient * phaseScale * 0.45
     humGain.connect(ambientGain)
 
-    hum.start()
-    subHum.start()
+    const osc = ctx.createOscillator()
+    osc.type = 'sine'
+    osc.frequency.value = baseFreq
+
+    // Sub-harmonic layer (octave below, adds body)
+    const subOsc = ctx.createOscillator()
+    subOsc.type = 'sine'
+    subOsc.frequency.value = baseFreq / 2
+
+    // Light wavering (0.08 Hz LFO → ±2 Hz pitch wobble)
+    const lfo = ctx.createOscillator()
+    lfo.type = 'sine'
+    lfo.frequency.value = 0.08
+    const lfoGain = ctx.createGain()
+    lfoGain.gain.value = 2
+    lfo.connect(lfoGain)
+    lfoGain.connect(osc.frequency)
+
+    osc.connect(humGain)
+    subOsc.connect(humGain)
+
+    osc.start()
+    subOsc.start()
     lfo.start()
 
-    this._labHumOsc = hum
+    this._labHumOsc = osc
     this._labHumGain = humGain
-
-    // Noise floor: filtered white noise for HVAC texture
-    const bufSize = ctx.sampleRate * 2
-    const noiseBuf = ctx.createBuffer(1, bufSize, ctx.sampleRate)
-    const data = noiseBuf.getChannelData(0)
-    for (let i = 0; i < bufSize; i++) data[i] = Math.random() * 2 - 1
-
-    const noise = ctx.createBufferSource()
-    noise.buffer = noiseBuf
-    noise.loop = true
-
-    const bpf = ctx.createBiquadFilter()
-    bpf.type = 'bandpass'
-    bpf.frequency.value = 200
-    bpf.Q.value = 0.5
-
-    const lpf = ctx.createBiquadFilter()
-    lpf.type = 'lowpass'
-    lpf.frequency.value = 400
-
-    const noiseGain = ctx.createGain()
-    noiseGain.gain.value = 0.04
-
-    noise.connect(bpf)
-    bpf.connect(lpf)
-    lpf.connect(noiseGain)
-    noiseGain.connect(ambientGain)
-    noise.start()
-
-    this._labHumNoiseSource = noise
-    this._labHumNoiseGain = noiseGain
-
-    // Random pitch micro-variation every 30s (rate 0.98–1.02)
-    this._labHumPitchTimer = setInterval(() => {
-      if (!this._labHumOsc) return
-      const drift = 0.98 + Math.random() * 0.04  // 0.98–1.02
-      this._labHumOsc.frequency.linearRampToValueAtTime(60 * drift, ctx.currentTime + 2)
-    }, 30_000)
   }
 
-  // ---------------------------------------------------------------------------
-  // Keyboard Clatter — rate scales with working agent count
-  // ---------------------------------------------------------------------------
-
-  private _getKeyboardIntervalMs(): number {
-    // Night phase: half rate
-    const nightMult = this._currentPhase === 'night' ? 2 : 1
-    if (this._workingAgentCount <= 0) return 0
-    if (this._workingAgentCount <= 2) return 1000 * nightMult   // 1/sec
-    if (this._workingAgentCount <= 5) return 350 * nightMult    // ~2–3/sec
-    return 250 * nightMult                                       // 4/sec cap
-  }
-
-  private _playKeystroke(): void {
-    const ctx = this._ctx
-    const sfxGain = this._channelGains.sfx
-    if (!ctx || !sfxGain) return
-
-    // Short broadband click + filtered noise burst
-    const gainNode = ctx.createGain()
-    gainNode.connect(sfxGain)
-
-    const freq = 2500 + Math.random() * 1500   // 4 variants via random freq band
-    const bpf = ctx.createBiquadFilter()
-    bpf.type = 'bandpass'
-    bpf.frequency.value = freq
-    bpf.Q.value = 3 + Math.random() * 4
-    bpf.connect(gainNode)
-
-    // Tiny noise burst
-    const bufSize = Math.floor(ctx.sampleRate * 0.02)
-    const buf = ctx.createBuffer(1, bufSize, ctx.sampleRate)
-    const d = buf.getChannelData(0)
-    for (let i = 0; i < bufSize; i++) d[i] = Math.random() * 2 - 1
-    const src = ctx.createBufferSource()
-    src.buffer = buf
-    src.connect(bpf)
-
-    const now = ctx.currentTime
-    gainNode.gain.setValueAtTime(0.08, now)
-    gainNode.gain.exponentialRampToValueAtTime(0.0001, now + 0.025)
-    src.start(now)
-    src.stop(now + 0.025)
-  }
-
-  private _restartKeyboardClatter(): void {
-    if (this._keyboardIntervalId !== null) {
-      clearInterval(this._keyboardIntervalId)
-      this._keyboardIntervalId = null
-    }
-    const ms = this._getKeyboardIntervalMs()
-    if (ms <= 0 || !this._initialized) return
-    this._keyboardIntervalId = setInterval(() => {
-      this._playKeystroke()
-    }, ms)
-  }
-
-  // ---------------------------------------------------------------------------
-  // Equipment Chirp — random beep every 15–30s
-  // ---------------------------------------------------------------------------
-
-  private _scheduleNextChirp(): void {
-    if (this._chirpTimerId !== null) {
-      clearTimeout(this._chirpTimerId)
-      this._chirpTimerId = null
-    }
-    // Evening: slow down (25–50s)
-    const [minMs, maxMs] = this._currentPhase === 'evening'
-      ? [25_000, 50_000]
-      : [15_000, 30_000]
-    const delay = minMs + Math.random() * (maxMs - minMs)
-    this._chirpTimerId = setTimeout(() => {
-      this._playChirp()
-      this._scheduleNextChirp()
-    }, delay)
-  }
-
-  private _playChirp(): void {
-    const ctx = this._ctx
+  /** Continuous shaped noise: bandpass-filtered texture for HVAC / room tone. */
+  private _startLabNoise(ctx: AudioContext): void {
     const ambientGain = this._channelGains.ambient
-    if (!ctx || !ambientGain) return
+    if (!ambientGain) return
+    const phaseScale = PHASE_AMBIENT_GAIN[this._timePhase]
 
-    // 3 variants: low beep, mid ping, short trill
-    const variant = Math.floor(Math.random() * 3)
-    const gainNode = ctx.createGain()
-    gainNode.connect(ambientGain)
-
-    const now = ctx.currentTime
-
-    if (variant === 0) {
-      // Short beep at 880 Hz
-      const osc = ctx.createOscillator()
-      osc.type = 'sine'
-      osc.frequency.value = 880
-      osc.connect(gainNode)
-      gainNode.gain.setValueAtTime(0, now)
-      gainNode.gain.linearRampToValueAtTime(0.05, now + 0.01)
-      gainNode.gain.exponentialRampToValueAtTime(0.0001, now + 0.18)
-      osc.start(now)
-      osc.stop(now + 0.2)
-    } else if (variant === 1) {
-      // Double-beep at 1200 Hz
-      for (let i = 0; i < 2; i++) {
-        const osc = ctx.createOscillator()
-        osc.type = 'sine'
-        osc.frequency.value = 1200
-        osc.connect(gainNode)
-        const t = now + i * 0.12
-        gainNode.gain.setValueAtTime(0.05, t)
-        gainNode.gain.exponentialRampToValueAtTime(0.0001, t + 0.08)
-        osc.start(t)
-        osc.stop(t + 0.09)
-      }
-    } else {
-      // Rising chirp sweep 600 → 1800 Hz
-      const osc = ctx.createOscillator()
-      osc.type = 'sine'
-      osc.frequency.setValueAtTime(600, now)
-      osc.frequency.exponentialRampToValueAtTime(1800, now + 0.12)
-      osc.connect(gainNode)
-      gainNode.gain.setValueAtTime(0.05, now)
-      gainNode.gain.exponentialRampToValueAtTime(0.0001, now + 0.13)
-      osc.start(now)
-      osc.stop(now + 0.14)
-    }
-  }
-
-  // ---------------------------------------------------------------------------
-  // Night ambience layer
-  // ---------------------------------------------------------------------------
-
-  private _startNightLayer(): void {
-    const ctx = this._ctx
-    const ambientGain = this._channelGains.ambient
-    if (!ctx || !ambientGain || this._nightLayerGain) return
-
-    // Very soft high-frequency hiss (server fan / silence)
-    const bufSize = ctx.sampleRate * 3
-    const buf = ctx.createBuffer(1, bufSize, ctx.sampleRate)
-    const d = buf.getChannelData(0)
-    for (let i = 0; i < bufSize; i++) d[i] = Math.random() * 2 - 1
+    // 3-second looping noise buffer
+    const bufLen = ctx.sampleRate * 3
+    const buf = ctx.createBuffer(1, bufLen, ctx.sampleRate)
+    const data = buf.getChannelData(0)
+    for (let i = 0; i < bufLen; i++) data[i] = Math.random() * 2 - 1
 
     const src = ctx.createBufferSource()
     src.buffer = buf
     src.loop = true
 
-    const hpf = ctx.createBiquadFilter()
-    hpf.type = 'highpass'
-    hpf.frequency.value = 4000
-    hpf.Q.value = 0.5
+    // Bandpass around 200 Hz — HVAC / ventilation rumble
+    const bpf = ctx.createBiquadFilter()
+    bpf.type = 'bandpass'
+    bpf.frequency.value = 200
+    bpf.Q.value = 1.5
 
-    const nightGain = ctx.createGain()
-    nightGain.gain.value = 0
-    src.connect(hpf)
-    hpf.connect(nightGain)
-    nightGain.connect(ambientGain)
+    // High-shelf cut above 500 Hz — keeps it dark/muffled
+    const shelf = ctx.createBiquadFilter()
+    shelf.type = 'highshelf'
+    shelf.frequency.value = 500
+    shelf.gain.value = -18
+
+    const noiseGain = ctx.createGain()
+    noiseGain.gain.value = this._channelVolumes.ambient * phaseScale * 0.12
+
+    src.connect(bpf)
+    bpf.connect(shelf)
+    shelf.connect(noiseGain)
+    noiseGain.connect(ambientGain)
     src.start()
 
-    // Fade in
-    nightGain.gain.linearRampToValueAtTime(0.035, ctx.currentTime + 3)
-
-    this._nightLayerOsc = src as unknown as OscillatorNode   // reuse field type
-    this._nightLayerGain = nightGain
+    this._labNoiseSource = src
+    this._labNoiseGain = noiseGain
   }
 
-  private _stopNightLayer(): void {
-    if (this._nightLayerGain && this._ctx) {
-      this._nightLayerGain.gain.linearRampToValueAtTime(0, this._ctx.currentTime + 2)
-      setTimeout(() => {
-        try { (this._nightLayerOsc as unknown as AudioBufferSourceNode)?.stop() } catch { /* ok */ }
-        this._nightLayerOsc = null
-        this._nightLayerGain = null
-      }, 2500)
+  /** Schedule a keyboard clatter burst. Interval scales with working agent count. */
+  private _scheduleKbClatter(): void {
+    if (this._kbClatterTimeout) clearTimeout(this._kbClatterTimeout)
+    if (!this._ambientRunning) return
+
+    const agentWeight = Math.min(this._workingAgentCount, 8) / 8  // 0..1
+    const interval = KB_MAX_INTERVAL - agentWeight * (KB_MAX_INTERVAL - KB_MIN_INTERVAL)
+    const jitter = (Math.random() - 0.5) * interval * 0.4
+
+    this._kbClatterTimeout = setTimeout(() => {
+      if (!this._ambientRunning) return
+      this._playKbBurst()
+      this._scheduleKbClatter()
+    }, Math.max(80, interval + jitter))
+  }
+
+  /** Play a short burst of keyboard typing (2-8 keystrokes). */
+  private _playKbBurst(): void {
+    if (!this._ctx || this._muted) return
+    const ctx = this._ctx
+    const sfxGain = this._channelGains.sfx
+    if (!sfxGain) return
+    const burstLen = 2 + Math.floor(Math.random() * 7)  // 2..8 keys
+    const keyInterval = 0.04 + Math.random() * 0.06
+
+    for (let i = 0; i < burstLen; i++) {
+      const delay = i * keyInterval
+      const freq = 500 + Math.random() * 700
+      const now = ctx.currentTime + delay
+
+      const g = ctx.createGain()
+      g.gain.setValueAtTime(0, now)
+      g.gain.linearRampToValueAtTime(0.07, now + 0.003)
+      g.gain.exponentialRampToValueAtTime(0.0001, now + 0.018)
+      g.connect(sfxGain)
+
+      const osc = ctx.createOscillator()
+      osc.type = 'square'
+      osc.frequency.value = freq
+      osc.connect(g)
+      osc.start(now)
+      osc.stop(now + 0.025)
     }
   }
 
-  // ---------------------------------------------------------------------------
-  // Phase transitions
-  // ---------------------------------------------------------------------------
+  /** Schedule a random equipment chirp. */
+  private _scheduleChirp(): void {
+    if (this._chirpTimeout) clearTimeout(this._chirpTimeout)
+    if (!this._ambientRunning) return
 
-  private _applyPhaseAmbient(): void {
-    // Keyboard clatter — restart with new rate
-    this._restartKeyboardClatter()
+    const interval = CHIRP_MIN_INTERVAL + Math.random() * (CHIRP_MAX_INTERVAL - CHIRP_MIN_INTERVAL)
 
-    // Night layer on/off
-    if (this._currentPhase === 'night') {
-      this._startNightLayer()
-    } else {
-      this._stopNightLayer()
+    this._chirpTimeout = setTimeout(() => {
+      if (!this._ambientRunning) return
+      this._playEquipmentChirp()
+      this._scheduleChirp()
+    }, interval)
+  }
+
+  /** A short equipment beep — scope chirp, server ping, etc. */
+  private _playEquipmentChirp(): void {
+    if (!this._ctx || this._muted) return
+    const ctx = this._ctx
+    const sfxGain = this._channelGains.sfx
+    if (!sfxGain) return
+    const now = ctx.currentTime
+
+    // Two-tone chirp (rising or steady)
+    const type = Math.random() > 0.5 ? 'rising' : 'steady'
+    const baseFreq = 2200 + Math.random() * 1600  // 2.2–3.8 kHz
+
+    const g = ctx.createGain()
+    g.gain.setValueAtTime(0, now)
+    g.gain.linearRampToValueAtTime(0.06, now + 0.008)
+    g.gain.setValueAtTime(0.06, now + 0.06)
+    g.gain.exponentialRampToValueAtTime(0.0001, now + 0.14)
+    g.connect(sfxGain)
+
+    const osc = ctx.createOscillator()
+    osc.type = 'sine'
+    osc.frequency.setValueAtTime(baseFreq, now)
+    if (type === 'rising') {
+      osc.frequency.linearRampToValueAtTime(baseFreq * 1.35, now + 0.08)
     }
-
-    // Chirp scheduler — restart so it picks up new timing
-    this._scheduleNextChirp()
+    osc.connect(g)
+    osc.start(now)
+    osc.stop(now + 0.15)
   }
 
-  // ---------------------------------------------------------------------------
-  // Internal: channel gain node for external use (e.g. Phaser sound through channel)
-  // ---------------------------------------------------------------------------
+  // -------------------------------------------------------------------------
+  // localStorage persistence
+  // -------------------------------------------------------------------------
 
-  /** Returns the GainNode for a channel — allows routing external sounds through it. */
-  getChannelGain(channel: AudioChannel): GainNode | null {
-    return this._channelGains[channel] ?? null
-  }
-
-  /** Returns the AudioContext if initialized. */
-  getContext(): AudioContext | null {
-    return this._ctx
-  }
-
-  // ---------------------------------------------------------------------------
-  // Persistence
-  // ---------------------------------------------------------------------------
-
-  private _saveToStorage(): void {
+  private _saveState(): void {
     try {
-      const data = {
-        master: this._masterVolume,
-        channels: this._channelVolumes,
+      const state: AudioState = {
+        masterVolume: this._masterVolume,
         muted: this._muted,
+        channelVolumes: { ...this._channelVolumes },
       }
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(data))
-    } catch { /* storage unavailable */ }
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state))
+    } catch { /* localStorage unavailable — electron sandboxed context */ }
   }
 
-  private _loadFromStorage(): void {
+  private _loadState(): void {
     try {
       const raw = localStorage.getItem(STORAGE_KEY)
       if (!raw) return
-      const data = JSON.parse(raw) as {
-        master?: number
-        channels?: Partial<Record<AudioChannel, number>>
-        muted?: boolean
+      // JSON.parse can throw on corrupted data; the outer catch handles that.
+      const state = JSON.parse(raw) as Partial<AudioState>
+
+      // Validate masterVolume: must be a finite number in [0, 1]
+      if (typeof state.masterVolume === 'number' && isFinite(state.masterVolume)) {
+        this._masterVolume = Math.max(0, Math.min(1, state.masterVolume))
       }
-      if (typeof data.master === 'number') this._masterVolume = data.master
-      if (data.channels) {
-        const channels: AudioChannel[] = ['ambient', 'sfx', 'ui', 'music']
-        for (const ch of channels) {
-          if (typeof data.channels[ch] === 'number') this._channelVolumes[ch] = data.channels[ch]!
+
+      // Validate muted: strict boolean check
+      if (state.muted === true || state.muted === false) {
+        this._muted = state.muted
+      }
+
+      // Validate per-channel volumes: each must be a finite number in [0, 1]
+      if (state.channelVolumes && typeof state.channelVolumes === 'object') {
+        for (const key of Object.keys(CHANNEL_DEFAULTS) as ChannelName[]) {
+          const v = state.channelVolumes[key]
+          if (typeof v === 'number' && isFinite(v)) {
+            this._channelVolumes[key] = Math.max(0, Math.min(1, v))
+          }
+          // If v is missing/invalid the CHANNEL_DEFAULTS value remains (set in field initializer)
         }
       }
-      if (typeof data.muted === 'boolean') this._muted = data.muted
-    } catch { /* parse error — use defaults */ }
-  }
-
-  // ---------------------------------------------------------------------------
-  // Teardown
-  // ---------------------------------------------------------------------------
-
-  destroy(): void {
-    if (this._labHumPitchTimer !== null) clearInterval(this._labHumPitchTimer)
-    if (this._keyboardIntervalId !== null) clearInterval(this._keyboardIntervalId)
-    if (this._chirpTimerId !== null) clearTimeout(this._chirpTimerId)
-    try { this._labHumOsc?.stop() } catch { /* ok */ }
-    try { this._labHumNoiseSource?.stop() } catch { /* ok */ }
-    try { (this._nightLayerOsc as unknown as AudioBufferSourceNode)?.stop() } catch { /* ok */ }
-    void this._ctx?.close()
+    } catch {
+      // JSON parse failure or localStorage access error — silently use defaults.
+      // This covers: malformed JSON, quota exceeded, sandboxed context.
+    }
   }
 }
 
@@ -535,4 +556,4 @@ export class AudioManager {
 // Singleton export
 // ---------------------------------------------------------------------------
 
-export const audioManager = AudioManager.get()
+export const audioManager = AudioManager.getInstance()

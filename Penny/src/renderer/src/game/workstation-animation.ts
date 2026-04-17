@@ -49,7 +49,7 @@ import type { WorkstationHost } from './office-workstation'
 import type { NavMesh } from './nav-mesh'
 import { buildOwnRoomRect } from './nav-mesh'
 import { PathWalker } from './path-walker'
-import { getCurrentActivity, getGameHour } from './agent-schedule'
+import { StateMachine } from './state-machine'
 
 // ---------------------------------------------------------------------------
 // Eval glow color helper
@@ -93,6 +93,16 @@ export class WorkstationAnimator {
   private evalFetchPromise: Promise<void> | null = null
   /** Workstations that need a glow refresh when the current eval fetch completes */
   private pendingEvalGlowWorkstations = new Set<WorkstationSprite>()
+
+  /**
+   * Per-agent StateMachine (two states: 'ready' | 'blending') used to
+   * serialise rapid mode-change requests.  If a crossfade is already
+   * in flight the incoming request is stored in pendingAnimUpdate and
+   * replayed once the current blend tween completes.
+   */
+  private blendSMs = new Map<string, StateMachine>()
+  /** Latest queued mode-change request per agent — flushed by _finishBlend. */
+  private pendingAnimUpdate = new Map<string, { ws: WorkstationSprite; agent: AgentState }>()
 
   constructor(
     scene: Phaser.Scene,
@@ -160,6 +170,37 @@ export class WorkstationAnimator {
   }
 
   // ---------------------------------------------------------------------------
+  // Blend-guard helpers (use StateMachine transition queue to serialise mode switches)
+  // ---------------------------------------------------------------------------
+
+  /** Get or create the two-state blend guard SM for a given agent. */
+  private getBlendSM(agentId: string): StateMachine {
+    let sm = this.blendSMs.get(agentId)
+    if (!sm) {
+      sm = new StateMachine(`${agentId}-blend`)
+      sm.addState({ name: 'ready' })
+      sm.addState({ name: 'blending' })
+      sm.setState('ready')
+      this.blendSMs.set(agentId, sm)
+    }
+    return sm
+  }
+
+  /**
+   * Called at the end of every blend tween.  Restores the SM to 'ready' and
+   * flushes any mode-change that arrived while the blend was in progress.
+   */
+  private _finishBlend(agentId: string, sm: StateMachine): void {
+    sm.setState('ready')
+    const pending = this.pendingAnimUpdate.get(agentId)
+    if (pending) {
+      this.pendingAnimUpdate.delete(agentId)
+      pending.ws.lastAnimMode = undefined  // force full re-evaluation
+      this.updateAnimation(pending.ws, pending.agent)
+    }
+  }
+
+  // ---------------------------------------------------------------------------
   // updateAnimation — the main animation state machine
   // ---------------------------------------------------------------------------
 
@@ -169,6 +210,17 @@ export class WorkstationAnimator {
 
     const mode: 'idle' | 'working' | 'waiting' = isWaiting ? 'waiting' : isWorking ? 'working' : 'idle'
     if (ws.lastAnimMode === mode) return
+
+    // Blend-guard: if a crossfade tween is already in flight, queue the latest
+    // request and return.  _finishBlend will flush the queue when the blend ends.
+    // This uses the StateMachine transition queue to serialise rapid mode changes.
+    const agentId = agent.config.id
+    const blendSM = this.getBlendSM(agentId)
+    if (blendSM.currentStateName === 'blending') {
+      this.pendingAnimUpdate.set(agentId, { ws, agent })
+      return
+    }
+
     const prevMode = ws.lastAnimMode
     ws.lastAnimMode = mode
 
@@ -182,7 +234,6 @@ export class WorkstationAnimator {
     if (ws.pulseTween)       { ws.pulseTween.destroy();       ws.pulseTween       = undefined }
     if (ws.ledPulseTween)    { ws.ledPulseTween.destroy();    ws.ledPulseTween    = undefined }
     if (ws.kbGlowTween)     { ws.kbGlowTween.destroy();     ws.kbGlowTween     = undefined }
-    if (ws.kbScaleTween)    { ws.kbScaleTween.destroy();    ws.kbScaleTween    = undefined; if (ws.keyboard) { ws.keyboard.scaleX = 1; ws.keyboard.scaleY = 1 } }
     if (ws.lampLightTween)   { ws.lampLightTween.destroy();   ws.lampLightTween   = undefined }
     if (ws.lampFlickerTimer) { ws.lampFlickerTimer.destroy();  ws.lampFlickerTimer = undefined }
     if (ws.walkBreakTween)   { ws.walkBreakTween.destroy();   ws.walkBreakTween   = undefined }
@@ -266,29 +317,40 @@ export class WorkstationAnimator {
     const base = charIdx * CHAR_COLS
 
     if (isWaiting) {
+      // any→waiting: fade the sprite in gradually over 400 ms so the waiting
+      // pose doesn't snap in abruptly.  Main-loop tweens are delayed by the
+      // same duration so they only start once the agent is fully visible.
+      const waitingBlendMs = AnimConfig.stateTransitions.anyToWaiting.durationMs
+      ws.sprite.setAlpha(0)
+      blendSM.setState('blending')
+      this.scene.tweens.add({
+        targets: ws.sprite, alpha: 1,
+        duration: waitingBlendMs, ease: 'Sine.easeOut',
+        onComplete: () => this._finishBlend(agentId, blendSM),
+      })
+
       if (!gdsLock) ws.sprite.setFrame(base + POSE_IDLE)
       ws.pulseTween = this.scene.tweens.add({
         targets: ws.sprite, scaleX: CHAR_SCALE * AnimConfig.waiting.pulseScaleFactor, scaleY: CHAR_SCALE * AnimConfig.waiting.pulseScaleFactor,
         duration: AnimConfig.waiting.pulseDuration, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
+        delay: waitingBlendMs,
       })
       ws.typingTween = this.scene.tweens.add({
         targets: ws.sprite, x: AnimConfig.waiting.swayAmplitude,
         duration: AnimConfig.waiting.swayDuration, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
+        delay: waitingBlendMs,
       })
       ws.dotPulseTween = this.scene.tweens.add({
         targets: ws.statusDot, alpha: AnimConfig.waiting.dotPulseAlphaMin,
         duration: AnimConfig.waiting.dotPulseDuration, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
+        delay: waitingBlendMs,
       })
-      // LED: waiting — amber fast-blink loop to signal attention needed
+      // LED: waiting — amber steady glow
       if (ws.ledGlow) {
         ws.ledGlow.clear()
         ws.ledGlow.fillStyle(activeTheme.deskStrokeWaiting, 1)
         ws.ledGlow.fillRoundedRect(-26, WS_DESK_Y + 4, 52, 2, 1)
-        ws.ledGlow.setAlpha(0.2)
-        ws.ledPulseTween = this.scene.tweens.add({
-          targets: ws.ledGlow, alpha: 0.75,
-          duration: 450, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
-        })
+        this.scene.tweens.add({ targets: ws.ledGlow, alpha: 0.5, duration: 300, ease: 'Sine.easeOut' })
       }
       // Lamp light cone: dim when waiting
       if (ws.lampLight) {
@@ -300,17 +362,44 @@ export class WorkstationAnimator {
       this.restoreDeskStrokeCallback(ws)
     } else if (isWorking) {
       if (!gdsLock) ws.sprite.setFrame(base + POSE_INTERACT)
+
+      // idle→working: squash-compression burst (scaleY) before typing starts.
+      // The sprite compresses to compressionScale over half the blend window,
+      // then bounces back.  Main sprite-motion loops are delayed by the full
+      // blend duration so they begin after the settle.
+      const workingBlendMs = (prevMode === 'idle' || prevMode === undefined)
+        ? AnimConfig.stateTransitions.idleToWorking.durationMs
+        : 0
+      if (workingBlendMs > 0) {
+        blendSM.setState('blending')
+        const halfBlend = workingBlendMs / 2
+        this.scene.tweens.add({
+          targets: ws.sprite,
+          scaleY: CHAR_SCALE * AnimConfig.stateTransitions.idleToWorking.compressionScale,
+          duration: halfBlend,
+          ease: 'Sine.easeIn',
+          yoyo: true,
+          onComplete: () => {
+            ws.sprite.setScale(CHAR_SCALE)
+            this._finishBlend(agentId, blendSM)
+          },
+        })
+      }
+
       ws.typingTween = this.scene.tweens.add({
         targets: ws.sprite, x: AnimConfig.working.typingAmplitude,
         duration: AnimConfig.working.typingDuration, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
+        delay: workingBlendMs,
       })
       ws.bounceTween = this.scene.tweens.add({
         targets: ws.sprite, y: WS_SPRITE_Y - AnimConfig.working.bounceOffset,
         duration: AnimConfig.working.bounceDuration, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
+        delay: workingBlendMs,
       })
       ws.headTiltTween = this.scene.tweens.add({
         targets: ws.sprite, angle: AnimConfig.working.headTiltAngle,
         duration: AnimConfig.working.headTiltDuration, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
+        delay: workingBlendMs,
       })
       if (!this.host.getOrAssignGdsDeskSlot) ws.deskBody.setStrokeStyle(1, 0x34d399, 0.55)
 
@@ -325,18 +414,6 @@ export class WorkstationAnimator {
             yoyo: true,
             repeat: -1,
             ease: 'Sine.easeInOut',
-          })
-        }
-        // Keyboard scale pulse — tiny key-press simulation (scaleY squish)
-        if (!ws.kbScaleTween) {
-          ws.kbScaleTween = this.scene.tweens.add({
-            targets: ws.keyboard,
-            scaleY: { from: 1, to: 0.94 },
-            duration: 180,
-            yoyo: true,
-            repeat: -1,
-            ease: 'Sine.easeInOut',
-            delay: 180, // offset from glow for organic feel
           })
         }
       }
@@ -529,21 +606,41 @@ export class WorkstationAnimator {
       this.showSpeechBubble(ws, agent)
 
     } else {
-      if (!gdsLock) {
-        ws.sprite.setFrame(base + POSE_SIT)
-        // Sitting-down compression on chair contact (squash & stretch principle)
-        const ssSit = AnimConfig.squashStretch
+      if (!gdsLock) ws.sprite.setFrame(base + POSE_SIT)
+
+      // working→idle: hands-lift + lean-back before settling into the idle pose.
+      // The sprite lifts (y), tilts back (angle), then snaps to resting position.
+      // Breath and chair-rock loops are delayed so they start after the settle.
+      const idleBlendMs = prevMode === 'working'
+        ? AnimConfig.stateTransitions.workingToIdle.durationMs
+        : 0
+      if (idleBlendMs > 0) {
+        blendSM.setState('blending')
+        const halfBlend = idleBlendMs / 3        // lift phase
+        const settleMs  = idleBlendMs * 2 / 3   // settle phase
         this.scene.tweens.add({
           targets: ws.sprite,
-          scaleY: CHAR_SCALE * ssSit.sitCompressScaleY,
-          duration: ssSit.sitCompressDuration,
-          yoyo: true,
+          y:     WS_SPRITE_Y - AnimConfig.stateTransitions.workingToIdle.liftPx,
+          angle: AnimConfig.stateTransitions.workingToIdle.leanAngle,
+          duration: halfBlend,
           ease: 'Sine.easeOut',
+          onComplete: () => {
+            this.scene.tweens.add({
+              targets: ws.sprite,
+              y:     WS_SPRITE_Y,
+              angle: 0,
+              duration: settleMs,
+              ease: 'Sine.easeIn',
+              onComplete: () => this._finishBlend(agentId, blendSM),
+            })
+          },
         })
       }
+
       ws.breathTween = this.scene.tweens.add({
         targets: ws.sprite, scaleY: CHAR_SCALE * AnimConfig.idle.breathScaleFactor,
         duration: AnimConfig.idle.breathDuration, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
+        delay: idleBlendMs,
       })
 
       // Idle chair rocking — very subtle lean-back oscillation
@@ -555,6 +652,7 @@ export class WorkstationAnimator {
           yoyo: true,
           repeat: -1,
           ease: 'Sine.easeInOut',
+          delay: idleBlendMs,
         })
       }
 
@@ -567,19 +665,16 @@ export class WorkstationAnimator {
         fart.once('animationcomplete', () => fart.destroy())
       }
 
-      // Remove keyboard glow (already torn down at top; just restore visuals)
+      // Remove keyboard glow
+      if (ws.kbGlowTween) { ws.kbGlowTween.destroy(); ws.kbGlowTween = undefined }
       if (ws.keyboard) ws.keyboard.setStrokeStyle(0, 0, 0).setAlpha(0.8)
 
-      // LED: idle — slow dim blink loop (breathing glow)
+      // LED: idle — muted dim glow
       if (ws.ledGlow) {
         ws.ledGlow.clear()
         ws.ledGlow.fillStyle(activeTheme.deskStrokeIdle, 1)
         ws.ledGlow.fillRoundedRect(-26, WS_DESK_Y + 4, 52, 2, 1)
-        ws.ledGlow.setAlpha(0.03)
-        ws.ledPulseTween = this.scene.tweens.add({
-          targets: ws.ledGlow, alpha: 0.18,
-          duration: 2200, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
-        })
+        this.scene.tweens.add({ targets: ws.ledGlow, alpha: 0.1, duration: 600, ease: 'Sine.easeOut' })
       }
       // Lamp light cone: dim when idle
       if (ws.lampLight) {
@@ -590,40 +685,9 @@ export class WorkstationAnimator {
       }
       this.restoreDeskStrokeCallback(ws)
 
-      // Task complete reaction: squash-stretch hop when transitioning from working→idle
+      // "Just finished" confetti + game-systems — the Y lift / lean-back is
+      // already handled by the idleBlendMs tween above (working→idle crossfade).
       if (prevMode === 'working') {
-        const ssHop = AnimConfig.squashStretch
-        // Phase 1: pre-launch squash (character coils down)
-        this.scene.tweens.add({
-          targets: ws.sprite,
-          scaleY: CHAR_SCALE * ssHop.taskHopScaleSquash,
-          duration: Math.round(ssHop.taskHopDuration * 0.27),
-          ease: 'Sine.easeIn',
-          onComplete: () => {
-            // Phase 2: hop up + stretch (character pops upward, elongates)
-            this.scene.tweens.add({
-              targets: ws.sprite,
-              y: WS_SPRITE_Y + ssHop.taskHopY,
-              scaleY: CHAR_SCALE * ssHop.taskHopScaleStretch,
-              duration: Math.round(ssHop.taskHopDuration * 0.4),
-              ease: 'Sine.easeOut',
-              onComplete: () => {
-                // Phase 3: land + settle back to rest scale
-                this.scene.tweens.add({
-                  targets: ws.sprite,
-                  y: WS_SPRITE_Y,
-                  scaleY: CHAR_SCALE,
-                  duration: Math.round(ssHop.taskHopDuration * 0.33),
-                  ease: 'Bounce.easeOut',
-                  onComplete: () => {
-                    ws.sprite.y = WS_SPRITE_Y
-                    ws.sprite.scaleY = CHAR_SCALE
-                  },
-                })
-              },
-            })
-          },
-        })
         // Find the room that owns this workstation to compute world position
         for (const room of this.host.getRooms().values()) {
           if (room.workstations.has(agent.config.id)) {
@@ -674,34 +738,6 @@ export class WorkstationAnimator {
 
       // Stamp idleSince so later timers can detect prolonged boredom
       ws.sprite.setData('idleSince', Date.now())
-
-      // Schedule-driven idle activity — real session state already overrides via the
-      // mode guard above; we only reach here when the agent is genuinely idle.
-      const scheduledActivity = getCurrentActivity(agent.config.id, getGameHour())
-      ws.sprite.setData('scheduleActivity', scheduledActivity)
-
-      // Adjust idle micro-behaviour based on schedule:
-      // coffee/break → agent is more restless (shorter walk-break interval)
-      // standup → slight lean-in (head tilt fires quickly once)
-      // arrive/leave → agent looks around attentively
-      if (scheduledActivity === 'coffee' || scheduledActivity === 'break') {
-        // Trigger an early walk break to simulate heading to the break area
-        this.scene.time.delayedCall(3000 + Math.random() * 4000, () => {
-          if (ws.lastAnimMode !== 'idle' || ws.walkBreakTween) return
-          this._executeWalkBreak(ws, agent)
-        })
-      } else if (scheduledActivity === 'standup' || scheduledActivity === 'meeting') {
-        // Quick look-around to simulate engaging with peers
-        this.scene.time.delayedCall(1000 + Math.random() * 1500, () => {
-          if (ws.lastAnimMode !== 'idle' || ws.headTiltTween || gdsLock) return
-          const angle = (Math.random() - 0.5) * 10
-          ws.headTiltTween = this.scene.tweens.add({
-            targets: ws.sprite, angle,
-            duration: 350, hold: 800, yoyo: true, ease: 'Sine.easeInOut',
-            onComplete: () => { ws.sprite.setAngle(0); ws.headTiltTween = undefined },
-          })
-        })
-      }
 
       // Head tilt: tween angle -4..+4 degrees every 8-15s, hold 1s, return to 0
       // Skip in GDS mode — sprite angle is locked to stool rotation
@@ -912,54 +948,81 @@ export class WorkstationAnimator {
     const goPath = navMesh.findPath({ x: worldX, y: worldY }, { x: targetX, y: targetY }, ownRoomRect)
     if (!goPath || goPath.length < 2) return
 
-    // Create a temporary world-space walk sprite
-    const charIdx = getAgentCharacterIndex(agent)
-    const walkSheetKey = charIdx === 1 ? ANIM_KEYS.WALK_2 : ANIM_KEYS.WALK_1
-    const walkSprite = this.scene.add.sprite(worldX, worldY, walkSheetKey, 0)
-      .setScale(CHAR_SCALE).setOrigin(0.5, 1).setDepth(9000)
-    const walkShadow = this.scene.add.ellipse(worldX, worldY + 2, 16, 5, 0x000000, 0.15).setDepth(8999)
-
-    ws.sprite.setVisible(false)
-
-    const pathWalker = new PathWalker(this.scene, walkSprite, walkShadow, walkSheetKey)
-
-    // Use a dummy tween as the walkBreakTween sentinel to prevent overlapping walks
-    ws.walkBreakTween = this.scene.tweens.addCounter({ duration: 999999 })
-
-    const returnPath = navMesh.findPath({ x: targetX, y: targetY }, { x: worldX, y: worldY }, ownRoomRect)
-      ?? [...goPath].reverse()
-
     // gdsLock and base are recomputed since this method may be called outside the idle closure
     const gdsLock = this.host.getOrAssignGdsDeskSlot != null
     const base = getAgentCharacterIndex(agent) * CHAR_COLS
 
-    const finishWalk = () => {
-      pathWalker.destroy()
-      walkSprite.destroy()
-      walkShadow.destroy()
-      ws.sprite.setVisible(true)
-      if (ws.walkBreakTween) { ws.walkBreakTween.destroy(); ws.walkBreakTween = undefined }
-      ws.sprite.x = 0
-      ws.sprite.y = WS_SPRITE_Y
-      if (!gdsLock) {
-        ws.sprite.setFrame(base + POSE_SIT)
-        // Sitting-down compression on return from walk break
-        const ssFW = AnimConfig.squashStretch
+    // idle→walking: anticipation lean — the idle sprite tilts forward for
+    // `leanMs` before the walk sprite appears and the path begins.
+    // The sentinel tween is set immediately so the walk-break timer cannot
+    // fire again during the lean window.
+    ws.walkBreakTween = this.scene.tweens.addCounter({ duration: 999999 })
+
+    const leanMs = AnimConfig.stateTransitions.idleToWalking.durationMs
+    const leanAngle = AnimConfig.stateTransitions.idleToWalking.leanAngle
+    this.scene.tweens.add({
+      targets: ws.sprite,
+      angle: leanAngle,
+      duration: leanMs / 2,
+      ease: 'Sine.easeOut',
+      yoyo: true,
+      onComplete: () => { ws.sprite.setAngle(0) },
+    })
+
+    this.scene.time.delayedCall(leanMs, () => {
+      // Guard: mode may have changed while the lean was playing
+      if (!ws.walkBreakTween?.isPlaying()) return
+
+      // Create walk sprite + shadow only now (after the lean)
+      const charIdx = getAgentCharacterIndex(agent)
+      const walkSheetKey = charIdx === 1 ? ANIM_KEYS.WALK_2 : ANIM_KEYS.WALK_1
+      const walkSprite = this.scene.add.sprite(worldX, worldY, walkSheetKey, 0)
+        .setScale(CHAR_SCALE).setOrigin(0.5, 1).setDepth(9000)
+      const walkShadow = this.scene.add.ellipse(worldX, worldY + 2, 16, 5, 0x000000, 0.15).setDepth(8999)
+
+      ws.sprite.setVisible(false)
+
+      const pathWalker = new PathWalker(this.scene, walkSprite, walkShadow, walkSheetKey)
+
+      const returnPath = navMesh.findPath({ x: targetX, y: targetY }, { x: worldX, y: worldY }, ownRoomRect)
+        ?? [...goPath].reverse()
+
+      const finishWalk = () => {
+        pathWalker.destroy()
+        walkSprite.destroy()
+        walkShadow.destroy()
+        ws.sprite.setVisible(true)
+        if (ws.walkBreakTween) { ws.walkBreakTween.destroy(); ws.walkBreakTween = undefined }
+        ws.sprite.x = 0
+        ws.sprite.y = WS_SPRITE_Y
+        if (!gdsLock) ws.sprite.setFrame(base + POSE_SIT)
+
+        // walking→idle: momentum overshoot + settle — the sprite drifts slightly
+        // in the walk direction (positive X = rightward) then springs back.
+        const overshootPx = AnimConfig.stateTransitions.walkingToIdle.overshootPx
+        const overshootMs = AnimConfig.stateTransitions.walkingToIdle.durationMs
         this.scene.tweens.add({
           targets: ws.sprite,
-          scaleY: CHAR_SCALE * ssFW.sitCompressScaleY,
-          duration: ssFW.sitCompressDuration,
-          yoyo: true,
+          x: overshootPx,
+          duration: overshootMs * 0.4,
           ease: 'Sine.easeOut',
+          onComplete: () => {
+            this.scene.tweens.add({
+              targets: ws.sprite,
+              x: 0,
+              duration: overshootMs * 0.6,
+              ease: 'Back.easeOut',
+            })
+          },
         })
       }
-    }
 
-    pathWalker.startPath(goPath, () => {
-      // Brief pause at destination, then walk back
-      this.scene.time.delayedCall(800 + Math.random() * 600, () => {
-        if (!walkSprite.active) { finishWalk(); return }
-        pathWalker.startPath(returnPath, finishWalk)
+      pathWalker.startPath(goPath, () => {
+        // Brief pause at destination, then walk back
+        this.scene.time.delayedCall(800 + Math.random() * 600, () => {
+          if (!walkSprite.active) { finishWalk(); return }
+          pathWalker.startPath(returnPath, finishWalk)
+        })
       })
     })
   }
@@ -977,83 +1040,6 @@ export class WorkstationAnimator {
       return true
     }
     return false
-  }
-
-  // ---------------------------------------------------------------------------
-  // Squash & stretch — celebration sequence (Living Lab 1b)
-  // ---------------------------------------------------------------------------
-
-  /**
-   * Recursive helper: runs `count` decaying scale oscillations on a sprite.
-   * Each oscillation compresses scaleY by `amplitude` and widens scaleX by half that,
-   * then restores, with `amplitude` multiplied by `decay` each time.
-   */
-  private _runDecayingOscillations(
-    sprite: Phaser.GameObjects.Sprite,
-    count: number,
-    amplitude: number,
-    duration: number,
-    decay: number,
-  ): void {
-    if (count <= 0 || !sprite.active) {
-      sprite.setScale(CHAR_SCALE)
-      return
-    }
-    this.scene.tweens.add({
-      targets: sprite,
-      scaleY: CHAR_SCALE * (1 - amplitude),
-      scaleX: CHAR_SCALE * (1 + amplitude * 0.5),
-      duration,
-      yoyo: true,
-      ease: 'Sine.easeInOut',
-      onComplete: () => {
-        sprite.setScale(CHAR_SCALE)
-        this._runDecayingOscillations(sprite, count - 1, amplitude * decay, duration, decay)
-      },
-    })
-  }
-
-  /**
-   * Play the full squash-stretch celebration sequence on an agent's sprite:
-   * wind-up crouch → stretch pop → 3 decaying settle oscillations.
-   * Callable externally (e.g. from CelebrationManager for rank-up events).
-   */
-  triggerCelebrationSquash(agentId: string): void {
-    for (const room of this.host.getRooms().values()) {
-      const ws = room.workstations.get(agentId)
-      if (!ws?.sprite?.active) continue
-      const ss = AnimConfig.squashStretch
-      // Step 1: wind-up crouch
-      this.scene.tweens.add({
-        targets: ws.sprite,
-        scaleY: CHAR_SCALE * ss.celebWindupScaleY,
-        scaleX: CHAR_SCALE * (2 - ss.celebWindupScaleY),  // inverse X for volume conservation
-        duration: ss.celebWindupDuration,
-        ease: 'Sine.easeIn',
-        onComplete: () => {
-          // Step 2: stretch pop
-          this.scene.tweens.add({
-            targets: ws.sprite,
-            scaleY: CHAR_SCALE * ss.celebStretchScaleY,
-            scaleX: CHAR_SCALE * (2 - ss.celebStretchScaleY),
-            duration: ss.celebStretchDuration,
-            ease: 'Back.easeOut',
-            onComplete: () => {
-              // Step 3: decaying settle oscillations
-              ws.sprite.setScale(CHAR_SCALE)
-              this._runDecayingOscillations(
-                ws.sprite,
-                ss.celebSettleCount,
-                ss.celebSettleAmplitude,
-                ss.celebSettleDuration,
-                ss.celebSettleDecay,
-              )
-            },
-          })
-        },
-      })
-      return
-    }
   }
 
   // ---------------------------------------------------------------------------

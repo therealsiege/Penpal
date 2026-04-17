@@ -48,6 +48,7 @@ import { questSystem } from './quest-system'
 import { creditManager } from './credits'
 import { leaderboardManager } from './leaderboard'
 import { seasonManager } from './seasons'
+import { PostFXManager } from './post-fx-manager'
 
 import {
   KB_ZOOM_STEP,
@@ -113,6 +114,8 @@ export class OfficeScene extends Phaser.Scene {
   private lastShadowUpdateAt = 0
   // Subtle screen-space edge shading to frame the office.
   private vignetteFx: Phaser.FX.Vignette | null = null
+  // Event-triggered post-processing effects (chromatic aberration + focus blur)
+  private _postFX!: PostFXManager
 
   // Keyboard selection — managed by OfficeSelection
   private selection!: OfficeSelection
@@ -263,9 +266,15 @@ export class OfficeScene extends Phaser.Scene {
   }
 
   private onCameraJuice(hint: CameraJuiceHint): void {
-    if (hint === 'rankUp') this.officeCamera.pulseZoom('rankUp')
-    else if (hint === 'taskComplete') this.officeCamera.pulseZoom('taskComplete')
-    else this.officeCamera.pulseZoom('errorZoomOut')
+    if (hint === 'rankUp') {
+      this.officeCamera.pulseZoom('rankUp')
+      this._postFX.flashFocusBlur(300)
+    } else if (hint === 'taskComplete') {
+      this.officeCamera.pulseZoom('taskComplete')
+    } else {
+      this.officeCamera.pulseZoom('errorZoomOut')
+      this._postFX.flashFocusBlur(300)
+    }
   }
 
   private readonly _agentArrivedCamera = (...args: unknown[]) => {
@@ -393,6 +402,10 @@ export class OfficeScene extends Phaser.Scene {
       this.worldHeight,
       null,
     )
+
+    // Enable Phaser Light2D pipeline — ambient color is driven by office-atmosphere.ts.
+    // WebGL only; safe no-op in Canvas fallback mode.
+    this.lights.enable().setAmbientColor(0xfff5e6)
 
     // Particle / effect pool systems
     this.particles = new OfficeParticles(this)
@@ -642,7 +655,7 @@ export class OfficeScene extends Phaser.Scene {
         this.ui.toggleDebugOverlay(this.navMesh, this.rooms, this.agents, this.cafe)
       })
 
-      // M — toggle sound mute (soundEngine + audioManager)
+      // M — toggle sound mute
       this.input.keyboard.on('keydown-M', (e: KeyboardEvent) => {
         if (shouldIgnoreKeyboardShortcuts(e)) return
         e.preventDefault()
@@ -697,6 +710,9 @@ export class OfficeScene extends Phaser.Scene {
     // Vignette — subtle edge framing only (strong strength + tight radius read as “too dark” on wide labs)
     this.vignetteFx = this.cameras.main.postFX.addVignette(0.5, 0.5, 0.9, 0.22)
 
+    // Event-triggered post-processing effects
+    this._postFX = new PostFXManager(this)
+
     // Screen-space UI overlays: toasts, tooltip, hover ring, help, debug, LOD label, status bar
     this.ui = new OfficeUI(this)
     this.ui.init(this.viewWidth, this.viewHeight)
@@ -737,7 +753,10 @@ export class OfficeScene extends Phaser.Scene {
     EventBus.on(EVENTS.AGENT_DEPARTED, this._agentDepartedCamera)
 
     // Game systems — celebrations, mood, achievements, sound, props, season HUD
-    this.celebrations = new CelebrationManager(this, { onCameraJuice: (h: CameraJuiceHint) => this.onCameraJuice(h) })
+    this.celebrations = new CelebrationManager(this, {
+      onCameraJuice: (h: CameraJuiceHint) => this.onCameraJuice(h),
+      onShake: () => this._postFX.flashChromaticAberration(),
+    })
 
     // VFX + animal pet animations registered globally by BootScene
 
@@ -753,11 +772,11 @@ export class OfficeScene extends Phaser.Scene {
     soundEngine.setScene(this)
     soundEngine.wireEvents()
 
-    // AudioManager — initialize on first user gesture (browser autoplay policy).
-    // Both pointerdown and keydown qualify. Subsequent calls are no-ops.
-    const _initAudio = () => audioManager.init()
-    this.input.once('pointerdown', _initAudio)
-    this.input.keyboard?.once('keydown', _initAudio)
+    // Start ambient soundscape on first pointer interaction (Web Audio requires user gesture)
+    this.input.once('pointerdown', () => {
+      audioManager.startAmbient()
+    })
+
     achievements.load()
 
     // Wire achievement unlock to visual celebration
@@ -1435,8 +1454,8 @@ export class OfficeScene extends Phaser.Scene {
 
     this.agents = allAgents
 
-    // Update keyboard clatter rate based on how many agents are actively working
-    const workingCount = allAgents.filter(a => a.sessionMode === 'working' || a.status === 'active').length
+    // Update audio working count
+    const workingCount = allAgents.filter(a => a.sessionMode === 'working').length
     audioManager.setWorkingAgentCount(workingCount)
 
     const grouped = new Map<string, AgentState[]>()
@@ -2003,6 +2022,7 @@ export class OfficeScene extends Phaser.Scene {
       this.cameras.main.postFX.remove(this.vignetteFx)
       this.vignetteFx = null
     }
+    this._postFX?.destroy()
     this.dayNightOverlay = null
     this.skyGradient = null
 

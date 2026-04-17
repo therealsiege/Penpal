@@ -925,6 +925,13 @@ export class WorkstationFactory {
       .setInteractive({ useHandCursor: true })
     wsContainer.add(hitArea)
 
+    // Light2D pipeline — applied to texture-based objects so ambient day/night color affects them.
+    // GDS backdrop (managed by GdsSceneRenderer) is intentionally excluded.
+    sprite.setPipeline('Light2D')
+    if (consoleDeskSprite) consoleDeskSprite.setPipeline('Light2D')
+    if (chairSprite) chairSprite.setPipeline('Light2D')
+    if (monitorSprite) monitorSprite.setPipeline('Light2D')
+
     const ws: WorkstationSprite = {
       container: wsContainer, sprite, nameText, statusDot, roleBadge,
       deskBody, deskTop, monitorSprite, chairSprite,

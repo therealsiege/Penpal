@@ -1,195 +1,156 @@
+// ---------------------------------------------------------------------------
+// post-fx-manager.ts
+// PostFXManager — event-triggered camera post-processing effects.
+//
+// Two effects, both gated to 'high' quality:
+//   - Chromatic aberration (barrel distortion) on screen shake
+//   - Focus blur (gaussian blur) on cinematic zoom transitions
+//
+// Both are applied to the main camera's postFX pipeline and cleaned up
+// automatically when their tween completes.
+// ---------------------------------------------------------------------------
+
 import Phaser from 'phaser'
+
+export type PostFXQuality = 'low' | 'medium' | 'high'
 
 // ---------------------------------------------------------------------------
 // PostFXManager
-// Manages camera-level postFX: vignette, bloom, and time-of-day color grading.
-// Quality levels: off | low | high — persisted to localStorage.
-// Press P to cycle quality levels.
 // ---------------------------------------------------------------------------
 
-export type QualityLevel = 'off' | 'low' | 'high'
-export type TimePhase = 'morning' | 'day' | 'evening' | 'night'
-
-const STORAGE_KEY = 'penny-postfx-quality'
-const QUALITY_LEVELS: QualityLevel[] = ['off', 'low', 'high']
-
-// Vignette parameters per phase
-const VIGNETTE: Record<TimePhase, { radius: number; strength: number }> = {
-  morning: { radius: 0.9, strength: 0.2 },
-  day:     { radius: 0.9, strength: 0.2 },
-  evening: { radius: 0.9, strength: 0.2 },
-  night:   { radius: 0.8, strength: 0.4 },
-}
-
-// Bloom strength base and night multiplier
-const BLOOM_BASE    = 0.4
-const BLOOM_NIGHT   = BLOOM_BASE * 1.3
-const BLOOM_BLUR    = 6
-const BLOOM_STEPS   = 4
-
-// Color matrix: warm morning (subtle amber)
-// Row-major 4×5 (RGBA + offset): [R→R, G→R, B→R, A→R, offset, R→G, ...]
-const WARM_MORNING: number[] = [
-  1.06, 0, 0, 0, 0,
-  0, 0.97, 0, 0, 0,
-  0, 0, 0.92, 0, 0,
-  0, 0, 0,    1, 0,
-]
-
-// Color matrix: warm evening (golden hour, stronger)
-const WARM_EVENING: number[] = [
-  1.10, 0, 0, 0, 0,
-  0, 0.93, 0, 0, 0,
-  0, 0, 0.85, 0, 0,
-  0, 0, 0,    1, 0,
-]
-
 export class PostFXManager {
-  private scene:   Phaser.Scene
-  private camera:  Phaser.Cameras.Scene2D.Camera
-  private quality: QualityLevel
-  private phase:   TimePhase = 'day'
+  private _scene: Phaser.Scene
+  private _quality: PostFXQuality
 
-  private vignette:    Phaser.FX.Vignette | null    = null
-  private bloom:       Phaser.FX.Bloom | null        = null
-  private colorMatrix: Phaser.FX.ColorMatrix | null  = null
+  private _barrelFx: Phaser.FX.Barrel | null = null
+  private _blurFx: Phaser.FX.Blur | null = null
+  private _chromaticTween: Phaser.Tweens.Tween | null = null
+  private _blurTween: Phaser.Tweens.Tween | null = null
 
-  private colorGradeTimer: Phaser.Time.TimerEvent | null = null
+  constructor(scene: Phaser.Scene, quality: PostFXQuality = 'high') {
+    this._scene = scene
+    this._quality = quality
+  }
 
-  constructor(scene: Phaser.Scene) {
-    this.scene  = scene
-    this.camera = scene.cameras.main
+  setQuality(q: PostFXQuality): void {
+    this._quality = q
+  }
 
-    const saved = localStorage.getItem(STORAGE_KEY) as QualityLevel | null
-    this.quality = QUALITY_LEVELS.includes(saved as QualityLevel) ? (saved as QualityLevel) : 'high'
-
-    this.applyEffects()
-    this.startColorGradeTimer()
+  getQuality(): PostFXQuality {
+    return this._quality
   }
 
   // ---------------------------------------------------------------------------
-  // Public API
+  // Chromatic aberration — synced with screen shake
   // ---------------------------------------------------------------------------
 
-  /** Called by OfficeAtmosphere (via callback) when the time-of-day phase changes. */
-  onPhaseChange(phase: TimePhase, animate: boolean): void {
-    this.phase = phase
+  /**
+   * Brief barrel-distortion flare simulating chromatic aberration.
+   * Tweens distortion amount from 0 → peak → 0 over `durationMs` (default 150ms).
+   * Only fires at 'high' quality.
+   */
+  flashChromaticAberration(durationMs = 150): void {
+    if (this._quality !== 'high') return
 
-    // Vignette — tween or snap
-    if (this.vignette) {
-      const p = VIGNETTE[phase]
-      if (animate) {
-        this.scene.tweens.killTweensOf(this.vignette)
-        this.scene.tweens.add({
-          targets:  this.vignette,
-          radius:   p.radius,
-          strength: p.strength,
-          duration: 3000,
-          ease:     'Sine.easeInOut',
-        })
-      } else {
-        this.vignette.radius   = p.radius
-        this.vignette.strength = p.strength
-      }
-    }
+    // Cancel any in-progress chromatic tween and remove the effect cleanly
+    this._stopChromatic()
 
-    // Bloom — tween strength
-    if (this.bloom) {
-      const strength = phase === 'night' ? BLOOM_NIGHT : BLOOM_BASE
-      if (animate) {
-        this.scene.tweens.killTweensOf(this.bloom)
-        this.scene.tweens.add({
-          targets:  this.bloom,
-          strength,
-          duration: 3000,
-          ease:     'Sine.easeInOut',
-        })
-      } else {
-        this.bloom.strength = strength
-      }
-    }
+    const cam = this._scene.cameras.main
+    this._barrelFx = cam.postFX.addBarrel(0)
+    const fx = this._barrelFx
+    const half = Math.max(20, Math.floor(durationMs / 2))
 
-    // Color grading — immediate (matrix swap, no GPU tween)
-    this.applyColorGrade()
+    this._chromaticTween = this._scene.tweens.addCounter({
+      from: 0,
+      to: 0.07,
+      duration: half,
+      ease: 'Sine.easeOut',
+      yoyo: true,
+      onUpdate: (tween) => {
+        if (fx) fx.amount = tween.getValue() as number
+      },
+      onComplete: () => {
+        this._chromaticTween = null
+        if (this._barrelFx) {
+          cam.postFX.remove(this._barrelFx)
+          this._barrelFx = null
+        }
+      },
+    })
   }
 
-  /** Cycle through off → low → high → off. Returns the new level. */
-  cycleQuality(): QualityLevel {
-    const idx  = QUALITY_LEVELS.indexOf(this.quality)
-    const next = QUALITY_LEVELS[(idx + 1) % QUALITY_LEVELS.length]
-    this.setQuality(next)
-    return next
+  // ---------------------------------------------------------------------------
+  // Focus blur — synced with cinematic zoom transitions
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Brief gaussian blur flare simulating a camera lens focus pull.
+   * Strength tweens 0 → peak → 0 over `totalDurationMs` (default 300ms).
+   * Only fires at 'high' quality.
+   */
+  flashFocusBlur(totalDurationMs = 300): void {
+    if (this._quality !== 'high') return
+
+    // Cancel any in-progress blur tween and remove the effect cleanly
+    this._stopBlur()
+
+    const cam = this._scene.cameras.main
+    // quality 0 = low (fast, 1 pass), direction x/y 2,2 = slight radial spread, strength starts at 0
+    this._blurFx = cam.postFX.addBlur(0, 2, 2, 0)
+    const fx = this._blurFx
+    const half = Math.max(30, Math.floor(totalDurationMs / 2))
+
+    this._blurTween = this._scene.tweens.addCounter({
+      from: 0,
+      to: 1.5,
+      duration: half,
+      ease: 'Sine.easeOut',
+      yoyo: true,
+      onUpdate: (tween) => {
+        if (fx) fx.strength = tween.getValue() as number
+      },
+      onComplete: () => {
+        this._blurTween = null
+        if (this._blurFx) {
+          cam.postFX.remove(this._blurFx)
+          this._blurFx = null
+        }
+      },
+    })
   }
 
-  setQuality(level: QualityLevel): void {
-    this.quality = level
-    localStorage.setItem(STORAGE_KEY, level)
-    this.applyEffects()
-  }
-
-  getQuality(): QualityLevel {
-    return this.quality
-  }
+  // ---------------------------------------------------------------------------
+  // Lifecycle
+  // ---------------------------------------------------------------------------
 
   destroy(): void {
-    this.colorGradeTimer?.destroy()
-    this.colorGradeTimer = null
-    this.removeAll()
+    this._stopChromatic()
+    this._stopBlur()
   }
 
   // ---------------------------------------------------------------------------
-  // Internal
+  // Private helpers
   // ---------------------------------------------------------------------------
 
-  private applyEffects(): void {
-    this.removeAll()
-    if (this.quality === 'off') return
-
-    const p = VIGNETTE[this.phase]
-    this.vignette = this.camera.postFX.addVignette(0.5, 0.5, p.radius, p.strength)
-    if (this.quality !== 'high') return
-
-    const bloomStrength = this.phase === 'night' ? BLOOM_NIGHT : BLOOM_BASE
-    this.bloom = this.camera.postFX.addBloom(0xffffff, 1, 1, BLOOM_BLUR, bloomStrength, BLOOM_STEPS)
-
-    this.colorMatrix = this.camera.postFX.addColorMatrix()
-    this.applyColorGrade()
-  }
-
-  private removeAll(): void {
-    if (this.vignette)    { this.camera.postFX.remove(this.vignette);    this.vignette = null }
-    if (this.bloom)       { this.camera.postFX.remove(this.bloom);       this.bloom = null }
-    if (this.colorMatrix) { this.camera.postFX.remove(this.colorMatrix); this.colorMatrix = null }
-  }
-
-  private applyColorGrade(): void {
-    const cm = this.colorMatrix
-    if (!cm) return
-
-    cm.reset()
-    switch (this.phase) {
-      case 'morning':
-        cm.multiply(WARM_MORNING)
-        break
-      case 'evening':
-        cm.multiply(WARM_EVENING)
-        break
-      case 'night':
-        cm.night(0.15)
-        cm.saturate(-0.15, true)
-        break
-      default:
-        // day: neutral — reset is sufficient
-        break
+  private _stopChromatic(): void {
+    if (this._chromaticTween) {
+      this._chromaticTween.stop()
+      this._chromaticTween = null
+    }
+    if (this._barrelFx) {
+      this._scene.cameras.main.postFX.remove(this._barrelFx)
+      this._barrelFx = null
     }
   }
 
-  /** Re-applies color grading every 30s so it stays in sync with the current phase. */
-  private startColorGradeTimer(): void {
-    this.colorGradeTimer = this.scene.time.addEvent({
-      delay:    30_000,
-      callback: () => this.applyColorGrade(),
-      loop:     true,
-    })
+  private _stopBlur(): void {
+    if (this._blurTween) {
+      this._blurTween.stop()
+      this._blurTween = null
+    }
+    if (this._blurFx) {
+      this._scene.cameras.main.postFX.remove(this._blurFx)
+      this._blurFx = null
+    }
   }
 }
