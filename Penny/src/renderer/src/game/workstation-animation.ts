@@ -52,6 +52,41 @@ import { PathWalker } from './path-walker'
 import { soundEngine } from './sound-engine'
 
 // ---------------------------------------------------------------------------
+// Idle personality archetype system
+// ---------------------------------------------------------------------------
+
+type IdleArchetype = 'focused' | 'creative' | 'social'
+
+/** Map agent name → idle personality archetype.
+ *  Focused: deep technical work, methodical.
+ *  Creative: expressive, rhythmic, playful.
+ *  Social:  communicative, relaxed, people-aware. */
+const PERSONA_ARCHETYPE_MAP: Readonly<Record<string, IdleArchetype>> = {
+  'Sun Wukong':           'focused',   // fullstack-dev — unstoppable problem solver
+  'Guanyin':              'focused',   // backend-arch  — architectural precision
+  'Bull Demon King':      'focused',   // embedded-dev  — zero-waste concentration
+  'Erlang Shen':          'creative',  // nextjs-frontend — surgical creative eye
+  'Red Boy':              'creative',  // videogame-dev — creative fire & VFX
+  'Dragon King Ao Guang': 'creative',  // ui-designer   — aesthetics-first
+  'Sha Wujing':           'social',    // electron-dev  — steady executor
+  'Nezha':                'social',    // expo-mobile   — fast & social
+  'Tang Sanzang':         'social',    // product-mgr   — mission-driven, team-first
+  'White Dragon Horse':   'social',    // product-marketer — tireless storyteller
+  'Zhu Bajie':            'social',    // exec-assistant — brute-force social
+}
+
+/** Available micro-animation keys per archetype (3 each = 9 total). */
+const ARCHETYPE_ANIM_POOL: Readonly<Record<IdleArchetype, string[]>> = {
+  focused:  ['chin-rest', 'screen-lean', 'note-jot'],
+  creative: ['creative-stretch', 'head-bob', 'doodle'],
+  social:   ['phone-check', 'lean-back', 'wave'],
+}
+
+/** Module-level stagger tracker: animKey → last played timestamp (ms).
+ *  Ensures no two visible agents play the same animation within 2 seconds. */
+const lastMicroAnimPlayedAt = new Map<string, number>()
+
+// ---------------------------------------------------------------------------
 // Eval glow color helper
 // ---------------------------------------------------------------------------
 
@@ -190,6 +225,7 @@ export class WorkstationAnimator {
     if (ws.walkBreakTimer)      { ws.walkBreakTimer.destroy();      ws.walkBreakTimer      = undefined }
     if (ws.lookAtNeighborTimer) { ws.lookAtNeighborTimer.destroy(); ws.lookAtNeighborTimer = undefined }
     if (ws.yawnTimer)           { ws.yawnTimer.destroy();           ws.yawnTimer           = undefined }
+    if (ws.microAnimTimer)      { ws.microAnimTimer.destroy();      ws.microAnimTimer      = undefined }
     // Clear ambient sound-wave indicator on every mode transition; working branch re-draws it
     if (ws.soundWaveTween) { ws.soundWaveTween.destroy(); ws.soundWaveTween = undefined }
     if (ws.soundWaveGfx)   { ws.soundWaveGfx.clear(); ws.soundWaveGfx.setAlpha(1) }
@@ -828,6 +864,13 @@ export class WorkstationAnimator {
             onComplete: () => { ws.sprite.setAngle(0); ws.headTiltTween = undefined },
           })
         },
+      })
+
+      // Per-archetype idle micro-animation — random from personality pool every 8-15s
+      ws.microAnimTimer = this.scene.time.addEvent({
+        delay: 8000 + Math.random() * 7000,
+        loop: true,
+        callback: () => { this._playMicroAnim(ws, agent) },
       })
 
       ws.walkBreakTimer = this.scene.time.addEvent({
@@ -1890,6 +1933,141 @@ export class WorkstationAnimator {
   }
 
   // ---------------------------------------------------------------------------
+  // Per-archetype idle micro-animations
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Pick and play a random micro-animation from the agent's archetype pool.
+   * Enforces a 2s minimum stagger so no two agents play the same anim simultaneously.
+   */
+  private _playMicroAnim(ws: WorkstationSprite, agent: AgentState): void {
+    if (ws.lastAnimMode !== 'idle') return
+    if (ws.walkBreakTween || ws.headTiltTween) return
+
+    const archetype = PERSONA_ARCHETYPE_MAP[agent.config.name] ?? 'social'
+    const pool = ARCHETYPE_ANIM_POOL[archetype]
+    const now = Date.now()
+
+    // Filter to animations not played by any agent in the last 2s
+    const available = pool.filter(key => (now - (lastMicroAnimPlayedAt.get(key) ?? 0)) >= 2000)
+    if (available.length === 0) return
+
+    const key = available[Math.floor(Math.random() * available.length)]
+    lastMicroAnimPlayedAt.set(key, now)
+
+    // GDS mode locks sprite angle — skip angle-based anims
+    const gdsLock = this.host.getOrAssignGdsDeskSlot != null
+    this._executeMicroAnim(ws, key, gdsLock)
+  }
+
+  /**
+   * Execute a named micro-animation on the given workstation sprite.
+   * All animations use only x/y/angle tweens to avoid conflicting with
+   * the ongoing breathTween (which owns scaleY).
+   */
+  private _executeMicroAnim(ws: WorkstationSprite, key: string, gdsLock: boolean): void {
+    const sprite = ws.sprite
+    switch (key) {
+      // ── Focused archetype ────────────────────────────────────────────────
+      case 'chin-rest':
+        // Head tilts down (chin resting on hand), slight lean in
+        if (gdsLock) return
+        ws.headTiltTween = this.scene.tweens.add({
+          targets: sprite, angle: 6, y: WS_SPRITE_Y + 1,
+          duration: 350, hold: 1400, yoyo: true, ease: 'Sine.easeInOut',
+          onComplete: () => { sprite.setAngle(0); sprite.y = WS_SPRITE_Y; ws.headTiltTween = undefined },
+        })
+        break
+
+      case 'screen-lean':
+        // Lean toward the monitor — small y offset forward
+        sprite.y = WS_SPRITE_Y
+        this.scene.tweens.add({
+          targets: sprite, y: WS_SPRITE_Y - 3,
+          duration: 400, hold: 1000, yoyo: true, ease: 'Sine.easeInOut',
+          onComplete: () => { sprite.y = WS_SPRITE_Y },
+        })
+        break
+
+      case 'note-jot':
+        // Rapid hand wiggle to the side — jotting a quick note
+        this.scene.tweens.add({
+          targets: sprite, x: 4,
+          duration: 110, yoyo: true, repeat: 4, ease: 'Sine.easeInOut',
+          onComplete: () => { sprite.x = 0 },
+        })
+        break
+
+      // ── Creative archetype ───────────────────────────────────────────────
+      case 'creative-stretch':
+        // Arms-up stretch: sprite rises slightly
+        this.scene.tweens.add({
+          targets: sprite, y: WS_SPRITE_Y - 5,
+          duration: 400, hold: 700, yoyo: true, ease: 'Back.easeOut',
+          onComplete: () => { sprite.y = WS_SPRITE_Y },
+        })
+        break
+
+      case 'head-bob':
+        // Rhythmic head bob — 2 cycles of gentle tilt
+        if (gdsLock) return
+        ws.headTiltTween = this.scene.tweens.add({
+          targets: sprite, angle: 5,
+          duration: 220, yoyo: true, repeat: 3, ease: 'Sine.easeInOut',
+          onComplete: () => { sprite.setAngle(0); ws.headTiltTween = undefined },
+        })
+        break
+
+      case 'doodle':
+        // Small circular hand motion — doodling in the margin
+        this.scene.tweens.add({
+          targets: sprite, x: 3, y: WS_SPRITE_Y + 2,
+          duration: 180, yoyo: true, repeat: 3, ease: 'Sine.easeInOut',
+          onComplete: () => { sprite.x = 0; sprite.y = WS_SPRITE_Y },
+        })
+        break
+
+      // ── Social archetype ─────────────────────────────────────────────────
+      case 'phone-check':
+        // Hand moves to side + glance down — checking the phone
+        if (gdsLock) {
+          this.scene.tweens.add({
+            targets: sprite, x: 5, y: WS_SPRITE_Y + 1,
+            duration: 300, hold: 900, yoyo: true, ease: 'Sine.easeInOut',
+            onComplete: () => { sprite.x = 0; sprite.y = WS_SPRITE_Y },
+          })
+        } else {
+          ws.headTiltTween = this.scene.tweens.add({
+            targets: sprite, x: 5, angle: -4, y: WS_SPRITE_Y + 1,
+            duration: 300, hold: 900, yoyo: true, ease: 'Sine.easeInOut',
+            onComplete: () => { sprite.x = 0; sprite.setAngle(0); sprite.y = WS_SPRITE_Y; ws.headTiltTween = undefined },
+          })
+        }
+        break
+
+      case 'lean-back':
+        // Rock back in chair — casual lean away from the screen
+        if (gdsLock) return
+        ws.headTiltTween = this.scene.tweens.add({
+          targets: sprite, angle: -5, y: WS_SPRITE_Y + 2,
+          duration: 450, hold: 1200, yoyo: true, ease: 'Sine.easeInOut',
+          onComplete: () => { sprite.setAngle(0); sprite.y = WS_SPRITE_Y; ws.headTiltTween = undefined },
+        })
+        break
+
+      case 'wave':
+        // Quick wave toward the nearest agent or just outward
+        if (gdsLock) return
+        ws.headTiltTween = this.scene.tweens.add({
+          targets: sprite, x: 4, angle: 7,
+          duration: 180, yoyo: true, repeat: 2, ease: 'Sine.easeInOut',
+          onComplete: () => { sprite.x = 0; sprite.setAngle(0); ws.headTiltTween = undefined },
+        })
+        break
+    }
+  }
+
+  // ---------------------------------------------------------------------------
   // Sleep / Wake lifecycle — pause and resume all per-workstation timers/tweens
   // ---------------------------------------------------------------------------
 
@@ -1901,6 +2079,7 @@ export class WorkstationAnimator {
         if (ws.walkBreakTimer)      ws.walkBreakTimer.paused      = true
         if (ws.lookAtNeighborTimer) ws.lookAtNeighborTimer.paused = true
         if (ws.yawnTimer)           ws.yawnTimer.paused           = true
+        if (ws.microAnimTimer)      ws.microAnimTimer.paused      = true
         if (ws.lampFlickerTimer)    ws.lampFlickerTimer.paused    = true
         if (ws.typingNoteTimer)     ws.typingNoteTimer.paused     = true
         if (ws.speechBubbleTimer)   ws.speechBubbleTimer.paused   = true
@@ -1919,6 +2098,7 @@ export class WorkstationAnimator {
         if (ws.walkBreakTimer)      ws.walkBreakTimer.paused      = false
         if (ws.lookAtNeighborTimer) ws.lookAtNeighborTimer.paused = false
         if (ws.yawnTimer)           ws.yawnTimer.paused           = false
+        if (ws.microAnimTimer)      ws.microAnimTimer.paused      = false
         if (ws.lampFlickerTimer)    ws.lampFlickerTimer.paused    = false
         if (ws.typingNoteTimer)     ws.typingNoteTimer.paused     = false
         if (ws.speechBubbleTimer)   ws.speechBubbleTimer.paused   = false
