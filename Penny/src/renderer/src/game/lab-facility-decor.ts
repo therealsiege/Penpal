@@ -27,6 +27,7 @@ import type { TeamAreaLayout } from './office-types'
 import { SPRITESHEET_KEYS, LAB_ANIM_KEYS } from './office-asset-keys'
 import { LAB_PROP_FRAMES } from './lab-prop-frames.generated'
 import { computeReferenceLabRegions, type LabRegion } from './lab-footprint'
+import type { EnvironmentAnimator } from './environment-animator'
 
 export interface LabFacilityDecorHost {
   hashToken(value: string): number
@@ -107,6 +108,7 @@ function placeControlRoom(
   top: number,
   w: number,
   h: number,
+  animator?: EnvironmentAnimator,
 ): void {
   const right = left + w
   const bottom = top + h
@@ -115,12 +117,28 @@ function placeControlRoom(
   const consoleCount = w > 140 ? 3 : 2
   const spacing = w / (consoleCount + 1)
   const consoleFrames = [LP.CONSOLE_EXAMPLE_LONG, LP.CONSOLE_EXAMPLE_SHORT, LP.CONSOLE_EXAMPLE_CORNER]
+  const rackPositions: { x: number; y: number }[] = []
   for (let i = 0; i < consoleCount; i++) {
     const cx = left + spacing * (i + 1)
+    const cy = top + 8
     pushSprite(scene, out, {
       frame: pickFrom(consoleFrames, hashToken, `${salt}|con|${i}`),
-      x: cx, y: top + 8, scale: 0.18, depth: DEPTH_EQUIP, alpha: 0.80,
+      x: cx, y: cy, scale: 0.18, depth: DEPTH_EQUIP, alpha: 0.80,
     })
+    rackPositions.push({ x: cx, y: cy })
+  }
+
+  // Register racks and cable flows with the animator
+  if (animator) {
+    for (const pos of rackPositions) {
+      animator.registerProp('rack', pos.x, pos.y, { ledCount: 2 + (hashToken(`${salt}|led|${pos.x}`) % 2) })
+    }
+    // Cable path: connect racks left-to-right along the bottom of the rack row
+    if (rackPositions.length >= 2) {
+      animator.registerProp('cable', 0, 0, {
+        points: rackPositions.map(p => ({ x: p.x, y: p.y + 12 })),
+      })
+    }
   }
 
   // --- 1 animated screen on the first console ---
@@ -239,16 +257,24 @@ function placeMachinery(
   top: number,
   w: number,
   h: number,
+  animator?: EnvironmentAnimator,
 ): void {
   const right = left + w
   const bottom = top + h
 
   // --- Centerpiece: 1 large machine on top wall ---
   const centerpieces = [LP.GENERATOR, LP.LAB_MACHINE_01, LP.LARGE_TANK]
+  const cx = left + w * 0.5
+  const cy = top + 12
   pushSprite(scene, out, {
     frame: pickFrom(centerpieces, hashToken, `${salt}|center`),
-    x: left + w * 0.5, y: top + 12, scale: 0.28, depth: DEPTH_EQUIP, alpha: 0.85,
+    x: cx, y: cy, scale: 0.28, depth: DEPTH_EQUIP, alpha: 0.85,
   })
+
+  // Register centerpiece as a rack (it's the main server/generator unit)
+  if (animator) {
+    animator.registerProp('rack', cx, cy, { ledCount: 3, ledYOffset: -12 })
+  }
 
   // --- Warning sign next to centerpiece ---
   pushSprite(scene, out, {
@@ -265,10 +291,25 @@ function placeMachinery(
   // --- 2-3 power cells along bottom wall ---
   const cellCount = w > 120 ? 3 : 2
   const cellSpacing = w / (cellCount + 1)
+  const cellPositions: { x: number; y: number }[] = []
   for (let i = 0; i < cellCount; i++) {
+    const pcx = left + cellSpacing * (i + 1)
+    const pcy = bottom - 8
     pushSprite(scene, out, {
-      frame: LP.POWER_CELL, x: left + cellSpacing * (i + 1), y: bottom - 8,
+      frame: LP.POWER_CELL, x: pcx, y: pcy,
       scale: 0.17, depth: DEPTH_WALL, alpha: 0.75,
+    })
+    cellPositions.push({ x: pcx, y: pcy })
+  }
+
+  // Register cable flow from centerpiece down to power cells
+  if (animator && cellPositions.length >= 1) {
+    animator.registerProp('cable', 0, 0, {
+      points: [
+        { x: cx, y: cy + 12 },
+        { x: cx, y: bottom - 16 },
+        ...cellPositions.map(p => ({ x: p.x, y: p.y - 4 })),
+      ],
     })
   }
 
@@ -362,19 +403,20 @@ function placeZone(
   w: number,
   h: number,
   forceZone?: 'control' | 'chemical' | 'machinery' | 'pod',
+  animator?: EnvironmentAnimator,
 ): void {
   if (w < 40 || h < 30) return
 
   const zone = forceZone ?? (['control', 'chemical', 'machinery', 'pod'] as const)[hashToken(`${salt}|zone`) % 4]
   switch (zone) {
     case 'control':
-      placeControlRoom(scene, out, hashToken, salt, left, top, w, h)
+      placeControlRoom(scene, out, hashToken, salt, left, top, w, h, animator)
       break
     case 'chemical':
       placeChemicalStation(scene, out, hashToken, salt, left, top, w, h)
       break
     case 'machinery':
-      placeMachinery(scene, out, hashToken, salt, left, top, w, h)
+      placeMachinery(scene, out, hashToken, salt, left, top, w, h, animator)
       break
     case 'pod':
       placePodBay(scene, out, hashToken, salt, left, top, w, h)
@@ -396,6 +438,7 @@ export function placeLabFacilityDecor(
   width: number,
   height: number,
   bannerH: number,
+  animator?: EnvironmentAnimator,
 ): void {
   const hashToken = (s: string) => host.hashToken(s)
 
@@ -418,6 +461,7 @@ export function placeLabFacilityDecor(
       main.x + mainPad, main.y + mainPad,
       Math.max(0, main.w - mainPad * 2), Math.max(0, main.h - mainPad * 2),
       hashToken(`${salt}|mainZone`) % 2 === 0 ? 'machinery' : 'control',
+      animator,
     )
 
     // Wing L — chemical station
@@ -465,6 +509,6 @@ export function placeLabFacilityDecor(
     if (zw < 28) continue
 
     const zSalt = `${area.teamKey}|${band.zkey}`
-    placeZone(scene, out, hashToken, zSalt, zleft, innerTop, zw, innerH)
+    placeZone(scene, out, hashToken, zSalt, zleft, innerTop, zw, innerH, undefined, animator)
   }
 }
