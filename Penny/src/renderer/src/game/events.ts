@@ -66,6 +66,8 @@ export const EVENTS = {
   AGENT_CLICKED: 'agent:clicked',
   /** Fired when an agent sprite is double-clicked. Payload: (agentId: string, state: AgentState) */
   AGENT_DOUBLE_CLICKED: 'agent:doubleClicked',
+  /** Fired when a pod agent desk is clicked — opens detail modal instead of terminal. Payload: (agentId: string, state: AgentState) */
+  POD_AGENT_CLICKED: 'agent:podClicked',
   /** Fired when an agent sprite is right-clicked. Payload: (agentId: string, state: AgentState) */
   AGENT_RIGHT_CLICKED: 'agent:rightClicked',
   /** Fired when the active agent selection is cleared. No payload. */
@@ -141,10 +143,6 @@ export const EVENTS = {
   /** Fired when an achievement is unlocked. Payload: (achievementId: string, title: string, iconFrame: number) */
   ACHIEVEMENT_UNLOCKED: 'achievement:unlocked',
 
-  // --- NPC Interaction ---
-  /** Fired when the player presses E near an agent workstation. Payload: (agentId: string) */
-  AGENT_INTERACT: 'agent:interact',
-
   // --- Navigation ---
   /** Fired to navigate to the campus overview scene. No payload. */
   NAVIGATE_CAMPUS: 'navigate-campus',
@@ -152,11 +150,20 @@ export const EVENTS = {
   NAVIGATE_BUILDING: 'navigate-building',
   /** Fired when agent/pod counts update for campus display. Payload: (agents: number, pods: number) */
   CAMPUS_COUNTS_UPDATED: 'campus-counts-updated',
+  /** Fired when fleet heartbeat data updates. Payload: (instances: FleetInstance[]) */
+  FLEET_UPDATED: 'fleet-updated',
 
-  // --- Cafe ---
-  /** Fired when a patron transitions to a new phase of the coffee service flow.
-   *  Payload: (agentId: string, phase: PatronPhase) */
-  CAFE_PATRON_PHASE: 'cafe:patron-phase',
+  // --- Cinematic auto-pan (camera-cinematics.ts) ---
+  /** Fired when a task is dispatched to an agent. Payload: (agentId: string) */
+  TASK_DISPATCHED: 'task:dispatched',
+  /** Fired when a task completes for an agent. Payload: (agentId: string) */
+  TASK_COMPLETED: 'task:completed',
+  /** Fired when a new pod workflow is launched. Payload: (agentIds: string[]) — solver, reviewer, executor */
+  POD_LAUNCHED: 'pod:launched',
+  /** Fired when an agent reaches a new XP rank. Payload: (agentId: string) */
+  RANK_UP: 'rank:up',
+  /** Fired when an agent task fails with an error. Payload: (agentId: string) */
+  AGENT_ERROR: 'agent:error',
 } as const
 
 /**
@@ -172,6 +179,8 @@ export interface EventPayloadMap {
   // --- Agent interaction ---
   /** (agentId: string, state: AgentState) */
   [EVENTS.AGENT_CLICKED]: [agentId: string, state: AgentState]
+  /** (agentId: string, state: AgentState) */
+  [EVENTS.POD_AGENT_CLICKED]: [agentId: string, state: AgentState]
   /** (agentId: string, state: AgentState) */
   [EVENTS.AGENT_DOUBLE_CLICKED]: [agentId: string, state: AgentState]
   /** (agentId: string, state: AgentState) */
@@ -240,16 +249,16 @@ export interface EventPayloadMap {
   [EVENTS.SEASON_STARTED]: [payload: SeasonStartedEventPayload]
   [EVENTS.ACHIEVEMENT_UNLOCKED]: [achievementId: string, title: string, iconFrame: number]
 
-  // --- NPC Interaction ---
-  /** (agentId: string) */
-  [EVENTS.AGENT_INTERACT]: [agentId: string]
-
   // --- Navigation ---
   [EVENTS.NAVIGATE_CAMPUS]: []
   [EVENTS.NAVIGATE_BUILDING]: [building: 'office' | 'pod-foundry']
   [EVENTS.CAMPUS_COUNTS_UPDATED]: [agents: number, pods: number]
+  [EVENTS.FLEET_UPDATED]: [instances: { instanceId: string; hostname: string; user?: string; stale: boolean; health: string; sessions: { total: number; active: number }; pods: { active: number }; repos: string[]; isSelf: boolean; lat?: number; lon?: number; city?: string }[]]
 
-  // --- Cafe ---
-  /** (agentId: string, phase: string) */
-  [EVENTS.CAFE_PATRON_PHASE]: [agentId: string, phase: string]
+  // --- Cinematic auto-pan ---
+  [EVENTS.TASK_DISPATCHED]: [agentId: string]
+  [EVENTS.TASK_COMPLETED]: [agentId: string]
+  [EVENTS.POD_LAUNCHED]: [agentIds: string[]]
+  [EVENTS.RANK_UP]: [agentId: string]
+  [EVENTS.AGENT_ERROR]: [agentId: string]
 }

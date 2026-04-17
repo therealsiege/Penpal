@@ -990,6 +990,8 @@ export class OfficeWorkstations {
             this.host.celebrations.taskComplete(wx, wy, { agentId: aid })
             achievements.trackRankUp()
             soundEngine.levelUp()
+            // Notify cinematics system for auto-pan
+            EventBus.emit(EVENTS.RANK_UP, aid)
             // Track in leaderboard + season
             leaderboardManager.recordXP(agent.config.id, agent.config.name, 0, xp.level, xp.rank)
             seasonManager.trackAgentLevel(xp.level)

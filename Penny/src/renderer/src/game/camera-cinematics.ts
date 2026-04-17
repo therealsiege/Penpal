@@ -1,430 +1,401 @@
 // ---------------------------------------------------------------------------
 // camera-cinematics.ts
-// Scripted camera sequences: panTo, zoomTo, panAndZoom, shake, flash, sequence.
-// Manual input is suppressed while a cinematic is playing; bounds-elastic bounce
-// (10px overshoot → 200ms spring-back) is applied on bound hits.
+// Event-driven auto-pan with a priority queue.
+//
+// Listens on EventBus for key game events (task dispatch/complete, pod launch,
+// rank-up, agent error) and triggers scripted camera sequences. A priority
+// queue prevents lower-priority events from interrupting higher-priority ones.
+// Any user input (click, key, scroll) immediately cancels the active cinematic.
+//
+// Priority (highest first):
+//   rank-up (5) > pod-launch (4) > agent-error (3) > task-complete (2) > task-dispatch (1)
+//
+// Debounce: same event type within 3 s is dropped.
+// Queue overflow: task-dispatch is dropped when > 3 items pending.
 // ---------------------------------------------------------------------------
 
 import Phaser from 'phaser'
-import { ZOOM_MIN, ZOOM_MAX } from './office-constants'
+import { EventBus, EVENTS } from './events'
+import type { OfficeCamera } from './office-camera'
+import { getWorkstationWorldPos } from './office-camera'
+import type { Room } from './office-types'
+import { ZOOM_MAX } from './office-constants'
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
-export type CameraStepEase = string  // e.g. 'Sine.easeInOut', 'Power2'
+export type AutoPanEventType =
+  | 'task-dispatch'
+  | 'task-complete'
+  | 'pod-launch'
+  | 'rank-up'
+  | 'agent-error'
 
-export interface CameraStep {
-  /** World-space pan target. Omit to pan-in-place (zoom only). */
-  x?: number
-  y?: number
-  /** Zoom level. Omit to keep current zoom. */
-  zoom?: number
-  /** Duration in ms. */
-  duration: number
-  ease?: CameraStepEase
-  /** Optional delay before this step begins (ms). */
-  delay?: number
+const PRIORITY: Record<AutoPanEventType, number> = {
+  'rank-up':       5,
+  'pod-launch':    4,
+  'agent-error':   3,
+  'task-complete': 2,
+  'task-dispatch': 1,
 }
 
-export interface CinematicHostScene {
-  /** Called before any cinematic to suppress manual drag/zoom. */
+const DEBOUNCE_MS = 3000
+const MAX_QUEUE_FOR_TASK_DISPATCH = 3
+
+interface QueuedEvent {
+  type: AutoPanEventType
+  /** Primary agent is [0]; pod launch has solver[0], reviewer[1], executor[2]. */
+  agentIds: string[]
+  priority: number
+}
+
+export interface CinematicsHostScene {
+  getRooms(): Map<string, Room>
+  getOfficeCamera(): OfficeCamera
   lockCinematicInput(): void
-  /** Called after cinematic ends (or is cancelled) to restore input. */
   unlockCinematicInput(): void
+  cameras: Phaser.Cameras.Scene2D.CameraManager
+  tweens: Phaser.Tweens.TweenManager
+  time: Phaser.Time.Clock
+  input: Phaser.Input.InputPlugin
+  add: Phaser.GameObjects.GameObjectFactory
 }
 
 // ---------------------------------------------------------------------------
-// Helpers
+// CameraCinematics
 // ---------------------------------------------------------------------------
 
-/** Clamp a world-space scroll position against camera bounds. */
-function clampScroll(
-  tx: number,
-  ty: number,
-  cam: Phaser.Cameras.Scene2D.Camera,
-  zoom: number,
-): { x: number; y: number } {
-  const bounds = cam.getBounds()
-  const vw = cam.width / zoom
-  const vh = cam.height / zoom
-  const sx = Phaser.Math.Clamp(tx, bounds.x, Math.max(bounds.x, bounds.right - vw))
-  const sy = Phaser.Math.Clamp(ty, bounds.y, Math.max(bounds.y, bounds.bottom - vh))
-  return { x: sx, y: sy }
-}
-
-/** Convert a world-space center target to scroll-space. */
-function worldToScroll(
-  worldX: number,
-  worldY: number,
-  cam: Phaser.Cameras.Scene2D.Camera,
-  zoom: number,
-): { x: number; y: number } {
-  return {
-    x: worldX - cam.width / (2 * zoom),
-    y: worldY - cam.height / (2 * zoom),
-  }
-}
-
-// ---------------------------------------------------------------------------
-// CameraCinematic
-// ---------------------------------------------------------------------------
-
-export class CameraCinematic {
+export class CameraCinematics {
   private scene: Phaser.Scene
-  private host: CinematicHostScene
+  private host: CinematicsHostScene
 
-  private _playing = false
-  private _activeTweens: Phaser.Tweens.Tween[] = []
-  private _flashRect: Phaser.GameObjects.Rectangle | null = null
+  private queue: QueuedEvent[] = []
+  private activePriority = -1
+  private running = false
 
-  // State saved before cinematic begins — restored smoothly on cancel/complete.
-  private _savedFollowTarget: { x: number; y: number } | null = null
-  private _savedTargetZoom = 1
+  /** Last emission time per event type — used for debounce. */
+  private lastTrigger: Partial<Record<AutoPanEventType, number>> = {}
 
-  constructor(scene: Phaser.Scene, host: CinematicHostScene) {
+  // EventBus listener refs (stored for cleanup)
+  private readonly _onTaskDispatched = (...args: unknown[]) => {
+    this._enqueue('task-dispatch', [args[0] as string])
+  }
+  private readonly _onTaskCompleted = (...args: unknown[]) => {
+    this._enqueue('task-complete', [args[0] as string])
+  }
+  private readonly _onPodLaunched = (...args: unknown[]) => {
+    this._enqueue('pod-launch', args[0] as string[])
+  }
+  private readonly _onRankUp = (...args: unknown[]) => {
+    this._enqueue('rank-up', [args[0] as string])
+  }
+  private readonly _onAgentError = (...args: unknown[]) => {
+    this._enqueue('agent-error', [args[0] as string])
+  }
+
+  // User-input cancel listeners
+  private readonly _onPointerDown = (_p: Phaser.Input.Pointer) => { this._cancelActive() }
+  private readonly _onKeyDown = (_e: KeyboardEvent) => { this._cancelActive() }
+  private readonly _onWheel = () => { this._cancelActive() }
+
+  constructor(scene: Phaser.Scene, host: CinematicsHostScene) {
     this.scene = scene
     this.host = host
   }
 
-  // ---------------------------------------------------------------------------
-  // Public API
-  // ---------------------------------------------------------------------------
+  init(): void {
+    EventBus.on(EVENTS.TASK_DISPATCHED, this._onTaskDispatched)
+    EventBus.on(EVENTS.TASK_COMPLETED, this._onTaskCompleted)
+    EventBus.on(EVENTS.POD_LAUNCHED, this._onPodLaunched)
+    EventBus.on(EVENTS.RANK_UP, this._onRankUp)
+    EventBus.on(EVENTS.AGENT_ERROR, this._onAgentError)
 
-  isPlaying(): boolean {
-    return this._playing
+    this.scene.input.on('pointerdown', this._onPointerDown)
+    this.scene.input.keyboard?.on('keydown', this._onKeyDown)
+    this.scene.input.on('wheel', this._onWheel)
   }
 
-  /** Abort any running cinematic and return camera to idle (no follow). */
-  cancel(): void {
-    this._stopAllTweens()
-    this._playing = false
+  destroy(): void {
+    EventBus.off(EVENTS.TASK_DISPATCHED, this._onTaskDispatched)
+    EventBus.off(EVENTS.TASK_COMPLETED, this._onTaskCompleted)
+    EventBus.off(EVENTS.POD_LAUNCHED, this._onPodLaunched)
+    EventBus.off(EVENTS.RANK_UP, this._onRankUp)
+    EventBus.off(EVENTS.AGENT_ERROR, this._onAgentError)
+
+    this.scene.input.off('pointerdown', this._onPointerDown)
+    this.scene.input.keyboard?.off('keydown', this._onKeyDown)
+    this.scene.input.off('wheel', this._onWheel)
+  }
+
+  // ---------------------------------------------------------------------------
+  // Queue management
+  // ---------------------------------------------------------------------------
+
+  private _enqueue(type: AutoPanEventType, agentIds: string[]): void {
+    const now = this.scene.time.now
+
+    // Debounce: same type within 3 s gets dropped
+    const last = this.lastTrigger[type] ?? 0
+    if (now - last < DEBOUNCE_MS) return
+
+    // Overflow: skip task-dispatch when queue is already large
+    if (type === 'task-dispatch' && this.queue.length >= MAX_QUEUE_FOR_TASK_DISPATCH) return
+
+    const priority = PRIORITY[type]
+
+    // Don't interrupt an active higher-priority sequence
+    if (this.running && priority < this.activePriority) return
+
+    // Cancel lower-priority active sequence if a higher-priority event arrives
+    if (this.running && priority > this.activePriority) {
+      this._cancelActive()
+    }
+
+    this.lastTrigger[type] = now
+
+    this.queue.push({ type, agentIds, priority })
+    // Highest priority at front
+    this.queue.sort((a, b) => b.priority - a.priority)
+
+    if (!this.running) {
+      this._processNext()
+    }
+  }
+
+  private _cancelActive(): void {
+    if (!this.running) return
+
+    // Kill any camera tweens
+    const cam = this.host.cameras.main
+    this.host.tweens.killTweensOf(cam)
+
+    // Release zoom lock
+    this.host.getOfficeCamera().setCinematicZoomLock(false)
     this.host.unlockCinematicInput()
+
+    this.running = false
+    this.activePriority = -1
+    this.queue = []
   }
 
-  /**
-   * Smooth pan to (worldX, worldY).
-   * Respects camera bounds with elastic bounce on edges.
-   */
-  panTo(worldX: number, worldY: number, duration: number, ease = 'Sine.easeInOut'): Promise<void> {
-    return new Promise(resolve => {
-      this._beginCinematic()
-      const cam = this.scene.cameras.main
-      const z = cam.zoom
-      const raw = worldToScroll(worldX, worldY, cam, z)
-      const clamped = clampScroll(raw.x, raw.y, cam, z)
-      const hitBoundX = Math.abs(raw.x - clamped.x) > 0.5
-      const hitBoundY = Math.abs(raw.y - clamped.y) > 0.5
-
-      if (hitBoundX || hitBoundY) {
-        this._elasticPan(clamped.x, clamped.y, raw.x, raw.y, duration, ease, () => {
-          this._endCinematic()
-          resolve()
-        })
-      } else {
-        const tween = this.scene.tweens.add({
-          targets: cam,
-          scrollX: clamped.x,
-          scrollY: clamped.y,
-          duration,
-          ease,
-          onComplete: () => {
-            this._removeTween(tween)
-            this._endCinematic()
-            resolve()
-          },
-        })
-        this._activeTweens.push(tween)
-      }
-    })
-  }
-
-  /**
-   * Smooth zoom to target level.
-   */
-  zoomTo(level: number, duration: number, ease = 'Sine.easeInOut'): Promise<void> {
-    return new Promise(resolve => {
-      this._beginCinematic()
-      const cam = this.scene.cameras.main
-      const target = Phaser.Math.Clamp(level, ZOOM_MIN, ZOOM_MAX)
-      const proxy = { zoom: cam.zoom }
-      const tween = this.scene.tweens.add({
-        targets: proxy,
-        zoom: target,
-        duration,
-        ease,
-        onUpdate: () => cam.setZoom(proxy.zoom),
-        onComplete: () => {
-          cam.setZoom(target)
-          this._removeTween(tween)
-          this._endCinematic()
-          resolve()
-        },
-      })
-      this._activeTweens.push(tween)
-    })
-  }
-
-  /**
-   * Pan and zoom simultaneously.
-   */
-  panAndZoom(
-    worldX: number,
-    worldY: number,
-    zoom: number,
-    duration: number,
-    ease = 'Sine.easeInOut',
-  ): Promise<void> {
-    return new Promise(resolve => {
-      this._beginCinematic()
-      const cam = this.scene.cameras.main
-      const targetZoom = Phaser.Math.Clamp(zoom, ZOOM_MIN, ZOOM_MAX)
-      const raw = worldToScroll(worldX, worldY, cam, targetZoom)
-      const clamped = clampScroll(raw.x, raw.y, cam, targetZoom)
-
-      const proxy = { zoom: cam.zoom, scrollX: cam.scrollX, scrollY: cam.scrollY }
-      const tween = this.scene.tweens.add({
-        targets: proxy,
-        zoom: targetZoom,
-        scrollX: clamped.x,
-        scrollY: clamped.y,
-        duration,
-        ease,
-        onUpdate: () => {
-          cam.setZoom(proxy.zoom)
-          cam.setScroll(proxy.scrollX, proxy.scrollY)
-        },
-        onComplete: () => {
-          cam.setZoom(targetZoom)
-          cam.setScroll(clamped.x, clamped.y)
-          this._removeTween(tween)
-          this._endCinematic()
-          resolve()
-        },
-      })
-      this._activeTweens.push(tween)
-    })
-  }
-
-  /**
-   * Directional shake.
-   * @param direction  'both' | 'horizontal' | 'vertical' — default 'both'
-   */
-  shake(duration = 300, intensity = 0.003, direction: 'both' | 'horizontal' | 'vertical' = 'both'): void {
-    const cam = this.scene.cameras.main
-    const ix = direction === 'vertical' ? 0 : intensity
-    const iy = direction === 'horizontal' ? 0 : intensity
-    cam.shake(duration, [ix, iy])
-  }
-
-  /**
-   * Full-screen flash overlay.
-   * @param color    0xRRGGBB hex color
-   * @param duration total duration in ms (fade-in + hold + fade-out)
-   * @param alpha    peak alpha (default 0.6)
-   */
-  flash(color: number, duration = 300, alpha = 0.6): void {
-    if (!this._flashRect) {
-      this._flashRect = this.scene.add
-        .rectangle(0, 0, 8000, 8000, color, 0)
-        .setOrigin(0.5, 0.5)
-        .setDepth(9998)
-        .setScrollFactor(0)
-    } else {
-      this._flashRect.setFillStyle(color)
-      this._flashRect.setAlpha(0)
-      this._flashRect.setVisible(true)
+  private _processNext(): void {
+    if (this.queue.length === 0) {
+      this.running = false
+      this.activePriority = -1
+      return
     }
 
-    const half = Math.max(40, Math.floor(duration / 2))
-    const tween = this.scene.tweens.add({
-      targets: this._flashRect,
-      alpha,
-      duration: half,
-      ease: 'Sine.easeOut',
-      yoyo: true,
-      onComplete: () => {
-        this._flashRect?.setAlpha(0)
-        this._removeTween(tween)
-      },
+    const evt = this.queue.shift()!
+    this.running = true
+    this.activePriority = evt.priority
+
+    this._playSequence(evt, () => {
+      this.running = false
+      this.activePriority = -1
+      if (this.queue.length > 0) {
+        // Small gap between consecutive sequences
+        this.scene.time.delayedCall(200, () => this._processNext())
+      }
     })
-    this._activeTweens.push(tween)
   }
 
-  /**
-   * Chain multiple camera steps in sequence.
-   * Each step can pan, zoom, or both.
-   */
-  async sequence(steps: CameraStep[]): Promise<void> {
-    this._beginCinematic()
-    try {
-      for (const step of steps) {
-        if (step.delay && step.delay > 0) {
-          await this._delay(step.delay)
-        }
-        const hasPan = step.x != null && step.y != null
-        const hasZoom = step.zoom != null
-        if (hasPan && hasZoom) {
-          await this._sequenceStep_panAndZoom(step.x!, step.y!, step.zoom!, step.duration, step.ease)
-        } else if (hasPan) {
-          await this._sequenceStep_pan(step.x!, step.y!, step.duration, step.ease)
-        } else if (hasZoom) {
-          await this._sequenceStep_zoom(step.zoom!, step.duration, step.ease)
-        }
-      }
-    } finally {
-      this._endCinematic()
+  // ---------------------------------------------------------------------------
+  // Sequence dispatcher
+  // ---------------------------------------------------------------------------
+
+  private _playSequence(evt: QueuedEvent, onComplete: () => void): void {
+    const rooms = this.host.getRooms()
+    const cam = this.host.getOfficeCamera()
+
+    switch (evt.type) {
+      case 'task-dispatch': this._seqTaskDispatch(evt.agentIds[0], rooms, cam, onComplete); break
+      case 'task-complete': this._seqTaskComplete(evt.agentIds[0], rooms, cam, onComplete); break
+      case 'pod-launch':    this._seqPodLaunch(evt.agentIds, rooms, cam, onComplete);       break
+      case 'rank-up':       this._seqRankUp(evt.agentIds[0], rooms, cam, onComplete);       break
+      case 'agent-error':   this._seqAgentError(evt.agentIds[0], rooms, cam, onComplete);   break
     }
   }
 
   // ---------------------------------------------------------------------------
-  // Private — sequence step helpers (no lock/unlock, _playing already set)
+  // Helpers
   // ---------------------------------------------------------------------------
 
-  private _sequenceStep_pan(worldX: number, worldY: number, duration: number, ease = 'Sine.easeInOut'): Promise<void> {
-    return new Promise(resolve => {
-      const cam = this.scene.cameras.main
-      const z = cam.zoom
-      const raw = worldToScroll(worldX, worldY, cam, z)
-      const clamped = clampScroll(raw.x, raw.y, cam, z)
-      const hitBound = Math.abs(raw.x - clamped.x) > 0.5 || Math.abs(raw.y - clamped.y) > 0.5
-      if (hitBound) {
-        this._elasticPan(clamped.x, clamped.y, raw.x, raw.y, duration, ease, resolve)
-      } else {
-        const tween = this.scene.tweens.add({
-          targets: cam,
-          scrollX: clamped.x,
-          scrollY: clamped.y,
-          duration,
-          ease,
-          onComplete: () => { this._removeTween(tween); resolve() },
-        })
-        this._activeTweens.push(tween)
-      }
-    })
+  private _pos(agentId: string, rooms: Map<string, Room>): { x: number; y: number } | null {
+    return getWorkstationWorldPos(agentId, rooms)
   }
-
-  private _sequenceStep_zoom(zoom: number, duration: number, ease = 'Sine.easeInOut'): Promise<void> {
-    return new Promise(resolve => {
-      const cam = this.scene.cameras.main
-      const target = Phaser.Math.Clamp(zoom, ZOOM_MIN, ZOOM_MAX)
-      const proxy = { zoom: cam.zoom }
-      const tween = this.scene.tweens.add({
-        targets: proxy,
-        zoom: target,
-        duration,
-        ease,
-        onUpdate: () => cam.setZoom(proxy.zoom),
-        onComplete: () => { cam.setZoom(target); this._removeTween(tween); resolve() },
-      })
-      this._activeTweens.push(tween)
-    })
-  }
-
-  private _sequenceStep_panAndZoom(worldX: number, worldY: number, zoom: number, duration: number, ease = 'Sine.easeInOut'): Promise<void> {
-    return new Promise(resolve => {
-      const cam = this.scene.cameras.main
-      const targetZoom = Phaser.Math.Clamp(zoom, ZOOM_MIN, ZOOM_MAX)
-      const raw = worldToScroll(worldX, worldY, cam, targetZoom)
-      const clamped = clampScroll(raw.x, raw.y, cam, targetZoom)
-      const proxy = { zoom: cam.zoom, scrollX: cam.scrollX, scrollY: cam.scrollY }
-      const tween = this.scene.tweens.add({
-        targets: proxy,
-        zoom: targetZoom,
-        scrollX: clamped.x,
-        scrollY: clamped.y,
-        duration,
-        ease,
-        onUpdate: () => { cam.setZoom(proxy.zoom); cam.setScroll(proxy.scrollX, proxy.scrollY) },
-        onComplete: () => {
-          cam.setZoom(targetZoom)
-          cam.setScroll(clamped.x, clamped.y)
-          this._removeTween(tween)
-          resolve()
-        },
-      })
-      this._activeTweens.push(tween)
-    })
-  }
-
-  // ---------------------------------------------------------------------------
-  // Private — elastic bounce on bounds
-  // ---------------------------------------------------------------------------
 
   /**
-   * Animate to `clampedX/Y`, then overshoot 10px back toward center,
-   * then spring to exact clamped position in 200ms.
+   * Tween the camera's zoom property directly, with the cinematicZoomLock
+   * preventing the targetZoom lerp from fighting the tween.
    */
-  private _elasticPan(
-    clampedX: number,
-    clampedY: number,
-    rawX: number,
-    rawY: number,
+  private _zoomTo(
+    toZoom: number,
     duration: number,
     ease: string,
-    onDone: () => void,
+    onComplete: () => void,
   ): void {
-    const cam = this.scene.cameras.main
-    // Overshoot direction: push slightly away from the wall
-    const OVERSHOOT = 10
-    const ox = rawX < clampedX ? clampedX + OVERSHOOT : (rawX > clampedX + 0.5 ? clampedX - OVERSHOOT : clampedX)
-    const oy = rawY < clampedY ? clampedY + OVERSHOOT : (rawY > clampedY + 0.5 ? clampedY - OVERSHOOT : clampedY)
+    const mainCam = this.host.cameras.main
+    const offCam = this.host.getOfficeCamera()
+    offCam.setCinematicZoomLock(true)
+    this.host.lockCinematicInput()
 
-    const t1 = this.scene.tweens.add({
-      targets: cam,
-      scrollX: ox,
-      scrollY: oy,
+    this.host.tweens.add({
+      targets: mainCam,
+      zoom: Phaser.Math.Clamp(toZoom, 0.2, ZOOM_MAX),
       duration,
       ease,
       onComplete: () => {
-        this._removeTween(t1)
-        // Spring back to exact clamped position
-        const t2 = this.scene.tweens.add({
-          targets: cam,
-          scrollX: clampedX,
-          scrollY: clampedY,
-          duration: 200,
-          ease: 'Back.easeOut',
-          onComplete: () => {
-            this._removeTween(t2)
-            onDone()
-          },
-        })
-        this._activeTweens.push(t2)
+        offCam.targetZoom = mainCam.zoom
+        offCam.setCinematicZoomLock(false)
+        this.host.unlockCinematicInput()
+        onComplete()
       },
     })
-    this._activeTweens.push(t1)
   }
 
   // ---------------------------------------------------------------------------
-  // Private — lifecycle helpers
+  // Sequence implementations
   // ---------------------------------------------------------------------------
 
-  private _beginCinematic(): void {
-    if (!this._playing) {
-      this._playing = true
-      this.host.lockCinematicInput()
+  /**
+   * Task Dispatched: pan (800 ms) → zoom 1.2× (400 ms) → zoom back (400 ms)
+   */
+  private _seqTaskDispatch(
+    agentId: string,
+    rooms: Map<string, Room>,
+    cam: OfficeCamera,
+    onComplete: () => void,
+  ): void {
+    const pos = this._pos(agentId, rooms)
+    if (!pos) { onComplete(); return }
+
+    const baseZoom = this.host.cameras.main.zoom
+    cam.smoothPanTo(pos.x, pos.y, 800, () => {
+      const peakZoom = Math.min(baseZoom * 1.2, ZOOM_MAX)
+      this._zoomTo(peakZoom, 400, 'Sine.easeOut', () => {
+        this._zoomTo(baseZoom, 400, 'Sine.easeIn', onComplete)
+      })
+    })
+  }
+
+  /**
+   * Task Completed: pan (600 ms) → hold 1 s → return (600 ms zoom-to-fit)
+   */
+  private _seqTaskComplete(
+    agentId: string,
+    rooms: Map<string, Room>,
+    cam: OfficeCamera,
+    onComplete: () => void,
+  ): void {
+    const pos = this._pos(agentId, rooms)
+    if (!pos) { onComplete(); return }
+
+    cam.smoothPanTo(pos.x, pos.y, 600, () => {
+      this.scene.time.delayedCall(1000, onComplete)
+    })
+  }
+
+  /**
+   * Pod Launched:
+   *   pan agent1 (500 ms) → zip agent2 (300 ms) → zip agent3 (300 ms) →
+   *   zoom out show-all (400 ms) → hold 1 s → zoom back (600 ms)
+   */
+  private _seqPodLaunch(
+    agentIds: string[],
+    rooms: Map<string, Room>,
+    cam: OfficeCamera,
+    onComplete: () => void,
+  ): void {
+    const positions = agentIds
+      .slice(0, 3)
+      .map(id => this._pos(id, rooms))
+      .filter((p): p is { x: number; y: number } => p !== null)
+
+    if (positions.length === 0) { onComplete(); return }
+
+    const mainCam = this.host.cameras.main
+    const baseZoom = mainCam.zoom
+
+    const visitAgent = (idx: number) => {
+      if (idx >= positions.length) {
+        // All agents visited — zoom out to show all
+        const xs = positions.map(p => p.x)
+        const ys = positions.map(p => p.y)
+        const cx = (Math.min(...xs) + Math.max(...xs)) / 2
+        const cy = (Math.min(...ys) + Math.max(...ys)) / 2
+        const zoomOut = Math.max(baseZoom * 0.65, 0.3)
+
+        cam.smoothPanTo(cx, cy, 400, () => {
+          this._zoomTo(zoomOut, 400, 'Sine.easeOut', () => {
+            this.scene.time.delayedCall(1000, () => {
+              this._zoomTo(baseZoom, 600, 'Sine.easeInOut', onComplete)
+            })
+          })
+        })
+        return
+      }
+
+      const dur = idx === 0 ? 500 : 300
+      cam.smoothPanTo(positions[idx].x, positions[idx].y, dur, () => visitAgent(idx + 1))
     }
+
+    visitAgent(0)
   }
 
-  private _endCinematic(): void {
-    this._playing = false
-    this.host.unlockCinematicInput()
+  /**
+   * Rank Up: pan (500 ms) → zoom 1.5× (400 ms) → hold 2 s → zoom back (500 ms)
+   */
+  private _seqRankUp(
+    agentId: string,
+    rooms: Map<string, Room>,
+    cam: OfficeCamera,
+    onComplete: () => void,
+  ): void {
+    const pos = this._pos(agentId, rooms)
+    if (!pos) { onComplete(); return }
+
+    const baseZoom = this.host.cameras.main.zoom
+    const peakZoom = Math.min(baseZoom * 1.5, ZOOM_MAX)
+
+    cam.smoothPanTo(pos.x, pos.y, 500, () => {
+      this._zoomTo(peakZoom, 400, 'Sine.easeOut', () => {
+        this.scene.time.delayedCall(2000, () => {
+          this._zoomTo(baseZoom, 500, 'Sine.easeInOut', onComplete)
+        })
+      })
+    })
   }
 
-  private _stopAllTweens(): void {
-    for (const t of this._activeTweens) {
-      if (t && t.isPlaying()) t.stop()
-    }
-    this._activeTweens = []
-  }
+  /**
+   * Agent Error: quick pan (400 ms, Back.easeOut for jerk) → red flash → hold 1 s → done
+   */
+  private _seqAgentError(
+    agentId: string,
+    rooms: Map<string, Room>,
+    cam: OfficeCamera,
+    onComplete: () => void,
+  ): void {
+    const pos = this._pos(agentId, rooms)
+    if (!pos) { onComplete(); return }
 
-  private _removeTween(tween: Phaser.Tweens.Tween): void {
-    const idx = this._activeTweens.indexOf(tween)
-    if (idx !== -1) this._activeTweens.splice(idx, 1)
-  }
+    const mainCam = this.host.cameras.main
 
-  private _delay(ms: number): Promise<void> {
-    return new Promise(resolve => this.scene.time.delayedCall(ms, resolve))
+    // Jerky ease via Back.easeOut (slight overshoot)
+    cam.smoothPanTo(pos.x, pos.y, 400, () => {
+      // Brief red overlay flash
+      const overlay = this.host.add
+        .rectangle(0, 0, mainCam.width * 4, mainCam.height * 4, 0xff2222, 0.2)
+        .setScrollFactor(0)
+        .setDepth(9998)
+      this.host.tweens.add({
+        targets: overlay,
+        alpha: 0,
+        duration: 450,
+        ease: 'Sine.easeOut',
+        onComplete: () => overlay.destroy(),
+      })
+      this.scene.time.delayedCall(1000, onComplete)
+    }, 'Back.easeOut')
   }
 }
