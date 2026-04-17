@@ -1085,6 +1085,10 @@ export class OfficeScene extends Phaser.Scene {
           return scene.background.assignGdsDeskSlot(agentId)
         },
         getGdsScale: () => scene.background.hasGdsScene() ? scene.background.getGdsScale() : 1,
+        getWalkTrack: (agentId: string) => {
+          if (!scene.background.hasGdsScene()) return null
+          return scene.background.getWalkTrackWorldPoints(agentId)
+        },
       })
     }
   }

@@ -806,23 +806,52 @@ export class WorkstationAnimator {
     const worldX = ownerRoom.x + ws.container.x
     const worldY = ownerRoom.y + ws.container.y + WS_SPRITE_Y
 
-    // Pick a random nearby walkable point (30-60px away), clamped to own room
-    const angle = Math.random() * Math.PI * 2
-    const dist = 30 + Math.random() * 30
-    const targetX = worldX + Math.cos(angle) * dist
-    const targetY = worldY + Math.sin(angle) * dist
+    // ---------------------------------------------------------------------------
+    // Determine forward and return paths
+    // ---------------------------------------------------------------------------
 
-    // Clamp target to own room bounds so agents never aim for another room
-    const roomLeft = ownerRoom.x - ownerRoom.width / 2 + 14
-    const roomTop = ownerRoom.y - ownerRoom.height / 2 + 14
-    const roomRight = ownerRoom.x + ownerRoom.width / 2 - 14
-    const roomBottom = ownerRoom.y + ownerRoom.height / 2 - 14 - ROOM_HEADER_H
-    if (targetX < roomLeft || targetX > roomRight || targetY < roomTop || targetY > roomBottom) return
+    let goPath: { x: number; y: number }[] | null = null
+    let returnPath: { x: number; y: number }[] | null = null
+    let pauseMs = 800 + Math.random() * 600
 
-    // Pass own room so agent can walk within it (base grid has corridors only)
-    const ownRoomRect = buildOwnRoomRect(ownerRoom)
+    // Check if the desk has a pre-authored walk track
+    const trackData = this.host.getWalkTrack?.(agent.config.id)
 
-    const goPath = navMesh.findPath({ x: worldX, y: worldY }, { x: targetX, y: targetY }, ownRoomRect)
+    if (trackData && trackData.points.length > 0) {
+      // Build paths from track waypoints (already in world space from GDS transform)
+      const pts = trackData.points
+      // Forward: desk origin → each track point in order
+      goPath = [{ x: worldX, y: worldY }, ...pts]
+
+      if (trackData.loop) {
+        // loop=true: reverse through intermediate points back to desk
+        // e.g. [P4] → P3 → P2 → P1 → desk
+        returnPath = [...pts.slice(0, -1).reverse(), { x: worldX, y: worldY }]
+      } else {
+        // loop=false: walk directly from final point back to desk
+        returnPath = [pts[pts.length - 1], { x: worldX, y: worldY }]
+        pauseMs = 1200 + Math.random() * 800 // longer pause at track endpoint
+      }
+    } else {
+      // Original random walk: pick a random nearby point clamped to own room
+      const angle = Math.random() * Math.PI * 2
+      const dist = 30 + Math.random() * 30
+      const targetX = worldX + Math.cos(angle) * dist
+      const targetY = worldY + Math.sin(angle) * dist
+
+      const roomLeft = ownerRoom.x - ownerRoom.width / 2 + 14
+      const roomTop = ownerRoom.y - ownerRoom.height / 2 + 14
+      const roomRight = ownerRoom.x + ownerRoom.width / 2 - 14
+      const roomBottom = ownerRoom.y + ownerRoom.height / 2 - 14 - ROOM_HEADER_H
+      if (targetX < roomLeft || targetX > roomRight || targetY < roomTop || targetY > roomBottom) return
+
+      const ownRoomRect = buildOwnRoomRect(ownerRoom)
+      goPath = navMesh.findPath({ x: worldX, y: worldY }, { x: targetX, y: targetY }, ownRoomRect)
+      if (!goPath || goPath.length < 2) return
+      returnPath = navMesh.findPath({ x: targetX, y: targetY }, { x: worldX, y: worldY }, ownRoomRect)
+        ?? [...goPath].reverse()
+    }
+
     if (!goPath || goPath.length < 2) return
 
     // Create a temporary world-space walk sprite
@@ -838,9 +867,6 @@ export class WorkstationAnimator {
 
     // Use a dummy tween as the walkBreakTween sentinel to prevent overlapping walks
     ws.walkBreakTween = this.scene.tweens.addCounter({ duration: 999999 })
-
-    const returnPath = navMesh.findPath({ x: targetX, y: targetY }, { x: worldX, y: worldY }, ownRoomRect)
-      ?? [...goPath].reverse()
 
     // gdsLock and base are recomputed since this method may be called outside the idle closure
     const gdsLock = this.host.getOrAssignGdsDeskSlot != null
@@ -858,9 +884,10 @@ export class WorkstationAnimator {
     }
 
     pathWalker.startPath(goPath, () => {
-      // Brief pause at destination, then walk back
-      this.scene.time.delayedCall(800 + Math.random() * 600, () => {
+      // Pause at destination, then walk back
+      this.scene.time.delayedCall(pauseMs, () => {
         if (!walkSprite.active) { finishWalk(); return }
+        if (!returnPath || returnPath.length < 2) { finishWalk(); return }
         pathWalker.startPath(returnPath, finishWalk)
       })
     })
