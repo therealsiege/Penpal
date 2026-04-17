@@ -74,6 +74,8 @@ export type CameraJuiceHint = 'taskComplete' | 'rankUp' | 'errorZoomOut'
 
 export interface CelebrationManagerOptions {
   onCameraJuice?: (hint: CameraJuiceHint) => void
+  /** Called immediately before camera.shake() — lets PostFXManager sync chromatic aberration. */
+  onShake?: () => void
 }
 
 /** Optional per-call guards (global toggle via {@link CelebrationManager.setCelebrationsAllowed}). */
@@ -116,6 +118,7 @@ type PendingCelebration = {
 export class CelebrationManager {
   private _scene: Phaser.Scene
   private _onCameraJuice?: (hint: CameraJuiceHint) => void
+  private _onShake?: () => void
 
   private _celebrationsAllowed = true
   private _lastSeasonEndKey = ''
@@ -146,6 +149,7 @@ export class CelebrationManager {
   constructor(scene: Phaser.Scene, opts?: CelebrationManagerOptions) {
     this._scene = scene
     this._onCameraJuice = opts?.onCameraJuice
+    this._onShake = opts?.onShake
     this._initBurstPool()
     this._initConfettiPool()
     this._initSparklePool()
@@ -475,6 +479,7 @@ export class CelebrationManager {
   }
 
   private _playMilestone(x: number, y: number, text: string, mergeCount: number): void {
+    this._onShake?.()
     this._scene.cameras.main.shake(100, 0.003 + 0.0004 * (mergeCount - 1))
     soundEngine.levelUp()
     const n1 = Math.min(28, 16 + (mergeCount - 1) * 2)
@@ -547,6 +552,7 @@ export class CelebrationManager {
 
   private _playError(x: number, y: number, mergeCount: number): void {
     this._onCameraJuice?.('errorZoomOut')
+    this._onShake?.()
     const shakeDur = Math.min(120, 60 + (mergeCount - 1) * 12)
     this._scene.cameras.main.shake(shakeDur, 0.002 + (mergeCount - 1) * 0.0003)
     soundEngine.error()
