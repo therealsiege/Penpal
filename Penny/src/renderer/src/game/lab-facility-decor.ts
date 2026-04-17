@@ -24,9 +24,10 @@
 
 import type { GameObjects } from 'phaser'
 import type { TeamAreaLayout } from './office-types'
-import { SPRITESHEET_KEYS, LAB_ANIM_KEYS } from './office-asset-keys'
+import { SPRITESHEET_KEYS, LAB_ANIM_KEYS, ICON_FRAMES } from './office-asset-keys'
 import { LAB_PROP_FRAMES } from './lab-prop-frames.generated'
 import { computeReferenceLabRegions, type LabRegion } from './lab-footprint'
+import type { EnvironmentAnimator } from './environment-animator'
 
 export interface LabFacilityDecorHost {
   hashToken(value: string): number
@@ -107,6 +108,7 @@ function placeControlRoom(
   top: number,
   w: number,
   h: number,
+  animator?: EnvironmentAnimator,
 ): void {
   const right = left + w
   const bottom = top + h
@@ -158,6 +160,20 @@ function placeControlRoom(
     frame: pickFrom(warnFrames, hashToken, `${salt}|warn`),
     x: right - 10, y: top + 8, scale: 0.15, depth: DEPTH_WALL, alpha: 0.75,
   })
+
+  // --- Atmosphere: 2 vent sources along bottom wall + 1 plant near stool ---
+  if (animator) {
+    animator.registerVent(left + 16, bottom - 4)
+    animator.registerVent(right - 16, bottom - 4)
+
+    const plant = scene.add
+      .sprite(left + spacing * 2 + 14, bottom - 10, SPRITESHEET_KEYS.GAME_ICONS, ICON_FRAMES.CIRCLE_GREEN)
+      .setScale(0.18)
+      .setDepth(DEPTH_WALL)
+      .setAlpha(0.80)
+    out.push(plant)
+    animator.registerPlant(plant, Math.random() * 3000)
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -174,6 +190,7 @@ function placeChemicalStation(
   top: number,
   w: number,
   h: number,
+  animator?: EnvironmentAnimator,
 ): void {
   const right = left + w
   const bottom = top + h
@@ -223,6 +240,25 @@ function placeChemicalStation(
     frame: LP.WARNING_BIOLOGICAL, x: left + 8, y: top + 6,
     scale: 0.15, depth: DEPTH_WALL, alpha: 0.75,
   })
+
+  // --- Atmosphere: vent near sink + 2 potted plants ---
+  if (animator) {
+    animator.registerVent(left + w * 0.5, top + 14)
+
+    const plantPositions = [
+      { x: left + w * 0.88, y: top + 10 },
+      { x: left + w * 0.12, y: bottom - 10 },
+    ]
+    plantPositions.forEach((pos, idx) => {
+      const plant = scene.add
+        .sprite(pos.x, pos.y, SPRITESHEET_KEYS.GAME_ICONS, ICON_FRAMES.CIRCLE_GREEN)
+        .setScale(0.18)
+        .setDepth(DEPTH_WALL)
+        .setAlpha(0.80)
+      out.push(plant)
+      animator.registerPlant(plant, idx * 1200 + Math.random() * 800)
+    })
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -239,6 +275,7 @@ function placeMachinery(
   top: number,
   w: number,
   h: number,
+  animator?: EnvironmentAnimator,
 ): void {
   const right = left + w
   const bottom = top + h
@@ -283,6 +320,12 @@ function placeMachinery(
     frame: LP.SUNKEN_VENT, x: left + 12, y: bottom - 6,
     scale: 0.15, depth: DEPTH_FLOOR, alpha: 0.70,
   })
+
+  // --- Atmosphere: register both vent positions for steam ---
+  if (animator) {
+    animator.registerVent(left + 12, bottom - 6)
+    animator.registerVent(right - 16, bottom - 8)
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -299,6 +342,7 @@ function placePodBay(
   top: number,
   w: number,
   h: number,
+  animator?: EnvironmentAnimator,
 ): void {
   const right = left + w
   const bottom = top + h
@@ -346,6 +390,19 @@ function placePodBay(
     frame: LP.CABLE_PIECE_01, x: left + w * 0.5, y: bottom - 6,
     scale: 0.15, depth: DEPTH_FLOOR, alpha: 0.70,
   })
+
+  // --- Atmosphere: vent near warning stripes + 1 plant near door ---
+  if (animator) {
+    animator.registerVent(left + w * 0.3, bottom - 4)
+
+    const plant = scene.add
+      .sprite(left + 14, top + h * 0.5 + 12, SPRITESHEET_KEYS.GAME_ICONS, ICON_FRAMES.CIRCLE_GREEN)
+      .setScale(0.18)
+      .setDepth(DEPTH_WALL)
+      .setAlpha(0.80)
+    out.push(plant)
+    animator.registerPlant(plant, Math.random() * 3000)
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -362,22 +419,23 @@ function placeZone(
   w: number,
   h: number,
   forceZone?: 'control' | 'chemical' | 'machinery' | 'pod',
+  animator?: EnvironmentAnimator,
 ): void {
   if (w < 40 || h < 30) return
 
   const zone = forceZone ?? (['control', 'chemical', 'machinery', 'pod'] as const)[hashToken(`${salt}|zone`) % 4]
   switch (zone) {
     case 'control':
-      placeControlRoom(scene, out, hashToken, salt, left, top, w, h)
+      placeControlRoom(scene, out, hashToken, salt, left, top, w, h, animator)
       break
     case 'chemical':
-      placeChemicalStation(scene, out, hashToken, salt, left, top, w, h)
+      placeChemicalStation(scene, out, hashToken, salt, left, top, w, h, animator)
       break
     case 'machinery':
-      placeMachinery(scene, out, hashToken, salt, left, top, w, h)
+      placeMachinery(scene, out, hashToken, salt, left, top, w, h, animator)
       break
     case 'pod':
-      placePodBay(scene, out, hashToken, salt, left, top, w, h)
+      placePodBay(scene, out, hashToken, salt, left, top, w, h, animator)
       break
   }
 }
@@ -396,6 +454,7 @@ export function placeLabFacilityDecor(
   width: number,
   height: number,
   bannerH: number,
+  animator?: EnvironmentAnimator,
 ): void {
   const hashToken = (s: string) => host.hashToken(s)
 
@@ -418,6 +477,7 @@ export function placeLabFacilityDecor(
       main.x + mainPad, main.y + mainPad,
       Math.max(0, main.w - mainPad * 2), Math.max(0, main.h - mainPad * 2),
       hashToken(`${salt}|mainZone`) % 2 === 0 ? 'machinery' : 'control',
+      animator,
     )
 
     // Wing L — chemical station
@@ -428,6 +488,7 @@ export function placeLabFacilityDecor(
         wingL.x + wPad, wingL.y + wPad,
         Math.max(0, wingL.w - wPad * 2), Math.max(0, wingL.h - wPad * 2),
         'chemical',
+        animator,
       )
     }
 
@@ -439,6 +500,7 @@ export function placeLabFacilityDecor(
         wingR.x + wPad, wingR.y + wPad,
         Math.max(0, wingR.w - wPad * 2), Math.max(0, wingR.h - wPad * 2),
         'pod',
+        animator,
       )
     }
     return
@@ -465,6 +527,6 @@ export function placeLabFacilityDecor(
     if (zw < 28) continue
 
     const zSalt = `${area.teamKey}|${band.zkey}`
-    placeZone(scene, out, hashToken, zSalt, zleft, innerTop, zw, innerH)
+    placeZone(scene, out, hashToken, zSalt, zleft, innerTop, zw, innerH, undefined, animator)
   }
 }
