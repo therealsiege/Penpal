@@ -258,6 +258,12 @@ export interface Room {
   headerStatusDotTweens?: Phaser.Tweens.Tween[]
   // Lego brick sprites behind room header text
   headerLegoBricks?: Phaser.GameObjects.Sprite[]
+  /** Zone ambient light glow — large low-intensity colored circle at room center */
+  zoneAmbientGlow?: Phaser.GameObjects.Graphics
+  /** Breathing pulse tween for zone ambient light */
+  zoneAmbientTween?: Phaser.Tweens.Tween
+  /** Current ambient light intensity 0–1 — used to modulate character shadow alpha */
+  ambientLightIntensity?: number
 }
 
 export interface TeamAreaLayout {
