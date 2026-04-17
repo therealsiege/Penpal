@@ -19,7 +19,7 @@ import { creditManager } from './credits'
 // drawn relative to the viewport.
 // ---------------------------------------------------------------------------
 
-type ToastLevel = 'info' | 'warn' | 'error'
+type ToastLevel = 'info' | 'warn' | 'error' | 'success'
 
 interface ActiveToast {
   container: Phaser.GameObjects.Container
@@ -33,8 +33,9 @@ const TOAST_SLIDE_PX = 200
 const TOAST_MAX      = 4
 const TOAST_TTL_MS   = 3500
 
-const TOAST_BG: Record<ToastLevel, number>   = { info: 0x1e40af, warn: 0x78350f, error: 0x7f1d1d }
-const TOAST_DOT: Record<ToastLevel, number>  = { info: 0x3b82f6, warn: 0xfbbf24, error: 0xef4444 }
+const TOAST_BG: Record<ToastLevel, number>   = { info: 0x1e40af, warn: 0x78350f, error: 0x7f1d1d, success: 0x065f46 }
+const TOAST_DOT: Record<ToastLevel, number>  = { info: 0x3b82f6, warn: 0xfbbf24, error: 0xef4444, success: 0x34d399 }
+const TOAST_BORDER: Record<ToastLevel, number> = { info: 0x3b82f6, warn: 0xfbbf24, error: 0xef4444, success: 0x34d399 }
 
 const STATUS_BAR_H  = 32
 const STATUS_TOAST_OFFSET = STATUS_BAR_H + 4  // toasts appear below the status bar
@@ -250,6 +251,8 @@ export class UIScene extends BaseScene {
     const bg = this.add.graphics()
     bg.fillStyle(TOAST_BG[level], 0.92)
     bg.fillRoundedRect(0, 0, TOAST_W, TOAST_H, 6)
+    bg.lineStyle(1.5, TOAST_BORDER[level], 0.7)
+    bg.strokeRoundedRect(0, 0, TOAST_W, TOAST_H, 6)
 
     // Sprite icon from game-icons sheet — map 'warn' -> 'warning' for TOAST_ICON_FRAMES lookup
     const frameLookup = level === 'warn' ? 'warning' : level
@@ -295,12 +298,14 @@ export class UIScene extends BaseScene {
       ease: 'Back.easeOut',
     })
 
-    // Auto-dismiss: slide back out and fade
+    // Auto-dismiss: shrink + slide back out and fade
     this.time.delayedCall(duration, () => {
       this.tweens.add({
         targets: toast,
         x: startX + TOAST_SLIDE_PX,
         alpha: 0,
+        scaleX: 0.85,
+        scaleY: 0.85,
         duration: 250,
         ease: 'Power2',
         onComplete: () => {
