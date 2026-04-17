@@ -158,6 +158,35 @@ export interface AnimationConfig {
     progressRingFadeMs: number
     /** Duration (ms) for the quest icon fade-out on mode transition. */
     questIconFadeMs: number
+
+    // ── Crossfade blending (Living Lab 1a) ──
+
+    /** idle → working: total blend duration (ms). */
+    idleToWorkingMs: number
+    /** idle → working: scaleY compression factor during settle (e.g. 0.95). */
+    idleToWorkingScaleY: number
+    /** idle → working: duration (ms) of the compression half before bounce-back. */
+    idleToWorkingCompressMs: number
+
+    /** working → idle: total blend duration (ms). */
+    workingToIdleMs: number
+    /** working → idle: y-offset (px) for "hands lift off keyboard" motion. */
+    workingToIdleLiftY: number
+    /** working → idle: x-tilt angle (degrees) for "lean back" motion. */
+    workingToIdleTiltAngle: number
+
+    /** idle → walking: anticipation lean duration (ms) before walk begins. */
+    idleToWalkingMs: number
+    /** idle → walking: lean distance (px) in the movement direction. */
+    idleToWalkingLeanX: number
+
+    /** walking → idle: overshoot distance (px) past the stop point. */
+    walkingToIdleOvershootPx: number
+    /** walking → idle: settle tween duration (ms) after overshoot. */
+    walkingToIdleSettleMs: number
+
+    /** any → waiting: slow crossfade duration (ms). */
+    anyToWaitingMs: number
   }
 
   /** Parameters for the monitor glow post-processing effect. */
@@ -339,6 +368,23 @@ function makeDefaults(): AnimationConfig {
       moodFadeOutDuration:    200,
       progressRingFadeMs:     300,
       questIconFadeMs:        200,
+
+      // Crossfade blending (Living Lab 1a)
+      idleToWorkingMs:            200,
+      idleToWorkingScaleY:        0.95,
+      idleToWorkingCompressMs:    100,
+
+      workingToIdleMs:            300,
+      workingToIdleLiftY:         4,
+      workingToIdleTiltAngle:     3,
+
+      idleToWalkingMs:            150,
+      idleToWalkingLeanX:         3,
+
+      walkingToIdleOvershootPx:   2,
+      walkingToIdleSettleMs:      200,
+
+      anyToWaitingMs:             400,
     },
 
     // -----------------------------------------------------------------------

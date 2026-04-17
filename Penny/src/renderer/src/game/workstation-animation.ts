@@ -275,6 +275,9 @@ export class WorkstationAnimator {
       })
     }
 
+    // ── Crossfade transition blending (Living Lab 1a) ──
+    this._playTransitionBlend(ws, prevMode, mode)
+
     // Chair swivel on mode change — quick turn as if the agent is shifting in their seat
     if (ws.chairSprite?.visible) {
       const swivelAngle = (Math.random() - 0.5) * 8 // -4 to +4 degrees
@@ -891,6 +894,80 @@ export class WorkstationAnimator {
   }
 
   // ---------------------------------------------------------------------------
+  // Crossfade transition blending — smooth visual bridge between anim states
+  // ---------------------------------------------------------------------------
+
+  private _playTransitionBlend(
+    ws: WorkstationSprite,
+    prevMode: 'idle' | 'working' | 'waiting' | undefined,
+    nextMode: 'idle' | 'working' | 'waiting',
+  ): void {
+    const tc = AnimConfig.transitions
+
+    if (prevMode === 'idle' && nextMode === 'working') {
+      // Settle-into-chair: brief scaleY compression then bounce back
+      ws.sprite.setScale(CHAR_SCALE, CHAR_SCALE)
+      this.scene.tweens.add({
+        targets: ws.sprite,
+        scaleY: CHAR_SCALE * tc.idleToWorkingScaleY,
+        duration: tc.idleToWorkingCompressMs,
+        ease: 'Sine.easeIn',
+        yoyo: true,
+        hold: 0,
+        onComplete: () => {
+          if (ws.sprite.active) ws.sprite.setScale(CHAR_SCALE)
+        },
+      })
+      // Alpha crossfade: brief dip then back to full
+      ws.sprite.setAlpha(0.85)
+      this.scene.tweens.add({
+        targets: ws.sprite,
+        alpha: 1,
+        duration: tc.idleToWorkingMs,
+        ease: 'Sine.easeOut',
+      })
+    } else if (prevMode === 'working' && nextMode === 'idle') {
+      // Hands lift off keyboard (y-offset up) + lean back (x-tilt) + settle
+      ws.sprite.y = WS_SPRITE_Y - tc.workingToIdleLiftY
+      ws.sprite.setAngle(tc.workingToIdleTiltAngle)
+      this.scene.tweens.add({
+        targets: ws.sprite,
+        y: WS_SPRITE_Y,
+        angle: 0,
+        duration: tc.workingToIdleMs,
+        ease: 'Cubic.easeOut',
+      })
+      // Alpha crossfade
+      ws.sprite.setAlpha(0.88)
+      this.scene.tweens.add({
+        targets: ws.sprite,
+        alpha: 1,
+        duration: tc.workingToIdleMs,
+        ease: 'Sine.easeOut',
+      })
+    } else if (nextMode === 'waiting') {
+      // any → waiting: slow alpha crossfade into pulse/sway
+      ws.sprite.setAlpha(0.7)
+      this.scene.tweens.add({
+        targets: ws.sprite,
+        alpha: 1,
+        duration: tc.anyToWaitingMs,
+        ease: 'Sine.easeInOut',
+      })
+      // Gradual scale-up to waiting pulse start
+      ws.sprite.setScale(CHAR_SCALE * 0.98)
+      this.scene.tweens.add({
+        targets: ws.sprite,
+        scaleX: CHAR_SCALE,
+        scaleY: CHAR_SCALE,
+        duration: tc.anyToWaitingMs,
+        ease: 'Sine.easeOut',
+      })
+    }
+    // idle → walking and walking → idle are handled in _executeWalkBreak
+  }
+
+  // ---------------------------------------------------------------------------
   // Walk break — extracted so it can be triggered programmatically in tests
   // ---------------------------------------------------------------------------
 
@@ -957,16 +1034,55 @@ export class WorkstationAnimator {
     const gdsLock = this.host.getOrAssignGdsDeskSlot != null
     const base = getAgentCharacterIndex(agent) * CHAR_COLS
 
+    const tc = AnimConfig.transitions
+
     const finishWalk = () => {
       pathWalker.destroy()
       walkSprite.destroy()
       walkShadow.destroy()
       ws.sprite.setVisible(true)
       if (ws.walkBreakTween) { ws.walkBreakTween.destroy(); ws.walkBreakTween = undefined }
-      ws.sprite.x = 0
+
+      // Walking → idle: momentum overshoot + settle (Living Lab 1a)
+      const overshootDir = goPath.length >= 2
+        ? Math.sign(goPath[goPath.length - 1].x - goPath[goPath.length - 2].x)
+        : 0
+      ws.sprite.x = overshootDir * tc.walkingToIdleOvershootPx
       ws.sprite.y = WS_SPRITE_Y
+      this.scene.tweens.add({
+        targets: ws.sprite,
+        x: 0,
+        duration: tc.walkingToIdleSettleMs,
+        ease: 'Cubic.easeOut',
+      })
       if (!gdsLock) ws.sprite.setFrame(base + POSE_SIT)
     }
+
+    // Idle → walking: anticipation lean before walk begins (Living Lab 1a)
+    const leanDir = goPath.length >= 2
+      ? Math.sign(goPath[1].x - goPath[0].x) || 1
+      : 1
+    walkSprite.setAlpha(0.85)
+    walkSprite.x = worldX - leanDir * tc.idleToWalkingLeanX
+    this.scene.tweens.add({
+      targets: walkSprite,
+      x: worldX,
+      alpha: 1,
+      duration: tc.idleToWalkingMs,
+      ease: 'Sine.easeOut',
+    })
+    // Sync shadow position during lean
+    walkShadow.x = walkSprite.x
+    this.scene.tweens.add({
+      targets: walkShadow,
+      x: worldX,
+      duration: tc.idleToWalkingMs,
+      ease: 'Sine.easeOut',
+    })
+
+    // Delay the actual path walk until anticipation lean finishes
+    this.scene.time.delayedCall(tc.idleToWalkingMs, () => {
+      if (!walkSprite.active) { finishWalk(); return }
 
     pathWalker.startPath(goPath, () => {
       // Brief pause at destination, then walk back
@@ -975,6 +1091,7 @@ export class WorkstationAnimator {
         pathWalker.startPath(returnPath, finishWalk)
       })
     })
+    }) // end delayedCall for anticipation lean
   }
 
   /**
