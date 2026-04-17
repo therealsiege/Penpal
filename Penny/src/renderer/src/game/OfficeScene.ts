@@ -13,6 +13,7 @@ import { OfficeMcp } from './office-mcp'
 import { OfficeSelection } from './office-selection'
 import { OfficeRooms } from './office-rooms'
 import { OfficeWorkstations } from './office-workstation'
+import { AgentScheduler } from './agent-schedule'
 import { OfficeBackground } from './office-background'
 import { LabEditor } from './lab-editor'
 import { OfficeBroadcast } from './office-broadcast'
@@ -162,6 +163,8 @@ export class OfficeScene extends Phaser.Scene {
   private roomRenderer!: OfficeRooms
   // Workstation lifecycle subsystem (extracted to OfficeWorkstations)
   private wsManager!: OfficeWorkstations
+  // Schedule-driven arrival/departure animations + standup meeting
+  private agentScheduler: AgentScheduler | null = null
   private lastHallwayPulseAt = 0
 
   // Room-based object culling — managed by RoomVisibilityManager
@@ -1163,6 +1166,26 @@ export class OfficeScene extends Phaser.Scene {
           return scene.background.getWalkTrackWorldPoints(agentId)
         },
       })
+
+      // ── Agent scheduler: arrival / departure walk animations + standup ──
+      if (!this.agentScheduler) {
+        this.agentScheduler = new AgentScheduler({
+          getScene: () => scene,
+          getNavMesh: () => scene.navMesh,
+          getRooms: () => scene.rooms,
+        })
+        this.agentScheduler.init()
+
+        // Wire arrival hook — play walk-in animation for new agents
+        this.wsManager.onAgentArrived = (ws, agent, room) => {
+          this.agentScheduler!.playArrivalAnimation(ws, agent, room)
+        }
+
+        // Wire departure hook — play walk-out animation then destroy
+        this.wsManager.onAgentDeparting = (ws, agent, room, proceed) => {
+          this.agentScheduler!.playDepartureAnimation(ws, agent, room, proceed)
+        }
+      }
     }
   }
 
@@ -2202,6 +2225,7 @@ export class OfficeScene extends Phaser.Scene {
     this.cafe?.pause()
     this.ambient?.pause()
     if (this.wsManager) this.wsManager.pauseAll()
+    this.agentScheduler?.pause()
     if (this.bgTransitionTween) this.bgTransitionTween.pause()
   }
 
@@ -2212,6 +2236,7 @@ export class OfficeScene extends Phaser.Scene {
     this.cafe?.resume()
     this.ambient?.resume()
     if (this.wsManager) this.wsManager.resumeAll()
+    this.agentScheduler?.resume()
     if (this.bgTransitionTween) this.bgTransitionTween.resume()
 
     // If rooms changed while sleeping, rebuild the nav mesh now
