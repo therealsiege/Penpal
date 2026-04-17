@@ -573,6 +573,24 @@ export class GdsSceneRenderer {
     this.assignedSlots.clear()
   }
 
+  /**
+   * Return the walk track for the given agent's assigned desk, with points
+   * converted from GDS space to world space.  Returns null if the desk has no
+   * walkTrack configured or if the agent has no assigned slot.
+   */
+  getWalkTrackWorldPoints(agentId: string): { points: { x: number; y: number }[]; loop: boolean } | null {
+    if (!this.rendered) return null
+    const idx = this.assignedSlots.get(agentId)
+    if (idx === undefined) return null
+    const desk = this.labMap.desks?.[idx]
+    if (!desk?.walkTrack?.points?.length) return null
+    const worldPoints = desk.walkTrack.points.map(p => ({
+      x: this.originX + p.x * this.scale,
+      y: this.originY + p.y * this.scale,
+    }))
+    return { points: worldPoints, loop: desk.walkTrack.loop ?? false }
+  }
+
   // -------------------------------------------------------------------------
   // World bounds
   // -------------------------------------------------------------------------

@@ -105,6 +105,8 @@ export interface WorkstationHost {
   getOrAssignGdsDeskSlot?(agentId: string): { x: number; y: number; flipX: boolean; sitFrame: number; angle: number } | null
   /** GDS scene scale factor — used to scale workstations proportionally to the scene. */
   getGdsScale?(): number
+  /** Get world-space walk track for the agent's assigned desk, if configured. */
+  getWalkTrack?(agentId: string): { points: { x: number; y: number }[]; loop: boolean } | null
 }
 
 // ---------------------------------------------------------------------------

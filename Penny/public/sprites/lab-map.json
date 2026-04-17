@@ -56,7 +56,14 @@
       "flipX": false,
       "angle": 0,
       "assignTo": null,
-      "walkTrack": null,
+      "walkTrack": {
+        "points": [
+          { "x": 1478, "y": 958 },
+          { "x": 1478, "y": 1150 },
+          { "x": 1650, "y": 1150 }
+        ],
+        "loop": false
+      },
       "animations": {
         "idle": "default",
         "working": "typing",
@@ -92,7 +99,15 @@
       "flipX": false,
       "angle": 0,
       "assignTo": null,
-      "walkTrack": null,
+      "walkTrack": {
+        "points": [
+          { "x": 880, "y": 1669 },
+          { "x": 1100, "y": 1669 },
+          { "x": 1100, "y": 1400 },
+          { "x": 880, "y": 1400 }
+        ],
+        "loop": true
+      },
       "animations": {
         "idle": "default",
         "working": "typing",

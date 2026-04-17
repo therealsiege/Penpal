@@ -225,6 +225,11 @@ export class OfficeBackground {
   /** Get world bounds of the GDS scene (for camera centering). */
   getGdsSceneBounds(): { x: number; y: number; width: number; height: number } | null { return this.gdsRenderer.getWorldBounds() }
 
+  /** Get world-space walk track for the agent's assigned desk, if configured. */
+  getWalkTrackWorldPoints(agentId: string): { points: { x: number; y: number }[]; loop: boolean } | null {
+    return this.gdsRenderer.getWalkTrackWorldPoints(agentId)
+  }
+
   // ---------------------------------------------------------------------------
   // calcRoomSize
   // ---------------------------------------------------------------------------
