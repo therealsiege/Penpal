@@ -36,6 +36,7 @@ import {
 import { LAB_DECORATION_PIPELINE_ID, LAB_STRATEGIC_LAYOUT_LINKS, LAB_STRATEGIC_LAYOUT_VERSION } from './lab-decoration'
 import { RoomVisibilityManager } from './room-visibility'
 import { soundEngine } from './sound-engine'
+import { audioManager } from './audio-manager'
 import { achievements } from './achievements'
 import { CelebrationManager, themeIconFrameForTheme, type CameraJuiceHint } from './celebrations'
 import { AgentMoodManager } from './agent-mood'
@@ -378,6 +379,7 @@ export class OfficeScene extends Phaser.Scene {
       onPhaseChange: (phase, _animate, _rainDropPool, _snowPool, _vw, _vh) => {
         // Guard: particles may not yet be initialized during create() (called from atmosphere.init)
         if (this.particles) this.particles.setWeather(phase, this.viewWidth, this.viewHeight)
+        audioManager.setTimePhase(phase)
       },
       invalidateOfficeBgCache: () => { this.background.invalidateBgCache() },
       showToast: (msg, type) => this.showToast(msg, type === 'warn' ? 'warning' : type),
@@ -391,6 +393,10 @@ export class OfficeScene extends Phaser.Scene {
       this.worldHeight,
       null,
     )
+
+    // Enable Phaser Light2D pipeline — ambient color is driven by office-atmosphere.ts.
+    // WebGL only; safe no-op in Canvas fallback mode.
+    this.lights.enable().setAmbientColor(0xfff5e6)
 
     // Particle / effect pool systems
     this.particles = new OfficeParticles(this)
@@ -645,6 +651,7 @@ export class OfficeScene extends Phaser.Scene {
         if (shouldIgnoreKeyboardShortcuts(e)) return
         e.preventDefault()
         soundEngine.toggleMute()
+        audioManager.toggleMute()
         this.showToast(soundEngine.isMuted ? 'Sound OFF' : 'Sound ON', 'info')
       })
 
@@ -749,6 +756,12 @@ export class OfficeScene extends Phaser.Scene {
 
     soundEngine.setScene(this)
     soundEngine.wireEvents()
+
+    // Start ambient soundscape on first pointer interaction (Web Audio requires user gesture)
+    this.input.once('pointerdown', () => {
+      audioManager.startAmbient()
+    })
+
     achievements.load()
 
     // Wire achievement unlock to visual celebration
@@ -1425,6 +1438,10 @@ export class OfficeScene extends Phaser.Scene {
     }
 
     this.agents = allAgents
+
+    // Update audio working count
+    const workingCount = allAgents.filter(a => a.sessionMode === 'working').length
+    audioManager.setWorkingAgentCount(workingCount)
 
     const grouped = new Map<string, AgentState[]>()
     for (const agent of allAgents) {
