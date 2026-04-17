@@ -68,6 +68,8 @@ export class OfficeScene extends Phaser.Scene {
 
   /** Orchestrator queue tasks assigned to agents — shown on desks via OfficeWorkstations */
   private orchestratorTasksByAgent = new Map<string, OrchestratorTaskOfficeInfo>()
+  /** Tracks taskIds seen in the previous setOrchestratorTasks call for dispatch detection */
+  private previousOrchestratorTaskIds = new Set<string>()
 
   private rooms = new Map<string, Room>()
   private agents: AgentState[] = []
@@ -1605,12 +1607,43 @@ export class OfficeScene extends Phaser.Scene {
 
   /** Active orchestrator tasks — shows `[stage] title` below each assigned agent's name */
   setOrchestratorTasks(tasks: OrchestratorTaskOfficeInfo[]): void {
+    // Detect newly dispatched tasks before clearing previous state
+    const newlyDispatched = tasks.filter(t => !this.previousOrchestratorTaskIds.has(t.taskId))
+
     this.orchestratorTasksByAgent.clear()
     for (const t of tasks) {
       this.orchestratorTasksByAgent.set(t.agentId, t)
     }
+
+    // Rebuild previous task ID tracking set
+    this.previousOrchestratorTaskIds.clear()
+    for (const t of tasks) this.previousOrchestratorTaskIds.add(t.taskId)
+
     this.ensureWsManager()
     this.wsManager.syncOrchestratorTaskLabels()
+
+    // Emit TASK_DISPATCHED for each newly dispatched task so particles can animate
+    for (const task of newlyDispatched) {
+      const coords = this.getTaskDispatchCoords(task.agentId)
+      if (coords === null) continue
+      EventBus.emit(EVENTS.TASK_DISPATCHED, task.agentId, coords.roomCx, coords.roomCy, coords.deskX, coords.deskY, coords.rankLevel)
+    }
+  }
+
+  /** Resolve world coords for a task dispatch trail: room center → agent desk. */
+  private getTaskDispatchCoords(agentId: string): { roomCx: number; roomCy: number; deskX: number; deskY: number; rankLevel: number } | null {
+    for (const room of this.rooms.values()) {
+      const ws = room.workstations.get(agentId)
+      if (!ws) continue
+      const roomCx = room.x + room.width / 2
+      const roomCy = room.y + room.height / 2
+      const deskX  = room.x + ws.container.x
+      const deskY  = room.y + ws.container.y
+      const agent  = this.agents.find(a => a.config.id === agentId)
+      const rankLevel = agent?.xp?.level ?? 1
+      return { roomCx, roomCy, deskX, deskY, rankLevel }
+    }
+    return null
   }
 
   /** Highlight a workstation for drag-over feedback */
