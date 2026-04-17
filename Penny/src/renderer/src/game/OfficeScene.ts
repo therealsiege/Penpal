@@ -47,6 +47,7 @@ import { questSystem } from './quest-system'
 import { creditManager } from './credits'
 import { leaderboardManager } from './leaderboard'
 import { seasonManager } from './seasons'
+import { PostFXManager } from './post-fx-manager'
 
 import {
   KB_ZOOM_STEP,
@@ -112,8 +113,8 @@ export class OfficeScene extends Phaser.Scene {
   private dayNightOverlay: Phaser.GameObjects.Rectangle | null = null
   private skyGradient: Phaser.GameObjects.Graphics | null = null
   private lastShadowUpdateAt = 0
-  // Subtle screen-space edge shading to frame the office.
-  private vignetteFx: Phaser.FX.Vignette | null = null
+  // PostFX: vignette, bloom, time-of-day color grading — managed by PostFXManager
+  private postFX!: PostFXManager
 
   // Keyboard selection — managed by OfficeSelection
   private selection!: OfficeSelection
@@ -380,6 +381,10 @@ export class OfficeScene extends Phaser.Scene {
       onPhaseChange: (phase, _animate, _rainDropPool, _snowPool, _vw, _vh) => {
         // Guard: particles may not yet be initialized during create() (called from atmosphere.init)
         if (this.particles) this.particles.setWeather(phase, this.viewWidth, this.viewHeight)
+      },
+      onPostFXPhaseChange: (phase, animate) => {
+        // Guard: postFX initialized after atmosphere
+        if (this.postFX) this.postFX.onPhaseChange(phase, animate)
       },
       invalidateOfficeBgCache: () => { this.background.invalidateBgCache() },
       showToast: (msg, type) => this.showToast(msg, type === 'warn' ? 'warning' : type),
@@ -691,10 +696,19 @@ export class OfficeScene extends Phaser.Scene {
           this.ui.showOpsBoardOverlay(this._capRows)
         }
       })
+
+      // P — cycle postFX quality (off → low → high)
+      this.input.keyboard.on('keydown-P', (e: KeyboardEvent) => {
+        if (shouldIgnoreKeyboardShortcuts(e)) return
+        e.preventDefault()
+        const next = this.postFX.cycleQuality()
+        this.showToast(`PostFX: ${next}`, 'info')
+      })
     }
 
-    // Vignette — subtle edge framing only (strong strength + tight radius read as “too dark” on wide labs)
-    this.vignetteFx = this.cameras.main.postFX.addVignette(0.5, 0.5, 0.9, 0.22)
+    // PostFX — vignette, bloom, time-of-day color grading (WebGL only)
+    // Quality persisted to localStorage; P key cycles levels.
+    this.postFX = new PostFXManager(this)
 
     // Screen-space UI overlays: toasts, tooltip, hover ring, help, debug, LOD label, status bar
     this.ui = new OfficeUI(this)
@@ -2019,10 +2033,7 @@ export class OfficeScene extends Phaser.Scene {
     // Keyboard selection + focus mode cleanup — delegates to OfficeSelection
     this.selection.destroy()
 
-    if (this.vignetteFx) {
-      this.cameras.main.postFX.remove(this.vignetteFx)
-      this.vignetteFx = null
-    }
+    this.postFX.destroy()
     this.dayNightOverlay = null
     this.skyGradient = null
 
