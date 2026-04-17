@@ -3,6 +3,7 @@ import fs from 'fs'
 import path from 'path'
 import dotenv from 'dotenv'
 import { registerIpcHandlers, registerPreferenceIpc, ipcEvents } from './ipc'
+import { registerMcpIpcHandlers } from './mcp-manager'
 import { closeGraph } from './graph'
 import { loadAgentConfigs } from './agents'
 import { registerPtyHandlers, destroyAllPtys, stopPtySweep } from './pty'
@@ -121,6 +122,7 @@ app.whenReady().then(() => {
   registerSoundboardProtocol()
   loadAgentConfigs()
   registerIpcHandlers()
+  registerMcpIpcHandlers()
   registerPtyHandlers()
   const dataDir = path.resolve(ELECTRON_ROOT, 'data')
   const preferenceStore = new PreferenceStore(dataDir)
