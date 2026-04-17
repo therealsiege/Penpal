@@ -61,6 +61,8 @@ export interface WorkstationSprite {
   walkBreakTween?: Phaser.Tweens.Tween
   lookAtNeighborTimer?: Phaser.Time.TimerEvent
   yawnTimer?: Phaser.Time.TimerEvent
+  /** Timer for per-archetype idle micro-animations (personality variety) */
+  microAnimTimer?: Phaser.Time.TimerEvent
   blockedIndicatorTween?: Phaser.Tweens.Tween
   ledGlow?: Phaser.GameObjects.Graphics
   ledPulseTween?: Phaser.Tweens.Tween
