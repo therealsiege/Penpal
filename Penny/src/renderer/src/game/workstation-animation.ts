@@ -221,6 +221,14 @@ export class WorkstationAnimator {
     }
     // Always stop steam when transitioning; idle branch will re-spawn it
     this.host.clearSteamParticles(ws)
+    // Clear mug steam timer (idle branch re-creates it)
+    if (ws.mugSteamTimer) { ws.mugSteamTimer.destroy(); ws.mugSteamTimer = undefined }
+    // Clear monitor screensaver and restore sprite to neutral state
+    if (ws.screensaverTween) {
+      ws.screensaverTween.destroy()
+      ws.screensaverTween = undefined
+      if (ws.monitorSprite?.active) { ws.monitorSprite.clearTint(); ws.monitorSprite.setAlpha(1) }
+    }
     // Clean up thinking dots when leaving working mode
     if (mode !== 'working' && ws.thinkingDotsContainer) {
       this.hideThinkingDots(ws)
@@ -528,6 +536,57 @@ export class WorkstationAnimator {
           ease: 'Sine.easeInOut',
         })
       }
+
+      // Monitor screensaver — color gradient cycle on unoccupied desk monitors
+      // Colors: dark blue → purple → teal, 12s cycle, alpha 0.45
+      if (ws.monitorSprite) {
+        const SS_COLORS = [0x1e3a5f, 0x5b21b6, 0x0d9488]
+        ws.screensaverTween = this.scene.tweens.addCounter({
+          from: 0, to: 1, duration: 12000, repeat: -1, ease: 'Linear',
+          onUpdate: (tw: Phaser.Tweens.Tween) => {
+            if (!ws.monitorSprite?.active) return
+            const raw = tw.getValue() * 3
+            const seg = Math.floor(raw) % 3
+            const frac = raw - Math.floor(raw)
+            const c1 = SS_COLORS[seg] ?? SS_COLORS[0]!
+            const c2 = SS_COLORS[(seg + 1) % 3] ?? SS_COLORS[0]!
+            const lerp = (a: number, b: number) => Math.round(a + (b - a) * frac)
+            const r = lerp((c1 >> 16) & 0xff, (c2 >> 16) & 0xff)
+            const g = lerp((c1 >> 8) & 0xff, (c2 >> 8) & 0xff)
+            const b = lerp(c1 & 0xff, c2 & 0xff)
+            ws.monitorSprite!.setTint((r << 16) | (g << 8) | b)
+            ws.monitorSprite!.setAlpha(0.45)
+          },
+        })
+      }
+
+      // Coffee mug steam — 3 tiny particles rising from idle agent's desk mug
+      // Params: alpha 0.05, 8px rise, 2s fade
+      if (!ws.steamContainer) {
+        ws.steamContainer = this.scene.add.container(8, WS_DESK_Y - 2)
+        ws.container.add(ws.steamContainer)
+      }
+      const spawnMugSteam = () => {
+        if (ws.lastAnimMode !== 'idle' || !ws.steamContainer?.active) return
+        for (let i = 0; i < 5; i++) {
+          const xOff = (i - 2) * 2.0 + (Math.random() - 0.5) * 0.5
+          const p = this.scene.add.circle(xOff, 0, 1.5, 0xd4d4d8, 0.08)
+          ws.steamContainer.add(p)
+          this.scene.tweens.add({
+            targets: p,
+            y: -8 - Math.random() * 3,
+            alpha: 0,
+            duration: 2000,
+            delay: i * 350,
+            ease: 'Sine.easeOut',
+            onComplete: () => { try { ws.steamContainer?.remove(p, true) } catch { /* gone */ } },
+          })
+        }
+      }
+      spawnMugSteam()
+      ws.mugSteamTimer = this.scene.time.addEvent({
+        delay: 2500, loop: true, callback: () => { spawnMugSteam() },
+      })
 
       // Fart VFX when entering compressing mode
       if (agent.sessionMode === 'compressing' && this.scene.anims.exists(EFFECT_ANIM_KEYS.FART)) {

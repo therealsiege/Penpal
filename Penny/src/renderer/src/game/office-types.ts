@@ -194,6 +194,10 @@ export interface WorkstationSprite {
   contextRotShakeTween?: Phaser.Tweens.Tween
   lastContextRotState?: boolean
   contextRotMonitorBaseX?: number
+  /** Monitor screensaver — gradient cycle tween (idle only) */
+  screensaverTween?: Phaser.Tweens.Tween
+  /** Coffee mug steam — recurring spawn timer (idle only) */
+  mugSteamTimer?: Phaser.Time.TimerEvent
 }
 
 export interface Room {

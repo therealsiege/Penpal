@@ -1344,6 +1344,9 @@ export class WorkstationFactory {
     if (ws.contextMeterPulseTween) ws.contextMeterPulseTween.destroy()
     if (ws.contextRotShakeTween)   ws.contextRotShakeTween.destroy()
     if (ws.contextMeter)           ws.contextMeter.destroy()
+    if (ws.screensaverTween)       ws.screensaverTween.destroy()
+    if (ws.mugSteamTimer)          ws.mugSteamTimer.destroy()
+    if (ws.steamContainer)         { ws.steamContainer.removeAll(true); ws.steamContainer.destroy(); ws.steamContainer = undefined }
     if (ws.orchestratorTaskLabel) ws.orchestratorTaskLabel.destroy()
     if (ws.thinkingDotsTween)    ws.thinkingDotsTween.destroy()
     if (ws.thinkingMergeTween)   ws.thinkingMergeTween.destroy()

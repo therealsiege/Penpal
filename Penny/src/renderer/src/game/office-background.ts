@@ -1021,6 +1021,21 @@ export class OfficeBackground {
         }
       }
     }
+
+    // Pipe pressure pulse — compression wave along all pipe sprites (scaleX 1.0→1.05→1.0)
+    // 400ms yoyo = 0.8s total cycle; stagger by index so the wave propagates along the run
+    for (let i = 0; i < this.teamPipeSprites.length; i++) {
+      const spr = this.teamPipeSprites[i]!
+      this.scene.tweens.add({
+        targets: spr,
+        scaleX: SCALE * 1.05,
+        duration: 400,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut',
+        delay: (i * 50) % 800,
+      })
+    }
   }
 
   // ---------------------------------------------------------------------------
