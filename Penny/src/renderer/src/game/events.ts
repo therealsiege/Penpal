@@ -141,6 +141,10 @@ export const EVENTS = {
   /** Fired when an achievement is unlocked. Payload: (achievementId: string, title: string, iconFrame: number) */
   ACHIEVEMENT_UNLOCKED: 'achievement:unlocked',
 
+  // --- NPC Interaction ---
+  /** Fired when the player presses E near an agent workstation. Payload: (agentId: string) */
+  AGENT_INTERACT: 'agent:interact',
+
   // --- Navigation ---
   /** Fired to navigate to the campus overview scene. No payload. */
   NAVIGATE_CAMPUS: 'navigate-campus',
@@ -235,6 +239,10 @@ export interface EventPayloadMap {
   [EVENTS.SEASON_ENDED]: [payload: SeasonEndedEventPayload]
   [EVENTS.SEASON_STARTED]: [payload: SeasonStartedEventPayload]
   [EVENTS.ACHIEVEMENT_UNLOCKED]: [achievementId: string, title: string, iconFrame: number]
+
+  // --- NPC Interaction ---
+  /** (agentId: string) */
+  [EVENTS.AGENT_INTERACT]: [agentId: string]
 
   // --- Navigation ---
   [EVENTS.NAVIGATE_CAMPUS]: []
