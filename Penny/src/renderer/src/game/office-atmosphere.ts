@@ -11,6 +11,8 @@ import { AtmosphereLighting } from './atmosphere-lighting'
 export interface AtmosphereCallbacks {
   /** Called when day/night phase changes — lets OfficeScene update rain/snow state */
   onPhaseChange(phase: 'morning' | 'day' | 'evening' | 'night', animate: boolean, rainDropPool: Phaser.GameObjects.Line[], snowPool: Phaser.GameObjects.Arc[], viewWidth: number, viewHeight: number): void
+  /** Called when the time-of-day phase changes — lets PostFXManager update vignette/bloom/color grading */
+  onPostFXPhaseChange?(phase: 'morning' | 'day' | 'evening' | 'night', animate: boolean): void
   /** Called when atmosphere needs to invalidate the office background cache */
   invalidateOfficeBgCache(): void
   /** Called to show a toast notification */
@@ -317,6 +319,9 @@ export class OfficeAtmosphere {
 
     // Delegate rain/snow updates to OfficeScene via callback
     this.callbacks.onPhaseChange(phase, animate, [], [], 0, 0)
+
+    // Delegate postFX (vignette/bloom/color-grade) updates
+    this.callbacks.onPostFXPhaseChange?.(phase, animate)
 
     // Exterior lights — tween container alpha so all child fixtures change together.
     if (this.exteriorLights) {
