@@ -36,6 +36,7 @@ import {
 import { LAB_DECORATION_PIPELINE_ID, LAB_STRATEGIC_LAYOUT_LINKS, LAB_STRATEGIC_LAYOUT_VERSION } from './lab-decoration'
 import { RoomVisibilityManager } from './room-visibility'
 import { soundEngine } from './sound-engine'
+import { audioManager } from './audio-manager'
 import { achievements } from './achievements'
 import { CelebrationManager, themeIconFrameForTheme, type CameraJuiceHint } from './celebrations'
 import { AgentMoodManager } from './agent-mood'
@@ -378,6 +379,7 @@ export class OfficeScene extends Phaser.Scene {
       onPhaseChange: (phase, _animate, _rainDropPool, _snowPool, _vw, _vh) => {
         // Guard: particles may not yet be initialized during create() (called from atmosphere.init)
         if (this.particles) this.particles.setWeather(phase, this.viewWidth, this.viewHeight)
+        audioManager.setTimePhase(phase)
       },
       invalidateOfficeBgCache: () => { this.background.invalidateBgCache() },
       showToast: (msg, type) => this.showToast(msg, type === 'warn' ? 'warning' : type),
@@ -640,11 +642,12 @@ export class OfficeScene extends Phaser.Scene {
         this.ui.toggleDebugOverlay(this.navMesh, this.rooms, this.agents, this.cafe)
       })
 
-      // M — toggle sound mute
+      // M — toggle sound mute (soundEngine + audioManager)
       this.input.keyboard.on('keydown-M', (e: KeyboardEvent) => {
         if (shouldIgnoreKeyboardShortcuts(e)) return
         e.preventDefault()
         soundEngine.toggleMute()
+        audioManager.toggleMute()
         this.showToast(soundEngine.isMuted ? 'Sound OFF' : 'Sound ON', 'info')
       })
 
@@ -749,6 +752,12 @@ export class OfficeScene extends Phaser.Scene {
 
     soundEngine.setScene(this)
     soundEngine.wireEvents()
+
+    // AudioManager — initialize on first user gesture (browser autoplay policy).
+    // Both pointerdown and keydown qualify. Subsequent calls are no-ops.
+    const _initAudio = () => audioManager.init()
+    this.input.once('pointerdown', _initAudio)
+    this.input.keyboard?.once('keydown', _initAudio)
     achievements.load()
 
     // Wire achievement unlock to visual celebration
@@ -1425,6 +1434,10 @@ export class OfficeScene extends Phaser.Scene {
     }
 
     this.agents = allAgents
+
+    // Update keyboard clatter rate based on how many agents are actively working
+    const workingCount = allAgents.filter(a => a.sessionMode === 'working' || a.status === 'active').length
+    audioManager.setWorkingAgentCount(workingCount)
 
     const grouped = new Map<string, AgentState[]>()
     for (const agent of allAgents) {
