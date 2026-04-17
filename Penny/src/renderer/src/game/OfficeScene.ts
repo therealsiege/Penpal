@@ -42,6 +42,7 @@ import { AgentMoodManager } from './agent-mood'
 import { InteractivePropsManager } from './interactive-props'
 import { SeasonHUD } from './season-hud'
 import { QuestPanel } from './quest-panel'
+import { QuestLogUI } from './quest-log-ui'
 import { AchievementPanel } from './achievement-panel'
 import { questSystem } from './quest-system'
 import { creditManager } from './credits'
@@ -160,8 +161,10 @@ export class OfficeScene extends Phaser.Scene {
   private propsManager!: InteractivePropsManager
   private seasonHud!: SeasonHUD
   private questPanel!: QuestPanel
+  private questLogUI!: QuestLogUI
   private achievementPanel!: AchievementPanel
   private lastQuestPanelUpdateAt = 0
+  private lastQuestLogUIUpdateAt = 0
   private lastAchievementPanelUpdateAt = 0
   private lastMoodUpdateAt = 0
   private lastSeasonHudUpdateAt = 0
@@ -503,6 +506,7 @@ export class OfficeScene extends Phaser.Scene {
       if (this.ui) { this.ui.setViewSize(gameSize.width, gameSize.height) }
       if (this.seasonHud) { this.seasonHud.setViewSize(gameSize.width, gameSize.height) }
       if (this.questPanel) { this.questPanel.setViewSize(gameSize.width, gameSize.height) }
+      if (this.questLogUI) { this.questLogUI.setViewSize(gameSize.width, gameSize.height) }
       if (this.achievementPanel) { this.achievementPanel.setViewSize(gameSize.width, gameSize.height) }
 
       if (this.resizeTimer) clearTimeout(this.resizeTimer)
@@ -553,6 +557,7 @@ export class OfficeScene extends Phaser.Scene {
         if (shouldIgnoreKeyboardShortcuts(e)) return
         e.preventDefault()
         if (this.ui.opsVisible) { this.ui.hideOpsBoardOverlay(); return }
+        if (this.questLogUI?.isVisible()) { this.questLogUI.hide(); return }
         if (this.achievementPanel?.isVisible) { this.achievementPanel.hide(); return }
         if (this.ui.helpVisible) { this.ui.hideHelpOverlay(); return }
         if (this.selection.isFocused) { this.selection.exitFocusMode(); return }
@@ -631,6 +636,13 @@ export class OfficeScene extends Phaser.Scene {
         if (shouldIgnoreKeyboardShortcuts(e)) return
         e.preventDefault()
         this.questPanel.toggleQuestLog()
+      })
+
+      // J — toggle quest log overlay (pod workflow view)
+      this.input.keyboard.on('keydown-J', (e: KeyboardEvent) => {
+        if (shouldIgnoreKeyboardShortcuts(e)) return
+        e.preventDefault()
+        this.questLogUI.toggle()
       })
 
       // A — toggle achievements panel
@@ -760,6 +772,8 @@ export class OfficeScene extends Phaser.Scene {
     this.seasonHud.init(this.viewWidth, this.viewHeight)
     this.questPanel = new QuestPanel(this)
     this.questPanel.init(this.viewWidth, this.viewHeight)
+    this.questLogUI = new QuestLogUI(this)
+    this.questLogUI.init(this.viewWidth, this.viewHeight)
     this.achievementPanel = new AchievementPanel(this)
     this.achievementPanel.init(this.viewWidth, this.viewHeight)
 
@@ -1369,6 +1383,12 @@ export class OfficeScene extends Phaser.Scene {
     if (this.questPanel && time - this.lastQuestPanelUpdateAt >= 3000) {
       this.lastQuestPanelUpdateAt = time
       this.questPanel.update()
+    }
+
+    if (this.questLogUI && time - this.lastQuestLogUIUpdateAt >= 3000) {
+      this.lastQuestLogUIUpdateAt = time
+      // Refresh elapsed times when visible (no new quest data — quests arrive via update())
+      if (this.questLogUI.isVisible()) this.questLogUI.update([])
     }
 
     // Performance auto-reducer — check avg FPS every 3s
@@ -2058,6 +2078,7 @@ export class OfficeScene extends Phaser.Scene {
     this.ui.destroy()
     this.seasonHud.destroy()
     this.questPanel.destroy()
+    this.questLogUI.destroy()
     this.achievementPanel.destroy()
 
     if (this.roomRenderer) {
