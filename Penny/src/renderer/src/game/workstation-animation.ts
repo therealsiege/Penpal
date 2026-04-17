@@ -49,42 +49,6 @@ import type { WorkstationHost } from './office-workstation'
 import type { NavMesh } from './nav-mesh'
 import { buildOwnRoomRect } from './nav-mesh'
 import { PathWalker } from './path-walker'
-import { soundEngine } from './sound-engine'
-
-// ---------------------------------------------------------------------------
-// Idle personality archetype system
-// ---------------------------------------------------------------------------
-
-type IdleArchetype = 'focused' | 'creative' | 'social'
-
-/** Map agent name → idle personality archetype.
- *  Focused: deep technical work, methodical.
- *  Creative: expressive, rhythmic, playful.
- *  Social:  communicative, relaxed, people-aware. */
-const PERSONA_ARCHETYPE_MAP: Readonly<Record<string, IdleArchetype>> = {
-  'Sun Wukong':           'focused',   // fullstack-dev — unstoppable problem solver
-  'Guanyin':              'focused',   // backend-arch  — architectural precision
-  'Bull Demon King':      'focused',   // embedded-dev  — zero-waste concentration
-  'Erlang Shen':          'creative',  // nextjs-frontend — surgical creative eye
-  'Red Boy':              'creative',  // videogame-dev — creative fire & VFX
-  'Dragon King Ao Guang': 'creative',  // ui-designer   — aesthetics-first
-  'Sha Wujing':           'social',    // electron-dev  — steady executor
-  'Nezha':                'social',    // expo-mobile   — fast & social
-  'Tang Sanzang':         'social',    // product-mgr   — mission-driven, team-first
-  'White Dragon Horse':   'social',    // product-marketer — tireless storyteller
-  'Zhu Bajie':            'social',    // exec-assistant — brute-force social
-}
-
-/** Available micro-animation keys per archetype (3 each = 9 total). */
-const ARCHETYPE_ANIM_POOL: Readonly<Record<IdleArchetype, string[]>> = {
-  focused:  ['chin-rest', 'screen-lean', 'note-jot'],
-  creative: ['creative-stretch', 'head-bob', 'doodle'],
-  social:   ['phone-check', 'lean-back', 'wave'],
-}
-
-/** Module-level stagger tracker: animKey → last played timestamp (ms).
- *  Ensures no two visible agents play the same animation within 2 seconds. */
-const lastMicroAnimPlayedAt = new Map<string, number>()
 
 // ---------------------------------------------------------------------------
 // Eval glow color helper
@@ -217,6 +181,7 @@ export class WorkstationAnimator {
     if (ws.pulseTween)       { ws.pulseTween.destroy();       ws.pulseTween       = undefined }
     if (ws.ledPulseTween)    { ws.ledPulseTween.destroy();    ws.ledPulseTween    = undefined }
     if (ws.kbGlowTween)     { ws.kbGlowTween.destroy();     ws.kbGlowTween     = undefined }
+    if (ws.kbScaleTween)    { ws.kbScaleTween.destroy();    ws.kbScaleTween    = undefined; if (ws.keyboard) { ws.keyboard.scaleX = 1; ws.keyboard.scaleY = 1 } }
     if (ws.lampLightTween)   { ws.lampLightTween.destroy();   ws.lampLightTween   = undefined }
     if (ws.lampFlickerTimer) { ws.lampFlickerTimer.destroy();  ws.lampFlickerTimer = undefined }
     if (ws.walkBreakTween)   { ws.walkBreakTween.destroy();   ws.walkBreakTween   = undefined }
@@ -225,7 +190,6 @@ export class WorkstationAnimator {
     if (ws.walkBreakTimer)      { ws.walkBreakTimer.destroy();      ws.walkBreakTimer      = undefined }
     if (ws.lookAtNeighborTimer) { ws.lookAtNeighborTimer.destroy(); ws.lookAtNeighborTimer = undefined }
     if (ws.yawnTimer)           { ws.yawnTimer.destroy();           ws.yawnTimer           = undefined }
-    if (ws.microAnimTimer)      { ws.microAnimTimer.destroy();      ws.microAnimTimer      = undefined }
     // Clear ambient sound-wave indicator on every mode transition; working branch re-draws it
     if (ws.soundWaveTween) { ws.soundWaveTween.destroy(); ws.soundWaveTween = undefined }
     if (ws.soundWaveGfx)   { ws.soundWaveGfx.clear(); ws.soundWaveGfx.setAlpha(1) }
@@ -238,7 +202,6 @@ export class WorkstationAnimator {
     if (ws.typingNoteTimer) { ws.typingNoteTimer.destroy(); ws.typingNoteTimer = undefined }
     // Clear speech bubble
     if (ws.speechBubbleTween) { ws.speechBubbleTween.destroy(); ws.speechBubbleTween = undefined }
-    if (ws.speechBubbleBobTween) { ws.speechBubbleBobTween.destroy(); ws.speechBubbleBobTween = undefined }
     if (ws.speechBubbleTimer) { ws.speechBubbleTimer.destroy(); ws.speechBubbleTimer = undefined }
     if (ws.speechBubble) { ws.speechBubble.setVisible(false).setAlpha(0) }
     // Fade out progress ring when leaving working mode; working branch re-starts it
@@ -276,9 +239,6 @@ export class WorkstationAnimator {
       })
     }
 
-    // ── Crossfade transition blending (Living Lab 1a) ──
-    this._playTransitionBlend(ws, prevMode, mode)
-
     // Chair swivel on mode change — quick turn as if the agent is shifting in their seat
     if (ws.chairSprite?.visible) {
       const swivelAngle = (Math.random() - 0.5) * 8 // -4 to +4 degrees
@@ -305,43 +265,29 @@ export class WorkstationAnimator {
     const base = charIdx * CHAR_COLS
 
     if (isWaiting) {
-      // Agent went from working → blocked/waiting: play task-fail sound
-      if (prevMode === 'working') {
-        soundEngine.taskFail()
-      }
       if (!gdsLock) ws.sprite.setFrame(base + POSE_IDLE)
       ws.pulseTween = this.scene.tweens.add({
         targets: ws.sprite, scaleX: CHAR_SCALE * AnimConfig.waiting.pulseScaleFactor, scaleY: CHAR_SCALE * AnimConfig.waiting.pulseScaleFactor,
-        duration: AnimConfig.waiting.pulseDuration, yoyo: true, repeat: -1, ease: AnimConfig.easing.scalePop,
+        duration: AnimConfig.waiting.pulseDuration, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
       })
       ws.typingTween = this.scene.tweens.add({
         targets: ws.sprite, x: AnimConfig.waiting.swayAmplitude,
-        duration: AnimConfig.waiting.swayDuration, yoyo: true, repeat: -1, ease: AnimConfig.easing.waitingSway,
+        duration: AnimConfig.waiting.swayDuration, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
       })
       ws.dotPulseTween = this.scene.tweens.add({
         targets: ws.statusDot, alpha: AnimConfig.waiting.dotPulseAlphaMin,
         duration: AnimConfig.waiting.dotPulseDuration, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
       })
-      // Irregular breathing — Y-offset only (pulseTween handles scale); re-schedules itself each cycle
-      const waitBreath = () => {
-        if (!ws.sprite.active || ws.lastAnimMode !== 'waiting') return
-        const dur = AnimConfig.waiting.breathDuration + Math.random() * AnimConfig.waiting.breathDurationVar
-        ws.breathTween = this.scene.tweens.add({
-          targets: ws.sprite,
-          y: WS_SPRITE_Y - AnimConfig.waiting.breathYOffset,
-          duration: dur,
-          yoyo: true,
-          ease: 'Sine.easeInOut',
-          onComplete: waitBreath,
-        })
-      }
-      waitBreath()
-      // LED: waiting — amber steady glow
+      // LED: waiting — amber fast-blink loop to signal attention needed
       if (ws.ledGlow) {
         ws.ledGlow.clear()
         ws.ledGlow.fillStyle(activeTheme.deskStrokeWaiting, 1)
         ws.ledGlow.fillRoundedRect(-26, WS_DESK_Y + 4, 52, 2, 1)
-        this.scene.tweens.add({ targets: ws.ledGlow, alpha: 0.5, duration: 300, ease: 'Sine.easeOut' })
+        ws.ledGlow.setAlpha(0.2)
+        ws.ledPulseTween = this.scene.tweens.add({
+          targets: ws.ledGlow, alpha: 0.75,
+          duration: 450, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
+        })
       }
       // Lamp light cone: dim when waiting
       if (ws.lampLight) {
@@ -355,7 +301,7 @@ export class WorkstationAnimator {
       if (!gdsLock) ws.sprite.setFrame(base + POSE_INTERACT)
       ws.typingTween = this.scene.tweens.add({
         targets: ws.sprite, x: AnimConfig.working.typingAmplitude,
-        duration: AnimConfig.working.typingDuration, yoyo: true, repeat: -1, ease: AnimConfig.easing.workingTyping,
+        duration: AnimConfig.working.typingDuration, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
       })
       ws.bounceTween = this.scene.tweens.add({
         targets: ws.sprite, y: WS_SPRITE_Y - AnimConfig.working.bounceOffset,
@@ -364,15 +310,6 @@ export class WorkstationAnimator {
       ws.headTiltTween = this.scene.tweens.add({
         targets: ws.sprite, angle: AnimConfig.working.headTiltAngle,
         duration: AnimConfig.working.headTiltDuration, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
-      })
-      // Working breath — scaleY only (bounceTween owns Y); faster 2s cycle
-      ws.breathTween = this.scene.tweens.add({
-        targets: ws.sprite,
-        scaleY: CHAR_SCALE * AnimConfig.working.breathScaleFactor,
-        duration: AnimConfig.working.breathDuration,
-        yoyo: true,
-        repeat: -1,
-        ease: 'Sine.easeInOut',
       })
       if (!this.host.getOrAssignGdsDeskSlot) ws.deskBody.setStrokeStyle(1, 0x34d399, 0.55)
 
@@ -389,11 +326,18 @@ export class WorkstationAnimator {
             ease: 'Sine.easeInOut',
           })
         }
-      }
-
-      // ── Audio: task start sound on idle/waiting → working transition ──
-      if (prevMode !== 'working') {
-        soundEngine.taskStart()
+        // Keyboard scale pulse — tiny key-press simulation (scaleY squish)
+        if (!ws.kbScaleTween) {
+          ws.kbScaleTween = this.scene.tweens.add({
+            targets: ws.keyboard,
+            scaleY: { from: 1, to: 0.94 },
+            duration: 180,
+            yoyo: true,
+            repeat: -1,
+            ease: 'Sine.easeInOut',
+            delay: 180, // offset from glow for organic feel
+          })
+        }
       }
 
       // ── Game systems: auto-wrap into quest ──
@@ -585,32 +529,9 @@ export class WorkstationAnimator {
 
     } else {
       if (!gdsLock) ws.sprite.setFrame(base + POSE_SIT)
-      // Enhanced idle breathing: scaleY + Y-offset (chest rise), with occasional sigh.
-      // sighNext toggles every ~5 cycles on average (sighChance = 0.2).
-      let sighNext = false
       ws.breathTween = this.scene.tweens.add({
-        targets: ws.sprite,
-        scaleY: CHAR_SCALE * AnimConfig.idle.breathScaleFactor,
-        y: WS_SPRITE_Y - AnimConfig.idle.breathYOffset,
-        duration: AnimConfig.idle.breathDuration,
-        yoyo: true,
-        repeat: -1,
-        ease: 'Sine.easeInOut',
-        onRepeat: () => {
-          const t = ws.breathTween
-          if (!t) return
-          if (sighNext) {
-            // Reset to normal breath values after the sigh cycle
-            t.updateTo('scaleY', CHAR_SCALE * AnimConfig.idle.breathScaleFactor)
-            t.updateTo('y', WS_SPRITE_Y - AnimConfig.idle.breathYOffset)
-            sighNext = false
-          } else if (Math.random() < AnimConfig.idle.sighChance) {
-            // Next cycle is a deeper sigh: larger amplitude + more Y rise
-            t.updateTo('scaleY', CHAR_SCALE * AnimConfig.idle.sighScaleFactor)
-            t.updateTo('y', WS_SPRITE_Y - AnimConfig.idle.sighYOffset)
-            sighNext = true
-          }
-        },
+        targets: ws.sprite, scaleY: CHAR_SCALE * AnimConfig.idle.breathScaleFactor,
+        duration: AnimConfig.idle.breathDuration, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
       })
 
       // Idle chair rocking — very subtle lean-back oscillation
@@ -634,16 +555,19 @@ export class WorkstationAnimator {
         fart.once('animationcomplete', () => fart.destroy())
       }
 
-      // Remove keyboard glow
-      if (ws.kbGlowTween) { ws.kbGlowTween.destroy(); ws.kbGlowTween = undefined }
+      // Remove keyboard glow (already torn down at top; just restore visuals)
       if (ws.keyboard) ws.keyboard.setStrokeStyle(0, 0, 0).setAlpha(0.8)
 
-      // LED: idle — muted dim glow
+      // LED: idle — slow dim blink loop (breathing glow)
       if (ws.ledGlow) {
         ws.ledGlow.clear()
         ws.ledGlow.fillStyle(activeTheme.deskStrokeIdle, 1)
         ws.ledGlow.fillRoundedRect(-26, WS_DESK_Y + 4, 52, 2, 1)
-        this.scene.tweens.add({ targets: ws.ledGlow, alpha: 0.1, duration: 600, ease: 'Sine.easeOut' })
+        ws.ledGlow.setAlpha(0.03)
+        ws.ledPulseTween = this.scene.tweens.add({
+          targets: ws.ledGlow, alpha: 0.18,
+          duration: 2200, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
+        })
       }
       // Lamp light cone: dim when idle
       if (ws.lampLight) {
@@ -656,10 +580,9 @@ export class WorkstationAnimator {
 
       // "Just finished" bounce + confetti when transitioning from working→idle
       if (prevMode === 'working') {
-        soundEngine.taskComplete()
         this.scene.tweens.add({
           targets: ws.sprite, y: WS_SPRITE_Y - 6,
-          duration: 200, yoyo: true, ease: AnimConfig.easing.celebration,
+          duration: 200, yoyo: true, ease: 'Back.easeOut',
           onComplete: () => { ws.sprite.y = WS_SPRITE_Y },
         })
         // Find the room that owns this workstation to compute world position
@@ -870,13 +793,6 @@ export class WorkstationAnimator {
         },
       })
 
-      // Per-archetype idle micro-animation — random from personality pool every 8-15s
-      ws.microAnimTimer = this.scene.time.addEvent({
-        delay: 8000 + Math.random() * 7000,
-        loop: true,
-        callback: () => { this._playMicroAnim(ws, agent) },
-      })
-
       ws.walkBreakTimer = this.scene.time.addEvent({
         delay: IDLE_WALK_BREAK_MIN_MS + Math.random() * IDLE_WALK_BREAK_VAR_MS,
         loop: true,
@@ -895,80 +811,6 @@ export class WorkstationAnimator {
   }
 
   // ---------------------------------------------------------------------------
-  // Crossfade transition blending — smooth visual bridge between anim states
-  // ---------------------------------------------------------------------------
-
-  private _playTransitionBlend(
-    ws: WorkstationSprite,
-    prevMode: 'idle' | 'working' | 'waiting' | undefined,
-    nextMode: 'idle' | 'working' | 'waiting',
-  ): void {
-    const tc = AnimConfig.transitions
-
-    if (prevMode === 'idle' && nextMode === 'working') {
-      // Settle-into-chair: brief scaleY compression then bounce back
-      ws.sprite.setScale(CHAR_SCALE, CHAR_SCALE)
-      this.scene.tweens.add({
-        targets: ws.sprite,
-        scaleY: CHAR_SCALE * tc.idleToWorkingScaleY,
-        duration: tc.idleToWorkingCompressMs,
-        ease: 'Sine.easeIn',
-        yoyo: true,
-        hold: 0,
-        onComplete: () => {
-          if (ws.sprite.active) ws.sprite.setScale(CHAR_SCALE)
-        },
-      })
-      // Alpha crossfade: brief dip then back to full
-      ws.sprite.setAlpha(0.85)
-      this.scene.tweens.add({
-        targets: ws.sprite,
-        alpha: 1,
-        duration: tc.idleToWorkingMs,
-        ease: 'Sine.easeOut',
-      })
-    } else if (prevMode === 'working' && nextMode === 'idle') {
-      // Hands lift off keyboard (y-offset up) + lean back (x-tilt) + settle
-      ws.sprite.y = WS_SPRITE_Y - tc.workingToIdleLiftY
-      ws.sprite.setAngle(tc.workingToIdleTiltAngle)
-      this.scene.tweens.add({
-        targets: ws.sprite,
-        y: WS_SPRITE_Y,
-        angle: 0,
-        duration: tc.workingToIdleMs,
-        ease: 'Cubic.easeOut',
-      })
-      // Alpha crossfade
-      ws.sprite.setAlpha(0.88)
-      this.scene.tweens.add({
-        targets: ws.sprite,
-        alpha: 1,
-        duration: tc.workingToIdleMs,
-        ease: 'Sine.easeOut',
-      })
-    } else if (nextMode === 'waiting') {
-      // any → waiting: slow alpha crossfade into pulse/sway
-      ws.sprite.setAlpha(0.7)
-      this.scene.tweens.add({
-        targets: ws.sprite,
-        alpha: 1,
-        duration: tc.anyToWaitingMs,
-        ease: 'Sine.easeInOut',
-      })
-      // Gradual scale-up to waiting pulse start
-      ws.sprite.setScale(CHAR_SCALE * 0.98)
-      this.scene.tweens.add({
-        targets: ws.sprite,
-        scaleX: CHAR_SCALE,
-        scaleY: CHAR_SCALE,
-        duration: tc.anyToWaitingMs,
-        ease: 'Sine.easeOut',
-      })
-    }
-    // idle → walking and walking → idle are handled in _executeWalkBreak
-  }
-
-  // ---------------------------------------------------------------------------
   // Walk break — extracted so it can be triggered programmatically in tests
   // ---------------------------------------------------------------------------
 
@@ -984,52 +826,23 @@ export class WorkstationAnimator {
     const worldX = ownerRoom.x + ws.container.x
     const worldY = ownerRoom.y + ws.container.y + WS_SPRITE_Y
 
-    // ---------------------------------------------------------------------------
-    // Determine forward and return paths
-    // ---------------------------------------------------------------------------
+    // Pick a random nearby walkable point (30-60px away), clamped to own room
+    const angle = Math.random() * Math.PI * 2
+    const dist = 30 + Math.random() * 30
+    const targetX = worldX + Math.cos(angle) * dist
+    const targetY = worldY + Math.sin(angle) * dist
 
-    let goPath: { x: number; y: number }[] | null = null
-    let returnPath: { x: number; y: number }[] | null = null
-    let pauseMs = 800 + Math.random() * 600
+    // Clamp target to own room bounds so agents never aim for another room
+    const roomLeft = ownerRoom.x - ownerRoom.width / 2 + 14
+    const roomTop = ownerRoom.y - ownerRoom.height / 2 + 14
+    const roomRight = ownerRoom.x + ownerRoom.width / 2 - 14
+    const roomBottom = ownerRoom.y + ownerRoom.height / 2 - 14 - ROOM_HEADER_H
+    if (targetX < roomLeft || targetX > roomRight || targetY < roomTop || targetY > roomBottom) return
 
-    // Check if the desk has a pre-authored walk track
-    const trackData = this.host.getWalkTrack?.(agent.config.id)
+    // Pass own room so agent can walk within it (base grid has corridors only)
+    const ownRoomRect = buildOwnRoomRect(ownerRoom)
 
-    if (trackData && trackData.points.length > 0) {
-      // Build paths from track waypoints (already in world space from GDS transform)
-      const pts = trackData.points
-      // Forward: desk origin → each track point in order
-      goPath = [{ x: worldX, y: worldY }, ...pts]
-
-      if (trackData.loop) {
-        // loop=true: reverse through intermediate points back to desk
-        // e.g. [P4] → P3 → P2 → P1 → desk
-        returnPath = [...pts.slice(0, -1).reverse(), { x: worldX, y: worldY }]
-      } else {
-        // loop=false: walk directly from final point back to desk
-        returnPath = [pts[pts.length - 1], { x: worldX, y: worldY }]
-        pauseMs = 1200 + Math.random() * 800 // longer pause at track endpoint
-      }
-    } else {
-      // Original random walk: pick a random nearby point clamped to own room
-      const angle = Math.random() * Math.PI * 2
-      const dist = 30 + Math.random() * 30
-      const targetX = worldX + Math.cos(angle) * dist
-      const targetY = worldY + Math.sin(angle) * dist
-
-      const roomLeft = ownerRoom.x - ownerRoom.width / 2 + 14
-      const roomTop = ownerRoom.y - ownerRoom.height / 2 + 14
-      const roomRight = ownerRoom.x + ownerRoom.width / 2 - 14
-      const roomBottom = ownerRoom.y + ownerRoom.height / 2 - 14 - ROOM_HEADER_H
-      if (targetX < roomLeft || targetX > roomRight || targetY < roomTop || targetY > roomBottom) return
-
-      const ownRoomRect = buildOwnRoomRect(ownerRoom)
-      goPath = navMesh.findPath({ x: worldX, y: worldY }, { x: targetX, y: targetY }, ownRoomRect)
-      if (!goPath || goPath.length < 2) return
-      returnPath = navMesh.findPath({ x: targetX, y: targetY }, { x: worldX, y: worldY }, ownRoomRect)
-        ?? [...goPath].reverse()
-    }
-
+    const goPath = navMesh.findPath({ x: worldX, y: worldY }, { x: targetX, y: targetY }, ownRoomRect)
     if (!goPath || goPath.length < 2) return
 
     // Create a temporary world-space walk sprite
@@ -1041,27 +854,17 @@ export class WorkstationAnimator {
 
     ws.sprite.setVisible(false)
 
-    const pathWalker = new PathWalker(
-      this.scene, walkSprite, walkShadow, walkSheetKey, undefined,
-      (wx, wy) => {
-        // Distance attenuation: full volume within 100px of camera center, silent at 400px
-        const cam = this.scene.cameras.main
-        const camCX = cam.scrollX + cam.width / 2
-        const camCY = cam.scrollY + cam.height / 2
-        const dist = Math.hypot(camCX - wx, camCY - wy)
-        const factor = Math.max(0, 1 - dist / 400)
-        soundEngine.footstep(factor)
-      },
-    )
+    const pathWalker = new PathWalker(this.scene, walkSprite, walkShadow, walkSheetKey)
 
     // Use a dummy tween as the walkBreakTween sentinel to prevent overlapping walks
     ws.walkBreakTween = this.scene.tweens.addCounter({ duration: 999999 })
 
+    const returnPath = navMesh.findPath({ x: targetX, y: targetY }, { x: worldX, y: worldY }, ownRoomRect)
+      ?? [...goPath].reverse()
+
     // gdsLock and base are recomputed since this method may be called outside the idle closure
     const gdsLock = this.host.getOrAssignGdsDeskSlot != null
     const base = getAgentCharacterIndex(agent) * CHAR_COLS
-
-    const tc = AnimConfig.transitions
 
     const finishWalk = () => {
       pathWalker.destroy()
@@ -1069,57 +872,18 @@ export class WorkstationAnimator {
       walkShadow.destroy()
       ws.sprite.setVisible(true)
       if (ws.walkBreakTween) { ws.walkBreakTween.destroy(); ws.walkBreakTween = undefined }
-
-      // Walking → idle: momentum overshoot + settle (Living Lab 1a)
-      const overshootDir = goPath.length >= 2
-        ? Math.sign(goPath[goPath.length - 1].x - goPath[goPath.length - 2].x)
-        : 0
-      ws.sprite.x = overshootDir * tc.walkingToIdleOvershootPx
+      ws.sprite.x = 0
       ws.sprite.y = WS_SPRITE_Y
-      this.scene.tweens.add({
-        targets: ws.sprite,
-        x: 0,
-        duration: tc.walkingToIdleSettleMs,
-        ease: 'Cubic.easeOut',
-      })
       if (!gdsLock) ws.sprite.setFrame(base + POSE_SIT)
     }
 
-    // Idle → walking: anticipation lean before walk begins (Living Lab 1a)
-    const leanDir = goPath.length >= 2
-      ? Math.sign(goPath[1].x - goPath[0].x) || 1
-      : 1
-    walkSprite.setAlpha(0.85)
-    walkSprite.x = worldX - leanDir * tc.idleToWalkingLeanX
-    this.scene.tweens.add({
-      targets: walkSprite,
-      x: worldX,
-      alpha: 1,
-      duration: tc.idleToWalkingMs,
-      ease: 'Sine.easeOut',
-    })
-    // Sync shadow position during lean
-    walkShadow.x = walkSprite.x
-    this.scene.tweens.add({
-      targets: walkShadow,
-      x: worldX,
-      duration: tc.idleToWalkingMs,
-      ease: 'Sine.easeOut',
-    })
-
-    // Delay the actual path walk until anticipation lean finishes
-    this.scene.time.delayedCall(tc.idleToWalkingMs, () => {
-      if (!walkSprite.active) { finishWalk(); return }
-
     pathWalker.startPath(goPath, () => {
-      // Pause at destination, then walk back
-      this.scene.time.delayedCall(pauseMs, () => {
+      // Brief pause at destination, then walk back
+      this.scene.time.delayedCall(800 + Math.random() * 600, () => {
         if (!walkSprite.active) { finishWalk(); return }
-        if (!returnPath || returnPath.length < 2) { finishWalk(); return }
         pathWalker.startPath(returnPath, finishWalk)
       })
     })
-    }) // end delayedCall for anticipation lean
   }
 
   /**
@@ -1228,10 +992,6 @@ export class WorkstationAnimator {
       ws.blockedIndicatorTween.destroy()
       ws.blockedIndicatorTween = undefined
     }
-    if (ws.blockedBobTween) {
-      ws.blockedBobTween.destroy()
-      ws.blockedBobTween = undefined
-    }
 
     // Phone light: stop and hide on every re-evaluation before deciding state
     if (ws.phoneLightTween) {
@@ -1278,17 +1038,6 @@ export class WorkstationAnimator {
       scaleY: 1.08,
       alpha: 0.78,
       duration: 520,
-      yoyo: true,
-      repeat: -1,
-      ease: 'Sine.easeInOut',
-    })
-
-    // Gentle bob animation (y ±2px, 2s cycle) on the blocked indicator
-    const baseBlockedY = ws.blockedIndicator.y
-    ws.blockedBobTween = this.scene.tweens.add({
-      targets: ws.blockedIndicator,
-      y: { from: baseBlockedY - 2, to: baseBlockedY + 2 },
-      duration: 2000,
       yoyo: true,
       repeat: -1,
       ease: 'Sine.easeInOut',
@@ -1548,7 +1297,6 @@ export class WorkstationAnimator {
 
     // Avoid duplicate repeat timers if this path runs again before mode teardown
     if (ws.speechBubbleTween) { ws.speechBubbleTween.destroy(); ws.speechBubbleTween = undefined }
-    if (ws.speechBubbleBobTween) { ws.speechBubbleBobTween.destroy(); ws.speechBubbleBobTween = undefined }
     if (ws.speechBubbleTimer) { ws.speechBubbleTimer.destroy(); ws.speechBubbleTimer = undefined }
 
     const BUBBLE_Y = WS_SPRITE_Y - 40
@@ -1649,21 +1397,6 @@ export class WorkstationAnimator {
 
     // Show the first blurb immediately
     typewriterCycle(displayText)
-
-    // Gentle bob animation (y ±2px, 2s cycle) on the speech bubble
-    const bobTarget = { val: 0 }
-    ws.speechBubbleBobTween = this.scene.tweens.add({
-      targets: bobTarget,
-      val: 1,
-      duration: 2000,
-      yoyo: true,
-      repeat: -1,
-      ease: 'Sine.easeInOut',
-      onUpdate: () => {
-        if (!ws.speechBubble?.active) return
-        ws.speechBubble.y = BUBBLE_Y + (bobTarget.val * 4 - 2) // ±2px
-      },
-    })
 
     // Repeat every 8-12 seconds with the latest blurb
     ws.speechBubbleTimer = this.scene.time.addEvent({
@@ -2109,141 +1842,6 @@ export class WorkstationAnimator {
   }
 
   // ---------------------------------------------------------------------------
-  // Per-archetype idle micro-animations
-  // ---------------------------------------------------------------------------
-
-  /**
-   * Pick and play a random micro-animation from the agent's archetype pool.
-   * Enforces a 2s minimum stagger so no two agents play the same anim simultaneously.
-   */
-  private _playMicroAnim(ws: WorkstationSprite, agent: AgentState): void {
-    if (ws.lastAnimMode !== 'idle') return
-    if (ws.walkBreakTween || ws.headTiltTween) return
-
-    const archetype = PERSONA_ARCHETYPE_MAP[agent.config.name] ?? 'social'
-    const pool = ARCHETYPE_ANIM_POOL[archetype]
-    const now = Date.now()
-
-    // Filter to animations not played by any agent in the last 2s
-    const available = pool.filter(key => (now - (lastMicroAnimPlayedAt.get(key) ?? 0)) >= 2000)
-    if (available.length === 0) return
-
-    const key = available[Math.floor(Math.random() * available.length)]
-    lastMicroAnimPlayedAt.set(key, now)
-
-    // GDS mode locks sprite angle — skip angle-based anims
-    const gdsLock = this.host.getOrAssignGdsDeskSlot != null
-    this._executeMicroAnim(ws, key, gdsLock)
-  }
-
-  /**
-   * Execute a named micro-animation on the given workstation sprite.
-   * All animations use only x/y/angle tweens to avoid conflicting with
-   * the ongoing breathTween (which owns scaleY).
-   */
-  private _executeMicroAnim(ws: WorkstationSprite, key: string, gdsLock: boolean): void {
-    const sprite = ws.sprite
-    switch (key) {
-      // ── Focused archetype ────────────────────────────────────────────────
-      case 'chin-rest':
-        // Head tilts down (chin resting on hand), slight lean in
-        if (gdsLock) return
-        ws.headTiltTween = this.scene.tweens.add({
-          targets: sprite, angle: 6, y: WS_SPRITE_Y + 1,
-          duration: 350, hold: 1400, yoyo: true, ease: 'Sine.easeInOut',
-          onComplete: () => { sprite.setAngle(0); sprite.y = WS_SPRITE_Y; ws.headTiltTween = undefined },
-        })
-        break
-
-      case 'screen-lean':
-        // Lean toward the monitor — small y offset forward
-        sprite.y = WS_SPRITE_Y
-        this.scene.tweens.add({
-          targets: sprite, y: WS_SPRITE_Y - 3,
-          duration: 400, hold: 1000, yoyo: true, ease: 'Sine.easeInOut',
-          onComplete: () => { sprite.y = WS_SPRITE_Y },
-        })
-        break
-
-      case 'note-jot':
-        // Rapid hand wiggle to the side — jotting a quick note
-        this.scene.tweens.add({
-          targets: sprite, x: 4,
-          duration: 110, yoyo: true, repeat: 4, ease: 'Sine.easeInOut',
-          onComplete: () => { sprite.x = 0 },
-        })
-        break
-
-      // ── Creative archetype ───────────────────────────────────────────────
-      case 'creative-stretch':
-        // Arms-up stretch: sprite rises slightly
-        this.scene.tweens.add({
-          targets: sprite, y: WS_SPRITE_Y - 5,
-          duration: 400, hold: 700, yoyo: true, ease: 'Back.easeOut',
-          onComplete: () => { sprite.y = WS_SPRITE_Y },
-        })
-        break
-
-      case 'head-bob':
-        // Rhythmic head bob — 2 cycles of gentle tilt
-        if (gdsLock) return
-        ws.headTiltTween = this.scene.tweens.add({
-          targets: sprite, angle: 5,
-          duration: 220, yoyo: true, repeat: 3, ease: 'Sine.easeInOut',
-          onComplete: () => { sprite.setAngle(0); ws.headTiltTween = undefined },
-        })
-        break
-
-      case 'doodle':
-        // Small circular hand motion — doodling in the margin
-        this.scene.tweens.add({
-          targets: sprite, x: 3, y: WS_SPRITE_Y + 2,
-          duration: 180, yoyo: true, repeat: 3, ease: 'Sine.easeInOut',
-          onComplete: () => { sprite.x = 0; sprite.y = WS_SPRITE_Y },
-        })
-        break
-
-      // ── Social archetype ─────────────────────────────────────────────────
-      case 'phone-check':
-        // Hand moves to side + glance down — checking the phone
-        if (gdsLock) {
-          this.scene.tweens.add({
-            targets: sprite, x: 5, y: WS_SPRITE_Y + 1,
-            duration: 300, hold: 900, yoyo: true, ease: 'Sine.easeInOut',
-            onComplete: () => { sprite.x = 0; sprite.y = WS_SPRITE_Y },
-          })
-        } else {
-          ws.headTiltTween = this.scene.tweens.add({
-            targets: sprite, x: 5, angle: -4, y: WS_SPRITE_Y + 1,
-            duration: 300, hold: 900, yoyo: true, ease: 'Sine.easeInOut',
-            onComplete: () => { sprite.x = 0; sprite.setAngle(0); sprite.y = WS_SPRITE_Y; ws.headTiltTween = undefined },
-          })
-        }
-        break
-
-      case 'lean-back':
-        // Rock back in chair — casual lean away from the screen
-        if (gdsLock) return
-        ws.headTiltTween = this.scene.tweens.add({
-          targets: sprite, angle: -5, y: WS_SPRITE_Y + 2,
-          duration: 450, hold: 1200, yoyo: true, ease: 'Sine.easeInOut',
-          onComplete: () => { sprite.setAngle(0); sprite.y = WS_SPRITE_Y; ws.headTiltTween = undefined },
-        })
-        break
-
-      case 'wave':
-        // Quick wave toward the nearest agent or just outward
-        if (gdsLock) return
-        ws.headTiltTween = this.scene.tweens.add({
-          targets: sprite, x: 4, angle: 7,
-          duration: 180, yoyo: true, repeat: 2, ease: 'Sine.easeInOut',
-          onComplete: () => { sprite.x = 0; sprite.setAngle(0); ws.headTiltTween = undefined },
-        })
-        break
-    }
-  }
-
-  // ---------------------------------------------------------------------------
   // Sleep / Wake lifecycle — pause and resume all per-workstation timers/tweens
   // ---------------------------------------------------------------------------
 
@@ -2255,7 +1853,6 @@ export class WorkstationAnimator {
         if (ws.walkBreakTimer)      ws.walkBreakTimer.paused      = true
         if (ws.lookAtNeighborTimer) ws.lookAtNeighborTimer.paused = true
         if (ws.yawnTimer)           ws.yawnTimer.paused           = true
-        if (ws.microAnimTimer)      ws.microAnimTimer.paused      = true
         if (ws.lampFlickerTimer)    ws.lampFlickerTimer.paused    = true
         if (ws.typingNoteTimer)     ws.typingNoteTimer.paused     = true
         if (ws.speechBubbleTimer)   ws.speechBubbleTimer.paused   = true
@@ -2274,7 +1871,6 @@ export class WorkstationAnimator {
         if (ws.walkBreakTimer)      ws.walkBreakTimer.paused      = false
         if (ws.lookAtNeighborTimer) ws.lookAtNeighborTimer.paused = false
         if (ws.yawnTimer)           ws.yawnTimer.paused           = false
-        if (ws.microAnimTimer)      ws.microAnimTimer.paused      = false
         if (ws.lampFlickerTimer)    ws.lampFlickerTimer.paused    = false
         if (ws.typingNoteTimer)     ws.typingNoteTimer.paused     = false
         if (ws.speechBubbleTimer)   ws.speechBubbleTimer.paused   = false

@@ -40,6 +40,8 @@ export interface WorkstationSprite {
   dotPulseTween?: Phaser.Tweens.Tween
   keyboard?: Phaser.GameObjects.Rectangle
   kbGlowTween?: Phaser.Tweens.Tween
+  /** Keyboard scale pulse tween — tiny scaleY oscillation while agent is working */
+  kbScaleTween?: Phaser.Tweens.Tween
   monitorGlowTween?: Phaser.Tweens.Tween
   screenTween?: Phaser.Tweens.Tween
   /** Mutable ref shared with screenTween callback — set .mode to update screen animation */

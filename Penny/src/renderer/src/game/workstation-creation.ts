@@ -304,6 +304,15 @@ export class WorkstationFactory {
               screenLines.fillStyle(lineColorsWork[i], 0.2)
               screenLines.fillRect(-lineWidths[i] / 2, y, lineWidths[i], 1)
             }
+          } else if (mode === 'blocked') {
+            // Blocked — amber warning flash: pulsing horizontal bar + scan stripe
+            const phase = Math.sin(v * Math.PI * 4)   // 2 full cycles per tween period
+            const barAlpha = 0.15 + phase * 0.25       // 0.0..0.4 range
+            screenLines.fillStyle(0xfbbf24, Math.max(0, barAlpha))
+            screenLines.fillRect(-10, WS_MONITOR_Y - 3, 20, 7)
+            // Thin scan stripe through the middle
+            screenLines.fillStyle(0xfbbf24, Math.max(0, barAlpha * 0.5))
+            screenLines.fillRect(-10, WS_MONITOR_Y, 20, 1)
           } else {
             // Working (default) — scrolling colored lines
             for (let i = 0; i < 4; i++) {
@@ -1302,6 +1311,7 @@ export class WorkstationFactory {
     if (ws.soundWaveGfx)     ws.soundWaveGfx.destroy()
     if (ws.soundWaveSpeaker) ws.soundWaveSpeaker.destroy()
     if (ws.kbGlowTween)      ws.kbGlowTween.destroy()
+    if (ws.kbScaleTween)     ws.kbScaleTween.destroy()
     if (ws.typingNoteTimer)  ws.typingNoteTimer.destroy()
     if (ws.speechBubbleTween) { ws.speechBubbleTween.destroy(); ws.speechBubbleTween = undefined }
     if (ws.speechBubbleBobTween) { ws.speechBubbleBobTween.destroy(); ws.speechBubbleBobTween = undefined }
