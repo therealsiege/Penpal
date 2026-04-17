@@ -47,6 +47,7 @@ import { questSystem } from './quest-system'
 import { creditManager } from './credits'
 import { leaderboardManager } from './leaderboard'
 import { seasonManager } from './seasons'
+import { SceneTransition } from './scene-transition'
 
 import {
   KB_ZOOM_STEP,
@@ -476,7 +477,7 @@ export class OfficeScene extends Phaser.Scene {
           // GDS mode: double-click empty space → back to world map
           if (this.background.hasGdsScene()) {
             EventBus.emit(EVENTS.NAVIGATE_CAMPUS)
-            this.scene.sleep(SCENE_KEYS.OFFICE)
+            SceneTransition.fadeToScene(this, SCENE_KEYS.CAMPUS)
           } else {
             this.zoomToFit(true)
           }
@@ -915,8 +916,8 @@ export class OfficeScene extends Phaser.Scene {
     // Navigate back to campus when NAVIGATE_BUILDING requests it
     EventBus.on(EVENTS.NAVIGATE_BUILDING, (building: string) => {
       if (building === 'campus') {
-        this.scene.sleep(SCENE_KEYS.OFFICE)
         EventBus.emit(EVENTS.NAVIGATE_CAMPUS)
+        SceneTransition.fadeToScene(this, SCENE_KEYS.CAMPUS)
       }
     })
 
