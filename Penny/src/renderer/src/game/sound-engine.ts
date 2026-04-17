@@ -18,6 +18,9 @@ const C5  = 523.25
 const E5  = 659.25
 const G5  = 783.99
 const C6  = 1046.50
+const E6  = 1318.51
+const B3  = 246.94
+const F4  = 349.23
 
 // ---------------------------------------------------------------------------
 // Envelope helpers
@@ -41,6 +44,9 @@ function applyEnvelope(
 // SoundEngine
 // ---------------------------------------------------------------------------
 
+// Footstep pitch variants (Hz) — 3 different frequencies to avoid repetition
+const FOOTSTEP_FREQS = [180, 210, 195] as const
+
 export class SoundEngine {
   private _ctx: AudioContext | null = null
   private _masterGain: GainNode | null = null
@@ -48,6 +54,8 @@ export class SoundEngine {
   private _volume = 0.3
   /** Phaser scene reference — set once for OGG playback */
   private _scene: Phaser.Scene | null = null
+  /** Cycles through footstep variants to avoid repetition */
+  private _footstepVariant = 0
 
   // -------------------------------------------------------------------------
   // Lazy AudioContext init — must be triggered after a user gesture.
@@ -100,19 +108,73 @@ export class SoundEngine {
       { attack: 0.002, sustain: 0.06, decay: 0.08, peak: 0.25 })
   }
 
-  /** Triumphant arpeggio (C5→E5→G5→C6), 60ms each, sine. */
+  /** Rank-up fanfare — arpeggio C5→E5→G5→C6 with sustained reverb tail. ~1.4s total, peak 0.25. */
   levelUp(): void {
     const ctx = this._ensureContext()
     const now = ctx.currentTime
-    const step = 0.07
-    const env = { attack: 0.004, sustain: 0.03, decay: 0.06, peak: 0.65 }
+    const step = 0.12
+    const env = { attack: 0.006, sustain: 0.06, decay: 0.09, peak: 0.25 }
     const notes = [C5, E5, G5, C6]
     notes.forEach((freq, i) => {
-      this._osc('sine', freq, now + step * i, now + step * (i + 1) + 0.06, env)
+      this._osc('sine', freq, now + step * i, now + step * (i + 1) + 0.09, env)
     })
-    // Reverb tail — soft sine at C5 fading out
-    this._osc('sine', C5, now + step * 4, now + step * 4 + 0.4,
-      { attack: 0.01, sustain: 0.05, decay: 0.35, peak: 0.2 })
+    // Reverb tail — two overlapping sines fade out to ~1.4s total
+    this._osc('sine', C6, now + step * 4, now + step * 4 + 0.8,
+      { attack: 0.02, sustain: 0.1, decay: 0.7, peak: 0.15 })
+    this._osc('sine', G5, now + step * 4 + 0.1, now + step * 4 + 0.9,
+      { attack: 0.02, sustain: 0.08, decay: 0.65, peak: 0.10 })
+  }
+
+  // ── Agent state sounds ────────────────────────────────────────────────────
+
+  /**
+   * Soft footstep click. Call every 2nd walk frame.
+   * distanceFactor 0–1 attenuates volume proportional to camera distance.
+   * Cycles through 3 pitch variants to avoid repetition. Volume 0.12, ±5% pitch variance.
+   */
+  footstep(distanceFactor = 1.0): void {
+    if (distanceFactor <= 0.01) return
+    const ctx = this._ensureContext()
+    const now = ctx.currentTime
+    const baseFreq = FOOTSTEP_FREQS[this._footstepVariant % 3]
+    this._footstepVariant = (this._footstepVariant + 1) % 3
+    const pitchVariance = 1 + (Math.random() * 0.10 - 0.05) // ±5%
+    const freq = baseFreq * pitchVariance
+    const peak = 0.12 * Math.min(1, Math.max(0, distanceFactor))
+    this._osc('square', freq, now, now + 0.045,
+      { attack: 0.002, sustain: 0.008, decay: 0.035, peak })
+  }
+
+  /** Short rising "power up" tone — idle → working transition. 300ms, peak 0.15. */
+  taskStart(): void {
+    const ctx = this._ensureContext()
+    const now = ctx.currentTime
+    const gainNode = ctx.createGain()
+    gainNode.connect(this._masterGain!)
+    applyEnvelope(gainNode, ctx, { attack: 0.01, sustain: 0.15, decay: 0.12, peak: 0.15 })
+    const osc = ctx.createOscillator()
+    osc.type = 'sine'
+    osc.frequency.setValueAtTime(300, now)
+    osc.frequency.exponentialRampToValueAtTime(600, now + 0.3)
+    osc.connect(gainNode)
+    osc.start(now)
+    osc.stop(now + 0.32)
+  }
+
+  /** Rewarding two-note chime — working → idle (task complete). 500ms, peak 0.2. */
+  taskComplete(): void {
+    const ctx = this._ensureContext()
+    const now = ctx.currentTime
+    this._osc('sine', E6, now,        now + 0.38, { attack: 0.003, sustain: 0.05, decay: 0.32, peak: 0.2 })
+    this._osc('sine', C6, now + 0.12, now + 0.52, { attack: 0.003, sustain: 0.03, decay: 0.28, peak: 0.15 })
+  }
+
+  /** Dissonant tritone buzz — task failed / agent blocked. 300ms, peak 0.15. */
+  taskFail(): void {
+    const ctx = this._ensureContext()
+    const now = ctx.currentTime
+    this._osc('sawtooth', B3, now, now + 0.28, { attack: 0.004, sustain: 0.08, decay: 0.18, peak: 0.15 })
+    this._osc('sawtooth', F4, now, now + 0.28, { attack: 0.004, sustain: 0.08, decay: 0.18, peak: 0.10 })
   }
 
   /** Sparkle shimmer: sine sweep from 2000 Hz to 4000 Hz over 200ms. */

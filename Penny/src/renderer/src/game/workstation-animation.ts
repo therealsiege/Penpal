@@ -49,6 +49,7 @@ import type { WorkstationHost } from './office-workstation'
 import type { NavMesh } from './nav-mesh'
 import { buildOwnRoomRect } from './nav-mesh'
 import { PathWalker } from './path-walker'
+import { soundEngine } from './sound-engine'
 
 // ---------------------------------------------------------------------------
 // Eval glow color helper
@@ -264,6 +265,10 @@ export class WorkstationAnimator {
     const base = charIdx * CHAR_COLS
 
     if (isWaiting) {
+      // Agent went from working → blocked/waiting: play task-fail sound
+      if (prevMode === 'working') {
+        soundEngine.taskFail()
+      }
       if (!gdsLock) ws.sprite.setFrame(base + POSE_IDLE)
       ws.pulseTween = this.scene.tweens.add({
         targets: ws.sprite, scaleX: CHAR_SCALE * AnimConfig.waiting.pulseScaleFactor, scaleY: CHAR_SCALE * AnimConfig.waiting.pulseScaleFactor,
@@ -321,6 +326,11 @@ export class WorkstationAnimator {
             ease: 'Sine.easeInOut',
           })
         }
+      }
+
+      // ── Audio: task start sound on idle/waiting → working transition ──
+      if (prevMode !== 'working') {
+        soundEngine.taskStart()
       }
 
       // ── Game systems: auto-wrap into quest ──
@@ -560,6 +570,7 @@ export class WorkstationAnimator {
 
       // "Just finished" bounce + confetti when transitioning from working→idle
       if (prevMode === 'working') {
+        soundEngine.taskComplete()
         this.scene.tweens.add({
           targets: ws.sprite, y: WS_SPRITE_Y - 6,
           duration: 200, yoyo: true, ease: 'Back.easeOut',
@@ -834,7 +845,18 @@ export class WorkstationAnimator {
 
     ws.sprite.setVisible(false)
 
-    const pathWalker = new PathWalker(this.scene, walkSprite, walkShadow, walkSheetKey)
+    const pathWalker = new PathWalker(
+      this.scene, walkSprite, walkShadow, walkSheetKey, undefined,
+      (wx, wy) => {
+        // Distance attenuation: full volume within 100px of camera center, silent at 400px
+        const cam = this.scene.cameras.main
+        const camCX = cam.scrollX + cam.width / 2
+        const camCY = cam.scrollY + cam.height / 2
+        const dist = Math.hypot(camCX - wx, camCY - wy)
+        const factor = Math.max(0, 1 - dist / 400)
+        soundEngine.footstep(factor)
+      },
+    )
 
     // Use a dummy tween as the walkBreakTween sentinel to prevent overlapping walks
     ws.walkBreakTween = this.scene.tweens.addCounter({ duration: 999999 })

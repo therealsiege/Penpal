@@ -37,6 +37,8 @@ export class PathWalker {
   private trailDots: Phaser.GameObjects.Sprite[] = []
   private lastDirection = -1 // last startFrame direction used
   private lastStartFrame = -1 // previous waypoint's startFrame for direction change detection
+  /** Optional callback fired on every 2nd walk cycle (left foot). Receives world-space position. */
+  private onFootstep: ((worldX: number, worldY: number) => void) | null = null
 
   constructor(
     scene: Phaser.Scene,
@@ -44,12 +46,14 @@ export class PathWalker {
     shadow: Phaser.GameObjects.Ellipse | null,
     sheetKey: string,
     speed = DEFAULT_WALK_SPEED,
+    onFootstep?: (worldX: number, worldY: number) => void,
   ) {
     this.scene = scene
     this.sprite = sprite
     this.shadow = shadow
     this.sheetKey = sheetKey
     this.speed = speed
+    this.onFootstep = onFootstep ?? null
   }
 
   startPath(waypoints: NavPoint[], onComplete: () => void): void {
@@ -196,6 +200,11 @@ export class PathWalker {
             this.bounceTween = null
           },
         })
+
+        // Footstep sound — every 2nd walk frame (cycleIdx === 0 = left foot down)
+        if (cycleIdx === 0 && this.onFootstep) {
+          this.onFootstep(this.sprite.x, this.sprite.y)
+        }
 
         // Footstep dust puffs every few steps
         this.dustStepCounter++
