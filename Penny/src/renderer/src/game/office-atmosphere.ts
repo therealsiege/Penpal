@@ -1,6 +1,7 @@
 import Phaser from 'phaser'
 import { AtmosphereSky } from './atmosphere-sky'
 import { AtmosphereLighting } from './atmosphere-lighting'
+import { WeatherSystem, type WeatherType } from './weather-system'
 
 // ---------------------------------------------------------------------------
 // OfficeAtmosphere
@@ -32,6 +33,7 @@ export class OfficeAtmosphere {
   // Sub-modules
   private sky: AtmosphereSky
   private lighting: AtmosphereLighting
+  private weatherSystem: WeatherSystem
 
   // Day/night cycle
   private dayNightOverlay: Phaser.GameObjects.Rectangle | null = null
@@ -69,6 +71,7 @@ export class OfficeAtmosphere {
     this.callbacks = callbacks
     this.sky = new AtmosphereSky(scene)
     this.lighting = new AtmosphereLighting(scene)
+    this.weatherSystem = new WeatherSystem(scene)
   }
 
   // ---------------------------------------------------------------------------
@@ -82,6 +85,8 @@ export class OfficeAtmosphere {
     worldWidth: number,
     worldHeight: number,
     vignetteFx: Phaser.FX.Vignette | null,
+    viewWidth = 800,
+    viewHeight = 600,
   ): void {
     this.dayNightOverlay = dayNightOverlay
     this.windowGlintGfx = windowGlintGfx
@@ -100,6 +105,8 @@ export class OfficeAtmosphere {
       callback: () => this.applyDayNightCycle(true),
       loop: true,
     })
+
+    this.weatherSystem.init(viewWidth, viewHeight)
   }
 
   updateWorldSize(w: number, h: number): void {
@@ -112,9 +119,10 @@ export class OfficeAtmosphere {
   // Tick — called from OfficeScene.update()
   // ---------------------------------------------------------------------------
 
-  tick(time: number, rainActive: boolean, snowActive: boolean): void {
+  tick(time: number, rainActive: boolean, snowActive: boolean, dt = 16): void {
     if (rainActive) { /* tickRain lives in OfficeScene (particles module) */ }
     if (snowActive) { /* tickSnow lives in OfficeScene (particles module) */ }
+    this.weatherSystem.update(dt)
     this.lighting.tickWindowGlint(time, this.windowGlintGfx, this.windowPositions)
     this.sky.tick(time)
     if (this.wallClockContainer && time - this.lastClockTick >= 1000) {
@@ -133,11 +141,13 @@ export class OfficeAtmosphere {
 
   pause(): void {
     if (this.dayNightTimer) this.dayNightTimer.paused = true
+    this.weatherSystem.pause()
     this.scene.tweens.pauseAll()
   }
 
   resume(): void {
     if (this.dayNightTimer) this.dayNightTimer.paused = false
+    this.weatherSystem.resume()
     this.scene.tweens.resumeAll()
     // Re-sync day/night to wall-clock time so the office sky isn't frozen at the pre-sleep moment
     this.applyDayNightCycle(false)
@@ -153,6 +163,7 @@ export class OfficeAtmosphere {
     this.dayNightOverlay?.destroy()
     this.dayNightOverlay = null
 
+    this.weatherSystem.destroy()
     this.sky.destroy()
 
     this.lighting.destroyCeilingLights(this.ceilingLights)
@@ -368,6 +379,20 @@ export class OfficeAtmosphere {
         hazeOverlay.setAlpha(targetScale)
       }
     }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Weather system — public API
+  // ---------------------------------------------------------------------------
+
+  /** Set the active weather state, with optional transition duration in ms. */
+  setWeather(type: WeatherType, transition?: number): void {
+    this.weatherSystem.setWeather(type, transition)
+  }
+
+  /** Ambient light multiplier from weather (0.85 for overcast, 1.0 otherwise). */
+  getWeatherAmbientMultiplier(): number {
+    return this.weatherSystem.getAmbientMultiplier()
   }
 
   // ---------------------------------------------------------------------------

@@ -395,6 +395,8 @@ export class OfficeScene extends Phaser.Scene {
       this.worldWidth,
       this.worldHeight,
       null,
+      this.viewWidth,
+      this.viewHeight,
     )
 
     // Particle / effect pool systems
@@ -1300,7 +1302,7 @@ export class OfficeScene extends Phaser.Scene {
     this.particles.tickMakoMotes(cam.scrollX, cam.scrollY, camWWorld, camHWorld, cam.zoom)
     this.particles.tickSparks(cam.scrollX, cam.scrollY, camWWorld, camHWorld, cam.zoom)
     this.particles.tickSteam(cam.scrollX, cam.scrollY, camWWorld, camHWorld, cam.zoom)
-    this.atmosphere.tick(time, this.particles.isRainActive(), this.particles.isSnowActive())
+    this.atmosphere.tick(time, this.particles.isRainActive(), this.particles.isSnowActive(), _delta)
     this.atmosphere.tickCeilingLightActivity(time, this.rooms)
     // Room ambient haze — subtle productivity puffs in busy rooms
     if (this.roomRenderer && this.rooms.size > 0) {
