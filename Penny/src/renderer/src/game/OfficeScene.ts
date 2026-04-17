@@ -17,6 +17,7 @@ import { OfficeBackground } from './office-background'
 import { LabEditor } from './lab-editor'
 import { OfficeBroadcast } from './office-broadcast'
 import { OfficeCamera, panDurationFromDistance, getWorkstationWorldPos } from './office-camera'
+import { CameraCinematic } from './camera-cinematics'
 import { AnimConfig } from './animation-config'
 import type { WorkstationSprite, Room, PodLineInfo, OfficeDebugSnapshot, OrchestratorTaskOfficeInfo } from './office-types'
 import {
@@ -122,6 +123,8 @@ export class OfficeScene extends Phaser.Scene {
 
   // Camera & navigation — extracted to OfficeCamera
   private officeCamera!: OfficeCamera
+  /** Scripted camera sequences (panTo, zoomTo, shake, flash, sequence). */
+  cameraCinematic!: CameraCinematic
   private resizeTimer: ReturnType<typeof setTimeout> | null = null
   private _cameraJuiceLockDepth = 0
   private _workstationRefitTimer: ReturnType<typeof setTimeout> | null = null
@@ -333,6 +336,12 @@ export class OfficeScene extends Phaser.Scene {
       getGdsSceneBounds: () => this.background?.hasGdsScene() ? this.background.getGdsSceneBounds() : null,
     })
     this.officeCamera.init()
+
+    // Scripted camera sequences
+    this.cameraCinematic = new CameraCinematic(this, {
+      lockCinematicInput: () => this.lockCameraJuiceInput(),
+      unlockCinematicInput: () => this.unlockCameraJuiceInput(),
+    })
 
     // Office background — extracted to OfficeBackground
     this.background = new OfficeBackground(this, {
