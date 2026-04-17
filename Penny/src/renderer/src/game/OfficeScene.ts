@@ -47,6 +47,7 @@ import { questSystem } from './quest-system'
 import { creditManager } from './credits'
 import { leaderboardManager } from './leaderboard'
 import { seasonManager } from './seasons'
+import { NpcInteractionManager } from './npc-interaction'
 
 import {
   KB_ZOOM_STEP,
@@ -163,6 +164,9 @@ export class OfficeScene extends Phaser.Scene {
   private lastMoodUpdateAt = 0
   private lastSeasonHudUpdateAt = 0
 
+
+  // NPC interaction prompts — RPG Layer 3a
+  private npcInteraction!: NpcInteractionManager
 
   // Screen-space UI overlays (toasts, tooltip, hover ring, help, debug, LOD label, status bar)
   private ui!: OfficeUI
@@ -920,6 +924,13 @@ export class OfficeScene extends Phaser.Scene {
       }
     })
 
+    // NPC interaction prompts — RPG Layer 3a
+    this.npcInteraction = new NpcInteractionManager(this)
+    EventBus.on(EVENTS.AGENT_INTERACT, (...args: unknown[]) => {
+      const agentId = args[0] as string
+      this.showToast(`Interact with agent: ${agentId}`, 'info')
+    })
+
     this.isReady = true
 
     // Scene sleep/wake lifecycle hooks — pause all subsystem timers/tweens when
@@ -1353,6 +1364,16 @@ export class OfficeScene extends Phaser.Scene {
     if (this.questPanel && time - this.lastQuestPanelUpdateAt >= 3000) {
       this.lastQuestPanelUpdateAt = time
       this.questPanel.update()
+    }
+
+    // NPC interaction radius — update every frame with camera-centre as player proxy
+    if (this.npcInteraction) {
+      const camCtr = this.getCameraWorldCenter()
+      const allWorkstations: import('./office-types').WorkstationSprite[] = []
+      for (const room of this.rooms.values()) {
+        for (const ws of room.workstations.values()) allWorkstations.push(ws)
+      }
+      this.npcInteraction.update(camCtr.x, camCtr.y, allWorkstations)
     }
 
     // Performance auto-reducer — check avg FPS every 3s
