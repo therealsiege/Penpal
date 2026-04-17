@@ -13,12 +13,10 @@ import { OfficeMcp } from './office-mcp'
 import { OfficeSelection } from './office-selection'
 import { OfficeRooms } from './office-rooms'
 import { OfficeWorkstations } from './office-workstation'
-import { AgentScheduler } from './agent-schedule'
 import { OfficeBackground } from './office-background'
 import { LabEditor } from './lab-editor'
 import { OfficeBroadcast } from './office-broadcast'
 import { OfficeCamera, panDurationFromDistance, getWorkstationWorldPos } from './office-camera'
-import { CameraCinematic } from './camera-cinematics'
 import { AnimConfig } from './animation-config'
 import type { WorkstationSprite, Room, PodLineInfo, OfficeDebugSnapshot, OrchestratorTaskOfficeInfo } from './office-types'
 import {
@@ -44,13 +42,12 @@ import { AgentMoodManager } from './agent-mood'
 import { InteractivePropsManager } from './interactive-props'
 import { SeasonHUD } from './season-hud'
 import { QuestPanel } from './quest-panel'
-import { QuestLogUI } from './quest-log-ui'
 import { AchievementPanel } from './achievement-panel'
 import { questSystem } from './quest-system'
 import { creditManager } from './credits'
 import { leaderboardManager } from './leaderboard'
 import { seasonManager } from './seasons'
-import { PostFXManager } from './post-fx-manager'
+import { SceneTransition } from './scene-transition'
 
 import {
   KB_ZOOM_STEP,
@@ -72,8 +69,6 @@ export class OfficeScene extends Phaser.Scene {
 
   /** Orchestrator queue tasks assigned to agents — shown on desks via OfficeWorkstations */
   private orchestratorTasksByAgent = new Map<string, OrchestratorTaskOfficeInfo>()
-  /** Tracks taskIds seen in the previous setOrchestratorTasks call for dispatch detection */
-  private previousOrchestratorTaskIds = new Set<string>()
 
   private rooms = new Map<string, Room>()
   private agents: AgentState[] = []
@@ -116,16 +111,14 @@ export class OfficeScene extends Phaser.Scene {
   private dayNightOverlay: Phaser.GameObjects.Rectangle | null = null
   private skyGradient: Phaser.GameObjects.Graphics | null = null
   private lastShadowUpdateAt = 0
-  // PostFX: vignette, bloom, time-of-day color grading — managed by PostFXManager
-  private postFX!: PostFXManager
+  // Subtle screen-space edge shading to frame the office.
+  private vignetteFx: Phaser.FX.Vignette | null = null
 
   // Keyboard selection — managed by OfficeSelection
   private selection!: OfficeSelection
 
   // Camera & navigation — extracted to OfficeCamera
   private officeCamera!: OfficeCamera
-  /** Scripted camera sequences (panTo, zoomTo, shake, flash, sequence). */
-  cameraCinematic!: CameraCinematic
   private resizeTimer: ReturnType<typeof setTimeout> | null = null
   private _cameraJuiceLockDepth = 0
   private _workstationRefitTimer: ReturnType<typeof setTimeout> | null = null
@@ -139,32 +132,10 @@ export class OfficeScene extends Phaser.Scene {
   private labFacilityPropsLayer: Phaser.GameObjects.Container | null = null
   /** Matches WorkspaceUnifiedFloor.drawFloor bbox — snap per-room strategic hex to these cell centers. */
   private labHexSlabRect: { x: number; y: number; width: number; height: number } | null = null
-  /** Idle camera timer */
-  private idleCameraTimer: number = 0
-  /** Idle camera state */
-  private isIdleCameraActive: boolean = false
-  /** Idle camera room index */
-  private idleCameraRoomIndex: number = 0
-  /** Last time an input was received */
-  private lastInputTime: number = 0
-  /** Last idle room visit time */
-  private lastIdleRoomVisitTime: number = 0
-  /** Current zoom oscillation phase */
-  private zoomOscillationPhase: number = 0
-  /** Follow target agent ID */
-  private followTargetAgentId: string | null = null
-  /** Last follow offset */
-  private followOffset: { x: number; y: number } = { x: 0, y: 0 }
-  /** Follow offset lerp time */
-  private followOffsetLerpTime: number = 0
-  /** Previous agent position */
-  private lastAgentPosition: { x: number; y: number } | null = null
   // Room rendering subsystem (extracted to OfficeRooms)
   private roomRenderer!: OfficeRooms
   // Workstation lifecycle subsystem (extracted to OfficeWorkstations)
   private wsManager!: OfficeWorkstations
-  // Schedule-driven arrival/departure animations + standup meeting
-  private agentScheduler: AgentScheduler | null = null
   private lastHallwayPulseAt = 0
 
   // Room-based object culling — managed by RoomVisibilityManager
@@ -187,10 +158,8 @@ export class OfficeScene extends Phaser.Scene {
   private propsManager!: InteractivePropsManager
   private seasonHud!: SeasonHUD
   private questPanel!: QuestPanel
-  private questLogUI!: QuestLogUI
   private achievementPanel!: AchievementPanel
   private lastQuestPanelUpdateAt = 0
-  private lastQuestLogUIUpdateAt = 0
   private lastAchievementPanelUpdateAt = 0
   private lastMoodUpdateAt = 0
   private lastSeasonHudUpdateAt = 0
@@ -222,20 +191,6 @@ export class OfficeScene extends Phaser.Scene {
   get celebrationsManager() { return this.celebrations }
   get atmosphereManager() { return this.atmosphere }
   get roomMap() { return this.rooms }
-
-  // ---------------------------------------------------------------------------
-  // Thunderstorm management
-  // ---------------------------------------------------------------------------
-
-  setThunderstormActive(active: boolean): void {
-    if (this.particles) {
-      if (active) {
-        this.particles.activateThunderstorm();
-      } else {
-        this.particles.deactivateThunderstorm();
-      }
-    }
-  }
 
   get targetZoom() { return this.officeCamera.targetZoom }
   set targetZoom(z: number) { this.officeCamera.targetZoom = z }
@@ -354,12 +309,6 @@ export class OfficeScene extends Phaser.Scene {
     })
     this.officeCamera.init()
 
-    // Scripted camera sequences
-    this.cameraCinematic = new CameraCinematic(this, {
-      lockCinematicInput: () => this.lockCameraJuiceInput(),
-      unlockCinematicInput: () => this.unlockCameraJuiceInput(),
-    })
-
     // Office background — extracted to OfficeBackground
     this.background = new OfficeBackground(this, {
       getRooms: () => this.rooms,
@@ -430,10 +379,6 @@ export class OfficeScene extends Phaser.Scene {
       onPhaseChange: (phase, _animate, _rainDropPool, _snowPool, _vw, _vh) => {
         // Guard: particles may not yet be initialized during create() (called from atmosphere.init)
         if (this.particles) this.particles.setWeather(phase, this.viewWidth, this.viewHeight)
-      },
-      onPostFXPhaseChange: (phase, animate) => {
-        // Guard: postFX initialized after atmosphere
-        if (this.postFX) this.postFX.onPhaseChange(phase, animate)
       },
       invalidateOfficeBgCache: () => { this.background.invalidateBgCache() },
       showToast: (msg, type) => this.showToast(msg, type === 'warn' ? 'warning' : type),
@@ -532,7 +477,7 @@ export class OfficeScene extends Phaser.Scene {
           // GDS mode: double-click empty space → back to world map
           if (this.background.hasGdsScene()) {
             EventBus.emit(EVENTS.NAVIGATE_CAMPUS)
-            this.scene.sleep(SCENE_KEYS.OFFICE)
+            SceneTransition.fadeToScene(this, SCENE_KEYS.CAMPUS)
           } else {
             this.zoomToFit(true)
           }
@@ -552,7 +497,6 @@ export class OfficeScene extends Phaser.Scene {
       if (this.ui) { this.ui.setViewSize(gameSize.width, gameSize.height) }
       if (this.seasonHud) { this.seasonHud.setViewSize(gameSize.width, gameSize.height) }
       if (this.questPanel) { this.questPanel.setViewSize(gameSize.width, gameSize.height) }
-      if (this.questLogUI) { this.questLogUI.setViewSize(gameSize.width, gameSize.height) }
       if (this.achievementPanel) { this.achievementPanel.setViewSize(gameSize.width, gameSize.height) }
 
       if (this.resizeTimer) clearTimeout(this.resizeTimer)
@@ -603,7 +547,6 @@ export class OfficeScene extends Phaser.Scene {
         if (shouldIgnoreKeyboardShortcuts(e)) return
         e.preventDefault()
         if (this.ui.opsVisible) { this.ui.hideOpsBoardOverlay(); return }
-        if (this.questLogUI?.isVisible()) { this.questLogUI.hide(); return }
         if (this.achievementPanel?.isVisible) { this.achievementPanel.hide(); return }
         if (this.ui.helpVisible) { this.ui.hideHelpOverlay(); return }
         if (this.selection.isFocused) { this.selection.exitFocusMode(); return }
@@ -684,13 +627,6 @@ export class OfficeScene extends Phaser.Scene {
         this.questPanel.toggleQuestLog()
       })
 
-      // J — toggle quest log overlay (pod workflow view)
-      this.input.keyboard.on('keydown-J', (e: KeyboardEvent) => {
-        if (shouldIgnoreKeyboardShortcuts(e)) return
-        e.preventDefault()
-        this.questLogUI.toggle()
-      })
-
       // A — toggle achievements panel
       this.input.keyboard.on('keydown-A', (e: KeyboardEvent) => {
         if (shouldIgnoreKeyboardShortcuts(e)) return
@@ -754,19 +690,10 @@ export class OfficeScene extends Phaser.Scene {
           this.ui.showOpsBoardOverlay(this._capRows)
         }
       })
-
-      // P — cycle postFX quality (off → low → high)
-      this.input.keyboard.on('keydown-P', (e: KeyboardEvent) => {
-        if (shouldIgnoreKeyboardShortcuts(e)) return
-        e.preventDefault()
-        const next = this.postFX.cycleQuality()
-        this.showToast(`PostFX: ${next}`, 'info')
-      })
     }
 
-    // PostFX — vignette, bloom, time-of-day color grading (WebGL only)
-    // Quality persisted to localStorage; P key cycles levels.
-    this.postFX = new PostFXManager(this)
+    // Vignette — subtle edge framing only (strong strength + tight radius read as “too dark” on wide labs)
+    this.vignetteFx = this.cameras.main.postFX.addVignette(0.5, 0.5, 0.9, 0.22)
 
     // Screen-space UI overlays: toasts, tooltip, hover ring, help, debug, LOD label, status bar
     this.ui = new OfficeUI(this)
@@ -818,8 +745,6 @@ export class OfficeScene extends Phaser.Scene {
     this.seasonHud.init(this.viewWidth, this.viewHeight)
     this.questPanel = new QuestPanel(this)
     this.questPanel.init(this.viewWidth, this.viewHeight)
-    this.questLogUI = new QuestLogUI(this)
-    this.questLogUI.init(this.viewWidth, this.viewHeight)
     this.achievementPanel = new AchievementPanel(this)
     this.achievementPanel.init(this.viewWidth, this.viewHeight)
 
@@ -991,8 +916,8 @@ export class OfficeScene extends Phaser.Scene {
     // Navigate back to campus when NAVIGATE_BUILDING requests it
     EventBus.on(EVENTS.NAVIGATE_BUILDING, (building: string) => {
       if (building === 'campus') {
-        this.scene.sleep(SCENE_KEYS.OFFICE)
         EventBus.emit(EVENTS.NAVIGATE_CAMPUS)
+        SceneTransition.fadeToScene(this, SCENE_KEYS.CAMPUS)
       }
     })
 
@@ -1161,31 +1086,7 @@ export class OfficeScene extends Phaser.Scene {
           return scene.background.assignGdsDeskSlot(agentId)
         },
         getGdsScale: () => scene.background.hasGdsScene() ? scene.background.getGdsScale() : 1,
-        getWalkTrack: (agentId: string) => {
-          if (!scene.background.hasGdsScene()) return null
-          return scene.background.getWalkTrackWorldPoints(agentId)
-        },
       })
-
-      // ── Agent scheduler: arrival / departure walk animations + standup ──
-      if (!this.agentScheduler) {
-        this.agentScheduler = new AgentScheduler({
-          getScene: () => scene,
-          getNavMesh: () => scene.navMesh,
-          getRooms: () => scene.rooms,
-        })
-        this.agentScheduler.init()
-
-        // Wire arrival hook — play walk-in animation for new agents
-        this.wsManager.onAgentArrived = (ws, agent, room) => {
-          this.agentScheduler!.playArrivalAnimation(ws, agent, room)
-        }
-
-        // Wire departure hook — play walk-out animation then destroy
-        this.wsManager.onAgentDeparting = (ws, agent, room, proceed) => {
-          this.agentScheduler!.playDepartureAnimation(ws, agent, room, proceed)
-        }
-      }
     }
   }
 
@@ -1297,9 +1198,6 @@ export class OfficeScene extends Phaser.Scene {
 
     // Camera smooth zoom + follow + recovery
     this.officeCamera.updateZoomAndFollow(time)
-
-    // Handle idle camera mode
-    this.handleIdleCamera(time);
 
     // Zoom-dependent multi-level LOD
     const lodLevel = cam.zoom < LOD_L1_MAX ? 1 : cam.zoom <= LOD_L2_MAX ? 2 : 3
@@ -1458,12 +1356,6 @@ export class OfficeScene extends Phaser.Scene {
       this.questPanel.update()
     }
 
-    if (this.questLogUI && time - this.lastQuestLogUIUpdateAt >= 3000) {
-      this.lastQuestLogUIUpdateAt = time
-      // Refresh elapsed times when visible (no new quest data — quests arrive via update())
-      if (this.questLogUI.isVisible()) this.questLogUI.update([])
-    }
-
     // Performance auto-reducer — check avg FPS every 3s
     this._perfFrameCount++
     if (time - this._perfLastCheckAt >= 3000) {
@@ -1481,154 +1373,6 @@ export class OfficeScene extends Phaser.Scene {
     }
   }
 
-  /**
-   * Handle the idle camera mode behavior
-   * When no events or user input for 30+ seconds:
-   * - Slow panoramic drift across the lab (visit each room, 10s per room)
-   * - Gentle zoom oscillation (1.0x to 1.1x, 20s cycle)
-   * - Any user input cancels idle mode immediately
-   * - Resume idle after 30s of inactivity again
-   */
-  private handleIdleCamera(time: number): void {
-    // Update idle camera timer
-    this.idleCameraTimer += 16; // Assuming ~60fps
-    
-    // Check for user input
-    if (this.input?.mouse?.isDown || this.input?.pointer?.isDown || 
-        this.input?.keyboard?.isDown) {
-      // Reset timer and cancel idle mode
-      this.idleCameraTimer = 0;
-      this.isIdleCameraActive = false;
-      this.lastInputTime = time;
-      return;
-    }
-    
-    // Check if we've been inactive for 30 seconds
-    if (time - this.lastInputTime > 30000 && !this.isIdleCameraActive) {
-      this.isIdleCameraActive = true;
-      this.idleCameraTimer = 0;
-      this.lastIdleRoomVisitTime = time;
-      this.zoomOscillationPhase = 0;
-      // Start panning to first room
-      this.panToNextRoom();
-    }
-    
-    if (this.isIdleCameraActive) {
-      // Update zoom oscillation phase (20s cycle)
-      this.zoomOscillationPhase = (time - this.lastIdleRoomVisitTime) / 20000;
-      const oscillation = Math.sin(this.zoomOscillationPhase * 2 * Math.PI) * 0.1;
-      const targetZoom = 1.0 + oscillation;
-      
-      // Apply zoom (lerp to target)
-      this.officeCamera.targetZoom = Phaser.Math.Lerp(this.officeCamera.targetZoom, targetZoom, 0.02);
-      
-      // Check if it's time to visit next room (10s per room)
-      if (time - this.lastIdleRoomVisitTime > 10000) {
-        this.panToNextRoom();
-      }
-    }
-  }
-  
-  /**
-   * Pan camera to the next room in the sequence
-   */
-  private panToNextRoom(): void {
-    const roomList = Array.from(this.rooms.values());
-    if (roomList.length === 0) return;
-    
-    // Find next room index
-    this.idleCameraRoomIndex = (this.idleCameraRoomIndex + 1) % roomList.length;
-    
-    const room = roomList[this.idleCameraRoomIndex];
-    if (!room) return;
-    
-    // Center camera on room with slight zoom (zoom in slightly on room)
-    this.officeCamera.smoothPanTo(
-      room.x + room.width / 2,
-      room.y + room.height / 2,
-      2000 // 2 second pan to next room
-    );
-    
-    // Set target zoom to slightly zoomed in (1.02x) for more focus on the room
-    this.officeCamera.targetZoom = 1.02;
-    
-    this.lastIdleRoomVisitTime = this.time.now;
-  }
-
-  /**
-   * Update smooth follow behavior for an agent
-   */
-  private updateFollowTarget(agentId: string, agentPosition: { x: number; y: number }, time: number): void {
-    // Check if we're following this agent
-    if (this.followTargetAgentId !== agentId) {
-      return;
-    }
-    
-    // Calculate deadzone (60x40px)
-    const deadzoneLeft = -30;
-    const deadzoneRight = 30;
-    const deadzoneTop = -20;
-    const deadzoneBottom = 20;
-    
-    // Determine if agent's position is outside the deadzone
-    if (agentPosition.x < this.lastAgentPosition?.x + deadzoneLeft || 
-        agentPosition.x > this.lastAgentPosition?.x + deadzoneRight ||
-        agentPosition.y < this.lastAgentPosition?.y + deadzoneTop ||
-        agentPosition.y > this.lastAgentPosition?.y + deadzoneBottom) {
-      
-      // Apply look-ahead
-      const lookAheadX = 40; // 40px offset in walking direction
-      
-      // We need to determine the walking direction...
-      // For now, we'll use a simple approximation
-      const dx = agentPosition.x - (this.lastAgentPosition?.x || agentPosition.x);
-      const dy = agentPosition.y - (this.lastAgentPosition?.y || agentPosition.y);
-      
-      // Calculate offset based on movement direction (simplified)
-      const followX = agentPosition.x + (dx > 0 ? lookAheadX : -lookAheadX);
-      const followY = agentPosition.y;
-      
-      // Store current offset target
-      const targetOffset = { x: followX, y: followY };
-      
-      // Apply lerp transition on direction change (300ms)
-      if (this.followOffsetLerpTime > 0) {
-        // Smooth transition to new offset
-        this.followOffset.x += (targetOffset.x - this.followOffset.x) * (0.3 * (1000 / 60)); // ~300ms lerp
-        this.followOffset.y += (targetOffset.y - this.followOffset.y) * (0.3 * (1000 / 60));
-      } else {
-        // If we don't have a lerp time yet, set to the target immediately
-        this.followOffset = targetOffset;
-      }
-      
-      // Store the follow target with the offset applied
-      this.officeCamera.followTarget = {
-        x: followX,
-        y: followY
-      };
-      
-      this.followOffsetLerpTime = 300; // Reset lerp timer
-    } else {
-      // Inside deadzone, just return to 0 offset over 500ms
-      if (this.followOffsetLerpTime > 0) {
-        this.followOffset.x += (0 - this.followOffset.x) * (0.2 * (1000 / 60)); // 500ms lerp
-        this.followOffset.y += (0 - this.followOffset.y) * (0.2 * (1000 / 60));
-        this.followOffsetLerpTime -= 16; // 60fps update
-      } else {
-        this.followOffset = { x: 0, y: 0 };
-      }
-      
-      // Update follow target without offset
-      this.officeCamera.followTarget = {
-        x: agentPosition.x,
-        y: agentPosition.y
-      };
-    }
-    
-    // Update last position
-    this.lastAgentPosition = agentPosition;
-  }
-  
   // ---------------------------------------------------------------------------
   // Public API
   // ---------------------------------------------------------------------------
@@ -1862,43 +1606,12 @@ export class OfficeScene extends Phaser.Scene {
 
   /** Active orchestrator tasks — shows `[stage] title` below each assigned agent's name */
   setOrchestratorTasks(tasks: OrchestratorTaskOfficeInfo[]): void {
-    // Detect newly dispatched tasks before clearing previous state
-    const newlyDispatched = tasks.filter(t => !this.previousOrchestratorTaskIds.has(t.taskId))
-
     this.orchestratorTasksByAgent.clear()
     for (const t of tasks) {
       this.orchestratorTasksByAgent.set(t.agentId, t)
     }
-
-    // Rebuild previous task ID tracking set
-    this.previousOrchestratorTaskIds.clear()
-    for (const t of tasks) this.previousOrchestratorTaskIds.add(t.taskId)
-
     this.ensureWsManager()
     this.wsManager.syncOrchestratorTaskLabels()
-
-    // Emit TASK_DISPATCHED for each newly dispatched task so particles can animate
-    for (const task of newlyDispatched) {
-      const coords = this.getTaskDispatchCoords(task.agentId)
-      if (coords === null) continue
-      EventBus.emit(EVENTS.TASK_DISPATCHED, task.agentId, coords.roomCx, coords.roomCy, coords.deskX, coords.deskY, coords.rankLevel)
-    }
-  }
-
-  /** Resolve world coords for a task dispatch trail: room center → agent desk. */
-  private getTaskDispatchCoords(agentId: string): { roomCx: number; roomCy: number; deskX: number; deskY: number; rankLevel: number } | null {
-    for (const room of this.rooms.values()) {
-      const ws = room.workstations.get(agentId)
-      if (!ws) continue
-      const roomCx = room.x + room.width / 2
-      const roomCy = room.y + room.height / 2
-      const deskX  = room.x + ws.container.x
-      const deskY  = room.y + ws.container.y
-      const agent  = this.agents.find(a => a.config.id === agentId)
-      const rankLevel = agent?.xp?.level ?? 1
-      return { roomCx, roomCy, deskX, deskY, rankLevel }
-    }
-    return null
   }
 
   /** Highlight a workstation for drag-over feedback */
@@ -2225,7 +1938,6 @@ export class OfficeScene extends Phaser.Scene {
     this.cafe?.pause()
     this.ambient?.pause()
     if (this.wsManager) this.wsManager.pauseAll()
-    this.agentScheduler?.pause()
     if (this.bgTransitionTween) this.bgTransitionTween.pause()
   }
 
@@ -2236,7 +1948,6 @@ export class OfficeScene extends Phaser.Scene {
     this.cafe?.resume()
     this.ambient?.resume()
     if (this.wsManager) this.wsManager.resumeAll()
-    this.agentScheduler?.resume()
     if (this.bgTransitionTween) this.bgTransitionTween.resume()
 
     // If rooms changed while sleeping, rebuild the nav mesh now
@@ -2276,7 +1987,10 @@ export class OfficeScene extends Phaser.Scene {
     // Keyboard selection + focus mode cleanup — delegates to OfficeSelection
     this.selection.destroy()
 
-    this.postFX.destroy()
+    if (this.vignetteFx) {
+      this.cameras.main.postFX.remove(this.vignetteFx)
+      this.vignetteFx = null
+    }
     this.dayNightOverlay = null
     this.skyGradient = null
 
@@ -2301,7 +2015,6 @@ export class OfficeScene extends Phaser.Scene {
     this.ui.destroy()
     this.seasonHud.destroy()
     this.questPanel.destroy()
-    this.questLogUI.destroy()
     this.achievementPanel.destroy()
 
     if (this.roomRenderer) {
