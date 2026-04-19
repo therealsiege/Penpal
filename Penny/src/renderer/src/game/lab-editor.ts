@@ -8,6 +8,7 @@
 import Phaser from 'phaser'
 import { SPRITESHEET_KEYS } from './office-asset-keys'
 import { scaledFontSize } from './office-constants'
+import { activeTheme } from './office-theme'
 
 // All available prop frames from the atlas
 const PROP_CATALOG = [
@@ -160,7 +161,7 @@ export class LabEditor {
     ).setScrollFactor(0).setDepth(10001)
 
     // Background
-    const bg = this.scene.add.rectangle(0, 0, PALETTE_W, cam.height - 80, 0x0f172a, 0.92)
+    const bg = this.scene.add.rectangle(0, 0, PALETTE_W, cam.height - 80, activeTheme.panelBg, 0.92)
       .setOrigin(0, 0)
     this.paletteContainer.add(bg)
 

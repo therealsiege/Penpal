@@ -373,7 +373,7 @@ export class OfficeUI {
     ty += LH
     if (title) { ct.add(this.scene.add.text(tx, ty, title, { fontSize: scaledFontSize(10), color: activeTheme.subtleText, fontFamily: 'system-ui, sans-serif', resolution: 2 })); ty += LH }
     ty += 4
-    const statusDotFrame = aInt === 0xfbbf24 ? ICON_FRAMES.CIRCLE_YELLOW : aInt === 0x34d399 ? ICON_FRAMES.CIRCLE_GREEN : aInt === 0xa78bfa ? ICON_FRAMES.CIRCLE_BLUE : ICON_FRAMES.CIRCLE_GREY
+    const statusDotFrame = aInt === 0xfbbf24 ? ICON_FRAMES.CIRCLE_YELLOW : aInt === 0x34d399 ? ICON_FRAMES.CIRCLE_GREEN : aInt === activeTheme.thoughtPlan ? ICON_FRAMES.CIRCLE_BLUE : ICON_FRAMES.CIRCLE_GREY
     ct.add(this.scene.add.sprite(tx + 3.5, ty + LH / 2, SPRITESHEET_KEYS.GAME_ICONS, statusDotFrame).setScale(0.22).setOrigin(0.5)); ct.add(this.scene.add.text(tx + 12, ty, statusLabel, { fontSize: scaledFontSize(10), color: statusHex, fontFamily: 'system-ui, sans-serif', fontStyle: 'bold', resolution: 2 }))
     if (uptime) ct.add(this.scene.add.text(cX + tW - PX, ty, uptime, { fontSize: scaledFontSize(10), color: '#5a6a7a', fontFamily: 'system-ui, monospace', resolution: 2 }).setOrigin(1, 0))
     ty += LH
@@ -642,7 +642,7 @@ export class OfficeUI {
       ok: 0x34d399,
       degraded: 0xfbbf24,
       error: 0xef4444,
-      unknown: 0x5a6a7a,
+      unknown: activeTheme.wallInner,
     }
 
     if (rows.length === 0) {
@@ -685,7 +685,7 @@ export class OfficeUI {
         this.scene.add
           .text(statusX, rowY, row.status, {
             fontSize: scaledFontSize(10),
-            color: dotColor === 0x5a6a7a ? activeTheme.subtleText : `#${dotColor.toString(16).padStart(6, '0')}`,
+            color: row.status === 'unknown' ? activeTheme.subtleText : `#${dotColor.toString(16).padStart(6, '0')}`,
             fontFamily: 'monospace',
           })
           .setOrigin(1, 0)

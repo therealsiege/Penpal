@@ -8,10 +8,8 @@ import type { AgentState } from '../types'
 import type { Room } from './office-types'
 import type { OfficeAtmosphere } from './office-atmosphere'
 import { getRoomType, getTemplate } from './room-renderer'
-import { activeTheme } from './office-theme'
+import { activeTheme, lerpColor } from './office-theme'
 import {
-  COLOR_HEADER_BG,
-  COLOR_DOOR_FILL,
   ROOM_HEADER_H,
   LAB_EQUIP_ZONE_H,
   scaledFontSize,
@@ -50,14 +48,14 @@ export interface RoomsHostScene {
 function getZoneAmbientColor(cwd: string): number {
   const type = getRoomType(cwd)
   switch (type) {
-    case 'server-room':    return 0x1a2a4e  // Command: cool blue
-    case 'ops-center':     return 0x1e2a38  // Operations: neutral steel
-    case 'game-den':       return 0x2a1a4e  // Research: purple
-    case 'design-studio':  return 0x2a1a4e  // Research: purple
-    case 'mobile-lab':     return 0x4e3a1a  // Engineering: amber
-    case 'creative-suite': return 0x4e3a1a  // Engineering: amber
-    case 'qa-lab':         return 0x1a4e2a  // Systems: green
-    default:               return 0x1a2434  // Standard: neutral dark
+    case 'server-room':    return lerpColor(activeTheme.roomFloor, 0x0a2060, 0.45)  // Command: cool blue
+    case 'ops-center':     return activeTheme.deskBody                              // Operations: neutral steel
+    case 'game-den':       return lerpColor(activeTheme.roomFloor, 0x300060, 0.45) // Research: purple
+    case 'design-studio':  return lerpColor(activeTheme.roomFloor, 0x300060, 0.45) // Research: purple
+    case 'mobile-lab':     return lerpColor(activeTheme.roomFloor, 0x603000, 0.45) // Engineering: amber
+    case 'creative-suite': return lerpColor(activeTheme.roomFloor, 0x603000, 0.45) // Engineering: amber
+    case 'qa-lab':         return lerpColor(activeTheme.roomFloor, 0x006030, 0.45) // Systems: green
+    default:               return activeTheme.roomFloor                             // Standard: theme neutral
   }
 }
 
@@ -303,7 +301,7 @@ export class OfficeRooms {
     const template = getTemplate(getRoomType(room.cwd))
     const roomStyle = {
       floorGrid: template.rugColor,
-      header: COLOR_HEADER_BG,
+      header: activeTheme.headerBg,
       accent: template.accentColor,
     }
 
@@ -338,7 +336,7 @@ export class OfficeRooms {
     }
     {
       const sg = this.scene.add.graphics()
-      sg.fillStyle(0x64748b, 0.2)
+      sg.fillStyle(activeTheme.panelStroke, 0.2)
       sg.fillRect(hBarX, hBarY - 2, w, 1)
       room.container.add(sg)
       room.statusStrip = sg
@@ -431,7 +429,7 @@ export class OfficeRooms {
     const dg = room.doorGraphics
     dg.clear()
     dg.setPosition(doorLeftX, 0)
-    dg.fillStyle(COLOR_DOOR_FILL, 1)
+    dg.fillStyle(activeTheme.headerBg, 1)
     dg.fillRoundedRect(0, doorY, doorW, doorH, 2)
     dg.fillStyle(accentColor, 0.45)
     dg.fillRect(4, doorY + 2, Math.max(doorW - 8, 4), 2)
@@ -1264,7 +1262,7 @@ export class OfficeRooms {
     const stripeW = 8       // tape width
     const segLen = 10       // each colored segment length
     const yellow = 0xfbbf24
-    const dark = 0x1a1a2e
+    const dark = activeTheme.roomFloor
     const alphaY = 0.80
     const alphaD = 0.60
 
@@ -1422,7 +1420,7 @@ export class OfficeRooms {
           g.lineBetween(lx, ventY + 1, lx, ventY + ventH - 1)
         }
         // Thin border
-        g.lineStyle(0.5, 0x4a5a6a, 0.225)
+        g.lineStyle(0.5, activeTheme.metallicAlt, 0.225)
         g.strokeRect(ventX, ventY, ventW, ventH)
       }
     }
@@ -1439,11 +1437,11 @@ export class OfficeRooms {
         g.fillStyle(activeTheme.wallInner, 0.30)
         g.fillRect(pipeX, pipeStartY, pipeW, pipeLen)
         // Highlight stripe (2px)
-        g.fillStyle(0x64748b, 0.18)
+        g.fillStyle(activeTheme.panelStroke, 0.18)
         g.fillRect(pipeX + 1, pipeStartY, 2, pipeLen)
         // Bracket mounts (2-3 along the pipe)
         const bracketCount = pipeLen > 60 ? 3 : 2
-        g.fillStyle(0x4a5a6a, 0.35)
+        g.fillStyle(activeTheme.metallicAlt, 0.35)
         for (let bi = 0; bi < bracketCount; bi++) {
           const by = pipeStartY + ((bi + 1) * pipeLen) / (bracketCount + 1)
           g.fillRect(pipeX - 2, by - 2, pipeW + 4, 4)

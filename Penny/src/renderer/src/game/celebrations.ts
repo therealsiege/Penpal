@@ -14,6 +14,7 @@ import type { QuestDifficulty } from './quest-system'
 import { soundEngine } from './sound-engine'
 import { AnimConfig } from './animation-config'
 import { scaledFontSize } from './office-constants'
+import { activeTheme } from './office-theme'
 
 // Pool sizes
 const BURST_POOL_SIZE = 48   // shared by rankUp + milestone burst layers
@@ -813,7 +814,7 @@ export class CelebrationManager {
     toDestroy.push(panel)
 
     const bg = this._scene.add.graphics()
-    bg.fillStyle(0x0c1018, 0.94)
+    bg.fillStyle(activeTheme.panelBg, 0.94)
     bg.fillRoundedRect(0, 0, panelW, panelH, 8)
     bg.lineStyle(1, payload.accentColor, 0.65)
     bg.strokeRoundedRect(0, 0, panelW, panelH, 8)
@@ -1024,7 +1025,7 @@ export class CelebrationManager {
     const challenges = payload.challenges
     const lh = 18
     const listH = 22 + challenges.length * lh + 10
-    listBg.fillStyle(0x0c1018, 0.9)
+    listBg.fillStyle(activeTheme.panelBg, 0.9)
     listBg.fillRoundedRect(0, 0, 220, listH, 6)
     listBg.lineStyle(1, payload.accentColor, 0.5)
     listBg.strokeRoundedRect(0, 0, 220, listH, 6)

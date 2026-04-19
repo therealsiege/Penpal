@@ -53,7 +53,7 @@ import { PostFXManager } from './post-fx-manager'
 import {
   KB_ZOOM_STEP,
   WORKSTATION_W, WORKSTATION_H,
-  COLOR_BG, ZOOM_MAX,
+  ZOOM_MAX,
   LOD_L1_MAX, LOD_L2_MAX,
   POD_REFRESH_MS,
   MCP_REFRESH_MS,
@@ -111,6 +111,7 @@ export class OfficeScene extends Phaser.Scene {
   // Day/night cycle overlay (passed to atmosphere.init)
   private dayNightOverlay: Phaser.GameObjects.Rectangle | null = null
   private skyGradient: Phaser.GameObjects.Graphics | null = null
+  private groundPlane: Phaser.GameObjects.Rectangle | null = null
   private lastShadowUpdateAt = 0
   // Subtle screen-space edge shading to frame the office.
   private vignetteFx: Phaser.FX.Vignette | null = null
@@ -366,7 +367,7 @@ export class OfficeScene extends Phaser.Scene {
 
     // Ground plane — semi-transparent so the HTML background image bleeds through.
     // Keep a touch lighter than full-opacity so lab hex + props stay readable at overview zoom.
-    this.add.rectangle(0, 0, 16000, 16000, COLOR_BG, 0.78)
+    this.groundPlane = this.add.rectangle(0, 0, 16000, 16000, activeTheme.bg, 0.78)
       .setOrigin(0.5, 0.5).setDepth(-12).setScrollFactor(0)
 
     // Sky gradient — deepest visible layer, behind stars and clouds
@@ -676,22 +677,18 @@ export class OfficeScene extends Phaser.Scene {
         this.showToast(`Phase: ${nextPhase}`, 'info')
       })
 
-      // T — toggle color theme (dark ↔ light)
+      // T — cycle color theme (dark → light → neon → dark)
       this.input.keyboard.on('keydown-T', (e: KeyboardEvent) => {
         if (shouldIgnoreKeyboardShortcuts(e)) return
         e.preventDefault()
-        const nextName: ThemeName = activeTheme === THEMES.dark ? 'light' : 'dark'
-        const { newBg } = setActiveTheme(nextName)
-        // Redraw everything with new theme colors
-        // Ground plane handles visual bg — don't set camera bg (keeps canvas transparent)
+        const nextName: ThemeName = activeTheme === THEMES.dark ? 'light' : activeTheme === THEMES.light ? 'neon' : 'dark'
+        setActiveTheme(nextName)
+        // Rebuild terrain/corridors/interior (uses activeTheme internally)
         this.background.invalidateBgCache()
         this.background.layoutRooms()
         this.officeCamera.updateCameraBounds()
-        // Re-sync workstations to pick up new theme colors
-        for (const room of this.rooms.values()) {
-          this.roomRenderer.drawRoomBackground(room)
-          this.roomRenderer.refreshRoomHeaderText(room)
-        }
+        // Recolor workstations, pod lines, MCP overlays
+        this._applyThemeToAll()
         this.showToast(`Theme: ${nextName}`, 'info')
       })
 
@@ -1723,6 +1720,7 @@ export class OfficeScene extends Phaser.Scene {
     this.ensureRoomRenderer()
     this.ensureWsManager()
     const t = activeTheme
+    this.groundPlane?.setFillStyle(t.bg, 0.78)
     for (const room of this.rooms.values()) {
       this.roomRenderer.drawRoomBackground(room)
       for (const ws of room.workstations.values()) {

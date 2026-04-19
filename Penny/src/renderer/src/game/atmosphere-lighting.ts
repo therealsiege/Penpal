@@ -1,4 +1,5 @@
 import Phaser from 'phaser'
+import { activeTheme } from './office-theme'
 
 // ---------------------------------------------------------------------------
 // AtmosphereLighting
@@ -35,7 +36,7 @@ export class AtmosphereLighting {
   initChimeRipplePool(): void {
     for (let i = 0; i < 3; i++) {
       const circle = this.scene.add
-        .circle(0, 0, 1, 0x00e5ff, 0)
+        .circle(0, 0, 1, activeTheme.monitorGlowActive, 0)
         .setDepth(-0.4)
         .setVisible(false)
       circle.setData('busy', false)
@@ -50,7 +51,7 @@ export class AtmosphereLighting {
       if (circle.getData('busy')) continue
       circle.setPosition(clockX, clockY)
       circle.setRadius(4)
-      circle.setFillStyle(0x00e5ff, 0.3)
+      circle.setFillStyle(activeTheme.monitorGlowActive, 0.3)
       circle.setScale(1)
       circle.setAlpha(0.3)
       circle.setVisible(true)

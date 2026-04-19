@@ -8,6 +8,7 @@
 import Phaser from 'phaser'
 import type { Room } from './office-types'
 import { getStatusColor, getTeamColor } from './office-helpers'
+import { activeTheme } from './office-theme'
 
 // ---------------------------------------------------------------------------
 // Host-scene interface
@@ -32,7 +33,7 @@ const MINIMAP_W       = 180
 const MINIMAP_H       = 120
 const MINIMAP_PAD     = 10   // distance from screen edge
 const MINIMAP_TITLE_H = 14   // header bar height
-const MINIMAP_BG_CLR  = 0x0a1120
+// MINIMAP_BG_CLR is now read from activeTheme.panelBg at construction time
 const MINIMAP_BG_A    = 0.82
 const MINIMAP_DEPTH   = 9998 // above most overlays, below notifications (9999+)
 
@@ -86,9 +87,9 @@ export class OfficeMinimap {
     this.bgRect = scene.add.rectangle(
       0, 0,
       MINIMAP_W, MINIMAP_TITLE_H + MINIMAP_H,
-      MINIMAP_BG_CLR, MINIMAP_BG_A,
+      activeTheme.panelBg, MINIMAP_BG_A,
     ).setOrigin(0, 0)
-    this.bgRect.setStrokeStyle(1, 0x1e3a5f, 1)
+    this.bgRect.setStrokeStyle(1, activeTheme.wall, 1)
     this.container.add(this.bgRect)
 
     // Title text

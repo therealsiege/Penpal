@@ -224,7 +224,7 @@ export class AmbientParticles {
   private initMakoMotePool(): void {
     for (let i = 0; i < MAKO_MOTE_POOL_SIZE; i++) {
       const radius = 3 + Math.random() * 3
-      const arc = this.scene.add.circle(0, 0, radius, 0x00ff88, 0)
+      const arc = this.scene.add.circle(0, 0, radius, activeTheme.doorFrame, 0)
         .setDepth(2)
         .setBlendMode(Phaser.BlendModes.ADD)
         .setVisible(false)
@@ -244,7 +244,7 @@ export class AmbientParticles {
 
     const worldX = camX + Math.random() * camW
     const worldY = camY + Math.random() * camH
-    const color = Math.random() < 0.5 ? 0x00ff88 : 0x00e5ff
+    const color = Math.random() < 0.5 ? activeTheme.doorFrame : activeTheme.monitorGlowActive
     const duration = 3000 + Math.random() * 2000
     const riseY = 60 + Math.random() * 60
 
@@ -279,7 +279,7 @@ export class AmbientParticles {
   // ---------------------------------------------------------------------------
 
   private initSparkPool(): void {
-    const sparkColors = [0xd4a017, 0xff8c00, 0xffffff]
+    const sparkColors = [activeTheme.lampShade, 0xff8c00, 0xffffff]
     for (let i = 0; i < SPARK_POOL_SIZE; i++) {
       const radius = 1.5 + Math.random() * 2.0
       const color = sparkColors[i % sparkColors.length]
@@ -303,7 +303,7 @@ export class AmbientParticles {
     const burstX = centerX + (Math.random() - 0.5) * 400
     const burstY = centerY + (Math.random() - 0.5) * 400
     const sparkCount = 3 + Math.floor(Math.random() * 2)
-    const sparkColors = [0xd4a017, 0xff8c00, 0xffffff]
+    const sparkColors = [activeTheme.lampShade, 0xff8c00, 0xffffff]
 
     for (let i = 0; i < sparkCount; i++) {
       const spark = this.sparkPool.find(s => !s.getData('busy'))
@@ -369,7 +369,7 @@ export class AmbientParticles {
 
     gfx.clear()
     const alpha = 0.06 + Math.random() * 0.06
-    gfx.fillStyle(0x8a96a4, alpha)
+    gfx.fillStyle(activeTheme.metallicAlt, alpha)
     gfx.fillCircle(0, 0, 6 + Math.random() * 4)
     gfx.fillCircle(4, -2.5, 5 + Math.random() * 3)
     gfx.fillCircle(-3.5, -3.5, 4 + Math.random() * 3)

@@ -636,11 +636,11 @@ export class OfficeBackground {
       const lightX = x + width / 2
       const lightY = y + BANNER_H + 10
       const lightGfx = this.scene.add.graphics()
-      lightGfx.fillStyle(0x94a3b8, 0.06)
+      lightGfx.fillStyle(activeTheme.metallicAlt, 0.06)
       lightGfx.fillCircle(0, 0, 20)
       // Mid glow ring — sprite circle
       const lightMid = this.scene.add.sprite(0, 0, SPRITESHEET_KEYS.GAME_ICONS, ICON_FRAMES.CIRCLE_GREY)
-        .setScale(0.12).setAlpha(0.18).setTint(0x22d3ee)
+        .setScale(0.12).setAlpha(0.18).setTint(activeTheme.monitorGlowActive)
       // Center bright dot — sprite circle
       const lightCenter = this.scene.add.sprite(0, 0, SPRITESHEET_KEYS.GAME_ICONS, ICON_FRAMES.CIRCLE_GREY)
         .setScale(0.06).setAlpha(0.32).setTint(0xa5f3fc)
@@ -806,7 +806,7 @@ export class OfficeBackground {
 
     // Alternating yellow/dark hazard tape helper — matches reference
     const YELLOW = 0xfbbf24
-    const DARK = 0x1a1a2e
+    const DARK = activeTheme.roomFloor
     const SEG_LEN = 10
     const STRIPE_W = 8
     const ALPHA_Y = 0.80
@@ -872,11 +872,11 @@ export class OfficeBackground {
       if (glowG) {
         const cy = (roomA.y + roomB.y) / 2
         for (let dx = gapX1 + 30; dx < gapX2 - 15; dx += 60) {
-          glowG.fillStyle(0x00e5ff, 0.18)
+          glowG.fillStyle(activeTheme.monitorGlowActive, 0.18)
           glowG.fillCircle(dx, cy, 24)
-          glowG.fillStyle(0x00e5ff, 0.35)
+          glowG.fillStyle(activeTheme.monitorGlowActive, 0.35)
           glowG.fillCircle(dx, cy, 14)
-          glowG.fillStyle(0x00e5ff, 0.60)
+          glowG.fillStyle(activeTheme.monitorGlowActive, 0.60)
           glowG.fillCircle(dx, cy, 6)
         }
       }
@@ -920,11 +920,11 @@ export class OfficeBackground {
         if (glowG) {
           const cx = (topRoom.x + bottomRoom.x) / 2
           for (let dy = gapY1 + 30; dy < gapY2 - 15; dy += 60) {
-            glowG.fillStyle(0x00e5ff, 0.18)
+            glowG.fillStyle(activeTheme.monitorGlowActive, 0.18)
             glowG.fillCircle(cx, dy, 24)
-            glowG.fillStyle(0x00e5ff, 0.35)
+            glowG.fillStyle(activeTheme.monitorGlowActive, 0.35)
             glowG.fillCircle(cx, dy, 14)
-            glowG.fillStyle(0x00e5ff, 0.60)
+            glowG.fillStyle(activeTheme.monitorGlowActive, 0.60)
             glowG.fillCircle(cx, dy, 6)
           }
         }
