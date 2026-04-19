@@ -14,6 +14,20 @@
 export const SPRITESHEET_KEYS = Object.freeze({
   /** Main character sheet — 17-frame rows (4 idle + 12 walk + 1 sit), 256x512 per frame */
   CHARACTERS: 'characters',
+  /**
+   * RPG 8-direction character sheet — 48 frames per character, 256x512 per frame.
+   * Layout: 16 cols × 3 rows per character.
+   * Frame groups (char offset = charIdx * 48):
+   *   0-3   walk-n   (N,  4 frames)    4-7   walk-ne  (NE, 4 frames)
+   *   8-11  walk-e   (E,  4 frames)    12-15 walk-se  (SE, 4 frames)
+   *   16-19 walk-s   (S,  4 frames)    20-23 walk-sw  (SW, 4 frames)
+   *   24-27 walk-w   (W,  4 frames)    28-31 walk-nw  (NW, 4 frames)
+   *   32    idle-n   33  idle-ne   34  idle-e    35  idle-se
+   *   36    idle-s   37  idle-sw   38  idle-w    39  idle-nw
+   *   40    sit-front  41 sit-back  42 sit-left  43 sit-right
+   *   44    action-type  45 action-drink  46 action-celebrate  47 action-talk
+   */
+  CHARACTERS_RPG: 'characters-rpg',
   /** Office prop tiles (chairs, monitors, desks, plants, etc.) */
   OFFICE: 'office',
   /** Room background tiles */
@@ -658,6 +672,84 @@ export const ANIM_KEYS = Object.freeze({
   SIT_1:  'anim-sit-1',
   SIT_2:  'anim-sit-2',
 } as const)
+
+// ---------------------------------------------------------------------------
+// RPG 8-direction character animation keys
+// Registered in BootScene.onCreate() against SPRITESHEET_KEYS.CHARACTERS_RPG.
+// Key naming: <pose>-<direction>  |  <pose>-<variant>
+// Frame layout: see SPRITESHEET_KEYS.CHARACTERS_RPG JSDoc above.
+// ---------------------------------------------------------------------------
+
+/** Walk animation keys — 8 compass directions, 4 frames each at 8 fps. */
+export const RPG_WALK_ANIM_KEYS = Object.freeze({
+  N:  'walk-n',
+  NE: 'walk-ne',
+  E:  'walk-e',
+  SE: 'walk-se',
+  S:  'walk-s',
+  SW: 'walk-sw',
+  W:  'walk-w',
+  NW: 'walk-nw',
+} as const)
+
+/** Idle animation keys — 8 compass directions, 1 frame each at 4 fps (loop). */
+export const RPG_IDLE_ANIM_KEYS = Object.freeze({
+  N:  'idle-n',
+  NE: 'idle-ne',
+  E:  'idle-e',
+  SE: 'idle-se',
+  S:  'idle-s',
+  SW: 'idle-sw',
+  W:  'idle-w',
+  NW: 'idle-nw',
+} as const)
+
+/** Sit animation keys — 4 facing variants, 1 frame each. */
+export const RPG_SIT_ANIM_KEYS = Object.freeze({
+  FRONT: 'sit-front',
+  BACK:  'sit-back',
+  LEFT:  'sit-left',
+  RIGHT: 'sit-right',
+} as const)
+
+/** Action animation keys — 4 types, 1 frame each at 6 fps. */
+export const RPG_ACTION_ANIM_KEYS = Object.freeze({
+  TYPE:      'action-type',
+  DRINK:     'action-drink',
+  CELEBRATE: 'action-celebrate',
+  TALK:      'action-talk',
+} as const)
+
+/**
+ * Frame-index helpers for SPRITESHEET_KEYS.CHARACTERS_RPG.
+ *
+ * With COLS=16, frame index for character variant `c` (0-based) is:
+ *   frameIndex = c * RPG_FRAMES_PER_CHAR + <offset below>
+ */
+export const RPG_FRAME_OFFSETS = Object.freeze({
+  // Walk: 8 dirs × 4 frames, packed as sequential quads
+  WALK_N:  0,   WALK_NE:  4,  WALK_E:  8,   WALK_SE: 12,
+  WALK_S:  16,  WALK_SW: 20,  WALK_W:  24,  WALK_NW: 28,
+  // Idle: 8 dirs × 1 frame
+  IDLE_N:  32,  IDLE_NE: 33,  IDLE_E:  34,  IDLE_SE: 35,
+  IDLE_S:  36,  IDLE_SW: 37,  IDLE_W:  38,  IDLE_NW: 39,
+  // Sit: 4 variants × 1 frame
+  SIT_FRONT:  40,  SIT_BACK:  41,  SIT_LEFT: 42,  SIT_RIGHT: 43,
+  // Action: 4 types × 1 frame
+  ACTION_TYPE: 44,  ACTION_DRINK: 45,  ACTION_CELEBRATE: 46,  ACTION_TALK: 47,
+} as const)
+
+/** Number of frames per character variant in CHARACTERS_RPG. */
+export const RPG_FRAMES_PER_CHAR = 48
+
+/** Ordered 8-direction list matching WALK/IDLE frame offset order. */
+export const RPG_DIRECTIONS = ['n', 'ne', 'e', 'se', 's', 'sw', 'w', 'nw'] as const
+export type RpgDirection = typeof RPG_DIRECTIONS[number]
+
+export type RpgWalkAnimKey   = typeof RPG_WALK_ANIM_KEYS[keyof typeof RPG_WALK_ANIM_KEYS]
+export type RpgIdleAnimKey   = typeof RPG_IDLE_ANIM_KEYS[keyof typeof RPG_IDLE_ANIM_KEYS]
+export type RpgSitAnimKey    = typeof RPG_SIT_ANIM_KEYS[keyof typeof RPG_SIT_ANIM_KEYS]
+export type RpgActionAnimKey = typeof RPG_ACTION_ANIM_KEYS[keyof typeof RPG_ACTION_ANIM_KEYS]
 
 // ---------------------------------------------------------------------------
 // Scene keys

@@ -4,8 +4,14 @@ import {
   SCENE_KEYS, SPRITESHEET_KEYS, ANIM_KEYS, IMAGE_KEYS, AUDIO_KEYS,
   EFFECT_ANIM_KEYS, ANIMAL_IDLE_FRAMES, ANIMAL_SPECIES,
   LAB_ANIM_KEYS, LAB_PROP_FRAMES, GDS_SCENE_KEYS,
+  RPG_WALK_ANIM_KEYS, RPG_IDLE_ANIM_KEYS, RPG_SIT_ANIM_KEYS, RPG_ACTION_ANIM_KEYS,
+  RPG_FRAME_OFFSETS, RPG_FRAMES_PER_CHAR, RPG_DIRECTIONS,
 } from './office-asset-keys'
-import { CHAR_FRAME_W, CHAR_FRAME_H, OFFICE_TILE_SIZE, ROOM_TILE_SIZE, LAB_TILE_SIZE, scaledFontSize } from './office-constants'
+import {
+  CHAR_FRAME_W, CHAR_FRAME_H, OFFICE_TILE_SIZE, ROOM_TILE_SIZE, LAB_TILE_SIZE, scaledFontSize,
+  RPG_CHAR_COLS, RPG_CHAR_FRAMES_PER_VAR, RPG_NUM_CHARS,
+  RPG_WALK_FPS, RPG_IDLE_FPS, RPG_ACTION_FPS,
+} from './office-constants'
 
 // ---------------------------------------------------------------------------
 // BootScene — shared asset preloader
@@ -99,6 +105,7 @@ export class BootScene extends BaseScene {
       [ANIM_KEYS.IDLE_2]: 'Idle Anim B',
       [ANIM_KEYS.SIT_1]: 'Sit Anim A',
       [ANIM_KEYS.SIT_2]: 'Sit Anim B',
+      [SPRITESHEET_KEYS.CHARACTERS_RPG]: 'RPG 8-Dir Chars',
       [IMAGE_KEYS.SLIDER_TRACK]: 'Slider Track',
       [IMAGE_KEYS.SLIDER_FILL]: 'Slider Fill',
       [IMAGE_KEYS.DIVIDER]: 'Divider',
@@ -123,7 +130,7 @@ export class BootScene extends BaseScene {
     // Spritesheets worth showing a thumbnail preview for
     const loadedSheetKeys: string[] = []
     const sheetPreviewKeys = new Set<string>([
-      SPRITESHEET_KEYS.CHARACTERS, SPRITESHEET_KEYS.OFFICE, SPRITESHEET_KEYS.ROOMS,
+      SPRITESHEET_KEYS.CHARACTERS, SPRITESHEET_KEYS.CHARACTERS_RPG, SPRITESHEET_KEYS.OFFICE, SPRITESHEET_KEYS.ROOMS,
       SPRITESHEET_KEYS.DUDER_1, SPRITESHEET_KEYS.DUDER_2,
       SPRITESHEET_KEYS.GAME_ICONS, SPRITESHEET_KEYS.GAME_ITEMS, SPRITESHEET_KEYS.DESK_PETS,
       SPRITESHEET_KEYS.ANIMAL_PETS, SPRITESHEET_KEYS.OFFICE_FURNITURE, SPRITESHEET_KEYS.MEDALS_HD,
@@ -236,6 +243,13 @@ export class BootScene extends BaseScene {
     })
     this.load.spritesheet(SPRITESHEET_KEYS.DUDER_2, './sprites/duder-compact-2.png', {
       frameWidth: CHAR_FRAME_W,
+      frameHeight: CHAR_FRAME_H,
+    })
+    // RPG 8-direction character sheet — 16 cols × (RPG_NUM_CHARS * 3) rows, 256×512 per frame.
+    // Built by scripts/build-sprites.mjs (buildRpgCharacterSheet).
+    // Frame layout: char 0 = frames 0-47, char 1 = 48-95, char 2 = 96-143.
+    this.load.spritesheet(SPRITESHEET_KEYS.CHARACTERS_RPG, './sprites/characters-rpg.png', {
+      frameWidth:  CHAR_FRAME_W,
       frameHeight: CHAR_FRAME_H,
     })
     // Individual animation strips (_256 PNGs, 256x512 per frame — same as main spritesheet)
@@ -571,6 +585,120 @@ export class BootScene extends BaseScene {
           }),
           frameRate: 8,
           repeat: -1,
+        })
+      }
+    }
+  }
+
+    // -------------------------------------------------------------------------
+    // RPG 8-direction character animations
+    // Registered once for character variant 0 (charIdx=0, frame offset=0).
+    // Additional variants: offset = charIdx * RPG_FRAMES_PER_CHAR (48).
+    // -------------------------------------------------------------------------
+    if (this.textures.exists(SPRITESHEET_KEYS.CHARACTERS_RPG)) {
+      this._registerRpgAnims(0)
+    }
+
+  // -------------------------------------------------------------------------
+  // RPG animation registration helper
+  // -------------------------------------------------------------------------
+
+  /**
+   * Register all 24 RPG direction-based animation keys against CHARACTERS_RPG.
+   *
+   * @param charIdx - Character variant index (0 = default/Claude, 1 = Cursor, 2 = OpenCode).
+   *   Frame offset = charIdx * RPG_FRAMES_PER_CHAR (48).
+   *   When charIdx=0 the base keys (walk-n, idle-n, …) are registered.
+   *   Future calls with charIdx>0 register suffixed variants (walk-n-2, etc.)
+   *   for multi-character support.
+   */
+  private _registerRpgAnims(charIdx: number): void {
+    const offset = charIdx * RPG_FRAMES_PER_CHAR
+    const suffix = charIdx === 0 ? '' : `-${charIdx + 1}`
+    const sheet  = SPRITESHEET_KEYS.CHARACTERS_RPG
+
+    // ── Walk: 8 directions × 4 frames @ RPG_WALK_FPS ──────────────────────
+    const walkDirs = Object.values(RPG_WALK_ANIM_KEYS)
+    const walkOffsets = [
+      RPG_FRAME_OFFSETS.WALK_N,  RPG_FRAME_OFFSETS.WALK_NE,
+      RPG_FRAME_OFFSETS.WALK_E,  RPG_FRAME_OFFSETS.WALK_SE,
+      RPG_FRAME_OFFSETS.WALK_S,  RPG_FRAME_OFFSETS.WALK_SW,
+      RPG_FRAME_OFFSETS.WALK_W,  RPG_FRAME_OFFSETS.WALK_NW,
+    ]
+    for (let i = 0; i < RPG_DIRECTIONS.length; i++) {
+      const key = `${walkDirs[i]}${suffix}`
+      if (!this.anims.exists(key)) {
+        const start = offset + walkOffsets[i]
+        this.anims.create({
+          key,
+          frames: this.anims.generateFrameNumbers(sheet, { start, end: start + 3 }),
+          frameRate: RPG_WALK_FPS,
+          repeat: -1,
+        })
+      }
+    }
+
+    // ── Idle: 8 directions × 1 frame @ RPG_IDLE_FPS (loop) ────────────────
+    const idleDirs = Object.values(RPG_IDLE_ANIM_KEYS)
+    const idleOffsets = [
+      RPG_FRAME_OFFSETS.IDLE_N,  RPG_FRAME_OFFSETS.IDLE_NE,
+      RPG_FRAME_OFFSETS.IDLE_E,  RPG_FRAME_OFFSETS.IDLE_SE,
+      RPG_FRAME_OFFSETS.IDLE_S,  RPG_FRAME_OFFSETS.IDLE_SW,
+      RPG_FRAME_OFFSETS.IDLE_W,  RPG_FRAME_OFFSETS.IDLE_NW,
+    ]
+    for (let i = 0; i < RPG_DIRECTIONS.length; i++) {
+      const key = `${idleDirs[i]}${suffix}`
+      if (!this.anims.exists(key)) {
+        this.anims.create({
+          key,
+          frames: this.anims.generateFrameNumbers(sheet, {
+            start: offset + idleOffsets[i],
+            end:   offset + idleOffsets[i],
+          }),
+          frameRate: RPG_IDLE_FPS,
+          repeat: -1,
+        })
+      }
+    }
+
+    // ── Sit: 4 variants × 1 frame (static) ───────────────────────────────
+    const sitDefs: Array<{ key: string; frameOffset: number }> = [
+      { key: `${RPG_SIT_ANIM_KEYS.FRONT}${suffix}`,  frameOffset: RPG_FRAME_OFFSETS.SIT_FRONT },
+      { key: `${RPG_SIT_ANIM_KEYS.BACK}${suffix}`,   frameOffset: RPG_FRAME_OFFSETS.SIT_BACK  },
+      { key: `${RPG_SIT_ANIM_KEYS.LEFT}${suffix}`,   frameOffset: RPG_FRAME_OFFSETS.SIT_LEFT  },
+      { key: `${RPG_SIT_ANIM_KEYS.RIGHT}${suffix}`,  frameOffset: RPG_FRAME_OFFSETS.SIT_RIGHT },
+    ]
+    for (const { key, frameOffset } of sitDefs) {
+      if (!this.anims.exists(key)) {
+        this.anims.create({
+          key,
+          frames: this.anims.generateFrameNumbers(sheet, {
+            start: offset + frameOffset,
+            end:   offset + frameOffset,
+          }),
+          frameRate: RPG_IDLE_FPS,
+          repeat: -1,
+        })
+      }
+    }
+
+    // ── Action: 4 types × 1 frame @ RPG_ACTION_FPS ───────────────────────
+    const actionDefs: Array<{ key: string; frameOffset: number }> = [
+      { key: `${RPG_ACTION_ANIM_KEYS.TYPE}${suffix}`,      frameOffset: RPG_FRAME_OFFSETS.ACTION_TYPE      },
+      { key: `${RPG_ACTION_ANIM_KEYS.DRINK}${suffix}`,     frameOffset: RPG_FRAME_OFFSETS.ACTION_DRINK     },
+      { key: `${RPG_ACTION_ANIM_KEYS.CELEBRATE}${suffix}`, frameOffset: RPG_FRAME_OFFSETS.ACTION_CELEBRATE },
+      { key: `${RPG_ACTION_ANIM_KEYS.TALK}${suffix}`,      frameOffset: RPG_FRAME_OFFSETS.ACTION_TALK      },
+    ]
+    for (const { key, frameOffset } of actionDefs) {
+      if (!this.anims.exists(key)) {
+        this.anims.create({
+          key,
+          frames: this.anims.generateFrameNumbers(sheet, {
+            start: offset + frameOffset,
+            end:   offset + frameOffset,
+          }),
+          frameRate: RPG_ACTION_FPS,
+          repeat: 0,
         })
       }
     }

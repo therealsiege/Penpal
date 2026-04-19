@@ -25,6 +25,25 @@ export const CHAR_FRAME_H = 512
 export const CHAR_COLS    = 6
 export const NUM_CHARS    = 3  // Character 1, Character 2, Character 1 tinted
 
+// ---------------------------------------------------------------------------
+// RPG 8-direction character spritesheet (characters-rpg.png)
+// ---------------------------------------------------------------------------
+
+/** Columns per row in the RPG character spritesheet (= max frames per row). */
+export const RPG_CHAR_COLS           = 16
+/** Total frames per character variant (8 walk dirs × 4 + 8 idle + 4 sit + 4 action). */
+export const RPG_CHAR_FRAMES_PER_VAR = 48
+/** Rows per character variant in the spritesheet (RPG_CHAR_FRAMES_PER_VAR / RPG_CHAR_COLS). */
+export const RPG_CHAR_ROWS_PER_VAR   = 3   // 48 frames / 16 cols
+/** Number of character variants in characters-rpg.png. */
+export const RPG_NUM_CHARS           = 3
+/** Walk animation frame rate (fps). */
+export const RPG_WALK_FPS            = 8
+/** Idle animation frame rate (fps). */
+export const RPG_IDLE_FPS            = 4
+/** Action animation frame rate (fps). */
+export const RPG_ACTION_FPS          = 6
+
 export const POSE_IDLE     = 0
 export const POSE_INTERACT = 1
 export const POSE_SIT      = 2
