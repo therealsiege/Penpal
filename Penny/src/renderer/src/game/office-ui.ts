@@ -5,9 +5,11 @@ import { NavMesh } from './nav-mesh'
 import type { PennyCafe } from './penny-cafe'
 import { WS_DESK_Y, scaledFontSize } from './office-constants'
 import { activeTheme } from './office-theme'
+import type { ThemeName } from './office-theme'
 import { SPRITESHEET_KEYS, TOAST_ICON_FRAMES, ICON_FRAMES, ITEM_FRAMES, PET_COUNT, IMAGE_KEYS } from './office-asset-keys'
 import { SIGNATURE_ITEM_NAMES } from './workstation-creation'
 import { audioManager } from './audio-manager'
+import { SettingsMenu } from './settings-menu'
 
 // ---------------------------------------------------------------------------
 // OfficeUI — owns all screen-space UI state for OfficeScene
@@ -34,6 +36,10 @@ export class OfficeUI {
   // World-space highlight ring around hovered desk
   private hoverRingGraphics: Phaser.GameObjects.Graphics | null = null
   private hoverRingAccent: Phaser.GameObjects.Sprite | null = null
+
+  // In-game settings overlay (volumes, theme, keybinds)
+  private settingsMenu: SettingsMenu | null = null
+  get settingsVisible(): boolean { return this.settingsMenu?.isVisible ?? false }
 
   // Keyboard shortcut help overlay
   private helpOverlay: Phaser.GameObjects.Container | null = null
@@ -69,6 +75,30 @@ export class OfficeUI {
   }
 
   // ---------------------------------------------------------------------------
+  // Settings menu
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Initialise the settings menu with an optional theme-change callback.
+   * Must be called after the scene is created (before any show call).
+   */
+  initSettingsMenu(onThemeChange?: (theme: ThemeName) => void): void {
+    this.settingsMenu = new SettingsMenu(this.scene, onThemeChange)
+  }
+
+  showSettingsMenu(): void {
+    this.settingsMenu?.show()
+  }
+
+  hideSettingsMenu(): void {
+    this.settingsMenu?.hide()
+  }
+
+  toggleSettingsMenu(): void {
+    this.settingsMenu?.toggle()
+  }
+
+  // ---------------------------------------------------------------------------
   // Lifecycle
   // ---------------------------------------------------------------------------
 
@@ -89,6 +119,11 @@ export class OfficeUI {
   }
 
   destroy(): void {
+    if (this.settingsMenu) {
+      this.settingsMenu.destroy()
+      this.settingsMenu = null
+    }
+
     if (this.opsOverlay) {
       this.scene.tweens.killTweensOf(this.opsOverlay)
       this.opsOverlay.destroy()

@@ -204,6 +204,11 @@ export class AudioManager {
   get isMuted(): boolean { return this._muted }
   get masterVolume(): number { return this._masterVolume }
 
+  /** Read the current volume for a channel (0–1). */
+  getChannelVolume(name: ChannelName): number {
+    return this._channelVolumes[name]
+  }
+
   // -------------------------------------------------------------------------
   // Fade helpers
   // -------------------------------------------------------------------------
@@ -237,6 +242,82 @@ export class AudioManager {
       if (g) g.gain.value = this._channelVolumes[from]
     }, ms + 50)
     this.fadeChannelIn(to, ms)
+  }
+
+  // -------------------------------------------------------------------------
+  // UI sound effects — panel open/close, toast notifications
+  // -------------------------------------------------------------------------
+
+  /** Short rising-tone chime played when a panel or overlay opens. */
+  panelOpen(): void {
+    if (this._disabled || this._muted) return
+    const ctx = this._ensureContext()
+    if (!ctx) return
+    const uiGain = this._channelGains.ui
+    if (!uiGain) return
+    const now = ctx.currentTime
+    const g = ctx.createGain()
+    g.gain.setValueAtTime(0, now)
+    g.gain.linearRampToValueAtTime(0.06 * this._channelVolumes.ui, now + 0.01)
+    g.gain.exponentialRampToValueAtTime(0.0001, now + 0.14)
+    g.connect(uiGain)
+    const osc = ctx.createOscillator()
+    osc.type = 'sine'
+    osc.frequency.setValueAtTime(880, now)
+    osc.frequency.linearRampToValueAtTime(1100, now + 0.09)
+    osc.connect(g)
+    osc.start(now)
+    osc.stop(now + 0.15)
+  }
+
+  /** Short falling-tone chime played when a panel or overlay closes. */
+  panelClose(): void {
+    if (this._disabled || this._muted) return
+    const ctx = this._ensureContext()
+    if (!ctx) return
+    const uiGain = this._channelGains.ui
+    if (!uiGain) return
+    const now = ctx.currentTime
+    const g = ctx.createGain()
+    g.gain.setValueAtTime(0, now)
+    g.gain.linearRampToValueAtTime(0.05 * this._channelVolumes.ui, now + 0.01)
+    g.gain.exponentialRampToValueAtTime(0.0001, now + 0.12)
+    g.connect(uiGain)
+    const osc = ctx.createOscillator()
+    osc.type = 'sine'
+    osc.frequency.setValueAtTime(700, now)
+    osc.frequency.linearRampToValueAtTime(440, now + 0.08)
+    osc.connect(g)
+    osc.start(now)
+    osc.stop(now + 0.13)
+  }
+
+  /** Short beep matched to toast severity: info=neutral, success=high, warning=mid, error=low. */
+  toastSound(type: 'info' | 'success' | 'warning' | 'error'): void {
+    if (this._disabled || this._muted) return
+    const ctx = this._ensureContext()
+    if (!ctx) return
+    const uiGain = this._channelGains.ui
+    if (!uiGain) return
+    const freqs: Record<string, number> = {
+      info:    660,
+      success: 880,
+      warning: 550,
+      error:   330,
+    }
+    const freq = freqs[type] ?? 660
+    const now = ctx.currentTime
+    const g = ctx.createGain()
+    g.gain.setValueAtTime(0, now)
+    g.gain.linearRampToValueAtTime(0.07 * this._channelVolumes.ui, now + 0.008)
+    g.gain.exponentialRampToValueAtTime(0.0001, now + 0.11)
+    g.connect(uiGain)
+    const osc = ctx.createOscillator()
+    osc.type = 'sine'
+    osc.frequency.value = freq
+    osc.connect(g)
+    osc.start(now)
+    osc.stop(now + 0.12)
   }
 
   // -------------------------------------------------------------------------

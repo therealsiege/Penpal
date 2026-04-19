@@ -556,16 +556,22 @@ export class OfficeScene extends Phaser.Scene {
         this.selection.confirmSelectedAgent()
       })
 
-      // ESC document order: ops board → achievements → help → focus → deselect
+      // ESC dismissal order: settings → ops board → achievements → help → focus → open settings
       this.input.keyboard.on('keydown-ESC', (e: KeyboardEvent) => {
         if (shouldIgnoreKeyboardShortcuts(e)) return
         e.preventDefault()
+        if (this.ui.settingsVisible) { this.ui.hideSettingsMenu(); return }
         if (this.ui.opsVisible) { this.ui.hideOpsBoardOverlay(); return }
         if (this.achievementPanel?.isVisible) { this.achievementPanel.hide(); return }
         if (this.ui.helpVisible) { this.ui.hideHelpOverlay(); return }
         if (this.selection.isFocused) { this.selection.exitFocusMode(); return }
-        this.selection.deselectAgent()
-        this.selection.stopAutoPan()
+        if (this.selection.selectedAgentIndex >= 0) {
+          this.selection.deselectAgent()
+          this.selection.stopAutoPan()
+          return
+        }
+        // Nothing active — open settings overlay
+        this.ui.showSettingsMenu()
       })
 
       this.input.keyboard.on('keydown-F', (e: KeyboardEvent) => {
@@ -716,6 +722,19 @@ export class OfficeScene extends Phaser.Scene {
     // Screen-space UI overlays: toasts, tooltip, hover ring, help, debug, LOD label, status bar
     this.ui = new OfficeUI(this)
     this.ui.init(this.viewWidth, this.viewHeight)
+    this.ui.initSettingsMenu((theme) => {
+      // Mirror the theme-switch logic from the T key handler
+      const { newBg: _newBg } = setActiveTheme(theme)
+      void _newBg
+      this.background.invalidateBgCache()
+      this.background.layoutRooms()
+      this.officeCamera.updateCameraBounds()
+      for (const room of this.rooms.values()) {
+        this.roomRenderer.drawRoomBackground(room)
+        this.roomRenderer.refreshRoomHeaderText(room)
+      }
+      this.showToast(`Theme: ${theme}`, 'info')
+    })
 
     // Ambient office-life activity — fires every 8-15 seconds with a random incidental event
     this.ambient = new OfficeAmbient(this)
