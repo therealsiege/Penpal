@@ -21,6 +21,10 @@ import { getWorkstationWorldPos } from './office-camera'
 import type { Room } from './office-types'
 import { ZOOM_MAX } from './office-constants'
 
+const LETTERBOX_HEIGHT_RATIO = 0.08  // 8% of screen height
+const LETTERBOX_ANIM_MS      = 200   // slide duration in ms
+const LETTERBOX_DEPTH        = 9998  // screen-space overlay depth
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -77,6 +81,14 @@ export class CameraCinematics {
   /** Last emission time per event type — used for debounce. */
   private lastTrigger: Partial<Record<AutoPanEventType, number>> = {}
 
+  // ---------------------------------------------------------------------------
+  // Letterbox state
+  // ---------------------------------------------------------------------------
+
+  private _letterboxTop: Phaser.GameObjects.Rectangle | null = null
+  private _letterboxBottom: Phaser.GameObjects.Rectangle | null = null
+  private _letterboxActive = false
+
   // EventBus listener refs (stored for cleanup)
   private readonly _onTaskDispatched = (...args: unknown[]) => {
     this._enqueue('task-dispatch', [args[0] as string])
@@ -94,6 +106,10 @@ export class CameraCinematics {
     this._enqueue('agent-error', [args[0] as string])
   }
 
+  // Season ceremony listeners — letterbox wraps the full ceremony duration
+  private readonly _onSeasonStarted = () => { this.enterLetterbox() }
+  private readonly _onSeasonEnded   = () => { this.exitLetterbox() }
+
   // User-input cancel listeners
   private readonly _onPointerDown = (_p: Phaser.Input.Pointer) => { this._cancelActive() }
   private readonly _onKeyDown = (_e: KeyboardEvent) => { this._cancelActive() }
@@ -110,6 +126,8 @@ export class CameraCinematics {
     EventBus.on(EVENTS.POD_LAUNCHED, this._onPodLaunched)
     EventBus.on(EVENTS.RANK_UP, this._onRankUp)
     EventBus.on(EVENTS.AGENT_ERROR, this._onAgentError)
+    EventBus.on(EVENTS.SEASON_STARTED, this._onSeasonStarted)
+    EventBus.on(EVENTS.SEASON_ENDED, this._onSeasonEnded)
 
     this.scene.input.on('pointerdown', this._onPointerDown)
     this.scene.input.keyboard?.on('keydown', this._onKeyDown)
@@ -122,10 +140,18 @@ export class CameraCinematics {
     EventBus.off(EVENTS.POD_LAUNCHED, this._onPodLaunched)
     EventBus.off(EVENTS.RANK_UP, this._onRankUp)
     EventBus.off(EVENTS.AGENT_ERROR, this._onAgentError)
+    EventBus.off(EVENTS.SEASON_STARTED, this._onSeasonStarted)
+    EventBus.off(EVENTS.SEASON_ENDED, this._onSeasonEnded)
 
     this.scene.input.off('pointerdown', this._onPointerDown)
     this.scene.input.keyboard?.off('keydown', this._onKeyDown)
     this.scene.input.off('wheel', this._onWheel)
+
+    // Clean up any visible letterbox bars
+    this._letterboxTop?.destroy()
+    this._letterboxBottom?.destroy()
+    this._letterboxTop = null
+    this._letterboxBottom = null
   }
 
   // ---------------------------------------------------------------------------
@@ -174,6 +200,21 @@ export class CameraCinematics {
     this.host.getOfficeCamera().setCinematicZoomLock(false)
     this.host.unlockCinematicInput()
 
+    // Force-remove letterbox bars without animation
+    if (this._letterboxActive) {
+      this._letterboxActive = false
+      if (this._letterboxTop) {
+        this.host.tweens.killTweensOf(this._letterboxTop)
+        this._letterboxTop.destroy()
+        this._letterboxTop = null
+      }
+      if (this._letterboxBottom) {
+        this.host.tweens.killTweensOf(this._letterboxBottom)
+        this._letterboxBottom.destroy()
+        this._letterboxBottom = null
+      }
+    }
+
     this.running = false
     this.activePriority = -1
     this.queue = []
@@ -214,6 +255,103 @@ export class CameraCinematics {
       case 'pod-launch':    this._seqPodLaunch(evt.agentIds, rooms, cam, onComplete);       break
       case 'rank-up':       this._seqRankUp(evt.agentIds[0], rooms, cam, onComplete);       break
       case 'agent-error':   this._seqAgentError(evt.agentIds[0], rooms, cam, onComplete);   break
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Letterbox bars (public — may also be called from OfficeScene ceremony hooks)
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Slide black bars in from top and bottom edges (8% screen height each).
+   * No-op if letterbox is already active.
+   */
+  enterLetterbox(onComplete?: () => void): void {
+    if (this._letterboxActive) { onComplete?.(); return }
+    this._letterboxActive = true
+
+    const cam = this.host.cameras.main
+    const barH = Math.round(cam.height * LETTERBOX_HEIGHT_RATIO)
+    const w = cam.width
+
+    // Destroy any stale bars left from a force-cancel
+    this._letterboxTop?.destroy()
+    this._letterboxBottom?.destroy()
+
+    this._letterboxTop = this.scene.add
+      .rectangle(0, -barH, w, barH, 0x000000)
+      .setOrigin(0, 0)
+      .setScrollFactor(0)
+      .setDepth(LETTERBOX_DEPTH)
+
+    this._letterboxBottom = this.scene.add
+      .rectangle(0, cam.height, w, barH, 0x000000)
+      .setOrigin(0, 0)
+      .setScrollFactor(0)
+      .setDepth(LETTERBOX_DEPTH)
+
+    let doneCount = 0
+    const onBarDone = () => { if (++doneCount === 2) onComplete?.() }
+
+    this.host.tweens.add({
+      targets: this._letterboxTop,
+      y: 0,
+      duration: LETTERBOX_ANIM_MS,
+      ease: 'Sine.easeOut',
+      onComplete: onBarDone,
+    })
+    this.host.tweens.add({
+      targets: this._letterboxBottom,
+      y: cam.height - barH,
+      duration: LETTERBOX_ANIM_MS,
+      ease: 'Sine.easeOut',
+      onComplete: onBarDone,
+    })
+  }
+
+  /**
+   * Slide the letterbox bars back out. No-op if not active.
+   */
+  exitLetterbox(onComplete?: () => void): void {
+    if (!this._letterboxActive) { onComplete?.(); return }
+    this._letterboxActive = false
+
+    const cam = this.host.cameras.main
+    const barH = Math.round(cam.height * LETTERBOX_HEIGHT_RATIO)
+
+    let doneCount = 0
+    const onBarDone = () => {
+      if (++doneCount === 2) {
+        this._letterboxTop?.destroy()
+        this._letterboxBottom?.destroy()
+        this._letterboxTop = null
+        this._letterboxBottom = null
+        onComplete?.()
+      }
+    }
+
+    if (this._letterboxTop) {
+      this.host.tweens.add({
+        targets: this._letterboxTop,
+        y: -barH,
+        duration: LETTERBOX_ANIM_MS,
+        ease: 'Sine.easeIn',
+        onComplete: onBarDone,
+      })
+    } else {
+      onBarDone()
+    }
+
+    if (this._letterboxBottom) {
+      this.host.tweens.add({
+        targets: this._letterboxBottom,
+        y: cam.height,
+        duration: LETTERBOX_ANIM_MS,
+        ease: 'Sine.easeIn',
+        onComplete: onBarDone,
+      })
+    } else {
+      onBarDone()
     }
   }
 
@@ -344,7 +482,8 @@ export class CameraCinematics {
   }
 
   /**
-   * Rank Up: pan (500 ms) → zoom 1.5× (400 ms) → hold 2 s → zoom back (500 ms)
+   * Rank Up: letterbox in (200 ms) → pan (500 ms) → zoom 1.5× (400 ms) →
+   *          hold 2 s → zoom back (500 ms) → letterbox out (200 ms)
    */
   private _seqRankUp(
     agentId: string,
@@ -358,10 +497,14 @@ export class CameraCinematics {
     const baseZoom = this.host.cameras.main.zoom
     const peakZoom = Math.min(baseZoom * 1.5, ZOOM_MAX)
 
-    cam.smoothPanTo(pos.x, pos.y, 500, () => {
-      this._zoomTo(peakZoom, 400, 'Sine.easeOut', () => {
-        this.scene.time.delayedCall(2000, () => {
-          this._zoomTo(baseZoom, 500, 'Sine.easeInOut', onComplete)
+    this.enterLetterbox(() => {
+      cam.smoothPanTo(pos.x, pos.y, 500, () => {
+        this._zoomTo(peakZoom, 400, 'Sine.easeOut', () => {
+          this.scene.time.delayedCall(2000, () => {
+            this._zoomTo(baseZoom, 500, 'Sine.easeInOut', () => {
+              this.exitLetterbox(onComplete)
+            })
+          })
         })
       })
     })
