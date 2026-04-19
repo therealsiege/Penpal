@@ -239,6 +239,17 @@ export function Layout({ activePanel, onNavigate, children }: LayoutProps) {
               </svg>
             }
           />
+          <NavButton
+            label="Replay"
+            active={activePanel === 'replay'}
+            onClick={() => onNavigate('replay')}
+            icon={
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10" />
+                <polygon points="10 8 16 12 10 16 10 8" fill="currentColor" stroke="none" />
+              </svg>
+            }
+          />
         </nav>
 
         <div className="shrink-0 px-2.5 pb-4 pt-3 mt-auto border-t border-[color-mix(in_srgb,var(--c-bg-hover)_90%,transparent)] bg-[var(--c-bg-deep)]">

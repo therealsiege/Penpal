@@ -203,6 +203,13 @@ declare global {
       vaultSearchRich: (query: string, glob?: string, limit?: number) => Promise<ContextEngineeredResponse<VaultSearchResult[]>>
       orchestratorQueueRich: () => Promise<ContextEngineeredResponse<Task[]>>
       orchestratorAgentHealthRich: () => Promise<ContextEngineeredResponse<AgentHealthStatus[]>>
+      // Session Replay
+      replayStatus: () => Promise<{ active: boolean; recordingId: string | null; startedAt: number | null; durationMs: number }>
+      replayStart: (label?: string) => Promise<{ id: string }>
+      replayStop: () => Promise<import('./types').RecordingMeta | null>
+      replayList: () => Promise<import('./types').RecordingMeta[]>
+      replayGet: (id: string) => Promise<import('./types').Recording>
+      replayDelete: (id: string) => Promise<{ ok: boolean }>
     }
   }
 }

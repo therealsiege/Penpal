@@ -723,3 +723,62 @@ export interface ConfigSnapshot {
   agents: AgentToolSummary[]
   timestamp: number
 }
+
+// ── Session Replay ────────────────────────────────────────────────────────────
+
+export type ReplayEventType =
+  | 'state-transition'
+  | 'task-dispatched'
+  | 'task-completed'
+  | 'task-failed'
+  | 'snapshot'
+
+export interface AgentSnapshot {
+  agentId: string
+  agentName: string
+  status: AgentStatus
+  sessionMode?: SessionMode
+  cwd?: string
+  cpu?: string
+  memoryMB?: number
+  contextUtilization?: number
+  needsInteraction?: boolean
+}
+
+export interface ReplayEvent {
+  id: string
+  timestamp: number
+  type: ReplayEventType
+  agentId: string
+  agentName: string
+  data: {
+    fromStatus?: AgentStatus
+    toStatus?: AgentStatus
+    fromMode?: SessionMode
+    toMode?: SessionMode
+    taskTitle?: string
+    taskId?: string
+    taskPriority?: string
+    message?: string
+    sessionId?: string
+    cwd?: string
+    contextUtilization?: number
+    cpu?: string
+    memoryMB?: number
+    agents?: AgentSnapshot[]
+  }
+}
+
+export interface RecordingMeta {
+  id: string
+  label: string
+  startedAt: number
+  endedAt?: number
+  eventCount: number
+  durationMs: number
+  isActive: boolean
+}
+
+export interface Recording extends RecordingMeta {
+  events: ReplayEvent[]
+}
