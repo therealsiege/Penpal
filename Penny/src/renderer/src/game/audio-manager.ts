@@ -504,6 +504,136 @@ export class AudioManager {
   }
 
   // -------------------------------------------------------------------------
+  // UI sound effects
+  // -------------------------------------------------------------------------
+
+  /** Short high-frequency click for button press. */
+  buttonClick(): void {
+    if (!this._ctx || this._muted) return
+    const ctx = this._ensureContext()
+    if (!ctx) return
+    const uiGain = this._channelGains.ui
+    if (!uiGain) return
+    const now = ctx.currentTime
+
+    const g = ctx.createGain()
+    g.gain.setValueAtTime(0, now)
+    g.gain.linearRampToValueAtTime(0.08, now + 0.004)
+    g.gain.exponentialRampToValueAtTime(0.0001, now + 0.035)
+    g.connect(uiGain)
+
+    const osc = ctx.createOscillator()
+    osc.type = 'square'
+    osc.frequency.value = 900
+    osc.connect(g)
+    osc.start(now)
+    osc.stop(now + 0.04)
+  }
+
+  /** Subtle hover tone — very short, quiet. */
+  buttonHover(): void {
+    if (!this._ctx || this._muted) return
+    const ctx = this._ensureContext()
+    if (!ctx) return
+    const uiGain = this._channelGains.ui
+    if (!uiGain) return
+    const now = ctx.currentTime
+
+    const g = ctx.createGain()
+    g.gain.setValueAtTime(0, now)
+    g.gain.linearRampToValueAtTime(0.025, now + 0.003)
+    g.gain.exponentialRampToValueAtTime(0.0001, now + 0.018)
+    g.connect(uiGain)
+
+    const osc = ctx.createOscillator()
+    osc.type = 'sine'
+    osc.frequency.value = 1100
+    osc.connect(g)
+    osc.start(now)
+    osc.stop(now + 0.022)
+  }
+
+  /** Severity-matched sound for toast notifications. */
+  toastSound(type: 'info' | 'success' | 'warning' | 'error'): void {
+    if (!this._ctx || this._muted) return
+    const ctx = this._ensureContext()
+    if (!ctx) return
+    const uiGain = this._channelGains.ui
+    if (!uiGain) return
+    const now = ctx.currentTime
+
+    // Frequency and decay per severity
+    const configs: Record<string, { freq: number; decay: number; vol: number }> = {
+      info:    { freq: 880,  decay: 0.12, vol: 0.04 },
+      success: { freq: 1046, decay: 0.18, vol: 0.05 },
+      warning: { freq: 600,  decay: 0.22, vol: 0.06 },
+      error:   { freq: 320,  decay: 0.30, vol: 0.07 },
+    }
+    const { freq, decay, vol } = configs[type] ?? configs.info
+
+    const g = ctx.createGain()
+    g.gain.setValueAtTime(0, now)
+    g.gain.linearRampToValueAtTime(vol, now + 0.006)
+    g.gain.exponentialRampToValueAtTime(0.0001, now + decay)
+    g.connect(uiGain)
+
+    const osc = ctx.createOscillator()
+    osc.type = 'sine'
+    osc.frequency.value = freq
+    osc.connect(g)
+    osc.start(now)
+    osc.stop(now + decay + 0.01)
+  }
+
+  /** Soft whoosh-up for panel open. */
+  panelOpen(): void {
+    if (!this._ctx || this._muted) return
+    const ctx = this._ensureContext()
+    if (!ctx) return
+    const uiGain = this._channelGains.ui
+    if (!uiGain) return
+    const now = ctx.currentTime
+
+    const g = ctx.createGain()
+    g.gain.setValueAtTime(0, now)
+    g.gain.linearRampToValueAtTime(0.05, now + 0.04)
+    g.gain.exponentialRampToValueAtTime(0.0001, now + 0.18)
+    g.connect(uiGain)
+
+    const osc = ctx.createOscillator()
+    osc.type = 'sine'
+    osc.frequency.setValueAtTime(400, now)
+    osc.frequency.linearRampToValueAtTime(700, now + 0.12)
+    osc.connect(g)
+    osc.start(now)
+    osc.stop(now + 0.20)
+  }
+
+  /** Soft whoosh-down for panel close. */
+  panelClose(): void {
+    if (!this._ctx || this._muted) return
+    const ctx = this._ensureContext()
+    if (!ctx) return
+    const uiGain = this._channelGains.ui
+    if (!uiGain) return
+    const now = ctx.currentTime
+
+    const g = ctx.createGain()
+    g.gain.setValueAtTime(0, now)
+    g.gain.linearRampToValueAtTime(0.04, now + 0.02)
+    g.gain.exponentialRampToValueAtTime(0.0001, now + 0.16)
+    g.connect(uiGain)
+
+    const osc = ctx.createOscillator()
+    osc.type = 'sine'
+    osc.frequency.setValueAtTime(700, now)
+    osc.frequency.linearRampToValueAtTime(350, now + 0.12)
+    osc.connect(g)
+    osc.start(now)
+    osc.stop(now + 0.18)
+  }
+
+  // -------------------------------------------------------------------------
   // localStorage persistence
   // -------------------------------------------------------------------------
 
