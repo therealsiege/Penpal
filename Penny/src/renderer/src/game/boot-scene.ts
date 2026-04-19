@@ -588,7 +588,6 @@ export class BootScene extends BaseScene {
         })
       }
     }
-  }
 
     // -------------------------------------------------------------------------
     // RPG 8-direction character animations
@@ -598,6 +597,7 @@ export class BootScene extends BaseScene {
     if (this.textures.exists(SPRITESHEET_KEYS.CHARACTERS_RPG)) {
       this._registerRpgAnims(0)
     }
+  }
 
   // -------------------------------------------------------------------------
   // RPG animation registration helper
