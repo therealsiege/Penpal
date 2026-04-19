@@ -431,7 +431,7 @@ export class OfficeAtmosphere {
   // Dynamic shadows
   // ---------------------------------------------------------------------------
 
-  updateShadows(rooms: Map<string, { workstations: Map<string, { shadow?: Phaser.GameObjects.Ellipse }> }>): void {
+  updateShadows(rooms: Map<string, { workstations: Map<string, { shadow?: Phaser.GameObjects.Ellipse }>; ambientLightIntensity?: number }>): void {
     const phase = this.currentTimePhase
     let shadowAlpha: number
     let shadowWidth: number
@@ -454,10 +454,13 @@ export class OfficeAtmosphere {
     const xOffset = this.shadowAngle * 8
 
     for (const room of rooms.values()) {
+      // Ambient zone light boosts shadow alpha slightly — stronger lights cast sharper shadows
+      const ambientBoost = (room.ambientLightIntensity ?? 0) * 0.12
+      const roomShadowAlpha = Math.min(shadowAlpha + ambientBoost, 0.38)
       for (const ws of room.workstations.values()) {
         if (!ws.shadow) continue
         ws.shadow.x = xOffset
-        ws.shadow.setAlpha(shadowAlpha)
+        ws.shadow.setAlpha(roomShadowAlpha)
         ws.shadow.width = shadowWidth
       }
     }

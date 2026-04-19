@@ -643,7 +643,8 @@ export class WorkstationFactory {
     const chairOffX = hasConsoleDeskImage ? 18 : 0
     const chairOffY = hasConsoleDeskImage ? 2 : 0
     const chairAngle = hasConsoleDeskImage ? -15 : 0
-    const shadow = this.scene.add.ellipse(chairOffX, WS_SPRITE_Y + 2 + chairOffY, 20, 6, 0x000000, 0.2)
+    // Wider blob shadow — 30px wide, 60% height (18px) per Living Lab spec
+    const shadow = this.scene.add.ellipse(chairOffX, WS_SPRITE_Y + 2 + chairOffY, 30, 18, 0x000000, 0.2)
     wsContainer.add(shadow)
 
     const charIdx = this.host.getAgentCharacterIndex(agent)

@@ -54,6 +54,8 @@ class InteractiveProp {
   // Per-prop mutable state
   private whiteboardIndex = 0
   private whiteboardDisplay: Phaser.GameObjects.Text | null = null
+  /** Orange glow graphics for printer — activated during reactPrinter */
+  private printerGlow: Phaser.GameObjects.Graphics | null = null
 
   constructor(scene: Phaser.Scene, config: PropConfig) {
     this.scene = scene
@@ -132,6 +134,16 @@ class InteractiveProp {
   }
 
   private buildPrinter(): void {
+    // Orange glow — inactive (alpha 0) until printer is activated via reactPrinter
+    const printerGlow = this.scene.add.graphics()
+    printerGlow.fillStyle(0xfb923c, 0.07)
+    printerGlow.fillCircle(0, 0, 28)
+    printerGlow.fillStyle(0xfb923c, 0.13)
+    printerGlow.fillCircle(0, 0, 15)
+    printerGlow.setAlpha(0)
+    this.container.addAt(printerGlow, 0)  // behind all printer graphics
+    this.printerGlow = printerGlow
+
     const g = this.scene.add.graphics()
     // Body — dark steel
     g.fillStyle(activeTheme.wall, 1); g.fillRect(-22, -10, 44, 20)
@@ -326,6 +338,25 @@ class InteractiveProp {
     g.lineBetween(0, 28, 0, 34)
     g.lineBetween(4, 28, 4, 31)
     this.container.add(g)
+
+    // Subtle green point light — server status LEDs scatter soft green onto floor
+    const rackGlow = this.scene.add.graphics()
+    rackGlow.fillStyle(0x00ff88, 0.06)
+    rackGlow.fillCircle(0, 0, 30)
+    rackGlow.fillStyle(0x00ff88, 0.10)
+    rackGlow.fillCircle(0, 0, 18)
+    rackGlow.fillStyle(0x22c55e, 0.14)
+    rackGlow.fillCircle(0, 0, 8)
+    this.container.addAt(rackGlow, 0)  // behind rack graphics
+    this.scene.tweens.add({
+      targets: rackGlow,
+      alpha: { from: 0.55, to: 1.0 },
+      duration: 1600,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
+      delay: Math.random() * 600,
+    })
   }
 
   private buildMakoLamp(): void {
@@ -494,6 +525,26 @@ class InteractiveProp {
   }
 
   private reactPrinter(): void {
+    // Flash orange accent glow when printing
+    if (this.printerGlow) {
+      const glow = this.printerGlow
+      this.scene.tweens.add({
+        targets: glow,
+        alpha: { from: 0, to: 1.0 },
+        duration: 120,
+        ease: 'Power2',
+        onComplete: () => {
+          this.scene.tweens.add({
+            targets: glow,
+            alpha: 0,
+            duration: 900,
+            delay: 250,
+            ease: 'Sine.easeOut',
+          })
+        },
+      })
+    }
+
     const paper = this.scene.add.rectangle(
       this.container.x, this.container.y - 10, 20, 2, 0xf8fafc
     ).setDepth(this.container.depth + 1)
@@ -792,6 +843,8 @@ class InteractiveProp {
     this.hitZone.destroy()
     this.container.destroy()
     this.whiteboardDisplay?.destroy()
+    this.printerGlow?.destroy()
+    this.printerGlow = null
   }
 }
 
