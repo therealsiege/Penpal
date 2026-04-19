@@ -203,6 +203,7 @@ export class AudioManager {
 
   get isMuted(): boolean { return this._muted }
   get masterVolume(): number { return this._masterVolume }
+  getChannelVolume(name: ChannelName): number { return this._channelVolumes[name] }
 
   // -------------------------------------------------------------------------
   // Fade helpers

@@ -8,6 +8,7 @@ import { activeTheme } from './office-theme'
 import { SPRITESHEET_KEYS, TOAST_ICON_FRAMES, ICON_FRAMES, ITEM_FRAMES, PET_COUNT, IMAGE_KEYS } from './office-asset-keys'
 import { SIGNATURE_ITEM_NAMES } from './workstation-creation'
 import { audioManager } from './audio-manager'
+import { SettingsOverlay, type SettingsHostScene } from './office-settings'
 
 // ---------------------------------------------------------------------------
 // OfficeUI — owns all screen-space UI state for OfficeScene
@@ -43,6 +44,10 @@ export class OfficeUI {
   private opsOverlay: Phaser.GameObjects.Container | null = null
   opsVisible = false
 
+  // In-game settings overlay (Audio / Display / Controls)
+  private _settings: SettingsOverlay | null = null
+  get settingsVisible(): boolean { return this._settings?.settingsVisible ?? false }
+
   // Debug overlay (backtick toggle)
   debugOverlayVisible = false
   private debugOverlayContainer: Phaser.GameObjects.Container | null = null
@@ -66,6 +71,7 @@ export class OfficeUI {
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene
+    this._settings = new SettingsOverlay(scene)
   }
 
   // ---------------------------------------------------------------------------
@@ -89,6 +95,9 @@ export class OfficeUI {
   }
 
   destroy(): void {
+    this._settings?.destroy()
+    this._settings = null
+
     if (this.opsOverlay) {
       this.scene.tweens.killTweensOf(this.opsOverlay)
       this.opsOverlay.destroy()
@@ -572,6 +581,18 @@ export class OfficeUI {
       ease: 'Quad.easeIn',
       onComplete: () => { try { overlay.destroy() } catch { /* already gone */ } },
     })
+  }
+
+  // ---------------------------------------------------------------------------
+  // Settings overlay (Audio / Display / Controls)
+  // ---------------------------------------------------------------------------
+
+  showSettingsOverlay(host: SettingsHostScene): void {
+    this._settings?.show(host)
+  }
+
+  hideSettingsOverlay(): void {
+    this._settings?.hide()
   }
 
   // ---------------------------------------------------------------------------

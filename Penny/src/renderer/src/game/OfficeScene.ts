@@ -7,6 +7,7 @@ import { PennyCafe, type CafeHostScene } from './penny-cafe'
 import { OfficeParticles } from './office-particles'
 import { OfficeAtmosphere } from './office-atmosphere'
 import { OfficeUI } from './office-ui'
+import { loadGameSettings, type SettingsHostScene } from './office-settings'
 import { OfficeAmbient } from './office-ambient'
 import { OfficePods } from './office-pods'
 import { OfficeMcp } from './office-mcp'
@@ -295,6 +296,10 @@ export class OfficeScene extends Phaser.Scene {
   }
 
   create(): void {
+    // Restore persisted theme before rendering anything
+    const { themeName: savedTheme } = loadGameSettings()
+    setActiveTheme(savedTheme)
+
     this.cafe = new PennyCafe(this as unknown as CafeHostScene)
 
     const cam = this.cameras.main
@@ -556,16 +561,18 @@ export class OfficeScene extends Phaser.Scene {
         this.selection.confirmSelectedAgent()
       })
 
-      // ESC document order: ops board → achievements → help → focus → deselect
+      // ESC document order: settings → ops board → achievements → help → focus → deselect → open settings
       this.input.keyboard.on('keydown-ESC', (e: KeyboardEvent) => {
         if (shouldIgnoreKeyboardShortcuts(e)) return
         e.preventDefault()
+        if (this.ui.settingsVisible) { this.ui.hideSettingsOverlay(); return }
         if (this.ui.opsVisible) { this.ui.hideOpsBoardOverlay(); return }
         if (this.achievementPanel?.isVisible) { this.achievementPanel.hide(); return }
         if (this.ui.helpVisible) { this.ui.hideHelpOverlay(); return }
         if (this.selection.isFocused) { this.selection.exitFocusMode(); return }
-        this.selection.deselectAgent()
-        this.selection.stopAutoPan()
+        if (this.selection.selectedAgentIndex >= 0) { this.selection.deselectAgent(); this.selection.stopAutoPan(); return }
+        // Nothing to dismiss — open settings
+        this.ui.showSettingsOverlay(this)
       })
 
       this.input.keyboard.on('keydown-F', (e: KeyboardEvent) => {
@@ -1676,6 +1683,12 @@ export class OfficeScene extends Phaser.Scene {
   /** Delegate for CafeHostScene — cafe calls scene.spawnEmojiReaction() */
   public spawnEmojiReaction(worldX: number, worldY: number, emoji: string): void {
     this.particles.spawnEmojiReaction(worldX, worldY, emoji)
+  }
+
+  /** Apply a theme change from the settings overlay (SettingsHostScene contract). */
+  applyTheme(name: ThemeName): void {
+    this.setTheme(name)
+    this.showToast(`Theme: ${name}`, 'info')
   }
 
   /** Switch theme with smooth 500ms background color transition */
