@@ -21,7 +21,7 @@ export class WeatherParticles {
   private lightningInterval = 20000 + Math.random() * 20000 // 20-40s between strikes
 
   // Thunderstorm state
-  private isThunderstormActive = false
+  private thunderstormActive = false
   private puddleLayer: Phaser.GameObjects.Graphics | null = null
   private puddles: { x: number; y: number; radius: number; alpha: number; createdAt: number }[] = []
   private puddleTimer = 0
@@ -120,7 +120,7 @@ export class WeatherParticles {
     }
 
     // Occasional lightning flash during rain
-    if (this.rainActive && this.isThunderstormActive) {
+    if (this.rainActive && this.thunderstormActive) {
       const now = this.scene.time.now
       if (now - this.lastLightningAt > this.lightningInterval) {
         this.lastLightningAt = now
@@ -142,7 +142,7 @@ export class WeatherParticles {
     }
     
     // Puddle accumulation logic
-    if (this.rainActive && this.isThunderstormActive) {
+    if (this.rainActive && this.thunderstormActive) {
       this.puddleTimer += 16 // Assuming ~60fps
       
       // Show puddle layer once 30 seconds of rain have passed
@@ -345,12 +345,12 @@ export class WeatherParticles {
     }
     
     // Snow accumulation on ground
-    if (this.snowActive && this.isThunderstormActive) {
+    if (this.snowActive && this.thunderstormActive) {
       this.updateSnowAccumulation(time, viewWidth, viewHeight)
     }
     
     // Update breath particles when snow is active
-    if (this.isThunderstormActive && this.snowActive) {
+    if (this.thunderstormActive && this.snowActive) {
       this.updateBreathParticles(time, viewWidth, viewHeight)
     }
   }
@@ -361,7 +361,7 @@ export class WeatherParticles {
 
   private updateSnowAccumulation(time: number, viewWidth: number, viewHeight: number): void {
     // Gradually increase snow ground overlay when snow is active and thunderstorm is active
-    if (this.snowActive && this.isThunderstormActive) {
+    if (this.snowActive && this.thunderstormActive) {
       if (time - this.lastSnowAccumulationAt > 200) {
         if (this.snowAccumulation < 0.3) {
           this.snowAccumulation += 0.001
@@ -434,7 +434,7 @@ export class WeatherParticles {
       }
       
       // Reset puddle timers when rain ends
-      if (!shouldRain && this.isThunderstormActive) {
+      if (!shouldRain && this.thunderstormActive) {
         this.lastRainStopTime = this.scene.time.now
       }
     }
@@ -453,62 +453,28 @@ export class WeatherParticles {
       }
       
       // Reset snow when snow ends
-      if (!shouldSnow && this.isThunderstormActive) {
+      if (!shouldSnow && this.thunderstormActive) {
         this.snowGroundOverlay!.setVisible(false)
         this.snowAccumulation = 0
       }
     }
   }
 
-  // Puddle management
-  // ---------------------------------------------------------------------------
-
-  private updatePuddles(viewWidth: number, viewHeight: number): void {
-    // Clear previously drawn puddles
-    this.puddleLayer!.clear()
-    
-    // Add new puddle occasionally if we don't have too many
-    if (this.puddles.length < 20 && Math.random() < 0.02) {
-      this.puddles.push({
-        x: Math.random() * viewWidth,
-        y: Math.random() * viewHeight,
-        radius: 6 + Math.random() * 8,
-        alpha: 0.4 + Math.random() * 0.2,
-        createdAt: this.scene.time.now
-      })
-    }
-    
-    // Remove puddles that are too old or have faded out
-    this.puddles = this.puddles.filter(puddle => {
-      if (this.scene.time.now - puddle.createdAt > this.puddleFadeDuration) {
-        // Puddles fade out completely over the fade duration period
-        return false
-      }
-      return true
-    });
-    
-    // Draw all puddles in the pool
-    this.puddleLayer!.fillStyle(0x3b82f6, 0.2)
-    for (const puddle of this.puddles) {
-      this.puddleLayer!.fillEllipse(puddle.x, puddle.y, puddle.radius * 2, puddle.radius * 1.5)
-    }
-  }
-
   deactivateThunderstorm(): void {
     // Reset snow accumulation and puddles when thunderstorm is deactivated
-    this.isThunderstormActive = false
+    this.thunderstormActive = false
     this.puddleLayer!.setVisible(false)
     this.snowGroundOverlay!.setVisible(false)
     this.puddles = []
     this.snowAccumulation = 0
     this.puddleTimer = 0
-    
+
     // Ensure rain timer is reset too
     this.lastLightningAt = this.scene.time.now
   }
 
-  isThunderstormActive(): boolean {
-    return this.isThunderstormActive
+  getThunderstormActive(): boolean {
+    return this.thunderstormActive
   }
 
   // ---------------------------------------------------------------------------
