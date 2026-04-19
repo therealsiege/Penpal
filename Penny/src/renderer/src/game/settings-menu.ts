@@ -2,12 +2,25 @@
 // settings-menu.ts
 // In-game settings overlay — volumes, theme, keybinds.
 //
-// Opened with ESC when no other overlay is active; closed with ESC or the
-// X button.  All settings persist to localStorage.
+// ESC key behaviour (handled in OfficeScene, not here):
+//   - If settings is already open  → close it (this.ui.hideSettingsMenu())
+//   - If another overlay is open   → close that overlay first
+//   - If nothing is open           → open settings (this.ui.showSettingsMenu())
+//   i.e. ESC always closes the top-most overlay; settings is the last to open.
+//
+// Close mechanisms: ESC key (via OfficeScene dismissal chain) OR the X button.
+//
+// localStorage persistence:
+//   - Audio state (master + channel volumes, mute): stored under "penny-audio-state"
+//     by AudioManager._saveState() / _loadState(). Wrapped in try/catch — if
+//     localStorage is unavailable or quota-exceeded the call silently no-ops and
+//     the session retains in-memory state (defaults are restored on next launch).
+//   - Theme: stored under "penny-settings-theme". Same silent-fallback pattern.
 //
 // Sections:
 //   AUDIO   — master + per-channel (ambient / sfx / ui / music) sliders
-//   DISPLAY — dark / light theme selector
+//             Range 0–100% (stored as 0.0–1.0), step 1%.
+//   DISPLAY — theme selector (available: "dark" | "light", defined in office-theme.ts)
 //   CONTROLS — keybind reference (two-column)
 // ---------------------------------------------------------------------------
 
@@ -32,6 +45,11 @@ const SECTION_GAP = 14
 
 // Accent color for track fill + handle stroke
 const ACCENT = 0x3b82f6
+
+// Volume slider range and step
+const VOL_MIN  = 0     // 0%
+const VOL_MAX  = 1     // 100%
+const VOL_STEP = 0.01  // 1% per step — snapped on drag release
 
 // ---------------------------------------------------------------------------
 // Pointer-handler record (for cleanup)
@@ -359,7 +377,10 @@ export class SettingsMenu {
     ct.add(zone)
 
     const applyX = (screenX: number) => {
-      const v = Phaser.Math.Clamp((screenX - trackX) / TRACK_W, 0, 1)
+      // Snap to VOL_STEP (1%) increments; clamp to [VOL_MIN, VOL_MAX]
+      const raw     = (screenX - trackX) / TRACK_W
+      const stepped = Math.round(raw / VOL_STEP) * VOL_STEP
+      const v       = Phaser.Math.Clamp(stepped, VOL_MIN, VOL_MAX)
       if (v !== val) { redraw(v); valText.setText(_pct(v)); onChange(v) }
     }
 
@@ -386,6 +407,11 @@ export class SettingsMenu {
     panelX: number,
     y: number,
   ): number {
+    // Available themes: "dark" (default) and "light", defined in office-theme.ts.
+    // Selecting a theme calls setActiveTheme() + persists to localStorage under
+    // "penny-settings-theme". If localStorage is unavailable, the change applies
+    // for the current session only and silently falls back to default on next launch.
+    // The onThemeChange callback triggers OfficeScene to redraw rooms/background.
     const themes: { name: ThemeName; label: string }[] = [
       { name: 'dark',  label: 'Dark'  },
       { name: 'light', label: 'Light' },
