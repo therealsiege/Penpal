@@ -40,8 +40,6 @@ export interface WorkstationSprite {
   dotPulseTween?: Phaser.Tweens.Tween
   keyboard?: Phaser.GameObjects.Rectangle
   kbGlowTween?: Phaser.Tweens.Tween
-  /** Keyboard scale pulse tween — tiny scaleY oscillation while agent is working */
-  kbScaleTween?: Phaser.Tweens.Tween
   monitorGlowTween?: Phaser.Tweens.Tween
   screenTween?: Phaser.Tweens.Tween
   /** Mutable ref shared with screenTween callback — set .mode to update screen animation */
@@ -63,10 +61,7 @@ export interface WorkstationSprite {
   walkBreakTween?: Phaser.Tweens.Tween
   lookAtNeighborTimer?: Phaser.Time.TimerEvent
   yawnTimer?: Phaser.Time.TimerEvent
-  /** Timer for per-archetype idle micro-animations (personality variety) */
-  microAnimTimer?: Phaser.Time.TimerEvent
   blockedIndicatorTween?: Phaser.Tweens.Tween
-  blockedBobTween?: Phaser.Tweens.Tween
   ledGlow?: Phaser.GameObjects.Graphics
   ledPulseTween?: Phaser.Tweens.Tween
   lastShownBlurb?: string
@@ -155,7 +150,6 @@ export interface WorkstationSprite {
   speechBubbleText?: Phaser.GameObjects.Text
   speechBubbleBg?: Phaser.GameObjects.Graphics
   speechBubbleTween?: Phaser.Tweens.Tween
-  speechBubbleBobTween?: Phaser.Tweens.Tween
   speechBubbleTimer?: Phaser.Time.TimerEvent
   /** Lego exclamation sprite — shown when agent needs interaction */
   exclamationSprite?: Phaser.GameObjects.Sprite
@@ -200,15 +194,10 @@ export interface WorkstationSprite {
   contextRotShakeTween?: Phaser.Tweens.Tween
   lastContextRotState?: boolean
   contextRotMonitorBaseX?: number
-  // ---------------------------------------------------------------------------
-  // Schedule-driven animation state (agent-schedule.ts)
-  // ---------------------------------------------------------------------------
-  /** True while the arrival walk animation is playing — suppresses other animations */
-  isArriving?: boolean
-  /** True while the departure walk animation is playing — suppresses other animations */
-  isDeparting?: boolean
-  /** True while the agent is participating in a standup meeting */
-  isInStandup?: boolean
+  /** Monitor screensaver — gradient cycle tween (idle only) */
+  screensaverTween?: Phaser.Tweens.Tween
+  /** Coffee mug steam — recurring spawn timer (idle only) */
+  mugSteamTimer?: Phaser.Time.TimerEvent
 }
 
 export interface Room {
