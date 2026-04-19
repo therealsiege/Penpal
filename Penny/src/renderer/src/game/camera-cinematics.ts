@@ -12,6 +12,11 @@
 //
 // Debounce: same event type within 3 s is dropped.
 // Queue overflow: task-dispatch is dropped when > 3 items pending.
+//
+// Letterbox bars:
+//   enterLetterbox() / exitLetterbox() — 200 ms slide, 8% screen height.
+//   Auto-triggered on rank-up sequences and season ceremonies.
+//   Screen-space overlay, depth 9998.
 // ---------------------------------------------------------------------------
 
 import Phaser from 'phaser'
@@ -66,6 +71,13 @@ export interface CinematicsHostScene {
 // CameraCinematics
 // ---------------------------------------------------------------------------
 
+/** Height of each letterbox bar as a fraction of camera height. */
+const LETTERBOX_FRACTION = 0.08
+/** Slide duration in ms for enter/exit letterbox animation. */
+const LETTERBOX_DURATION_MS = 200
+/** How long to hold letterbox bars during a season ceremony (ms). */
+const SEASON_LETTERBOX_HOLD_MS = 4000
+
 export class CameraCinematics {
   private scene: Phaser.Scene
   private host: CinematicsHostScene
@@ -76,6 +88,11 @@ export class CameraCinematics {
 
   /** Last emission time per event type — used for debounce. */
   private lastTrigger: Partial<Record<AutoPanEventType, number>> = {}
+
+  // Letterbox bar GameObjects (screen-space, depth 9998)
+  private _topBar: Phaser.GameObjects.Rectangle | null = null
+  private _bottomBar: Phaser.GameObjects.Rectangle | null = null
+  private _seasonLetterboxTimer: Phaser.Time.TimerEvent | null = null
 
   // EventBus listener refs (stored for cleanup)
   private readonly _onTaskDispatched = (...args: unknown[]) => {
@@ -92,6 +109,12 @@ export class CameraCinematics {
   }
   private readonly _onAgentError = (...args: unknown[]) => {
     this._enqueue('agent-error', [args[0] as string])
+  }
+  private readonly _onSeasonEnded = () => {
+    this._triggerSeasonLetterbox()
+  }
+  private readonly _onSeasonStarted = () => {
+    this._triggerSeasonLetterbox()
   }
 
   // User-input cancel listeners
@@ -110,6 +133,8 @@ export class CameraCinematics {
     EventBus.on(EVENTS.POD_LAUNCHED, this._onPodLaunched)
     EventBus.on(EVENTS.RANK_UP, this._onRankUp)
     EventBus.on(EVENTS.AGENT_ERROR, this._onAgentError)
+    EventBus.on(EVENTS.SEASON_ENDED, this._onSeasonEnded)
+    EventBus.on(EVENTS.SEASON_STARTED, this._onSeasonStarted)
 
     this.scene.input.on('pointerdown', this._onPointerDown)
     this.scene.input.keyboard?.on('keydown', this._onKeyDown)
@@ -122,10 +147,143 @@ export class CameraCinematics {
     EventBus.off(EVENTS.POD_LAUNCHED, this._onPodLaunched)
     EventBus.off(EVENTS.RANK_UP, this._onRankUp)
     EventBus.off(EVENTS.AGENT_ERROR, this._onAgentError)
+    EventBus.off(EVENTS.SEASON_ENDED, this._onSeasonEnded)
+    EventBus.off(EVENTS.SEASON_STARTED, this._onSeasonStarted)
 
     this.scene.input.off('pointerdown', this._onPointerDown)
     this.scene.input.keyboard?.off('keydown', this._onKeyDown)
     this.scene.input.off('wheel', this._onWheel)
+
+    // Clean up any lingering letterbox bars
+    this._destroyBarsImmediate()
+  }
+
+  // ---------------------------------------------------------------------------
+  // Letterbox bars — public API
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Slide two black bars in from the top and bottom edges.
+   * Each bar is 8% of camera height. Duration: 200 ms.
+   * Safe to call when bars are already visible (no-op if mid-enter).
+   */
+  enterLetterbox(): void {
+    const cam = this.host.cameras.main
+    const barH = Math.round(cam.height * LETTERBOX_FRACTION)
+    const w = cam.width
+
+    // Create bars if they don't exist yet
+    if (!this._topBar) {
+      this._topBar = this.host.add
+        .rectangle(0, -barH, w, barH, 0x000000)
+        .setOrigin(0, 0)
+        .setScrollFactor(0)
+        .setDepth(9998)
+    }
+    if (!this._bottomBar) {
+      this._bottomBar = this.host.add
+        .rectangle(0, cam.height, w, barH, 0x000000)
+        .setOrigin(0, 0)
+        .setScrollFactor(0)
+        .setDepth(9998)
+    }
+
+    this.host.tweens.killTweensOf(this._topBar)
+    this.host.tweens.killTweensOf(this._bottomBar)
+
+    this.host.tweens.add({
+      targets: this._topBar,
+      y: 0,
+      duration: LETTERBOX_DURATION_MS,
+      ease: 'Sine.easeOut',
+    })
+    this.host.tweens.add({
+      targets: this._bottomBar,
+      y: cam.height - barH,
+      duration: LETTERBOX_DURATION_MS,
+      ease: 'Sine.easeOut',
+    })
+  }
+
+  /**
+   * Slide the letterbox bars back out to the edges.
+   * Bars are destroyed after the 200 ms animation completes.
+   */
+  exitLetterbox(): void {
+    if (!this._topBar && !this._bottomBar) return
+
+    const cam = this.host.cameras.main
+    const barH = Math.round(cam.height * LETTERBOX_FRACTION)
+
+    if (this._topBar) {
+      const topBar = this._topBar
+      this._topBar = null
+      this.host.tweens.killTweensOf(topBar)
+      this.host.tweens.add({
+        targets: topBar,
+        y: -barH,
+        duration: LETTERBOX_DURATION_MS,
+        ease: 'Sine.easeIn',
+        onComplete: () => topBar.destroy(),
+      })
+    }
+
+    if (this._bottomBar) {
+      const bottomBar = this._bottomBar
+      this._bottomBar = null
+      this.host.tweens.killTweensOf(bottomBar)
+      this.host.tweens.add({
+        targets: bottomBar,
+        y: cam.height,
+        duration: LETTERBOX_DURATION_MS,
+        ease: 'Sine.easeIn',
+        onComplete: () => bottomBar.destroy(),
+      })
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Season ceremony letterbox
+  // ---------------------------------------------------------------------------
+
+  private _triggerSeasonLetterbox(): void {
+    // Cancel any pending season letterbox hold
+    if (this._seasonLetterboxTimer) {
+      this._seasonLetterboxTimer.remove()
+      this._seasonLetterboxTimer = null
+    }
+
+    this.enterLetterbox()
+
+    this._seasonLetterboxTimer = this.scene.time.delayedCall(
+      SEASON_LETTERBOX_HOLD_MS,
+      () => {
+        this._seasonLetterboxTimer = null
+        this.exitLetterbox()
+      },
+    )
+  }
+
+  // ---------------------------------------------------------------------------
+  // Internal helpers
+  // ---------------------------------------------------------------------------
+
+  /** Immediately destroy bars without animation (used on cancel/destroy). */
+  private _destroyBarsImmediate(): void {
+    if (this._topBar) {
+      this.host.tweens.killTweensOf(this._topBar)
+      this._topBar.destroy()
+      this._topBar = null
+    }
+    if (this._bottomBar) {
+      this.host.tweens.killTweensOf(this._bottomBar)
+      this._bottomBar.destroy()
+      this._bottomBar = null
+    }
+    if (this._seasonLetterboxTimer) {
+      this._seasonLetterboxTimer.remove()
+      this._seasonLetterboxTimer = null
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -173,6 +331,9 @@ export class CameraCinematics {
     // Release zoom lock
     this.host.getOfficeCamera().setCinematicZoomLock(false)
     this.host.unlockCinematicInput()
+
+    // Retract any visible letterbox bars
+    this.exitLetterbox()
 
     this.running = false
     this.activePriority = -1
@@ -344,7 +505,8 @@ export class CameraCinematics {
   }
 
   /**
-   * Rank Up: pan (500 ms) → zoom 1.5× (400 ms) → hold 2 s → zoom back (500 ms)
+   * Rank Up: enter letterbox → pan (500 ms) → zoom 1.5× (400 ms) → hold 2 s →
+   *          zoom back (500 ms) → exit letterbox
    */
   private _seqRankUp(
     agentId: string,
@@ -358,10 +520,15 @@ export class CameraCinematics {
     const baseZoom = this.host.cameras.main.zoom
     const peakZoom = Math.min(baseZoom * 1.5, ZOOM_MAX)
 
+    this.enterLetterbox()
+
     cam.smoothPanTo(pos.x, pos.y, 500, () => {
       this._zoomTo(peakZoom, 400, 'Sine.easeOut', () => {
         this.scene.time.delayedCall(2000, () => {
-          this._zoomTo(baseZoom, 500, 'Sine.easeInOut', onComplete)
+          this._zoomTo(baseZoom, 500, 'Sine.easeInOut', () => {
+            this.exitLetterbox()
+            onComplete()
+          })
         })
       })
     })
