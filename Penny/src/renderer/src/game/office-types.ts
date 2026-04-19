@@ -194,10 +194,10 @@ export interface WorkstationSprite {
   contextRotShakeTween?: Phaser.Tweens.Tween
   lastContextRotState?: boolean
   contextRotMonitorBaseX?: number
-  /** Monitor screensaver — gradient cycle tween (idle only) */
-  screensaverTween?: Phaser.Tweens.Tween
-  /** Coffee mug steam — recurring spawn timer (idle only) */
-  mugSteamTimer?: Phaser.Time.TimerEvent
+  /** Yellow rotating arc ring shown during accept-edits review phase */
+  taskReviewRing?: Phaser.GameObjects.Graphics
+  /** Counter tween driving the review ring rotation angle */
+  taskReviewRingTween?: Phaser.Tweens.Tween
 }
 
 export interface Room {
@@ -262,12 +262,6 @@ export interface Room {
   headerStatusDotTweens?: Phaser.Tweens.Tween[]
   // Lego brick sprites behind room header text
   headerLegoBricks?: Phaser.GameObjects.Sprite[]
-  /** Zone ambient light glow — large low-intensity colored circle at room center */
-  zoneAmbientGlow?: Phaser.GameObjects.Graphics
-  /** Breathing pulse tween for zone ambient light */
-  zoneAmbientTween?: Phaser.Tweens.Tween
-  /** Current ambient light intensity 0–1 — used to modulate character shadow alpha */
-  ambientLightIntensity?: number
 }
 
 export interface TeamAreaLayout {
