@@ -1,6 +1,5 @@
 import Phaser from 'phaser'
 import type { Room, PodLineInfo } from './office-types'
-import { COLOR_LED_AMBER } from './office-constants'
 import { hashToken, drawDashedLine } from './office-helpers'
 import { SPRITESHEET_KEYS, ICON_FRAMES, EFFECT_ANIM_KEYS } from './office-asset-keys'
 import { leaderboardManager } from './leaderboard'
@@ -41,8 +40,9 @@ export class OfficePods {
 
   /** Sprite-based endpoint dots at pod line agent positions */
   private endpointSprites: Phaser.GameObjects.Sprite[] = []
-  /** Sprite-based pulse dots traveling along active pod segments */
-  private pulseSprites: Phaser.GameObjects.Sprite[] = []
+
+  /** Track last t-value per segment key to detect pulse wrap-around for receiver flash */
+  private _lastPulseT = new Map<string, number>()
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene
@@ -83,8 +83,7 @@ export class OfficePods {
     this.podGraphics?.clear()
     for (const s of this.endpointSprites) s.destroy()
     this.endpointSprites = []
-    for (const s of this.pulseSprites) s.destroy()
-    this.pulseSprites = []
+    this._lastPulseT.clear()
   }
 
   clearRivalryVisuals(): void {
@@ -114,11 +113,9 @@ export class OfficePods {
     }
     this.podGraphics.clear()
 
-    // Recycle old endpoint and pulse sprites
+    // Recycle old endpoint sprites (pulse now drawn on podGraphics)
     for (const s of this.endpointSprites) s.destroy()
     this.endpointSprites = []
-    for (const s of this.pulseSprites) s.destroy()
-    this.pulseSprites = []
 
     for (const pod of this.podLines) {
       const agentIds = [pod.solverAgentId, pod.reviewerAgentId, pod.executorAgentId]
@@ -139,10 +136,6 @@ export class OfficePods {
         lineColor = 0x3b82f6
         lineAlpha = 0.6
         endpointFrame = ICON_FRAMES.CIRCLE_BLUE
-      } else if (pod.status === 'self-fixing') {
-        lineColor = 0xf97316
-        lineAlpha = 0.6
-        endpointFrame = ICON_FRAMES.CIRCLE_YELLOW
       } else if (pod.status === 'feedback') {
         lineColor = 0xfbbf24
         lineAlpha = 0.5
@@ -172,24 +165,55 @@ export class OfficePods {
 
       if (this.isPodAnimatedStatus(pod.status)) {
         const pulseSegments = this.getPodPulseSegments(pod.status, positions.length)
-        const pulseFrame = pod.status === 'feedback' ? ICON_FRAMES.CIRCLE_YELLOW : ICON_FRAMES.CIRCLE_BLUE
         const seed = hashToken(pod.workflowId) % 1000
-        pulseSegments.forEach((seg, i) => {
+
+        pulseSegments.forEach((seg, segIdx) => {
           if (seg.from < 0 || seg.to < 0 || seg.from >= positions.length || seg.to >= positions.length) return
-          const speed = 0.00058
-          const base = (timeMs * speed + seed * 0.001 + i * 0.21) % 1
-          const t = seg.from <= seg.to ? base : 1 - base
-          // Sprite-based pulse dot traveling along the segment
-          const px = Phaser.Math.Linear(positions[seg.from].x, positions[seg.to].x, t)
-          const py = Phaser.Math.Linear(positions[seg.from].y, positions[seg.to].y, t)
-          const pulseSprite = this.scene.add.sprite(px, py, SPRITESHEET_KEYS.GAME_ICONS, pulseFrame)
-            .setScale(0.15)
-            .setAlpha(0.75)
-            .setDepth(10001)
-          this.pulseSprites.push(pulseSprite)
-          // Keep the Graphics glow halo behind the sprite for the bloom effect
-          this.podGraphics!.fillStyle(pulseFrame === ICON_FRAMES.CIRCLE_YELLOW ? COLOR_LED_AMBER : 0x60a5fa, 0.15)
-          this.podGraphics!.fillCircle(px, py, 7)
+
+          const fromPos = positions[seg.from]
+          const toPos = positions[seg.to]
+          const dist = Math.hypot(toPos.x - fromPos.x, toPos.y - fromPos.y)
+          if (dist < 1) return
+
+          // Role-based pulse color: Solver=blue, Reviewer=purple, Executor=green
+          const pulseColor = this._getRolePulseColor(pod.status)
+
+          // Time-based 200px/sec speed
+          const PULSE_SPEED_PX_PER_MS = 0.2  // 200px/sec = 0.2px/ms
+          const period = dist / PULSE_SPEED_PX_PER_MS
+          const rawT = ((timeMs + seed * 17) % period) / period
+
+          // Flash at receiver on wrap-around (pulse crossed finish line)
+          const segKey = `${pod.workflowId}|${segIdx}`
+          const lastT = this._lastPulseT.get(segKey) ?? -1
+          if (lastT >= 0 && rawT < lastT && lastT > 0.85 && dist > 30) {
+            this._flashAtReceiver(toPos, pulseColor)
+          }
+          this._lastPulseT.set(segKey, rawT)
+
+          // 3-frame afterimage trail drawn directly on podGraphics
+          const TRAIL_FRAME_MS = 16  // ~1 frame at 60fps
+          const frameStep = TRAIL_FRAME_MS / period
+          const trailDots: Array<{ tOff: number; alpha: number; radius: number }> = [
+            { tOff: 0,             alpha: 0.82, radius: 4.5 },
+            { tOff: frameStep,     alpha: 0.45, radius: 3.0 },
+            { tOff: frameStep * 2, alpha: 0.20, radius: 1.8 },
+          ]
+
+          for (const dot of trailDots) {
+            const dotT = ((rawT - dot.tOff) % 1 + 1) % 1
+            const px = Phaser.Math.Linear(fromPos.x, toPos.x, dotT)
+            const py = Phaser.Math.Linear(fromPos.y, toPos.y, dotT)
+
+            // Glow halo for main dot
+            if (dot.tOff === 0) {
+              this.podGraphics!.fillStyle(pulseColor, 0.18)
+              this.podGraphics!.fillCircle(px, py, dot.radius * 2.2)
+            }
+            // Core dot
+            this.podGraphics!.fillStyle(pulseColor, dot.alpha)
+            this.podGraphics!.fillCircle(px, py, dot.radius)
+          }
         })
       }
     }
@@ -197,6 +221,36 @@ export class OfficePods {
 
   private isPodAnimatedStatus(status: string): boolean {
     return status === 'solving' || status === 'reviewing' || status === 'executing' || status === 'self-fixing' || status === 'feedback'
+  }
+
+  /** Role-based pulse color: Solver=blue, Reviewer=purple, Executor=green */
+  private _getRolePulseColor(status: string): number {
+    if (status === 'solving')   return 0x3b82f6  // S — blue
+    if (status === 'reviewing') return 0xa855f7  // R — purple
+    if (status === 'executing') return 0x10b981  // E — green
+    if (status === 'self-fixing') return 0x10b981 // executor self-correcting — green
+    if (status === 'feedback')  return 0xa855f7  // reviewer sending back — purple
+    return 0x60a5fa
+  }
+
+  /** Brief expanding ring + core flash at the receiver position when a pulse arrives. */
+  private _flashAtReceiver(pos: { x: number; y: number }, color: number): void {
+    const gfx = this.scene.add.graphics().setDepth(10002)
+    this.scene.tweens.addCounter({
+      from: 0,
+      to: 1,
+      duration: 240,
+      ease: 'Power2',
+      onUpdate: (tween) => {
+        const p = tween.getValue() ?? 0
+        gfx.clear()
+        gfx.lineStyle(2.5 * (1 - p), color, (1 - p) * 0.9)
+        gfx.strokeCircle(pos.x, pos.y, 4 + p * 18)
+        gfx.fillStyle(color, (1 - p) * 0.5)
+        gfx.fillCircle(pos.x, pos.y, 3 + p * 7)
+      },
+      onComplete: () => gfx.destroy(),
+    })
   }
 
   private getPodPulseSegments(status: string, pointCount: number): Array<{ from: number; to: number }> {
@@ -451,8 +505,7 @@ export class OfficePods {
 
     for (const s of this.endpointSprites) s.destroy()
     this.endpointSprites = []
-    for (const s of this.pulseSprites) s.destroy()
-    this.pulseSprites = []
+    this._lastPulseT.clear()
 
     for (const anim of this.chatAnimations) {
       try { anim.dot.destroy() } catch { /* already gone */ }

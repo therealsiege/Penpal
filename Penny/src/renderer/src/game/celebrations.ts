@@ -293,9 +293,15 @@ export class CelebrationManager {
   ): void {
     this._onCameraJuice?.('rankUp')
     soundEngine.levelUp()
+    // Screen shake for impact — scales with merge count
+    this._scene.cameras.main.shake(80 + mergeCount * 8, 0.0025 + 0.0003 * (mergeCount - 1))
     const burstN = Math.min(28, Math.round(10 * (1 + 0.15 * (mergeCount - 1))))
     const radius = Math.round(52 * (1 + 0.08 * (mergeCount - 1)))
     this._particleBurst(x, y, burstN, rankColor, radius)
+    // Gold particle burst slightly delayed for layered feel
+    this._scene.time.delayedCall(60, () => {
+      this._particleBurst(x, y, Math.round(burstN * 0.55), 0xfbbf24, Math.round(radius * 0.72))
+    })
     this._risingText(x, y - 18, `PROMOTED!`, {
       fontSize: scaledFontSize(13),
       fontFamily: 'monospace',
@@ -613,7 +619,11 @@ export class CelebrationManager {
         })
       },
     })
-    this._confetti(x, y, Math.min(40, 22 + (mergeCount - 1) * 3))
+    // 3-second confetti rain: three waves from the top of the viewport
+    const waveSize = Math.min(14, 10 + Math.floor((mergeCount - 1) * 1.5))
+    this._screenConfetti(waveSize)
+    this._scene.time.delayedCall(1000, () => { this._screenConfetti(waveSize) })
+    this._scene.time.delayedCall(2000, () => { this._screenConfetti(Math.ceil(waveSize * 0.7)) })
   }
 
   /**

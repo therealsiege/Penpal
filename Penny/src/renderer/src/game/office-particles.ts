@@ -55,6 +55,9 @@ export class OfficeParticles {
   private _reducedMode = false
   private _sleeping = false
 
+  /** Maximum simultaneously active particles across all Arc pools. Oldest is recycled when exceeded. */
+  private static readonly PARTICLE_BUDGET = 200
+
   // Sub-modules
   private weather: WeatherParticles
   private ambient: AmbientParticles
@@ -284,6 +287,56 @@ export class OfficeParticles {
   }
 
   // ---------------------------------------------------------------------------
+  // Particle budget system — max PARTICLE_BUDGET active Arc particles
+  // ---------------------------------------------------------------------------
+
+  /** All Arc pools included in the global budget. */
+  private _getAllArcPools(): Phaser.GameObjects.Arc[][] {
+    return [
+      this.typingParticlePool,
+      this.corridorParticlePool,
+      this.alertRipplePool,
+      this.mouseTrailPool,
+      this.chimeRipplePool,
+      this.streakFlamePool,
+    ]
+  }
+
+  /**
+   * If the global particle count is at budget, force-recycle the oldest busy
+   * particle so the next spawn can proceed.
+   */
+  private _enforceParticleBudget(): void {
+    const allPools = this._getAllArcPools()
+    let count = 0
+    for (const pool of allPools) {
+      for (const p of pool) {
+        if (p.getData('busy')) count++
+      }
+    }
+    if (count < OfficeParticles.PARTICLE_BUDGET) return
+
+    // Find oldest active particle by startedAt timestamp
+    let oldest: Phaser.GameObjects.Arc | null = null
+    let oldestTime = Infinity
+    for (const pool of allPools) {
+      for (const p of pool) {
+        if (p.getData('busy')) {
+          const t = (p.getData('startedAt') as number) ?? 0
+          if (t < oldestTime) {
+            oldestTime = t
+            oldest = p
+          }
+        }
+      }
+    }
+    if (oldest) {
+      this.scene.tweens.killTweensOf(oldest)
+      oldest.setVisible(false).setAlpha(0).setData('busy', false)
+    }
+  }
+
+  // ---------------------------------------------------------------------------
   // Typing spark particles
   // ---------------------------------------------------------------------------
 
@@ -298,6 +351,7 @@ export class OfficeParticles {
 
   spawnTypingParticle(worldX: number, worldY: number, isWaiting = false, isCompressing = false): void {
     if (this._sleeping) return
+    this._enforceParticleBudget()
     const p = this.typingParticlePool.find(c => !c.getData('busy'))
     if (!p) return
     const colors = isCompressing
@@ -311,7 +365,7 @@ export class OfficeParticles {
     p.setPosition(worldX + (Math.random() - 0.5) * 24, worldY)
     p.setFillStyle(colors[Math.floor(Math.random() * colors.length)])
     p.setRadius(radius)
-    p.setAlpha(0.9).setVisible(true).setData('busy', true)
+    p.setAlpha(0.9).setVisible(true).setData('busy', true).setData('startedAt', this.scene.time.now)
     const driftY = -8 - Math.random() * 18
     const driftX = (Math.random() - 0.5) * 24
     this.scene.tweens.add({
@@ -386,6 +440,7 @@ export class OfficeParticles {
     if (corridorSegments.length === 0) return
     if (!hasActiveAgent) return
 
+    this._enforceParticleBudget()
     const free = this.corridorParticlePool.find(p => !p.getData('busy'))
     if (!free) return
 
@@ -399,7 +454,7 @@ export class OfficeParticles {
     free.setPosition(seg.x1, seg.y1)
     free.setAlpha(0)
     free.setVisible(true)
-    free.setData('busy', true)
+    free.setData('busy', true).setData('startedAt', this.scene.time.now)
 
     this.scene.tweens.add({
       targets: free,
@@ -442,6 +497,7 @@ export class OfficeParticles {
 
   spawnAlertRipple(worldX: number, worldY: number, color: number): void {
     if (this._sleeping) return
+    this._enforceParticleBudget()
     const circle = this.alertRipplePool.find(c => !c.getData('busy'))
     if (!circle) return
 
@@ -452,7 +508,7 @@ export class OfficeParticles {
     circle.setAlpha(0.4)
     circle.setScale(1)
     circle.setVisible(true)
-    circle.setData('busy', true)
+    circle.setData('busy', true).setData('startedAt', this.scene.time.now)
 
     this.scene.tweens.add({
       targets: circle,
@@ -698,6 +754,7 @@ export class OfficeParticles {
   spawnFlameParticle(worldX: number, worldY: number, streak: number): void {
     if (this._sleeping) return
     if (this._reducedMode && Math.random() > 0.3) return
+    this._enforceParticleBudget()
     const p = this.streakFlamePool.find(c => !c.getData('busy'))
     if (!p) return
 
@@ -722,7 +779,7 @@ export class OfficeParticles {
     p.setPosition(startX, worldY)
     p.setFillStyle(color)
     p.setRadius(radius)
-    p.setAlpha(Math.min(0.98, 0.72 + alphaBias)).setVisible(true).setData('busy', true)
+    p.setAlpha(Math.min(0.98, 0.72 + alphaBias)).setVisible(true).setData('busy', true).setData('startedAt', this.scene.time.now)
 
     const driftY = -10 - Math.random() * 12
     const swayAmp = 2 + Math.random()
@@ -1024,7 +1081,7 @@ export class OfficeParticles {
       circle.setScale(1)
       circle.setAlpha(0.3)
       circle.setVisible(true)
-      circle.setData('busy', true)
+      circle.setData('busy', true).setData('startedAt', this.scene.time.now)
 
       this.scene.time.delayedCall(delays[i], () => {
         this.scene.tweens.add({
