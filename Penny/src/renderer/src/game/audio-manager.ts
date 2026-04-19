@@ -66,6 +66,17 @@ const CHIRP_MIN_INTERVAL = 18_000
 const CHIRP_MAX_INTERVAL = 45_000
 
 // ---------------------------------------------------------------------------
+// SFX helpers
+// ---------------------------------------------------------------------------
+
+interface EnvOpts {
+  attack: number
+  sustain: number
+  decay: number
+  peak?: number
+}
+
+// ---------------------------------------------------------------------------
 // AudioManager
 // ---------------------------------------------------------------------------
 
@@ -103,6 +114,10 @@ export class AudioManager {
 
   // Set to true if AudioContext is permanently unavailable (policy block, old browser, etc.)
   private _disabled = false
+
+  // Throttle: suppress repeated toast SFX within this window (ms)
+  private _lastToastAt = 0
+  private static readonly TOAST_THROTTLE_MS = 80
 
   // -------------------------------------------------------------------------
   // Singleton
@@ -501,6 +516,245 @@ export class AudioManager {
     osc.connect(g)
     osc.start(now)
     osc.stop(now + 0.15)
+  }
+
+  // -------------------------------------------------------------------------
+  // SFX — task lifecycle, celebrations, UI
+  // All route through the appropriate channel gain node so they respect
+  // per-channel volume and the master mute toggle.
+  // -------------------------------------------------------------------------
+
+  /**
+   * Internal: play a single oscillator through the given channel gain.
+   *
+   * Mute/volume contract:
+   *   - If `this._muted` is true (master mute), the call is a no-op — no nodes are created.
+   *   - Channel volume is applied automatically via the channel's GainNode (`_channelGains[channel]`),
+   *     which is updated by `setChannelVolume()`. No explicit per-call volume check is needed.
+   *   - Master volume is applied downstream at `_masterGain`. Changing either at any time takes effect
+   *     immediately because all SFX route through those gain nodes.
+   */
+  private _sfxOsc(
+    channel: ChannelName,
+    type: OscillatorType,
+    freq: number,
+    startDelay: number,
+    duration: number,
+    env: EnvOpts,
+  ): void {
+    const ctx = this._ensureContext()
+    if (!ctx || this._muted) return
+    const dest = this._channelGains[channel]
+    if (!dest) return
+    const { attack, sustain, decay, peak = 1 } = env
+    const t = ctx.currentTime + startDelay
+    const g = ctx.createGain()
+    g.gain.setValueAtTime(0, t)
+    g.gain.linearRampToValueAtTime(peak, t + attack)
+    g.gain.setValueAtTime(peak, t + attack + sustain)
+    g.gain.exponentialRampToValueAtTime(0.0001, t + attack + sustain + decay)
+    g.connect(dest)
+    const osc = ctx.createOscillator()
+    osc.type = type
+    osc.frequency.value = freq
+    osc.connect(g)
+    osc.start(t)
+    osc.stop(t + duration)
+  }
+
+  /**
+   * Internal: play white noise burst through the given channel.
+   * Mute/volume contract is identical to `_sfxOsc` — see that method's documentation.
+   */
+  private _sfxNoise(
+    channel: ChannelName,
+    durationSec: number,
+    env: EnvOpts,
+    filterFreq?: number,
+    filterSweepTo?: number,
+  ): void {
+    const ctx = this._ensureContext()
+    if (!ctx || this._muted) return
+    const dest = this._channelGains[channel]
+    if (!dest) return
+    const { attack, sustain, decay, peak = 1 } = env
+    const now = ctx.currentTime
+    const bufLen = Math.ceil(ctx.sampleRate * durationSec)
+    const buf = ctx.createBuffer(1, bufLen, ctx.sampleRate)
+    const data = buf.getChannelData(0)
+    for (let i = 0; i < bufLen; i++) data[i] = Math.random() * 2 - 1
+    const src = ctx.createBufferSource()
+    src.buffer = buf
+
+    const g = ctx.createGain()
+    g.gain.setValueAtTime(0, now)
+    g.gain.linearRampToValueAtTime(peak, now + attack)
+    g.gain.setValueAtTime(peak, now + attack + sustain)
+    g.gain.exponentialRampToValueAtTime(0.0001, now + attack + sustain + decay)
+
+    if (filterFreq !== undefined) {
+      const bpf = ctx.createBiquadFilter()
+      bpf.type = 'bandpass'
+      bpf.frequency.setValueAtTime(filterFreq, now)
+      if (filterSweepTo !== undefined) {
+        bpf.frequency.exponentialRampToValueAtTime(filterSweepTo, now + durationSec)
+      }
+      bpf.Q.value = 2
+      src.connect(bpf)
+      bpf.connect(g)
+    } else {
+      src.connect(g)
+    }
+    g.connect(dest)
+    src.start(now)
+    src.stop(now + durationSec + 0.05)
+  }
+
+  // ── Task lifecycle ───────────────────────────────────────────────────────
+
+  /** Task start: sine chime at 440 Hz, 280 ms. sfx channel. */
+  taskStart(): void {
+    this._sfxOsc('sfx', 'sine', 440, 0, 0.28,
+      { attack: 0.008, sustain: 0.08, decay: 0.19, peak: 0.22 })
+  }
+
+  /**
+   * Task complete: ascending A-major arpeggio (A4→C#5→E5→A5), 4 notes × 100 ms steps.
+   * sfx channel.
+   */
+  taskComplete(): void {
+    const notes = [440, 554.37, 659.25, 880]  // A4 C#5 E5 A5
+    const step = 0.1
+    const env: EnvOpts = { attack: 0.005, sustain: 0.04, decay: 0.08, peak: 0.2 }
+    notes.forEach((f, i) =>
+      this._sfxOsc('sfx', 'sine', f, step * i, step + 0.08, env))
+  }
+
+  /** Task fail: dual sawtooth buzz (B3 + F#3), 280 ms. sfx channel. */
+  taskFail(): void {
+    const env: EnvOpts = { attack: 0.004, sustain: 0.09, decay: 0.18, peak: 0.18 }
+    this._sfxOsc('sfx', 'sawtooth', 246.94, 0, 0.28, env)  // B3
+    this._sfxOsc('sfx', 'sawtooth', 185.00, 0, 0.28,       // F#3
+      { ...env, peak: 0.12 })
+  }
+
+  /**
+   * Rank-up fanfare: C5→E5→G5→C6 arpeggio + sustained chord tail. ~1.4 s. sfx channel.
+   */
+  rankUpFanfare(): void {
+    const step = 0.12
+    const env: EnvOpts = { attack: 0.006, sustain: 0.06, decay: 0.09, peak: 0.22 }
+    const notes = [523.25, 659.25, 783.99, 1046.5]  // C5 E5 G5 C6
+    notes.forEach((f, i) =>
+      this._sfxOsc('sfx', 'sine', f, step * i, step + 0.09, env))
+    // Reverb tail
+    this._sfxOsc('sfx', 'sine', 1046.5, step * 4,        step * 4 + 0.8,
+      { attack: 0.02, sustain: 0.1, decay: 0.7, peak: 0.14 })
+    this._sfxOsc('sfx', 'sine', 783.99, step * 4 + 0.1,  step * 4 + 0.9,
+      { attack: 0.02, sustain: 0.08, decay: 0.65, peak: 0.09 })
+  }
+
+  // ── UI sounds ────────────────────────────────────────────────────────────
+
+  /**
+   * Toast notification click. Type determines pitch: success=high, error=low, else mid.
+   * ui channel.
+   *
+   * Concurrency/overlap behavior:
+   *   - Multiple toasts firing within TOAST_THROTTLE_MS (80 ms) are collapsed — only the first
+   *     plays. This prevents rapid-fire notifications (e.g. batch task completions) from producing
+   *     an unpleasant stacked burst while still giving clear audio feedback for the first event.
+   *   - Toasts fired outside that window overlap naturally through the shared ui channel gain node;
+   *     Web Audio mixes them at the hardware level with no clipping risk at these gain levels.
+   *   - Other audio events (sfx channel: task start/complete/fail, pod launch) share no channel
+   *     with the toast sound, so they never interfere.
+   */
+  toastSound(type: 'info' | 'success' | 'warning' | 'error' = 'info'): void {
+    const now = performance.now()
+    if (now - this._lastToastAt < AudioManager.TOAST_THROTTLE_MS) return
+    this._lastToastAt = now
+    const freq = type === 'success' ? 1200 : type === 'error' ? 200 : 800
+    this._sfxNoise('ui', 0.04, { attack: 0.002, sustain: 0.01, decay: 0.025, peak: 0.35 }, freq)
+  }
+
+  /**
+   * Pod launch: two-component sound on the sfx channel.
+   *
+   *   Component 1 — noise sweep (filtered white noise):
+   *     A single bandpass-filtered noise burst that sweeps its center frequency from 200 Hz → 3000 Hz
+   *     over 450 ms. Provides the "whoosh" texture of an agent team spinning up.
+   *
+   *   Component 2 — rising sine tone:
+   *     A sine oscillator that slides from 220 Hz → 880 Hz over 380 ms, starting 20 ms after the
+   *     noise. Adds a clear pitched "launch" accent that cuts through the ambient soundscape and
+   *     signals forward momentum. Peak gain (0.18) is lower than the noise so it blends rather than
+   *     dominates.
+   *
+   * Both components route through the sfx channel gain node and respect master mute/volume.
+   */
+  podLaunch(): void {
+    // Component 1: bandpass noise sweep 200 Hz → 3 kHz
+    this._sfxNoise('sfx', 0.45, { attack: 0.01, sustain: 0.15, decay: 0.28, peak: 0.4 }, 200, 3000)
+    // Component 2: rising sine 220 Hz → 880 Hz
+    const ctx = this._ensureContext()
+    if (!ctx || this._muted) return
+    const dest = this._channelGains.sfx
+    if (!dest) return
+    const t = ctx.currentTime + 0.02  // slight offset so noise leads
+    const g = ctx.createGain()
+    g.gain.setValueAtTime(0, t)
+    g.gain.linearRampToValueAtTime(0.18, t + 0.015)
+    g.gain.setValueAtTime(0.18, t + 0.25)
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.38)
+    g.connect(dest)
+    const osc = ctx.createOscillator()
+    osc.type = 'sine'
+    osc.frequency.setValueAtTime(220, t)
+    osc.frequency.exponentialRampToValueAtTime(880, t + 0.38)
+    osc.connect(g)
+    osc.start(t)
+    osc.stop(t + 0.42)
+  }
+
+  /** Panel open: short rising sine click. ui channel. */
+  panelOpen(): void {
+    this._sfxOsc('ui', 'sine', 880, 0, 0.07,
+      { attack: 0.003, sustain: 0.015, decay: 0.05, peak: 0.18 })
+  }
+
+  /** Panel close: short falling sine click. ui channel. */
+  panelClose(): void {
+    this._sfxOsc('ui', 'sine', 660, 0, 0.07,
+      { attack: 0.003, sustain: 0.015, decay: 0.05, peak: 0.15 })
+  }
+
+  // ── EventBus wiring ──────────────────────────────────────────────────────
+
+  // Lazy import — resolved at first wireEvents() call to avoid circular deps
+  private _wired = false
+  private _cbPodLaunched = () => this.podLaunch()
+
+  /**
+   * Subscribe to EventBus events that trigger SFX.
+   * Call once after the first user interaction (same time as startAmbient).
+   * Safe to call multiple times — idempotent.
+   */
+  wireEvents(): void {
+    if (this._wired) return
+    this._wired = true
+    // Dynamic import avoids circular dependency: audio-manager ↔ events
+    import('./events').then(({ EventBus, EVENTS }) => {
+      EventBus.on(EVENTS.POD_LAUNCHED, this._cbPodLaunched)
+    }).catch(() => { /* non-critical — SFX won't fire on pod launch */ })
+  }
+
+  /** Remove all EventBus listeners (call on scene teardown). */
+  unwireEvents(): void {
+    if (!this._wired) return
+    this._wired = false
+    import('./events').then(({ EventBus, EVENTS }) => {
+      EventBus.off(EVENTS.POD_LAUNCHED, this._cbPodLaunched)
+    }).catch(() => { /* noop */ })
   }
 
   // -------------------------------------------------------------------------

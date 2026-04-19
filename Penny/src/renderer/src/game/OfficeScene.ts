@@ -771,6 +771,7 @@ export class OfficeScene extends Phaser.Scene {
 
     soundEngine.setScene(this)
     soundEngine.wireEvents()
+    audioManager.wireEvents()
 
     // Start ambient soundscape on first pointer interaction (Web Audio requires user gesture)
     this.input.once('pointerdown', () => {
@@ -2055,5 +2056,6 @@ export class OfficeScene extends Phaser.Scene {
       }
     }
     this.rooms.clear()
+    audioManager.unwireEvents()
   }
 }
