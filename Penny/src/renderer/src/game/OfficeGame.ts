@@ -35,7 +35,6 @@ export function createOfficeGame(container: HTMLDivElement): {
     input: {
       mouse: { preventDefaultWheel: true },
     },
-    audio: { noAudio: true },
   })
 
   // Take the canvas out of document flow so it can never inflate its flex parent.
