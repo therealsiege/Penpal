@@ -292,7 +292,7 @@ export class CelebrationManager {
     mergeCount: number,
   ): void {
     this._onCameraJuice?.('rankUp')
-    soundEngine.levelUp()
+    // SFX handled by soundEngine.wireEvents() on RANK_UP event
     // Screen shake for impact — scales with merge count
     this._scene.cameras.main.shake(80 + mergeCount * 8, 0.0025 + 0.0003 * (mergeCount - 1))
     const burstN = Math.min(28, Math.round(10 * (1 + 0.15 * (mergeCount - 1))))

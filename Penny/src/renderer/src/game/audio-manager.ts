@@ -160,6 +160,14 @@ export class AudioManager {
   /** True if AudioContext failed to initialize (policy block, unsupported platform, etc.). */
   get isDisabled(): boolean { return this._disabled }
 
+  /**
+   * Returns the AudioContext (initializing lazily if needed), or null if audio is disabled.
+   * Use this to create oscillator/buffer nodes that route through getChannel().
+   */
+  getContext(): AudioContext | null {
+    return this._ensureContext()
+  }
+
   // -------------------------------------------------------------------------
   // Volume & mute
   // -------------------------------------------------------------------------
