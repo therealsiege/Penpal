@@ -243,7 +243,7 @@ class InteractiveProp {
       if (arcBtn) this.container.add(arcBtn)
     }
     // Coin slot
-    g.fillStyle(0x0f172a, 1); g.fillRect(-8, 18, 16, 2)
+    g.fillStyle(activeTheme.shadowDark, 1); g.fillRect(-8, 18, 16, 2)
     this.container.add(g)
 
     // Screen text — mako green
@@ -289,11 +289,11 @@ class InteractiveProp {
     // Glass panel
     g.fillStyle(0x082f49, 0.9); g.fillRect(-18, -40, 36, 36)
     // Coin slot
-    g.fillStyle(0x0f172a, 1); g.fillRect(-4, 0, 8, 2)
+    g.fillStyle(activeTheme.shadowDark, 1); g.fillRect(-4, 0, 8, 2)
     // Display — cyan
-    g.fillStyle(0x00e5ff, 0.7); g.fillRect(-14, 4, 28, 8)
+    g.fillStyle(activeTheme.monitorGlowActive, 0.7); g.fillRect(-14, 4, 28, 8)
     // Dispense tray
-    g.fillStyle(0x0f172a, 1); g.fillRect(-18, 16, 36, 6)
+    g.fillStyle(activeTheme.shadowDark, 1); g.fillRect(-18, 16, 36, 6)
     g.fillStyle(activeTheme.wall, 1); g.fillRect(-16, 18, 32, 3)
     this.container.add(g)
     // Product rows — use GAME_ITEMS sprites instead of plain colored rectangles

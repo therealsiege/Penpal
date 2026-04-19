@@ -11,7 +11,7 @@
  *   // Call setActiveTheme('light') then trigger redraw.
  */
 
-export type ThemeName = 'dark' | 'light'
+export type ThemeName = 'dark' | 'light' | 'neon'
 
 export interface OfficeTheme {
   // Scene background
@@ -73,6 +73,11 @@ export interface OfficeTheme {
   fogColor: number       // atmosphere fog / sky base (dark: 0x141a22)
   ventFill: number       // vent dark fill, industrial detail (dark: 0x1a2230)
   shadowDark: number     // deep shadow tint (dark: 0x0a0e14)
+  // Accent alias (= monitorGlowActive) — convenience shorthand for thinking dots, glow FX
+  accent: number
+  // Structural metallic tones for terrain/furniture details
+  metallic: number       // dark: 0x3a4a5a — steel panels, reactor body, structural metal
+  metallicAlt: number    // dark: 0x4a5a6a — lighter metal, furniture legs, fixtures
 }
 
 export const THEMES: Record<ThemeName, OfficeTheme> = {
@@ -123,6 +128,9 @@ export const THEMES: Record<ThemeName, OfficeTheme> = {
     fogColor: 0x0f2137,
     ventFill: 0x1a2230,
     shadowDark: 0x0a0e14,
+    accent: 0x00e5ff,
+    metallic: 0x3a4a5a,
+    metallicAlt: 0x4a5a6a,
   },
 
   // ---- LIGHT (warm studio — cream, teal, coffee tones) ----
@@ -172,6 +180,61 @@ export const THEMES: Record<ThemeName, OfficeTheme> = {
     fogColor: 0xddd5c8,
     ventFill: 0xe0d8cc,
     shadowDark: 0xebe4d8,
+    accent: 0x2a8c8c,
+    metallic: 0x8b9090,
+    metallicAlt: 0x9ba0a0,
+  },
+
+  // ---- NEON (cyberpunk — deep violet, neon magenta, electric) ----
+  neon: {
+    bg: 0x0a0a14,
+    roomFloor: 0x0f0f1a,
+    roomFloor2: 0x141424,
+    wall: 0x2a1a4a,
+    wallInner: 0x3a2a6a,
+    deskBody: 0x160d2a,
+    deskTop: 0x1e1432,
+    headerBg: 0x050510,
+    doorFrame: 0xff00ff,
+    officeFloor: 0x0c0a18,
+    officeGrid: 0x1a1228,
+    rugFill: 0x160d2a,
+    rugStroke: 0xff00ff,
+    headerText: '#e0d0ff',
+    badgeText: '#ff00ff',
+    badgeBg: '#0f0f1a',
+    nameText: '#e0d0ff',
+    nameBg: '#050510cc',
+    tooltipBg: 0x0a0a14,
+    tooltipStroke: 0x2a1a4a,
+    tooltipText: '#e0d0ff',
+    panelBg: 0x0a0a14,
+    panelStroke: 0x2a1a4a,
+    separator: 0x160d2a,
+    accentText: '#ff00ff',
+    subtleText: '#8070a0',
+    monitorGlowActive: 0xff00ff,
+    monitorGlowIdle: 0x160d2a,
+    thoughtDefault: 0x1e1432,
+    thoughtWorking: 0xff00ff,
+    thoughtPlan: 0xb060ff,
+    thoughtAcceptEdits: 0xff00ff,
+    deskStrokeIdle: 0x1e1432,
+    deskStrokeWorking: 0xff00ff,
+    deskStrokeWaiting: 0xffa040,
+    deskStrokeHover: 0xff00ff,
+    particleColors: [0xff00ff, 0x00ff88, 0xb060ff],
+    screenLineColors: [0xff00ff, 0x00ff88],
+    lampMetal: 0x2a1a4a,
+    lampShade: 0xffa040,
+    mugBody: 0xff00ff,
+    mugHandle: 0x8a0088,
+    fogColor: 0x08081a,
+    ventFill: 0x160d2a,
+    shadowDark: 0x05050f,
+    accent: 0xff00ff,
+    metallic: 0x2a1a4a,
+    metallicAlt: 0x3a2a5a,
   },
 
 }

@@ -175,7 +175,7 @@ export class PennyCafe implements CoffeeRunHost, ChatHost {
     g.fillCircle(CAFE_W, CAFE_H - 2, 4)
 
     // ── Sign ──
-    g.fillStyle(0x0f172a, 0.85)
+    g.fillStyle(activeTheme.panelBg, 0.85)
     g.fillRoundedRect(8, 2, CAFE_W - 16, 22, 3)
     container.add(scene.add.text(CAFE_W / 2, 13, 'PENPAL CAFE', {
       fontSize: scaledFontSize(14), fontFamily: 'system-ui, sans-serif', fontStyle: 'bold',
@@ -254,7 +254,7 @@ export class PennyCafe implements CoffeeRunHost, ChatHost {
         const puffKey = EFFECT_ANIM_KEYS.PUFF
         if (scene.anims.exists(puffKey)) {
           const puff = scene.add.sprite(mx, COUNTER_Y - 10, SPRITESHEET_KEYS.EFFECTS_PUFF, 0)
-            .setScale(0.12).setAlpha(0.25).setOrigin(0.5).setTint(0x00e5ff)
+            .setScale(0.12).setAlpha(0.25).setOrigin(0.5).setTint(activeTheme.monitorGlowActive)
           container.add(puff)
           puff.play(puffKey)
           scene.tweens.add({ targets: puff, y: COUNTER_Y - 30, alpha: 0, scale: 0.06, duration: 1000, ease: 'Sine.easeOut', onComplete: () => { puff.destroy() } })

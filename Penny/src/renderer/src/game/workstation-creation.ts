@@ -27,8 +27,6 @@ import {
   WS_MONITOR_Y,
   WS_NAME_Y,
   WS_DOT_GAP,
-  COLOR_DESK_BODY,
-  COLOR_DESK_TOP,
   COLOR_LAB_DESK_BODY,
   COLOR_LAB_DESK_STROKE,
   COLOR_LAB_DESK_STROKE_ALPHA,
@@ -219,7 +217,7 @@ export class WorkstationFactory {
       wsContainer.add(evalGlow)
 
       const deskH = labPropsLoaded ? 18 : 21
-      const deskFill   = labPropsLoaded ? COLOR_LAB_DESK_BODY : COLOR_DESK_BODY
+      const deskFill   = labPropsLoaded ? COLOR_LAB_DESK_BODY : activeTheme.deskBody
       const deskStroke = labPropsLoaded ? COLOR_LAB_DESK_STROKE : activeTheme.deskStrokeIdle
       const deskStrokeAlpha = labPropsLoaded ? 0.3 : 0.5
       const deskFillAlpha = labPropsLoaded ? 0.25 : 1
@@ -227,7 +225,7 @@ export class WorkstationFactory {
       wsContainer.add(deskBody)
 
       if (!labPropsLoaded) {
-        const deskTopColor = COLOR_DESK_TOP
+        const deskTopColor = activeTheme.deskTop
         deskTop = this.scene.add.rectangle(0, WS_DESK_Y - 8, deskW - 5, 3, deskTopColor)
         wsContainer.add(deskTop)
       }
@@ -244,7 +242,7 @@ export class WorkstationFactory {
           wsContainer.add(monitorSprite)
         }
         if (monitorSprite) {
-          monitorGlowFx = monitorSprite.postFX.addGlow(0x64748b, 0, 0, false, AnimConfig.monitor.glowQuality, AnimConfig.monitor.glowDistance * 0.55)
+          monitorGlowFx = monitorSprite.postFX.addGlow(activeTheme.monitorGlowIdle, 0, 0, false, AnimConfig.monitor.glowQuality, AnimConfig.monitor.glowDistance * 0.55)
         }
       } else if (labPropsLoaded) {
         monitorSprite = this.scene.add.sprite(0, WS_MONITOR_Y, SPRITESHEET_KEYS.LAB_PROPS, LAB_PROP_FRAMES.CONSOLE_SCREEN)
@@ -256,12 +254,12 @@ export class WorkstationFactory {
       }
     }
     if (monitorSprite && labPropsLoaded && !facilityStrategic) {
-      monitorGlowFx = monitorSprite.postFX.addGlow(0x0ea5e9, 0, 0, false, AnimConfig.monitor.glowQuality, AnimConfig.monitor.glowDistance)
+      monitorGlowFx = monitorSprite.postFX.addGlow(activeTheme.monitorGlowActive, 0, 0, false, AnimConfig.monitor.glowQuality, AnimConfig.monitor.glowDistance)
       // Scrolling screen content lines
       screenLines = this.scene.add.graphics().setVisible(false).setDepth(4.5)
       wsContainer.add(screenLines)
-      const LINE_COLORS_WORK = [0x0ea5e9, 0x34d399]
-      const LINE_COLORS_PLAN = [0xa78bfa, 0xc4b5fd]
+      const LINE_COLORS_WORK = [activeTheme.monitorGlowActive, 0x34d399]
+      const LINE_COLORS_PLAN = [activeTheme.thoughtPlan, 0xc4b5fd]
       const lineWidths = Array.from({ length: 4 }, () => 6 + Math.random() * 6)
       const lineColorsWork = lineWidths.map(() => LINE_COLORS_WORK[Math.floor(Math.random() * LINE_COLORS_WORK.length)])
       const lineColorsPlan = lineWidths.map(() => LINE_COLORS_PLAN[Math.floor(Math.random() * LINE_COLORS_PLAN.length)])
@@ -329,14 +327,14 @@ export class WorkstationFactory {
       wsContainer.add(this.scene.add.rectangle(0, WS_MONITOR_Y, 16, 13, activeTheme.roomFloor).setStrokeStyle(1, activeTheme.deskTop, 0.8))
     }
     if (monitorSprite && !labPropsLoaded && this.host.officeTilesLoaded) {
-      monitorGlowFx = monitorSprite.postFX.addGlow(0x0ea5e9, 0, 0, false, AnimConfig.monitor.glowQuality, AnimConfig.monitor.glowDistance)
+      monitorGlowFx = monitorSprite.postFX.addGlow(activeTheme.monitorGlowActive, 0, 0, false, AnimConfig.monitor.glowQuality, AnimConfig.monitor.glowDistance)
     }
 
     // Monitor screen frame overlay — sprite-based outline on the monitor screen area
     let monitorFrame: Phaser.GameObjects.Image | undefined
     if (monitorSprite && this.scene.textures.exists(IMAGE_KEYS.PANEL_OUTLINE)) {
       monitorFrame = this.scene.add.image(0, WS_MONITOR_Y, IMAGE_KEYS.PANEL_OUTLINE)
-        .setDisplaySize(14, 10).setAlpha(0.15).setTint(0x0ea5e9).setOrigin(0.5).setDepth(4.6)
+        .setDisplaySize(14, 10).setAlpha(0.15).setTint(activeTheme.monitorGlowActive).setOrigin(0.5).setDepth(4.6)
       wsContainer.add(monitorFrame)
     }
 
@@ -419,11 +417,11 @@ export class WorkstationFactory {
       wsContainer.add(phoneBody)
       phoneScreen = this.scene.add.rectangle(-30, WS_DESK_Y - 5, 3, 2, activeTheme.roomFloor).setVisible(phoneVisible)
       wsContainer.add(phoneScreen)
-      phoneLight = this.scene.add.arc(-28, WS_DESK_Y - 6, 1.5, 0, 360, false, 0x00e5ff, 0).setVisible(phoneVisible)
+      phoneLight = this.scene.add.arc(-28, WS_DESK_Y - 6, 1.5, 0, 360, false, activeTheme.monitorGlowActive, 0).setVisible(phoneVisible)
       wsContainer.add(phoneLight)
 
       // Sticky note (unlocks at Associate / L3)
-      const stickyColors = [0x00e5ff, 0xd4a017, 0xd4a017, 0xa78bfa, 0x00ff88]
+      const stickyColors = [activeTheme.monitorGlowActive, activeTheme.lampShade, activeTheme.lampShade, activeTheme.thoughtPlan, activeTheme.doorFrame]
       const stickyX = nameHash % 2 === 0 ? 20 : -20
       const stickyVisible = isDeskItemUnlocked(agentLevel, 'sticky')
       sticky = this.scene.add.rectangle(stickyX, WS_DESK_Y - 6, 7, 6, stickyColors[nameHash % 5], 0.7).setVisible(stickyVisible)
@@ -434,7 +432,7 @@ export class WorkstationFactory {
         const phX = nameHash % 2 === 0 ? -20 : 20
         const cup = this.scene.add.rectangle(phX, WS_DESK_Y - 5, 5, 7, activeTheme.deskTop, 0.7)
         wsContainer.add(cup); extraDecos.push(cup)
-        const p1 = this.scene.add.rectangle(phX - 1, WS_DESK_Y - 10, 1, 6, 0xd4a017, 0.6).setAngle(-5)
+        const p1 = this.scene.add.rectangle(phX - 1, WS_DESK_Y - 10, 1, 6, activeTheme.lampShade, 0.6).setAngle(-5)
         wsContainer.add(p1); extraDecos.push(p1)
         const p2 = this.scene.add.rectangle(phX + 1, WS_DESK_Y - 10, 1, 6, 0xef4444, 0.5).setAngle(7)
         wsContainer.add(p2); extraDecos.push(p2)
@@ -537,7 +535,7 @@ export class WorkstationFactory {
       }
     } else if (labPropsLoaded && facilityStrategic) {
       ledGlow = this.scene.add.graphics()
-      ledGlow.fillStyle(0x22d3ee, 0.22)
+      ledGlow.fillStyle(activeTheme.monitorGlowActive, 0.22)
       ledGlow.fillRoundedRect(-deskW / 2 + 4, WS_DESK_Y + 6, deskW - 8, 2.5, 1)
       wsContainer.add(ledGlow)
     } else {
@@ -575,7 +573,7 @@ export class WorkstationFactory {
       if (nameHash % 4 === 0) addLabProp(LP.STOP_BUTTON, deskW * 0.42, WS_DESK_Y - 3, 0.11, 0.9, 2)
 
       ledGlow = this.scene.add.graphics()
-      ledGlow.fillStyle(0x22d3ee, 0.28)
+      ledGlow.fillStyle(activeTheme.monitorGlowActive, 0.28)
       ledGlow.fillRoundedRect(-deskW / 2 + 4, WS_DESK_Y + 6, deskW - 8, 2.5, 1)
       wsContainer.add(ledGlow)
     }

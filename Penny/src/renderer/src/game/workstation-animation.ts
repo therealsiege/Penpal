@@ -703,7 +703,7 @@ export class WorkstationAnimator {
       // Monitor screensaver — color gradient cycle on unoccupied desk monitors
       // Colors: dark blue → purple → teal, 12s cycle, alpha 0.45
       if (ws.monitorSprite) {
-        const SS_COLORS = [0x1e3a5f, 0x5b21b6, 0x0d9488]
+        const SS_COLORS = [activeTheme.wall, 0x5b21b6, 0x0d9488]
         ws.screensaverTween = this.scene.tweens.addCounter({
           from: 0, to: 1, duration: 12000, repeat: -1, ease: 'Linear',
           onUpdate: (tw: Phaser.Tweens.Tween) => {
@@ -1210,9 +1210,9 @@ export class WorkstationAnimator {
     const isActive = isWorking || isWaiting
     // Orchestrator tasks get stage-colored monitor glow
     const orchStage = ws.state?.isOrchestratorTask ? (ws.state.taskStage ?? 'executing') : null
-    const orchColors: Record<string, number> = { planning: 0xa78bfa, executing: 0xf97316, validating: 0x06b6d4 }
+    const orchColors: Record<string, number> = { planning: activeTheme.thoughtPlan, executing: 0xf97316, validating: 0x06b6d4 }
     const baseColor = orchStage ? (orchColors[orchStage] ?? 0xf97316)
-      : isWaiting ? 0xfbbf24 : isWorking ? 0x0ea5e9 : activeTheme.deskBody
+      : isWaiting ? 0xfbbf24 : isWorking ? activeTheme.monitorGlowActive : activeTheme.deskBody
     const baseStrength = isActive ? AnimConfig.monitor.activeBaseStrength : AnimConfig.monitor.idleBaseStrength
     const peakStrength = isActive ? AnimConfig.monitor.activePeakStrength : AnimConfig.monitor.idlePeakStrength
     const duration     = isActive ? AnimConfig.monitor.activePulseDuration : AnimConfig.monitor.idlePulseDuration

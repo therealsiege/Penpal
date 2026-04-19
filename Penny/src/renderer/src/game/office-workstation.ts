@@ -736,7 +736,7 @@ export class OfficeWorkstations {
     // ── Orchestrator headless task badge ──────────────────────────────────
     if (ws.orchTaskBadge) {
       if (agent.isOrchestratorTask) {
-        const stageTints: Record<string, number> = { planning: 0xa78bfa, executing: 0xf97316, validating: 0x06b6d4 }
+        const stageTints: Record<string, number> = { planning: activeTheme.thoughtPlan, executing: 0xf97316, validating: 0x06b6d4 }
         const tint = stageTints[agent.taskStage ?? 'executing'] ?? 0xf97316
         ws.orchTaskBadge.setTint(tint)
         if (!ws.orchTaskBadge.visible) {

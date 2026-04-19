@@ -63,9 +63,9 @@ export class OfficeTerrain {
   } {
     const month = new Date().getMonth()
     if (month === 11 || month <= 1) return { color: 0x93c5fd, accent: 0xef4444, extraDecorType: 'winter' }
-    if (month >= 2 && month <= 4) return { color: 0x86efac, accent: 0xd4a017, extraDecorType: 'spring' }
+    if (month >= 2 && month <= 4) return { color: 0x86efac, accent: activeTheme.lampShade, extraDecorType: 'spring' }
     if (month >= 5 && month <= 7) return { color: 0x00e5ff, accent: 0x00ff88, extraDecorType: 'summer' }
-    return { color: 0xd4a017, accent: 0xd4a017, extraDecorType: 'autumn' }
+    return { color: activeTheme.lampShade, accent: activeTheme.lampShade, extraDecorType: 'autumn' }
   }
 
   // ---------------------------------------------------------------------------
@@ -120,7 +120,7 @@ export class OfficeTerrain {
     }
 
     // ── 1. Base metal floor — dark steel plate ──
-    g.fillStyle(0x1a1e2a, 1)
+    g.fillStyle(activeTheme.roomFloor, 1)
     g.fillRect(x0, y0, w, h)
 
     // Steel plate grid — irregular sizes for organic look
@@ -144,7 +144,7 @@ export class OfficeTerrain {
       accX += pw
       if (accX >= x0 + w) break
       const lineAlpha = 0.2 + rand() * 0.2
-      g.lineStyle(rand() > 0.7 ? 1.5 : 1, 0x2a3040, lineAlpha)
+      g.lineStyle(rand() > 0.7 ? 1.5 : 1, activeTheme.deskTop, lineAlpha)
       g.lineBetween(accX, y0, accX, y0 + h)
     }
     // Draw plate seam lines (horizontal)
@@ -153,7 +153,7 @@ export class OfficeTerrain {
       accY += ph
       if (accY >= y0 + h) break
       const lineAlpha = 0.2 + rand() * 0.2
-      g.lineStyle(rand() > 0.7 ? 1.5 : 1, 0x2a3040, lineAlpha)
+      g.lineStyle(rand() > 0.7 ? 1.5 : 1, activeTheme.deskTop, lineAlpha)
       g.lineBetween(x0, accY, x0 + w, accY)
     }
 
@@ -164,10 +164,10 @@ export class OfficeTerrain {
       for (const pw of plateWidths) {
         const r = rand()
         if (r < 0.15) {
-          g.fillStyle(0x242a38, 0.35 + rand() * 0.2)
+          g.fillStyle(activeTheme.deskTop, 0.35 + rand() * 0.2)
           g.fillRect(accX + 1, accY + 1, pw - 2, ph - 2)
         } else if (r < 0.25) {
-          g.fillStyle(0x141822, 0.25 + rand() * 0.15)
+          g.fillStyle(activeTheme.roomFloor, 0.25 + rand() * 0.15)
           g.fillRect(accX + 1, accY + 1, pw - 2, ph - 2)
         }
         accX += pw
@@ -185,7 +185,7 @@ export class OfficeTerrain {
         if (rand() > 0.5) corners.push([accX + 6, accY + ph - 6])
         for (const [bx, by] of corners) {
           const bolt = this.scene.add.sprite(bx, by, SPRITESHEET_KEYS.GAME_ICONS, ICON_FRAMES.CIRCLE_GREY)
-            .setScale(0.14).setAlpha(0.3 + rand() * 0.15).setTint(0x3a4050).setDepth(-10)
+            .setScale(0.14).setAlpha(0.3 + rand() * 0.15).setTint(activeTheme.metallic).setDepth(-10)
           this.terrainDecos.push(bolt)
         }
         accX += pw
@@ -219,10 +219,10 @@ export class OfficeTerrain {
     const poolRY = 40 + rand() * 15
     if (!isOverlapping(poolCX, poolCY, Math.max(poolRX, poolRY) + 20)) {
       // Outer rim — dark metal
-      g.fillStyle(0x2a3040, 0.45)
+      g.fillStyle(activeTheme.deskTop, 0.45)
       g.fillEllipse(poolCX, poolCY, poolRX + 12, poolRY + 8)
       // Grating ring
-      g.lineStyle(2, 0x3a4a5a, 0.35)
+      g.lineStyle(2, activeTheme.metallic, 0.35)
       g.strokeEllipse(poolCX, poolCY, poolRX + 6, poolRY + 4)
       // Reactor pool — very subtle green
       g.fillStyle(MAKO_GREEN, 0.03)
@@ -238,7 +238,7 @@ export class OfficeTerrain {
         const sy1 = poolCY + Math.sin(angle) * (poolRY + 10)
         const sx2 = poolCX + Math.cos(angle) * (poolRX + 25)
         const sy2 = poolCY + Math.sin(angle) * (poolRY + 18)
-        g.lineStyle(2, 0xd4a017, 0.15)
+        g.lineStyle(2, activeTheme.lampShade, 0.15)
         g.lineBetween(sx1, sy1, sx2, sy2)
       }
       this.reactorCenter = { x: poolCX, y: poolCY, rx: poolRX, ry: poolRY }
@@ -284,14 +284,14 @@ export class OfficeTerrain {
         g.fillRect(pipe.x1 + 4, pipe.y1 - pipe.r + 4, pipe.x2 - pipe.x1, pipe.r * 2)
       }
       // Pipe body
-      g.fillStyle(0x4a5568, 0.7)
+      g.fillStyle(activeTheme.metallic, 0.7)
       if (isVert) {
         g.fillRect(pipe.x1 - pipe.r, pipe.y1, pipe.r * 2, pipe.y2 - pipe.y1)
       } else {
         g.fillRect(pipe.x1, pipe.y1 - pipe.r, pipe.x2 - pipe.x1, pipe.r * 2)
       }
       // Highlight stripe
-      g.fillStyle(0x6b7a8a, 0.4)
+      g.fillStyle(activeTheme.metallicAlt, 0.4)
       if (isVert) {
         g.fillRect(pipe.x1 - pipe.r + 3, pipe.y1, 5, pipe.y2 - pipe.y1)
       } else {
@@ -304,7 +304,7 @@ export class OfficeTerrain {
         const t = ji / Math.max(1, joints)
         const jx = pipe.x1 + (pipe.x2 - pipe.x1) * t
         const jy = pipe.y1 + (pipe.y2 - pipe.y1) * t
-        g.fillStyle(0x5a6a7a, 0.6)
+        g.fillStyle(activeTheme.wallInner, 0.6)
         if (isVert) {
           g.fillRect(jx - pipe.r - 3, jy - 3, pipe.r * 2 + 6, 7)
         } else {
@@ -346,13 +346,13 @@ export class OfficeTerrain {
           sy1 = sy2 = rect.y + rect.h * (0.2 + rand() * 0.6)
           sx2 = rect.x; sx1 = sx2 - stubLen
         }
-        g.fillStyle(0x4a5568, 0.6)
+        g.fillStyle(activeTheme.metallic, 0.6)
         if (sx1 === sx2) {
           g.fillRect(sx1 - stubR, Math.min(sy1, sy2), stubR * 2, Math.abs(sy2 - sy1))
         } else {
           g.fillRect(Math.min(sx1, sx2), sy1 - stubR, Math.abs(sx2 - sx1), stubR * 2)
         }
-        g.fillStyle(0x5a6a7a, 0.45)
+        g.fillStyle(activeTheme.wallInner, 0.45)
         if (sx1 === sx2) {
           g.fillRect(sx1 - stubR - 2, Math.min(sy1, sy2) - 2, stubR * 2 + 4, 5)
         } else {
@@ -383,11 +383,11 @@ export class OfficeTerrain {
       const oy = y0 + rand() * h
       if (isOverlapping(ox, oy, 8)) continue
       const ow = 8 + rand() * 14, oh = ow * (0.3 + rand() * 0.4)
-      g.fillStyle(0x0a0a1a, 0.06 + rand() * 0.04)
+      g.fillStyle(activeTheme.bg, 0.06 + rand() * 0.04)
       g.fillEllipse(ox, oy, ow, oh)
       // Drip tail
       if (rand() > 0.4) {
-        g.fillStyle(0x0a0a1a, 0.03)
+        g.fillStyle(activeTheme.bg, 0.03)
         g.fillEllipse(ox + ow * 0.4, oy + oh * 0.8, ow * 0.3, oh * 1.5)
       }
     }
@@ -399,7 +399,7 @@ export class OfficeTerrain {
       const sLen = 10 + rand() * 25
       const angle = rand() * Math.PI
       const thick = 0.5 + rand() * 1
-      g.lineStyle(thick, 0x3a4a5a, 0.06 + rand() * 0.08)
+      g.lineStyle(thick, activeTheme.metallic, 0.06 + rand() * 0.08)
       g.lineBetween(sx, sy, sx + Math.cos(angle) * sLen, sy + Math.sin(angle) * sLen)
     }
 
@@ -409,14 +409,14 @@ export class OfficeTerrain {
       const my = WORLD_MARGIN + 60 + rand() * (worldH - WORLD_MARGIN * 2 - 120)
       if (isOverlapping(mx, my, 12)) continue
       const mr = 16 + rand() * 6
-      g.fillStyle(0x2a3040, 0.5)
+      g.fillStyle(activeTheme.deskTop, 0.5)
       g.fillCircle(mx, my, mr + 4)
-      g.fillStyle(0x222a38, 0.55)
+      g.fillStyle(activeTheme.deskTop, 0.55)
       g.fillCircle(mx, my, mr)
-      g.lineStyle(2, 0x3a4a5a, 0.2)
+      g.lineStyle(2, activeTheme.metallic, 0.2)
       g.lineBetween(mx - mr + 5, my, mx + mr - 5, my)
       g.lineBetween(mx, my - mr + 5, mx, my + mr - 5)
-      g.lineStyle(1, 0x3a4a5a, 0.15)
+      g.lineStyle(1, activeTheme.metallic, 0.15)
       g.strokeCircle(mx, my, mr * 0.6)
     }
 
@@ -427,9 +427,9 @@ export class OfficeTerrain {
       const sx = rect.x + 14
       const sw = rect.w - 28
       for (let stripe = 0; stripe < sw; stripe += 56) {
-        g.fillStyle(0xd4a017, 0.12)
+        g.fillStyle(activeTheme.lampShade, 0.12)
         g.fillRect(sx + stripe, sy + 3, 30, 10)
-        g.fillStyle(0x1a1e2a, 0.14)
+        g.fillStyle(activeTheme.roomFloor, 0.14)
         g.fillRect(sx + stripe + 30, sy + 3, 26, 10)
       }
     }
@@ -440,9 +440,9 @@ export class OfficeTerrain {
       const gy = y0 + 100 + rand() * (h - 200)
       if (isOverlapping(gx, gy, 15)) continue
       // Vent grating only — no glow
-      g.fillStyle(0x2a3040, 0.3)
+      g.fillStyle(activeTheme.deskTop, 0.3)
       g.fillRoundedRect(gx - 12, gy - 7, 24, 14, 2)
-      g.lineStyle(2, 0x1a2030, 0.3)
+      g.lineStyle(2, activeTheme.roomFloor, 0.3)
       g.lineBetween(gx - 4, gy - 4, gx - 4, gy + 4)
       g.lineBetween(gx, gy - 4, gx, gy + 4)
       g.lineBetween(gx + 4, gy - 4, gx + 4, gy + 4)
@@ -457,14 +457,14 @@ export class OfficeTerrain {
     const STREET_W = 64
     if (streetY < y0 + h - 60) {
       // Road surface
-      g.fillStyle(0x222a36, 0.85)
+      g.fillStyle(activeTheme.deskTop, 0.85)
       g.fillRect(x0, streetY - STREET_W / 2, w, STREET_W)
       // Road edges — lighter curb lines
-      g.fillStyle(0x3a4a5a, 0.7)
+      g.fillStyle(activeTheme.metallic, 0.7)
       g.fillRect(x0, streetY - STREET_W / 2, w, 2)
       g.fillRect(x0, streetY + STREET_W / 2 - 2, w, 2)
       // Center dashed lane markings
-      g.lineStyle(1.5, 0xd4a017, 0.4)
+      g.lineStyle(1.5, activeTheme.lampShade, 0.4)
       for (let dx = x0; dx < x0 + w; dx += 48) {
         g.lineBetween(dx, streetY, dx + 16, streetY)
       }
@@ -473,7 +473,7 @@ export class OfficeTerrain {
       for (const cx of crosswalkPositions) {
         if (cx < x0 || cx > x0 + w) continue
         for (let stripe = -STREET_W / 2 + 4; stripe < STREET_W / 2 - 4; stripe += 10) {
-          g.fillStyle(0x8a96a4, 0.2)
+          g.fillStyle(activeTheme.metallicAlt, 0.2)
           g.fillRect(cx - 20, streetY + stripe, 40, 4)
         }
       }
@@ -482,12 +482,12 @@ export class OfficeTerrain {
     // Vertical connector road on the right side
     const vStreetX = worldW + 60
     if (vStreetX < x0 + w - 60) {
-      g.fillStyle(0x222a36, 0.85)
+      g.fillStyle(activeTheme.deskTop, 0.85)
       g.fillRect(vStreetX - STREET_W / 2, y0, STREET_W, h)
-      g.fillStyle(0x3a4a5a, 0.7)
+      g.fillStyle(activeTheme.metallic, 0.7)
       g.fillRect(vStreetX - STREET_W / 2, y0, 2, h)
       g.fillRect(vStreetX + STREET_W / 2 - 2, y0, 2, h)
-      g.lineStyle(1.5, 0xd4a017, 0.4)
+      g.lineStyle(1.5, activeTheme.lampShade, 0.4)
       for (let dy = y0; dy < y0 + h; dy += 48) {
         g.lineBetween(vStreetX, dy, vStreetX, dy + 16)
       }
@@ -497,17 +497,17 @@ export class OfficeTerrain {
     const SIDEWALK_W = 24
     // Sidewalk above horizontal street
     if (streetY < y0 + h - 60) {
-      g.fillStyle(0x2a3444, 0.65)
+      g.fillStyle(activeTheme.deskTop, 0.65)
       g.fillRect(x0, streetY - STREET_W / 2 - SIDEWALK_W, w, SIDEWALK_W)
       // Sidewalk tile lines
-      g.lineStyle(0.5, 0x3a4a5a, 0.2)
+      g.lineStyle(0.5, activeTheme.metallic, 0.2)
       for (let sx = x0; sx < x0 + w; sx += 44) {
         g.lineBetween(sx, streetY - STREET_W / 2 - SIDEWALK_W, sx, streetY - STREET_W / 2)
       }
       // Below street
-      g.fillStyle(0x2a3444, 0.65)
+      g.fillStyle(activeTheme.deskTop, 0.65)
       g.fillRect(x0, streetY + STREET_W / 2, w, SIDEWALK_W)
-      g.lineStyle(0.5, 0x3a4a5a, 0.2)
+      g.lineStyle(0.5, activeTheme.metallic, 0.2)
       for (let sx = x0; sx < x0 + w; sx += 44) {
         g.lineBetween(sx, streetY + STREET_W / 2, sx, streetY + STREET_W / 2 + SIDEWALK_W)
       }
@@ -520,17 +520,17 @@ export class OfficeTerrain {
         if (isOverlapping(lx, streetY - STREET_W / 2 - 20, 10)) continue
         const lampY = streetY - STREET_W / 2 - SIDEWALK_W - 6
         // Lamp post
-        g.fillStyle(0x4a5a6a, 0.7)
+        g.fillStyle(activeTheme.metallicAlt, 0.7)
         g.fillRect(lx - 2.5, lampY - 36, 5, 36)
         // Lamp arm
-        g.fillStyle(0x4a5a6a, 0.6)
+        g.fillStyle(activeTheme.metallicAlt, 0.6)
         g.fillRect(lx - 1, lampY - 38, 16, 2)
         // Lamp housing
         g.fillStyle(activeTheme.wallInner, 0.6)
         g.fillRect(lx + 7, lampY - 41, 14, 6)
         // Lamp bulb sprite — no ground glow, no ADD blend
         const bulb = this.scene.add.sprite(lx + 14, lampY - 38, SPRITESHEET_KEYS.GAME_ICONS, ICON_FRAMES.CIRCLE_YELLOW)
-          .setScale(0.14).setAlpha(0.25).setTint(0xd4a017).setDepth(-9)
+          .setScale(0.14).setAlpha(0.25).setTint(activeTheme.lampShade).setDepth(-9)
         this.terrainDecos.push(bulb)
       }
     }
@@ -543,16 +543,16 @@ export class OfficeTerrain {
     if (!isOverlapping(subX, subY, 40) && subY < y0 + h - 40) {
       const sbW = 120, sbH = 80
       // Building base
-      g.fillStyle(0x1e2836, 0.85)
+      g.fillStyle(activeTheme.deskBody, 0.85)
       g.fillRect(subX - sbW / 2, subY - sbH / 2, sbW, sbH)
-      g.lineStyle(1, 0x3a4a5a, 0.65)
+      g.lineStyle(1, activeTheme.metallic, 0.65)
       g.strokeRect(subX - sbW / 2, subY - sbH / 2, sbW, sbH)
       // Roof stripe
-      g.fillStyle(0x2a3848, 0.8)
+      g.fillStyle(activeTheme.deskTop, 0.8)
       g.fillRect(subX - sbW / 2, subY - sbH / 2, sbW, 6)
       // Warning stripes on front
       for (let si = 0; si < 3; si++) {
-        g.fillStyle(0xd4a017, 0.15)
+        g.fillStyle(activeTheme.lampShade, 0.15)
         g.fillRect(subX - sbW / 2 + 4 + si * 20, subY + sbH / 2 - 8, 10, 6)
         g.fillStyle(activeTheme.bg, 0.15)
         g.fillRect(subX - sbW / 2 + 14 + si * 20, subY + sbH / 2 - 8, 6, 6)
@@ -573,17 +573,17 @@ export class OfficeTerrain {
     const guardY = worldH / 2
     if (!isOverlapping(guardX, guardY, 20) && guardX > x0 + 20) {
       const gbW = 48, gbH = 40
-      g.fillStyle(0x1e2836, 0.85)
+      g.fillStyle(activeTheme.deskBody, 0.85)
       g.fillRect(guardX - gbW / 2, guardY - gbH / 2, gbW, gbH)
-      g.lineStyle(1, 0x3a4a5a, 0.65)
+      g.lineStyle(1, activeTheme.metallic, 0.65)
       g.strokeRect(guardX - gbW / 2, guardY - gbH / 2, gbW, gbH)
       // Window
       g.fillStyle(0x0ea5e9, 0.12)
       g.fillRect(guardX - 5, guardY - gbH / 2 + 4, 10, 6)
       // Barrier arm
-      g.fillStyle(0xd4a017, 0.45)
+      g.fillStyle(activeTheme.lampShade, 0.45)
       g.fillRect(guardX + gbW / 2, guardY - 1, 50, 2)
-      g.fillStyle(0xd4a017, 0.25)
+      g.fillStyle(activeTheme.lampShade, 0.25)
       g.fillRect(guardX + gbW / 2, guardY - 1, 50, 2)
       // Checkpoint light
       const checkLight = this.scene.add.sprite(guardX, guardY - gbH / 2 - 4, SPRITESHEET_KEYS.GAME_ICONS, ICON_FRAMES.CIRCLE_YELLOW)
@@ -601,10 +601,10 @@ export class OfficeTerrain {
         const shW = 72, shH = 48
         g.fillStyle(activeTheme.ventFill, 0.85)
         g.fillRect(sx - shW / 2, sy - shH / 2, shW, shH)
-        g.lineStyle(1, 0x2a3a4a, 0.4)
+        g.lineStyle(1, activeTheme.metallic, 0.4)
         g.strokeRect(sx - shW / 2, sy - shH / 2, shW, shH)
         // Corrugated roof lines
-        g.lineStyle(0.5, 0x3a4a5a, 0.2)
+        g.lineStyle(0.5, activeTheme.metallic, 0.2)
         for (let rl = 0; rl < shW; rl += 5) {
           g.lineBetween(sx - shW / 2 + rl, sy - shH / 2, sx - shW / 2 + rl, sy - shH / 2 + 4)
         }
@@ -645,7 +645,7 @@ export class OfficeTerrain {
         g.fillStyle(0x4a3a2a, 0.45)
         g.fillRect(bx_ - 18, by_ - 2, 36, 5)
         // Bench legs
-        g.fillStyle(0x3a4a5a, 0.4)
+        g.fillStyle(activeTheme.metallic, 0.4)
         g.fillRect(bx_ - 15, by_ + 3, 2, 4)
         g.fillRect(bx_ + 13, by_ + 3, 2, 4)
         // Bench backrest
@@ -665,7 +665,7 @@ export class OfficeTerrain {
       const signY = rect.y + rect.h / 2
       if (signX < x0 + 10) continue
       // Sign post
-      g.fillStyle(0x4a5a6a, 0.4)
+      g.fillStyle(activeTheme.metallicAlt, 0.4)
       g.fillRect(signX - 1, signY - 26, 2, 26)
       // Sign board
       g.fillStyle(activeTheme.bg, 0.85)
@@ -685,15 +685,15 @@ export class OfficeTerrain {
     if (!isOverlapping(padCX, padCY, 50) && padCX < x0 + w - 50 && padCY < y0 + h - 50) {
       const padR = 70
       // Pad surface
-      g.fillStyle(0x1a2030, 0.8)
+      g.fillStyle(activeTheme.roomFloor, 0.8)
       g.fillCircle(padCX, padCY, padR)
-      g.lineStyle(2, 0x3a4a5a, 0.4)
+      g.lineStyle(2, activeTheme.metallic, 0.4)
       g.strokeCircle(padCX, padCY, padR)
       // Inner circle
       g.lineStyle(1.5, MAKO_CYAN, 0.2)
       g.strokeCircle(padCX, padCY, padR - 10)
       // H marking
-      g.fillStyle(0x8a96a4, 0.25)
+      g.fillStyle(activeTheme.metallicAlt, 0.25)
       g.fillRect(padCX - 17.5, padCY - 14, 7, 28) // left stroke
       g.fillRect(padCX + 10.5, padCY - 14, 7, 28)  // right stroke
       g.fillRect(padCX - 10.5, padCY - 2, 21, 5.25)  // cross bar
@@ -722,7 +722,7 @@ export class OfficeTerrain {
       const cableY = rect.y + rand() * rect.h * 0.5
       if (cableEndX > x0 + w - 20) continue
       // Cable line
-      g.lineStyle(1, 0x4a5a6a, 0.2)
+      g.lineStyle(1, activeTheme.metallicAlt, 0.2)
       g.lineBetween(cableStartX, cableY, cableEndX, cableY)
       // Sag curve — drawn as a few segment lines
       const sagDepth = 6 + rand() * 4.5
@@ -733,14 +733,14 @@ export class OfficeTerrain {
         const t2 = (si + 1) / segments
         const sag1 = Math.sin(t1 * Math.PI) * sagDepth
         const sag2 = Math.sin(t2 * Math.PI) * sagDepth
-        g.lineStyle(0.8, 0x3a4a5a, 0.15)
+        g.lineStyle(0.8, activeTheme.metallic, 0.15)
         g.lineBetween(
           cableStartX + t1 * cableLen, cableY + sag1,
           cableStartX + t2 * cableLen, cableY + sag2,
         )
       }
       // Support bracket at start
-      g.fillStyle(0x4a5a6a, 0.3)
+      g.fillStyle(activeTheme.metallicAlt, 0.3)
       g.fillRect(cableStartX - 2, cableY - 3, 4, 6)
     }
 
@@ -803,29 +803,29 @@ export class OfficeTerrain {
           const bx_ = cx - bw / 2, by_ = cy - bh / 2
           g.fillStyle(0x000000, 0.12)
           g.fillRect(bx_ + 5, by_ + 5, bw, bh)
-          g.fillStyle(0x242e3e, 0.92)
+          g.fillStyle(activeTheme.deskTop, 0.92)
           g.fillRect(bx_, by_, bw, bh)
-          g.lineStyle(1.5, 0x3a4a5a, 0.7)
+          g.lineStyle(1.5, activeTheme.metallic, 0.7)
           g.strokeRect(bx_, by_, bw, bh)
-          g.fillStyle(0x354560, 0.8)
+          g.fillStyle(activeTheme.wall, 0.8)
           g.fillRect(bx_, by_, bw, 6)
           // Ventilation units
           for (let vi = 0; vi < 3; vi++) {
-            g.fillStyle(0x3a4a5a, 0.5)
+            g.fillStyle(activeTheme.metallic, 0.5)
             g.fillRect(bx_ + 15 + vi * 35, by_ + 10, 14, 8)
           }
           // AC unit boxes on roof
           for (const acOff of [bx_ + bw - 50, bx_ + bw - 25]) {
-            g.fillStyle(0x1a2530, 0.6)
+            g.fillStyle(activeTheme.roomFloor, 0.6)
             g.fillRect(acOff, by_ + 8, 16, 10)
-            g.lineStyle(0.5, 0x3a4a5a, 0.35)
+            g.lineStyle(0.5, activeTheme.metallic, 0.35)
             g.strokeRect(acOff, by_ + 8, 16, 10)
             // Fan circle inside
-            g.lineStyle(0.5, 0x4a5a6a, 0.4)
+            g.lineStyle(0.5, activeTheme.metallicAlt, 0.4)
             g.strokeCircle(acOff + 8, by_ + 13, 3)
           }
           // Antenna stubs on roof edge
-          g.lineStyle(0.8, 0x4a5a6a, 0.35)
+          g.lineStyle(0.8, activeTheme.metallicAlt, 0.35)
           g.lineBetween(bx_ + 8, by_, bx_ + 8, by_ - 10)
           g.lineBetween(bx_ + 18, by_, bx_ + 18, by_ - 8)
           g.lineBetween(bx_ + 26, by_, bx_ + 26, by_ - 12)
@@ -833,15 +833,15 @@ export class OfficeTerrain {
           for (let di = 0; di < 2; di++) {
             const dx = bx_ + 20 + di * 50
             const dy = by_ + bh - 18
-            g.fillStyle(0x0e1620, 0.5)
+            g.fillStyle(activeTheme.bg, 0.5)
             g.fillRect(dx, dy, 28, 16)
-            g.lineStyle(0.6, 0x2a3a4a, 0.4)
+            g.lineStyle(0.6, activeTheme.metallic, 0.4)
             g.strokeRect(dx, dy, 28, 16)
           }
           // Exhaust pipe on right side
-          g.fillStyle(0x2a3444, 0.5)
+          g.fillStyle(activeTheme.deskTop, 0.5)
           g.fillRect(bx_ + bw - 8, by_ - 14, 5, 16)
-          g.lineStyle(0.5, 0x3a4a5a, 0.3)
+          g.lineStyle(0.5, activeTheme.metallic, 0.3)
           g.strokeRect(bx_ + bw - 8, by_ - 14, 5, 16)
           // Status light
           const lightFrame = (col + row) % 2 === 0 ? ICON_FRAMES.CIRCLE_GREEN : ICON_FRAMES.CIRCLE_RED
@@ -854,15 +854,15 @@ export class OfficeTerrain {
           }).setOrigin(0.5, 0).setDepth(-9).setAlpha(0.6)
           this.terrainDecos.push(label)
           // Prop: stone blocks near building
-          placeTerrainProp(bx_ - 14, by_ + bh * 0.4, IMAGE_KEYS.TERRAIN_STONE, 0.22, 0.35, 0x4a5a6a)
-          if ((col + row) % 3 === 0) placeTerrainProp(bx_ + bw + 10, by_ + bh * 0.7, IMAGE_KEYS.TERRAIN_DIRT, 0.2, 0.3, 0x4a5a6a)
+          placeTerrainProp(bx_ - 14, by_ + bh * 0.4, IMAGE_KEYS.TERRAIN_STONE, 0.22, 0.35, activeTheme.metallicAlt)
+          if ((col + row) % 3 === 0) placeTerrainProp(bx_ + bw + 10, by_ + bh * 0.7, IMAGE_KEYS.TERRAIN_DIRT, 0.2, 0.3, activeTheme.metallicAlt)
 
         } else if (zType === 'storage') {
           // Loading dock platform — wide dark slab behind containers
-          g.fillStyle(0x2a3444, 0.65)
+          g.fillStyle(activeTheme.deskTop, 0.65)
           g.fillRect(cx - 55, cy + 14, 110, 10)
           // Yellow dock edge marking
-          g.lineStyle(1.5, 0xd4a017, 0.45)
+          g.lineStyle(1.5, activeTheme.lampShade, 0.45)
           g.lineBetween(cx - 55, cy + 14, cx + 55, cy + 14)
 
           // Cargo containers — orderly row of 3
@@ -874,17 +874,17 @@ export class OfficeTerrain {
             const cColor = containerColors[ci % containerColors.length]
             g.fillStyle(cColor, 0.7)
             g.fillRect(ccx, ccy, cw, ch)
-            g.lineStyle(1, 0x5a6a7a, 0.5)
+            g.lineStyle(1, activeTheme.wallInner, 0.5)
             g.strokeRect(ccx, ccy, cw, ch)
             // Corrugation
-            g.lineStyle(0.5, 0x5a6a7a, 0.2)
+            g.lineStyle(0.5, activeTheme.wallInner, 0.2)
             for (let ri = 4; ri < cw; ri += 6) {
               g.lineBetween(ccx + ri, ccy + 1, ccx + ri, ccy + ch - 1)
             }
           }
 
           // Pallet markings on the ground near containers
-          g.lineStyle(0.5, 0x3a4a5a, 0.25)
+          g.lineStyle(0.5, activeTheme.metallic, 0.25)
           g.strokeRect(cx - 60, cy + 10, 16, 10)
           g.strokeRect(cx - 10, cy + 12, 16, 10)
           g.strokeRect(cx + 35, cy + 9, 16, 10)
@@ -892,14 +892,14 @@ export class OfficeTerrain {
           // Forklift silhouette — simple geometric shape
           const fkx = cx + 58, fky = cy - 2
           // Body
-          g.fillStyle(0x3a4a5a, 0.3)
+          g.fillStyle(activeTheme.metallic, 0.3)
           g.fillRect(fkx, fky, 12, 8)
           // Wheels
           g.fillStyle(activeTheme.wall, 0.35)
           g.fillCircle(fkx + 2, fky + 10, 2)
           g.fillCircle(fkx + 10, fky + 10, 2)
           // Fork prongs extending forward
-          g.fillStyle(0x4a5a6a, 0.25)
+          g.fillStyle(activeTheme.metallicAlt, 0.25)
           g.fillRect(fkx - 8, fky + 5, 8, 1.5)
           g.fillRect(fkx - 8, fky + 7, 8, 1.5)
 
@@ -916,12 +916,12 @@ export class OfficeTerrain {
         } else if (zType === 'utility') {
           // Transformer box + generator unit
           const tw = 28, th = 28
-          g.fillStyle(0x354560, 0.8)
+          g.fillStyle(activeTheme.wall, 0.8)
           g.fillRect(cx - tw / 2, cy - th / 2, tw, th)
-          g.lineStyle(1.5, 0x5a6a7a, 0.55)
+          g.lineStyle(1.5, activeTheme.wallInner, 0.55)
           g.strokeRect(cx - tw / 2, cy - th / 2, tw, th)
           // Warning diamond
-          g.fillStyle(0xd4a017, 0.25)
+          g.fillStyle(activeTheme.lampShade, 0.25)
           g.beginPath()
           g.moveTo(cx, cy - 5)
           g.lineTo(cx + 5, cy)
@@ -931,9 +931,9 @@ export class OfficeTerrain {
           g.fillPath()
           // Generator nearby
           const gx_ = cx + 30, gy_ = cy - 10
-          g.fillStyle(0x283848, 0.85)
+          g.fillStyle(activeTheme.deskTop, 0.85)
           g.fillRect(gx_, gy_, 44, 30)
-          g.lineStyle(1.5, 0x4a5a6a, 0.6)
+          g.lineStyle(1.5, activeTheme.metallicAlt, 0.6)
           g.strokeRect(gx_, gy_, 44, 30)
           // Vent slats
           for (let sl = 0; sl < 2; sl++) {
@@ -946,11 +946,11 @@ export class OfficeTerrain {
           const pole2X = gx_ + 10, pole2Y = gy_ - 2
           const poleW = 3, poleH = 20, crossW = 12
           // Pole 1 (near transformer)
-          g.fillStyle(0x3a4a5a, 0.45)
+          g.fillStyle(activeTheme.metallic, 0.45)
           g.fillRect(pole1X - poleW / 2, pole1Y - poleH, poleW, poleH)
           g.fillRect(pole1X - crossW / 2, pole1Y - poleH + 3, crossW, 2)
           // Pole 2 (near generator)
-          g.fillStyle(0x3a4a5a, 0.45)
+          g.fillStyle(activeTheme.metallic, 0.45)
           g.fillRect(pole2X - poleW / 2, pole2Y - poleH, poleW, poleH)
           g.fillRect(pole2X - crossW / 2, pole2Y - poleH + 3, crossW, 2)
 
@@ -959,7 +959,7 @@ export class OfficeTerrain {
           const wireY2 = pole2Y - poleH + 4
           const wireMidX = (pole1X + pole2X) / 2
           const wireMidY = (wireY1 + wireY2) / 2 + 4 // sag
-          g.lineStyle(0.6, 0x5a6a7a, 0.3)
+          g.lineStyle(0.6, activeTheme.wallInner, 0.3)
           g.lineBetween(pole1X, wireY1, wireMidX, wireMidY)
           g.lineBetween(wireMidX, wireMidY, pole2X, wireY2)
 
@@ -976,17 +976,17 @@ export class OfficeTerrain {
           const trayX1 = cx
           const trayX2 = gx_ + 20
           const trayLen = trayX2 - trayX1
-          g.fillStyle(0x2a3444, 0.35)
+          g.fillStyle(activeTheme.deskTop, 0.35)
           g.fillRect(trayX1, trayY, trayLen, 4)
           // Tick marks along tray
-          g.lineStyle(0.5, 0x4a5a6a, 0.3)
+          g.lineStyle(0.5, activeTheme.metallicAlt, 0.3)
           for (let ti = 0; ti < 3; ti++) {
             const tx = trayX1 + 10 + ti * (trayLen - 20) / 2
             g.lineBetween(tx, trayY - 1, tx, trayY + 5)
           }
 
           // ── DANGER HIGH VOLTAGE sign ──
-          g.fillStyle(0xd4a017, 0.3)
+          g.fillStyle(activeTheme.lampShade, 0.3)
           g.fillRect(cx - tw / 2 - 2, cy + th / 2 + 8, 30, 8)
           g.lineStyle(0.5, 0x8a7a2a, 0.35)
           g.strokeRect(cx - tw / 2 - 2, cy + th / 2 + 8, 30, 8)
@@ -995,7 +995,7 @@ export class OfficeTerrain {
           }).setOrigin(0.5).setDepth(-9).setAlpha(0.4)
           this.terrainDecos.push(dangerLabel)
           // Prop: coin box (equipment locker) near transformer
-          placeTerrainProp(cx - tw / 2 - 18, cy - 8, IMAGE_KEYS.TERRAIN_BOX_COIN, 0.22, 0.35, 0x5a6a7a)
+          placeTerrainProp(cx - tw / 2 - 18, cy - 8, IMAGE_KEYS.TERRAIN_BOX_COIN, 0.22, 0.35, activeTheme.wallInner)
 
         } else if (zType === 'green') {
           // Small park area — organic green space with trees, bushes, benches, path, flowers
@@ -1005,7 +1005,7 @@ export class OfficeTerrain {
           g.fillStyle(0x1a3a1a, 0.14)
           g.fillEllipse(cx + 8, cy - 5, 96, 100)
           // Walkway path cutting through
-          g.fillStyle(0x3a4a4a, 0.2)
+          g.fillStyle(activeTheme.metallic, 0.2)
           g.fillRect(cx - 2, cy - 20, 4, 40)
           // Tree 1 (small, left)
           g.fillStyle(0x4a3a2a, 0.45)
@@ -1032,21 +1032,21 @@ export class OfficeTerrain {
           // Bench 1 (left side)
           g.fillStyle(0x4a3a2a, 0.35)
           g.fillRect(cx - 18, cy + 22, 28, 4)
-          g.fillStyle(0x3a4a5a, 0.30)
+          g.fillStyle(activeTheme.metallic, 0.30)
           g.fillRect(cx - 16, cy + 26, 2, 3)
           g.fillRect(cx + 6, cy + 26, 2, 3)
           // Bench 2 (right side)
           g.fillStyle(0x4a3a2a, 0.30)
           g.fillRect(cx + 20, cy + 24, 24, 4)
-          g.fillStyle(0x3a4a5a, 0.25)
+          g.fillStyle(activeTheme.metallic, 0.25)
           g.fillRect(cx + 22, cy + 28, 2, 3)
           g.fillRect(cx + 40, cy + 28, 2, 3)
           // Flower dots scattered on the ground
-          g.fillStyle(0xd4a017, 0.20)
+          g.fillStyle(activeTheme.lampShade, 0.20)
           g.fillCircle(cx - 10, cy + 14, 1.5)
           g.fillStyle(0xfda4af, 0.18)
           g.fillCircle(cx + 8, cy + 10, 1.5)
-          g.fillStyle(0xd4a017, 0.16)
+          g.fillStyle(activeTheme.lampShade, 0.16)
           g.fillCircle(cx + 30, cy + 18, 2)
           // Prop: decorative dirt/stone blocks at park edges
           placeTerrainProp(cx - 45, cy + 30, IMAGE_KEYS.TERRAIN_DIRT, 0.18, 0.25, 0x4a6a4a)
@@ -1055,16 +1055,16 @@ export class OfficeTerrain {
         } else if (zType === 'parking') {
           // Parking lot with spot markings
           const pw = 150, ph = 90
-          g.fillStyle(0x222a38, 0.85)
+          g.fillStyle(activeTheme.deskTop, 0.85)
           g.fillRect(cx - pw / 2, cy - ph / 2, pw, ph)
-          g.lineStyle(2, 0x4a5a6a, 0.6)
+          g.lineStyle(2, activeTheme.metallicAlt, 0.6)
           g.strokeRect(cx - pw / 2, cy - ph / 2, pw, ph)
           // Spot markings
           const spotW = 16, spotH = 7
           const spotsPerRow = Math.floor((pw - 30) / 20)
           for (let r = 0; r < 2; r++) {
             for (let c = 0; c < spotsPerRow; c++) {
-              g.lineStyle(0.8, 0x5a6a7a, 0.45)
+              g.lineStyle(0.8, activeTheme.wallInner, 0.45)
               g.strokeRect(cx - pw / 2 + 15 + c * 20, cy - ph / 2 + 18 + r * 28, spotW, spotH)
             }
           }
@@ -1094,7 +1094,7 @@ export class OfficeTerrain {
           // Directional arrow in center aisle pointing right toward entrance
           const arrowCx = cx
           const arrowCy = laneY
-          g.lineStyle(1, 0x4a5a6a, 0.35)
+          g.lineStyle(1, activeTheme.metallicAlt, 0.35)
           g.lineBetween(arrowCx - 10, arrowCy, arrowCx + 6, arrowCy)
           g.lineBetween(arrowCx + 2, arrowCy - 3, arrowCx + 6, arrowCy)
           g.lineBetween(arrowCx + 2, arrowCy + 3, arrowCx + 6, arrowCy)
@@ -1123,13 +1123,13 @@ export class OfficeTerrain {
         // Connect right
         if (col + 1 < zoneCols && getZoneType(col + 1, row) !== 'open') {
           const cx2 = cx1 + ZONE_SIZE
-          g.lineStyle(1, 0x3a4a5a, 0.15 + rand() * 0.1)
+          g.lineStyle(1, activeTheme.metallic, 0.15 + rand() * 0.1)
           g.lineBetween(cx1, cy1, cx2, cy1)
         }
         // Connect down
         if (row + 1 < zoneRows && getZoneType(col, row + 1) !== 'open') {
           const cy2 = cy1 + ZONE_SIZE
-          g.lineStyle(1, 0x3a4a5a, 0.15 + rand() * 0.1)
+          g.lineStyle(1, activeTheme.metallic, 0.15 + rand() * 0.1)
           g.lineBetween(cx1, cy1, cx1, cy2)
         }
       }
@@ -1140,7 +1140,7 @@ export class OfficeTerrain {
     const perimY1 = y0 + 20
     const perimX2 = x0 + w - 20
     const perimY2 = y0 + h - 20
-    const perimColor = 0x2a3a4a
+    const perimColor = activeTheme.metallic
     const perimDash = 12
     const perimGap = 8
     // Top edge
@@ -1175,9 +1175,9 @@ export class OfficeTerrain {
       { x: perimX2, y: perimY2 },
     ]
     for (const corner of cornerPositions) {
-      g.fillStyle(0x2a3444, 0.7)
+      g.fillStyle(activeTheme.deskTop, 0.7)
       g.fillRect(corner.x - 6, corner.y - 6, 12, 12)
-      g.lineStyle(1, 0x3a4a5a, 0.6)
+      g.lineStyle(1, activeTheme.metallic, 0.6)
       g.strokeRect(corner.x - 6, corner.y - 6, 12, 12)
       const cornerLight = this.scene.add.sprite(corner.x, corner.y, SPRITESHEET_KEYS.GAME_ICONS, ICON_FRAMES.CIRCLE_YELLOW)
         .setScale(0.12).setAlpha(0.4).setDepth(-9)
@@ -1223,7 +1223,7 @@ export class OfficeTerrain {
     }
 
     // ── 1. Base — deep navy facility floor ──
-    g.fillStyle(0x0d1b2a, 1)
+    g.fillStyle(activeTheme.bg, 1)
     g.fillRect(x0, y0, w, h)
 
     // ── 2. Subtle structural panel grid — large dark panels ──
@@ -1232,10 +1232,10 @@ export class OfficeTerrain {
     for (let py = y0; py < y0 + h; py += panelH) {
       for (let px = x0; px < x0 + w; px += panelW) {
         // Panel seam lines
-        g.lineStyle(1, 0x142238, 0.35)
+        g.lineStyle(1, activeTheme.officeGrid, 0.35)
         g.lineBetween(px, y0, px, y0 + h)
       }
-      g.lineStyle(1, 0x142238, 0.35)
+      g.lineStyle(1, activeTheme.officeGrid, 0.35)
       g.lineBetween(x0, py, x0 + w, py)
     }
 
@@ -1244,10 +1244,10 @@ export class OfficeTerrain {
       for (let px = x0; px < x0 + w; px += panelW) {
         const r = rand()
         if (r < 0.12) {
-          g.fillStyle(0x0f2035, 0.3)
+          g.fillStyle(activeTheme.fogColor, 0.3)
           g.fillRect(px + 1, py + 1, panelW - 2, panelH - 2)
         } else if (r < 0.20) {
-          g.fillStyle(0x0a1520, 0.25)
+          g.fillStyle(activeTheme.bg, 0.25)
           g.fillRect(px + 1, py + 1, panelW - 2, panelH - 2)
         }
       }
@@ -1259,7 +1259,7 @@ export class OfficeTerrain {
     const perimX2 = x0 + w - 30
     const perimY2 = y0 + h - 30
     // Solid perimeter lines
-    g.lineStyle(2, 0x1a2d42, 0.5)
+    g.lineStyle(2, activeTheme.wall, 0.5)
     g.strokeRect(perimX1, perimY1, perimX2 - perimX1, perimY2 - perimY1)
     // Corner reinforcement brackets
     const corners = [
@@ -1269,7 +1269,7 @@ export class OfficeTerrain {
       { x: perimX2, y: perimY2 },
     ]
     for (const c of corners) {
-      g.fillStyle(0x1a2d42, 0.5)
+      g.fillStyle(activeTheme.wall, 0.5)
       g.fillRect(c.x - 4, c.y - 4, 8, 8)
     }
 
@@ -1277,18 +1277,18 @@ export class OfficeTerrain {
     // Horizontal conduit below building area
     const conduitY = worldH + 30
     if (conduitY < y0 + h - 50) {
-      g.fillStyle(0x112030, 0.6)
+      g.fillStyle(activeTheme.bg, 0.6)
       g.fillRect(x0, conduitY - 3, w, 6)
-      g.lineStyle(0.5, 0x1a3050, 0.3)
+      g.lineStyle(0.5, activeTheme.wall, 0.3)
       g.lineBetween(x0, conduitY - 3, x0 + w, conduitY - 3)
       g.lineBetween(x0, conduitY + 3, x0 + w, conduitY + 3)
     }
     // Vertical conduit right of building area
     const conduitX = worldW + 30
     if (conduitX < x0 + w - 50) {
-      g.fillStyle(0x112030, 0.6)
+      g.fillStyle(activeTheme.bg, 0.6)
       g.fillRect(conduitX - 3, y0, 6, h)
-      g.lineStyle(0.5, 0x1a3050, 0.3)
+      g.lineStyle(0.5, activeTheme.wall, 0.3)
       g.lineBetween(conduitX - 3, y0, conduitX - 3, y0 + h)
       g.lineBetween(conduitX + 3, y0, conduitX + 3, y0 + h)
     }
@@ -1299,7 +1299,7 @@ export class OfficeTerrain {
       const my = WORLD_MARGIN + 80 + rand() * (worldH - WORLD_MARGIN * 2 - 160)
       if (isOverlapping(mx, my, 20)) continue
       // Small cross marker
-      g.lineStyle(1, 0x1a3050, 0.2)
+      g.lineStyle(1, activeTheme.wall, 0.2)
       g.lineBetween(mx - 6, my, mx + 6, my)
       g.lineBetween(mx, my - 6, mx, my + 6)
     }
@@ -1309,9 +1309,9 @@ export class OfficeTerrain {
       const gx = x0 + 120 + rand() * (w - 240)
       const gy = y0 + 120 + rand() * (h - 240)
       if (isOverlapping(gx, gy, 15)) continue
-      g.fillStyle(0x0f1f30, 0.4)
+      g.fillStyle(activeTheme.bg, 0.4)
       g.fillRoundedRect(gx - 14, gy - 8, 28, 16, 2)
-      g.lineStyle(1, 0x1a3050, 0.25)
+      g.lineStyle(1, activeTheme.wall, 0.25)
       for (let sl = -8; sl <= 8; sl += 4) {
         g.lineBetween(gx + sl, gy - 5, gx + sl, gy + 5)
       }
@@ -1394,7 +1394,7 @@ export class OfficeTerrain {
         const lx = WORLD_MARGIN + rand() * (worldW - WORLD_MARGIN * 2)
         const ly = WORLD_MARGIN + rand() * (worldH - WORLD_MARGIN * 2)
         if (isOverlapping(lx, ly, 6)) continue
-        const leafColors = [0xd4a017, 0xb45309, 0xdc2626, 0xea580c]
+        const leafColors = [activeTheme.lampShade, 0xb45309, 0xdc2626, 0xea580c]
         g.fillStyle(leafColors[Math.floor(rand() * leafColors.length)], 0.08 + rand() * 0.04)
         g.fillEllipse(lx, ly, 3 + rand() * 3, 2 + rand() * 2)
       }
@@ -1434,7 +1434,7 @@ export class OfficeTerrain {
         .setScale(0.55)
         .setAlpha(0.4 + Math.random() * 0.15)
         .setAngle(Math.random() * 30 - 15)
-        .setTint(0x8a96a4) // muted industrial tint
+        .setTint(activeTheme.metallicAlt) // muted industrial tint
 
       this.propSprites.push(prop)
       this.terrainDecos.push(prop)

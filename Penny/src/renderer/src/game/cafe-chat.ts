@@ -1,6 +1,7 @@
 import Phaser from 'phaser'
 import type { CafeVisitor, ChatSession } from './penny-cafe'
 import { scaledFontSize } from './office-constants'
+import { activeTheme } from './office-theme'
 
 // ---------------------------------------------------------------------------
 // Social emojis
@@ -194,7 +195,7 @@ export class CafeChatManager {
     const c = scene.add.container(x, y).setDepth(9001)
 
     const bg = scene.add.graphics()
-    bg.fillStyle(0x0d1a2a, 0.9)
+    bg.fillStyle(activeTheme.panelBg, 0.9)
     bg.fillRoundedRect(-10, -7, 20, 14, 4)
     bg.fillTriangle(-2, 7, 2, 7, 0, 11)
     c.add(bg)

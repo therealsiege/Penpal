@@ -173,7 +173,7 @@ export class OfficeInterior {
       const DECO_SCALE = 0.65
       const decos: Phaser.GameObjects.Sprite[] = []
       const MAKO_TINT = 0x00cc88 // subtle mako-green tint for plants
-      const STEEL_TINT = 0x5a6a7a // metallic tint for furniture
+      const STEEL_TINT = activeTheme.wallInner // metallic tint for furniture
 
       // Industrial wall clock
       if (fw > 300) {
@@ -194,7 +194,7 @@ export class OfficeInterior {
           const ang = Phaser.Math.DegToRad(t * 30 - 90)
           clockFace.lineBetween(Math.cos(ang) * 10, Math.sin(ang) * 10, Math.cos(ang) * 12, Math.sin(ang) * 12)
         }
-        clockFace.fillStyle(0x00ff88, 1) // mako-green center dot
+        clockFace.fillStyle(activeTheme.doorFrame, 1) // door frame color center dot
         clockFace.fillCircle(0, 0, 1)
         const hourHand = this.scene.add.graphics()
         const minuteHand = this.scene.add.graphics()
@@ -218,7 +218,7 @@ export class OfficeInterior {
       // Mako coolant dispenser (water cooler re-themed)
       if (fw > 350) {
         decos.push(this.scene.add.sprite(fx + fw / 2 - 60, fy + fh - 30, SPRITESHEET_KEYS.OFFICE, OFFICE_FRAME_WATER_COOLER)
-          .setScale(DECO_SCALE * 0.85).setAlpha(0.55).setTint(0x00e5ff).setDepth(-1))
+          .setScale(DECO_SCALE * 0.85).setAlpha(0.55).setTint(activeTheme.monitorGlowActive).setDepth(-1))
       }
       // Mako-infused plant specimens — reactor-mutated greenery
       if (fw > 200) {
@@ -254,7 +254,7 @@ export class OfficeInterior {
       // Reactor-zone monitoring equipment
       if (fw > 350 && fh > 160) {
         decos.push(this.scene.add.sprite(fx + fw - 55, fy + 35, SPRITESHEET_KEYS.OFFICE, OFFICE_FRAME_MONITOR)
-          .setScale(DECO_SCALE * 0.85).setAlpha(0.58).setTint(0x00e5ff).setDepth(-1))
+          .setScale(DECO_SCALE * 0.85).setAlpha(0.58).setTint(activeTheme.monitorGlowActive).setDepth(-1))
       }
 
       this.officeDecoSprites = decos
@@ -323,7 +323,7 @@ export class OfficeInterior {
         const flx = bx + floodSpacing * (fi + 1)
 
         const pool = this.scene.add.graphics()
-        pool.fillStyle(0xd4a017, 1)
+        pool.fillStyle(activeTheme.lampShade, 1)
         pool.fillTriangle(-14, 0, 14, 0, 22, 32)
         pool.fillTriangle(-14, 0, -22, 32, 22, 32)
         pool.setPosition(flx, floodY)
@@ -331,11 +331,11 @@ export class OfficeInterior {
         lightChildren.push(pool)
 
         const halo = this.scene.add.sprite(flx, floodY - 2, SPRITESHEET_KEYS.GAME_ICONS, ICON_FRAMES.CIRCLE_YELLOW)
-          .setScale(0.55).setTint(0xd4a017).setAlpha(initAlpha * 0.25)
+          .setScale(0.55).setTint(activeTheme.lampShade).setAlpha(initAlpha * 0.25)
         lightChildren.push(halo)
 
         const bulb = this.scene.add.sprite(flx, floodY - 2, SPRITESHEET_KEYS.GAME_ICONS, ICON_FRAMES.CIRCLE_YELLOW)
-          .setScale(0.25).setTint(0xd4a017).setAlpha(initAlpha)
+          .setScale(0.25).setTint(activeTheme.lampShade).setAlpha(initAlpha)
         lightChildren.push(bulb)
       }
 
@@ -345,14 +345,14 @@ export class OfficeInterior {
         const side = wallX === bx ? 1 : -1
 
         const wallPool = this.scene.add.graphics()
-        wallPool.fillStyle(0xd4a017, 1)
+        wallPool.fillStyle(activeTheme.lampShade, 1)
         wallPool.fillTriangle(0, -10, 0, 10, side * 24, 0)
         wallPool.setPosition(wallX, sconceY)
         wallPool.setAlpha(initAlpha * 0.3)
         lightChildren.push(wallPool)
 
         const sconce = this.scene.add.sprite(wallX, sconceY, SPRITESHEET_KEYS.GAME_ICONS, ICON_FRAMES.CIRCLE_YELLOW)
-          .setScale(0.25).setTint(0xd4a017).setAlpha(initAlpha)
+          .setScale(0.25).setTint(activeTheme.lampShade).setAlpha(initAlpha)
         lightChildren.push(sconce)
       }
 
@@ -383,7 +383,7 @@ export class OfficeInterior {
     {
       const chevronW = 12
       const chevronH = 6
-      const yellow = 0xd4a017
+      const yellow = activeTheme.lampShade
       const black = activeTheme.bg
       const hazardAlpha = 0.22
 
@@ -444,7 +444,7 @@ export class OfficeInterior {
           { cx: fx + fw - 14, cy: fy + fh - 14 },
           { cx: fx + 40, cy: fy + fh - 25 },
         ]
-        const flowerColors = [0xd4a017, 0xd4a017, 0xfafafa]
+        const flowerColors = [activeTheme.lampShade, activeTheme.lampShade, 0xfafafa]
         let seed = 7
         const rand = (): number => {
           seed = (seed * 16807) % 2147483647
@@ -853,9 +853,9 @@ export class OfficeInterior {
     const gfx = this.scene.add.graphics().setDepth(-9.5)
 
     // Compact reactor glow — 2 rings, subtle
-    gfx.fillStyle(0x00ff88, 0.04)
+    gfx.fillStyle(activeTheme.doorFrame, 0.04)
     gfx.fillEllipse(x, y, rx * 2, ry * 2)       // 1x — inner
-    gfx.fillStyle(0x00ff88, 0.02)
+    gfx.fillStyle(activeTheme.doorFrame, 0.02)
     gfx.fillEllipse(x, y, rx * 3, ry * 3)       // 1.5x — outer
 
     this.reactorGlowGfx = gfx
@@ -889,9 +889,9 @@ export class OfficeInterior {
     const outerAlpha = 0.02 + churn * 0.008
 
     gfx.clear()
-    gfx.fillStyle(0x00ff88, innerAlpha)
+    gfx.fillStyle(activeTheme.doorFrame, innerAlpha)
     gfx.fillEllipse(x, y, rx * 2, ry * 2)
-    gfx.fillStyle(0x00ff88, outerAlpha)
+    gfx.fillStyle(activeTheme.doorFrame, outerAlpha)
     gfx.fillEllipse(x, y, rx * 3, ry * 3)
   }
 

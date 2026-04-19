@@ -4,6 +4,7 @@ import { hashToken, drawDashedLine } from './office-helpers'
 import { SPRITESHEET_KEYS, ICON_FRAMES, EFFECT_ANIM_KEYS } from './office-asset-keys'
 import { leaderboardManager } from './leaderboard'
 import type { Rivalry } from './leaderboard'
+import { activeTheme } from './office-theme'
 
 // ---------------------------------------------------------------------------
 // Chat animation entry type
@@ -447,15 +448,15 @@ export class OfficePods {
       const g = this.rivalryGraphics!
 
       // Outer glow line
-      g.lineStyle(3, 0x00e5ff, 0.1)
+      g.lineStyle(3, activeTheme.monitorGlowActive, 0.1)
       drawDashedLine(g, pos1.x, pos1.y, pos2.x, pos2.y, 5, 4)
 
       // Core line
-      g.lineStyle(1.5, 0x00e5ff, 0.35)
+      g.lineStyle(1.5, activeTheme.monitorGlowActive, 0.35)
       drawDashedLine(g, pos1.x, pos1.y, pos2.x, pos2.y, 5, 4)
 
       // Small glow dots at each endpoint
-      g.fillStyle(0x00e5ff, 0.15)
+      g.fillStyle(activeTheme.monitorGlowActive, 0.15)
       g.fillCircle(pos1.x, pos1.y, 5)
       g.fillCircle(pos2.x, pos2.y, 5)
 
@@ -467,12 +468,12 @@ export class OfficePods {
         // Use the puff VFX if available, otherwise draw a simple flash
         if (this.scene.anims.exists(EFFECT_ANIM_KEYS.PUFF)) {
           const puff = this.scene.add.sprite(mx, my, SPRITESHEET_KEYS.EFFECTS_PUFF)
-            .setDepth(202).setScale(0.15).setAlpha(0.4).setTint(0x00e5ff)
+            .setDepth(202).setScale(0.15).setAlpha(0.4).setTint(activeTheme.monitorGlowActive)
           puff.play(EFFECT_ANIM_KEYS.PUFF)
           puff.once('animationcomplete', () => puff.destroy())
         } else {
           // Fallback: simple circle flash
-          g.fillStyle(0x00e5ff, 0.3)
+          g.fillStyle(activeTheme.monitorGlowActive, 0.3)
           g.fillCircle(mx, my, 6)
         }
       }

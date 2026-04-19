@@ -8,6 +8,7 @@ import Phaser from 'phaser'
 import { ICON_FRAMES, EFFECT_ANIM_KEYS, SPRITESHEET_KEYS } from './office-asset-keys'
 import type { Room } from './office-types'
 import { scaledFontSize } from './office-constants'
+import { activeTheme } from './office-theme'
 
 export class OfficeBroadcast {
   private scene: Phaser.Scene
@@ -31,7 +32,7 @@ export class OfficeBroadcast {
     const viewW = this.scene.scale.width
     const BANNER_Y = 28
     const BANNER_H = 30
-    const BANNER_COLOR = 0x0f172a
+    const BANNER_COLOR = activeTheme.panelBg
     const BANNER_ALPHA = 0.9
     const TEXT_COLOR = '#fbbf24'
     const DURATION_MS = 5000
@@ -51,7 +52,7 @@ export class OfficeBroadcast {
     this.bannerContainer.add(this.bannerBg)
 
     // Mako green accent line at the top edge of the banner
-    const accentLine = this.scene.add.rectangle(0, 0, viewW, 2, 0x00ff88, 0.7).setOrigin(0, 0)
+    const accentLine = this.scene.add.rectangle(0, 0, viewW, 2, activeTheme.doorFrame, 0.7).setOrigin(0, 0)
     this.bannerContainer.add(accentLine)
 
     // Subtle flash VFX at screen center when broadcast starts
