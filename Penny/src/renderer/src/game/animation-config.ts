@@ -192,6 +192,50 @@ export interface AnimationConfig {
     comboTierFireMin: number
   }
 
+  /**
+   * State transition blending — crossfade durations and motion parameters for
+   * each animation-mode switch in WorkstationAnimator.
+   * All durationMs values are the total crossfade window; main-loop tweens are
+   * delayed by this amount so they don't clash with the entry motion.
+   */
+  stateTransitions: {
+    /** idle → working: sprite squash-compression burst before typing starts. */
+    idleToWorking: {
+      /** Total crossfade duration (ms). Sprite motion tweens are delayed by this. */
+      durationMs: number
+      /** ScaleY multiplier at peak compression (0.95 = 5% squash). */
+      compressionScale: number
+    }
+    /** working → idle: hands-lift + backward lean on task completion. */
+    workingToIdle: {
+      /** Total crossfade duration (ms). Breath / rock loops delayed by this. */
+      durationMs: number
+      /** Y lift amount (px) — sprite rises before settling back to WS_SPRITE_Y. */
+      liftPx: number
+      /** Lean-back angle (degrees, negative = tilt away from monitor). */
+      leanAngle: number
+    }
+    /** idle → walking: forward anticipation lean before the walk begins. */
+    idleToWalking: {
+      /** Duration (ms) of the lean-forward beat. Walk begins after this. */
+      durationMs: number
+      /** Forward lean angle (degrees, negative = tilt toward destination). */
+      leanAngle: number
+    }
+    /** walking → idle: momentum overshoot + settle when the agent returns. */
+    walkingToIdle: {
+      /** Total duration (ms) of the overshoot + settle animation. */
+      durationMs: number
+      /** X overshoot distance (px) in the direction of travel. */
+      overshootPx: number
+    }
+    /** any → waiting: gradual fade-in of the waiting pose. */
+    anyToWaiting: {
+      /** Duration (ms) for the sprite to fade from alpha 0 to 1. */
+      durationMs: number
+    }
+  }
+
   /** Camera juice: zoom pulses, scripted pans, slow zoom-to-fit (sidekick#79). */
   camera: {
     pulse: Record<
@@ -320,6 +364,17 @@ function makeDefaults(): AnimationConfig {
       comboTier2Min:           2,
       comboTier3Min:           3,
       comboTierFireMin:        5,
+    },
+
+    // -----------------------------------------------------------------------
+    // State transition blending (crossfade durations + motion params)
+    // -----------------------------------------------------------------------
+    stateTransitions: {
+      idleToWorking: { durationMs: 200, compressionScale: 0.95 },
+      workingToIdle: { durationMs: 300, liftPx: 6, leanAngle: -3 },
+      idleToWalking: { durationMs: 150, leanAngle: -4 },
+      walkingToIdle: { durationMs: 200, overshootPx: 3 },
+      anyToWaiting:  { durationMs: 400 },
     },
 
     camera: {

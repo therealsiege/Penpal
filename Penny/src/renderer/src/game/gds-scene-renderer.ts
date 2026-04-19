@@ -54,11 +54,30 @@ export interface LabMapRoom {
   bounds?: { x: number; y: number; w: number; h: number }
 }
 
+export interface LabMapBarista {
+  id: string
+  name: string
+  charIdx: number
+  gdsX: number
+  gdsY: number
+  startFacing: 'left' | 'right'
+  walkRange?: number
+  walkDurationMs?: number
+  workPulses?: number
+  startDelayMs?: number
+}
+
+export interface LabMapCafe {
+  stools?: { id: string; gdsX: number; gdsY: number }[]
+  baristas?: LabMapBarista[]
+}
+
 export interface LabMapJson {
   scene?: { width: number; height: number; backdrop: string; stoolYNudge?: number }
   rooms?: LabMapRoom[]
   desks?: LabMapDesk[]
   cafeSttools?: { id: string; gdsX: number; gdsY: number }[]
+  cafe?: LabMapCafe
   walkableTiles?: { x: number; y: number; w: number; h: number }[]
 }
 
@@ -137,16 +156,16 @@ export class GdsSceneRenderer {
     for (const c of this.baristaContainers) c.destroy(true)
     this.baristaContainers = []
 
-    // Cafe area in GDS scene coords — between the serving bars in the right room
-    const BARISTAS = [
-      { gdsX: 2580, gdsY: 800, charIdx: 1, name: 'Latte Larry' },
-      { gdsX: 2580, gdsY: 1050, charIdx: 0, name: 'Mocha Maya' },
-    ]
+    const baristas = this.labMap.cafe?.baristas ?? []
+    if (baristas.length === 0) return
 
-    for (const cfg of BARISTAS) {
+    for (const cfg of baristas) {
       const wx = this.originX + cfg.gdsX * this.scale
       const wy = this.originY + cfg.gdsY * this.scale
       const containerScale = this.scale * 1.5  // match workstation duder size
+      const walkRange = cfg.walkRange ?? 8
+      const walkDuration = cfg.walkDurationMs ?? 1800
+      const startDelay = cfg.startDelayMs ?? 0
 
       const bc = this.scene.add.container(wx, wy).setDepth(0).setScale(containerScale)
 
@@ -173,9 +192,9 @@ export class GdsSceneRenderer {
         ease: 'Sine.easeInOut', delay: Math.random() * 500,
       })
       this.scene.tweens.add({
-        targets: bc, x: wx + 8,
-        duration: 1800, yoyo: true, repeat: -1,
-        ease: 'Sine.easeInOut', delay: Math.random() * 800,
+        targets: bc, x: wx + walkRange,
+        duration: walkDuration, yoyo: true, repeat: -1,
+        ease: 'Sine.easeInOut', delay: startDelay + Math.random() * 800,
       })
 
       this.baristaContainers.push(bc)

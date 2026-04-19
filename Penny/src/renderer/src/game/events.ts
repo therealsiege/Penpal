@@ -152,6 +152,18 @@ export const EVENTS = {
   CAMPUS_COUNTS_UPDATED: 'campus-counts-updated',
   /** Fired when fleet heartbeat data updates. Payload: (instances: FleetInstance[]) */
   FLEET_UPDATED: 'fleet-updated',
+
+  // --- Cinematic auto-pan (camera-cinematics.ts) ---
+  /** Fired when a task is dispatched to an agent. Payload: (agentId: string) */
+  TASK_DISPATCHED: 'task:dispatched',
+  /** Fired when a task completes for an agent. Payload: (agentId: string) */
+  TASK_COMPLETED: 'task:completed',
+  /** Fired when a new pod workflow is launched. Payload: (agentIds: string[]) — solver, reviewer, executor */
+  POD_LAUNCHED: 'pod:launched',
+  /** Fired when an agent reaches a new XP rank. Payload: (agentId: string) */
+  RANK_UP: 'rank:up',
+  /** Fired when an agent task fails with an error. Payload: (agentId: string) */
+  AGENT_ERROR: 'agent:error',
 } as const
 
 /**
@@ -242,4 +254,11 @@ export interface EventPayloadMap {
   [EVENTS.NAVIGATE_BUILDING]: [building: 'office' | 'pod-foundry']
   [EVENTS.CAMPUS_COUNTS_UPDATED]: [agents: number, pods: number]
   [EVENTS.FLEET_UPDATED]: [instances: { instanceId: string; hostname: string; user?: string; stale: boolean; health: string; sessions: { total: number; active: number }; pods: { active: number }; repos: string[]; isSelf: boolean; lat?: number; lon?: number; city?: string }[]]
+
+  // --- Cinematic auto-pan ---
+  [EVENTS.TASK_DISPATCHED]: [agentId: string]
+  [EVENTS.TASK_COMPLETED]: [agentId: string]
+  [EVENTS.POD_LAUNCHED]: [agentIds: string[]]
+  [EVENTS.RANK_UP]: [agentId: string]
+  [EVENTS.AGENT_ERROR]: [agentId: string]
 }

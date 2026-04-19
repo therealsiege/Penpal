@@ -105,6 +105,8 @@ export interface WorkstationHost {
   getOrAssignGdsDeskSlot?(agentId: string): { x: number; y: number; flipX: boolean; sitFrame: number; angle: number } | null
   /** GDS scene scale factor — used to scale workstations proportionally to the scene. */
   getGdsScale?(): number
+  /** Get world-space walk track for the agent's assigned desk, if configured. */
+  getWalkTrack?(agentId: string): { points: { x: number; y: number }[]; loop: boolean } | null
 }
 
 // ---------------------------------------------------------------------------
@@ -117,6 +119,24 @@ export class OfficeWorkstations {
   private factory: WorkstationFactory
   private animator: WorkstationAnimator
   private _onApproved: (...args: unknown[]) => void
+
+  /**
+   * Optional hook called immediately after a new workstation is created.
+   * Set by AgentScheduler to play the arrival walk animation.
+   */
+  onAgentArrived?: (ws: WorkstationSprite, agent: AgentState, room: Room) => void
+
+  /**
+   * Optional hook called when an agent departs. Receives a `proceed` callback
+   * that must be invoked to complete the destruction sequence. When set, the
+   * default flash + 500ms destroy is replaced by this hook.
+   */
+  onAgentDeparting?: (
+    ws: WorkstationSprite,
+    agent: AgentState,
+    room: Room,
+    proceed: () => void,
+  ) => void
 
   constructor(scene: Phaser.Scene, host: WorkstationHost) {
     this.scene = scene
@@ -195,19 +215,27 @@ export class OfficeWorkstations {
 
     for (const [id, ws] of room.workstations) {
       if (!currentIds.has(id)) {
-        // Flash red before destroying (crash/departure visibility)
         const name = ws.state?.config?.name?.split(' ')[0] || id
         this.host.showToast(`${name} session ended`, 'warning')
-        flash(ws.sprite, this.scene, { tint: 0xff4444, duration: 150, repeat: 2 })
-        // Red flash on the desk (Rectangle cast — setTint exists at runtime)
-        flash(ws.deskBody as unknown as Parameters<typeof flash>[0], this.scene, { tint: 0xff4444, duration: 150, repeat: 1 })
-        // Delay destruction by 500ms so the flash is visible
-        const wsRef = ws
-        this.scene.time.delayedCall(500, () => {
-          this.destroyWorkstation(wsRef)
-        })
         room.workstations.delete(id)
         EventBus.emit(EVENTS.AGENT_DEPARTED, id)
+
+        const wsRef = ws
+        const agentSnapshot = ws.state
+
+        if (this.onAgentDeparting && agentSnapshot) {
+          // Departure hook: play animation then destroy
+          this.onAgentDeparting(wsRef, agentSnapshot, room, () => {
+            this.destroyWorkstation(wsRef)
+          })
+        } else {
+          // Default: flash red then destroy after 500ms
+          flash(wsRef.sprite, this.scene, { tint: 0xff4444, duration: 150, repeat: 2 })
+          flash(wsRef.deskBody as unknown as Parameters<typeof flash>[0], this.scene, { tint: 0xff4444, duration: 150, repeat: 1 })
+          this.scene.time.delayedCall(500, () => {
+            this.destroyWorkstation(wsRef)
+          })
+        }
       }
     }
 
@@ -219,6 +247,10 @@ export class OfficeWorkstations {
         const ws = this.createWorkstation(room, agent)
         room.workstations.set(agent.config.id, ws)
         EventBus.emit(EVENTS.AGENT_ARRIVED, agent.config.id, agent)
+        // Arrival hook: play walk-in animation
+        if (this.onAgentArrived) {
+          this.onAgentArrived(ws, agent, room)
+        }
       }
     }
 
@@ -772,12 +804,16 @@ export class OfficeWorkstations {
 
     // Screen content — set mode-specific pattern and timeScale
     if (ws.screenLines && ws.screenTween) {
-      const screenMode = isWorking ? (isPlan ? 'plan' : 'working') : isCompressing ? 'compressing' : 'idle'
+      const screenMode = isWaiting ? 'blocked'
+        : isWorking ? (isPlan ? 'plan' : 'working')
+        : isCompressing ? 'compressing'
+        : 'idle'
       if (ws.screenState) ws.screenState.mode = screenMode
       ws.screenLines.setVisible(true)
       ws.screenTween.resume()
       if (screenMode === 'compressing') ws.screenTween.setTimeScale(2)
       else if (screenMode === 'idle') ws.screenTween.setTimeScale(0.3)
+      else if (screenMode === 'blocked') ws.screenTween.setTimeScale(1.5)
       else ws.screenTween.setTimeScale(1)
     }
 
@@ -954,6 +990,8 @@ export class OfficeWorkstations {
             this.host.celebrations.taskComplete(wx, wy, { agentId: aid })
             achievements.trackRankUp()
             soundEngine.levelUp()
+            // Notify cinematics system for auto-pan
+            EventBus.emit(EVENTS.RANK_UP, aid)
             // Track in leaderboard + season
             leaderboardManager.recordXP(agent.config.id, agent.config.name, 0, xp.level, xp.rank)
             seasonManager.trackAgentLevel(xp.level)

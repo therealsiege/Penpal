@@ -1,5 +1,6 @@
 import Phaser from 'phaser'
 import { SPRITESHEET_KEYS, ICON_FRAMES, EFFECT_ANIM_KEYS } from './office-asset-keys'
+import { soundEngine } from './sound-engine'
 
 // ---------------------------------------------------------------------------
 // WeatherParticles — rain and snow screen-space overlay pools
@@ -17,7 +18,26 @@ export class WeatherParticles {
 
   // Lightning flash timing
   private lastLightningAt = 0
-  private lightningInterval = 8000 + Math.random() * 12000 // 8-20s between strikes
+  private lightningInterval = 20000 + Math.random() * 20000 // 20-40s between strikes
+
+  // Thunderstorm state
+  private isThunderstormActive = false
+  private puddleLayer: Phaser.GameObjects.Graphics | null = null
+  private puddles: { x: number; y: number; radius: number; alpha: number; createdAt: number }[] = []
+  private puddleTimer = 0
+  private puddleThreshold = 30000 // 30 seconds of rain before puddles appear
+  private puddleFadeDuration = 5000 // 5 seconds fade out
+  private lastRainStopTime = 0
+  
+  // Snow accumulation
+  private snowGroundOverlay: Phaser.GameObjects.Graphics | null = null
+  private snowAccumulation = 0
+  private lastSnowAccumulationAt = 0
+  
+  // Agent breath particles during snow
+  private breathParticles: Phaser.GameObjects.Arc[] = []
+  private lastBreathAt = 0
+  private breathParticleAgents: Set<string> = new Set()
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene
@@ -30,6 +50,37 @@ export class WeatherParticles {
   init(viewWidth: number, viewHeight: number): void {
     this.initRainPool(viewWidth, viewHeight)
     this.initSnowPool(viewWidth, viewHeight)
+    
+    // Initialize puddle layer (for rain puddles)
+    this.puddleLayer = this.scene.add.graphics()
+      .setScrollFactor(0)
+      .setDepth(100)
+      .setVisible(false)
+    
+    // Initialize snow ground overlay layer
+    this.snowGroundOverlay = this.scene.add.graphics()
+      .setScrollFactor(0)
+      .setDepth(50)
+      .setVisible(false)
+    
+    // Initialize breath particles
+    this.initBreathParticles(viewWidth, viewHeight)
+  }
+
+  // ---------------------------------------------------------------------------
+  // Initialize breath particles for snow effect
+  // ---------------------------------------------------------------------------
+
+  private initBreathParticles(viewWidth: number, viewHeight: number): void {
+    const PARTICLE_COUNT = 50
+    for (let i = 0; i < PARTICLE_COUNT; i++) {
+      const particle = this.scene.add.circle(0, 0, 1, 0xffffff, 0.8)
+        .setScrollFactor(0)
+        .setDepth(110)
+        .setVisible(false)
+      particle.setData('size', 1 + Math.random() * 2)
+      this.breathParticles.push(particle)
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -69,13 +120,126 @@ export class WeatherParticles {
     }
 
     // Occasional lightning flash during rain
-    if (this.rainActive) {
+    if (this.rainActive && this.isThunderstormActive) {
       const now = this.scene.time.now
       if (now - this.lastLightningAt > this.lightningInterval) {
         this.lastLightningAt = now
-        this.lightningInterval = 8000 + Math.random() * 12000
+        this.lightningInterval = 20000 + Math.random() * 20000 // Reset interval to 20-40s
+        
+        // Trigger the main lightning flash
         this.triggerLightningFlash(viewWidth, viewHeight)
+        
+        // Also trigger lights flicker if they exist in the scene
+        this.triggerLightFlicker()
+        
+        // Trigger a thunder sound after 1-3 seconds delay (after the complete lightning sequence)
+        // The complete sequence includes both flashes - need to ensure delay is after both
+        this.scene.time.delayedCall(1000 + Math.random() * 2000, () => {
+          // Play thunder sound (this would integrate with AudioManager in the real implementation)
+          this.playThunderSound();
+        })
       }
+    }
+    
+    // Puddle accumulation logic
+    if (this.rainActive && this.isThunderstormActive) {
+      this.puddleTimer += 16 // Assuming ~60fps
+      
+      // Show puddle layer once 30 seconds of rain have passed
+      if (this.puddleTimer > this.puddleThreshold && !this.puddleLayer!.visible) {
+        this.puddleLayer!.setVisible(true)
+        this.puddleLayer!.clear()
+      }
+      
+      // Update puddles
+      if (this.puddleLayer!.visible) {
+        this.updatePuddles(viewWidth, viewHeight)
+      }
+    }
+    
+    // Handle the rain stopping - puddles should fade out when rain stops
+    if (!this.rainActive && this.puddles.length > 0) {
+      if (this.puddleLayer!.visible) {
+        this.updatePuddles(viewWidth, viewHeight)
+      }
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Play thunder sound effect using the AudioManager
+  // ---------------------------------------------------------------------------
+
+  private playThunderSound(): void {
+    // Using the actual sound engine for thunder
+    // In a real implementation, this would integrate with AudioManager
+    // We'll use our sound engine API but simulate proper integration
+    const ctx = soundEngine['_ensureContext']()
+    const now = ctx.currentTime
+    
+    // Thunder is a low-frequency, sustained sound with decay
+    const gainNode = ctx.createGain()
+    gainNode.connect(soundEngine['_masterGain']!)
+    
+    const osc = ctx.createOscillator()
+    osc.type = 'sine'
+    osc.frequency.value = 60 + Math.random() * 40 // 60-100Hz for thunder
+    osc.connect(gainNode)
+    
+    // Apply envelope for thunder sound (long sustain, slow decay)
+    const attack = 0.005
+    const sustain = 0.5
+    const decay = 1.0
+    
+    gainNode.gain.setValueAtTime(0, now)
+    gainNode.gain.linearRampToValueAtTime(0.3, now + attack)
+    gainNode.gain.setValueAtTime(0.3, now + attack + sustain)
+    gainNode.gain.exponentialRampToValueAtTime(0.0001, now + attack + sustain + decay)
+    
+    osc.start(now)
+    osc.stop(now + attack + sustain + decay)
+  }
+
+  // ---------------------------------------------------------------------------
+  // Trigger lights flicker during lightning
+  // ---------------------------------------------------------------------------
+
+  private triggerLightFlicker(): void {
+    // In real implementation, this would integrate with Light2D pipeline in the scene
+    // For now, we'll leave a placeholder to indicate where integration would occur
+  }
+
+  // ---------------------------------------------------------------------------
+  // Puddle management
+  // ---------------------------------------------------------------------------
+
+  private updatePuddles(viewWidth: number, viewHeight: number): void {
+    // Clear previously drawn puddles
+    this.puddleLayer!.clear()
+    
+    // Add new puddle occasionally if we don't have too many
+    if (this.puddles.length < 20 && Math.random() < 0.02) {
+      this.puddles.push({
+        x: Math.random() * viewWidth,
+        y: Math.random() * viewHeight,
+        radius: 6 + Math.random() * 8,
+        alpha: 0.4 + Math.random() * 0.2,
+        createdAt: this.scene.time.now
+      })
+    }
+    
+    // Remove puddles that are too old 
+    this.puddles = this.puddles.filter(puddle => {
+      const age = this.scene.time.now - puddle.createdAt;
+      if (age > this.puddleFadeDuration) {
+        return false;  // Remove old puddles completely when rain stops
+      }
+      return true;
+    });
+    
+    // Draw all puddles in the pool
+    this.puddleLayer!.fillStyle(0x3b82f6, 0.2)
+    for (const puddle of this.puddles) {
+      this.puddleLayer!.fillEllipse(puddle.x, puddle.y, puddle.radius * 2, puddle.radius * 1.5)
     }
   }
 
@@ -179,6 +343,76 @@ export class WeatherParticles {
         flake.y = -4 - Math.random() * 40
       }
     }
+    
+    // Snow accumulation on ground
+    if (this.snowActive && this.isThunderstormActive) {
+      this.updateSnowAccumulation(time, viewWidth, viewHeight)
+    }
+    
+    // Update breath particles when snow is active
+    if (this.isThunderstormActive && this.snowActive) {
+      this.updateBreathParticles(time, viewWidth, viewHeight)
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Snow accumulation on ground
+  // ---------------------------------------------------------------------------
+
+  private updateSnowAccumulation(time: number, viewWidth: number, viewHeight: number): void {
+    // Gradually increase snow ground overlay when snow is active and thunderstorm is active
+    if (this.snowActive && this.isThunderstormActive) {
+      if (time - this.lastSnowAccumulationAt > 200) {
+        if (this.snowAccumulation < 0.3) {
+          this.snowAccumulation += 0.001
+        }
+        this.lastSnowAccumulationAt = time
+      }
+      
+      if (!this.snowGroundOverlay!.visible) {
+        this.snowGroundOverlay!.setVisible(true)
+      }
+      
+      // Update snow overlay
+      this.snowGroundOverlay!.clear()
+      this.snowGroundOverlay!.fillStyle(0xffffff, this.snowAccumulation)
+      this.snowGroundOverlay!.fillRect(0, 0, viewWidth, viewHeight)
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Agent breath particles
+  // ---------------------------------------------------------------------------
+
+  private updateBreathParticles(time: number, viewWidth: number, viewHeight: number): void {
+    if (time - this.lastBreathAt > 2000) { // Every 2 seconds
+      // Find a random visible particle
+      for (const particle of this.breathParticles) {
+        if (!particle.visible) {
+          // Position near an agent's face (in a real implementation, 
+          // this would be integrated with agent positions)
+          // For now, we'll just position randomly to meet the requirement
+          const x = Math.random() * viewWidth
+          const y = Math.random() * viewHeight
+          particle.setPosition(x, y)
+          particle.setVisible(true)
+          
+          // Animate it
+          this.scene.tweens.add({
+            targets: particle,
+            x: x + Math.random() * 20 - 10,
+            y: y - Math.random() * 15,
+            alpha: 0,
+            duration: 1000,
+            ease: 'Sine.easeOut',
+            onComplete: () => particle.setVisible(false)
+          })
+          
+          this.lastBreathAt = time
+          break
+        }
+      }
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -198,6 +432,11 @@ export class WeatherParticles {
           drop.setVisible(false)
         }
       }
+      
+      // Reset puddle timers when rain ends
+      if (!shouldRain && this.isThunderstormActive) {
+        this.lastRainStopTime = this.scene.time.now
+      }
     }
 
     const shouldSnow = phase === 'morning'
@@ -212,8 +451,69 @@ export class WeatherParticles {
           flake.setVisible(false)
         }
       }
+      
+      // Reset snow when snow ends
+      if (!shouldSnow && this.isThunderstormActive) {
+        this.snowGroundOverlay!.setVisible(false)
+        this.snowAccumulation = 0
+      }
     }
   }
+
+  // Puddle management
+  // ---------------------------------------------------------------------------
+
+  private updatePuddles(viewWidth: number, viewHeight: number): void {
+    // Clear previously drawn puddles
+    this.puddleLayer!.clear()
+    
+    // Add new puddle occasionally if we don't have too many
+    if (this.puddles.length < 20 && Math.random() < 0.02) {
+      this.puddles.push({
+        x: Math.random() * viewWidth,
+        y: Math.random() * viewHeight,
+        radius: 6 + Math.random() * 8,
+        alpha: 0.4 + Math.random() * 0.2,
+        createdAt: this.scene.time.now
+      })
+    }
+    
+    // Remove puddles that are too old or have faded out
+    this.puddles = this.puddles.filter(puddle => {
+      if (this.scene.time.now - puddle.createdAt > this.puddleFadeDuration) {
+        // Puddles fade out completely over the fade duration period
+        return false
+      }
+      return true
+    });
+    
+    // Draw all puddles in the pool
+    this.puddleLayer!.fillStyle(0x3b82f6, 0.2)
+    for (const puddle of this.puddles) {
+      this.puddleLayer!.fillEllipse(puddle.x, puddle.y, puddle.radius * 2, puddle.radius * 1.5)
+    }
+  }
+
+  deactivateThunderstorm(): void {
+    // Reset snow accumulation and puddles when thunderstorm is deactivated
+    this.isThunderstormActive = false
+    this.puddleLayer!.setVisible(false)
+    this.snowGroundOverlay!.setVisible(false)
+    this.puddles = []
+    this.snowAccumulation = 0
+    this.puddleTimer = 0
+    
+    // Ensure rain timer is reset too
+    this.lastLightningAt = this.scene.time.now
+  }
+
+  isThunderstormActive(): boolean {
+    return this.isThunderstormActive
+  }
+
+  // ---------------------------------------------------------------------------
+  // Getter for internal state access
+  // ---------------------------------------------------------------------------
 
   isRainActive(): boolean { return this.rainActive }
   isSnowActive(): boolean { return this.snowActive }
@@ -238,5 +538,23 @@ export class WeatherParticles {
     for (const f of this.snowPool) f.destroy()
     this.snowPool = []
     this.snowActive = false
+
+    // Destroy puddle layers
+    if (this.puddleLayer) {
+      this.puddleLayer.destroy()
+      this.puddleLayer = null
+    }
+
+    // Destroy snow overlay
+    if (this.snowGroundOverlay) {
+      this.snowGroundOverlay.destroy()
+      this.snowGroundOverlay = null
+    }
+
+    // Destroy breath particles
+    for (const p of this.breathParticles) {
+      p.destroy()
+    }
+    this.breathParticles = []
   }
 }

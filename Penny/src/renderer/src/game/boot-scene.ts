@@ -135,6 +135,15 @@ export class BootScene extends BaseScene {
       barGlow.width = barW * value
     })
 
+    // Error handler — audio files are non-critical; warn and continue loading
+    this.load.on('loaderror', (file: Phaser.Loader.File) => {
+      if (file.type === 'audio') {
+        console.warn(`[BootScene] Audio asset failed to load: ${file.key} (${String(file.src)}) — continuing without it`)
+        loadedCount++
+        counterText.setText(`${loadedCount} / ${totalAssets} assets`)
+      }
+    })
+
     // File complete handler — update counter, asset name, and sprite preview
     this.load.on('filecomplete', (key: string) => {
       loadedCount++
@@ -452,6 +461,12 @@ export class BootScene extends BaseScene {
     this.load.audio(AUDIO_KEYS.SWITCH_B, './sounds/switch-b.ogg')
     this.load.audio(AUDIO_KEYS.TAP_A, './sounds/tap-a.ogg')
     this.load.audio(AUDIO_KEYS.TAP_B, './sounds/tap-b.ogg')
+
+    // Ambient audio — procedurally generated via AudioManager (audio-manager.ts).
+    // When OGG ambient files are added to public/audio/ambient/, load them here:
+    //   this.load.audio(AUDIO_KEYS.AMBIENT_HUM,  './audio/ambient/lab-hum.ogg')
+    //   this.load.audio(AUDIO_KEYS.AMBIENT_NOISE, './audio/ambient/lab-noise.ogg')
+    // Until then, AudioManager synthesises all ambient sounds via Web Audio API.
   }
 
   // -------------------------------------------------------------------------

@@ -42,6 +42,26 @@ export interface RoomsHostScene {
 }
 
 // ---------------------------------------------------------------------------
+// Zone ambient light — maps room type to a low-intensity floor glow color.
+// Command → cool blue, Operations → neutral, Research → purple,
+// Engineering → amber, Systems → green.
+// ---------------------------------------------------------------------------
+
+function getZoneAmbientColor(cwd: string): number {
+  const type = getRoomType(cwd)
+  switch (type) {
+    case 'server-room':    return 0x1a2a4e  // Command: cool blue
+    case 'ops-center':     return 0x1e2a38  // Operations: neutral steel
+    case 'game-den':       return 0x2a1a4e  // Research: purple
+    case 'design-studio':  return 0x2a1a4e  // Research: purple
+    case 'mobile-lab':     return 0x4e3a1a  // Engineering: amber
+    case 'creative-suite': return 0x4e3a1a  // Engineering: amber
+    case 'qa-lab':         return 0x1a4e2a  // Systems: green
+    default:               return 0x1a2434  // Standard: neutral dark
+  }
+}
+
+// ---------------------------------------------------------------------------
 // OfficeRooms
 // ---------------------------------------------------------------------------
 
@@ -238,6 +258,8 @@ export class OfficeRooms {
       for (const t of room.miniWhiteboardTexts) t.destroy()
       room.miniWhiteboardTexts = []
     }
+    if (room.zoneAmbientTween) { room.zoneAmbientTween.destroy(); room.zoneAmbientTween = undefined }
+    if (room.zoneAmbientGlow) { room.zoneAmbientGlow.destroy(); room.zoneAmbientGlow = undefined }
     for (const ws of room.workstations.values()) {
       this.host.destroyWorkstation(ws)
     }
@@ -252,6 +274,10 @@ export class OfficeRooms {
   drawRoomBackground(room: Room): void {
     const g = room.floorGraphics
     g.clear()
+
+    // Zone ambient light — destroy before redraw (handles resize + GDS mode switches)
+    if (room.zoneAmbientTween) { room.zoneAmbientTween.destroy(); room.zoneAmbientTween = undefined }
+    if (room.zoneAmbientGlow) { room.zoneAmbientGlow.destroy(); room.zoneAmbientGlow = undefined }
 
     // GDS mode — backdrop has all room visuals; hide container chrome
     if (this.host.hasGdsScene?.()) {
@@ -334,7 +360,47 @@ export class OfficeRooms {
     // Stash room index for downstream use
     ;(room as unknown as Record<string, unknown>)._roomIndex = roomIndex
 
+    this.drawZoneAmbientLight(room)
     this.refreshRoomHeaderText(room)
+  }
+
+  // -------------------------------------------------------------------------
+  // Zone ambient light — large low-intensity colored radial glow at room center
+  // -------------------------------------------------------------------------
+
+  private drawZoneAmbientLight(room: Room): void {
+    const color = getZoneAmbientColor(room.cwd)
+    const w = room.width
+    const h = room.height - ROOM_HEADER_H
+    // Radius covers ~45% of the shorter room dimension for a broad, soft pool
+    const rMax = Math.min(w, h) * 0.45
+
+    const glowG = this.scene.add.graphics()
+    // Three concentric fills for a smooth radial falloff
+    glowG.fillStyle(color, 0.04)
+    glowG.fillCircle(0, 0, rMax)
+    glowG.fillStyle(color, 0.08)
+    glowG.fillCircle(0, 0, rMax * 0.6)
+    glowG.fillStyle(color, 0.11)
+    glowG.fillCircle(0, 0, rMax * 0.3)
+
+    // Center on the floor area (above header bar)
+    glowG.setPosition(0, -ROOM_HEADER_H / 2)
+    room.container.add(glowG)
+    room.zoneAmbientGlow = glowG
+    room.ambientLightIntensity = 0.75
+
+    // Gentle breathing pulse — each room phase-offset by a fraction of its hash
+    const basePhase = (room.x + room.y) % 1000
+    room.zoneAmbientTween = this.scene.tweens.add({
+      targets: glowG,
+      alpha: { from: 0.75, to: 1.0 },
+      duration: 3500 + (basePhase % 1500),
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
+      delay: basePhase % 800,
+    })
   }
 
   // -------------------------------------------------------------------------

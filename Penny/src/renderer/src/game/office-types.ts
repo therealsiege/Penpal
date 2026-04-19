@@ -194,6 +194,10 @@ export interface WorkstationSprite {
   contextRotShakeTween?: Phaser.Tweens.Tween
   lastContextRotState?: boolean
   contextRotMonitorBaseX?: number
+  /** Yellow rotating arc ring shown during accept-edits review phase */
+  taskReviewRing?: Phaser.GameObjects.Graphics
+  /** Counter tween driving the review ring rotation angle */
+  taskReviewRingTween?: Phaser.Tweens.Tween
 }
 
 export interface Room {

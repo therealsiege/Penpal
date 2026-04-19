@@ -2,6 +2,7 @@ import { BaseScene } from './base-scene'
 import { EventBus, EVENTS } from './events'
 import { SCENE_KEYS, SPRITESHEET_KEYS } from './office-asset-keys'
 import { scaledFontSize } from './office-constants'
+import { SceneTransition } from './scene-transition'
 
 // ---------------------------------------------------------------------------
 // CampusScene — North America map with fleet instance pins
@@ -330,12 +331,7 @@ export class CampusScene extends BaseScene {
   // ── Navigation ──
 
   private enterLab(): void {
-    if (this.scene.isSleeping(SCENE_KEYS.OFFICE)) {
-      this.scene.wake(SCENE_KEYS.OFFICE)
-    } else if (!this.scene.isActive(SCENE_KEYS.OFFICE)) {
-      this.scene.launch(SCENE_KEYS.OFFICE)
-    }
-    this.scene.sleep(SCENE_KEYS.CAMPUS)
+    SceneTransition.fadeToScene(this, SCENE_KEYS.OFFICE)
   }
 
   // ── EventBus handlers ──

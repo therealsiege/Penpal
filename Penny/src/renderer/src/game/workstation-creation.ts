@@ -13,6 +13,7 @@ import type { AgentState } from '../types'
 import type { WorkstationSprite, Room } from './office-types'
 import { activeTheme } from './office-theme'
 import { AnimatedBar } from './animated-bar'
+import { audioManager } from './audio-manager'
 import { computeRoomLayout, detectRoomType } from './office-layout'
 import {
   FRAME_CHAIR_DARK,
@@ -304,6 +305,15 @@ export class WorkstationFactory {
               screenLines.fillStyle(lineColorsWork[i], 0.2)
               screenLines.fillRect(-lineWidths[i] / 2, y, lineWidths[i], 1)
             }
+          } else if (mode === 'blocked') {
+            // Blocked — amber warning flash: pulsing horizontal bar + scan stripe
+            const phase = Math.sin(v * Math.PI * 4)   // 2 full cycles per tween period
+            const barAlpha = 0.15 + phase * 0.25       // 0.0..0.4 range
+            screenLines.fillStyle(0xfbbf24, Math.max(0, barAlpha))
+            screenLines.fillRect(-10, WS_MONITOR_Y - 3, 20, 7)
+            // Thin scan stripe through the middle
+            screenLines.fillStyle(0xfbbf24, Math.max(0, barAlpha * 0.5))
+            screenLines.fillRect(-10, WS_MONITOR_Y, 20, 1)
           } else {
             // Working (default) — scrolling colored lines
             for (let i = 0; i < 4; i++) {
@@ -633,7 +643,8 @@ export class WorkstationFactory {
     const chairOffX = hasConsoleDeskImage ? 18 : 0
     const chairOffY = hasConsoleDeskImage ? 2 : 0
     const chairAngle = hasConsoleDeskImage ? -15 : 0
-    const shadow = this.scene.add.ellipse(chairOffX, WS_SPRITE_Y + 2 + chairOffY, 20, 6, 0x000000, 0.2)
+    // Wider blob shadow — 30px wide, 60% height (18px) per Living Lab spec
+    const shadow = this.scene.add.ellipse(chairOffX, WS_SPRITE_Y + 2 + chairOffY, 30, 18, 0x000000, 0.2)
     wsContainer.add(shadow)
 
     const charIdx = this.host.getAgentCharacterIndex(agent)
@@ -651,6 +662,16 @@ export class WorkstationFactory {
       sprite.setScale(CHAR_SCALE).setOrigin(0.5, 1).setAngle(chairAngle)
     }
     wsContainer.add(sprite)
+
+    // Apply Light2D pipeline so sprites react to the ambient day/night color (WebGL only).
+    // GDS background image is excluded — it has baked lighting and is handled separately.
+    if (this.scene.sys.renderer.type === Phaser.WEBGL) {
+      sprite.setPipeline('Light2D')
+      if (!gdsScene) deskBody.setPipeline('Light2D')
+      if (consoleDeskSprite) consoleDeskSprite.setPipeline('Light2D')
+      if (monitorSprite) monitorSprite.setPipeline('Light2D')
+      if (chairSprite) chairSprite.setPipeline('Light2D')
+    }
 
     // Thought bubble — dark card with accent border and live blurb text
     const thoughtBubbleBg = this.scene.add.graphics()
@@ -905,6 +926,13 @@ export class WorkstationFactory {
       .setInteractive({ useHandCursor: true })
     wsContainer.add(hitArea)
 
+    // Light2D pipeline — applied to texture-based objects so ambient day/night color affects them.
+    // GDS backdrop (managed by GdsSceneRenderer) is intentionally excluded.
+    sprite.setPipeline('Light2D')
+    if (consoleDeskSprite) consoleDeskSprite.setPipeline('Light2D')
+    if (chairSprite) chairSprite.setPipeline('Light2D')
+    if (monitorSprite) monitorSprite.setPipeline('Light2D')
+
     const ws: WorkstationSprite = {
       container: wsContainer, sprite, nameText, statusDot, roleBadge,
       deskBody, deskTop, monitorSprite, chairSprite,
@@ -1056,6 +1084,7 @@ export class WorkstationFactory {
 
     let lastClickTime = 0
     hitArea.on('pointerdown', () => {
+      audioManager.buttonClick()
       const now = Date.now()
       const isPod = ws.state?.isOrchestratorTask === true
       if (isPod) {
@@ -1071,6 +1100,7 @@ export class WorkstationFactory {
     })
 
     hitArea.on('pointerover', () => {
+      audioManager.buttonHover()
       const baseScale = gdsScene ? gdsWsScale : 1
       this.scene.tweens.killTweensOf(wsContainer)
       this.scene.tweens.add({ targets: wsContainer, scaleX: baseScale * 1.07, scaleY: baseScale * 1.07, duration: 140, ease: 'Back.easeOut' })
@@ -1262,6 +1292,7 @@ export class WorkstationFactory {
     if (ws.bounceTween)      ws.bounceTween.destroy()
     if (ws.dotPulseTween)    ws.dotPulseTween.destroy()
     if (ws.blockedIndicatorTween) ws.blockedIndicatorTween.destroy()
+    if (ws.blockedBobTween) ws.blockedBobTween.destroy()
     if (ws.walkBreakTween)   ws.walkBreakTween.destroy()
     if (ws.typingTween)      ws.typingTween.destroy()
     if (ws.headTiltTween)    ws.headTiltTween.destroy()
@@ -1301,8 +1332,10 @@ export class WorkstationFactory {
     if (ws.soundWaveGfx)     ws.soundWaveGfx.destroy()
     if (ws.soundWaveSpeaker) ws.soundWaveSpeaker.destroy()
     if (ws.kbGlowTween)      ws.kbGlowTween.destroy()
+    if (ws.kbScaleTween)     ws.kbScaleTween.destroy()
     if (ws.typingNoteTimer)  ws.typingNoteTimer.destroy()
     if (ws.speechBubbleTween) { ws.speechBubbleTween.destroy(); ws.speechBubbleTween = undefined }
+    if (ws.speechBubbleBobTween) { ws.speechBubbleBobTween.destroy(); ws.speechBubbleBobTween = undefined }
     if (ws.speechBubbleTimer) { ws.speechBubbleTimer.destroy(); ws.speechBubbleTimer = undefined }
     if (ws.shadow)           ws.shadow.destroy()
     if (ws.sparklineGfx)     { ws.sparklineGfx.clear(); ws.sparklineGfx.destroy() }
@@ -1344,6 +1377,9 @@ export class WorkstationFactory {
     if (ws.contextMeterPulseTween) ws.contextMeterPulseTween.destroy()
     if (ws.contextRotShakeTween)   ws.contextRotShakeTween.destroy()
     if (ws.contextMeter)           ws.contextMeter.destroy()
+    if (ws.screensaverTween)       ws.screensaverTween.destroy()
+    if (ws.mugSteamTimer)          ws.mugSteamTimer.destroy()
+    if (ws.steamContainer)         { ws.steamContainer.removeAll(true); ws.steamContainer.destroy(); ws.steamContainer = undefined }
     if (ws.orchestratorTaskLabel) ws.orchestratorTaskLabel.destroy()
     if (ws.thinkingDotsTween)    ws.thinkingDotsTween.destroy()
     if (ws.thinkingMergeTween)   ws.thinkingMergeTween.destroy()

@@ -56,7 +56,14 @@
       "flipX": false,
       "angle": 0,
       "assignTo": null,
-      "walkTrack": null,
+      "walkTrack": {
+        "points": [
+          { "x": 1478, "y": 958 },
+          { "x": 1478, "y": 1150 },
+          { "x": 1650, "y": 1150 }
+        ],
+        "loop": false
+      },
       "animations": {
         "idle": "default",
         "working": "typing",
@@ -92,7 +99,15 @@
       "flipX": false,
       "angle": 0,
       "assignTo": null,
-      "walkTrack": null,
+      "walkTrack": {
+        "points": [
+          { "x": 880, "y": 1669 },
+          { "x": 1100, "y": 1669 },
+          { "x": 1100, "y": 1400 },
+          { "x": 880, "y": 1400 }
+        ],
+        "loop": true
+      },
       "animations": {
         "idle": "default",
         "working": "typing",
@@ -209,6 +224,198 @@
       "notes": "desk is screen-left"
     }
   ],
+  "props": [
+    {
+      "id": "console-knob-1",
+      "type": "rotating-knob",
+      "gdsX": 1180,
+      "gdsY": 460,
+      "speed": 0.35,
+      "radius": 14,
+      "color": "amber",
+      "nearDesk": "top-room-1",
+      "notes": "Command room left console bank"
+    },
+    {
+      "id": "console-knob-2",
+      "type": "rotating-knob",
+      "gdsX": 1350,
+      "gdsY": 460,
+      "speed": 0.6,
+      "radius": 11,
+      "color": "amber",
+      "nearDesk": "top-room-1",
+      "notes": "Command room center console"
+    },
+    {
+      "id": "console-knob-3",
+      "type": "rotating-knob",
+      "gdsX": 1280,
+      "gdsY": 900,
+      "speed": 0.5,
+      "radius": 12,
+      "color": "amber",
+      "nearDesk": "mid-console",
+      "notes": "Operations console"
+    },
+    {
+      "id": "console-knob-4",
+      "type": "rotating-knob",
+      "gdsX": 1580,
+      "gdsY": 820,
+      "speed": 0.4,
+      "radius": 10,
+      "color": "amber",
+      "nearDesk": "mid-console",
+      "notes": "Operations secondary console"
+    },
+    {
+      "id": "rack-led-1",
+      "type": "blink-led",
+      "gdsX": 2330,
+      "gdsY": 290,
+      "color": "green",
+      "interval": 900,
+      "radius": 5,
+      "notes": "Server rack row A — upper left"
+    },
+    {
+      "id": "rack-led-2",
+      "type": "blink-led",
+      "gdsX": 2380,
+      "gdsY": 330,
+      "color": "green",
+      "interval": 1400,
+      "radius": 5,
+      "notes": "Server rack row A — stagger"
+    },
+    {
+      "id": "rack-led-3",
+      "type": "blink-led",
+      "gdsX": 2430,
+      "gdsY": 290,
+      "color": "amber",
+      "interval": 2200,
+      "radius": 5,
+      "notes": "Server rack row A — activity indicator"
+    },
+    {
+      "id": "rack-led-4",
+      "type": "blink-led",
+      "gdsX": 2330,
+      "gdsY": 420,
+      "color": "green",
+      "interval": 700,
+      "radius": 5,
+      "notes": "Server rack row B"
+    },
+    {
+      "id": "rack-led-5",
+      "type": "blink-led",
+      "gdsX": 2430,
+      "gdsY": 420,
+      "color": "red",
+      "interval": 3000,
+      "radius": 5,
+      "notes": "Server rack row B — error indicator (rare)"
+    },
+    {
+      "id": "rack-led-6",
+      "type": "blink-led",
+      "gdsX": 2700,
+      "gdsY": 310,
+      "color": "green",
+      "interval": 1100,
+      "radius": 5,
+      "notes": "Server rack right bank"
+    },
+    {
+      "id": "rack-led-7",
+      "type": "blink-led",
+      "gdsX": 2750,
+      "gdsY": 360,
+      "color": "amber",
+      "interval": 1800,
+      "radius": 5,
+      "notes": "Server rack right bank — secondary"
+    },
+    {
+      "id": "reactor-core",
+      "type": "pulse-glow",
+      "gdsX": 1920,
+      "gdsY": 1050,
+      "radius": 22,
+      "intensity": 0.65,
+      "color": "cyan",
+      "notes": "Central reactor core — main machine"
+    },
+    {
+      "id": "reactor-ring",
+      "type": "pulse-glow",
+      "gdsX": 1920,
+      "gdsY": 1050,
+      "radius": 40,
+      "intensity": 0.25,
+      "color": "blue",
+      "notes": "Central reactor outer halo"
+    },
+    {
+      "id": "ceiling-light-cmd",
+      "type": "ceiling-light",
+      "gdsX": 1380,
+      "gdsY": 185,
+      "radius": 28,
+      "notes": "Command room overhead fixture"
+    },
+    {
+      "id": "ceiling-light-ops",
+      "type": "ceiling-light",
+      "gdsX": 1180,
+      "gdsY": 760,
+      "radius": 26,
+      "notes": "Operations room overhead fixture"
+    },
+    {
+      "id": "ceiling-light-research",
+      "type": "ceiling-light",
+      "gdsX": 870,
+      "gdsY": 1280,
+      "radius": 22,
+      "notes": "Research room overhead fixture"
+    },
+    {
+      "id": "ceiling-light-eng",
+      "type": "ceiling-light",
+      "gdsX": 1050,
+      "gdsY": 1750,
+      "radius": 24,
+      "notes": "Engineering room overhead fixture"
+    },
+    {
+      "id": "ceiling-light-sys",
+      "type": "ceiling-light",
+      "gdsX": 2380,
+      "gdsY": 1680,
+      "radius": 26,
+      "notes": "Systems room overhead fixture"
+    },
+    {
+      "id": "steam-vent-1",
+      "type": "steam-vent",
+      "gdsX": 1100,
+      "gdsY": 1180,
+      "radius": 8,
+      "notes": "Pipe joint near Research — activates when agents busy"
+    },
+    {
+      "id": "steam-vent-2",
+      "type": "steam-vent",
+      "gdsX": 1430,
+      "gdsY": 1180,
+      "radius": 8,
+      "notes": "Pipe joint near Operations-Research corridor"
+    }
+  ],
   "cafeSttools": [
     {
       "id": "cafe-1",
@@ -231,6 +438,34 @@
       "gdsY": 1200
     }
   ],
+  "cafe": {
+    "baristas": [
+      {
+        "id": "latte-larry",
+        "name": "Latte Larry",
+        "charIdx": 1,
+        "gdsX": 2580,
+        "gdsY": 800,
+        "startFacing": "left",
+        "walkRange": 8,
+        "walkDurationMs": 1800,
+        "workPulses": 5,
+        "startDelayMs": 0
+      },
+      {
+        "id": "mocha-maya",
+        "name": "Mocha Maya",
+        "charIdx": 0,
+        "gdsX": 2580,
+        "gdsY": 1050,
+        "startFacing": "right",
+        "walkRange": 8,
+        "walkDurationMs": 1800,
+        "workPulses": 5,
+        "startDelayMs": 2000
+      }
+    ]
+  },
   "walkableTiles": [
     {
       "x": 1761,

@@ -6,6 +6,20 @@ import type { CafeRoom, CafeWorkstation, CafeVisitor } from './penny-cafe'
 import type { NavMesh } from './nav-mesh'
 import { buildOwnRoomRect } from './nav-mesh'
 import { PathWalker } from './path-walker'
+import { EventBus, EVENTS } from './events'
+
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
+
+export type PatronPhase =
+  | 'walking-to-cafe'
+  | 'ordering'
+  | 'waiting-for-barista'
+  | 'walking-to-stool'
+  | 'seated'
+  | 'sipping'
+  | 'returning'
 
 // ---------------------------------------------------------------------------
 // Constants (local — not re-exported)
@@ -21,6 +35,9 @@ const WALK_SPEED = 55
 const MAX_RUNNERS = 10
 const RUN_TIMER_MIN = 3000
 const RUN_TIMER_VAR = 5000
+
+/** Max patrons that can queue at the counter waiting for a free barista */
+const MAX_COUNTER_QUEUE = 2
 
 // Social emojis reused here for standing-agent idle reactions
 const CHAT_EMOJIS = ['\uD83D\uDE04', '\uD83D\uDC4D', '\u2615', '\uD83D\uDCA1', '\uD83E\uDD14', '\uD83D\uDE02', '\uD83D\uDE0E', '\uD83C\uDF1F']
@@ -42,10 +59,14 @@ export interface CoffeeRunHost {
   readonly worldX: number
   /** World-space Y aligned to the stool row */
   readonly worldY: number
+  /** World-space Y of the serving counter (patrons stand here to order) */
+  readonly counterWorldY: number
   /** Barista containers for serving animation */
   readonly baristas: Phaser.GameObjects.Container[]
   /** Barista home X values (local to cafe container) */
   readonly baristaHomeX: number[]
+  /** Barista occupancy — true while a barista is actively serving */
+  readonly baristasBusy: boolean[]
   /** Set of occupied stool indices */
   readonly stoolOccupied: Set<number>
   /** Currently seated visitors */
@@ -54,6 +75,15 @@ export interface CoffeeRunHost {
   stoolWorldX(stoolIdx: number): number
   /** Notify that a chat should be attempted for a newly seated agent */
   tryStartChat(agentId: string): void
+}
+
+// ---------------------------------------------------------------------------
+// Internal queue entry
+// ---------------------------------------------------------------------------
+
+interface CounterQueueEntry {
+  agentId: string
+  onReady: (baristaIdx: number) => void
 }
 
 // ---------------------------------------------------------------------------
@@ -68,7 +98,11 @@ export class CafeCoffeeRunManager {
   readonly coffeeRunners = new Map<string, () => void>()
   /** Tracks how many runners came from each room cwd. */
   readonly coffeeRunnerRooms = new Map<string, number>()
+  /** Current phase for each active patron. Public for testability. */
+  readonly patronPhases = new Map<string, PatronPhase>()
 
+  /** FIFO queue of patrons waiting at the counter for a free barista */
+  private counterQueue: CounterQueueEntry[] = []
   private coffeeRunTimer: Phaser.Time.TimerEvent | null = null
 
   constructor(scene: CoffeRunHostScene, host: CoffeeRunHost) {
@@ -103,6 +137,8 @@ export class CafeCoffeeRunManager {
     if (this.coffeeRunTimer) { this.coffeeRunTimer.destroy(); this.coffeeRunTimer = null }
     this.coffeeRunners.clear()
     this.coffeeRunnerRooms.clear()
+    this.patronPhases.clear()
+    this.counterQueue = []
   }
 
   /** Cancel a running coffee trip — trigger walk back to desk (or force-cleanup pre-seat). */
@@ -116,7 +152,17 @@ export class CafeCoffeeRunManager {
     }
   }
 
-  // ── Private ──────────────────────────────────────────────────────────────
+  /** Public entry point for testing — bypasses the random dispatch logic. */
+  triggerForAgent(ws: CafeWorkstation, room: CafeRoom): void {
+    this.sendAgentForCoffee(ws, room)
+  }
+
+  // ── Private helpers ──────────────────────────────────────────────────────
+
+  private setPhase(agentId: string, phase: PatronPhase): void {
+    this.patronPhases.set(agentId, phase)
+    EventBus.emit(EVENTS.CAFE_PATRON_PHASE, agentId, phase)
+  }
 
   private tryStartCoffeeRun(): void {
     const { container, stoolOccupied } = this.host
@@ -162,14 +208,15 @@ export class CafeCoffeeRunManager {
 
     const startX = room.x + ws.container.x
     const startY = room.y + ws.container.y + WS_SPRITE_Y
-    const doorX = room.x
-    const doorY = getRoomDoorY(room)
 
+    // Phase 1 destination:
+    //   Seated → walk to the serving counter side (same X as stool, counter Y)
+    //   Standing → random spot near the cafe
     const cafeX = stoolIdx !== null
       ? this.host.stoolWorldX(stoolIdx)
       : (this.host.worldX - CAFE_W / 2) + 40 + Math.random() * (CAFE_W - 80)
     const cafeY = stoolIdx !== null
-      ? this.host.worldY
+      ? this.host.counterWorldY
       : this.host.worldY + 28 + Math.random() * 16
 
     ws.sprite.setVisible(false)
@@ -191,6 +238,9 @@ export class CafeCoffeeRunManager {
       pathWalker.destroy()
       if (stoolIdx !== null) this.host.stoolOccupied.delete(stoolIdx)
       this.cleanupVisitor(agentId)
+      this.patronPhases.delete(agentId)
+      // Remove from counter queue if still waiting
+      this.counterQueue = this.counterQueue.filter(e => e.agentId !== agentId)
       shadow.destroy()
       walker.destroy()
       ws.sprite.setVisible(true)
@@ -201,72 +251,58 @@ export class CafeCoffeeRunManager {
     }
     this.coffeeRunners.set(agentId, cleanup)
 
-    // Use NavMesh pathfinding — base grid has corridors + cafe only.
-    // ownRoomRect adds this agent's room + door zone as walkable.
+    // Use NavMesh pathfinding
     const navMesh = scene.getNavMesh()
     const ownRoomRect = buildOwnRoomRect(room)
     const goPath = navMesh.findPath({ x: startX, y: startY }, { x: cafeX, y: cafeY }, ownRoomRect)
     if (!goPath) { cleanup(); return }
-    const returnPath = navMesh.findPath({ x: cafeX, y: cafeY }, { x: startX, y: startY }, ownRoomRect)
+
+    // Return path starts from the stool for seated patrons (not the counter)
+    const returnFromY = isStanding ? cafeY : this.host.worldY
+    const returnPath = navMesh.findPath({ x: cafeX, y: returnFromY }, { x: startX, y: startY }, ownRoomRect)
       ?? [...goPath].reverse()
 
-    let phase: 'going' | 'sitting' | 'returning' = 'going'
+    this.setPhase(agentId, 'walking-to-cafe')
 
-    const onArrival = () => {
+    pathWalker.startPath(goPath, () => {
       if (!walker.active) { cleanup(); return }
-      if (phase === 'going') {
-        phase = 'sitting'
-        walker.setAngle(0)
-        walker.setScale(CHAR_SCALE)
-        walker.setDepth(9000)
+      walker.setAngle(0)
+      walker.setScale(CHAR_SCALE)
+      walker.setDepth(9000)
 
-        if (isStanding) {
-          walker.setTexture(walkSheetKey, 6)
-          walker.setFlipX(false)
-          scene.tweens.add({
-            targets: walker, angle: { from: -2, to: 2 },
-            duration: 2000 + Math.random() * 800, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
-          })
-        } else {
-          walker.setTexture(sitSheetKey, 3)
-          walker.setFlipX(false)
-        }
+      if (isStanding) {
+        // ── Standing flow — no barista service, cup appears immediately ──
+        walker.setTexture(walkSheetKey, 6)
+        walker.setFlipX(false)
+        scene.tweens.add({
+          targets: walker, angle: { from: -2, to: 2 },
+          duration: 2000 + Math.random() * 800, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
+        })
 
         const visitor: CafeVisitor = {
-          agentId,
-          stoolIdx: stoolIdx ?? -1,
-          walker,
-          shadow,
-          cup: null,
-          sipTimer: null,
-          chatPartner: null,
+          agentId, stoolIdx: -1, walker, shadow, cup: null, sipTimer: null, chatPartner: null,
         }
         this.host.seatedVisitors.set(agentId, visitor)
 
-        if (isStanding) {
-          const cup = scene.add.sprite(walker.x + 6, walker.y - 12, SPRITESHEET_KEYS.GAME_ITEMS, ITEM_FRAMES.COFFEE_CUP)
-            .setScale(0.25).setOrigin(0.5).setDepth(9002)
-          visitor.cup = cup
-          visitor.sipTimer = scene.time.addEvent({
-            delay: 6000 + Math.random() * 6000, loop: true,
-            callback: () => this.sipAnimation(visitor),
-          })
-          scene.time.addEvent({
-            delay: 5000 + Math.random() * 5000, loop: true,
-            callback: () => {
-              if (!walker.active) return
-              const emoji = CHAT_EMOJIS[Math.floor(Math.random() * CHAT_EMOJIS.length)]
-              scene.spawnEmojiReaction(walker.x, walker.y - 30, emoji)
-            },
-          })
-        } else {
-          this.serveDrink(visitor)
-          this.host.tryStartChat(agentId)
-        }
+        const cup = scene.add.sprite(walker.x + 6, walker.y - 12, SPRITESHEET_KEYS.GAME_ITEMS, ITEM_FRAMES.COFFEE_CUP)
+          .setScale(0.25).setOrigin(0.5).setDepth(9002)
+        visitor.cup = cup
+        visitor.sipTimer = scene.time.addEvent({
+          delay: 6000 + Math.random() * 6000, loop: true,
+          callback: () => this.sipAnimation(visitor),
+        })
+        scene.time.addEvent({
+          delay: 5000 + Math.random() * 5000, loop: true,
+          callback: () => {
+            if (!walker.active) return
+            const emoji = CHAT_EMOJIS[Math.floor(Math.random() * CHAT_EMOJIS.length)]
+            scene.spawnEmojiReaction(walker.x, walker.y - 30, emoji)
+          },
+        })
 
         visitor.triggerReturn = () => {
-          if (phase !== 'sitting' || !walker.active) return
-          phase = 'returning'
+          if (!walker.active) return
+          this.setPhase(agentId, 'returning')
           walker.setTexture(walkSheetKey, 0)
           this.cleanupVisitor(agentId)
           pathWalker.startPath(returnPath, () => {
@@ -274,37 +310,179 @@ export class CafeCoffeeRunManager {
             scene.spawnEmojiReaction(startX, startY - 25, '\uD83D\uDE0A')
           })
         }
-      } else {
-        cleanup()
-        scene.spawnEmojiReaction(startX, startY - 25, '\uD83D\uDE0A')
+        return
       }
-    }
 
-    pathWalker.startPath(goPath, onArrival)
+      // ── Seated flow: Phase 2 — ordering at counter ──
+      this.setPhase(agentId, 'ordering')
+      scene.spawnEmojiReaction(walker.x, walker.y - 25, '\u2615')
+
+      const visitor: CafeVisitor = {
+        agentId, stoolIdx: stoolIdx!, walker, shadow, cup: null, sipTimer: null, chatPartner: null,
+      }
+      this.host.seatedVisitors.set(agentId, visitor)
+
+      // Set triggerReturn early so cancelCoffeeRun works during ordering/waiting
+      visitor.triggerReturn = () => {
+        const phase = this.patronPhases.get(agentId)
+        if (phase === 'seated' || phase === 'sipping') {
+          this.setPhase(agentId, 'returning')
+          walker.setTexture(walkSheetKey, 0)
+          this.cleanupVisitor(agentId)
+          pathWalker.startPath(returnPath, () => {
+            cleanup()
+            scene.spawnEmojiReaction(startX, startY - 25, '\uD83D\uDE0A')
+          })
+        } else {
+          cleanup()
+        }
+      }
+
+      // Phase 3 — wait 500-1000ms then request barista service
+      scene.time.delayedCall(500 + Math.random() * 500, () => {
+        if (!walker.active) { cleanup(); return }
+        this.requestBaristaService(agentId, visitor, stoolIdx!, () => {
+          // Phase 5/6 — cup delivered, walk from counter Y to stool Y
+          if (!walker.active) { cleanup(); return }
+          this.setPhase(agentId, 'walking-to-stool')
+          walker.setTexture(walkSheetKey, 0)
+
+          const stoolWorldY = this.host.worldY
+          scene.tweens.add({
+            targets: walker,
+            y: stoolWorldY,
+            duration: 400,
+            ease: 'Sine.easeOut',
+            onComplete: () => {
+              if (!walker.active) { cleanup(); return }
+              // Phase 6 — seated
+              walker.setTexture(sitSheetKey, 3)
+              walker.setFlipX(false)
+              this.setPhase(agentId, 'seated')
+
+              visitor.sipTimer = scene.time.addEvent({
+                delay: 6000 + Math.random() * 6000,
+                loop: true,
+                callback: () => {
+                  if (this.patronPhases.get(agentId) === 'seated') {
+                    this.setPhase(agentId, 'sipping')
+                  }
+                  this.sipAnimation(visitor)
+                },
+              })
+
+              this.host.tryStartChat(agentId)
+
+              // Update triggerReturn now that patron is fully seated
+              visitor.triggerReturn = () => {
+                const ph = this.patronPhases.get(agentId)
+                if (ph !== 'seated' && ph !== 'sipping') return
+                this.setPhase(agentId, 'returning')
+                walker.setTexture(walkSheetKey, 0)
+                this.cleanupVisitor(agentId)
+                pathWalker.startPath(returnPath, () => {
+                  cleanup()
+                  scene.spawnEmojiReaction(startX, startY - 25, '\uD83D\uDE0A')
+                })
+              }
+            },
+          })
+          // Keep shadow in sync
+          scene.tweens.add({
+            targets: shadow,
+            y: stoolWorldY + 2,
+            duration: 400,
+            ease: 'Sine.easeOut',
+          })
+        }, cleanup)
+      })
+    })
   }
 
-  // ── Barista service ───────────────────────────────────────────────────────
+  // ── Barista queue ─────────────────────────────────────────────────────────
 
-  private serveDrink(visitor: CafeVisitor): void {
+  private requestBaristaService(
+    agentId: string,
+    visitor: CafeVisitor,
+    stoolIdx: number,
+    onDelivered: () => void,
+    cleanup: () => void,
+  ): void {
+    const { baristasBusy } = this.host
+    const freeIdx = baristasBusy.findIndex(busy => !busy)
+
+    if (freeIdx !== -1) {
+      // Phase 4 — barista assigned immediately
+      baristasBusy[freeIdx] = true
+      this.baristaWalkToCounterAndInteract(freeIdx, stoolIdx, visitor, onDelivered)
+    } else if (this.counterQueue.length < MAX_COUNTER_QUEUE) {
+      // Phase 3 extended — wait in queue
+      this.setPhase(agentId, 'waiting-for-barista')
+      this.counterQueue.push({
+        agentId,
+        onReady: (baristaIdx: number) => {
+          baristasBusy[baristaIdx] = true
+          this.baristaWalkToCounterAndInteract(baristaIdx, stoolIdx, visitor, onDelivered)
+        },
+      })
+    } else {
+      // Counter full — skip this run
+      cleanup()
+    }
+  }
+
+  private dequeueNextPatron(): void {
+    if (this.counterQueue.length === 0) return
+    const { baristasBusy } = this.host
+    const freeIdx = baristasBusy.findIndex(busy => !busy)
+    if (freeIdx === -1) return
+    const entry = this.counterQueue.shift()!
+    entry.onReady(freeIdx)
+  }
+
+  // ── Barista service animation ─────────────────────────────────────────────
+
+  private baristaWalkToCounterAndInteract(
+    baristaIdx: number,
+    stoolIdx: number,
+    visitor: CafeVisitor,
+    onDelivered: () => void,
+  ): void {
     const scene = this.scene
-    const { container, baristas, baristaHomeX } = this.host
-    if (!container?.active || baristas.length === 0) return
+    const { container, baristas, baristaHomeX, baristasBusy } = this.host
 
-    const stoolLocalX = STOOL_START_X + visitor.stoolIdx * STOOL_GAP
-    let bestIdx = 0
-    let bestDist = Infinity
-    for (let i = 0; i < baristas.length; i++) {
-      const d = Math.abs(baristaHomeX[i] - stoolLocalX)
-      if (d < bestDist) { bestDist = d; bestIdx = i }
+    const releaseBaristaAndDequeue = () => {
+      baristasBusy[baristaIdx] = false
+      this.dequeueNextPatron()
     }
 
-    const barista = baristas[bestIdx]
-    if (!barista?.active) return
+    if (!container?.active || baristas.length === 0) {
+      releaseBaristaAndDequeue()
+      onDelivered()
+      return
+    }
 
-    const homeX = baristaHomeX[bestIdx]
+    const barista = baristas[baristaIdx]
+    if (!barista?.active) {
+      releaseBaristaAndDequeue()
+      onDelivered()
+      return
+    }
+
+    const stoolLocalX = STOOL_START_X + stoolIdx * STOOL_GAP
+    const homeX = baristaHomeX[baristaIdx]
     const targetX = Phaser.Math.Clamp(stoolLocalX, 30, CAFE_W - 30)
     const BEHIND_W = 68
     const counterTopLocalY = BEHIND_W - 4
+
+    // Suspend idle sway so it doesn't fight the service tween
+    scene.tweens.killTweensOf(barista)
+
+    // Face toward patron
+    const baristaSprite = barista.list?.[0] as Phaser.GameObjects.Sprite | undefined
+    if (baristaSprite) {
+      baristaSprite.setFlipX(targetX < homeX)
+    }
 
     scene.tweens.add({
       targets: barista,
@@ -312,21 +490,39 @@ export class CafeCoffeeRunManager {
       duration: 600 + Math.abs(barista.x - targetX) * 2,
       ease: 'Sine.easeInOut',
       onComplete: () => {
-        if (!barista.active || !container?.active) return
+        if (!barista.active || !container?.active) {
+          releaseBaristaAndDequeue()
+          onDelivered()
+          return
+        }
 
-        const cupX = container.x + targetX
-        const cupY = container.y + counterTopLocalY
-        const cup = scene.add.sprite(cupX, cupY, SPRITESHEET_KEYS.GAME_ITEMS, ITEM_FRAMES.COFFEE_CUP)
-          .setScale(0.25).setOrigin(0.5).setDepth(9002)
-        const steam = scene.add.sprite(cupX, cupY - 6, SPRITESHEET_KEYS.GAME_ICONS, ICON_FRAMES.CIRCLE_BLUE)
-          .setScale(0.15).setOrigin(0.5).setDepth(9002).setAlpha(0.25)
+        // Brief bob — simulate order prep
+        scene.tweens.add({
+          targets: barista,
+          scaleX: 1.05, scaleY: 0.95,
+          duration: 200, yoyo: true,
+          ease: 'Sine.easeInOut',
+        })
 
-        scene.time.delayedCall(300, () => {
-          if (!cup.active || !visitor.walker.active) {
-            cup.destroy(); steam.destroy(); return
+        // After ~1200ms prep time, slide cup across the counter
+        scene.time.delayedCall(1200, () => {
+          if (!barista.active || !container?.active || !visitor.walker.active) {
+            releaseBaristaAndDequeue()
+            onDelivered()
+            return
           }
+
+          const cupX = container.x + targetX
+          const cupY = container.y + counterTopLocalY
+          const cup = scene.add.sprite(cupX, cupY, SPRITESHEET_KEYS.GAME_ITEMS, ITEM_FRAMES.COFFEE_CUP)
+            .setScale(0.25).setOrigin(0.5).setDepth(9002)
+          const steam = scene.add.sprite(cupX, cupY - 6, SPRITESHEET_KEYS.GAME_ICONS, ICON_FRAMES.CIRCLE_BLUE)
+            .setScale(0.15).setOrigin(0.5).setDepth(9002).setAlpha(0.25)
+
+          // Cup travels to patron's current world position (at the counter)
           const agentCupX = visitor.walker.x
           const agentCupY = visitor.walker.y - 10
+
           scene.tweens.add({
             targets: [cup, steam],
             x: agentCupX,
@@ -335,22 +531,32 @@ export class CafeCoffeeRunManager {
             onComplete: () => {
               steam.destroy()
               visitor.cup = cup
-              visitor.sipTimer = scene.time.addEvent({
-                delay: 6000 + Math.random() * 6000,
-                loop: true,
-                callback: () => this.sipAnimation(visitor),
-              })
-            },
-          })
-        })
 
-        scene.time.delayedCall(800, () => {
-          if (!barista.active) return
-          scene.tweens.add({
-            targets: barista,
-            x: homeX,
-            duration: 600 + Math.abs(barista.x - homeX) * 2,
-            ease: 'Sine.easeInOut',
+              // Reset barista facing and walk home
+              if (baristaSprite) baristaSprite.setFlipX(false)
+              scene.tweens.add({
+                targets: barista,
+                x: homeX,
+                duration: 600 + Math.abs(barista.x - homeX) * 2,
+                ease: 'Sine.easeInOut',
+                onComplete: () => {
+                  releaseBaristaAndDequeue()
+                  // Re-add idle sway tweens
+                  scene.tweens.add({
+                    targets: barista,
+                    angle: { from: -3, to: 3 },
+                    duration: 800, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
+                  })
+                  scene.tweens.add({
+                    targets: barista,
+                    x: homeX + 12,
+                    duration: 1800, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
+                  })
+                },
+              })
+
+              onDelivered()
+            },
           })
         })
       },

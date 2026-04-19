@@ -74,6 +74,8 @@ export type CameraJuiceHint = 'taskComplete' | 'rankUp' | 'errorZoomOut'
 
 export interface CelebrationManagerOptions {
   onCameraJuice?: (hint: CameraJuiceHint) => void
+  /** Called immediately before camera.shake() — lets PostFXManager sync chromatic aberration. */
+  onShake?: () => void
 }
 
 /** Optional per-call guards (global toggle via {@link CelebrationManager.setCelebrationsAllowed}). */
@@ -116,6 +118,7 @@ type PendingCelebration = {
 export class CelebrationManager {
   private _scene: Phaser.Scene
   private _onCameraJuice?: (hint: CameraJuiceHint) => void
+  private _onShake?: () => void
 
   private _celebrationsAllowed = true
   private _lastSeasonEndKey = ''
@@ -146,6 +149,7 @@ export class CelebrationManager {
   constructor(scene: Phaser.Scene, opts?: CelebrationManagerOptions) {
     this._scene = scene
     this._onCameraJuice = opts?.onCameraJuice
+    this._onShake = opts?.onShake
     this._initBurstPool()
     this._initConfettiPool()
     this._initSparklePool()
@@ -289,9 +293,15 @@ export class CelebrationManager {
   ): void {
     this._onCameraJuice?.('rankUp')
     soundEngine.levelUp()
+    // Screen shake for impact — scales with merge count
+    this._scene.cameras.main.shake(80 + mergeCount * 8, 0.0025 + 0.0003 * (mergeCount - 1))
     const burstN = Math.min(28, Math.round(10 * (1 + 0.15 * (mergeCount - 1))))
     const radius = Math.round(52 * (1 + 0.08 * (mergeCount - 1)))
     this._particleBurst(x, y, burstN, rankColor, radius)
+    // Gold particle burst slightly delayed for layered feel
+    this._scene.time.delayedCall(60, () => {
+      this._particleBurst(x, y, Math.round(burstN * 0.55), 0xfbbf24, Math.round(radius * 0.72))
+    })
     this._risingText(x, y - 18, `PROMOTED!`, {
       fontSize: scaledFontSize(13),
       fontFamily: 'monospace',
@@ -430,6 +440,92 @@ export class CelebrationManager {
     }
   }
 
+  /**
+   * Task start VFX — expanding white ring (0→40px, 400ms) + 3–4 sparkle particles.
+   * Fires immediately (not queued) when an agent transitions idle→working.
+   */
+  taskStart(x: number, y: number): void {
+    if (!this._celebrationsAllowed) return
+    this._playTaskStart(x, y)
+  }
+
+  private _playTaskStart(x: number, y: number): void {
+    // Expanding white ring: radius 0→40px, alpha 1→0, 400ms
+    const gfx = this._scene.add.graphics().setDepth(599)
+    this._scene.tweens.addCounter({
+      from: 0,
+      to: 1,
+      duration: 400,
+      ease: 'Sine.easeOut',
+      onUpdate: (tween) => {
+        const t = tween.getValue() ?? 0
+        const r = t * 40
+        const a = (1 - t) * 0.75
+        gfx.clear()
+        gfx.lineStyle(2.5 * (1 - t * 0.5), 0xffffff, a)
+        gfx.strokeCircle(x, y, r)
+      },
+      onComplete: () => gfx.destroy(),
+    })
+
+    // 3–4 sparkle particles fly outward
+    const count = 3 + Math.floor(Math.random() * 2)
+    for (let i = 0; i < count; i++) {
+      const p = this._sparklePool.find(c => !c.getData('busy'))
+      if (!p) continue
+      const angle = (i / count) * Math.PI * 2 + (Math.random() - 0.5) * 0.6
+      const dist = 8 + Math.random() * 10
+      const sy = y - 8
+      p.setPosition(x, sy)
+      p.setFillStyle(0xffffff)
+      p.setRadius(0.9 + Math.random() * 0.8)
+      p.setAlpha(0.9).setVisible(true).setData('busy', true)
+      this._scene.tweens.add({
+        targets: p,
+        x: x + Math.cos(angle) * dist,
+        y: sy + Math.sin(angle) * dist,
+        alpha: 0,
+        duration: 300 + Math.random() * 100,
+        ease: 'Power2',
+        onComplete: () => { p.setVisible(false).setData('busy', false) },
+      })
+    }
+  }
+
+  /**
+   * Task fail VFX — red pulse ring + brief screen-edge red flash (100ms).
+   * Enqueued at 'error' priority alongside the existing error() celebration.
+   */
+  taskFail(x: number, y: number, opts?: CelebrationOptions): void {
+    this._enqueueCelebration('error', opts, null, (e) => {
+      e.run = () => this._playTaskFail(x, y)
+    })
+  }
+
+  private _playTaskFail(x: number, y: number): void {
+    this._expandingRing(x, y, 0xef4444)
+    this._screenEdgeFlash(0xef4444, 100)
+  }
+
+  /** Screen-edge flash — fills only the border of the viewport with the given color. */
+  private _screenEdgeFlash(color: number, durationMs: number): void {
+    const cam = this._scene.cameras.main
+    const flash = this._scene.add.graphics().setScrollFactor(0).setDepth(9999)
+    const bw = 18
+    flash.fillStyle(color, 0.45)
+    flash.fillRect(0, 0, cam.width, bw)
+    flash.fillRect(0, cam.height - bw, cam.width, bw)
+    flash.fillRect(0, bw, bw, cam.height - bw * 2)
+    flash.fillRect(cam.width - bw, bw, bw, cam.height - bw * 2)
+    this._scene.tweens.add({
+      targets: flash,
+      alpha: 0,
+      duration: durationMs,
+      ease: 'Power2',
+      onComplete: () => flash.destroy(),
+    })
+  }
+
   private _comboFloatingLabel(streak: number): void {
     const cam = this._scene.cameras.main
     const cx = cam.width / 2
@@ -475,6 +571,7 @@ export class CelebrationManager {
   }
 
   private _playMilestone(x: number, y: number, text: string, mergeCount: number): void {
+    this._onShake?.()
     this._scene.cameras.main.shake(100, 0.003 + 0.0004 * (mergeCount - 1))
     soundEngine.levelUp()
     const n1 = Math.min(28, 16 + (mergeCount - 1) * 2)
@@ -522,7 +619,11 @@ export class CelebrationManager {
         })
       },
     })
-    this._confetti(x, y, Math.min(40, 22 + (mergeCount - 1) * 3))
+    // 3-second confetti rain: three waves from the top of the viewport
+    const waveSize = Math.min(14, 10 + Math.floor((mergeCount - 1) * 1.5))
+    this._screenConfetti(waveSize)
+    this._scene.time.delayedCall(1000, () => { this._screenConfetti(waveSize) })
+    this._scene.time.delayedCall(2000, () => { this._screenConfetti(Math.ceil(waveSize * 0.7)) })
   }
 
   /**
@@ -547,6 +648,7 @@ export class CelebrationManager {
 
   private _playError(x: number, y: number, mergeCount: number): void {
     this._onCameraJuice?.('errorZoomOut')
+    this._onShake?.()
     const shakeDur = Math.min(120, 60 + (mergeCount - 1) * 12)
     this._scene.cameras.main.shake(shakeDur, 0.002 + (mergeCount - 1) * 0.0003)
     soundEngine.error()
