@@ -12,6 +12,7 @@ import type { SeasonCeremonyRankingRow, SeasonEndedEventPayload } from './events
 import { SPRITESHEET_KEYS, EFFECT_ANIM_KEYS, ICON_FRAMES, LEGO_SPECIAL_FRAMES, DIFFICULTY_STAR_FRAME, MEDAL_HD_FRAMES } from './office-asset-keys'
 import type { QuestDifficulty } from './quest-system'
 import { soundEngine } from './sound-engine'
+import { audioManager } from './audio-manager'
 import { AnimConfig } from './animation-config'
 import { scaledFontSize } from './office-constants'
 
@@ -292,7 +293,7 @@ export class CelebrationManager {
     mergeCount: number,
   ): void {
     this._onCameraJuice?.('rankUp')
-    soundEngine.levelUp()
+    audioManager.rankUpFanfare()
     // Screen shake for impact — scales with merge count
     this._scene.cameras.main.shake(80 + mergeCount * 8, 0.0025 + 0.0003 * (mergeCount - 1))
     const burstN = Math.min(28, Math.round(10 * (1 + 0.15 * (mergeCount - 1))))
@@ -364,7 +365,7 @@ export class CelebrationManager {
     const streak = this._taskComboStreak
 
     this._onCameraJuice?.('taskComplete')
-    soundEngine.click()
+    audioManager.taskComplete()
 
     const onFire = streak >= cel.comboTierFireMin
     const comboTier = streak >= cel.comboTier3Min
@@ -450,6 +451,7 @@ export class CelebrationManager {
   }
 
   private _playTaskStart(x: number, y: number): void {
+    audioManager.taskStart()
     // Expanding white ring: radius 0→40px, alpha 1→0, 400ms
     const gfx = this._scene.add.graphics().setDepth(599)
     this._scene.tweens.addCounter({
@@ -503,6 +505,7 @@ export class CelebrationManager {
   }
 
   private _playTaskFail(x: number, y: number): void {
+    audioManager.taskFail()
     this._expandingRing(x, y, 0xef4444)
     this._screenEdgeFlash(0xef4444, 100)
   }
@@ -573,7 +576,7 @@ export class CelebrationManager {
   private _playMilestone(x: number, y: number, text: string, mergeCount: number): void {
     this._onShake?.()
     this._scene.cameras.main.shake(100, 0.003 + 0.0004 * (mergeCount - 1))
-    soundEngine.levelUp()
+    audioManager.rankUpFanfare()
     const n1 = Math.min(28, 16 + (mergeCount - 1) * 2)
     const n2 = Math.min(16, 8 + (mergeCount - 1))
     this._particleBurst(x, y, n1, 0xfbbf24, 72)
