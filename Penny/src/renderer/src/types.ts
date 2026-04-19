@@ -257,6 +257,57 @@ export interface AgentXP {
   currentStreak: number
 }
 
+// ── Session Replay ───────────────────────────────────────────────────────────
+
+export type ReplayEventType =
+  | 'snapshot'
+  | 'mode-change'
+  | 'interaction-change'
+  | 'sub-agent-start'
+  | 'sub-agent-done'
+
+export interface ReplayEventData {
+  mode?: string
+  interactionType?: string
+  cpu?: string
+  memoryMB?: number
+  contextUtilization?: number
+  subAgentDescription?: string
+  sessionId?: string
+  pid?: number
+}
+
+export interface ReplayEvent {
+  t: number           // ms from recording start
+  type: ReplayEventType
+  agentId: string
+  agentName: string
+  cwd?: string
+  data: ReplayEventData
+}
+
+export interface ReplayRecording {
+  id: string
+  label: string
+  startedAt: number
+  endedAt: number | null
+  durationMs: number
+  agentIds: string[]
+  eventCount: number
+}
+
+export interface ReplayRecordingWithEvents extends ReplayRecording {
+  events: ReplayEvent[]
+}
+
+export interface RecorderStatus {
+  recording: boolean
+  id?: string
+  label?: string
+  startedAt?: number
+  eventCount?: number
+}
+
 export const XP_RANKS = [
   { level: 1,  title: 'Intern',        minXP: 0 },
   { level: 2,  title: 'Junior',        minXP: 500 },

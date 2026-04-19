@@ -154,6 +154,14 @@ import { generateWeeklyDigest } from './evals/reports/weekly-digest'
 import { contextMonitor } from './evals/collectors/context-usage'
 import { spotCheckQueue } from './evals/judges/human-judge'
 import { listSoundboardClips } from './soundboard'
+import {
+  startRecording,
+  stopRecording,
+  listRecordings,
+  loadRecording,
+  deleteRecording,
+  getRecorderStatus,
+} from './session-recorder'
 import { DOCS_ROOT, getSystemPaths } from './paths'
 import { registerDataScriptHandlers } from './data-scripts'
 import {
@@ -1416,6 +1424,22 @@ export function registerIpcHandlers() {
     if (!Array.isArray(tools)) throw new Error('tools must be an array')
     return updateAgentTools(agentId, tools as string[])
   }))
+
+  // ── Session Replay ────────────────────────────────────────────────────────
+  ipcMain.handle('replay:start', wrapHandler((label?: unknown) => {
+    return startRecording(typeof label === 'string' ? label : undefined)
+  }))
+  ipcMain.handle('replay:stop', wrapHandler(() => stopRecording()))
+  ipcMain.handle('replay:list', wrapHandler(() => listRecordings()))
+  ipcMain.handle('replay:load', wrapHandler((id: unknown) => {
+    if (typeof id !== 'string') throw new Error('id must be a string')
+    return loadRecording(id)
+  }))
+  ipcMain.handle('replay:delete', wrapHandler((id: unknown) => {
+    if (typeof id !== 'string') throw new Error('id must be a string')
+    return { success: deleteRecording(id) }
+  }))
+  ipcMain.handle('replay:status', wrapHandler(() => getRecorderStatus()))
 
   // ── Data Scripts ──────────────────────────────────────────────────────
   registerDataScriptHandlers()

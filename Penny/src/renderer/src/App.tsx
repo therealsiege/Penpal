@@ -19,6 +19,7 @@ import { EvalsPanel } from './panels/EvalsPanel'
 import { DataPanel } from './panels/DataPanel'
 import { ProfilesPanel } from './panels/ProfilesPanel'
 import { McpPanel } from './panels/McpPanel'
+import { SessionReplayPanel } from './panels/SessionReplayPanel'
 import type { SystemPaths } from './types'
 import { getPathPresets } from './utils/path-presets'
 import { EventBus, EVENTS } from './game/events'
@@ -328,6 +329,7 @@ function AppContent() {
         {activePanel === 'soundboard' && <SoundboardPanel />}
         {activePanel === 'settings' && <SettingsPanel />}
         {activePanel === 'mcp' && <McpPanel />}
+        {activePanel === 'replay' && <SessionReplayPanel />}
       </Layout>
     </>
   )

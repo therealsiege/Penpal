@@ -29,6 +29,9 @@ import type {
   EvalStats,
   PreferenceStats,
   PreferenceEvent,
+  ReplayRecording,
+  ReplayRecordingWithEvents,
+  RecorderStatus,
 } from './types'
 
 interface ContextEngineeredResponse<T> {
@@ -203,6 +206,13 @@ declare global {
       vaultSearchRich: (query: string, glob?: string, limit?: number) => Promise<ContextEngineeredResponse<VaultSearchResult[]>>
       orchestratorQueueRich: () => Promise<ContextEngineeredResponse<Task[]>>
       orchestratorAgentHealthRich: () => Promise<ContextEngineeredResponse<AgentHealthStatus[]>>
+      // Session Replay
+      replayStart: (label?: string) => Promise<{ id: string } | null>
+      replayStop: () => Promise<ReplayRecording | null>
+      replayList: () => Promise<ReplayRecording[]>
+      replayLoad: (id: string) => Promise<ReplayRecordingWithEvents | null>
+      replayDelete: (id: string) => Promise<{ success: boolean }>
+      replayStatus: () => Promise<RecorderStatus>
     }
   }
 }
