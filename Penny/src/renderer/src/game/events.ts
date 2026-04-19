@@ -164,6 +164,10 @@ export const EVENTS = {
   RANK_UP: 'rank:up',
   /** Fired when an agent task fails with an error. Payload: (agentId: string) */
   AGENT_ERROR: 'agent:error',
+
+  // --- Player character (RPG Layer 2) ---
+  /** Fired each frame the player moves. Payload: (x: number, y: number) */
+  PLAYER_MOVED: 'player:moved',
 } as const
 
 /**
@@ -261,4 +265,8 @@ export interface EventPayloadMap {
   [EVENTS.POD_LAUNCHED]: [agentIds: string[]]
   [EVENTS.RANK_UP]: [agentId: string]
   [EVENTS.AGENT_ERROR]: [agentId: string]
+
+  // --- Player character ---
+  /** (x: number, y: number) */
+  [EVENTS.PLAYER_MOVED]: [x: number, y: number]
 }
