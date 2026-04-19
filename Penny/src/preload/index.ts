@@ -207,4 +207,11 @@ contextBridge.exposeInMainWorld('api', {
   // Flight Board
   flightBoardList: () => ipcRenderer.invoke('flight-board:list'),
   flightBoardFilesInFlight: () => ipcRenderer.invoke('flight-board:files-in-flight'),
+  // Session Replay
+  replayStatus: () => ipcRenderer.invoke('replay:status'),
+  replayStart: (label?: string) => ipcRenderer.invoke('replay:start', label),
+  replayStop: () => ipcRenderer.invoke('replay:stop'),
+  replayList: () => ipcRenderer.invoke('replay:list'),
+  replayGet: (id: string) => ipcRenderer.invoke('replay:get', id),
+  replayDelete: (id: string) => ipcRenderer.invoke('replay:delete', id),
 })

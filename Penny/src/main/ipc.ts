@@ -61,6 +61,7 @@ import {
 } from './pods'
 import { getActiveEntries, getFilesInFlight } from './flight-board'
 import { startWaveDispatcher, stopWaveDispatcher, isWaveDispatcherEnabled } from './wave-dispatcher'
+import { getSessionReplayRecorder } from './session-replay'
 
 function parsePodCreateOpts(opts: unknown): CreatePodOpts {
   const raw = opts && typeof opts === 'object' && !Array.isArray(opts) ? (opts as Record<string, unknown>) : {}
@@ -1419,6 +1420,70 @@ export function registerIpcHandlers() {
 
   // ── Data Scripts ──────────────────────────────────────────────────────
   registerDataScriptHandlers()
+
+  // ── Session Replay ────────────────────────────────────────────────────
+  {
+    const replay = getSessionReplayRecorder(DATA_DIR)
+
+    // Wire up agent state polling: reuse the agents:statuses logic inline
+    replay.setAgentStatesFn(async () => {
+      const configs = getAgentConfigs()
+      const [sessions] = await Promise.all([
+        getClaudeSessions(),
+        getCursorAgentSessions().catch(() => []),
+      ])
+      const savedMap = loadAgentSessionMap()
+      const states: AgentState[] = []
+      for (const config of configs) {
+        const matched = sessions.find(s => {
+          const saved = savedMap[config.id]
+          if (saved && saved.pid > 0) return s.pid === saved.pid
+          if (config.defaultRepos.length > 0) {
+            return config.defaultRepos.some(repo => s.cwd === repo) &&
+              !configs.some(other => other.id !== config.id && other.defaultRepos.includes(s.cwd))
+          }
+          return false
+        })
+        if (matched) {
+          const cpuVal = parseFloat(matched.cpu || '0')
+          states.push({
+            config,
+            status: (cpuVal >= 1 ? 'active' : 'idle') as AgentState['status'],
+            needsInteraction: matched.waitingForInput,
+            sessionMode: matched.sessionMode,
+            sessionId: matched.sessionId,
+            pid: matched.pid,
+            tty: matched.tty,
+            cpu: matched.cpu,
+            memoryMB: matched.memoryMB,
+            cwd: matched.cwd,
+            contextUtilization: matched.contextUtilization,
+            contextRotDetected: matched.contextRotDetected,
+          })
+        }
+      }
+      return states
+    })
+
+    ipcMain.handle('replay:status', wrapHandler(() => replay.getStatus()))
+    ipcMain.handle('replay:start', wrapHandler((label?: unknown) => {
+      const id = replay.startRecording(typeof label === 'string' ? label : undefined)
+      return { id }
+    }))
+    ipcMain.handle('replay:stop', wrapHandler(() => replay.stopRecording()))
+    ipcMain.handle('replay:list', wrapHandler(() => replay.listRecordings()))
+    ipcMain.handle('replay:get', wrapHandler((id: unknown) => {
+      if (typeof id !== 'string') throw new Error('id must be a string')
+      const rec = replay.getRecording(id)
+      if (!rec) throw new Error(`Recording not found: ${id}`)
+      return rec
+    }))
+    ipcMain.handle('replay:delete', wrapHandler((id: unknown) => {
+      if (typeof id !== 'string') throw new Error('id must be a string')
+      const ok = replay.deleteRecording(id)
+      return { ok }
+    }))
+  }
 }
 
 export function registerPreferenceIpc(store: PreferenceStore) {
