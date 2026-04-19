@@ -49,6 +49,7 @@ import { creditManager } from './credits'
 import { leaderboardManager } from './leaderboard'
 import { seasonManager } from './seasons'
 import { PostFXManager } from './post-fx-manager'
+import { PlayerController } from './player-controller'
 
 import {
   KB_ZOOM_STEP,
@@ -167,6 +168,11 @@ export class OfficeScene extends Phaser.Scene {
   private lastMoodUpdateAt = 0
   private lastSeasonHudUpdateAt = 0
 
+
+  // RPG Layer 2 — player character
+  private playerController!: PlayerController
+  /** True once the player has been repositioned to the first room's center. */
+  private _playerSpawnedAtRoom = false
 
   // Screen-space UI overlays (toasts, tooltip, hover ring, help, debug, LOD label, status bar)
   private ui!: OfficeUI
@@ -966,6 +972,30 @@ export class OfficeScene extends Phaser.Scene {
       this.officeCamera.updateCameraBounds()
     }
 
+    // RPG Layer 2 — player character spawns at world center;
+    // repositioned to first room center on the first setAgents() layout pass.
+    // getBounds returns the union of all room rects so the player cannot walk
+    // through walls or out of bounds.  Falls back to the world rect when no
+    // rooms exist yet (e.g. during initial load before setAgents() fires).
+    this.playerController = new PlayerController(
+      this,
+      this.worldWidth / 2,
+      this.worldHeight / 2,
+      () => {
+        if (this.rooms.size === 0) {
+          return { x: 0, y: 0, width: this.worldWidth, height: this.worldHeight }
+        }
+        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+        for (const room of this.rooms.values()) {
+          if (room.x < minX) minX = room.x
+          if (room.y < minY) minY = room.y
+          if (room.x + room.width  > maxX) maxX = room.x + room.width
+          if (room.y + room.height > maxY) maxY = room.y + room.height
+        }
+        return { x: minX, y: minY, width: maxX - minX, height: maxY - minY }
+      },
+    )
+
     // Debug: inspect all large visible objects in workstation containers
     ;(window as any).__inspectWorkstations = () => {
       const results: any[] = []
@@ -1225,6 +1255,10 @@ export class OfficeScene extends Phaser.Scene {
 
     // Camera smooth zoom + follow + recovery
     this.officeCamera.updateZoomAndFollow(time)
+
+    // RPG Layer 2 — player character movement + camera follow
+    this.playerController.update(_delta)
+    this.officeCamera.followTarget = this.playerController.getPosition()
 
     // Zoom-dependent multi-level LOD
     const lodLevel = cam.zoom < LOD_L1_MAX ? 1 : cam.zoom <= LOD_L2_MAX ? 2 : 3
@@ -1499,6 +1533,16 @@ export class OfficeScene extends Phaser.Scene {
     const prevWorldH = this.worldHeight
     this.background.layoutRooms()
     this.officeCamera.updateCameraBounds()
+
+    // Spawn player at center of first room the first time rooms are laid out
+    if (!this._playerSpawnedAtRoom && this.rooms.size > 0 && this.playerController) {
+      this._playerSpawnedAtRoom = true
+      const [, firstRoom] = this.rooms.entries().next().value as [string, import('./office-types').Room]
+      this.playerController.setPosition(
+        firstRoom.x + firstRoom.width / 2,
+        firstRoom.y + firstRoom.height / 2,
+      )
+    }
     this.background.updateWhiteboardStats()
 
     // Brief camera zoom-out when world expands to show new rooms
