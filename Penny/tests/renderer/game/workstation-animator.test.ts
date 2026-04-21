@@ -18,6 +18,7 @@ import { ICON_FRAMES } from '../../../src/renderer/src/game/office-asset-keys'
 import { MOOD_CONFIGS } from '../../../src/renderer/src/game/agent-mood'
 import type { WorkstationSprite } from '../../../src/renderer/src/game/office-types'
 import type { WorkstationHost } from '../../../src/renderer/src/game/office-workstation'
+import { TweenBag } from '../../../src/renderer/src/game/tween-lifecycle'
 
 vi.mock('phaser', () => ({
   default: {
@@ -299,6 +300,7 @@ function makeWorkstation(agentId: string, overrides?: Partial<WorkstationSprite>
     setAlpha: vi.fn(),
   }
   const base: WorkstationSprite = {
+    tweenBag: new TweenBag(),
     state: { config: { id: agentId, name: 'T' } } as AgentState,
     sprite: sprite as unknown as WorkstationSprite['sprite'],
     statusDot: statusDot as unknown as WorkstationSprite['statusDot'],

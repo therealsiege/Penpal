@@ -10,6 +10,7 @@ vi.mock('phaser', () => ({
 
 import { WorkstationAnimator } from '../../src/renderer/src/game/workstation-animation'
 import type { WorkstationSprite } from '../../src/renderer/src/game/office-types'
+import { TweenBag } from '../../src/renderer/src/game/tween-lifecycle'
 import { OfficeUI } from '../../src/renderer/src/game/office-ui'
 import {
   EVAL_GLOW_AMBER,
@@ -89,6 +90,7 @@ function makeWorkstationStub(agentId: string, withFlame = false): WorkstationSpr
     : undefined
 
   const base: Record<string, unknown> = {
+    tweenBag: new TweenBag(),
     evalGlow: evalGlow as unknown as Phaser.GameObjects.Arc,
     state: { config: { id: agentId } } as WorkstationSprite['state'],
     lodLevel2Objects: [evalGlow as unknown as Phaser.GameObjects.GameObject],

@@ -18,6 +18,7 @@ vi.mock('phaser', () => ({
 
 import { WorkstationAnimator } from '../../src/renderer/src/game/workstation-animation'
 import type { WorkstationSprite } from '../../src/renderer/src/game/office-types'
+import { TweenBag } from '../../src/renderer/src/game/tween-lifecycle'
 
 function makeFakeScene() {
   return {
@@ -38,6 +39,7 @@ function makeFakeScene() {
 
 function makeWorkstationStub(agentId: string): WorkstationSprite {
   return {
+    tweenBag: new TweenBag(),
     state: { config: { id: agentId } } as WorkstationSprite['state'],
     evalGlow: { setFillStyle: vi.fn() } as unknown as Phaser.GameObjects.Arc,
     lodLevel2Objects: [],
