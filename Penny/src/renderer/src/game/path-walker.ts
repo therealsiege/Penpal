@@ -10,8 +10,8 @@ import { SPRITESHEET_KEYS, ICON_FRAMES } from './office-asset-keys'
 import { AnimConfig } from './animation-config'
 
 const DEFAULT_WALK_SPEED = 55 // px/sec
-const WALK_CYCLE_MS = 200
-const WALK_SPEED_BASE = 120 // px/s reference speed at which WALK_CYCLE_MS is calibrated
+const BASE_WALK_SPEED = 120   // px/sec — reference speed for cycle scaling
+const BASE_CYCLE_MS = 200     // ms walk frame interval at BASE_WALK_SPEED
 const DUST_STEP_INTERVAL = 3 // spawn dust every N walk cycles
 const TRAIL_STEP_INTERVAL = 2 // spawn breadcrumb dot every N walk cycles
 const BOUNCE_AMPLITUDE = 1.5 // px vertical bounce during walk
@@ -33,6 +33,7 @@ export class PathWalker {
   private bounceTween: Phaser.Tweens.Tween | null = null
   private directionTween: Phaser.Tweens.Tween | null = null
   private onCompleteCb: (() => void) | null = null
+  private walkCycleMs: number
   private destroyed = false
   private walking = false
   private dustStepCounter = 0
@@ -53,10 +54,9 @@ export class PathWalker {
     this.shadow = shadow
     this.sheetKey = sheetKey
     this.speed = speed
-    // Scale walk animation frame interval inversely with speed so legs match travel pace.
-    // At WALK_SPEED_BASE (120 px/s) the cycle is exactly WALK_CYCLE_MS (200 ms).
+    // Scale frame interval inversely with speed; clamp to 100-400ms
     this.walkCycleMs = Phaser.Math.Clamp(
-      Math.round(WALK_CYCLE_MS * (WALK_SPEED_BASE / this.speed)),
+      Math.round(BASE_CYCLE_MS * (BASE_WALK_SPEED / this.speed)),
       100,
       400,
     )
