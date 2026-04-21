@@ -24,19 +24,7 @@ import { createPod, getPodStatus, type CreatePodOpts } from './pods'
 import { buildScopedContext, formatScopedContext } from './pod-context'
 import { MergeQueue } from './merge-queue'
 
-interface CliArgs {
-  task: string
-  preset?: string
-  cwd?: string
-  priority?: string
-  candidates?: number
-  maxSelfFixes?: number
-  cleanup?: boolean
-  mergeQueue?: boolean
-  mergeNext?: boolean
-}
-
-function parseArgs(): CliArgs {
+function parseArgs(): { task: string; preset?: string; cwd?: string; priority?: string; candidates?: number; maxSelfFixes?: number; cleanup?: boolean } {
   const args = process.argv.slice(2)
   let task = ''
   let preset: string | undefined
@@ -45,8 +33,6 @@ function parseArgs(): CliArgs {
   let candidates: number | undefined
   let maxSelfFixes: number | undefined
   let cleanup = false
-  let mergeQueue = false
-  let mergeNext = false
 
   for (let i = 0; i < args.length; i++) {
     switch (args[i]) {
@@ -71,68 +57,56 @@ function parseArgs(): CliArgs {
       case '--cleanup':
         cleanup = true
         break
-      case '--merge-queue':
-        mergeQueue = true
-        break
-      case '--merge-next':
-        mergeNext = true
-        break
     }
   }
 
-  if (!cleanup && !mergeQueue && !mergeNext && !task) {
-    console.error('Error: --task is required (or use --cleanup, --merge-queue, --merge-next)')
+  if (!cleanup && !task) {
+    console.error('Error: --task is required')
     process.exit(1)
   }
 
-  return { task, preset, cwd, priority, candidates, maxSelfFixes, cleanup, mergeQueue, mergeNext }
+  return { task, preset, cwd, priority, candidates, maxSelfFixes, cleanup }
 }
 
 /**
- * Prune stale git worktrees and remove .penny-worktrees/ dirs older than 48 hours.
+ * Remove stale pod worktrees older than 48 hours.
+ * Runs `git worktree prune` first, then removes directories by mtime.
  */
 function cleanupWorktrees(repoCwd: string): void {
-  const gitOpts = { cwd: repoCwd, encoding: 'utf-8' as const, stdio: 'pipe' as const, timeout: 30_000 }
   const worktreesRoot = join(repoCwd, '.penny-worktrees')
-  const maxAgeMs = 48 * 60 * 60 * 1000
+  const gitOpts = { cwd: repoCwd, encoding: 'utf-8' as const, stdio: 'pipe' as const, timeout: 30_000 }
 
-  // Prune deleted worktrees from git's tracking
   try {
     execSync('git worktree prune', gitOpts)
     console.error('[pod-cli] git worktree prune complete')
   } catch (err) {
-    console.error('[pod-cli] git worktree prune failed:', (err as Error).message)
+    console.error('[pod-cli] worktree prune failed:', (err as Error).message)
   }
 
-  // Remove stale worktree directories
   if (!fs.existsSync(worktreesRoot)) {
-    console.error('[pod-cli] No .penny-worktrees/ directory found — nothing to clean')
+    console.error('[pod-cli] No .penny-worktrees directory found — nothing to clean')
     return
   }
 
-  const now = Date.now()
+  const cutoffMs = Date.now() - 48 * 60 * 60 * 1000
+  const entries = fs.readdirSync(worktreesRoot)
   let removed = 0
-  let skipped = 0
 
-  for (const entry of fs.readdirSync(worktreesRoot)) {
-    const fullPath = join(worktreesRoot, entry)
+  for (const entry of entries) {
+    const entryPath = join(worktreesRoot, entry)
     try {
-      const stat = fs.statSync(fullPath)
-      const ageMs = now - stat.mtimeMs
-      if (stat.isDirectory() && ageMs > maxAgeMs) {
-        try { execSync(`git worktree remove ${fullPath} --force`, gitOpts) } catch { /* already pruned */ }
-        if (fs.existsSync(fullPath)) fs.rmSync(fullPath, { recursive: true, force: true })
-        console.error(`[pod-cli] Removed stale worktree: ${entry} (${Math.round(ageMs / 3600000)}h old)`)
-        removed++
-      } else {
-        skipped++
-      }
+      const stat = fs.statSync(entryPath)
+      if (!stat.isDirectory() || stat.mtimeMs >= cutoffMs) continue
+      try { execSync(`git worktree remove "${entryPath}" --force`, gitOpts) } catch { /* not a registered worktree */ }
+      if (fs.existsSync(entryPath)) fs.rmSync(entryPath, { recursive: true, force: true })
+      console.error(`[pod-cli] Removed stale worktree: ${entry}`)
+      removed++
     } catch (err) {
-      console.error(`[pod-cli] Could not stat ${entry}:`, (err as Error).message)
+      console.error(`[pod-cli] Could not remove ${entry}:`, (err as Error).message)
     }
   }
 
-  console.error(`[pod-cli] Cleanup done — removed ${removed}, skipped ${skipped} (under 48h)`)
+  console.error(`[pod-cli] Cleanup complete — ${removed} stale worktree(s) removed`)
 }
 
 /**
@@ -175,6 +149,20 @@ function createWorktree(repoCwd: string, slug: string): { worktreePath: string; 
 
     // Fetch latest
     execSync(`git fetch origin ${baseBranch}`, { ...gitOpts, timeout: 60_000 })
+
+    // Push local main if it's ahead of origin so the worktree branches from current work
+    try {
+      const localAhead = parseInt(
+        execSync(`git rev-list --count origin/${baseBranch}..${baseBranch}`, gitOpts).toString().trim(),
+        10,
+      )
+      if (localAhead > 0) {
+        console.error(`[pod-cli] Local ${baseBranch} is ${localAhead} commits ahead — pushing to origin`)
+        execSync(`git push origin ${baseBranch}`, { ...gitOpts, timeout: 60_000 })
+      }
+    } catch (err) {
+      console.error(`[pod-cli] Could not check/push local ${baseBranch}:`, (err as Error).message)
+    }
 
     // Prune stale worktrees and clean up old branch if it exists
     try { execSync('git worktree prune', gitOpts) } catch { /* */ }
@@ -239,6 +227,23 @@ function pushAndCreatePR(worktreePath: string, branch: string, task: string): vo
       return
     }
 
+    // Resolve base branch
+    let baseBranch = 'main'
+    try {
+      const ref = execSync('git symbolic-ref refs/remotes/origin/HEAD', gitOpts).toString().trim()
+      baseBranch = ref.replace(/^refs\/remotes\/origin\//, '')
+    } catch { /* default to main */ }
+
+    // Fetch latest and rebase onto origin/main to avoid merge conflicts in PR
+    execSync(`git fetch origin ${baseBranch}`, { ...gitOpts, timeout: 60_000 })
+    try {
+      execSync(`git rebase origin/${baseBranch}`, gitOpts)
+    } catch {
+      try { execSync('git rebase --abort', gitOpts) } catch { /* */ }
+      console.error('[pod-cli] Rebase conflict — skipping PR, needs manual resolution')
+      return
+    }
+
     execSync(`git push -u origin ${branch}`, gitOpts)
     console.error(`[pod-cli] Pushed ${branch}`)
 
@@ -289,32 +294,12 @@ function injectScopedContext(worktreePath: string, repoCwd: string, task: string
 }
 
 async function main(): Promise<void> {
-  const { task, preset, cwd, priority, candidates, maxSelfFixes, cleanup, mergeQueue, mergeNext } = parseArgs()
+  const { task, preset, cwd, priority, candidates, maxSelfFixes, cleanup } = parseArgs()
   const repoCwd = cwd || process.cwd()
 
-  // Handle --cleanup before anything else
   if (cleanup) {
     cleanupWorktrees(repoCwd)
     process.exit(0)
-  }
-
-  // Handle merge queue commands
-  if (mergeQueue || mergeNext) {
-    const queue = new MergeQueue(repoCwd)
-    if (mergeNext) {
-      const result = queue.processNext()
-      if (!result) {
-        console.log('[merge-queue] Queue empty')
-        process.exit(0)
-      }
-      console.log(JSON.stringify(result, null, 2))
-      process.exit(result.status === 'merged' ? 0 : 1)
-    } else {
-      const results = queue.processAll()
-      const failed = results.filter(r => r.status === 'failed').length
-      process.exit(failed > 0 ? 1 : 0)
-    }
-    return
   }
 
   // Extract a slug from the task for branch naming
