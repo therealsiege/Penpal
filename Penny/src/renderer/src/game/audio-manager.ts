@@ -784,6 +784,17 @@ export class AudioManager {
     }).catch(() => { this._wired = false })
   }
 
+  /**
+   * Full teardown — stop ambient soundscape, clear all pending timeouts, and
+   * unwire EventBus listeners. Call from OfficeScene.destroy() so no scheduled
+   * callbacks fire after the scene is gone.
+   */
+  destroy(): void {
+    this.stopAmbient()  // clears _kbClatterTimeout + _chirpTimeout
+    if (this._crossfadeTimeout) { clearTimeout(this._crossfadeTimeout); this._crossfadeTimeout = null }
+    this.unwireEvents()
+  }
+
   // -------------------------------------------------------------------------
   // localStorage persistence
   // -------------------------------------------------------------------------
