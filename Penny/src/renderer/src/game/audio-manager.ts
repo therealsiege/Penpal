@@ -764,17 +764,6 @@ export class AudioManager {
     }).catch(() => { /* non-critical — SFX won't fire on pod launch */ })
   }
 
-  /**
-   * Tear down all pending timeouts and stop ambient audio.
-   * Safe to call on scene destroy — AudioManager remains usable after this;
-   * calling `startAmbient()` and `wireEvents()` will re-initialize cleanly.
-   */
-  destroy(): void {
-    this.stopAmbient()
-    if (this._crossfadeTimeout) { clearTimeout(this._crossfadeTimeout); this._crossfadeTimeout = null }
-    this.unwireEvents()
-  }
-
   /** Remove all EventBus listeners (call on scene teardown). */
   unwireEvents(): void {
     if (!this._wired) return

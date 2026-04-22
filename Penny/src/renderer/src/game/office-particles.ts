@@ -287,17 +287,6 @@ export class OfficeParticles {
   }
 
   // ---------------------------------------------------------------------------
-  // Particle pool stats — active/max per type, for debug overlay
-  // ---------------------------------------------------------------------------
-
-  getPoolStats(): Record<string, { active: number; max: number }> {
-    return {
-      ...this.weather.getPoolStats(),
-      ...this.ambient.getPoolStats(),
-    }
-  }
-
-  // ---------------------------------------------------------------------------
   // Particle budget system — max PARTICLE_BUDGET active Arc particles
   // ---------------------------------------------------------------------------
 

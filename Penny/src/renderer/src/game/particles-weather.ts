@@ -485,17 +485,6 @@ export class WeatherParticles {
   }
 
   // ---------------------------------------------------------------------------
-  // Particle pool stats — used by debug overlay
-  // ---------------------------------------------------------------------------
-
-  getPoolStats(): Record<string, { active: number; max: number }> {
-    return {
-      rain: { active: this.rainDropPool.filter(d => d.visible).length, max: MAX_RAIN_POOL },
-      snow: { active: this.snowPool.filter(f => f.visible).length, max: MAX_SNOW_POOL },
-    }
-  }
-
-  // ---------------------------------------------------------------------------
   // Getter for internal state access
   // ---------------------------------------------------------------------------
 

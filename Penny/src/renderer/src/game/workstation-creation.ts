@@ -966,7 +966,6 @@ export class WorkstationFactory {
       uptimeText,
       taskCountBg,
       taskCountText,
-      tweenBag: new TweenBag(),
       localTaskCount: 0,
       questIcon,
       mvpMedal,

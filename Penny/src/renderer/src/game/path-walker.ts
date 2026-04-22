@@ -33,7 +33,6 @@ export class PathWalker {
   private bounceTween: Phaser.Tweens.Tween | null = null
   private directionTween: Phaser.Tweens.Tween | null = null
   private onCompleteCb: (() => void) | null = null
-  private walkCycleMs: number
   private destroyed = false
   private walking = false
   private dustStepCounter = 0
