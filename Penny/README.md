@@ -152,19 +152,19 @@ Each scene is a self-contained workspace with its own agent team, workflow patte
 
 Agents have personas from *Journey to the West* with unique backstories, working styles, and roles.
 
-| Agent ID | Persona | Role | Default Pod Role |
-|----------|---------|------|-----------------|
-| `fullstack-dev` | **Sun Wukong** — The Monkey King | Senior full-stack developer | Solver |
-| `nextjs-frontend` | **Erlang Shen** — The Three-Eyed God | Next.js / React frontend specialist | Solver |
-| `electron-dev` | **Sha Wujing** — The Curtain-Lifting General | Electron / desktop specialist | Executor |
-| `backend-arch` | **Guanyin** — Bodhisattva of Compassion | Backend architecture reviewer | Reviewer |
-| `expo-mobile` | **Nezha** — The Third Lotus Prince | React Native / Expo mobile | Solver |
-| `embedded-dev` | **Bull Demon King** — Great Sage Who Pacifies Heaven | Embedded systems / low-level | Solver |
-| `videogame-dev` | **Red Boy** — Holy Child King | Phaser / game development | Solver |
-| `ui-designer` | **Ao Guang** — Dragon King of the East Sea | UI/UX design reviewer | Reviewer |
-| `product-mgr` | **Tripitaka** — The Monk | Product management / planning | Reviewer |
-| `product-marketer` | **Ao Run** — White Dragon Horse | Content marketing | Solver |
-| `exec-assistant` | **Zhu Bajie** — Marshal of the Heavenly Canopy | Executive assistant / ops | Executor |
+| | Agent ID | Persona | Role | Pod Role |
+|---|----------|---------|------|----------|
+| <img src="Penny/public/sprites/avatars/WuKong.png" width="48"> | `fullstack-dev` | **Sun Wukong** — The Monkey King | Senior full-stack developer | Solver |
+| <img src="Penny/public/sprites/avatars/ErlangShen.png" width="48"> | `nextjs-frontend` | **Erlang Shen** — The Three-Eyed God | Next.js / React frontend specialist | Solver |
+| <img src="Penny/public/sprites/avatars/ShaWujing.png" width="48"> | `electron-dev` | **Sha Wujing** — The Curtain-Lifting General | Electron / desktop specialist | Executor |
+| <img src="Penny/public/sprites/avatars/Guanyin.png" width="48"> | `backend-arch` | **Guanyin** — Bodhisattva of Compassion | Backend architecture reviewer | Reviewer |
+| <img src="Penny/public/sprites/avatars/Nezha.png" width="48"> | `expo-mobile` | **Nezha** — The Third Lotus Prince | React Native / Expo mobile | Solver |
+| <img src="Penny/public/sprites/avatars/BullDemonKing.png" width="48"> | `embedded-dev` | **Bull Demon King** — Great Sage Who Pacifies Heaven | Embedded systems / low-level | Solver |
+| <img src="Penny/public/sprites/avatars/RedBoy.png" width="48"> | `videogame-dev` | **Red Boy** — Holy Child King | Phaser / game development | Solver |
+| <img src="Penny/public/sprites/avatars/AoGuang.png" width="48"> | `ui-designer` | **Ao Guang** — Dragon King of the East Sea | UI/UX design reviewer | Reviewer |
+| <img src="Penny/public/sprites/avatars/Tripitaka.png" width="48"> | `product-mgr` | **Tripitaka** — The Monk | Product management / planning | Reviewer |
+| <img src="Penny/public/sprites/avatars/AoRun.png" width="48"> | `product-marketer` | **Ao Run** — White Dragon Horse | Content marketing | Solver |
+| <img src="Penny/public/sprites/avatars/ZhuBajie.png" width="48"> | `exec-assistant` | **Zhu Bajie** — Marshal of the Heavenly Canopy | Executive assistant / ops | Executor |
 
 Each agent has a catchphrase, backstory, and working style injected into their system prompt. Pod presets combine agents into teams:
 
