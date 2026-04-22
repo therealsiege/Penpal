@@ -732,6 +732,18 @@ export class AudioManager {
       { attack: 0.003, sustain: 0.015, decay: 0.05, peak: 0.15 })
   }
 
+  /** Button click: crisp high-pitched tick. ui channel. */
+  buttonClick(): void {
+    this._sfxOsc('ui', 'sine', 1100, 0, 0.04,
+      { attack: 0.002, sustain: 0.008, decay: 0.028, peak: 0.2 })
+  }
+
+  /** Button hover: soft subtle tick. ui channel. */
+  buttonHover(): void {
+    this._sfxOsc('ui', 'sine', 900, 0, 0.03,
+      { attack: 0.002, sustain: 0.005, decay: 0.02, peak: 0.08 })
+  }
+
   // ── EventBus wiring ──────────────────────────────────────────────────────
 
   // Lazy import — resolved at first wireEvents() call to avoid circular deps
@@ -766,10 +778,10 @@ export class AudioManager {
   /** Remove all EventBus listeners (call on scene teardown). */
   unwireEvents(): void {
     if (!this._wired) return
-    this._wired = false
     import('./events').then(({ EventBus, EVENTS }) => {
       EventBus.off(EVENTS.POD_LAUNCHED, this._cbPodLaunched)
-    }).catch(() => { /* noop */ })
+      this._wired = false
+    }).catch(() => { this._wired = false })
   }
 
   // -------------------------------------------------------------------------
