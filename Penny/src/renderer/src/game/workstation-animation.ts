@@ -758,6 +758,15 @@ export class WorkstationAnimator {
               this.host.celebrations?.taskFail(worldX, worldY + 16, { agentId: agent.config.id })
             } else {
               this.host.burstConfetti(worldX, worldY)
+              // Signature move name flash — delayed 300ms so it layers above confetti
+              const sigMove = agent.config.bestiary?.signature_move?.name
+              const sigColorHex = agent.config.bestiary?.colors?.primary
+              if (sigMove && sigColorHex) {
+                const sigColorInt = parseInt(sigColorHex.replace('#', ''), 16)
+                this.scene.time.delayedCall(300, () => {
+                  this.host.celebrations?.signatureFlash(worldX, worldY - 12, sigMove, sigColorInt)
+                })
+              }
             }
             break
           }

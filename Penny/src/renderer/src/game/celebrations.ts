@@ -1426,6 +1426,24 @@ export class CelebrationManager {
   }
 
   /**
+   * Signature move name flash — a brief italic rising text in the agent's character color,
+   * shown when an agent completes a task with bestiary data attached.
+   */
+  signatureFlash(x: number, y: number, moveName: string, color: number): void {
+    if (!this._celebrationsAllowed) return
+    const hexColor = '#' + color.toString(16).padStart(6, '0')
+    this._risingText(x, y - 8, moveName, {
+      fontSize: scaledFontSize(8),
+      fontFamily: 'system-ui, monospace',
+      color: hexColor,
+      stroke: '#000000',
+      strokeThickness: 1,
+      fontStyle: 'italic',
+      resolution: 2,
+    })
+  }
+
+  /**
    * Brief gold sparkle burst on a workstation when the user approves a tool call.
    * 8-12 particles radiate outward with upward drift, shrink and fade over 500ms.
    */

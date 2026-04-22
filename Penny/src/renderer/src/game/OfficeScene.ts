@@ -1493,6 +1493,30 @@ export class OfficeScene extends Phaser.Scene {
 
     this.agents = allAgents
 
+    // Wire bestiary rival pairs into leaderboard natural rivalry system
+    const naturalRivalPairs: Array<{ id1: string; name1: string; id2: string; name2: string }> = []
+    for (const agent of allAgents) {
+      const rivalId = agent.config.bestiary?.rival
+      if (!rivalId) continue
+      const rivalAgent = allAgents.find(a => a.config.id === rivalId)
+      if (rivalAgent) {
+        // Only push once per pair (avoid duplicates from both sides declaring each other)
+        const alreadyAdded = naturalRivalPairs.some(
+          p => (p.id1 === agent.config.id && p.id2 === rivalId) ||
+               (p.id1 === rivalId && p.id2 === agent.config.id),
+        )
+        if (!alreadyAdded) {
+          naturalRivalPairs.push({
+            id1: agent.config.id,
+            name1: agent.config.name,
+            id2: rivalId,
+            name2: rivalAgent.config.name,
+          })
+        }
+      }
+    }
+    leaderboardManager.setNaturalRivals(naturalRivalPairs)
+
     // Update audio working count
     const workingCount = allAgents.filter(a => a.sessionMode === 'working').length
     audioManager.setWorkingAgentCount(workingCount)

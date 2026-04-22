@@ -185,6 +185,9 @@ contextBridge.exposeInMainWorld('api', {
   evalsWeeklyDigest: (weekOverride?: string) => ipcRenderer.invoke('evals:weekly-digest', weekOverride),
   // Pod Quality Metrics
   evalsPodQuality: (since?: string) => ipcRenderer.invoke('evals:pod-quality', since),
+  // Pod Combo Analytics
+  evalsPodCombos: (opts?: { since?: string; until?: string; presetId?: string; agentId?: string }) =>
+    ipcRenderer.invoke('evals:pod-combos', opts),
   // Spot-Check Queue
   evalsSpotCheckQueue: () => ipcRenderer.invoke('evals:spot-check-queue'),
   evalsSpotCheckSample: (count: number) => ipcRenderer.invoke('evals:spot-check-sample', count),

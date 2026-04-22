@@ -13,6 +13,7 @@ import {
 import { runAgentHeadless } from './sessions'
 import { getPhaseConfig, type PhaseConfig } from './pods/phase-config'
 import { podQualityCollector, type PodQualityEvent } from './evals/collectors/pod-quality'
+import { podComboCollector, computeStageDurations, makeComboKey } from './evals/collectors/pod-combos'
 import { resolveProjectPath } from './project-paths'
 import { addEntry, updateEntry, getActiveEntries, getFileConflicts, type FlightBoardEntry, type FileConflict } from './flight-board'
 import { reasoningBank, inferTaskType, formatPastPatterns, type PodPattern } from './reasoning-bank'
@@ -1554,6 +1555,24 @@ function finalizePodQuality(wf: PodWorkflow): void {
 
   wf.qualityRecorded = true
   podQualityCollector.record(event)
+
+  // Record combo analytics (agent IDs per role + stage timing)
+  podComboCollector.record({
+    podId: wf.id,
+    presetId: wf.presetId ?? 'default',
+    status: wf.status === 'complete' ? 'complete' : 'failed',
+    solverId: wf.solver.agentId,
+    reviewerId: wf.reviewer.agentId,
+    executorId: wf.executor.agentId,
+    comboKey: makeComboKey(wf.solver.agentId, wf.reviewer.agentId, wf.executor.agentId),
+    stageDurations: computeStageDurations(wf.stageHistory),
+    iterations: wf.iteration,
+    firstPassAccepted,
+    executorPassed: wf.lastExecutorPassed ?? false,
+    selfFixed: wf.status === 'complete' && wf.selfFixAttempts > 0,
+    completionTime_ms: Math.max(0, Date.now() - wf.createdAt),
+    timestamp: Date.now(),
+  })
 }
 
 // ── CLAUDE.md auto-update ───────────────────────────────────────────────────

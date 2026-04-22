@@ -161,6 +161,11 @@ export class WorkstationFactory {
     const hasConsoleDeskImage = !gdsScene && this.scene.textures.exists(LAB_IMAGE_KEYS.PROP_CONSOLE_DESK)
     const facilityStrategic = this.host.usesFacilityLabStrategicProps?.() === true
 
+    // Character primary color from bestiary — drives name, glow, XP bar.
+    // Hex string ("#FFD700") for text color; Phaser int (0xFFD700) for FX / graphics.
+    const _bestiaryHex = agent.config.bestiary?.colors?.primary
+    const bestiaryColorInt = _bestiaryHex ? parseInt(_bestiaryHex.replace('#', ''), 16) : undefined
+
     // Console desk image — replaces individual chair + desk rect + monitor in lab mode
     let consoleDeskSprite: Phaser.GameObjects.Image | null = null
     let chairSprite: Phaser.GameObjects.Sprite | null = null
@@ -243,7 +248,7 @@ export class WorkstationFactory {
           wsContainer.add(monitorSprite)
         }
         if (monitorSprite) {
-          monitorGlowFx = monitorSprite.postFX.addGlow(activeTheme.monitorGlowIdle, 0, 0, false, AnimConfig.monitor.glowQuality, AnimConfig.monitor.glowDistance * 0.55)
+          monitorGlowFx = monitorSprite.postFX.addGlow(bestiaryColorInt ?? activeTheme.monitorGlowIdle, 0, 0, false, AnimConfig.monitor.glowQuality, AnimConfig.monitor.glowDistance * 0.55)
         }
       } else if (labPropsLoaded) {
         monitorSprite = this.scene.add.sprite(0, WS_MONITOR_Y, SPRITESHEET_KEYS.LAB_PROPS, LAB_PROP_FRAMES.CONSOLE_SCREEN)
@@ -255,7 +260,7 @@ export class WorkstationFactory {
       }
     }
     if (monitorSprite && labPropsLoaded && !facilityStrategic) {
-      monitorGlowFx = monitorSprite.postFX.addGlow(activeTheme.monitorGlowActive, 0, 0, false, AnimConfig.monitor.glowQuality, AnimConfig.monitor.glowDistance)
+      monitorGlowFx = monitorSprite.postFX.addGlow(bestiaryColorInt ?? activeTheme.monitorGlowActive, 0, 0, false, AnimConfig.monitor.glowQuality, AnimConfig.monitor.glowDistance)
       // Scrolling screen content lines
       screenLines = this.scene.add.graphics().setVisible(false).setDepth(4.5)
       wsContainer.add(screenLines)
@@ -328,7 +333,7 @@ export class WorkstationFactory {
       wsContainer.add(this.scene.add.rectangle(0, WS_MONITOR_Y, 16, 13, activeTheme.roomFloor).setStrokeStyle(1, activeTheme.deskTop, 0.8))
     }
     if (monitorSprite && !labPropsLoaded && this.host.officeTilesLoaded) {
-      monitorGlowFx = monitorSprite.postFX.addGlow(activeTheme.monitorGlowActive, 0, 0, false, AnimConfig.monitor.glowQuality, AnimConfig.monitor.glowDistance)
+      monitorGlowFx = monitorSprite.postFX.addGlow(bestiaryColorInt ?? activeTheme.monitorGlowActive, 0, 0, false, AnimConfig.monitor.glowQuality, AnimConfig.monitor.glowDistance)
     }
 
     // Monitor screen frame overlay — sprite-based outline on the monitor screen area
@@ -693,15 +698,16 @@ export class WorkstationFactory {
 
     // Show persona name (e.g. "Marcus Chen") instead of title
     const nameText = this.scene.add.text(0, WS_NAME_Y, '', {
-      fontSize: scaledFontSize(11), color: activeTheme.nameText, fontFamily: "'Monogram', system-ui, monospace",
+      fontSize: scaledFontSize(11), color: _bestiaryHex ?? activeTheme.nameText,
+      fontFamily: "'Monogram', system-ui, monospace",
       backgroundColor: activeTheme.nameBg, padding: { x: 4, y: 1 }, align: 'center',
       resolution: 2,
     }).setOrigin(0.5).setVisible(false)
     wsContainer.add(nameText)
 
-    // Name glow effect (unlocks at Associate / L3)
+    // Name glow effect (unlocks at Associate / L3) — uses character color if available
     if (isFlairUnlocked(agentLevel, 'name_glow')) {
-      const glowFx = nameText.postFX?.addGlow(getRankColor(agentLevel), 2, 0, false, 0.08, 8)
+      const glowFx = nameText.postFX?.addGlow(bestiaryColorInt ?? getRankColor(agentLevel), 2, 0, false, 0.08, 8)
       void glowFx // applied via postFX pipeline
     }
 
@@ -810,7 +816,7 @@ export class WorkstationFactory {
       y: XP_BAR_Y - XP_BAR_H / 2,
       width: XP_BAR_W,
       height: XP_BAR_H,
-      fillColor: 0x3b82f6,
+      fillColor: bestiaryColorInt ?? 0x3b82f6,
       backgroundColor: activeTheme.roomFloor,
     })
     xpBar.graphics.setAlpha(0.6).setVisible(false)

@@ -150,6 +150,7 @@ import { getEvalReportAll, getEvalReportAgent, getEvalStats } from './evals'
 import { computeCapabilitiesStatus } from './capabilities-status'
 import { taskOutcomeCollector } from './evals/collectors/task-outcomes'
 import { podQualityCollector } from './evals/collectors/pod-quality'
+import { podComboCollector } from './evals/collectors/pod-combos'
 import { evalHarness } from './evals/harness'
 import { generateWeeklyDigest } from './evals/reports/weekly-digest'
 import { contextMonitor } from './evals/collectors/context-usage'
@@ -1341,6 +1342,17 @@ export function registerIpcHandlers() {
   ipcMain.handle('evals:pod-quality', wrapHandler((since?: unknown) =>
     podQualityCollector.report(since ? new Date(since as string) : undefined),
   ))
+
+  // ── Pod Combo Analytics ─────────────────────────────────────────────────
+  ipcMain.handle('evals:pod-combos', wrapHandler((opts?: unknown) => {
+    const o = (opts && typeof opts === 'object') ? opts as Record<string, unknown> : {}
+    return podComboCollector.report({
+      since: typeof o.since === 'string' ? new Date(o.since) : undefined,
+      until: typeof o.until === 'string' ? new Date(o.until) : undefined,
+      presetId: typeof o.presetId === 'string' ? o.presetId : undefined,
+      agentId: typeof o.agentId === 'string' ? o.agentId : undefined,
+    })
+  }))
 
   // ── Context Health ──────────────────────────────────────────────────────
   ipcMain.handle('evals:context-health', wrapHandler(() => contextMonitor.checkAll()))

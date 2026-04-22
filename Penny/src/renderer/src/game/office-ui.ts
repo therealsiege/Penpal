@@ -341,6 +341,12 @@ export class OfficeUI {
       sigTrait = SIGNATURE_ITEM_NAMES[sigFrame] ?? ''
     }
     const hasTrait = sigTrait.length > 0
+    // Bestiary data — realm, stats, signature move
+    const bestiary = agent.config.bestiary
+    const bStats = bestiary?.stats
+    const hasBestiary = !!(bestiary && bStats)
+    const bRealm = bestiary?.realm ?? ''
+    const bSigMove = bestiary?.signature_move?.name ?? ''
     // Compute pet frame and sig item frame for tooltip preview sprites
     let tooltipPetFrame = -1
     let tooltipSigFrame = -1
@@ -360,10 +366,12 @@ export class OfficeUI {
     }
     const hasPetPreview = this.scene.textures.exists(SPRITESHEET_KEYS.DESK_PETS) && this.scene.textures.exists(SPRITESHEET_KEYS.GAME_ITEMS)
     const HOTKEY_HINT = 'Click select · Dbl-click focus · Enter open'
-    const TW = 220, PX = 10, PY = 8, LH = 16, AH = 7
+    const TW = 220, PX = 10, PY = 8, LH = 16, SH = 10, AH = 7
     const hasR = resources.length > 0, hasS = sub.length > 0
     const subL = hasS ? Math.max(1, Math.ceil(sub.length / 26)) : 0
-    const tH = PY + LH + (title ? LH : 0) + 4 + LH + (hasR ? LH : 0) + (hasTrait ? LH : 0) + (hasPetPreview ? LH + 2 : 0) + (hasS ? 6 + subL * LH : 0) + LH + PY, tW = TW + PX * 2
+    // Bestiary section: divider(6) + realm(SH) + 5 stat rows(SH each) + sig move(SH) + bottom gap(4)
+    const bestiaryH = hasBestiary ? 6 + SH + 5 * SH + SH + 4 : 0
+    const tH = PY + LH + (title ? LH : 0) + 4 + LH + (hasR ? LH : 0) + (hasTrait ? LH : 0) + (hasPetPreview ? LH + 2 : 0) + (hasS ? 6 + subL * LH : 0) + bestiaryH + LH + PY, tW = TW + PX * 2
     const flip = screenY < tH + AH + 20
     const aY = flip ? screenY + AH + 2 : screenY - AH - 2 - tH
     const cX = Math.max(8, Math.min(screenX - tW / 2, this.viewWidth - tW - 8))
@@ -396,6 +404,48 @@ export class OfficeUI {
       ty += LH
     }
     if (hasS) { ty += 2; const dg = this.scene.add.graphics(); dg.setScrollFactor(0); dg.lineStyle(1, activeTheme.panelStroke, 0.6); dg.lineBetween(tx, ty, cX + tW - PX, ty); ct.add(dg); ty += 4; ct.add(this.scene.add.text(tx, ty, sub, { fontSize: scaledFontSize(10), color: activeTheme.subtleText, fontFamily: 'system-ui, sans-serif', wordWrap: { width: TW }, resolution: 2 })); ty += subL * LH }
+    // ── Bestiary section: realm · stat bars · signature move ─────────────────
+    if (hasBestiary && bStats) {
+      // Divider
+      const bdg = this.scene.add.graphics(); bdg.setScrollFactor(0)
+      bdg.lineStyle(1, activeTheme.panelStroke, 0.4); bdg.lineBetween(tx, ty + 3, cX + tW - PX, ty + 3); ct.add(bdg); ty += 6
+      // Realm line
+      const bestiaryColorHex = bestiary!.colors?.primary ?? '#888888'
+      const bestiaryColorInt = parseInt(bestiaryColorHex.replace('#', ''), 16)
+      ct.add(this.scene.add.text(tx, ty, bRealm, { fontSize: scaledFontSize(8), color: bestiaryColorHex, fontFamily: 'system-ui, monospace', fontStyle: 'italic', resolution: 2 })); ty += SH
+      // Stat bars: label (3 chars) + filled track + dim track
+      const STAT_LABELS: Array<[keyof typeof bStats, string, string]> = [
+        ['speed',      'SPD', '#60a5fa'],
+        ['precision',  'PRE', '#f472b6'],
+        ['creativity', 'CRE', '#fb923c'],
+        ['depth',      'DEP', '#a78bfa'],
+        ['teamwork',   'TMW', '#34d399'],
+      ]
+      const BAR_X = tx + 24, BAR_W = TW - 44, BAR_H = 4, BAR_Y_OFF = SH / 2 - BAR_H / 2
+      for (const [key, label, colorHex] of STAT_LABELS) {
+        const val = bStats[key] as number // 1–10
+        const colorInt = parseInt(colorHex.replace('#', ''), 16)
+        ct.add(this.scene.add.text(tx, ty + 1, label, { fontSize: scaledFontSize(7), color: '#5a6a7a', fontFamily: 'system-ui, monospace', fontStyle: 'bold', resolution: 2 }))
+        // Track background
+        const bg = this.scene.add.graphics(); bg.setScrollFactor(0)
+        bg.fillStyle(activeTheme.panelStroke ?? 0x1e293b, 0.5)
+        bg.fillRoundedRect(BAR_X, ty + BAR_Y_OFF, BAR_W, BAR_H, 2)
+        ct.add(bg)
+        // Fill
+        const fill = this.scene.add.graphics(); fill.setScrollFactor(0)
+        fill.fillStyle(colorInt, 0.85)
+        fill.fillRoundedRect(BAR_X, ty + BAR_Y_OFF, Math.round(BAR_W * val / 10), BAR_H, 2)
+        ct.add(fill)
+        // Value number
+        ct.add(this.scene.add.text(cX + tW - PX, ty + 1, String(val), { fontSize: scaledFontSize(7), color: colorHex, fontFamily: 'system-ui, monospace', fontStyle: 'bold', resolution: 2 }).setOrigin(1, 0))
+        ty += SH
+      }
+      // Signature move
+      if (bSigMove) {
+        ct.add(this.scene.add.text(tx, ty, `⚡ ${bSigMove}`, { fontSize: scaledFontSize(8), color: bestiaryColorHex, fontFamily: 'system-ui, sans-serif', fontStyle: 'italic', resolution: 2 })); ty += SH
+      }
+      ty += 4
+    }
     // Hotkey hint line
     ct.add(this.scene.add.text(tx, ty + 2, HOTKEY_HINT, { fontSize: scaledFontSize(8), color: '#3a4858', fontFamily: 'system-ui, monospace', resolution: 2 }))
     ct.setAlpha(0); g.setAlpha(0)

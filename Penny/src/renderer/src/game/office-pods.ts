@@ -444,21 +444,26 @@ export class OfficePods {
       const pos2 = this.getWorkstationWorldPos(rivalry.agent2Id, rooms)
       if (!pos1 || !pos2) continue
 
-      // Electric blue dashed line between rivals
+      // Natural (bestiary) rivals: crimson — sworn enemies, fated conflict
+      // XP-proximity rivals: theme blue — competitive peers chasing the same rank
+      const rivalColor = rivalry.isNatural ? 0xef4444 : activeTheme.monitorGlowActive
+      const dashLen = rivalry.isNatural ? 6 : 5
+      const gapLen = rivalry.isNatural ? 3 : 4
+
       const g = this.rivalryGraphics!
 
       // Outer glow line
-      g.lineStyle(3, activeTheme.monitorGlowActive, 0.1)
-      drawDashedLine(g, pos1.x, pos1.y, pos2.x, pos2.y, 5, 4)
+      g.lineStyle(rivalry.isNatural ? 4 : 3, rivalColor, rivalry.isNatural ? 0.14 : 0.1)
+      drawDashedLine(g, pos1.x, pos1.y, pos2.x, pos2.y, dashLen, gapLen)
 
       // Core line
-      g.lineStyle(1.5, activeTheme.monitorGlowActive, 0.35)
-      drawDashedLine(g, pos1.x, pos1.y, pos2.x, pos2.y, 5, 4)
+      g.lineStyle(rivalry.isNatural ? 2 : 1.5, rivalColor, rivalry.isNatural ? 0.45 : 0.35)
+      drawDashedLine(g, pos1.x, pos1.y, pos2.x, pos2.y, dashLen, gapLen)
 
       // Small glow dots at each endpoint
-      g.fillStyle(activeTheme.monitorGlowActive, 0.15)
-      g.fillCircle(pos1.x, pos1.y, 5)
-      g.fillCircle(pos2.x, pos2.y, 5)
+      g.fillStyle(rivalColor, rivalry.isNatural ? 0.2 : 0.15)
+      g.fillCircle(pos1.x, pos1.y, rivalry.isNatural ? 6 : 5)
+      g.fillCircle(pos2.x, pos2.y, rivalry.isNatural ? 6 : 5)
 
       // Midpoint clash VFX — tiny explosion puff every ~9 seconds
       if (shouldClash) {
@@ -468,13 +473,13 @@ export class OfficePods {
         // Use the puff VFX if available, otherwise draw a simple flash
         if (this.scene.anims.exists(EFFECT_ANIM_KEYS.PUFF)) {
           const puff = this.scene.add.sprite(mx, my, SPRITESHEET_KEYS.EFFECTS_PUFF)
-            .setDepth(202).setScale(0.15).setAlpha(0.4).setTint(activeTheme.monitorGlowActive)
+            .setDepth(202).setScale(rivalry.isNatural ? 0.20 : 0.15).setAlpha(0.4).setTint(rivalColor)
           puff.play(EFFECT_ANIM_KEYS.PUFF)
           puff.once('animationcomplete', () => puff.destroy())
         } else {
           // Fallback: simple circle flash
-          g.fillStyle(activeTheme.monitorGlowActive, 0.3)
-          g.fillCircle(mx, my, 6)
+          g.fillStyle(rivalColor, 0.3)
+          g.fillCircle(mx, my, rivalry.isNatural ? 8 : 6)
         }
       }
     }

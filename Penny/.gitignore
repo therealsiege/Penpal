@@ -37,5 +37,8 @@ release/
 # Nested duplicate (accidental)
 Penny/
 
+# Generated per-agent markdown files (build artifacts, regenerated at startup)
+agents/agent-files/
+
 # Visual regression diff artifacts (regenerate on failure locally / CI)
 tests/screenshots/diffs/

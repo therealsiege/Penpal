@@ -37,6 +37,8 @@ export interface Rivalry {
   agent2Name: string
   xpDiff: number
   percentDiff: number
+  /** True for bestiary-defined rival pairs; false/absent for XP-proximity rivals. */
+  isNatural?: boolean
 }
 
 // ---------------------------------------------------------------------------
@@ -61,9 +63,20 @@ export class LeaderboardManager {
 
   private _weeklyMVP: WeeklyMVP | null = null
   private _rivalries: Rivalry[] = []
+  /** Pairs declared via bestiary.rival — always shown regardless of XP proximity. */
+  private _naturalRivals: Array<{ id1: string; name1: string; id2: string; name2: string }> = []
 
   constructor() {
     this.load()
+  }
+
+  /**
+   * Declare natural rival pairs derived from bestiary.rival fields.
+   * Called by OfficeScene after agents are loaded. Persists until reset.
+   */
+  setNaturalRivals(pairs: Array<{ id1: string; name1: string; id2: string; name2: string }>): void {
+    this._naturalRivals = pairs
+    this._computeRivalries()
   }
 
   // -------------------------------------------------------------------------
@@ -242,6 +255,7 @@ export class LeaderboardManager {
     const entries = this.getRankings()
     this._rivalries = []
 
+    // XP-proximity rivalries (within 5% of each other)
     for (let i = 0; i < entries.length - 1; i++) {
       for (let j = i + 1; j < entries.length; j++) {
         const a = entries[i]
@@ -261,6 +275,30 @@ export class LeaderboardManager {
             percentDiff: pct,
           })
         }
+      }
+    }
+
+    // Natural rivalries from bestiary — always active, never XP-gated.
+    // Deduped against XP-proximity pairs already added above.
+    for (const nr of this._naturalRivals) {
+      const alreadyPresent = this._rivalries.some(
+        r => (r.agent1Id === nr.id1 && r.agent2Id === nr.id2) ||
+             (r.agent1Id === nr.id2 && r.agent2Id === nr.id1),
+      )
+      if (!alreadyPresent) {
+        const entryA = entries.find(e => e.agentId === nr.id1)
+        const entryB = entries.find(e => e.agentId === nr.id2)
+        const diff = entryA && entryB ? Math.abs(entryA.seasonXP - entryB.seasonXP) : 0
+        const max  = entryA && entryB ? Math.max(entryA.seasonXP, entryB.seasonXP) : 1
+        this._rivalries.push({
+          agent1Id: nr.id1,
+          agent2Id: nr.id2,
+          agent1Name: nr.name1,
+          agent2Name: nr.name2,
+          xpDiff: diff,
+          percentDiff: max > 0 ? diff / max : 0,
+          isNatural: true,
+        })
       }
     }
   }

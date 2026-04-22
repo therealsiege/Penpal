@@ -256,8 +256,10 @@ export class SeasonHUD {
     if (this.leaderboardContainer) this.leaderboardContainer.destroy()
 
     const rankings = leaderboardManager.getRankings().slice(0, 10)
+    const naturalRivals = leaderboardManager.getRivalries().filter(r => r.isNatural)
     const rowH = 26
-    const panelH = 30 + Math.max(rankings.length, 1) * rowH + 6
+    const rivalSectionH = naturalRivals.length > 0 ? 6 + 12 + naturalRivals.length * 14 : 0
+    const panelH = 30 + Math.max(rankings.length, 1) * rowH + 6 + rivalSectionH
     const panelW = 210
 
     const x = this.viewWidth - panelW - 10
@@ -418,6 +420,33 @@ export class SeasonHUD {
         resolution: 2,
       }).setOrigin(0.5, 0)
       this.leaderboardContainer!.add(empty)
+    }
+
+    // Natural rival pairs — shown below rankings with a sword icon separator
+    const naturalRivals = leaderboardManager.getRivalries().filter(r => r.isNatural)
+    if (naturalRivals.length > 0) {
+      const rivalTopY = 28 + Math.max(rankings.length, 1) * rowH + 4
+
+      // Section divider
+      const rdg = this.scene.add.graphics()
+      rdg.lineStyle(1, 0xef4444, 0.35)
+      rdg.lineBetween(10, rivalTopY, panelW - 10, rivalTopY)
+      this.leaderboardContainer!.add(rdg)
+
+      const rivalHeader = this.scene.add.text(panelW / 2, rivalTopY + 3, '⚔  RIVALRIES', {
+        fontSize: scaledFontSize(7), fontFamily: 'system-ui, monospace', color: '#ef4444',
+        resolution: 2,
+      }).setOrigin(0.5, 0)
+      this.leaderboardContainer!.add(rivalHeader)
+
+      naturalRivals.forEach((rv, i) => {
+        const ry = rivalTopY + 15 + i * 14
+        const label = this.scene.add.text(panelW / 2, ry, `${rv.agent1Name}  vs  ${rv.agent2Name}`, {
+          fontSize: scaledFontSize(7), fontFamily: 'system-ui, monospace', color: '#7a3434',
+          resolution: 2,
+        }).setOrigin(0.5, 0)
+        this.leaderboardContainer!.add(label)
+      })
     }
 
     // Update previous snapshot for next refresh cycle

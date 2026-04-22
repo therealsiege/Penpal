@@ -155,6 +155,38 @@ export interface AgentPersona {
   catchphrase: string
 }
 
+export interface AgentStats {
+  speed: number      // 1–10
+  precision: number  // 1–10
+  creativity: number // 1–10
+  depth: number      // 1–10
+  teamwork: number   // 1–10
+}
+
+export interface AgentPower {
+  name: string
+  lore: string
+  coding_analog: string
+}
+
+export interface AgentBestiary {
+  realm: string
+  titles: string[]
+  lore: string
+  weapon: { name: string; lore: string; coding_analog: string }
+  powers: AgentPower[]
+  weakness: string
+  rival: string | null
+  ally: string | null
+  motivation: string
+  fear: string
+  stats: AgentStats
+  signature_move: { name: string; description: string }
+  colors: { primary: string; accent: string }
+  desk_items: string[]
+  tags: string[]
+}
+
 export interface AgentConfig {
   id: string
   name: string
@@ -171,6 +203,7 @@ export interface AgentConfig {
   avatar: string
   desk: { row: number; col: number }
   autonomy: string
+  bestiary?: AgentBestiary
 }
 
 export interface OpencodeSession {
