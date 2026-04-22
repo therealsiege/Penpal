@@ -12,6 +12,48 @@ export interface AgentPersona {
   catchphrase: string
 }
 
+export interface AgentStats {
+  speed: number      // 1–10: how fast they work
+  precision: number  // 1–10: how error-free their output is
+  creativity: number // 1–10: how novel their solutions are
+  depth: number      // 1–10: how thorough / comprehensive
+  teamwork: number   // 1–10: how well they collaborate in pod workflows
+}
+
+export interface AgentPower {
+  name: string
+  lore: string
+  coding_analog: string
+}
+
+export interface AgentBestiary {
+  realm: string
+  titles: string[]
+  lore: string
+  weapon: {
+    name: string
+    lore: string
+    coding_analog: string
+  }
+  powers: AgentPower[]
+  weakness: string
+  rival: string | null
+  ally: string | null
+  motivation: string
+  fear: string
+  stats: AgentStats
+  signature_move: {
+    name: string
+    description: string
+  }
+  colors: {
+    primary: string  // hex color for game layer
+    accent: string   // hex accent color
+  }
+  desk_items: string[]
+  tags: string[]
+}
+
 export interface AgentConfig {
   id: string
   name: string
@@ -28,6 +70,7 @@ export interface AgentConfig {
   avatar: string
   desk: { row: number; col: number }
   autonomy: string
+  bestiary?: AgentBestiary
 }
 
 export type AgentStatus = 'sleeping' | 'idle' | 'active'
@@ -151,6 +194,7 @@ export function loadAgentConfigs(): AgentConfig[] {
         avatar: (cfg.avatar as string) || id,
         desk: (cfg.desk as { row: number; col: number }) || { row: 0, col: 0 },
         autonomy: (cfg.autonomy as string) || 'default',
+        bestiary: cfg.bestiary as AgentBestiary | undefined,
       }
     })
     console.log(`[agents] Loaded ${agentConfigs.length} agents: ${agentConfigs.map(a => a.id).join(', ')}`)
