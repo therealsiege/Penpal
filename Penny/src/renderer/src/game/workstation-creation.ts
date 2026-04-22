@@ -44,6 +44,7 @@ import {
 } from './office-constants'
 import type { WorkstationHost } from './office-workstation'
 import { isDeskItemUnlocked, isFlairUnlocked, getRankColor } from './cosmetic-tiers'
+import { TweenBag } from './tween-lifecycle'
 
 // ---------------------------------------------------------------------------
 // Signature item — deterministic per-agent personality item on desk
@@ -939,6 +940,7 @@ export class WorkstationFactory {
     if (monitorSprite) monitorSprite.setPipeline('Light2D')
 
     const ws: WorkstationSprite = {
+      tweenBag: new TweenBag(),
       container: wsContainer, sprite, nameText, statusDot, roleBadge,
       deskBody, deskTop, monitorSprite, chairSprite,
       monitorGlowFx, monitorFrame, screenLines, screenTween, screenState,

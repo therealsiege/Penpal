@@ -8,6 +8,8 @@ import type { TweenBag } from './tween-lifecycle'
 // ---------------------------------------------------------------------------
 
 export interface WorkstationSprite {
+  /** Lifecycle manager for all mode-transition tweens/timers on this workstation. */
+  tweenBag: TweenBag
   container: Phaser.GameObjects.Container
   sprite: Phaser.GameObjects.Sprite
   nameText: Phaser.GameObjects.Text

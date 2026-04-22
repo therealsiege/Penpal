@@ -1,99 +1,79 @@
 // ---------------------------------------------------------------------------
 // tween-lifecycle.ts
-// TweenBag — managed lifecycle container for Phaser tweens and timer events.
+// TweenBag — lightweight lifecycle manager for Phaser tweens and timer events.
 //
-// Replaces the 30+ per-property tween fields on WorkstationSprite with a
-// single keyed map.  Calling clearAll() destroys every registered tween/timer
-// and fires optional reset callbacks in one call, replacing the 55-line manual
-// teardown block in workstation-animation.ts.
+// Usage:
+//   const bag = new TweenBag()
+//   ws.bounceTween = bag.add('bounce', scene.tweens.add({ ... }))
+//   ws.lookAroundTimer = bag.add('lookAround', scene.time.addEvent({ ... }))
+//   // Later, on mode transition:
+//   bag.killAll()   // destroys every registered tween/timer in one call
+//
+// Design notes:
+//   - `add(key, item)` auto-kills any previously registered item at the same key
+//     before registering the new one, preventing double-running tweens.
+//   - `killAll()` is idempotent: Phaser tweens/timers ignore destroy() after
+//     they have already been destroyed.
+//   - The bag does NOT own the game objects targeted by tweens; callers are
+//     still responsible for destroying sprites/graphics referenced in tween
+//     targets (e.g. taskReviewRing, soundWaveSpeaker).
 // ---------------------------------------------------------------------------
 
-import Phaser from 'phaser'
-
-type TweenHandle = Phaser.Tweens.Tween | Phaser.Time.TimerEvent
-
-interface TweenEntry {
-  handle: TweenHandle
-  reset?: () => void
-}
+/** Minimal interface satisfied by both Phaser.Tweens.Tween and Phaser.Time.TimerEvent. */
+type Killable = { destroy(): void }
 
 export class TweenBag {
-  private entries = new Map<string, TweenEntry>()
+  private readonly entries = new Map<string, Killable>()
 
   /**
-   * Register a tween under key.  If a tween/timer already exists under that
-   * key, it is destroyed (and its reset callback called) before the new one
-   * is stored.
+   * Register `item` under `key`. If a previous item was registered at the same
+   * key it is destroyed first (safe, since Phaser destroy() is idempotent).
+   * Returns the item so callers can assign it and register in one expression:
+   *   ws.bounceTween = ws.tweenBag.add('bounce', scene.tweens.add({ ... }))
    */
-  add(key: string, tween: Phaser.Tweens.Tween, reset?: () => void): void {
-    this._destroyEntry(this.entries.get(key))
-    this.entries.set(key, { handle: tween, reset })
+  add<T extends Killable>(key: string, item: T): T {
+    this.entries.get(key)?.destroy()
+    this.entries.set(key, item)
+    return item
   }
 
-  /**
-   * Register a timer event under key.  Same auto-destroy semantics as add().
-   */
-  addTimer(key: string, timer: Phaser.Time.TimerEvent, reset?: () => void): void {
-    this._destroyEntry(this.entries.get(key))
-    this.entries.set(key, { handle: timer, reset })
-  }
-
-  /**
-   * Destroy and remove the tween/timer registered under key (no-op if absent).
-   */
-  remove(key: string): void {
-    const entry = this.entries.get(key)
-    if (!entry) return
-    this._destroyEntry(entry)
+  /** Destroy and remove the item at `key`. No-op when the key is absent. */
+  kill(key: string): void {
+    const item = this.entries.get(key)
+    if (!item) return
+    item.destroy()
     this.entries.delete(key)
   }
 
   /**
-   * Destroy every registered tween/timer and fire all reset callbacks.
-   * The internal map is cleared afterward.
+   * Destroy every registered item and clear the bag.
+   * This is the primary entry point used by WorkstationAnimator's mode-transition
+   * teardown to replace ~30 individual `if (ws.xxxTween) { ws.xxxTween.destroy() }`
+   * lines with a single call.
    */
-  clearAll(): void {
-    for (const entry of this.entries.values()) {
-      this._destroyEntry(entry)
+  killAll(): void {
+    for (const item of this.entries.values()) {
+      item.destroy()
     }
     this.entries.clear()
   }
 
-  /** Returns true if a tween/timer is currently registered under key. */
+  /** True when an item is currently registered under `key`. */
   has(key: string): boolean {
     return this.entries.has(key)
   }
 
   /**
-   * Returns the Tween registered under key, or undefined if the key is absent
-   * or holds a TimerEvent.  Use this when you need to call tween-specific
-   * methods such as pause(), resume(), or isPlaying().
+   * Retrieve the current item for `key`, or `undefined` if absent.
+   * Cast to the concrete type at the call site:
+   *   const t = ws.tweenBag.get<Phaser.Time.TimerEvent>('lookAround')
    */
-  get(key: string): Phaser.Tweens.Tween | undefined {
-    const entry = this.entries.get(key)
-    if (!entry) return undefined
-    if (entry.handle instanceof Phaser.Time.TimerEvent) return undefined
-    return entry.handle as Phaser.Tweens.Tween
+  get<T extends Killable = Killable>(key: string): T | undefined {
+    return this.entries.get(key) as T | undefined
   }
 
-  /**
-   * Set the paused state of the timer registered under key.
-   * No-op if the key is absent or holds a Tween instead of a TimerEvent.
-   */
-  setTimerPaused(key: string, paused: boolean): void {
-    const entry = this.entries.get(key)
-    if (!entry) return
-    if (!(entry.handle instanceof Phaser.Time.TimerEvent)) return
-    entry.handle.paused = paused
-  }
-
-  // ---------------------------------------------------------------------------
-  // Private helpers
-  // ---------------------------------------------------------------------------
-
-  private _destroyEntry(entry: TweenEntry | undefined): void {
-    if (!entry) return
-    try { entry.handle.destroy() } catch { /* already destroyed */ }
-    entry.reset?.()
+  /** Number of currently registered entries (useful for tests). */
+  get size(): number {
+    return this.entries.size
   }
 }
