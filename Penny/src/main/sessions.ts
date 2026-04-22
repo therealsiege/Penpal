@@ -1498,6 +1498,9 @@ function spawnHeadlessCli(invocation: HeadlessInvocation, timeoutMs: number): Pr
     if (missingDirs.length > 0) {
       childEnv.PATH = [...missingDirs, currentPath].join(':')
     }
+    // Enable forked subagents within spawned agent processes (Claude Code external build flag).
+    // When a spawned agent uses the Agent tool internally, it will fork rather than cold-start.
+    childEnv.CLAUDE_CODE_FORK_SUBAGENT = '1'
 
     const child = spawn(resolvedCommand, invocation.args, {
       cwd: invocation.cwd,

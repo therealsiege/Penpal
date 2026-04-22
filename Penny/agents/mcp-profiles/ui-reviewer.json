@@ -4,27 +4,23 @@
       "command": "npx",
       "args": ["-y", "@upstash/context7-mcp"]
     },
+    "serena": {
+      "command": "uvx",
+      "args": [
+        "--from", "git+https://github.com/oraios/serena",
+        "serena", "start-mcp-server",
+        "--context", "claude-code"
+      ]
+    },
     "sequential-thinking": {
       "command": "npx",
       "args": ["-y", "@modelcontextprotocol/server-sequential-thinking"]
-    },
-    "ddg-search": {
-      "command": "uvx",
-      "args": ["duckduckgo-mcp-server"]
     },
     "github": {
       "command": "npx",
       "args": ["-y", "@modelcontextprotocol/server-github"],
       "env": {
         "GITHUB_PERSONAL_ACCESS_TOKEN": "${GITHUB_PERSONAL_ACCESS_TOKEN}"
-      }
-    },
-    "graphite-atlas": {
-      "command": "npx",
-      "args": ["-y", "@graphite-atlas/mcp-server"],
-      "env": {
-        "GRAPHITE_ACCESS_TOKEN": "${GRAPHITE_ACCESS_TOKEN}",
-        "GRAPHITE_API_URL": "https://www.graphiteatlas.com"
       }
     }
   }

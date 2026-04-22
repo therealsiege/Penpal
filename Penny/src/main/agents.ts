@@ -209,6 +209,47 @@ export function getMcpProfilePath(profileName: string): string {
   return path.join(getAgentsDir(), 'mcp-profiles', `${profileName}.json`)
 }
 
+/**
+ * Generates a per-agent markdown file with YAML frontmatter (mcpServers) and the
+ * tagged system prompt as the body. Consumed by the `--agent` Claude Code flag, which
+ * loads mcpServers for the main-thread session and appends the body to the system prompt.
+ *
+ * Files are written to agents/agent-files/{agentId}.md and regenerated on every call
+ * so that dynamic content (shared CLAUDE.md) is always fresh.
+ */
+export function generateAgentFile(agentId: string, opts: BuildCliOpts = {}): string {
+  const agent = getAgentConfig(agentId)
+  if (!agent) throw new Error(`Unknown agent: ${agentId}`)
+
+  // Load mcpServers from the agent's MCP profile JSON
+  const mcpPath = getMcpProfilePath(agent.mcpProfile)
+  let mcpServers: Record<string, unknown> = {}
+  if (fs.existsSync(mcpPath)) {
+    try {
+      const profile = JSON.parse(fs.readFileSync(mcpPath, 'utf-8')) as { mcpServers?: Record<string, unknown> }
+      mcpServers = profile.mcpServers || {}
+    } catch (err) {
+      console.warn(`[agents] Failed to load MCP profile for ${agentId}:`, err)
+    }
+  }
+
+  // Build the system prompt body (same content previously injected via --append-system-prompt)
+  const taggedPrompt = buildAgentTaggedSystemPrompt(agentId, opts)
+
+  // Serialize mcpServers as YAML frontmatter
+  const frontmatter = yaml.dump({ mcpServers }, { noRefs: true, lineWidth: 200, quotingType: '"' })
+
+  const agentFilesDir = path.join(getAgentsDir(), 'agent-files')
+  fs.mkdirSync(agentFilesDir, { recursive: true })
+
+  const agentFilePath = path.join(agentFilesDir, `${agentId}.md`)
+  const content = `---\n${frontmatter}---\n\n${taggedPrompt}\n`
+  fs.writeFileSync(agentFilePath, content, 'utf-8')
+
+  console.log(`[agents] Generated agent file: ${agentFilePath} (${content.length} bytes)`)
+  return agentFilePath
+}
+
 // ── CLI Command Builder ─────────────────────────────────────────────────────
 
 const DISPATCH_SYSTEM_PROMPT = `You are operating in DISPATCH mode — a two-phase autonomous workflow.
@@ -452,9 +493,12 @@ export function buildAgentCliArgs(agentId: string, cwd: string, opts: BuildCliOp
   const agent = getAgentConfig(agentId)
   if (!agent) throw new Error(`Unknown agent: ${agentId}`)
 
-  const mcpPath = getMcpProfilePath(agent.mcpProfile)
   const isDispatch = opts.dispatch || agent.autonomy === 'dispatch'
-  const taggedPrompt = buildAgentTaggedSystemPrompt(agentId, opts)
+
+  // Generate the per-agent .md file (YAML frontmatter with mcpServers + system prompt body).
+  // This replaces the previous --append-system-prompt + --mcp-config pair: Claude Code now
+  // loads mcpServers for the main-thread session when invoked with --agent.
+  const agentFilePath = generateAgentFile(agentId, opts)
 
   const args: string[] = []
 
@@ -462,7 +506,7 @@ export function buildAgentCliArgs(agentId: string, cwd: string, opts: BuildCliOp
     args.push('-p')
   }
 
-  args.push('--append-system-prompt', taggedPrompt)
+  args.push('--agent', agentFilePath)
   args.push('--model', opts.modelOverride || agent.model)
 
   // Permission handling: explicit override > headless default > dispatch > agent config
@@ -472,10 +516,6 @@ export function buildAgentCliArgs(agentId: string, cwd: string, opts: BuildCliOp
     args.push('--dangerously-skip-permissions')
   } else {
     args.push('--permission-mode', agent.autonomy)
-  }
-
-  if (fs.existsSync(mcpPath)) {
-    args.push('--mcp-config', mcpPath)
   }
 
   if (agent.allowedTools.length > 0) {
