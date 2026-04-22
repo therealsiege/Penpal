@@ -155,6 +155,17 @@ export const MAKO_MOTE_POOL_SIZE = 15
 export const SPARK_POOL_SIZE = 12
 export const STEAM_WISP_POOL_SIZE = 8
 
+// ---------------------------------------------------------------------------
+// Particle pool size caps — hard upper bounds per type to prevent frame-rate
+// degradation. Spawn functions skip when the active count hits these limits.
+// ---------------------------------------------------------------------------
+export const MAX_RAIN_POOL    = 200
+export const MAX_SNOW_POOL    = 150
+export const MAX_MAKO_POOL    =  50
+export const MAX_SPARKS_POOL  =  30
+export const MAX_STEAM_POOL   =  20
+export const MAX_AMBIENT_POOL =  40
+
 // Eval glow — success-rate indicator behind workstation desk (sidekick#18)
 // Thresholds (successRate 0–1): green if >80%, amber if 60–80% inclusive, red if <60%, grey if no data.
 export const EVAL_GLOW_GREEN   = 0x22c55e

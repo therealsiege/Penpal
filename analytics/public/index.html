@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Knowledge Explorer</title>
+  <meta name="description" content="Browse and search the company knowledge graph" />
+
+  <!-- Preconnect for JetBrains Mono from Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap"
+    rel="stylesheet"
+  />
+
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<div id="app">
+
+  <!-- ======= Navbar ======= -->
+  <nav class="navbar" role="navigation" aria-label="Main navigation">
+    <span class="navbar-brand" onclick="navTo('#/')" role="link" tabindex="0"
+      onkeydown="if(event.key==='Enter')navTo('#/')">
+      olh<span>/</span>knowledge
+    </span>
+
+    <!-- Compact search in nav (hidden on mobile) -->
+    <div class="navbar-search" id="navbar-search-area" aria-label="Quick search">
+      <!-- Populated by JS after state is ready -->
+    </div>
+
+    <div class="navbar-right">
+      <button class="btn btn-sm btn-ghost" onclick="navTo('#/')" aria-label="Home">
+        ⌂ Home
+      </button>
+    </div>
+  </nav>
+
+  <!-- ======= Main content area ======= -->
+  <main class="main" id="main-content" role="main" aria-live="polite">
+    <!-- Views are rendered here by the router -->
+    <div class="state-msg">
+      <span class="icon" aria-hidden="true">⟳</span>
+      Loading…
+    </div>
+  </main>
+
+  <!-- ======= Toast container ======= -->
+  <div id="toast-container" class="toast-container" aria-live="assertive" aria-atomic="true"></div>
+
+</div>
+
+<script src="app.js"></script>
+
+</body>
+</html>

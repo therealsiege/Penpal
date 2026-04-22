@@ -172,7 +172,7 @@ export class OfficeWorkstations {
             if (ws.state?.needsInteraction && canSparkle(ws)) {
               const wx = room.x + ws.container.x
               const wy = room.y + ws.container.y
-              this.host.celebrations.approveSparkle(wx, wy)
+              this.host.celebrations?.approveSparkle(wx, wy)
             }
           }
         }
@@ -183,7 +183,7 @@ export class OfficeWorkstations {
           if (ws && canSparkle(ws)) {
             const wx = room.x + ws.container.x
             const wy = room.y + ws.container.y
-            this.host.celebrations.approveSparkle(wx, wy)
+            this.host.celebrations?.approveSparkle(wx, wy)
             break
           }
         }
@@ -986,8 +986,8 @@ export class OfficeWorkstations {
             const wx = room.x + ws.container.x
             const wy = room.y + ws.container.y
             const aid = agent.config?.id ?? ''
-            this.host.celebrations.rankUp(wx, wy, agent.config?.name ?? 'Agent', xp.rank, fillColor, { agentId: aid })
-            this.host.celebrations.taskComplete(wx, wy, { agentId: aid })
+            this.host.celebrations?.rankUp(wx, wy, agent.config?.name ?? 'Agent', xp.rank, fillColor, { agentId: aid })
+            this.host.celebrations?.taskComplete(wx, wy, { agentId: aid })
             achievements.trackRankUp()
             soundEngine.levelUp()
             // Notify cinematics system for auto-pan

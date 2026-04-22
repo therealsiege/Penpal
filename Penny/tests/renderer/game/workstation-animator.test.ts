@@ -168,6 +168,8 @@ function makeAnimScene(options?: { syncDelayedCall?: boolean }) {
           alpha: 0,
           visible: false,
           list: [] as unknown[],
+          add: vi.fn(),
+          remove: vi.fn(),
           setAlpha: vi.fn(function (this: { alpha: number }, a: number) {
             this.alpha = a
             return this
@@ -189,6 +191,14 @@ function makeAnimScene(options?: { syncDelayedCall?: boolean }) {
         setPosition: vi.fn().mockReturnThis(),
         play: vi.fn().mockReturnThis(),
         once: vi.fn().mockReturnThis(),
+        destroy: vi.fn(),
+      })),
+      circle: vi.fn(() => ({
+        active: true,
+        x: 0,
+        y: 0,
+        alpha: 1,
+        setAlpha: vi.fn().mockReturnThis(),
         destroy: vi.fn(),
       })),
       ellipse: vi.fn(() => ({ setDepth: vi.fn().mockReturnThis(), destroy: vi.fn() })),
@@ -217,15 +227,58 @@ function makeMinimalHost(ws: WorkstationSprite, extras?: Partial<WorkstationHost
   } as WorkstationHost
 }
 
+function makeTweenBagMock(): WorkstationSprite['tweenBag'] {
+  type Entry = { handle: { destroy?: () => void }; reset?: () => void }
+  const entries = new Map<string, Entry>()
+  const destroyEntry = (entry: Entry | undefined) => {
+    if (!entry) return
+    entry.handle.destroy?.()
+    entry.reset?.()
+  }
+
+  return {
+    add: (key, tween, reset) => {
+      destroyEntry(entries.get(key))
+      entries.set(key, { handle: tween as { destroy?: () => void }, reset })
+    },
+    addTimer: (key, timer, reset) => {
+      destroyEntry(entries.get(key))
+      entries.set(key, { handle: timer as { destroy?: () => void }, reset })
+    },
+    remove: (key) => {
+      const entry = entries.get(key)
+      destroyEntry(entry)
+      entries.delete(key)
+    },
+    clearAll: () => {
+      for (const entry of entries.values()) destroyEntry(entry)
+      entries.clear()
+    },
+    has: (key) => entries.has(key),
+    get: (key) => entries.get(key)?.handle as Phaser.Tweens.Tween | undefined,
+    setTimerPaused: (key, paused) => {
+      const entry = entries.get(key)
+      if (!entry) return
+      const handle = entry.handle as { paused?: boolean }
+      if ('paused' in handle) handle.paused = paused
+    },
+  } as WorkstationSprite['tweenBag']
+}
+
 function makeWorkstation(agentId: string, overrides?: Partial<WorkstationSprite>): WorkstationSprite {
   const data = new Map<string, unknown>()
   const sprite = {
     x: 0,
     y: WS_SPRITE_Y,
     visible: true,
+    alpha: 1,
     setFrame: vi.fn(),
     setScale: vi.fn(),
     setAngle: vi.fn(),
+    setAlpha: vi.fn(function (this: { alpha: number }, alpha: number) {
+      this.alpha = alpha
+      return this
+    }),
     setData: vi.fn((k: string, v: unknown) => {
       data.set(k, v)
     }),
@@ -264,6 +317,7 @@ function makeWorkstation(agentId: string, overrides?: Partial<WorkstationSprite>
     blockedIndicatorBadge: { setFrame: vi.fn() } as unknown as WorkstationSprite['blockedIndicatorBadge'],
     blockedIndicatorStem: { setFillStyle: vi.fn() } as unknown as WorkstationSprite['blockedIndicatorStem'],
     blockedIndicatorText: { setText: vi.fn() } as unknown as WorkstationSprite['blockedIndicatorText'],
+    tweenBag: makeTweenBagMock(),
     lodLevel2Objects: [],
     lodLevel3Objects: [],
     localTaskCount: 0,
@@ -399,7 +453,7 @@ describe('WorkstationAnimator — monitor glow', () => {
     const ws = makeWorkstation('g1')
     const animator = new WorkstationAnimator(scene, makeMinimalHost(ws), vi.fn(), vi.fn())
     animator.updateMonitorGlow(ws, true, false)
-    expect(ws.monitorGlowFx!.color).toBe(0x0ea5e9)
+    expect(ws.monitorGlowFx!.color).toBe(activeTheme.monitorGlowActive)
   })
 
   it('waiting sets yellow glow', () => {
@@ -701,7 +755,7 @@ describe('WorkstationAnimator — idle micro-variety', () => {
     })
     const animator = new WorkstationAnimator(scene, makeMinimalHost(ws), vi.fn(), vi.fn())
     animator.updateAnimation(ws, { ...agentBase('p5'), sessionMode: 'idle', needsInteraction: false })
-    ws.walkBreakTween = { destroy: vi.fn() } as unknown as WorkstationSprite['walkBreakTween']
+    ws.tweenBag.add('walkBreak', { destroy: vi.fn() } as unknown as Phaser.Tweens.Tween)
     const n = tweensAdd.mock.calls.length
     findTimerByDelay(timeEvents, 15000)()
     expect(tweensAdd.mock.calls.length).toBe(n)
@@ -842,10 +896,10 @@ describe('WorkstationAnimator — speech bubble', () => {
     const animator = new WorkstationAnimator(scene, makeMinimalHost(ws), vi.fn(), vi.fn())
     animator.updateAnimation(ws, agent)
     expect(ws.speechBubble).toBeDefined()
-    const bubbleTween = ws.speechBubbleTween
+    const bubbleTween = ws.tweenBag.get('speechBubble')
     animator.updateAnimation(ws, { ...agentBase('s7'), sessionMode: 'idle', needsInteraction: false })
     expect(bubbleTween?.destroy).toHaveBeenCalled()
-    expect(ws.speechBubbleTimer).toBeUndefined()
+    expect(ws.tweenBag.has('speechBubbleTimer')).toBe(false)
     expect(ws.speechBubble?.setVisible).toHaveBeenCalledWith(false)
   })
 })

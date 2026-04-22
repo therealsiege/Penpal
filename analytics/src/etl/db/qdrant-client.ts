@@ -26,6 +26,10 @@ export async function ensureCollections(): Promise<void> {
       field_name: "documentPath",
       field_schema: "keyword",
     });
+    await qdrant.createPayloadIndex(COLLECTIONS.documentChunks, {
+      field_name: "venture",
+      field_schema: "keyword",
+    });
     console.log(`  Created collection: ${COLLECTIONS.documentChunks}`);
   }
 
@@ -41,6 +45,10 @@ export async function ensureCollections(): Promise<void> {
       field_name: "documentPath",
       field_schema: "keyword",
     });
+    await qdrant.createPayloadIndex(COLLECTIONS.documentSummaries, {
+      field_name: "venture",
+      field_schema: "keyword",
+    });
     console.log(`  Created collection: ${COLLECTIONS.documentSummaries}`);
   }
 }
@@ -52,6 +60,7 @@ export interface ChunkPoint {
     documentId: string;
     documentPath: string;
     documentType: string;
+    venture: string;
     headingPath: string;
     content: string;
     chunkIndex: number;
@@ -65,6 +74,7 @@ export interface SummaryPoint {
     documentId: string;
     documentPath: string;
     documentType: string;
+    venture: string;
     title: string;
     contentPreview: string;
   };

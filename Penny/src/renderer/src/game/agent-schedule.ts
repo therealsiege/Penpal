@@ -343,7 +343,7 @@ export class AgentScheduler {
     for (const ws of room.workstations.values()) {
       if (!ws.state) continue
       if (ws.isArriving || ws.isDeparting || ws.isInStandup) continue
-      if (ws.walkBreakTween) continue
+      if (ws.tweenBag.has('walkBreak')) continue
       const mode = ws.state.sessionMode
       const busy =
         mode === 'working' ||

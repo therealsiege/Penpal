@@ -5,6 +5,7 @@
 // ---------------------------------------------------------------------------
 
 import Phaser from 'phaser'
+import { TweenBag } from './tween-lifecycle'
 import { SPRITESHEET_KEYS, ANIM_KEYS, ICON_FRAMES, ITEM_FRAMES, STATUS_DOT_FRAMES, LEGO_FRAMES, PET_COUNT, PET_FACE_FRAMES, EFFECT_ANIM_KEYS, IMAGE_KEYS, ANIMAL_SPECIES, ANIMAL_COUNT, ANIMAL_IDLE_FRAMES, MEDAL_HD_FRAMES, LAB_PROP_FRAMES, LAB_IMAGE_KEYS } from './office-asset-keys'
 import { fadeInUp, fadeOutDown, pulse } from './juice-utils'
 import { AnimConfig } from './animation-config'
@@ -957,6 +958,7 @@ export class WorkstationFactory {
       uptimeText,
       taskCountBg,
       taskCountText,
+      tweenBag: new TweenBag(),
       localTaskCount: 0,
       questIcon,
       mvpMedal,
@@ -1286,24 +1288,12 @@ export class WorkstationFactory {
   // ---------------------------------------------------------------------------
 
   destroy(ws: WorkstationSprite): void {
-    if (ws.breathTween)      ws.breathTween.destroy()
-    if (ws.bounceTween)      ws.bounceTween.destroy()
-    if (ws.dotPulseTween)    ws.dotPulseTween.destroy()
+    // Destroy all tracked tweens/timers in one call
+    ws.tweenBag.clearAll()
     if (ws.blockedIndicatorTween) ws.blockedIndicatorTween.destroy()
     if (ws.blockedBobTween) ws.blockedBobTween.destroy()
-    if (ws.walkBreakTween)   ws.walkBreakTween.destroy()
-    if (ws.typingTween)      ws.typingTween.destroy()
-    if (ws.headTiltTween)    ws.headTiltTween.destroy()
-    if (ws.monitorGlowTween) ws.monitorGlowTween.destroy()
     if (ws.screenTween)      ws.screenTween.destroy()
     if (ws.monitorTextTween) ws.monitorTextTween.destroy()
-    if (ws.pulseTween)       ws.pulseTween.destroy()
-    if (ws.ledPulseTween)    ws.ledPulseTween.destroy()
-    if (ws.lookAroundTimer)     ws.lookAroundTimer.destroy()
-    if (ws.stretchTimer)        ws.stretchTimer.destroy()
-    if (ws.walkBreakTimer)      ws.walkBreakTimer.destroy()
-    if (ws.lookAtNeighborTimer) ws.lookAtNeighborTimer.destroy()
-    if (ws.yawnTimer)           ws.yawnTimer.destroy()
     this.host.clearSteamParticles(ws)
     this.scene.tweens.killTweensOf(ws.thoughtBubble)
     if (ws.blurbFadeTimer)          ws.blurbFadeTimer.destroy()
@@ -1311,8 +1301,6 @@ export class WorkstationFactory {
     if (ws.thoughtBubbleFloatTween) ws.thoughtBubbleFloatTween.destroy()
     if (ws.thoughtBubbleBgSprite) ws.thoughtBubbleBgSprite.destroy()
     if (ws.monitorFrame) ws.monitorFrame.destroy()
-    if (ws.moodTween) ws.moodTween.destroy()
-    if (ws.moodBadgeTween) ws.moodBadgeTween.destroy()
     if (ws.moodEmoji) this.scene.tweens.killTweensOf(ws.moodEmoji)
     if (ws.moodBadge) { this.scene.tweens.killTweensOf(ws.moodBadge); ws.moodBadge.destroy() }
     if (ws.deskPetTween)     ws.deskPetTween.destroy()
@@ -1325,27 +1313,17 @@ export class WorkstationFactory {
     if (ws.signatureItem)      ws.signatureItem.destroy()
     if (ws.roomProp)           ws.roomProp.destroy()
     if (ws.xpBar)            ws.xpBar.destroy()
-    if (ws.chairRockTween)   ws.chairRockTween.destroy()
-    if (ws.soundWaveTween)   ws.soundWaveTween.destroy()
     if (ws.soundWaveGfx)     ws.soundWaveGfx.destroy()
     if (ws.soundWaveSpeaker) ws.soundWaveSpeaker.destroy()
-    if (ws.kbGlowTween)      ws.kbGlowTween.destroy()
     if (ws.kbScaleTween)     ws.kbScaleTween.destroy()
-    if (ws.typingNoteTimer)  ws.typingNoteTimer.destroy()
-    if (ws.speechBubbleTween) { ws.speechBubbleTween.destroy(); ws.speechBubbleTween = undefined }
-    if (ws.speechBubbleBobTween) { ws.speechBubbleBobTween.destroy(); ws.speechBubbleBobTween = undefined }
-    if (ws.speechBubbleTimer) { ws.speechBubbleTimer.destroy(); ws.speechBubbleTimer = undefined }
     if (ws.shadow)           ws.shadow.destroy()
     if (ws.sparklineGfx)     { ws.sparklineGfx.clear(); ws.sparklineGfx.destroy() }
     if (ws.phoneLightTween)      ws.phoneLightTween.destroy()
-    if (ws.progressRingTween)    ws.progressRingTween.destroy()
     if (ws.progressRing)         { ws.progressRing.clear(); ws.progressRing.destroy() }
     if (ws.roleBadgePulseTween)  ws.roleBadgePulseTween.destroy()
     if (ws.taskCountFlashTween)  ws.taskCountFlashTween.destroy()
     if (ws.taskCountBg)          { ws.taskCountBg.clear(); ws.taskCountBg.destroy() }
     if (ws.taskCountText)        ws.taskCountText.destroy()
-    if (ws.questIconTween)       ws.questIconTween.destroy()
-    if (ws.questIconPulseTween)  ws.questIconPulseTween.destroy()
     if (ws.questIcon)            ws.questIcon.destroy()
     if (ws.mvpMedalTween)        ws.mvpMedalTween.destroy()
     if (ws.mvpMedal)             ws.mvpMedal.destroy()
@@ -1362,8 +1340,6 @@ export class WorkstationFactory {
     if (ws.energyPulseTween)     ws.energyPulseTween.destroy()
     if (ws.energyTrack)          ws.energyTrack.destroy()
     if (ws.energyFill)           ws.energyFill.destroy()
-    if (ws.lampLightTween)       ws.lampLightTween.destroy()
-    if (ws.lampFlickerTimer)     ws.lampFlickerTimer.destroy()
     if (ws.flameTimer)           ws.flameTimer.destroy()
     if (ws.flameTweens) {
       for (const t of ws.flameTweens) { if (t.isPlaying()) t.stop(); t.destroy() }
@@ -1375,8 +1351,6 @@ export class WorkstationFactory {
     if (ws.contextMeterPulseTween) ws.contextMeterPulseTween.destroy()
     if (ws.contextRotShakeTween)   ws.contextRotShakeTween.destroy()
     if (ws.contextMeter)           ws.contextMeter.destroy()
-    if (ws.screensaverTween)       ws.screensaverTween.destroy()
-    if (ws.mugSteamTimer)          ws.mugSteamTimer.destroy()
     if (ws.steamContainer)         { ws.steamContainer.removeAll(true); ws.steamContainer.destroy(); ws.steamContainer = undefined }
     if (ws.orchestratorTaskLabel) ws.orchestratorTaskLabel.destroy()
     if (ws.thinkingDotsTween)    ws.thinkingDotsTween.destroy()

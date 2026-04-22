@@ -15,6 +15,11 @@ import { getPhaseConfig, type PhaseConfig } from './pods/phase-config'
 import { podQualityCollector, type PodQualityEvent } from './evals/collectors/pod-quality'
 import { resolveProjectPath } from './project-paths'
 import { addEntry, updateEntry, getActiveEntries, getFileConflicts, type FlightBoardEntry, type FileConflict } from './flight-board'
+import { reasoningBank, inferTaskType, formatPastPatterns, type PodPattern } from './reasoning-bank'
+import { checkGovernance, formatViolations, type GovernanceViolation } from './pod-governance'
+import { assessComplexity } from './pod-complexity'
+import { MergeQueue } from './merge-queue'
+import { reflectOnPod, getFleetAnalytics, type ReflectionReport } from './pod-reflection'
 
 export type { PhaseConfig } from './pods/phase-config'
 
@@ -327,11 +332,20 @@ function writeCritiqueArtifactFile(wf: PodWorkflow, critique: ReviewerCritique):
   }
 }
 
+const MAX_PERSISTED_WORKFLOWS = 100
+
 function savePods(): void {
   try {
     const dir = path.dirname(PERSIST_PATH)
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
-    const data = Array.from(workflows.values())
+    const all = Array.from(workflows.values())
+    // Keep active workflows + most recent completed/failed, capped at MAX_PERSISTED_WORKFLOWS
+    const active = all.filter(w => w.status !== 'complete' && w.status !== 'failed')
+    const finished = all
+      .filter(w => w.status === 'complete' || w.status === 'failed')
+      .sort((a, b) => b.updatedAt - a.updatedAt)
+      .slice(0, MAX_PERSISTED_WORKFLOWS - active.length)
+    const data = [...active, ...finished]
     fs.writeFileSync(PERSIST_PATH, JSON.stringify(data, null, 2))
   } catch (err) {
     console.error('[pods] Failed to save workflows:', err)
@@ -726,10 +740,14 @@ function formatSolverMessage(
     return blocks.join('\n')
   }
 
+  // Inject past patterns from ReasoningBank
+  const pastPatterns = formatPastPatterns(wf.task, extractFilesFromOutput(wf.task))
+
   return [
     header,
     taskSection,
     contextBlock,
+    pastPatterns ? `\n${pastPatterns}\n` : '',
     '**Instructions**: Implement this task completely. When finished, provide a summary of what you built and which files were changed.',
   ].filter(s => s !== '').join('\n')
 }
@@ -940,15 +958,44 @@ function createPodPR(wf: PodWorkflow, label?: string): string {
     const rebaseNote = wf.rebaseConflict ? '\n\n⚠️ Rebase conflict detected — manual resolution required.' : ''
     const body = `Pod workflow: ${wf.name}\n\nTask: ${wf.task}${rebaseNote}`
 
-    const labelArg = label ? `--label "${label}"` : ''
-    const cmd = `gh pr create --title "${title.replace(/"/g, '\\"')}" --body "${body.replace(/"/g, '\\"')}" ${labelArg}`.trim()
+    // Use execFileSync to avoid shell injection from task strings
+    const { execFileSync: execFileSyncPR } = require('child_process')
+    const ghArgs = ['pr', 'create', '--title', title, '--body', body]
+    if (label) ghArgs.push('--label', label)
 
-    const url = execSync(cmd, opts).trim()
+    const url = (execFileSyncPR('gh', ghArgs, opts) as string).trim()
     console.log(`[pods] PR created: ${url}`)
     return url
   } catch (err) {
     console.warn('[pods] PR creation failed:', err)
     return ''
+  }
+}
+
+/**
+ * Auto-enqueue a completed pod's PR into the merge queue.
+ */
+function enqueueForMerge(wf: PodWorkflow): void {
+  if (process.env.VITEST === 'true') return
+  if (!wf.prUrl) return
+
+  try {
+    const prMatch = wf.prUrl.match(/\/pull\/(\d+)/)
+    if (!prMatch) return
+    const prNumber = parseInt(prMatch[1], 10)
+
+    const branch = execSync('git rev-parse --abbrev-ref HEAD', {
+      cwd: wf.cwd, encoding: 'utf-8', stdio: 'pipe',
+    }).trim()
+
+    const queue = new MergeQueue(wf.cwd)
+    queue.add({
+      prNumber,
+      branch,
+      priority: wf.priority === 'high' ? 1 : wf.priority === 'low' ? 10 : 5,
+    })
+  } catch (err) {
+    console.warn('[pods] Failed to enqueue for merge:', err)
   }
 }
 
@@ -1245,6 +1292,27 @@ async function runSolveStage(wf: PodWorkflow, feedback?: string): Promise<boolea
       }
     }
 
+    // Governance check after solver completes
+    if (wf.iteration === 1) {
+      const govFiles = extractFilesFromOutput(wf.solver.output || '')
+      const violations = checkGovernance({ files: govFiles, cwd: wf.cwd, startedAt: wf.createdAt })
+      if (violations.length > 0) {
+        console.warn(`[pods] Governance: ${formatViolations(violations)}`)
+        const fatal = violations.find(v => v.rule.action === 'fail')
+        if (fatal) {
+          wf.error = `Governance violation: ${fatal.rule.message} — ${fatal.details}`
+          setStatus(wf, 'failed')
+          return false
+        }
+        const pauseViolation = violations.find(v => v.rule.action === 'pause')
+        if (pauseViolation) {
+          console.warn(`[pods] Auto-pausing: ${pauseViolation.details}`)
+          setStatus(wf, 'paused')
+          return false
+        }
+      }
+    }
+
     console.log(`[pods] Solver done (${Math.round((result.durationMs ?? 0) / 1000)}s)`)
     return true
   }
@@ -1371,6 +1439,26 @@ async function runSolveStage(wf: PodWorkflow, feedback?: string): Promise<boolea
     }
   }
 
+  // Governance check (multi-candidate path)
+  if (wf.iteration === 1) {
+    const govFiles = extractFilesFromOutput(wf.solver.output || '')
+    const violations = checkGovernance({ files: govFiles, cwd: wf.cwd, startedAt: wf.createdAt })
+    if (violations.length > 0) {
+      console.warn(`[pods] Governance: ${formatViolations(violations)}`)
+      const fatal = violations.find(v => v.rule.action === 'fail')
+      if (fatal) {
+        wf.error = `Governance violation: ${fatal.rule.message} — ${fatal.details}`
+        setStatus(wf, 'failed')
+        return false
+      }
+      const pauseViolation = violations.find(v => v.rule.action === 'pause')
+      if (pauseViolation) {
+        setStatus(wf, 'paused')
+        return false
+      }
+    }
+  }
+
   console.log(`[pods] Solver done with ${candidates.length}/${candidateCount} candidates`)
   return true
 }
@@ -1470,7 +1558,7 @@ function finalizePodQuality(wf: PodWorkflow): void {
 
 // ── CLAUDE.md auto-update ───────────────────────────────────────────────────
 
-const MAX_WORKFLOW_LOG_ENTRIES = 5
+const MAX_WORKFLOW_LOG_ENTRIES = 20
 
 function appendWorkflowSummary(wf: PodWorkflow): void {
   const sharedMemoryPath = path.resolve(__dirname, '..', '..', 'agents', 'CLAUDE.md')
@@ -1539,6 +1627,7 @@ async function completePodWithPR(wf: PodWorkflow): Promise<void> {
     if (process.env.VITEST !== 'true') {
       updateEntry(wf.id, { status: 'pr-created' })
     }
+    enqueueForMerge(wf)
   } else {
     console.warn(`[pods] Rebase conflict on: ${rebaseResult.conflictedFiles?.join(', ')} — creating PR with needs-rebase label`)
     wf.rebaseConflict = true
@@ -1547,10 +1636,40 @@ async function completePodWithPR(wf: PodWorkflow): Promise<void> {
     if (process.env.VITEST !== 'true') {
       updateEntry(wf.id, { status: 'pr-created' })
     }
+    // Don't enqueue conflict PRs — they need manual resolution
   }
 
   setStatus(wf, 'complete')
   appendWorkflowSummary(wf)
+  storePodPattern(wf)
+
+  // MRAP reflection
+
+  const reflection = reflectOnPod(wf)
+  console.log(`[pods] Reflection: ${reflection.efficiency} efficiency, bottleneck=${reflection.bottleneck}, ${reflection.recommendation}`)
+  podEvents.emit('pod-reflection', reflection)
+}
+
+function storePodPattern(wf: PodWorkflow): void {
+  try {
+    const pattern: PodPattern = {
+      id: wf.id,
+      task: wf.task,
+      taskType: inferTaskType(wf.task),
+      filesModified: extractFilesFromOutput(wf.solver.output || ''),
+      durationMs: Date.now() - wf.createdAt,
+      iterations: wf.iteration,
+      selfFixes: wf.selfFixAttempts,
+      passed: wf.status === 'complete' && (wf.lastExecutorPassed ?? false),
+      solverSummary: (wf.solver.output || '').slice(0, 500),
+      reviewerVerdict: wf.critique?.verdict || 'unknown',
+      timestamp: Date.now(),
+    }
+    reasoningBank.store(pattern)
+    console.log(`[pods] Stored pattern: ${pattern.taskType}, passed=${pattern.passed}, files=${pattern.filesModified.length}`)
+  } catch (err) {
+    console.error('[pods] Failed to store pattern:', err)
+  }
 }
 
 async function runWorkflow(wf: PodWorkflow): Promise<void> {
@@ -1641,6 +1760,8 @@ async function runWorkflow(wf: PodWorkflow): Promise<void> {
     ) {
       finalizePodQuality(wf)
     }
+    // Store pattern for ReasoningBank (captures both success and failure)
+    if (wf.status === 'failed') storePodPattern(wf)
     activeWorkflowPromises.delete(wf.id)
     if (process.env.VITEST !== 'true') {
       const currentEntry = getActiveEntries().find(e => e.podId === wf.id)
@@ -1710,11 +1831,27 @@ export function createPod(task: string, opts: CreatePodOpts = {}): PodWorkflow {
   }
 
   const phaseConfig = getPhaseConfig(opts.priority)
-  const candidateCount = opts.solverCandidates ?? phaseConfig.candidates
+
+  // Auto-assess complexity if no explicit runtime profile or candidate count set
+  const complexity = (!opts.runtimeProfile && !opts.solverCandidates)
+    ? assessComplexity(task, cwd)
+    : null
+
+  if (complexity) {
+    console.log(
+      `[pods] Complexity: ${complexity.tier} (score ${complexity.score}) — ` +
+      `profile '${complexity.recommendedProfile}', candidates ${complexity.recommendedCandidates}. ` +
+      `Signals: ${complexity.signals.join(', ')}`,
+    )
+  }
+
+  const candidateCount = opts.solverCandidates
+    ?? complexity?.recommendedCandidates
+    ?? phaseConfig.candidates
   const maxSelfFixes = opts.maxSelfFixes ?? phaseConfig.maxSelfFixes
 
   const presetId = opts.presetId ?? 'default'
-  const profile = resolveRuntimeProfile(opts.runtimeProfile)
+  const profile = resolveRuntimeProfile(opts.runtimeProfile ?? complexity?.recommendedProfile)
 
   const cwdErr = validatePodCwd(cwd)
   const wf: PodWorkflow = {
@@ -1866,4 +2003,8 @@ export function cancelPod(workflowId: string): boolean {
 
 export function getPodPresets(): PodPreset[] {
   return getPresets()
+}
+
+export function getPodAnalytics(lookbackHours?: number) {
+  return getFleetAnalytics(Array.from(workflows.values()), lookbackHours)
 }

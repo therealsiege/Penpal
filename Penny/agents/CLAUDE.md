@@ -110,73 +110,145 @@ Two graph databases are available. Use the right one for the job:
 
 
 
-### Workflow: therealsiege/Penpal#253 (2026-04-16)
-- Task: Implement GitHub issue therealsiege/Penpal#253: Living Lab 7a: CameraCinematic class — panTo, zoomTo, sequence, shake, flash
 
-Parent: #234
 
-## Context
 
-Foundation class for all scripted camera moves. 
-- Team: fullstack-dev / backend-arch / electron-dev
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+### Workflow: Implement GitHub issue therealsiege/Penpal#337: Refactor 3a: (2026-04-20)
+- Task: Implement GitHub issue therealsiege/Penpal#337: Refactor 3a: Sync walk animation frame rate to movement speed in path-walker.ts
+- Team: nextjs-frontend / ui-designer / electron-dev
 - Result: PASS (1/3 iterations)
-- Key output: All checks complete.
+- Key output: All checks complete. Here is the structured result:
 
 ```
 RESULT: PASS
 
-Test Case 1: CameraCinematic file exists — PASS
-  Details: `Penny/src/renderer/src/game/camera-cinematics.ts`
+Test Case 1: TypeScript compilation (npx tsc --noEmit) — PASS
+  Details: Exit c
 
-### Workflow: therealsiege/Penpal#255 (2026-04-16)
-- Task: Implement GitHub issue therealsiege/Penpal#255: Living Lab 7c: Idle camera mode + smooth follow with look-ahead
-
-Parent: #234
-Depends on: Living Lab 7a (CameraCinematic class)
-
-## Context
-
-When nobody
-- Team: fullstack-dev / backend-arch / electron-dev
-- Result: PASS (2/5 iterations)
-- Self-fix attempts: 2
-- Key output: Based on my analysis of the code, I now understand what's missing from the implementation. Looking at the OfficeScene.ts file, I can see that the vari
-
-### Workflow: Implement GitHub issue therealsiege/Penpal#200: RPG Layer 0a (2026-04-17)
-- Task: Implement GitHub issue therealsiege/Penpal#200: RPG Layer 0a: GameState types and interfaces. Create Penny/src/renderer/src/game/game-state.ts with TypeScript interfaces: GameState (root), WorldState,
+### Workflow: Implement GitHub issue therealsiege/Penpal#334: Refactor 1b: (2026-04-20)
+- Task: Implement GitHub issue therealsiege/Penpal#334: Refactor 1b: Fix audio-manager setTimeout leak on scene destroy — add destroy method, clear all timeouts
 - Team: nextjs-frontend / ui-designer / electron-dev
 - Result: PASS (1/3 iterations)
-- Key output: Clean. All checks done.
-
-```
-RESULT: PASS
-
-Test Case 1: File exists at correct path — PASS
-  Details: `Penny/src/renderer/src/game/game-state.ts` pres
-
-### Workflow: Implement GitHub issue therealsiege/Penpal#247: Living Lab 5 (2026-04-17)
-- Task: Implement GitHub issue therealsiege/Penpal#247: Living Lab 5a: AudioManager + ambient soundscape. Parent: #232. Create audio-manager.ts singleton with AudioContext init on first user interaction, chan
-- Team: nextjs-frontend / ui-designer / electron-dev
-- Result: PASS (2/3 iterations)
-- Key output: Clean. Here is the full QA report.
+- Key output: All checks complete. Here is the structured QA report:
 
 ---
 
 ```
 RESULT: PASS
 
-Test Case 1: AudioContext error handling (major reviewer issue) — PASS
-  Details: `_ensureC
+Test Case 1: TypeScript compilation (npx tsc --noEmit) — PASS
+  Details
 
-### Workflow: Implement GitHub issue therealsiege/Penpal#235: Living Lab 1 (2026-04-17)
-- Task: Implement GitHub issue therealsiege/Penpal#235: Living Lab 1a: State transition blending — crossfade between animation states. Parent: #228. Add crossfade transitions in workstation-animation.ts: idle
+### Workflow: Implement GitHub issue therealsiege/Penpal#339: Infra 1a: Po (2026-04-20)
+- Task: Implement GitHub issue therealsiege/Penpal#339: Infra 1a: Pod pipeline — add rebase before PR in pushAndCreatePR, add cleanup flag for stale worktrees, push local main if ahead
 - Team: nextjs-frontend / ui-designer / electron-dev
-- Result: PASS (2/3 iterations)
-- Key output: All checks done. Here is the full QA report.
+- Result: PASS (1/3 iterations)
+- Key output: All three requirements verified. Here is my structured QA report:
 
 ---
 
 ```
 RESULT: PASS
 
-Test Case 1: Crossfade transitions implemented in workstation-animation.ts — PASS
+Test Case 1: TypeScript compilation (npx tsc --noEmit) — PAS
+
+### Workflow: Implement GitHub issue therealsiege/Penpal#338: Refactor 3b: (2026-04-20)
+- Task: Implement GitHub issue therealsiege/Penpal#338: Refactor 3b: Add particle pool size caps and budget — MAX constants per particle type, debug overlay stats
+- Team: nextjs-frontend / ui-designer / electron-dev
+- Result: PASS (1/3 iterations)
+- Key output: TypeScript compilation is clean. Here is the structured result:
+
+```
+RESULT: PASS
+
+Test Case 1: TypeScript compilation (npx tsc --noEmit) — PASS
+  Det
+
+### Workflow: Implement GitHub issue therealsiege/Penpal#333: Refactor 1a: (2026-04-20)
+- Task: Implement GitHub issue therealsiege/Penpal#333: Refactor 1a: Extract tween lifecycle manager from WorkstationSprite — create TweenBag class, replace 55-line manual teardown block
+- Team: nextjs-frontend / ui-designer / electron-dev
+- Result: PASS (1/3 iterations)
+- Self-fix attempts: 1
+- Key output: Applied a minimal **test-only** fix to match the `TweenBag` refactor (no production source changes).
+
+```text
+RESULT: PASS
+
+Test Case 1: Refactor surf
+
+### Workflow: Implement GitHub issue therealsiege/Penpal#337: Refactor 3a: (2026-04-21)
+- Task: Implement GitHub issue therealsiege/Penpal#337: Refactor 3a: Sync walk animation frame rate to movement speed — scale WALK_CYCLE_MS by speed ratio in path-walker.ts
+- Team: nextjs-frontend / ui-designer / electron-dev
+- Result: PASS (1/3 iterations)
+- Key output: All checks done. The reviewer's minor concern about division by zero is also covered: `Phaser.Math.Clamp` handles `Infinity` (from speed=0) → 400ms, a
+
+### Workflow: Implement GitHub issue therealsiege/Penpal#334: Refactor 1b: (2026-04-21)
+- Task: Implement GitHub issue therealsiege/Penpal#334: Refactor 1b: Fix audio-manager setTimeout leak on scene destroy — add destroy method to AudioManager, clear all timeouts, call from OfficeScene.destroy
+- Team: nextjs-frontend / ui-designer / electron-dev
+- Result: PASS (1/3 iterations)
+- Key output: All checks complete. Here is the structured QA report:
+
+---
+
+```
+RESULT: PASS
+
+Test Case 1: TypeScript compilation (npx tsc --noEmit) — PASS
+  Details
+
+### Workflow: Implement GitHub issue therealsiege/Penpal#339: Infra 1a: Po (2026-04-21)
+- Task: Implement GitHub issue therealsiege/Penpal#339: Infra 1a: Pod pipeline — add --cleanup flag for stale worktrees, push local main if ahead before creating worktree
+- Team: nextjs-frontend / ui-designer / electron-dev
+- Result: PASS (1/3 iterations)
+- Key output: All checks done. The reviewer's minor concerns are both addressed:
+- Cleanup failures at the per-entry level are caught and logged (line 102-104); `gi
+
+### Workflow: Implement GitHub issue therealsiege/Penpal#338: Refactor 3b: (2026-04-21)
+- Task: Implement GitHub issue therealsiege/Penpal#338: Refactor 3b: Add particle pool size caps and budget — add MAX constants per particle type in office-particles.ts, particles-weather.ts, particles-ambien
+- Team: nextjs-frontend / ui-designer / electron-dev
+- Result: PASS (1/3 iterations)
+- Key output: TypeScript compilation is clean. Here is the structured result:
+
+```
+RESULT: PASS
+
+Test Case 1: TypeScript compilation (npx tsc --noEmit) — PASS
+  Det
+
+### Workflow: Implement GitHub issue therealsiege/Penpal#333: Refactor 1a: (2026-04-21)
+- Task: Implement GitHub issue therealsiege/Penpal#333: Refactor 1a: Extract tween lifecycle manager from WorkstationSprite — create TweenBag class in tween-lifecycle.ts, replace 55-line manual teardown block
+- Team: nextjs-frontend / ui-designer / electron-dev
+- Result: PASS (1/3 iterations)
+- Key output: The 21 failures in `workstation-animator.test.ts` are pre-existing on main — confirmed identical count before and after the patch.
+
+```
+RESULT: PASS
+
+

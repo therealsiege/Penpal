@@ -107,6 +107,7 @@ export class AudioManager {
   // Timing handles
   private _kbClatterTimeout: ReturnType<typeof setTimeout> | null = null
   private _chirpTimeout: ReturnType<typeof setTimeout> | null = null
+  private _crossfadeTimeout: ReturnType<typeof setTimeout> | null = null
 
   // Reactive state
   private _workingAgentCount = 0
@@ -248,7 +249,9 @@ export class AudioManager {
    */
   crossfade(from: ChannelName, to: ChannelName, ms = 1500): void {
     this.fadeChannelOut(from, ms)
-    setTimeout(() => {
+    if (this._crossfadeTimeout) clearTimeout(this._crossfadeTimeout)
+    this._crossfadeTimeout = setTimeout(() => {
+      this._crossfadeTimeout = null
       const g = this._channelGains[from]
       if (g) g.gain.value = this._channelVolumes[from]
     }, ms + 50)
@@ -747,6 +750,17 @@ export class AudioManager {
     import('./events').then(({ EventBus, EVENTS }) => {
       EventBus.on(EVENTS.POD_LAUNCHED, this._cbPodLaunched)
     }).catch(() => { /* non-critical — SFX won't fire on pod launch */ })
+  }
+
+  /**
+   * Tear down all pending timeouts and stop ambient audio.
+   * Safe to call on scene destroy — AudioManager remains usable after this;
+   * calling `startAmbient()` and `wireEvents()` will re-initialize cleanly.
+   */
+  destroy(): void {
+    this.stopAmbient()
+    if (this._crossfadeTimeout) { clearTimeout(this._crossfadeTimeout); this._crossfadeTimeout = null }
+    this.unwireEvents()
   }
 
   /** Remove all EventBus listeners (call on scene teardown). */

@@ -24,6 +24,10 @@ export const findSimilarSchema = {
         enum: ["chunks", "documents"],
         description: "Search chunks (granular) or documents (high-level). Default: documents",
       },
+      venture: {
+        type: "string",
+        description: "Filter by venture: openloop, 1putt. Omit for all.",
+      },
     },
     required: [],
   },
@@ -34,6 +38,7 @@ export async function findSimilar(args: {
   documentPath?: string;
   limit?: number;
   searchType?: string;
+  venture?: string;
 }): Promise<string> {
   if (!args.text && !args.documentPath) {
     return "Error: Either 'text' or 'documentPath' is required.";
@@ -72,10 +77,14 @@ export async function findSimilar(args: {
 
   // Search Qdrant
   const qdrant = getQdrant();
+  const ventureFilter = args.venture
+    ? { filter: { must: [{ key: "venture", match: { value: args.venture } }] } }
+    : {};
   const results = await qdrant.search(collection, {
     vector: queryVector,
     limit: limit + 1, // +1 to exclude self-match
     with_payload: true,
+    ...ventureFilter,
   });
 
   // Filter out self-match

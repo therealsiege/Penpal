@@ -170,3 +170,11 @@ export function isInActiveVenture(relPath: string, filterKeys?: string[]): boole
   const dirs = getActiveDirectories(filterKeys);
   return dirs.some((d) => relPath.startsWith(d));
 }
+
+/** Resolve a relative file path to its venture key */
+export function resolveVenture(relPath: string): string {
+  for (const [key, v] of Object.entries(ventures)) {
+    if (v.directories.some((d) => relPath.startsWith(d))) return key;
+  }
+  return "unknown";
+}

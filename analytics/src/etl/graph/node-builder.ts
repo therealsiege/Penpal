@@ -14,7 +14,7 @@ import { ProgramEntry, SpecialtyEntry } from "../dictionaries/revenue-model.js";
 import { normalizeName } from "../../shared/utils/normalize.js";
 import { WebIntelRecord } from "../parsers/web-intel-parser.js";
 
-export function buildDocumentNode(doc: ParsedDocument): NodeRecord {
+export function buildDocumentNode(doc: ParsedDocument, venture?: string): NodeRecord {
   return {
     label: "Document",
     properties: {
@@ -22,6 +22,7 @@ export function buildDocumentNode(doc: ParsedDocument): NodeRecord {
       title: doc.title,
       relativePath: doc.relativePath,
       documentType: doc.documentType,
+      venture: venture || "",
       createdAt: doc.createdAt || "",
       updatedAt: doc.updatedAt || "",
       contentPreview: doc.contentPreview,
@@ -30,7 +31,7 @@ export function buildDocumentNode(doc: ParsedDocument): NodeRecord {
   };
 }
 
-export function buildFolderNode(folderPath: string, name: string, depth: number): NodeRecord {
+export function buildFolderNode(folderPath: string, name: string, depth: number, venture?: string): NodeRecord {
   return {
     label: "Folder",
     properties: {
@@ -38,6 +39,7 @@ export function buildFolderNode(folderPath: string, name: string, depth: number)
       path: folderPath,
       name,
       depth,
+      venture: venture || "",
     },
   };
 }
@@ -124,13 +126,14 @@ export function buildRegulationNode(reg: RegulationEntry): NodeRecord {
   };
 }
 
-export function buildLeadNodeFromDoc(lead: ParsedLead, docRelPath: string): NodeRecord {
+export function buildLeadNodeFromDoc(lead: ParsedLead, docRelPath: string, venture?: string): NodeRecord {
   return {
     label: "Lead",
     properties: {
       id: stableId("Lead", normalizeName(lead.name), normalizeName(lead.company || "")),
       name: lead.name,
       company: lead.company || "",
+      venture: venture || "",
       location: lead.location || "",
       jobTitle: lead.jobTitle || "",
       type: lead.type || "",
@@ -150,13 +153,14 @@ export function buildLeadNodeFromDoc(lead: ParsedLead, docRelPath: string): Node
   };
 }
 
-export function buildLeadNodeFromCRM(crm: CRMRecord): NodeRecord {
+export function buildLeadNodeFromCRM(crm: CRMRecord, venture?: string): NodeRecord {
   return {
     label: "Lead",
     properties: {
       id: stableId("Lead", normalizeName(crm.name), normalizeName(crm.company || "")),
       name: crm.name,
       company: crm.company || "",
+      venture: venture || "",
       location: crm.location || "",
       jobTitle: crm.jobTitle || "",
       type: crm.type || "",

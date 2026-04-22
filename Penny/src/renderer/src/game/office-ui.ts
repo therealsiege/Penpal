@@ -53,6 +53,7 @@ export class OfficeUI {
   private debugOverlayContainer: Phaser.GameObjects.Container | null = null
   private debugFpsText: Phaser.GameObjects.Text | null = null
   private debugObjectCountText: Phaser.GameObjects.Text | null = null
+  private debugParticleStatsText: Phaser.GameObjects.Text | null = null
   private debugNavMeshGfx: Phaser.GameObjects.Graphics | null = null
   private debugPathGfx: Phaser.GameObjects.Graphics | null = null
 
@@ -767,21 +768,22 @@ export class OfficeUI {
 
     const panelGfx = this.scene.add.graphics()
     panelGfx.fillStyle(0x000000, 0.75)
-    panelGfx.fillRoundedRect(8, this.viewHeight - 88, 210, 80, 6)
+    panelGfx.fillRoundedRect(8, this.viewHeight - 102, 300, 94, 6)
     panelGfx.lineStyle(1, 0x3b82f6, 0.5)
-    panelGfx.strokeRoundedRect(8, this.viewHeight - 88, 210, 80, 6)
+    panelGfx.strokeRoundedRect(8, this.viewHeight - 102, 300, 94, 6)
     container.add(panelGfx)
 
     const textStyle: Phaser.Types.GameObjects.Text.TextStyle = {
       fontSize: scaledFontSize(10), fontFamily: 'monospace', color: '#34d399', resolution: 2,
     }
-    this.debugFpsText = this.scene.add.text(16, this.viewHeight - 82, 'FPS: --', textStyle).setScrollFactor(0)
-    this.debugObjectCountText = this.scene.add.text(16, this.viewHeight - 68, 'Objects: --', textStyle).setScrollFactor(0)
+    this.debugFpsText = this.scene.add.text(16, this.viewHeight - 96, 'FPS: --', textStyle).setScrollFactor(0)
+    this.debugObjectCountText = this.scene.add.text(16, this.viewHeight - 82, 'Objects: --', textStyle).setScrollFactor(0)
+    this.debugParticleStatsText = this.scene.add.text(16, this.viewHeight - 68, 'Ptcl: --', { ...textStyle, color: '#f59e0b' }).setScrollFactor(0)
     const navStats = navMesh.getStats()
     const navText = this.scene.add.text(16, this.viewHeight - 54, `NavMesh: ${navStats.walkable}/${navStats.total} walkable`, { ...textStyle, color: '#60a5fa' }).setScrollFactor(0)
     const roomText = this.scene.add.text(16, this.viewHeight - 40, `Rooms: ${rooms.size}  Agents: ${agents.length}`, { ...textStyle, color: activeTheme.subtleText }).setScrollFactor(0)
     const hintText = this.scene.add.text(16, this.viewHeight - 26, 'Press ` to dismiss', { ...textStyle, color: '#3a4858', fontSize: scaledFontSize(9) }).setScrollFactor(0)
-    container.add([this.debugFpsText, this.debugObjectCountText, navText, roomText, hintText])
+    container.add([this.debugFpsText, this.debugObjectCountText, this.debugParticleStatsText, navText, roomText, hintText])
 
     // Nav mesh world-space overlays
     this.debugNavMeshGfx = this.scene.add.graphics().setDepth(50).setAlpha(0.3)
@@ -799,12 +801,18 @@ export class OfficeUI {
     if (this.debugOverlayContainer) { this.debugOverlayContainer.destroy(); this.debugOverlayContainer = null }
     this.debugFpsText = null
     this.debugObjectCountText = null
+    this.debugParticleStatsText = null
     if (this.debugNavMeshGfx) { this.debugNavMeshGfx.destroy(); this.debugNavMeshGfx = null }
     if (this.debugPathGfx) { this.debugPathGfx.destroy(); this.debugPathGfx = null }
     this.showToast('Debug overlay OFF', 'info')
   }
 
-  refreshDebugOverlay(_time: number, delta: number, rooms: Map<string, Room>): void {
+  refreshDebugOverlay(
+    _time: number,
+    delta: number,
+    rooms: Map<string, Room>,
+    particleStats?: Record<string, { active: number; max: number }>,
+  ): void {
     const fps = Math.round(1000 / Math.max(delta, 1))
     if (this.debugFpsText) this.debugFpsText.setText(`FPS: ${fps}  (${delta.toFixed(1)}ms)`)
 
@@ -812,6 +820,14 @@ export class OfficeUI {
     let objectCount = 0
     try { objectCount = this.scene.children.length } catch { /* noop */ }
     if (this.debugObjectCountText) this.debugObjectCountText.setText(`Objects: ${objectCount}`)
+
+    // Particle pool stats
+    if (this.debugParticleStatsText && particleStats) {
+      const parts = Object.entries(particleStats)
+        .filter(([, v]) => v.active > 0 || v.max <= 50) // always show small pools; skip big idle ones
+        .map(([k, v]) => `${k.slice(0, 3)}:${v.active}/${v.max}`)
+      this.debugParticleStatsText.setText(`P: ${parts.join(' ')}`)
+    }
 
     // Redraw active paths on nav mesh debug layer
     if (this.debugPathGfx) {
@@ -1090,9 +1106,9 @@ export class OfficeUI {
     }
     if (ws.monitorGlowFx) {
       if (showFull) {
-        if (ws.monitorGlowTween) ws.monitorGlowTween.resume()
+        ws.tweenBag.get('monitorGlow')?.resume()
       } else {
-        if (ws.monitorGlowTween) ws.monitorGlowTween.pause()
+        ws.tweenBag.get('monitorGlow')?.pause()
         ws.monitorGlowFx.outerStrength = 0
       }
     }

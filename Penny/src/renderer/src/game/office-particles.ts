@@ -1065,6 +1065,30 @@ export class OfficeParticles {
     }
   }
 
+  // ---------------------------------------------------------------------------
+  // Pool stats — aggregated for the debug overlay
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Returns active/max counts for every particle pool in the system.
+   * Consumed by OfficeUI's debug overlay (backtick toggle).
+   */
+  getPoolStats(): Record<string, { active: number; max: number }> {
+    const countBusy = (pool: { getData(key: string): unknown }[]): number =>
+      pool.filter(p => p.getData('busy')).length
+
+    return {
+      ...this.weather.getPoolStats(),
+      ...this.ambient.getPoolStats(),
+      typing:    { active: countBusy(this.typingParticlePool),   max: this.typingParticlePool.length    },
+      corridor:  { active: countBusy(this.corridorParticlePool), max: this.corridorParticlePool.length  },
+      alert:     { active: countBusy(this.alertRipplePool),      max: this.alertRipplePool.length       },
+      flame:     { active: countBusy(this.streakFlamePool),      max: this.streakFlamePool.length       },
+      dataMote:  { active: countBusy(this.dataMotePool),         max: this.dataMotePool.length          },
+      taskTrail: { active: countBusy(this.taskTrailGhostPool),   max: this.taskTrailGhostPool.length    },
+    }
+  }
+
   triggerChimeRipple(wallClockContainer: Phaser.GameObjects.Container | null): void {
     if (!wallClockContainer) return
 

@@ -1,6 +1,7 @@
 import Phaser from 'phaser'
 import type { AgentState } from '../types'
 import type { AnimatedBar } from './animated-bar'
+import type { TweenBag } from './tween-lifecycle'
 
 // ---------------------------------------------------------------------------
 // Shared type definitions for the Office game scene
@@ -35,18 +36,12 @@ export interface WorkstationSprite {
   blockedIndicatorStem: Phaser.GameObjects.Rectangle
   blockedIndicatorText: Phaser.GameObjects.Text
   state: AgentState | null
-  breathTween?: Phaser.Tweens.Tween
-  bounceTween?: Phaser.Tweens.Tween
-  dotPulseTween?: Phaser.Tweens.Tween
+  /** Managed lifecycle bag for all animation tweens and timer events. */
+  tweenBag: TweenBag
   keyboard?: Phaser.GameObjects.Rectangle
-  kbGlowTween?: Phaser.Tweens.Tween
-  monitorGlowTween?: Phaser.Tweens.Tween
   screenTween?: Phaser.Tweens.Tween
   /** Mutable ref shared with screenTween callback — set .mode to update screen animation */
   screenState?: { mode: string }
-  typingTween?: Phaser.Tweens.Tween
-  headTiltTween?: Phaser.Tweens.Tween
-  pulseTween?: Phaser.Tweens.Tween
   steamTweens?: Phaser.Tweens.Tween[]
   steamContainer?: Phaser.GameObjects.Container
   lastAnimMode?: 'idle' | 'working' | 'waiting'
@@ -55,37 +50,29 @@ export interface WorkstationSprite {
   lodLevel2Objects: Phaser.GameObjects.GameObject[]
   /** Level 3 only: shown at full-detail zoom (accessories, lamps, mugs, ledGlow, monitorText, moodEmoji) */
   lodLevel3Objects: Phaser.GameObjects.GameObject[]
-  lookAroundTimer?: Phaser.Time.TimerEvent
-  stretchTimer?: Phaser.Time.TimerEvent
-  walkBreakTimer?: Phaser.Time.TimerEvent
-  walkBreakTween?: Phaser.Tweens.Tween
-  lookAtNeighborTimer?: Phaser.Time.TimerEvent
-  yawnTimer?: Phaser.Time.TimerEvent
   blockedIndicatorTween?: Phaser.Tweens.Tween
+  /** Blocked indicator bob tween (future feature placeholder) */
+  blockedBobTween?: Phaser.Tweens.Tween
+  /** Keyboard scale tween for tap animation (future feature placeholder) */
+  kbScaleTween?: Phaser.Tweens.Tween
   ledGlow?: Phaser.GameObjects.Graphics
-  ledPulseTween?: Phaser.Tweens.Tween
   lastShownBlurb?: string
   blurbFadeTimer?: Phaser.Time.TimerEvent
   thoughtBubbleFloatTween?: Phaser.Tweens.Tween
   blurbTypingTween?: Phaser.Tweens.Tween
   moodEmoji?: Phaser.GameObjects.Text
   moodBadge?: Phaser.GameObjects.Sprite
-  moodTween?: Phaser.Tweens.Tween
-  moodBadgeTween?: Phaser.Tweens.Tween
   deskPlantTween?: Phaser.Tweens.Tween
   xpBar?: AnimatedBar
   xpBarText?: Phaser.GameObjects.Text
   rippleFired?: boolean
   soundWaveGfx?: Phaser.GameObjects.Graphics
-  soundWaveTween?: Phaser.Tweens.Tween
   soundWaveSpeaker?: Phaser.GameObjects.Sprite
-  typingNoteTimer?: Phaser.Time.TimerEvent
   sparklineGfx?: Phaser.GameObjects.Graphics
   activityHistory?: number[]
   phoneLight?: Phaser.GameObjects.Arc
   phoneLightTween?: Phaser.Tweens.Tween
   progressRing?: Phaser.GameObjects.Graphics
-  progressRingTween?: Phaser.Tweens.Tween
   workStartTime?: number
   shadow?: Phaser.GameObjects.Ellipse
   uptimeText?: Phaser.GameObjects.Text
@@ -101,8 +88,6 @@ export interface WorkstationSprite {
   legoSegments?: Phaser.GameObjects.Sprite[]
   /** Floating quest difficulty star above workstation */
   questIcon?: Phaser.GameObjects.Sprite
-  questIconTween?: Phaser.Tweens.Tween
-  questIconPulseTween?: Phaser.Tweens.Tween
   /** Gold medal sprite for weekly MVP */
   mvpMedal?: Phaser.GameObjects.Sprite
   mvpMedalTween?: Phaser.Tweens.Tween
@@ -125,8 +110,6 @@ export interface WorkstationSprite {
   /** Rivalry indicator — red star shown when agent has an active leaderboard rival */
   rivalryIndicator?: Phaser.GameObjects.Sprite
   rivalryGlowTween?: Phaser.Tweens.Tween
-  /** Idle chair rocking tween — subtle lean-back oscillation */
-  chairRockTween?: Phaser.Tweens.Tween
   /** Vertical energy/stamina bar — track (grey background) */
   energyTrack?: Phaser.GameObjects.Image
   /** Vertical energy/stamina bar — fill (colored, cropped from bottom up) */
@@ -141,16 +124,10 @@ export interface WorkstationSprite {
   energyLastTint?: number
   /** Desk lamp light cone triangle — animated based on working/idle state */
   lampLight?: Phaser.GameObjects.Triangle
-  /** Lamp light tween (alpha fade between working/idle) */
-  lampLightTween?: Phaser.Tweens.Tween
-  /** Timer for subtle lamp flicker while working */
-  lampFlickerTimer?: Phaser.Time.TimerEvent
   /** Speech bubble container — shows last assistant blurb as typewriter text */
   speechBubble?: Phaser.GameObjects.Container
   speechBubbleText?: Phaser.GameObjects.Text
   speechBubbleBg?: Phaser.GameObjects.Graphics
-  speechBubbleTween?: Phaser.Tweens.Tween
-  speechBubbleTimer?: Phaser.Time.TimerEvent
   /** Lego exclamation sprite — shown when agent needs interaction */
   exclamationSprite?: Phaser.GameObjects.Sprite
   exclamationTween?: Phaser.Tweens.Tween
@@ -196,8 +173,6 @@ export interface WorkstationSprite {
   contextRotMonitorBaseX?: number
   /** Yellow rotating arc ring shown during accept-edits review phase */
   taskReviewRing?: Phaser.GameObjects.Graphics
-  /** Counter tween driving the review ring rotation angle */
-  taskReviewRingTween?: Phaser.Tweens.Tween
 }
 
 export interface Room {

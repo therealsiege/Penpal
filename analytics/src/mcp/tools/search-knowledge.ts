@@ -20,6 +20,11 @@ export const searchKnowledgeSchema = {
         description:
           "Filter by document type: lead, engineering, integration, competitor, skill, product, meeting, reference, general",
       },
+      venture: {
+        type: "string",
+        description:
+          "Filter by venture: openloop, 1putt. Omit to search across all ventures.",
+      },
     },
     required: ["query"],
   },
@@ -29,6 +34,7 @@ export async function searchKnowledge(args: {
   query: string;
   limit?: number;
   documentType?: string;
+  venture?: string;
 }): Promise<string> {
   const limit = args.limit || 10;
 
@@ -42,13 +48,10 @@ export async function searchKnowledge(args: {
 
   // Search Qdrant
   const qdrant = getQdrant();
-  const filter = args.documentType
-    ? {
-        must: [
-          { key: "documentType", match: { value: args.documentType } },
-        ],
-      }
-    : undefined;
+  const mustClauses: Array<{ key: string; match: { value: string } }> = [];
+  if (args.documentType) mustClauses.push({ key: "documentType", match: { value: args.documentType } });
+  if (args.venture) mustClauses.push({ key: "venture", match: { value: args.venture } });
+  const filter = mustClauses.length > 0 ? { must: mustClauses } : undefined;
 
   const results = await qdrant.search("document_chunks", {
     vector: queryVector,

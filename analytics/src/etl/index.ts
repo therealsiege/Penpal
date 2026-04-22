@@ -1,7 +1,7 @@
 import fs from "fs";
 import path from "path";
 import { glob } from "glob";
-import { config, resolveVaultPath, getActiveVentures, getActiveDirectories } from "../shared/config.js";
+import { config, resolveVaultPath, getActiveVentures, getActiveDirectories, resolveVenture } from "../shared/config.js";
 import { verifyConnection, closeConnections } from "../shared/connections.js";
 import { createSchema, dropAll } from "./db/schema.js";
 import { GraphImporter } from "./graph/importer.js";
@@ -208,7 +208,7 @@ async function main() {
   for (const dirPath of allDirs) {
     const name = path.basename(dirPath);
     const depth = dirPath.split(path.sep).length;
-    importer.addNode(buildFolderNode(dirPath, name, depth));
+    importer.addNode(buildFolderNode(dirPath, name, depth, resolveVenture(dirPath)));
 
     const parentPath = path.dirname(dirPath);
     if (parentPath !== "." && allDirs.has(parentPath)) {
@@ -225,7 +225,7 @@ async function main() {
   const pendingInternalLinks: { source: string; target: string }[] = [];
 
   // Phase 1: Chunking + embedding data collection
-  const allChunks: { doc: ReturnType<typeof parseMarkdownFile>; chunks: ReturnType<typeof chunkDocument> }[] = [];
+  const allChunks: { doc: ReturnType<typeof parseMarkdownFile>; chunks: ReturnType<typeof chunkDocument>; venture: string }[] = [];
 
   // Phase 2: Documents for LLM extraction
   const docsForLLM: { relPath: string; rawContent: string; documentType: string }[] = [];
@@ -239,10 +239,11 @@ async function main() {
   for (const relPath of mdFiles) {
     const absPath = path.join(config.vaultPath, relPath);
     const doc = parseMarkdownFile(absPath);
+    const venture = resolveVenture(relPath);
     docRelPaths.add(doc.relativePath);
 
     // Document node
-    importer.addNode(buildDocumentNode(doc));
+    importer.addNode(buildDocumentNode(doc, venture));
 
     // IN_FOLDER relationship
     const folderPath = path.dirname(doc.relativePath);
@@ -259,7 +260,7 @@ async function main() {
     // Lead parsing
     const lead = parseLeadFromDocument(doc);
     if (lead) {
-      importer.addNode(buildLeadNodeFromDoc(lead, doc.relativePath));
+      importer.addNode(buildLeadNodeFromDoc(lead, doc.relativePath, venture));
       importer.addRel(buildAboutLeadRel(doc.relativePath, lead.name, lead.company || ""));
 
       // Lead → EHR
@@ -351,7 +352,7 @@ async function main() {
     // Phase 1: Chunk document (for Qdrant embeddings only)
     const chunks = chunkDocument(doc.relativePath, doc.rawContent);
     if (chunks.length > 0) {
-      allChunks.push({ doc, chunks });
+      allChunks.push({ doc, chunks, venture });
     }
 
     // Phase 2: Collect for LLM extraction
@@ -383,15 +384,17 @@ async function main() {
 
   // 9. Parse CRM CSVs per venture
   console.log("\n--- Parsing CRM CSVs ---");
-  const allCrmPaths = activeVentures.filter((v) => v.crmCsvPath).map((v) => v.crmCsvPath!);
-  for (const csvRelPath of allCrmPaths) {
+  const crmVentures = activeVentures
+    .map((v, _, __, key = Object.entries(config.ventures).find(([, vc]) => vc.name === v.name)?.[0] || "unknown") => ({ csvRelPath: v.crmCsvPath, ventureKey: key }))
+    .filter((v): v is { csvRelPath: string; ventureKey: string } => !!v.csvRelPath);
+  for (const { csvRelPath, ventureKey: crmVenture } of crmVentures) {
   const crmPath = resolveVaultPath(csvRelPath);
   if (fs.existsSync(crmPath)) {
     const crmRecords = parseCRMCsv(crmPath);
     console.log(`  [${csvRelPath}] Found ${crmRecords.length} CRM records`);
 
     for (const crm of crmRecords) {
-      importer.addNode(buildLeadNodeFromCRM(crm));
+      importer.addNode(buildLeadNodeFromCRM(crm, crmVenture));
 
       // Lead → EHR
       if (crm.emr) {
@@ -582,7 +585,7 @@ async function main() {
     const chunkPoints: ChunkPoint[] = [];
     const summaryPoints: SummaryPoint[] = [];
 
-    for (const { doc, chunks } of allChunks) {
+    for (const { doc, chunks, venture: docVenture } of allChunks) {
       const docId = stableId("Document", doc.relativePath);
 
       // Embed chunks
@@ -605,6 +608,7 @@ async function main() {
             documentId: docId,
             documentPath: chunk.documentPath,
             documentType: doc.documentType,
+            venture: docVenture,
             headingPath: chunk.headingPath,
             content: chunk.content,
             chunkIndex: chunk.chunkIndex,
@@ -625,6 +629,7 @@ async function main() {
           documentId: docId,
           documentPath: doc.relativePath,
           documentType: doc.documentType,
+          venture: docVenture,
           title: doc.title,
           contentPreview: doc.contentPreview,
         },

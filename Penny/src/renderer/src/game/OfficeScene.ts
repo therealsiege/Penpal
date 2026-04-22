@@ -1336,7 +1336,7 @@ export class OfficeScene extends Phaser.Scene {
 
     // Debug overlay refresh (throttled to 250ms)
     if (this.ui.debugOverlayVisible && time - this.lastDebugRefreshAt >= 250) {
-      this.ui.refreshDebugOverlay(time, _delta, this.rooms)
+      this.ui.refreshDebugOverlay(time, _delta, this.rooms, this._particles.getPoolStats())
       this.lastDebugRefreshAt = time
     }
 
@@ -1980,9 +1980,9 @@ export class OfficeScene extends Phaser.Scene {
     }
     if (ws.monitorGlowFx) {
       if (showFull) {
-        if (ws.monitorGlowTween) ws.monitorGlowTween.resume()
+        ws.tweenBag.get('monitorGlow')?.resume()
       } else {
-        if (ws.monitorGlowTween) ws.monitorGlowTween.pause()
+        ws.tweenBag.get('monitorGlow')?.pause()
         ws.monitorGlowFx.outerStrength = 0
       }
     }
@@ -2111,6 +2111,6 @@ export class OfficeScene extends Phaser.Scene {
       }
     }
     this.rooms.clear()
-    audioManager.unwireEvents()
+    audioManager.destroy()
   }
 }

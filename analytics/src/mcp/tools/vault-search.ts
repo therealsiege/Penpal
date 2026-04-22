@@ -1,6 +1,6 @@
 import path from "path";
 import { execFile } from "child_process";
-import { config } from "../../shared/config.js";
+import { config, resolveVenture } from "../../shared/config.js";
 import { extractTags } from "./vault-helpers.js";
 import fs from "fs";
 
@@ -19,6 +19,10 @@ export const vaultSearchSchema = {
         type: "number",
         description: "Maximum number of results (default 20)",
       },
+      venture: {
+        type: "string",
+        description: "Filter by venture: openloop, 1putt. Omit for all.",
+      },
     },
     required: ["query"],
   },
@@ -36,6 +40,7 @@ interface SearchResult {
 export async function vaultSearch(args: {
   query: string;
   limit?: number;
+  venture?: string;
 }): Promise<string> {
   const query = args.query?.trim();
   if (!query) throw new Error("Query must not be empty");
@@ -46,7 +51,12 @@ export async function vaultSearch(args: {
   const sanitized = query.replace(/[^\w\s\-_.]/g, "").trim();
   if (!sanitized) throw new Error("Query contains no searchable characters");
 
-  const results = await grepSearch(sanitized, limit);
+  let results = await grepSearch(sanitized, args.venture ? limit * 3 : limit);
+
+  // Filter by venture if specified
+  if (args.venture) {
+    results = results.filter((r) => resolveVenture(r.path) === args.venture).slice(0, limit);
+  }
 
   return JSON.stringify(results);
 }

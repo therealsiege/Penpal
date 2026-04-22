@@ -11,6 +11,7 @@ import { AnimConfig } from './animation-config'
 
 const DEFAULT_WALK_SPEED = 55 // px/sec
 const WALK_CYCLE_MS = 200
+const WALK_SPEED_BASE = 120 // px/s reference speed at which WALK_CYCLE_MS is calibrated
 const DUST_STEP_INTERVAL = 3 // spawn dust every N walk cycles
 const TRAIL_STEP_INTERVAL = 2 // spawn breadcrumb dot every N walk cycles
 const BOUNCE_AMPLITUDE = 1.5 // px vertical bounce during walk
@@ -36,6 +37,7 @@ export class PathWalker {
   private walking = false
   private dustStepCounter = 0
   private trailDots: Phaser.GameObjects.Sprite[] = []
+  private walkCycleMs: number // frame interval scaled to movement speed
   private lastDirection = -1 // last startFrame direction used
   private lastStartFrame = -1 // previous waypoint's startFrame for direction change detection
 
@@ -51,6 +53,13 @@ export class PathWalker {
     this.shadow = shadow
     this.sheetKey = sheetKey
     this.speed = speed
+    // Scale walk animation frame interval inversely with speed so legs match travel pace.
+    // At WALK_SPEED_BASE (120 px/s) the cycle is exactly WALK_CYCLE_MS (200 ms).
+    this.walkCycleMs = Phaser.Math.Clamp(
+      Math.round(WALK_CYCLE_MS * (WALK_SPEED_BASE / this.speed)),
+      100,
+      400,
+    )
   }
 
   startPath(waypoints: NavPoint[], onComplete: () => void): void {
@@ -174,7 +183,7 @@ export class PathWalker {
 
     let cycleIdx = 0
     this.walkCycleTimer = this.scene.time.addEvent({
-      delay: WALK_CYCLE_MS, loop: true,
+      delay: this.walkCycleMs, loop: true,
       callback: () => {
         if (!this.sprite.active) { this.walkCycleTimer?.destroy(); return }
         cycleIdx = cycleIdx === 0 ? 1 : 0

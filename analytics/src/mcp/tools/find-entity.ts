@@ -16,6 +16,11 @@ export const findEntitySchema = {
         description:
           "Entity type filter: Company, Person, Technology, EHRSystem, Skill, Regulation, Market, Lead",
       },
+      venture: {
+        type: "string",
+        description:
+          "Filter by venture: openloop, 1putt. Only applies to Document and Lead nodes. Omit for all.",
+      },
     },
     required: ["name"],
   },
@@ -24,6 +29,7 @@ export const findEntitySchema = {
 export async function findEntity(args: {
   name: string;
   type?: string;
+  venture?: string;
 }): Promise<string> {
   const driver = getDriver();
   const session = driver.session();
@@ -31,13 +37,14 @@ export async function findEntity(args: {
   try {
     // Find the entity by name (case-insensitive)
     const labelFilter = args.type ? `:${args.type}` : "";
+    const ventureClause = args.venture ? ` AND e.venture = $venture` : "";
     const findQuery = `
       MATCH (e${labelFilter})
-      WHERE e.name IS NOT NULL AND toLower(e.name) CONTAINS toLower($name)
+      WHERE e.name IS NOT NULL AND toLower(e.name) CONTAINS toLower($name)${ventureClause}
       RETURN e, labels(e) AS labels
       LIMIT 5
     `;
-    const findResult = await session.run(findQuery, { name: args.name });
+    const findResult = await session.run(findQuery, { name: args.name, venture: args.venture || "" });
 
     if (findResult.records.length === 0) {
       return `No entity found matching "${args.name}"${args.type ? ` of type ${args.type}` : ""}.`;

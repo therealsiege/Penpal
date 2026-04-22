@@ -1,6 +1,7 @@
 import Phaser from 'phaser'
 import { SPRITESHEET_KEYS, ICON_FRAMES, EFFECT_ANIM_KEYS } from './office-asset-keys'
 import { soundEngine } from './sound-engine'
+import { MAX_RAIN_POOL, MAX_SNOW_POOL } from './office-constants'
 
 // ---------------------------------------------------------------------------
 // WeatherParticles — rain and snow screen-space overlay pools
@@ -483,6 +484,14 @@ export class WeatherParticles {
 
   isRainActive(): boolean { return this.rainActive }
   isSnowActive(): boolean { return this.snowActive }
+
+  /** Returns active/max counts for rain and snow pools (used by debug overlay). */
+  getPoolStats(): Record<string, { active: number; max: number }> {
+    return {
+      rain: { active: this.rainDropPool.filter(d => d.visible).length, max: MAX_RAIN_POOL },
+      snow: { active: this.snowPool.filter(f => f.visible).length,     max: MAX_SNOW_POOL },
+    }
+  }
 
   // ---------------------------------------------------------------------------
   // Sleep / Wake lifecycle

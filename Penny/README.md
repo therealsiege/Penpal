@@ -57,14 +57,85 @@ The long-term goal: manage the operations of an entire business through Slack, G
 
 We're eating our own dogfood — Penpal's pod system is used to build Penpal itself. The lab scene shows an isometric office where agent characters work at desks, take coffee breaks in the cafe, and celebrate task completions with particle effects.
 
-### Roadmap
+### Feature Status
 
-**Dispatch evolution:**
-- **Linear integration** — pull tasks from Linear alongside GitHub Issues. Same dispatch board, same pod system, another source of work
-- **Dispatch in the game** — weave the dispatch board into Mission Control itself. Issues appear as quest markers in the lab. Click an agent's desk to see their current pod. The game IS the control surface
-- **Slack-first operations** — manage everything from Slack. `!task`, `!pod status`, `!dispatch`. The desktop app is the visual layer; Slack is the command line
+#### Pod System
 
-**Future scenes:**
+| Feature | Status | Wave | Description |
+|---------|--------|------|-------------|
+| 3-agent pipeline (Solver/Reviewer/Executor) | Done | — | Core workflow engine with iteration loops and self-fix |
+| Isolated git worktrees | Done | — | Each pod gets its own branch + worktree, auto-cleanup |
+| Runtime profiles (max/sonnet/economic) | Done | — | Per-phase model selection, custom profiles via JSON |
+| Ollama/OpenCode economic mode | Done | — | Zero-cost local inference via qwen3-coder:30b |
+| GitHub issue pipeline | Done | — | `agent-ready` label → pod → PR, watched repo management |
+| Flight board (file conflict detection) | Done | — | Tracks files being edited by active pods |
+| Best-of-N solver candidates | Done | — | Multi-candidate solving with self-evaluation selection |
+| Rebase before PR | Done | W6 | Auto-rebase onto main, conflict detection, lock-file auto-resolve |
+| Push-if-ahead | Done | W6 | Pushes local main to origin before creating worktrees |
+| Stale worktree cleanup (`--cleanup`) | Done | W6 | Prunes worktrees older than 48h |
+| Workflow pruning | Done | W6 | Caps persisted workflows at 100, auto-kills zombies |
+| Expanded CLAUDE.md context (20 entries) | Done | W6 | Workflow log retention 5 → 20 |
+| Scoped context injection | Done | W7 | Task-aware CLAUDE.md filtering, ~1500 tokens vs ~3000 |
+| ReasoningBank (pattern learning) | Done | W7 | Stores outcomes, injects similar successes into solver |
+| Complexity routing | Done | W7 | Auto-selects Sonnet/Opus/Opus+N by task complexity |
+| Governance rules | Done | W7 | Max files, diff size, duration, forbidden paths |
+| MRAP reflection | Done | W7 | Efficiency rating, bottleneck detection, fleet analytics |
+| Merge queue (Refinery) | Done | W7 | Sequential rebase → tsc → merge → push pipeline |
+| Shell injection hardening | Done | W7 | All `execSync` with user input → `execFileSync` |
+| TweenBag lifecycle manager | PR ready | W6 | Replace 55-line manual tween teardown (#333 → PR #346) |
+| Audio-manager setTimeout leak fix | PR ready | W6 | Cleanup timeouts on scene destroy (#334 → PR #343) |
+| Walk animation speed sync | PR ready | W6 | Tie frame rate to movement speed (#337 → PR #342) |
+| Particle pool size caps | PR ready | W6 | MAX constants per particle type + debug overlay (#338 → PR #345) |
+| Pod pipeline cleanup CLI | PR ready | W6 | Cleanup flag + push-if-ahead (#339 → PR #344) |
+| Animation state classes | Planned | W6 | Extract idle/working/waiting into separate classes (#335) |
+| Game-system hooks extraction | Planned | W6 | Decouple quest/leaderboard/credits from animation (#336) |
+
+#### Game Surface (Isometric Lab)
+
+| Feature | Status | Wave | Description |
+|---------|--------|------|-------------|
+| Agent workstations with sprites | Done | — | Desk, chair, monitor, sprite per agent |
+| LOD system (3 levels) | Done | — | Overview → room-level → full detail based on zoom |
+| Day/night atmosphere cycle | Done | — | Sky gradients, starfield, clouds, shadows, dawn/dusk flash |
+| Cafe with coffee runs | Done | — | Agents walk to cafe, barista service, social interactions |
+| Quest auto-wrapper | Done | — | Tasks → quests with difficulty inference, XP multipliers |
+| Cosmetic tiers (rank-gated) | Done | — | Desk items unlock by XP rank (keyboard, lamp, plant, phone, gold, RGB) |
+| Leaderboard + rivalries | Done | — | Season XP rankings, weekly MVP, 5% rivalry detection |
+| 30-day seasons | Done | — | Themed challenges, 4 templates, auto-rotation |
+| Credits economy | Done | — | Cosmetic currency, shop catalog |
+| Celebration VFX | Done | — | Rank-up, task-complete, milestone, error effects |
+| Particle systems (weather, ambient) | Done | — | Rain, snow, mako motes, sparks, steam |
+| NavMesh A* pathfinding | Done | — | 12px grid, line-of-sight smoothing |
+| Pod connecting lines + chat dots | Done | — | Visual links between pod team members |
+| Minimap with click-to-pan | Done | — | Room outlines, viewport indicator, hover labels |
+| Phaser audio + AudioManager | PR ready | W5 | Web Audio synthesis, M-key mute |
+| SFX triggers (task lifecycle) | PR ready | W5 | Keyboard clatter, celebration sounds |
+| Theme audit (3 themes work) | PR ready | W5 | All hardcoded hex eliminated |
+| Cinematic letterbox bars | PR ready | W5 | Rank-up and season ceremony framing |
+| In-game settings menu | PR ready | W5 | Volume sliders, theme selector, keybinds |
+| Session replay (record/playback) | PR ready | W5 | Record and replay agent activity |
+| 8-direction character spritesheet | PR ready | W5 | Walk cycle overhaul |
+| Player character (WASD) | PR ready | W5 | Free-roaming player with keyboard movement |
+| Monitor + desk lamp point lights | In progress | — | Light2D point lights responding to agent state (#243) |
+| Agent dialog panel (E key) | In progress | — | NPC dialog showing persona info + current task (#206) |
+| Laser doors → lab-map.json | In progress | — | Extract hardcoded positions to config (#153) |
+
+#### Platform
+
+| Feature | Status | Description |
+|---------|--------|-------------|
+| Multi-machine fleet (Slack) | Done | Heartbeat discovery, world map pins, DM alerts |
+| Vault markdown editor | Done | CodeMirror 6, wikilinks, graph view, file tree |
+| Knowledge graph (Memgraph + Qdrant) | Done | ETL pipeline, entity extraction, embeddings |
+| MCP server | Done | 5 tool groups (meta, orchestrator, pods, office, vault) |
+| Dispatch board | Done | Unified GitHub issue + pod workflow board |
+| Eval dashboard | Done | Pod quality metrics, spot-check queue, digests |
+| Embedded terminal (xterm.js) | Done | node-pty, inline agent interaction |
+| Linear integration | Planned | Pull tasks from Linear alongside GitHub Issues |
+| Dispatch in game | Planned | Issues as quest markers, click desk to see pod |
+| Slack-first operations | Planned | `!task`, `!pod status`, `!dispatch` from Slack |
+
+### Future Scenes
 
 | Scene | Purpose |
 |-------|---------|
@@ -106,45 +177,91 @@ Each agent has a catchphrase, backstory, and working style injected into their s
 
 ---
 
-## Pod Workflow — How Issues Become PRs
+## Pod System — How Issues Become PRs
 
-```
-GitHub Issue (labeled agent-ready)
-  |
-  v
-[1] GitHub Pipeline picks up the issue
-  |  - Creates isolated git worktree + branch
-  |  - Selects runtime profile from labels (economic/max/sonnet)
-  |  - Copies opencode.json for Ollama provider access
-  |
-  v
-[2] SOLVER (e.g. Sun Wukong)
-  |  - Reads the issue description
-  |  - Implements the solution in the worktree
-  |  - Commits changes to the branch
-  |
-  v
-[3] REVIEWER (e.g. Guanyin)
-  |  - Reviews independently (does NOT see solver's code)
-  |  - Returns structured verdict: approve / reject / request-changes
-  |  - On reject: feedback goes back to solver (iteration loop)
-  |  - On parse failure: rejects (no silent auto-approve)
-  |
-  v
-[4] EXECUTOR (e.g. Sha Wujing)
-  |  - Runs test plan against the implementation
-  |  - Returns RESULT: PASS or RESULT: FAIL
-  |  - On fail: self-fix loop (up to maxSelfFixes attempts)
-  |  - On continued fail: feedback to solver (next iteration)
-  |
-  v
-[5] PR Created
-     - Branch pushed to origin
-     - PR created with "Closes #N"
-     - Issue labeled pr-ready
+Pods are 3-agent teams that turn GitHub issues into merged PRs. The system is self-improving — each pod run feeds data back into routing, context, and pattern matching for the next one.
+
+### The Pipeline
+
+```mermaid
+flowchart TD
+    Issue["GitHub Issue<br/><i>labeled agent-ready</i>"] --> Complexity
+
+    subgraph Intelligence ["Intelligence Layer"]
+        Complexity["Complexity Routing<br/><code>pod-complexity.ts</code><br/>Score task → Simple / Moderate / Complex<br/>→ auto-select Sonnet · Opus · Opus+N"]
+        Context["Scoped Context<br/><code>pod-context.ts</code><br/>Detect relevant files → filter CLAUDE.md<br/>→ file-specific git history (~1500 tokens)"]
+        Patterns["Pattern Matching<br/><code>reasoning-bank.ts</code><br/>Find similar past successes → inject into prompt<br/>Surface similar failures as warnings"]
+        Complexity --> Context --> Patterns
+    end
+
+    Patterns --> Solver
+
+    subgraph Execution ["Execution Layer"]
+        Solver["SOLVER<br/><i>e.g. Sun Wukong</i><br/>Implement solution in isolated worktree"]
+        Governance{"Governance Check<br/><code>pod-governance.ts</code><br/>max files · diff size · duration · secrets"}
+        Reviewer["REVIEWER<br/><i>e.g. Guanyin</i><br/>Independent review — does NOT see solver code<br/>approve · reject · request-changes"]
+        Executor["EXECUTOR<br/><i>e.g. Sha Wujing</i><br/>Run test plan → PASS or FAIL<br/>Self-fix loop on failure"]
+
+        Solver --> Governance
+        Governance -->|pass| Reviewer
+        Governance -->|violation| Paused([Pause / Fail])
+        Reviewer -->|approve| Executor
+        Reviewer -->|reject| Solver
+        Executor -->|fail + iterations left| Solver
+    end
+
+    Executor -->|pass| PR
+
+    subgraph Landing ["Landing Layer"]
+        PR["PR Created<br/>Rebase → push → create PR<br/>Auto-enqueue into merge queue"]
+        Reflect["Reflection<br/><code>pod-reflection.ts</code><br/>Efficiency · bottleneck · recommendation"]
+        Store["Pattern Storage<br/><code>reasoning-bank.ts</code><br/>Store outcome: task, files, iterations, pass/fail"]
+        Merge["Merge Queue<br/><code>merge-queue.ts</code><br/>Sequential: rebase → tsc → ff-merge → push"]
+
+        PR --> Reflect --> Store --> Merge
+    end
+
+    Store -.->|"feeds back into<br/>next pod"| Patterns
+
+    style Intelligence fill:#1a1a2e,stroke:#e94560,color:#eee
+    style Execution fill:#1a1a2e,stroke:#0f3460,color:#eee
+    style Landing fill:#1a1a2e,stroke:#16213e,color:#eee
 ```
 
 **Max iterations**: configurable per profile. Economic mode gets 5 rounds; max gets 3.
+
+### Intelligence Modules
+
+Six modules wrap the execution pipeline. Inspired by patterns from [ruflo](https://github.com/ruvnet/ruflo) (3-tier routing), [agentic-flow](https://github.com/ruvnet/agentic-flow) (ReasoningBank), [Dossier](https://github.com/rwliebs/Dossier) (scoped context), [gastown](https://github.com/gastownhall/gastown) (merge queue), and [DAA](https://github.com/ruvnet/daa) (governance + MRAP loop).
+
+| Module | File | When |
+|--------|------|------|
+| **Complexity Routing** | `pod-complexity.ts` | Before pod starts — scores task, selects model tier |
+| **Scoped Context** | `pod-context.ts` | At worktree creation — builds task-specific CLAUDE.md |
+| **ReasoningBank** | `reasoning-bank.ts` | Before solver (query) and after completion (store) |
+| **Governance** | `pod-governance.ts` | After solver — checks file count, diff size, duration, forbidden paths |
+| **Reflection** | `pod-reflection.ts` | After completion — rates efficiency, detects bottleneck |
+| **Merge Queue** | `merge-queue.ts` | After PR — sequential rebase-test-merge pipeline |
+
+### Governance Rules
+
+Default constraints (configurable via `data/governance-rules.json`):
+
+| Rule | Limit | Action |
+|------|-------|--------|
+| Max files modified | 12 | Warn |
+| Max diff lines | 800 | Warn |
+| Max duration | 30 minutes | Auto-pause |
+| Forbidden paths | `.env`, `credentials`, `secrets`, `.pem`, `.key` | Fail |
+
+### CLI
+
+```bash
+npm run pod:create -- --task "..." --preset frontend-feature   # auto-selects model tier
+npm run pod:create -- --merge-queue                            # drain merge queue
+npm run pod:create -- --merge-next                             # merge next PR in queue
+npm run pod:create -- --cleanup                                # prune stale worktrees >48h
+```
 
 ---
 
@@ -269,7 +386,7 @@ Requires Ollama running locally with `qwen3-coder:30b` pulled: `ollama pull qwen
 
 | Module | Purpose |
 |--------|---------|
-| `pods.ts` | 3-agent workflow engine — Solver/Reviewer/Executor with runtime profiles, issue tracking, phase overrides, file conflict detection |
+| `pods.ts` | 3-agent workflow engine — Solver/Reviewer/Executor with runtime profiles, complexity routing, governance, pattern learning, reflection, merge queue |
 | `github-pipeline.ts` | `agent-ready` issues -> isolated worktree -> pod -> PR creation |
 | `github-issues.ts` | GitHub issue poller, watched repo management, card aggregation |
 | `fleet-heartbeat.ts` | Multi-instance discovery via Slack `#sk-fleet`, IP geolocation, 60s cycle |
@@ -278,6 +395,12 @@ Requires Ollama running locally with `qwen3-coder:30b` pulled: `ollama pull qwen
 | `orchestrator.ts` | Task queue with priority routing, agent scoring, dispatch loop (10s), health monitor (30s) |
 | `agents.ts` | Agent configs from `agent-types.yaml`, CLI arg building, headless backend chains, model mapping |
 | `ollama-client.ts` | Local Ollama HTTP client (`/api/generate`, `/api/tags`) |
+| `pod-context.ts` | Scoped context builder — task-aware CLAUDE.md filtering, file-specific git history |
+| `pod-complexity.ts` | Three-tier complexity scorer — auto-selects runtime profile (Sonnet/Opus/Opus+candidates) |
+| `pod-governance.ts` | Governance rule engine — max files, diff size, duration, forbidden paths |
+| `reasoning-bank.ts` | Pattern storage — stores pod outcomes, finds similar past successes for solver injection |
+| `pod-reflection.ts` | MRAP reflection — efficiency rating, bottleneck detection, fleet analytics |
+| `merge-queue.ts` | Sequential merge pipeline — rebase, type-check, fast-forward merge, push |
 | `flight-board.ts` | Tracks files being edited by active pods for conflict detection |
 | `vault.ts` | Vault file manager — CRUD, search, tags, backlinks, `vault://` protocol |
 | `health.ts` | Infrastructure health checks (Memgraph, Qdrant, Docker) |
@@ -300,7 +423,7 @@ Requires Ollama running locally with `qwen3-coder:30b` pulled: `ollama pull qwen
 
 **Game (`game/`):**
 
-80+ files, ~20,000 lines. Two Phaser 3 scenes:
+50+ modules, ~20,000 lines. Two Phaser 3 scenes:
 
 | Scene | Description |
 |-------|-------------|
@@ -311,7 +434,7 @@ Key game modules:
 
 | Module | Lines | Description |
 |--------|------:|-------------|
-| `workstation-animation.ts` | ~1200 | Status bubbles, mood, monitor glow, idle micro-variety |
+| `workstation-animation.ts` | ~2100 | Status bubbles, mood, monitor glow, idle micro-variety (refactor in progress — Wave 6 splits into animation state classes) |
 | `workstation-creation.ts` | ~1100 | Desk/chair/monitor/sprite creation, rank-gated cosmetics |
 | `office-workstation.ts` | ~1700 | Workstation lifecycle, XP bars, sparklines, progress rings |
 | `celebrations.ts` | ~1130 | Rank-up, task-complete, milestone, error effects |
@@ -341,6 +464,9 @@ Runtime state files (JSON, gitignored):
 | `agent-sessions.json` | Agent ID -> session/PID mapping |
 | `task-queue.json` | Orchestrator task queue |
 | `flight-board.json` | Active file claims for conflict detection |
+| `reasoning-bank.json` | Pod pattern history for similarity matching (max 200 entries) |
+| `merge-queue.json` | Merge queue state (last 50 entries) |
+| `governance-rules.json` | Optional custom governance rules (overrides defaults) |
 | `github-pipeline.json` | Pipeline issue tracking state |
 | `spot-checks.json` | Eval spot-check queue |
 
@@ -414,7 +540,7 @@ All IPC calls go through `window.api.*`. Each handler uses `wrapHandler` which c
 
 **Agents**: `getAgents()`, `getAgentStatuses()`, `launchAgent(id, cwd)`, `focusAgent(id)`
 
-**Pods**: `createPod(task, opts?)`, `listPods()`, `getPodStatus(id)`, `pausePod(id)`, `resumePod(id)`, `cancelPod(id)`, `overridePod(id, phase, override)`, `getPodPresets()`
+**Pods**: `createPod(task, opts?)`, `listPods()`, `getPodStatus(id)`, `pausePod(id)`, `resumePod(id)`, `cancelPod(id)`, `overridePod(id, phase, override)`, `getPodPresets()`, `getPodAnalytics(lookbackHours?)`
 
 **Pod Profiles**: `podProfiles()`, `podSaveProfile(name, profile)`, `podDeleteProfile(name)`, `podSetDefaultProfile(name)`
 

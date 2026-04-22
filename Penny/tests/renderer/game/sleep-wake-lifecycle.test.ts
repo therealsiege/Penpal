@@ -83,6 +83,42 @@ function makeTween() {
   }
 }
 
+function makeTweenBagMock() {
+  type Entry = { handle: { destroy?: () => void } }
+  const entries = new Map<string, Entry>()
+  const destroyEntry = (entry: Entry | undefined) => {
+    if (!entry) return
+    entry.handle.destroy?.()
+  }
+  return {
+    add: (key: string, tween: { destroy?: () => void }) => {
+      destroyEntry(entries.get(key))
+      entries.set(key, { handle: tween })
+    },
+    addTimer: (key: string, timer: { destroy?: () => void }) => {
+      destroyEntry(entries.get(key))
+      entries.set(key, { handle: timer })
+    },
+    remove: (key: string) => {
+      const entry = entries.get(key)
+      destroyEntry(entry)
+      entries.delete(key)
+    },
+    clearAll: () => {
+      for (const entry of entries.values()) destroyEntry(entry)
+      entries.clear()
+    },
+    has: (key: string) => entries.has(key),
+    get: (key: string) => entries.get(key)?.handle,
+    setTimerPaused: (key: string, paused: boolean) => {
+      const entry = entries.get(key)
+      if (!entry) return
+      const handle = entry.handle as { paused?: boolean }
+      if ('paused' in handle) handle.paused = paused
+    },
+  }
+}
+
 // ---------------------------------------------------------------------------
 // OfficeAtmosphere — pause / resume
 // ---------------------------------------------------------------------------
@@ -286,18 +322,41 @@ describe('CafeCoffeeRunManager sleep/wake', () => {
 
 describe('WorkstationAnimator sleep/wake', () => {
   function makeWorkstation() {
+    const lookAroundTimer = makeTimer()
+    const stretchTimer = makeTimer()
+    const walkBreakTimer = makeTimer()
+    const lookAtNeighborTimer = makeTimer()
+    const yawnTimer = makeTimer()
+    const lampFlickerTimer = makeTimer()
+    const typingNoteTimer = makeTimer()
+    const speechBubbleTimer = makeTimer()
+    const flameTimer = makeTimer()
+    const blurbFadeTimer = makeTimer()
+    const walkBreakTween = makeTween()
+    const tweenBag = makeTweenBagMock()
+    tweenBag.addTimer('lookAround', lookAroundTimer)
+    tweenBag.addTimer('stretch', stretchTimer)
+    tweenBag.addTimer('walkBreakTimer', walkBreakTimer)
+    tweenBag.addTimer('lookAtNeighbor', lookAtNeighborTimer)
+    tweenBag.addTimer('yawn', yawnTimer)
+    tweenBag.addTimer('lampFlicker', lampFlickerTimer)
+    tweenBag.addTimer('typingNote', typingNoteTimer)
+    tweenBag.addTimer('speechBubbleTimer', speechBubbleTimer)
+    tweenBag.add('walkBreak', walkBreakTween)
+
     return {
-      lookAroundTimer: makeTimer(),
-      stretchTimer: makeTimer(),
-      walkBreakTimer: makeTimer(),
-      lookAtNeighborTimer: makeTimer(),
-      yawnTimer: makeTimer(),
-      lampFlickerTimer: makeTimer(),
-      typingNoteTimer: makeTimer(),
-      speechBubbleTimer: makeTimer(),
-      flameTimer: makeTimer(),
-      blurbFadeTimer: makeTimer(),
-      walkBreakTween: makeTween(),
+      lookAroundTimer,
+      stretchTimer,
+      walkBreakTimer,
+      lookAtNeighborTimer,
+      yawnTimer,
+      lampFlickerTimer,
+      typingNoteTimer,
+      speechBubbleTimer,
+      flameTimer,
+      blurbFadeTimer,
+      walkBreakTween,
+      tweenBag,
       container: { x: 0, y: 0, visible: true, alpha: 1 },
     }
   }
@@ -377,7 +436,7 @@ describe('WorkstationAnimator sleep/wake', () => {
   })
 
   it('pauseAll/resumeAll handle workstations with no timers gracefully', () => {
-    const ws = { container: { x: 0, y: 0, visible: true, alpha: 1 } }
+    const ws = { container: { x: 0, y: 0, visible: true, alpha: 1 }, tweenBag: makeTweenBagMock() }
     const host = makeHost(new Map([['agent1', ws]]) as never)
     const animator = new WorkstationAnimator(
       {} as Phaser.Scene,

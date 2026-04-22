@@ -173,7 +173,7 @@ export class CafeCoffeeRunManager {
     for (const room of this.scene.rooms.values()) {
       for (const ws of room.workstations.values()) {
         if (!ws.state) continue
-        if (ws.walkBreakTween) continue
+        if (ws.tweenBag.has('walkBreak')) continue
         if (this.coffeeRunners.has(ws.state.config.id)) continue
         const mdl = ws.state.config.model
         if (mdl === 'nemoclaw' || mdl === 'openclaw') continue

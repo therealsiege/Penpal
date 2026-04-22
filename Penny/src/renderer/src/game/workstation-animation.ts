@@ -224,43 +224,20 @@ export class WorkstationAnimator {
     const prevMode = ws.lastAnimMode
     ws.lastAnimMode = mode
 
-    // Tear down all animation state
-    if (ws.bounceTween)      { ws.bounceTween.destroy();      ws.bounceTween      = undefined }
-    if (ws.dotPulseTween)    { ws.dotPulseTween.destroy();    ws.dotPulseTween    = undefined; ws.statusDot.setAlpha(1) }
-    if (ws.typingTween)      { ws.typingTween.destroy();      ws.typingTween      = undefined; ws.sprite.x = 0 }
-    if (ws.monitorGlowTween) { ws.monitorGlowTween.destroy(); ws.monitorGlowTween = undefined }
-    if (ws.breathTween)      { ws.breathTween.destroy();      ws.breathTween      = undefined }
-    if (ws.headTiltTween)    { ws.headTiltTween.destroy();    ws.headTiltTween    = undefined }
-    if (ws.pulseTween)       { ws.pulseTween.destroy();       ws.pulseTween       = undefined }
-    if (ws.ledPulseTween)    { ws.ledPulseTween.destroy();    ws.ledPulseTween    = undefined }
-    if (ws.kbGlowTween)     { ws.kbGlowTween.destroy();     ws.kbGlowTween     = undefined }
-    if (ws.lampLightTween)   { ws.lampLightTween.destroy();   ws.lampLightTween   = undefined }
-    if (ws.lampFlickerTimer) { ws.lampFlickerTimer.destroy();  ws.lampFlickerTimer = undefined }
-    if (ws.walkBreakTween)   { ws.walkBreakTween.destroy();   ws.walkBreakTween   = undefined }
-    if (ws.lookAroundTimer)     { ws.lookAroundTimer.destroy();     ws.lookAroundTimer     = undefined }
-    if (ws.stretchTimer)        { ws.stretchTimer.destroy();        ws.stretchTimer        = undefined }
-    if (ws.walkBreakTimer)      { ws.walkBreakTimer.destroy();      ws.walkBreakTimer      = undefined }
-    if (ws.lookAtNeighborTimer) { ws.lookAtNeighborTimer.destroy(); ws.lookAtNeighborTimer = undefined }
-    if (ws.yawnTimer)           { ws.yawnTimer.destroy();           ws.yawnTimer           = undefined }
-    // Clear ambient sound-wave indicator on every mode transition; working branch re-draws it
-    if (ws.soundWaveTween) { ws.soundWaveTween.destroy(); ws.soundWaveTween = undefined }
+    // Tear down all tracked animation tweens/timers in one call.
+    // Reset callbacks registered in tweenBag handle per-tween side effects
+    // (sprite.x = 0, statusDot.setAlpha(1), monitorSprite.clearTint, etc.)
+    ws.tweenBag.clearAll()
+    // Clear ambient sound-wave indicator; working branch re-draws it
     if (ws.soundWaveGfx)   { ws.soundWaveGfx.clear(); ws.soundWaveGfx.setAlpha(1) }
     // Clear sound wave speaker sprite
     if (ws.soundWaveSpeaker) { ws.soundWaveSpeaker.destroy(); ws.soundWaveSpeaker = undefined }
-    // Clear chair rocking tween
-    if (ws.chairRockTween) { ws.chairRockTween.destroy(); ws.chairRockTween = undefined }
     if (ws.chairSprite) ws.chairSprite.setAngle(0)
-    // Clear typing note timer
-    if (ws.typingNoteTimer) { ws.typingNoteTimer.destroy(); ws.typingNoteTimer = undefined }
     // Clear task-review ring (accept-edits waiting state)
-    if (ws.taskReviewRingTween) { ws.taskReviewRingTween.destroy(); ws.taskReviewRingTween = undefined }
     if (ws.taskReviewRing) { ws.taskReviewRing.destroy(); ws.taskReviewRing = undefined }
-    // Clear speech bubble
-    if (ws.speechBubbleTween) { ws.speechBubbleTween.destroy(); ws.speechBubbleTween = undefined }
-    if (ws.speechBubbleTimer) { ws.speechBubbleTimer.destroy(); ws.speechBubbleTimer = undefined }
+    // Hide speech bubble
     if (ws.speechBubble) { ws.speechBubble.setVisible(false).setAlpha(0) }
     // Fade out progress ring when leaving working mode; working branch re-starts it
-    if (ws.progressRingTween) { ws.progressRingTween.destroy(); ws.progressRingTween = undefined }
     if (ws.progressRing && ws.progressRing.alpha > 0) {
       this.scene.tweens.add({ targets: ws.progressRing, alpha: 0, duration: 300, ease: 'Sine.easeOut',
         onComplete: () => { ws.progressRing?.clear() },
@@ -268,8 +245,6 @@ export class WorkstationAnimator {
     }
     ws.workStartTime = undefined
     // Hide quest icon on mode transition
-    if (ws.questIconTween) { ws.questIconTween.destroy(); ws.questIconTween = undefined }
-    if (ws.questIconPulseTween) { ws.questIconPulseTween.destroy(); ws.questIconPulseTween = undefined }
     if (ws.questIcon && ws.questIcon.alpha > 0) {
       this.scene.tweens.add({ targets: ws.questIcon, alpha: 0, duration: 200, ease: 'Sine.easeOut',
         onComplete: () => { ws.questIcon?.setVisible(false) },
@@ -277,22 +252,12 @@ export class WorkstationAnimator {
     }
     // Always stop steam when transitioning; idle branch will re-spawn it
     this.host.clearSteamParticles(ws)
-    // Clear mug steam timer (idle branch re-creates it)
-    if (ws.mugSteamTimer) { ws.mugSteamTimer.destroy(); ws.mugSteamTimer = undefined }
-    // Clear monitor screensaver and restore sprite to neutral state
-    if (ws.screensaverTween) {
-      ws.screensaverTween.destroy()
-      ws.screensaverTween = undefined
-      if (ws.monitorSprite?.active) { ws.monitorSprite.clearTint(); ws.monitorSprite.setAlpha(1) }
-    }
     // Clean up thinking dots when leaving working mode
     if (mode !== 'working' && ws.thinkingDotsContainer) {
       this.hideThinkingDots(ws)
     }
 
     // Fade out mood emoji and badge on mode transition; updateMood will fade the new ones in
-    if (ws.moodTween) { ws.moodTween.destroy(); ws.moodTween = undefined }
-    if (ws.moodBadgeTween) { ws.moodBadgeTween.destroy(); ws.moodBadgeTween = undefined }
     if (ws.moodEmoji) {
       this.scene.tweens.add({ targets: ws.moodEmoji, alpha: 0, duration: 200, ease: 'Sine.easeOut' })
     }
@@ -341,21 +306,21 @@ export class WorkstationAnimator {
       })
 
       if (!gdsLock) ws.sprite.setFrame(base + POSE_IDLE)
-      ws.pulseTween = this.scene.tweens.add({
+      ws.tweenBag.add('pulse', this.scene.tweens.add({
         targets: ws.sprite, scaleX: CHAR_SCALE * AnimConfig.waiting.pulseScaleFactor, scaleY: CHAR_SCALE * AnimConfig.waiting.pulseScaleFactor,
         duration: AnimConfig.waiting.pulseDuration, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
         delay: waitingBlendMs,
-      })
-      ws.typingTween = this.scene.tweens.add({
+      }))
+      ws.tweenBag.add('typing', this.scene.tweens.add({
         targets: ws.sprite, x: AnimConfig.waiting.swayAmplitude,
         duration: AnimConfig.waiting.swayDuration, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
         delay: waitingBlendMs,
-      })
-      ws.dotPulseTween = this.scene.tweens.add({
+      }), () => { ws.sprite.x = 0 })
+      ws.tweenBag.add('dotPulse', this.scene.tweens.add({
         targets: ws.statusDot, alpha: AnimConfig.waiting.dotPulseAlphaMin,
         duration: AnimConfig.waiting.dotPulseDuration, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
         delay: waitingBlendMs,
-      })
+      }), () => { ws.statusDot.setAlpha(1) })
       // LED: waiting — amber steady glow
       if (ws.ledGlow) {
         ws.ledGlow.clear()
@@ -365,10 +330,10 @@ export class WorkstationAnimator {
       }
       // Lamp light cone: dim when waiting
       if (ws.lampLight) {
-        ws.lampLightTween = this.scene.tweens.add({
+        ws.tweenBag.add('lampLight', this.scene.tweens.add({
           targets: ws.lampLight, alpha: AnimConfig.waiting.lampDimAlpha,
           duration: AnimConfig.waiting.ledFadeDuration, ease: 'Sine.easeOut',
-        })
+        }))
       }
       // Task review ring — yellow rotating arc during accept-edits review phase
       if (agent.interactionType === 'accept-edits') {
@@ -376,7 +341,7 @@ export class WorkstationAnimator {
         ws.container.add(reviewRing)
         ws.taskReviewRing = reviewRing
         const REVIEW_RING_R = 14
-        ws.taskReviewRingTween = this.scene.tweens.addCounter({
+        ws.tweenBag.add('taskReviewRing', this.scene.tweens.addCounter({
           from: 0,
           to: Math.PI * 2,
           duration: 1600,
@@ -391,7 +356,7 @@ export class WorkstationAnimator {
             reviewRing.arc(0, WS_SPRITE_Y, REVIEW_RING_R, a, a + Math.PI * 1.1, false)
             reviewRing.strokePath()
           },
-        })
+        }))
       }
       this.restoreDeskStrokeCallback(ws)
     } else if (isWorking) {
@@ -420,35 +385,35 @@ export class WorkstationAnimator {
         })
       }
 
-      ws.typingTween = this.scene.tweens.add({
+      ws.tweenBag.add('typing', this.scene.tweens.add({
         targets: ws.sprite, x: AnimConfig.working.typingAmplitude,
         duration: AnimConfig.working.typingDuration, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
         delay: workingBlendMs,
-      })
-      ws.bounceTween = this.scene.tweens.add({
+      }), () => { ws.sprite.x = 0 })
+      ws.tweenBag.add('bounce', this.scene.tweens.add({
         targets: ws.sprite, y: WS_SPRITE_Y - AnimConfig.working.bounceOffset,
         duration: AnimConfig.working.bounceDuration, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
         delay: workingBlendMs,
-      })
-      ws.headTiltTween = this.scene.tweens.add({
+      }))
+      ws.tweenBag.add('headTilt', this.scene.tweens.add({
         targets: ws.sprite, angle: AnimConfig.working.headTiltAngle,
         duration: AnimConfig.working.headTiltDuration, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
         delay: workingBlendMs,
-      })
+      }))
       if (!this.host.getOrAssignGdsDeskSlot) ws.deskBody.setStrokeStyle(1, 0x34d399, 0.55)
 
       // Keyboard glow — subtle blue stroke shimmer while typing
       if (ws.keyboard) {
         ws.keyboard.setStrokeStyle(0.5, 0x0ea5e9, 0.4)
-        if (!ws.kbGlowTween) {
-          ws.kbGlowTween = this.scene.tweens.add({
+        if (!ws.tweenBag.has('kbGlow')) {
+          ws.tweenBag.add('kbGlow', this.scene.tweens.add({
             targets: ws.keyboard,
             alpha: { from: AnimConfig.working.keyboardGlowAlphaMin, to: AnimConfig.working.keyboardGlowAlphaMax },
             duration: AnimConfig.working.keyboardGlowDuration,
             yoyo: true,
             repeat: -1,
             ease: 'Sine.easeInOut',
-          })
+          }))
         }
       }
 
@@ -475,8 +440,8 @@ export class WorkstationAnimator {
         if (activeQ && ws.questIcon) {
           const frame = DIFFICULTY_STAR_FRAME[activeQ.difficulty] ?? ICON_FRAMES.STAR_GREY
           ws.questIcon.setFrame(frame).setVisible(true).setAlpha(0)
-          if (ws.questIconTween) { ws.questIconTween.destroy(); ws.questIconTween = undefined }
-          if (ws.questIconPulseTween) { ws.questIconPulseTween.destroy(); ws.questIconPulseTween = undefined }
+          ws.tweenBag.remove('questIcon')
+          ws.tweenBag.remove('questIconPulse')
           this._applyQuestStarStyle(ws, activeQ.difficulty as QuestDifficulty)
         }
 
@@ -485,7 +450,7 @@ export class WorkstationAnimator {
           if (room.workstations.has(agent.config.id)) {
             const worldX = room.x + ws.container.x
             const worldY = room.y + ws.container.y + WS_SPRITE_Y
-            this.host.celebrations.taskStart(worldX, worldY)
+            this.host.celebrations?.taskStart(worldX, worldY)
             break
           }
         }
@@ -499,21 +464,21 @@ export class WorkstationAnimator {
           onComplete: () => {
             if (!ws.ledGlow) return
             ws.ledGlow.setAlpha(AnimConfig.working.ledPulseAlphaBase)
-            ws.ledPulseTween = this.scene.tweens.add({
+            ws.tweenBag.add('ledPulse', this.scene.tweens.add({
               targets: ws.ledGlow, alpha: AnimConfig.working.ledPulseAlphaPeak,
               duration: AnimConfig.working.ledPulseDuration, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
-            })
+            }))
           },
         })
       }
       // Lamp light cone: brighten when working with a warm glow
       if (ws.lampLight) {
-        ws.lampLightTween = this.scene.tweens.add({
+        ws.tweenBag.add('lampLight', this.scene.tweens.add({
           targets: ws.lampLight, alpha: AnimConfig.working.lampBrightAlpha,
           duration: 300, ease: 'Sine.easeOut',
-        })
+        }))
         // Subtle flicker every 8-15 seconds — tiny alpha dip then recovery
-        ws.lampFlickerTimer = this.scene.time.addEvent({
+        ws.tweenBag.addTimer('lampFlicker', this.scene.time.addEvent({
           delay: AnimConfig.working.lampFlickerIntervalMin + Math.random() * AnimConfig.working.lampFlickerIntervalVar,
           loop: true,
           callback: () => {
@@ -527,7 +492,7 @@ export class WorkstationAnimator {
               ease: 'Sine.easeInOut',
             })
           },
-        })
+        }))
       }
 
       // Ambient sound-wave indicator — three concentric quarter-circle arcs drawn
@@ -548,10 +513,10 @@ export class WorkstationAnimator {
         gfx.arc(0, 0, 7, Phaser.Math.DegToRad(-45), Phaser.Math.DegToRad(45), false)
         gfx.strokePath()
         gfx.setAlpha(1)
-        ws.soundWaveTween = this.scene.tweens.add({
+        ws.tweenBag.add('soundWave', this.scene.tweens.add({
           targets: gfx, alpha: 0,
           duration: 1500, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
-        })
+        }))
 
         // Small PLAY_DARK "speaker" sprite at the sound wave origin
         const speaker = this.scene.add.sprite(0, 0, SPRITESHEET_KEYS.GAME_ICONS, ICON_FRAMES.PLAY_DARK)
@@ -568,7 +533,7 @@ export class WorkstationAnimator {
 
       // Floating "typing note" sprites — tiny circles that rise like musical notes.
       // Only spawned at LOD level 3 (full detail zoom) to avoid performance issues.
-      ws.typingNoteTimer = this.scene.time.addEvent({
+      ws.tweenBag.addTimer('typingNote', this.scene.time.addEvent({
         delay: 500,
         loop: true,
         callback: () => {
@@ -594,7 +559,7 @@ export class WorkstationAnimator {
             })
           }
         },
-      })
+      }))
       // Progress ring — circular arc that fills clockwise over 60 seconds.
       if (ws.progressRing) {
         ws.workStartTime = Date.now()
@@ -627,7 +592,7 @@ export class WorkstationAnimator {
         ring.setAlpha(0)
         drawRing(0)
         this.scene.tweens.add({ targets: ring, alpha: 1, duration: 400, ease: 'Sine.easeOut' })
-        ws.progressRingTween = this.scene.tweens.addCounter({
+        ws.tweenBag.add('progressRing', this.scene.tweens.addCounter({
           from: 0, to: 100,
           duration: RING_DURATION_MS,
           ease: 'Linear',
@@ -638,12 +603,12 @@ export class WorkstationAnimator {
           onComplete: () => {
             // Ring is full — pulse alpha to signal overtime
             drawRing(1)
-            ws.progressRingTween = this.scene.tweens.add({
+            ws.tweenBag.add('progressRing', this.scene.tweens.add({
               targets: ring, alpha: 0.35,
               duration: 800, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
-            })
+            }))
           },
-        })
+        }))
       }
 
       // ── Speech bubble — shows lastAssistantBlurb as typewriter text ──
@@ -681,15 +646,15 @@ export class WorkstationAnimator {
         })
       }
 
-      ws.breathTween = this.scene.tweens.add({
+      ws.tweenBag.add('breath', this.scene.tweens.add({
         targets: ws.sprite, scaleY: CHAR_SCALE * AnimConfig.idle.breathScaleFactor,
         duration: AnimConfig.idle.breathDuration, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
         delay: idleBlendMs,
-      })
+      }))
 
       // Idle chair rocking — very subtle lean-back oscillation
       if (ws.chairSprite?.visible) {
-        ws.chairRockTween = this.scene.tweens.add({
+        ws.tweenBag.add('chairRock', this.scene.tweens.add({
           targets: ws.chairSprite,
           angle: { from: -AnimConfig.idle.chairRockAngle, to: AnimConfig.idle.chairRockAngle },
           duration: AnimConfig.idle.chairRockDuration,
@@ -697,14 +662,14 @@ export class WorkstationAnimator {
           repeat: -1,
           ease: 'Sine.easeInOut',
           delay: idleBlendMs,
-        })
+        }), () => { if (ws.chairSprite) ws.chairSprite.setAngle(0) })
       }
 
       // Monitor screensaver — color gradient cycle on unoccupied desk monitors
       // Colors: dark blue → purple → teal, 12s cycle, alpha 0.45
       if (ws.monitorSprite) {
         const SS_COLORS = [activeTheme.wall, 0x5b21b6, 0x0d9488]
-        ws.screensaverTween = this.scene.tweens.addCounter({
+        ws.tweenBag.add('screensaver', this.scene.tweens.addCounter({
           from: 0, to: 1, duration: 12000, repeat: -1, ease: 'Linear',
           onUpdate: (tw: Phaser.Tweens.Tween) => {
             if (!ws.monitorSprite?.active) return
@@ -720,7 +685,7 @@ export class WorkstationAnimator {
             ws.monitorSprite!.setTint((r << 16) | (g << 8) | b)
             ws.monitorSprite!.setAlpha(0.45)
           },
-        })
+        }), () => { if (ws.monitorSprite?.active) { ws.monitorSprite.clearTint(); ws.monitorSprite.setAlpha(1) } })
       }
 
       // Coffee mug steam — 3 tiny particles rising from idle agent's desk mug
@@ -747,9 +712,9 @@ export class WorkstationAnimator {
         }
       }
       spawnMugSteam()
-      ws.mugSteamTimer = this.scene.time.addEvent({
+      ws.tweenBag.addTimer('mugSteam', this.scene.time.addEvent({
         delay: 2500, loop: true, callback: () => { spawnMugSteam() },
-      })
+      }))
 
       // Fart VFX when entering compressing mode
       if (agent.sessionMode === 'compressing' && this.scene.anims.exists(EFFECT_ANIM_KEYS.FART)) {
@@ -761,7 +726,7 @@ export class WorkstationAnimator {
       }
 
       // Remove keyboard glow
-      if (ws.kbGlowTween) { ws.kbGlowTween.destroy(); ws.kbGlowTween = undefined }
+      ws.tweenBag.remove('kbGlow')
       if (ws.keyboard) ws.keyboard.setStrokeStyle(0, 0, 0).setAlpha(0.8)
 
       // LED: idle — muted dim glow
@@ -773,10 +738,10 @@ export class WorkstationAnimator {
       }
       // Lamp light cone: dim when idle
       if (ws.lampLight) {
-        ws.lampLightTween = this.scene.tweens.add({
+        ws.tweenBag.add('lampLight', this.scene.tweens.add({
           targets: ws.lampLight, alpha: AnimConfig.waiting.lampDimAlpha,
           duration: AnimConfig.waiting.ledFadeDuration, ease: 'Sine.easeOut',
-        })
+        }))
       }
       this.restoreDeskStrokeCallback(ws)
 
@@ -790,7 +755,7 @@ export class WorkstationAnimator {
             const worldY = room.y + ws.container.y - 16  // slightly above the agent head
             if (agent.sessionMode === 'error' || agent.sessionMode === 'crashed') {
               // Task failed — play fail VFX instead of confetti
-              this.host.celebrations.taskFail(worldX, worldY + 16, { agentId: agent.config.id })
+              this.host.celebrations?.taskFail(worldX, worldY + 16, { agentId: agent.config.id })
             } else {
               this.host.burstConfetti(worldX, worldY)
             }
@@ -842,23 +807,23 @@ export class WorkstationAnimator {
       // Head tilt: tween angle -4..+4 degrees every 8-15s, hold 1s, return to 0
       // Skip in GDS mode — sprite angle is locked to stool rotation
       if (!gdsLock) {
-        ws.lookAroundTimer = this.scene.time.addEvent({
+        ws.tweenBag.addTimer('lookAround', this.scene.time.addEvent({
           delay: 8000 + Math.random() * 7000,
           loop: true,
           callback: () => {
-            if (ws.headTiltTween) ws.headTiltTween.destroy()
+            ws.tweenBag.remove('headTilt')
             const angle = (Math.random() - 0.5) * 8   // -4 to +4 degrees
-            ws.headTiltTween = this.scene.tweens.add({
+            ws.tweenBag.add('headTilt', this.scene.tweens.add({
               targets: ws.sprite, angle,
               duration: 400, hold: 1000, yoyo: true, ease: 'Sine.easeInOut',
-              onComplete: () => { ws.sprite.setAngle(0); ws.headTiltTween = undefined },
-            })
+              onComplete: () => { ws.sprite.setAngle(0); ws.tweenBag.remove('headTilt') },
+            }))
           },
-        })
+        }))
       }
 
       // Stretch: scaleY 1→1.04 over 300ms, hold 200ms, back to 1 every 20-30s
-      ws.stretchTimer = this.scene.time.addEvent({
+      ws.tweenBag.addTimer('stretch', this.scene.time.addEvent({
         delay: 20000 + Math.random() * 10000,
         loop: true,
         callback: () => {
@@ -877,14 +842,14 @@ export class WorkstationAnimator {
             },
           })
         },
-      })
+      }))
 
       // Look at neighbor: tilt -3/+3 degrees toward a working peer every 12-18s
-      ws.lookAtNeighborTimer = this.scene.time.addEvent({
+      ws.tweenBag.addTimer('lookAtNeighbor', this.scene.time.addEvent({
         delay: 12000 + Math.random() * 6000,
         loop: true,
         callback: () => {
-          if (ws.walkBreakTween || ws.headTiltTween) return
+          if (ws.tweenBag.has('walkBreak') || ws.tweenBag.has('headTilt')) return
           let neighborContainerX: number | null = null
           for (const room of this.host.getRooms().values()) {
             if (!room.workstations.has(agent.config.id)) continue
@@ -903,8 +868,8 @@ export class WorkstationAnimator {
           }
           if (neighborContainerX === null) return
           const tiltAngle = neighborContainerX < ws.container.x ? -3 : 3
-          if (ws.headTiltTween) ws.headTiltTween.destroy()
-          ws.headTiltTween = this.scene.tweens.add({
+          ws.tweenBag.remove('headTilt')
+          ws.tweenBag.add('headTilt', this.scene.tweens.add({
             targets: ws.sprite, angle: tiltAngle,
             duration: 350, ease: 'Sine.easeOut',
             onComplete: () => {
@@ -912,22 +877,22 @@ export class WorkstationAnimator {
                 this.scene.tweens.add({
                   targets: ws.sprite, angle: 0,
                   duration: 350, ease: 'Sine.easeIn',
-                  onComplete: () => { ws.headTiltTween = undefined },
+                  onComplete: () => { ws.tweenBag.remove('headTilt') },
                 })
               })
             },
-          })
+          }))
         },
-      })
+      }))
 
       // Yawn/bored pose: after 60s+ idle, briefly switch to POSE_INTERACT (fidget) for 1.5s
-      ws.yawnTimer = this.scene.time.addEvent({
+      ws.tweenBag.addTimer('yawn', this.scene.time.addEvent({
         delay: 65000 + Math.random() * 10000,
         loop: true,
         callback: () => {
           const idleSince: number = ws.sprite.getData('idleSince') ?? Date.now()
           if (Date.now() - idleSince < 60000) return
-          if (ws.walkBreakTween) return
+          if (ws.tweenBag.has('walkBreak')) return
           if (!gdsLock) ws.sprite.setFrame(base + POSE_INTERACT)
           this.scene.time.delayedCall(1500, () => {
             if (ws.lastAnimMode === 'idle' && !gdsLock) {
@@ -935,7 +900,7 @@ export class WorkstationAnimator {
             }
           })
         },
-      })
+      }))
 
       // Look at desk pet: tilt toward pet + pet bounce every 15-25s
       if (ws.deskPet && ws.deskPet.visible) {
@@ -944,14 +909,14 @@ export class WorkstationAnimator {
           loop: true,
           callback: () => {
             if (gdsLock) return
-            if (ws.walkBreakTween || ws.headTiltTween || ws.lastAnimMode !== 'idle') return
+            if (ws.tweenBag.has('walkBreak') || ws.tweenBag.has('headTilt') || ws.lastAnimMode !== 'idle') return
             if (!ws.deskPet || !ws.deskPet.visible) return
             const petDir = ws.deskPet.x > 0 ? 3 : -3
-            ws.headTiltTween = this.scene.tweens.add({
+            ws.tweenBag.add('headTilt', this.scene.tweens.add({
               targets: ws.sprite, angle: petDir,
               duration: 300, hold: 600, yoyo: true, ease: 'Sine.easeInOut',
-              onComplete: () => { ws.sprite.setAngle(0); ws.headTiltTween = undefined },
-            })
+              onComplete: () => { ws.sprite.setAngle(0); ws.tweenBag.remove('headTilt') },
+            }))
             // Pet does a tiny bounce in response
             this.scene.tweens.add({
               targets: ws.deskPet,
@@ -968,7 +933,7 @@ export class WorkstationAnimator {
           delay: 25000 + Math.random() * 15000,
           loop: true,
           callback: () => {
-            if (ws.walkBreakTween || ws.lastAnimMode !== 'idle') return
+            if (ws.tweenBag.has('walkBreak') || ws.lastAnimMode !== 'idle') return
             if (!ws.signatureItem || !ws.signatureItem.visible) return
             this.scene.tweens.add({
               targets: ws.signatureItem,
@@ -985,22 +950,22 @@ export class WorkstationAnimator {
         loop: true,
         callback: () => {
           if (gdsLock) return
-          if (ws.walkBreakTween || ws.headTiltTween || ws.lastAnimMode !== 'idle') return
+          if (ws.tweenBag.has('walkBreak') || ws.tweenBag.has('headTilt') || ws.lastAnimMode !== 'idle') return
           if ((ws.energyLevel ?? 1) > 0.3) return
           // Lean slightly toward the energy bar (left side of desk)
-          ws.headTiltTween = this.scene.tweens.add({
+          ws.tweenBag.add('headTilt', this.scene.tweens.add({
             targets: ws.sprite, angle: -4,
             duration: 250, hold: 500, yoyo: true, ease: 'Sine.easeInOut',
-            onComplete: () => { ws.sprite.setAngle(0); ws.headTiltTween = undefined },
-          })
+            onComplete: () => { ws.sprite.setAngle(0); ws.tweenBag.remove('headTilt') },
+          }))
         },
       })
 
-      ws.walkBreakTimer = this.scene.time.addEvent({
+      ws.tweenBag.addTimer('walkBreakTimer', this.scene.time.addEvent({
         delay: IDLE_WALK_BREAK_MIN_MS + Math.random() * IDLE_WALK_BREAK_VAR_MS,
         loop: true,
         callback: () => {
-          if (!ws.state || ws.walkBreakTween || !ws.sprite.visible) return
+          if (!ws.state || ws.tweenBag.has('walkBreak') || !ws.sprite.visible) return
           const stillIdle =
             !ws.state.needsInteraction &&
             ws.state.sessionMode !== 'working' &&
@@ -1009,7 +974,7 @@ export class WorkstationAnimator {
           if (!stillIdle) return
           this._executeWalkBreak(ws, agent)
         },
-      })
+      }))
     }
   }
 
@@ -1056,7 +1021,7 @@ export class WorkstationAnimator {
     // `leanMs` before the walk sprite appears and the path begins.
     // The sentinel tween is set immediately so the walk-break timer cannot
     // fire again during the lean window.
-    ws.walkBreakTween = this.scene.tweens.addCounter({ duration: 999999 })
+    ws.tweenBag.add('walkBreak', this.scene.tweens.addCounter({ duration: 999999 }))
 
     const leanMs = AnimConfig.stateTransitions.idleToWalking.durationMs
     const leanAngle = AnimConfig.stateTransitions.idleToWalking.leanAngle
@@ -1071,7 +1036,7 @@ export class WorkstationAnimator {
 
     this.scene.time.delayedCall(leanMs, () => {
       // Guard: mode may have changed while the lean was playing
-      if (!ws.walkBreakTween?.isPlaying()) return
+      if (!ws.tweenBag.get('walkBreak')?.isPlaying()) return
 
       // Create walk sprite + shadow only now (after the lean)
       const charIdx = getAgentCharacterIndex(agent)
@@ -1092,7 +1057,7 @@ export class WorkstationAnimator {
         walkSprite.destroy()
         walkShadow.destroy()
         ws.sprite.setVisible(true)
-        if (ws.walkBreakTween) { ws.walkBreakTween.destroy(); ws.walkBreakTween = undefined }
+        ws.tweenBag.remove('walkBreak')
         ws.sprite.x = 0
         ws.sprite.y = WS_SPRITE_Y
         if (!gdsLock) ws.sprite.setFrame(base + POSE_SIT)
@@ -1135,7 +1100,7 @@ export class WorkstationAnimator {
   triggerWalkBreak(agentId: string): boolean {
     for (const room of this.host.getRooms().values()) {
       const ws = room.workstations.get(agentId)
-      if (!ws?.state || ws.walkBreakTween) continue
+      if (!ws?.state || ws.tweenBag.has('walkBreak')) continue
       this._executeWalkBreak(ws, ws.state)
       return true
     }
@@ -1164,17 +1129,17 @@ export class WorkstationAnimator {
     })
 
     // Bob tween (all difficulties)
-    ws.questIconTween = this.scene.tweens.add({
+    ws.tweenBag.add('questIcon', this.scene.tweens.add({
       targets: icon, y: icon.y - 2,
       duration: bobDuration, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
-    })
+    }))
 
     // Higher difficulties get additional scale pulse + tint
     if (difficulty === 'hard' || difficulty === 'epic' || difficulty === 'legendary') {
       const pulseScale = difficulty === 'legendary' ? 0.12 : difficulty === 'epic' ? 0.08 : 0.04
       const pulseDuration = difficulty === 'legendary' ? 600 : difficulty === 'epic' ? 900 : 1600
 
-      ws.questIconPulseTween = this.scene.tweens.add({
+      ws.tweenBag.add('questIconPulse', this.scene.tweens.add({
         targets: icon,
         scaleX: icon.scaleX + pulseScale,
         scaleY: icon.scaleY + pulseScale,
@@ -1182,7 +1147,7 @@ export class WorkstationAnimator {
         yoyo: true,
         repeat: -1,
         ease: 'Sine.easeInOut',
-      })
+      }))
     }
 
     if (difficulty === 'epic') {
@@ -1218,10 +1183,10 @@ export class WorkstationAnimator {
     const duration     = isActive ? AnimConfig.monitor.activePulseDuration : AnimConfig.monitor.idlePulseDuration
     ws.monitorGlowFx.color = baseColor
     ws.monitorGlowFx.outerStrength = baseStrength
-    ws.monitorGlowTween = this.scene.tweens.add({
+    ws.tweenBag.add('monitorGlow', this.scene.tweens.add({
       targets: ws.monitorGlowFx, outerStrength: peakStrength,
       duration, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
-    })
+    }))
   }
 
   // ---------------------------------------------------------------------------
@@ -1330,10 +1295,7 @@ export class WorkstationAnimator {
     if (currentEmoji === emoji) return
 
     // Emoji changed — stop existing float tween, fade out, then swap and bounce in
-    if (ws.moodTween) {
-      ws.moodTween.destroy()
-      ws.moodTween = undefined
-    }
+    ws.tweenBag.remove('mood')
 
     const moodText = ws.moodEmoji
     moodText.setData('currentEmoji', emoji)
@@ -1372,14 +1334,14 @@ export class WorkstationAnimator {
                 if (!moodText.active) return
                 // Gentle infinite float: oscillate y ±2px
                 const baseY = moodText.y
-                ws.moodTween = this.scene.tweens.add({
+                ws.tweenBag.add('mood', this.scene.tweens.add({
                   targets: moodText,
                   y: baseY - 2,
                   duration: 2000,
                   yoyo: true,
                   repeat: -1,
                   ease: 'Sine.easeInOut',
-                })
+                }))
               },
             })
           },
@@ -1477,10 +1439,7 @@ export class WorkstationAnimator {
     badge.setData('currentFrame', frame)
 
     // Tear down existing badge tween
-    if (ws.moodBadgeTween) {
-      ws.moodBadgeTween.destroy()
-      ws.moodBadgeTween = undefined
-    }
+    ws.tweenBag.remove('moodBadge')
 
     // Fade out, swap frame, bounce in
     this.scene.tweens.add({
@@ -1510,14 +1469,14 @@ export class WorkstationAnimator {
                 if (!badge.active) return
                 // Gentle float in sync with mood emoji
                 const baseY = badge.y
-                ws.moodBadgeTween = this.scene.tweens.add({
+                ws.tweenBag.add('moodBadge', this.scene.tweens.add({
                   targets: badge,
                   y: baseY - 2,
                   duration: 2000,
                   yoyo: true,
                   repeat: -1,
                   ease: 'Sine.easeInOut',
-                })
+                }))
               },
             })
           },
@@ -1537,8 +1496,8 @@ export class WorkstationAnimator {
     if (!blurb) return
 
     // Avoid duplicate repeat timers if this path runs again before mode teardown
-    if (ws.speechBubbleTween) { ws.speechBubbleTween.destroy(); ws.speechBubbleTween = undefined }
-    if (ws.speechBubbleTimer) { ws.speechBubbleTimer.destroy(); ws.speechBubbleTimer = undefined }
+    ws.tweenBag.remove('speechBubble')
+    ws.tweenBag.remove('speechBubbleTimer')
 
     const BUBBLE_Y = WS_SPRITE_Y - 40
     const MAX_CHARS = 40
@@ -1603,12 +1562,12 @@ export class WorkstationAnimator {
       bubble.y = BUBBLE_Y
 
       // Fade in
-      if (ws.speechBubbleTween) { ws.speechBubbleTween.destroy(); ws.speechBubbleTween = undefined }
+      ws.tweenBag.remove('speechBubble')
       this.scene.tweens.add({ targets: bubble, alpha: 1, duration: 200, ease: 'Sine.easeOut' })
 
       // Typewriter — character by character
       const counter = { val: 0 }
-      ws.speechBubbleTween = this.scene.tweens.add({
+      ws.tweenBag.add('speechBubble', this.scene.tweens.add({
         targets: counter,
         val: text.length,
         duration: Math.min(600, text.length * 20),
@@ -1633,14 +1592,14 @@ export class WorkstationAnimator {
             })
           })
         },
-      })
+      }))
     }
 
     // Show the first blurb immediately
     typewriterCycle(displayText)
 
     // Repeat every 8-12 seconds with the latest blurb
-    ws.speechBubbleTimer = this.scene.time.addEvent({
+    ws.tweenBag.addTimer('speechBubbleTimer', this.scene.time.addEvent({
       delay: 8000 + Math.random() * 4000,
       loop: true,
       callback: () => {
@@ -1654,7 +1613,7 @@ export class WorkstationAnimator {
         const truncated = currentBlurb.length > MAX_CHARS ? currentBlurb.slice(0, MAX_CHARS) + '...' : currentBlurb
         typewriterCycle(truncated)
       },
-    })
+    }))
   }
 
   // ---------------------------------------------------------------------------
@@ -2089,17 +2048,17 @@ export class WorkstationAnimator {
   pauseAll(): void {
     for (const room of this.host.getRooms().values()) {
       for (const ws of room.workstations.values()) {
-        if (ws.lookAroundTimer)     ws.lookAroundTimer.paused     = true
-        if (ws.stretchTimer)        ws.stretchTimer.paused        = true
-        if (ws.walkBreakTimer)      ws.walkBreakTimer.paused      = true
-        if (ws.lookAtNeighborTimer) ws.lookAtNeighborTimer.paused = true
-        if (ws.yawnTimer)           ws.yawnTimer.paused           = true
-        if (ws.lampFlickerTimer)    ws.lampFlickerTimer.paused    = true
-        if (ws.typingNoteTimer)     ws.typingNoteTimer.paused     = true
-        if (ws.speechBubbleTimer)   ws.speechBubbleTimer.paused   = true
-        if (ws.flameTimer)          ws.flameTimer.paused          = true
-        if (ws.blurbFadeTimer)      ws.blurbFadeTimer.paused      = true
-        ws.walkBreakTween?.pause()
+        ws.tweenBag.setTimerPaused('lookAround',    true)
+        ws.tweenBag.setTimerPaused('stretch',        true)
+        ws.tweenBag.setTimerPaused('walkBreakTimer', true)
+        ws.tweenBag.setTimerPaused('lookAtNeighbor', true)
+        ws.tweenBag.setTimerPaused('yawn',           true)
+        ws.tweenBag.setTimerPaused('lampFlicker',    true)
+        ws.tweenBag.setTimerPaused('typingNote',     true)
+        ws.tweenBag.setTimerPaused('speechBubbleTimer', true)
+        if (ws.flameTimer)     ws.flameTimer.paused     = true
+        if (ws.blurbFadeTimer) ws.blurbFadeTimer.paused = true
+        ws.tweenBag.get('walkBreak')?.pause()
       }
     }
   }
@@ -2107,17 +2066,17 @@ export class WorkstationAnimator {
   resumeAll(): void {
     for (const room of this.host.getRooms().values()) {
       for (const ws of room.workstations.values()) {
-        if (ws.lookAroundTimer)     ws.lookAroundTimer.paused     = false
-        if (ws.stretchTimer)        ws.stretchTimer.paused        = false
-        if (ws.walkBreakTimer)      ws.walkBreakTimer.paused      = false
-        if (ws.lookAtNeighborTimer) ws.lookAtNeighborTimer.paused = false
-        if (ws.yawnTimer)           ws.yawnTimer.paused           = false
-        if (ws.lampFlickerTimer)    ws.lampFlickerTimer.paused    = false
-        if (ws.typingNoteTimer)     ws.typingNoteTimer.paused     = false
-        if (ws.speechBubbleTimer)   ws.speechBubbleTimer.paused   = false
-        if (ws.flameTimer)          ws.flameTimer.paused          = false
-        if (ws.blurbFadeTimer)      ws.blurbFadeTimer.paused      = false
-        ws.walkBreakTween?.resume()
+        ws.tweenBag.setTimerPaused('lookAround',    false)
+        ws.tweenBag.setTimerPaused('stretch',        false)
+        ws.tweenBag.setTimerPaused('walkBreakTimer', false)
+        ws.tweenBag.setTimerPaused('lookAtNeighbor', false)
+        ws.tweenBag.setTimerPaused('yawn',           false)
+        ws.tweenBag.setTimerPaused('lampFlicker',    false)
+        ws.tweenBag.setTimerPaused('typingNote',     false)
+        ws.tweenBag.setTimerPaused('speechBubbleTimer', false)
+        if (ws.flameTimer)     ws.flameTimer.paused     = false
+        if (ws.blurbFadeTimer) ws.blurbFadeTimer.paused = false
+        ws.tweenBag.get('walkBreak')?.resume()
       }
     }
   }

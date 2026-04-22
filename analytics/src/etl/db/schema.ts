@@ -25,6 +25,9 @@ const CONSTRAINTS = [
 const INDEXES = [
   "CREATE INDEX ON :Document(title)",
   "CREATE INDEX ON :Document(documentType)",
+  "CREATE INDEX ON :Document(venture)",
+  "CREATE INDEX ON :Lead(venture)",
+  "CREATE INDEX ON :Folder(venture)",
   "CREATE INDEX ON :Person(name)",
   "CREATE INDEX ON :Company(name)",
   "CREATE INDEX ON :Lead(salesFunnel)",

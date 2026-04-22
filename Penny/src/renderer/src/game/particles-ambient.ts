@@ -1,6 +1,7 @@
 import Phaser from 'phaser'
 import { activeTheme } from './office-theme'
-import { AMBIENT_MOTE_POOL_SIZE, MAKO_MOTE_POOL_SIZE, SPARK_POOL_SIZE, STEAM_WISP_POOL_SIZE } from './office-constants'
+import { AMBIENT_MOTE_POOL_SIZE, MAKO_MOTE_POOL_SIZE, SPARK_POOL_SIZE, STEAM_WISP_POOL_SIZE,
+  MAX_MAKO_POOL, MAX_SPARKS_POOL, MAX_STEAM_POOL, MAX_AMBIENT_POOL } from './office-constants'
 import { SPRITESHEET_KEYS, ICON_FRAMES } from './office-asset-keys'
 
 // ---------------------------------------------------------------------------
@@ -105,6 +106,7 @@ export class AmbientParticles {
   }
 
   private spawnAmbientMote(): void {
+    if (this.ambientMotePool.filter(m => m.getData('busy')).length >= MAX_AMBIENT_POOL) return
     const mote = this.ambientMotePool.find(m => !m.getData('busy'))
     if (!mote) return
 
@@ -237,6 +239,7 @@ export class AmbientParticles {
     const now = this.scene.time.now
     if (now - this.lastMakoSpawnAt < 300) return
     if (zoom < 0.3) return
+    if (this.makoMotePool.filter(m => m.getData('busy')).length >= MAX_MAKO_POOL) return
     this.lastMakoSpawnAt = now
 
     const mote = this.makoMotePool.find(m => !m.getData('busy'))
@@ -296,6 +299,7 @@ export class AmbientParticles {
     const now = this.scene.time.now
     if (now - this.lastSparkBurstAt < 2000) return
     if (zoom < 0.5) return
+    if (this.sparkPool.filter(s => s.getData('busy')).length >= MAX_SPARKS_POOL) return
     this.lastSparkBurstAt = now
 
     const centerX = camX + camW * 0.5
@@ -357,6 +361,7 @@ export class AmbientParticles {
     const now = this.scene.time.now
     if (now - this.lastSteamSpawnAt < 1500) return
     if (zoom < 0.3) return
+    if (this.steamWispPool.filter(g => g.getData('busy')).length >= MAX_STEAM_POOL) return
     this.lastSteamSpawnAt = now
 
     const gfx = this.steamWispPool.find(g => !g.getData('busy'))
@@ -396,6 +401,20 @@ export class AmbientParticles {
         gfx.setData('busy', false)
       },
     })
+  }
+
+  // ---------------------------------------------------------------------------
+  // Pool stats — for debug overlay
+  // ---------------------------------------------------------------------------
+
+  /** Returns active/max counts for all ambient particle pools. */
+  getPoolStats(): Record<string, { active: number; max: number }> {
+    return {
+      mako:  { active: this.makoMotePool.filter(m => m.getData('busy')).length,    max: MAX_MAKO_POOL    },
+      sparks: { active: this.sparkPool.filter(s => s.getData('busy')).length,       max: MAX_SPARKS_POOL  },
+      steam: { active: this.steamWispPool.filter(g => g.getData('busy')).length,    max: MAX_STEAM_POOL   },
+      ambient: { active: this.ambientMotePool.filter(m => m.getData('busy')).length, max: MAX_AMBIENT_POOL },
+    }
   }
 
   // ---------------------------------------------------------------------------
