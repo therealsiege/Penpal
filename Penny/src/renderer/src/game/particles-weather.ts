@@ -424,11 +424,14 @@ export class WeatherParticles {
     const shouldRain = phase === 'night'
     if (shouldRain !== this.rainActive) {
       this.rainActive = shouldRain
+      let rainVisible = 0
       for (const drop of this.rainDropPool) {
         if (shouldRain) {
+          if (rainVisible >= MAX_RAIN_POOL) { drop.setVisible(false); continue }
           drop.x = Math.random() * viewWidth
           drop.y = -16 - Math.random() * viewHeight
           drop.setVisible(true)
+          rainVisible++
         } else {
           drop.setVisible(false)
         }
@@ -443,11 +446,14 @@ export class WeatherParticles {
     const shouldSnow = phase === 'morning'
     if (shouldSnow !== this.snowActive) {
       this.snowActive = shouldSnow
+      let snowVisible = 0
       for (const flake of this.snowPool) {
         if (shouldSnow) {
+          if (snowVisible >= MAX_SNOW_POOL) { flake.setVisible(false); continue }
           flake.x = Math.random() * viewWidth
           flake.y = Math.random() * viewHeight
           flake.setVisible(true)
+          snowVisible++
         } else {
           flake.setVisible(false)
         }
@@ -476,6 +482,17 @@ export class WeatherParticles {
 
   getThunderstormActive(): boolean {
     return this.thunderstormActive
+  }
+
+  // ---------------------------------------------------------------------------
+  // Particle pool stats — used by debug overlay
+  // ---------------------------------------------------------------------------
+
+  getPoolStats(): Record<string, { active: number; max: number }> {
+    return {
+      rain: { active: this.rainDropPool.filter(d => d.visible).length, max: MAX_RAIN_POOL },
+      snow: { active: this.snowPool.filter(f => f.visible).length, max: MAX_SNOW_POOL },
+    }
   }
 
   // ---------------------------------------------------------------------------

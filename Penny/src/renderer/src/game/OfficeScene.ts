@@ -726,6 +726,7 @@ export class OfficeScene extends Phaser.Scene {
     // Screen-space UI overlays: toasts, tooltip, hover ring, help, debug, LOD label, status bar
     this.ui = new OfficeUI(this)
     this.ui.init(this.viewWidth, this.viewHeight)
+    this.ui.setParticles(this.particles)
 
     // Ambient office-life activity — fires every 8-15 seconds with a random incidental event
     this.ambient = new OfficeAmbient(this)
