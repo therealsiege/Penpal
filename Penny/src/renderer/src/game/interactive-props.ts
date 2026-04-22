@@ -261,7 +261,7 @@ class InteractiveProp {
     // Tank border — dark steel
     g.lineStyle(2, activeTheme.wall, 0.9); g.strokeRect(-30, -20, 60, 40)
     // Water — dark blue
-    g.fillStyle(0x082f49, 0.85); g.fillRect(-28, -18, 56, 36)
+    g.fillStyle(activeTheme.glassFill, 0.85); g.fillRect(-28, -18, 56, 36)
     // Water surface glow
     g.fillStyle(0x00ff88, 0.06); g.fillRect(-28, -18, 56, 8)
     // Gravel
@@ -287,7 +287,7 @@ class InteractiveProp {
     // Body — dark steel
     g.fillStyle(activeTheme.deskBody, 1); g.fillRect(-22, -44, 44, 68)
     // Glass panel
-    g.fillStyle(0x082f49, 0.9); g.fillRect(-18, -40, 36, 36)
+    g.fillStyle(activeTheme.glassFill, 0.9); g.fillRect(-18, -40, 36, 36)
     // Coin slot
     g.fillStyle(activeTheme.shadowDark, 1); g.fillRect(-4, 0, 8, 2)
     // Display — cyan

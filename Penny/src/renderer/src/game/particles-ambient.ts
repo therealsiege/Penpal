@@ -431,6 +431,19 @@ export class AmbientParticles {
   // Destroy / cleanup
   // ---------------------------------------------------------------------------
 
+  /** Refresh pool init colors after a theme switch */
+  onThemeChanged(): void {
+    for (const m of this.makoMotePool) {
+      if (!m.getData('busy')) m.setFillStyle(activeTheme.doorFrame, 0)
+    }
+    const sparkColors = [activeTheme.lampShade, 0xff8c00, 0xffffff]
+    for (let i = 0; i < this.sparkPool.length; i++) {
+      if (!this.sparkPool[i].getData('busy')) {
+        this.sparkPool[i].setFillStyle(sparkColors[i % sparkColors.length], 0)
+      }
+    }
+  }
+
   destroy(): void {
     this.ambientMoteTimer?.destroy()
     this.ambientMoteTimer = null
