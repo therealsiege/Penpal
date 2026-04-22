@@ -227,23 +227,6 @@ function pushAndCreatePR(worktreePath: string, branch: string, task: string): vo
       return
     }
 
-    // Resolve base branch
-    let baseBranch = 'main'
-    try {
-      const ref = execSync('git symbolic-ref refs/remotes/origin/HEAD', gitOpts).toString().trim()
-      baseBranch = ref.replace(/^refs\/remotes\/origin\//, '')
-    } catch { /* default to main */ }
-
-    // Fetch latest and rebase onto origin/main to avoid merge conflicts in PR
-    execSync(`git fetch origin ${baseBranch}`, { ...gitOpts, timeout: 60_000 })
-    try {
-      execSync(`git rebase origin/${baseBranch}`, gitOpts)
-    } catch {
-      try { execSync('git rebase --abort', gitOpts) } catch { /* */ }
-      console.error('[pod-cli] Rebase conflict — skipping PR, needs manual resolution')
-      return
-    }
-
     execSync(`git push -u origin ${branch}`, gitOpts)
     console.error(`[pod-cli] Pushed ${branch}`)
 
