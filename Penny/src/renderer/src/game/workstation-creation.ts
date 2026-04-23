@@ -264,8 +264,8 @@ export class WorkstationFactory {
       // Scrolling screen content lines
       screenLines = this.scene.add.graphics().setVisible(false).setDepth(4.5)
       wsContainer.add(screenLines)
-      const LINE_COLORS_WORK = [activeTheme.monitorGlowActive, 0x34d399]
-      const LINE_COLORS_PLAN = [activeTheme.thoughtPlan, 0xc4b5fd]
+      const LINE_COLORS_WORK = [activeTheme.monitorGlowActive, activeTheme.statusWorking]
+      const LINE_COLORS_PLAN = [activeTheme.thoughtPlan, activeTheme.screenPlanAlt]
       const lineWidths = Array.from({ length: 4 }, () => 6 + Math.random() * 6)
       const lineColorsWork = lineWidths.map(() => LINE_COLORS_WORK[Math.floor(Math.random() * LINE_COLORS_WORK.length)])
       const lineColorsPlan = lineWidths.map(() => LINE_COLORS_PLAN[Math.floor(Math.random() * LINE_COLORS_PLAN.length)])
@@ -313,10 +313,10 @@ export class WorkstationFactory {
             // Blocked — amber warning flash: pulsing horizontal bar + scan stripe
             const phase = Math.sin(v * Math.PI * 4)   // 2 full cycles per tween period
             const barAlpha = 0.15 + phase * 0.25       // 0.0..0.4 range
-            screenLines.fillStyle(0xfbbf24, Math.max(0, barAlpha))
+            screenLines.fillStyle(activeTheme.statusWaiting, Math.max(0, barAlpha))
             screenLines.fillRect(-10, WS_MONITOR_Y - 3, 20, 7)
             // Thin scan stripe through the middle
-            screenLines.fillStyle(0xfbbf24, Math.max(0, barAlpha * 0.5))
+            screenLines.fillStyle(activeTheme.statusWaiting, Math.max(0, barAlpha * 0.5))
             screenLines.fillRect(-10, WS_MONITOR_Y, 20, 1)
           } else {
             // Working (default) — scrolling colored lines
@@ -537,7 +537,7 @@ export class WorkstationFactory {
 
       // Gold desk trim for Master+ (L8)
       if (isDeskItemUnlocked(agentLevel, 'gold_trim')) {
-        deskBody.setStrokeStyle(1.5, 0xfbbf24, 0.7)
+        deskBody.setStrokeStyle(1.5, activeTheme.statusWaiting, 0.7)
       }
     } else if (labPropsLoaded && facilityStrategic) {
       ledGlow = this.scene.add.graphics()
@@ -890,8 +890,8 @@ export class WorkstationFactory {
     lodLevel3Objects.push(flameContainer)
 
     // "Blocked" clarity marker for needsInteraction agents.
-    const blockedIndicatorPulse = this.scene.add.circle(0, 0, 10, 0xfbbf24, 0.16)
-    const blockedIndicatorStem = this.scene.add.rectangle(0, 8, 1.5, 7, 0xfbbf24, 0.55)
+    const blockedIndicatorPulse = this.scene.add.circle(0, 0, 10, activeTheme.statusWaiting, 0.16)
+    const blockedIndicatorStem = this.scene.add.rectangle(0, 8, 1.5, 7, activeTheme.statusWaiting, 0.55)
     const blockedIndicatorBadge = this.scene.add.sprite(0, 0, SPRITESHEET_KEYS.GAME_ICONS, ICON_FRAMES.CIRCLE_YELLOW)
       .setScale(0.32).setOrigin(0.5)
     const blockedIndicatorText = this.scene.add.text(0, -0.5, '!', {

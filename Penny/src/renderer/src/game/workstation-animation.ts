@@ -370,7 +370,7 @@ export class WorkstationAnimator {
             if (!reviewRing.active) return
             const a = tween.getValue() ?? 0
             reviewRing.clear()
-            reviewRing.lineStyle(1.5, 0xfbbf24, 0.75)
+            reviewRing.lineStyle(1.5, activeTheme.statusWaiting, 0.75)
             reviewRing.beginPath()
             reviewRing.arc(0, WS_SPRITE_Y, REVIEW_RING_R, a, a + Math.PI * 1.1, false)
             reviewRing.strokePath()
@@ -419,7 +419,7 @@ export class WorkstationAnimator {
         duration: AnimConfig.working.headTiltDuration, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
         delay: workingBlendMs,
       }))
-      if (!this.host.getOrAssignGdsDeskSlot) ws.deskBody.setStrokeStyle(1, 0x34d399, 0.55)
+      if (!this.host.getOrAssignGdsDeskSlot) ws.deskBody.setStrokeStyle(1, activeTheme.statusWorking, 0.55)
 
       // Keyboard glow — subtle blue stroke shimmer while typing
       if (ws.keyboard) {
@@ -596,7 +596,7 @@ export class WorkstationAnimator {
           // Filled arc from top (-90deg) clockwise
           const fill = Math.min(progress, 1)
           if (fill > 0) {
-            const arcColor = fill < 0.8 ? 0x34d399 : 0xfbbf24
+            const arcColor = fill < 0.8 ? activeTheme.statusWorking : activeTheme.statusWaiting
             ring.lineStyle(1.5, arcColor, 0.5)
             ring.beginPath()
             ring.arc(0, 0, RING_R,
@@ -687,8 +687,8 @@ export class WorkstationAnimator {
       // Monitor screensaver — color gradient cycle on unoccupied desk monitors
       // Colors: dark blue → purple → teal, 12s cycle, alpha 0.45
       if (ws.monitorSprite) {
-        const SS_COLORS = [activeTheme.wall, 0x5b21b6, 0x0d9488]
-        ws.screensaverTween = ws.tweenBag.add('screensaver', this.scene.tweens.addCounter({
+        const SS_COLORS = [activeTheme.wall, activeTheme.screensaverPurple, activeTheme.screensaverTeal]
+        ws.tweenBag.add('screensaver', this.scene.tweens.addCounter({
           from: 0, to: 1, duration: 12000, repeat: -1, ease: 'Linear',
           onUpdate: (tw: Phaser.Tweens.Tween) => {
             if (!ws.monitorSprite?.active) return
@@ -1205,9 +1205,9 @@ export class WorkstationAnimator {
     const isActive = isWorking || isWaiting
     // Orchestrator tasks get stage-colored monitor glow
     const orchStage = ws.state?.isOrchestratorTask ? (ws.state.taskStage ?? 'executing') : null
-    const orchColors: Record<string, number> = { planning: activeTheme.thoughtPlan, executing: 0xf97316, validating: 0x06b6d4 }
-    const baseColor = orchStage ? (orchColors[orchStage] ?? 0xf97316)
-      : isWaiting ? 0xfbbf24 : isWorking ? activeTheme.monitorGlowActive : activeTheme.deskBody
+    const orchColors: Record<string, number> = { planning: activeTheme.thoughtPlan, executing: activeTheme.stageExecuting, validating: activeTheme.stageValidating }
+    const baseColor = orchStage ? (orchColors[orchStage] ?? activeTheme.stageExecuting)
+      : isWaiting ? activeTheme.statusWaiting : isWorking ? activeTheme.monitorGlowActive : activeTheme.deskBody
     const baseStrength = isActive ? AnimConfig.monitor.activeBaseStrength : AnimConfig.monitor.idleBaseStrength
     const peakStrength = isActive ? AnimConfig.monitor.activePeakStrength : AnimConfig.monitor.idlePeakStrength
     const duration     = isActive ? AnimConfig.monitor.activePulseDuration : AnimConfig.monitor.idlePulseDuration
@@ -1257,7 +1257,7 @@ export class WorkstationAnimator {
       glyph = '~'
       badgeFrame = ICON_FRAMES.CIRCLE_BLUE
     } else if (agent.interactionType === 'tool-approval') {
-      color = 0xf97316
+      color = activeTheme.stageExecuting
       glyph = '!'
       badgeFrame = ICON_FRAMES.CIRCLE_RED
     }
@@ -1817,7 +1817,7 @@ export class WorkstationAnimator {
     for (let i = 0; i < candidateCount; i++) {
       const dot = this.scene.add.circle(
         startX + i * THINKING_DOT_SPACING, 0,
-        THINKING_DOT_RADIUS, activeTheme.accent, 0,
+        THINKING_DOT_RADIUS, activeTheme.monitorGlowActive, 0,
       )
       dot.setAlpha(0)
       container.add(dot)
@@ -1861,17 +1861,17 @@ export class WorkstationAnimator {
           } else if (elapsed < dotStart + stepMs) {
             // Fading in
             dots[i].setAlpha((elapsed - dotStart) / stepMs)
-            dots[i].setFillStyle(activeTheme.accent, dots[i].alpha)
+            dots[i].setFillStyle(activeTheme.monitorGlowActive, dots[i].alpha)
           } else if (elapsed < totalAppear + holdMs) {
             // Hold phase
             dots[i].setAlpha(1)
-            dots[i].setFillStyle(activeTheme.accent, 1)
+            dots[i].setFillStyle(activeTheme.monitorGlowActive, 1)
           } else {
             // Fade out
             const fadeElapsed = elapsed - (totalAppear + holdMs)
             const alpha = Math.max(0, 1 - fadeElapsed / THINKING_DOT_FADE_MS)
             dots[i].setAlpha(alpha)
-            dots[i].setFillStyle(activeTheme.accent, alpha)
+            dots[i].setFillStyle(activeTheme.monitorGlowActive, alpha)
           }
         }
       },
@@ -1894,7 +1894,7 @@ export class WorkstationAnimator {
     // Make all dots fully visible for merge
     for (const dot of dots) {
       dot.setAlpha(1)
-      dot.setFillStyle(activeTheme.accent, 1)
+      dot.setFillStyle(activeTheme.monitorGlowActive, 1)
     }
 
     // Tween all dots to center (x=0) simultaneously

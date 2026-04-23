@@ -84,19 +84,19 @@ export function getStatusColor(agent: AgentState): number {
   // Orchestrator headless tasks — stage-colored
   if (agent.isOrchestratorTask) {
     if (agent.taskStage === 'planning')    return activeTheme.thoughtPlan  // Purple
-    if (agent.taskStage === 'validating')  return 0x06b6d4  // Cyan
-    return 0xf97316  // Orange for executing (default)
+    if (agent.taskStage === 'validating')  return activeTheme.stageValidating  // Cyan
+    return activeTheme.stageExecuting  // Orange for executing (default)
   }
   if (agent.needsInteraction) {
-    if (agent.interactionType === 'tool-approval') return 0xf87171  // Red for approval needed
-    return 0xfbbf24  // Yellow for other interactions
+    if (agent.interactionType === 'tool-approval') return activeTheme.stageExecuting  // Red-ish for approval needed
+    return activeTheme.statusWaiting  // Yellow for other interactions
   }
-  if (agent.sessionMode === 'working')       return 0x34d399  // Green for working
+  if (agent.sessionMode === 'working')       return activeTheme.statusWorking  // Green for working
   if (agent.sessionMode === 'plan')          return activeTheme.thoughtPlan  // Purple for planning
-  if (agent.sessionMode === 'accept-edits')  return 0x60a5fa  // Blue for pending edits
-  if (agent.sessionMode === 'compressing')   return 0xf87171  // Red for compressing
-  if (agent.sessionMode === 'waiting')       return 0xfbbf24  // Yellow for waiting
-  return 0x64748b  // Gray for idle
+  if (agent.sessionMode === 'accept-edits')  return activeTheme.stageValidating  // Blue for pending edits
+  if (agent.sessionMode === 'compressing')   return activeTheme.stageExecuting  // Red for compressing
+  if (agent.sessionMode === 'waiting')       return activeTheme.statusWaiting  // Yellow for waiting
+  return activeTheme.deskStrokeIdle  // Gray for idle
 }
 
 export function isCursorAgent(agent: AgentState): boolean {

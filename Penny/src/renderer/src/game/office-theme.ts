@@ -73,11 +73,24 @@ export interface OfficeTheme {
   fogColor: number       // atmosphere fog / sky base (dark: 0x141a22)
   ventFill: number       // vent dark fill, industrial detail (dark: 0x1a2230)
   shadowDark: number     // deep shadow tint (dark: 0x0a0e14)
-  // Accent alias (= monitorGlowActive) — convenience shorthand for thinking dots, glow FX
-  accent: number
   // Structural metallic tones for terrain/furniture details
   metallic: number       // dark: 0x3a4a5a — steel panels, reactor body, structural metal
   metallicAlt: number    // dark: 0x4a5a6a — lighter metal, furniture legs, fixtures
+  // Stage / status indicator colors
+  stageExecuting: number   // orchestrator executing stage (dark: 0xf97316 orange)
+  stageValidating: number  // orchestrator validating stage (dark: 0x06b6d4 cyan)
+  statusWorking: number    // working/success green (dark: 0x34d399)
+  statusWaiting: number    // waiting/warning amber (dark: 0xfbbf24)
+  // Screen line / screensaver alternate colors
+  screenPlanAlt: number    // plan-mode screen line alt (dark: 0xc4b5fd lavender)
+  screensaverPurple: number // screensaver purple band (dark: 0x5b21b6)
+  screensaverTeal: number  // screensaver teal band (dark: 0x0d9488)
+  // Glass / translucent fill
+  glassFill: number        // fish tank water, vending glass (dark: 0x082f49)
+  // Seasonal leaf accent colors
+  leafOrange: number       // autumn leaf orange (dark: 0xb45309)
+  leafRed: number          // autumn leaf red (dark: 0xdc2626)
+  leafBurnt: number        // autumn leaf burnt orange (dark: 0xea580c)
 }
 
 export const THEMES: Record<ThemeName, OfficeTheme> = {
@@ -128,9 +141,19 @@ export const THEMES: Record<ThemeName, OfficeTheme> = {
     fogColor: 0x0f2137,
     ventFill: 0x1a2230,
     shadowDark: 0x0a0e14,
-    accent: 0x00e5ff,
     metallic: 0x3a4a5a,
     metallicAlt: 0x4a5a6a,
+    stageExecuting: 0xf97316,
+    stageValidating: 0x06b6d4,
+    statusWorking: 0x34d399,
+    statusWaiting: 0xfbbf24,
+    screenPlanAlt: 0xc4b5fd,
+    screensaverPurple: 0x5b21b6,
+    screensaverTeal: 0x0d9488,
+    glassFill: 0x082f49,
+    leafOrange: 0xb45309,
+    leafRed: 0xdc2626,
+    leafBurnt: 0xea580c,
   },
 
   // ---- LIGHT (warm studio — cream, teal, coffee tones) ----
@@ -180,9 +203,19 @@ export const THEMES: Record<ThemeName, OfficeTheme> = {
     fogColor: 0xddd5c8,
     ventFill: 0xe0d8cc,
     shadowDark: 0xebe4d8,
-    accent: 0x2a8c8c,
     metallic: 0x8b9090,
     metallicAlt: 0x9ba0a0,
+    stageExecuting: 0xc48a3f,
+    stageValidating: 0x5b9ea0,
+    statusWorking: 0x5a9e6f,
+    statusWaiting: 0xc48a3f,
+    screenPlanAlt: 0xb8a0d0,
+    screensaverPurple: 0x7b5ea0,
+    screensaverTeal: 0x5b9ea0,
+    glassFill: 0x8baab8,
+    leafOrange: 0xc07830,
+    leafRed: 0xb84040,
+    leafBurnt: 0xc46838,
   },
 
   // ---- NEON (cyberpunk — deep violet, neon magenta, electric) ----
@@ -232,9 +265,19 @@ export const THEMES: Record<ThemeName, OfficeTheme> = {
     fogColor: 0x08081a,
     ventFill: 0x160d2a,
     shadowDark: 0x05050f,
-    accent: 0xff00ff,
     metallic: 0x2a1a4a,
     metallicAlt: 0x3a2a5a,
+    stageExecuting: 0xff6020,
+    stageValidating: 0x00ffcc,
+    statusWorking: 0x00ff88,
+    statusWaiting: 0xffa040,
+    screenPlanAlt: 0xd080ff,
+    screensaverPurple: 0x8020e0,
+    screensaverTeal: 0x00ccaa,
+    glassFill: 0x0a0a30,
+    leafOrange: 0xff8020,
+    leafRed: 0xff2040,
+    leafBurnt: 0xff5020,
   },
 
 }

@@ -454,8 +454,8 @@ export class OfficeWorkstations {
           if (room) {
             const wx = room.x + ws.container.x
             const wy = room.y + ws.container.y
-            let rippleColor = 0xfbbf24 // default amber
-            if (agent.interactionType === 'tool-approval') rippleColor = 0xf97316
+            let rippleColor = activeTheme.statusWaiting // default amber
+            if (agent.interactionType === 'tool-approval') rippleColor = activeTheme.stageExecuting
             else if (agent.interactionType === 'question') rippleColor = 0x60a5fa
             else if (agent.interactionType === 'accept-edits') rippleColor = 0x3b82f6
             this.host.spawnAlertRipple(wx, wy, rippleColor)
@@ -706,7 +706,7 @@ export class OfficeWorkstations {
       const oc = agent.openclaw
       if (oc?.supervised) {
         // Set color: cyan tint for OpenClaw, green tint for NemoClaw
-        const tint = oc.runtime === 'nemoclaw' ? 0x22c55e : 0x06b6d4
+        const tint = oc.runtime === 'nemoclaw' ? activeTheme.statusWorking : activeTheme.stageValidating
         ws.openclawBadge.setTint(tint)
         if (!ws.openclawBadge.visible) {
           ws.openclawBadge.setVisible(true).setAlpha(0)
@@ -736,8 +736,8 @@ export class OfficeWorkstations {
     // ── Orchestrator headless task badge ──────────────────────────────────
     if (ws.orchTaskBadge) {
       if (agent.isOrchestratorTask) {
-        const stageTints: Record<string, number> = { planning: activeTheme.thoughtPlan, executing: 0xf97316, validating: 0x06b6d4 }
-        const tint = stageTints[agent.taskStage ?? 'executing'] ?? 0xf97316
+        const stageTints: Record<string, number> = { planning: activeTheme.thoughtPlan, executing: activeTheme.stageExecuting, validating: activeTheme.stageValidating }
+        const tint = stageTints[agent.taskStage ?? 'executing'] ?? activeTheme.stageExecuting
         ws.orchTaskBadge.setTint(tint)
         if (!ws.orchTaskBadge.visible) {
           ws.orchTaskBadge.setVisible(true).setAlpha(0)
@@ -1061,7 +1061,7 @@ export class OfficeWorkstations {
             const y0 = toY(history[i - 1])
             const y1 = toY(history[i])
             const v1 = history[i]
-            const col = v1 >= 1 ? 0x34d399 : v1 >= 0.5 ? 0xfbbf24 : activeTheme.wall
+            const col = v1 >= 1 ? activeTheme.statusWorking : v1 >= 0.5 ? activeTheme.statusWaiting : activeTheme.wall
 
             // Polyline segment
             gfx.lineStyle(1, col, 0.85)
@@ -1107,7 +1107,7 @@ export class OfficeWorkstations {
       ws.energyFill.setCrop(0, Math.round((1 - pct) * fullH), fullW, Math.round(pct * fullH))
 
       // Determine target tint: >0.5 = no tint (0), 0.25-0.5 = yellow, <0.25 = red
-      const targetTint = pct > 0.5 ? 0 : pct > 0.25 ? 0xfbbf24 : 0xef4444
+      const targetTint = pct > 0.5 ? 0 : pct > 0.25 ? activeTheme.statusWaiting : 0xef4444
       const lastTint = ws.energyLastTint ?? 0
 
       if (targetTint !== lastTint) {
@@ -1310,9 +1310,9 @@ export class OfficeWorkstations {
 
     const s = ws.state
     if (s?.needsInteraction) {
-      ws.deskBody.setStrokeStyle(2, 0xfbbf24, 0.7)
+      ws.deskBody.setStrokeStyle(2, activeTheme.statusWaiting, 0.7)
     } else if (s?.sessionMode === 'working' || s?.sessionMode === 'plan') {
-      ws.deskBody.setStrokeStyle(1, 0x34d399, 0.5)
+      ws.deskBody.setStrokeStyle(1, activeTheme.statusWorking, 0.5)
     } else {
       ws.deskBody.setStrokeStyle(1, activeTheme.deskStrokeIdle, 0.5)
     }

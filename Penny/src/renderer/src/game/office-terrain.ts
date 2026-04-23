@@ -1394,7 +1394,7 @@ export class OfficeTerrain {
         const lx = WORLD_MARGIN + rand() * (worldW - WORLD_MARGIN * 2)
         const ly = WORLD_MARGIN + rand() * (worldH - WORLD_MARGIN * 2)
         if (isOverlapping(lx, ly, 6)) continue
-        const leafColors = [activeTheme.lampShade, 0xb45309, 0xdc2626, 0xea580c]
+        const leafColors = [activeTheme.lampShade, activeTheme.leafOrange, activeTheme.leafRed, activeTheme.leafBurnt]
         g.fillStyle(leafColors[Math.floor(rand() * leafColors.length)], 0.08 + rand() * 0.04)
         g.fillEllipse(lx, ly, 3 + rand() * 3, 2 + rand() * 2)
       }

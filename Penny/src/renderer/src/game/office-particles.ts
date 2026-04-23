@@ -739,7 +739,7 @@ export class OfficeParticles {
 
   private initStreakFlamePool(): void {
     for (let i = 0; i < 30; i++) {
-      const p = this.scene.add.circle(0, 0, 1.5, 0xf97316, 0)
+      const p = this.scene.add.circle(0, 0, 1.5, activeTheme.stageExecuting, 0)
         .setDepth(599).setVisible(false).setBlendMode(Phaser.BlendModes.ADD)
       p.setData('busy', false)
       this.streakFlamePool.push(p)
@@ -761,13 +761,13 @@ export class OfficeParticles {
     const hotness = streak >= 15 ? 3 : streak >= 10 ? 2 : streak >= 5 ? 1 : 0
     if (hotness === 0) return
     const roll = Math.random()
-    let color = 0xf97316
+    let color = activeTheme.stageExecuting
     if (hotness === 1) {
-      color = roll < 0.7 ? 0xf97316 : roll < 0.95 ? 0xfbbf24 : 0xfefce8
+      color = roll < 0.7 ? activeTheme.stageExecuting : roll < 0.95 ? activeTheme.statusWaiting : 0xfefce8
     } else if (hotness === 2) {
-      color = roll < 0.5 ? 0xf97316 : roll < 0.85 ? 0xfbbf24 : 0xfefce8
+      color = roll < 0.5 ? activeTheme.stageExecuting : roll < 0.85 ? activeTheme.statusWaiting : 0xfefce8
     } else {
-      color = roll < 0.3 ? 0xf97316 : roll < 0.7 ? 0xfbbf24 : 0xfefce8
+      color = roll < 0.3 ? activeTheme.stageExecuting : roll < 0.7 ? activeTheme.statusWaiting : 0xfefce8
     }
 
     const radiusBias = hotness === 3 ? 0.45 : hotness === 2 ? 0.25 : 0.1
@@ -1124,5 +1124,20 @@ export class OfficeParticles {
         })
       })
     }
+  }
+
+  /** Refresh pool init colors after a theme switch */
+  onThemeChanged(): void {
+    const palette = activeTheme.particleColors
+    for (let i = 0; i < this.mouseTrailPool.length; i++) {
+      this.mouseTrailPool[i].setFillStyle(palette[i % palette.length], 0)
+    }
+    for (const p of this.streakFlamePool) {
+      if (!p.getData('busy')) p.setFillStyle(activeTheme.stageExecuting, 0)
+    }
+    for (const c of this.chimeRipplePool) {
+      if (!c.getData('busy')) c.setFillStyle(activeTheme.monitorGlowActive, 0)
+    }
+    this.ambient.onThemeChanged()
   }
 }

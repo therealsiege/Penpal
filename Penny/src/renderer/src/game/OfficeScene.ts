@@ -1828,6 +1828,7 @@ export class OfficeScene extends Phaser.Scene {
       this.pods.clearPodLineVisuals()
     }
     this.mcp.markDirty()
+    this.particles.onThemeChanged()
   }
 
 
