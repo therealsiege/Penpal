@@ -140,31 +140,34 @@ Two graph databases are available. Use the right one for the job:
 
 
 
-### Workflow: Implement GitHub issue therealsiege/Penpal#337: Refactor 3a: (2026-04-20)
-- Task: Implement GitHub issue therealsiege/Penpal#337: Refactor 3a: Sync walk animation frame rate to movement speed in path-walker.ts
-- Team: nextjs-frontend / ui-designer / electron-dev
-- Result: PASS (1/3 iterations)
-- Key output: All checks complete. Here is the structured result:
 
-```
-RESULT: PASS
 
-Test Case 1: TypeScript compilation (npx tsc --noEmit) — PASS
-  Details: Exit c
 
-### Workflow: Implement GitHub issue therealsiege/Penpal#334: Refactor 1b: (2026-04-20)
-- Task: Implement GitHub issue therealsiege/Penpal#334: Refactor 1b: Fix audio-manager setTimeout leak on scene destroy — add destroy method, clear all timeouts
-- Team: nextjs-frontend / ui-designer / electron-dev
-- Result: PASS (1/3 iterations)
-- Key output: All checks complete. Here is the structured QA report:
 
----
 
-```
-RESULT: PASS
 
-Test Case 1: TypeScript compilation (npx tsc --noEmit) — PASS
-  Details
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 ### Workflow: Implement GitHub issue therealsiege/Penpal#339: Infra 1a: Po (2026-04-20)
 - Task: Implement GitHub issue therealsiege/Penpal#339: Infra 1a: Pod pipeline — add rebase before PR in pushAndCreatePR, add cleanup flag for stale worktrees, push local main if ahead
@@ -267,3 +270,122 @@ origin/pod-204-rpg-layer-2-player-character-with-wasd-m
   origin/pod-319-polish-1a-in-game-settings-menu-volumes
   origin/pod-320-polish-1b-session-replay-record-and-play
 ```
+
+### Workflow: single candidate task (2026-04-23)
+- Task: single candidate task
+- Team: solver-a / reviewer-b / executor-c
+- Result: PASS (1/1 iterations)
+- Key output: RESULT: PASS
+
+### Workflow: multi candidate task (2026-04-23)
+- Task: multi candidate task
+- Team: solver-a / reviewer-b / executor-c
+- Result: PASS (1/1 iterations)
+- Key output: RESULT: PASS
+
+### Workflow: invalid self eval task (2026-04-23)
+- Task: invalid self eval task
+- Team: solver-a / reviewer-b / executor-c
+- Result: PASS (1/1 iterations)
+- Key output: RESULT: PASS
+
+### Workflow: task (2026-04-23)
+- Task: task
+- Team: fullstack-dev / backend-arch / electron-dev
+- Result: PASS (1/2 iterations)
+- Key output: RESULT: PASS
+
+ey output: RESULT: PASS
+
+### Workflow: task (2026-04-23)
+- Task: task
+- Team: fullstack-dev / backend-arch / electron-dev
+- Result: FAIL (1/1 iterations)
+- Key output: RESULT: FAIL
+broken
+
+### Workflow: rejected (2026-04-23)
+- Task: rejected
+- Team: fullstack-dev / backend-arch / electron-dev
+- Result: FAIL (1/2 iterations)
+- Key output: solver output
+
+### Workflow: task (2026-04-23)
+- Task: task
+- Team: fullstack-dev / backend-arch / electron-dev
+- Result: PASS (1/2 iterations)
+- Key output:
+
+### Workflow: pod quality pass (2026-04-23)
+- Task: pod quality pass
+- Team: nextjs-frontend / ui-designer / electron-dev
+- Result: PASS (1/1 iterations)
+- Key output: RESULT: PASS
+
+### Workflow: invalid self eval task (2026-04-23)
+- Task: invalid self eval task
+- Team: solver-a / reviewer-b / executor-c
+- Result: PASS (1/1 iterations)
+- Key output: RESULT: PASS
+
+### Workflow: task (2026-04-23)
+- Task: task
+- Team: fullstack-dev / backend-arch / electron-dev
+- Result: PASS (1/2 iterations)
+- Key output: RESULT: PASS
+
+### Workflow: rejected (2026-04-23)
+- Task: rejected
+- Team: fullstack-dev / backend-arch / electron-dev
+- Result: FAIL (1/2 iterations)
+- Key output: solver output
+
+### Workflow: task (2026-04-23)
+- Task: task
+- Team: fullstack-dev / backend-arch / electron-dev
+- Result: FAIL (1/2 iterations)
+- Key output: solver
+
+### Workflow: task (2026-04-23)
+- Task: task
+- Team: fullstack-dev / backend-arch / electron-dev
+- Result: PASS (1/3 iterations)
+- Self-fix attempts: 2
+- Key output: RESULT: PASS
+
+### Workflow: task (2026-04-23)
+- Task: task
+- Team: fullstack-dev / backend-arch / electron-dev
+- Result: PASS (2/2 iterations)
+- Key output: RESULT: PASS
+
+### Workflow: task (2026-04-23)
+- Task: task
+- Team: fullstack-dev / backend-arch / electron-dev
+- Result: FAIL (1/1 iterations)
+- Key output: solver
+
+### Workflow: task (2026-04-23)
+- Task: task
+- Team: fullstack-dev / backend-arch / electron-dev
+- Result: PASS (1/2 iterations)
+- Self-fix attempts: 1
+- Key output: RESULT: PASS
+
+### Workflow: task (2026-04-23)
+- Task: task
+- Team: fullstack-dev / backend-arch / electron-dev
+- Result: PASS (2/2 iterations)
+- Key output: RESULT: PASS
+
+### Workflow: rebase pr task (2026-04-23)
+- Task: rebase pr task
+- Team: solver-a / reviewer-b / executor-c
+- Result: PASS (1/1 iterations)
+- Key output: RESULT: PASS
+
+### Workflow: rebase conflict task (2026-04-23)
+- Task: rebase conflict task
+- Team: solver-a / reviewer-b / executor-c
+- Result: PASS (1/1 iterations)
+- Key output: RESULT: PASS

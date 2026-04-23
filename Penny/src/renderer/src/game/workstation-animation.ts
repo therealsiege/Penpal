@@ -1,7 +1,13 @@
 // ---------------------------------------------------------------------------
 // workstation-animation.ts
-// WorkstationAnimator — all animation, mood, monitor-glow, blocked-indicator,
-// and thought-bubble logic. Extracted from office-workstation.ts.
+// WorkstationAnimator — orchestrator for animation, mood, monitor-glow,
+// blocked-indicator, and thought-bubble logic.
+//
+// The monolithic updateAnimation method has been decomposed into discrete
+// state handler classes (WaitingState, WorkingState, IdleState) in
+// animation-states.ts.  This file retains the orchestrator role: mode
+// detection, blend-guard serialisation, the common teardown that runs on
+// every mode transition, and delegation to the active state's enter().
 // ---------------------------------------------------------------------------
 
 import Phaser from 'phaser'
@@ -9,25 +15,13 @@ import type { AgentState } from '../types'
 import type { WorkstationSprite, Room } from './office-types'
 import { activeTheme } from './office-theme'
 import { AnimConfig } from './animation-config'
-import { EventBus, EVENTS } from './events'
-import { questSystem, type QuestDifficulty } from './quest-system'
-import { creditManager } from './credits'
-import { leaderboardManager } from './leaderboard'
-import { seasonManager } from './seasons'
 import {
   CHAR_COLS,
-  POSE_IDLE,
-  POSE_INTERACT,
-  POSE_SIT,
-  POSE_WALK,
   CHAR_SCALE,
   WS_DESK_Y,
   WS_SPRITE_Y,
-  IDLE_WALK_BREAK_MIN_MS,
-  IDLE_WALK_BREAK_VAR_MS,
   COLOR_LED_AMBER,
   LOD_L2_MAX,
-  ROOM_HEADER_H,
   THINKING_DOT_RADIUS,
   THINKING_DOT_SPACING,
   THINKING_DOT_Y,
@@ -41,13 +35,18 @@ import {
   EVAL_GLOW_REFRESH_MS,
   scaledFontSize,
 } from './office-constants'
-import { ANIM_KEYS, DIFFICULTY_STAR_FRAME, ICON_FRAMES, EFFECT_ANIM_KEYS, SPRITESHEET_KEYS, PET_FACE_FRAMES } from './office-asset-keys'
-import { getAgentCharacterIndex } from './office-helpers'
+import { DIFFICULTY_STAR_FRAME, ICON_FRAMES, EFFECT_ANIM_KEYS, SPRITESHEET_KEYS, PET_FACE_FRAMES } from './office-asset-keys'
 import { MOOD_CONFIGS, type Mood } from './agent-mood'
 import type { WorkstationHost } from './office-workstation'
-import { buildOwnRoomRect, type NavMesh } from './nav-mesh'
-import { PathWalker } from './path-walker'
 import { StateMachine } from './state-machine'
+import type { QuestDifficulty } from './quest-system'
+import {
+  WaitingState,
+  WorkingState,
+  IdleState,
+  type AnimationStateContext,
+  type AnimationState,
+} from './animation-states'
 
 // ---------------------------------------------------------------------------
 // Eval glow color helper
@@ -61,46 +60,33 @@ function evalGlowColor(rate: number | null | undefined): number {
 }
 
 // ---------------------------------------------------------------------------
-// WorkstationAnimator
+// WorkstationAnimator — orchestrator
 // ---------------------------------------------------------------------------
 
-export class WorkstationAnimator {
-  private scene: Phaser.Scene
-  private host: WorkstationHost
+export class WorkstationAnimator implements AnimationStateContext {
+  readonly scene: Phaser.Scene
+  readonly host: WorkstationHost
 
-  /** Callback to the parent OfficeWorkstations.restoreDeskStroke.
-   *  Needed because updateAnimation calls restoreDeskStroke for idle/waiting
-   *  branches, but we cannot import OfficeWorkstations here. */
+  /** Callback to the parent OfficeWorkstations.restoreDeskStroke. */
   private restoreDeskStrokeCallback: (ws: WorkstationSprite) => void
 
-  /** Callback to the parent OfficeWorkstations.refreshTaskCountDisplay.
-   *  Called from the working→idle transition inside updateAnimation. */
+  /** Callback to the parent OfficeWorkstations.refreshTaskCountDisplay. */
   private refreshTaskCountCallback: (ws: WorkstationSprite) => void
 
   /** Cached eval success rates: agentId → successRate (null = no data) */
   private evalCache = new Map<string, number | null>()
-  /**
-   * Cached eval harness consecutive-success streak (0+). Only agents present in
-   * evalsReportAll() have an entry; missing key means harness has no row yet for
-   * that agent (flame falls back to XP streak only until the next fetch).
-   */
   private evalStreakCache = new Map<string, number>()
-  /** Timestamp of last eval data fetch */
   private lastEvalFetchAt = 0
-  /** Guard against duplicate in-flight eval fetches */
   private evalFetchPromise: Promise<void> | null = null
-  /** Workstations that need a glow refresh when the current eval fetch completes */
   private pendingEvalGlowWorkstations = new Set<WorkstationSprite>()
 
-  /**
-   * Per-agent StateMachine (two states: 'ready' | 'blending') used to
-   * serialise rapid mode-change requests.  If a crossfade is already
-   * in flight the incoming request is stored in pendingAnimUpdate and
-   * replayed once the current blend tween completes.
-   */
   private blendSMs = new Map<string, StateMachine>()
-  /** Latest queued mode-change request per agent — flushed by _finishBlend. */
   private pendingAnimUpdate = new Map<string, { ws: WorkstationSprite; agent: AgentState }>()
+
+  // ── State handler instances ──
+  private readonly waitingState: WaitingState
+  private readonly workingState: WorkingState
+  private readonly idleState: IdleState
 
   constructor(
     scene: Phaser.Scene,
@@ -112,13 +98,43 @@ export class WorkstationAnimator {
     this.host = host
     this.restoreDeskStrokeCallback = restoreDeskStrokeCallback
     this.refreshTaskCountCallback = refreshTaskCountCallback
+
+    // Create state handler instances — each follows the module pattern
+    // (receives Phaser.Scene in constructor) and gets a reference to this
+    // orchestrator as context for shared methods.
+    this.waitingState = new WaitingState(scene, this)
+    this.workingState = new WorkingState(scene, this)
+    this.idleState = new IdleState(scene, this)
+  }
+
+  // ---------------------------------------------------------------------------
+  // AnimationStateContext implementation — shared methods for state classes
+  // ---------------------------------------------------------------------------
+
+  restoreDeskStroke(ws: WorkstationSprite): void {
+    this.restoreDeskStrokeCallback(ws)
+  }
+
+  refreshTaskCount(ws: WorkstationSprite): void {
+    this.refreshTaskCountCallback(ws)
+  }
+
+  showSpeechBubble(ws: WorkstationSprite, agent: AgentState): void {
+    this._showSpeechBubble(ws, agent)
+  }
+
+  applyQuestStarStyle(ws: WorkstationSprite, difficulty: QuestDifficulty): void {
+    this._applyQuestStarStyle(ws, difficulty)
+  }
+
+  finishBlend(agentId: string, sm: StateMachine): void {
+    this._finishBlend(agentId, sm)
   }
 
   // ---------------------------------------------------------------------------
   // Eval glow data fetching
   // ---------------------------------------------------------------------------
 
-  /** Refresh eval data from main process (throttled to EVAL_GLOW_REFRESH_MS). */
   private refreshEvalCacheIfDue(): void {
     const now = Date.now()
     if (this.evalFetchPromise) return
@@ -131,7 +147,6 @@ export class WorkstationAnimator {
         for (const r of reports) {
           this.evalCache.set(r.agentId, r.totalTasks > 0 ? r.successRate : null)
           if (r.totalTasks > 0) {
-            // Harness streak is signed (negative if latest outcomes are failures); flame uses successes only.
             this.evalStreakCache.set(r.agentId, Math.max(0, r.streak ?? 0))
           }
         }
@@ -144,10 +159,6 @@ export class WorkstationAnimator {
       .finally(() => { this.evalFetchPromise = null })
   }
 
-  /**
-   * Apply eval glow tint from the in-memory cache only (no IPC).
-   * Canonical rate: null = missing agent in report or zero tasks; number = success rate 0–1.
-   */
   applyEvalGlowFromCache(ws: WorkstationSprite): void {
     if (!ws.evalGlow) return
     const agentId = ws.state?.config.id
@@ -160,7 +171,6 @@ export class WorkstationAnimator {
     ws.evalGlow.setFillStyle(evalGlowColor(canonical))
   }
 
-  /** Queue workstation, refresh evals on cadence, apply tint (again when fetch completes). */
   updateEvalGlow(ws: WorkstationSprite): void {
     this.pendingEvalGlowWorkstations.add(ws)
     this.refreshEvalCacheIfDue()
@@ -168,10 +178,9 @@ export class WorkstationAnimator {
   }
 
   // ---------------------------------------------------------------------------
-  // Blend-guard helpers (use StateMachine transition queue to serialise mode switches)
+  // Blend-guard helpers
   // ---------------------------------------------------------------------------
 
-  /** Get or create the two-state blend guard SM for a given agent. */
   private getBlendSM(agentId: string): StateMachine {
     let sm = this.blendSMs.get(agentId)
     if (!sm) {
@@ -184,22 +193,18 @@ export class WorkstationAnimator {
     return sm
   }
 
-  /**
-   * Called at the end of every blend tween.  Restores the SM to 'ready' and
-   * flushes any mode-change that arrived while the blend was in progress.
-   */
   private _finishBlend(agentId: string, sm: StateMachine): void {
     sm.setState('ready')
     const pending = this.pendingAnimUpdate.get(agentId)
     if (pending) {
       this.pendingAnimUpdate.delete(agentId)
-      pending.ws.lastAnimMode = undefined  // force full re-evaluation
+      pending.ws.lastAnimMode = undefined
       this.updateAnimation(pending.ws, pending.agent)
     }
   }
 
   // ---------------------------------------------------------------------------
-  // updateAnimation — the main animation state machine
+  // updateAnimation — mode detection, common teardown, then delegate to state
   // ---------------------------------------------------------------------------
 
   updateAnimation(ws: WorkstationSprite, agent: AgentState): void {
@@ -210,8 +215,7 @@ export class WorkstationAnimator {
     if (ws.lastAnimMode === mode) return
 
     // Blend-guard: if a crossfade tween is already in flight, queue the latest
-    // request and return.  _finishBlend will flush the queue when the blend ends.
-    // This uses the StateMachine transition queue to serialise rapid mode changes.
+    // request and return.
     const agentId = agent.config.id
     const blendSM = this.getBlendSM(agentId)
     if (blendSM.currentStateName === 'blending') {
@@ -222,21 +226,18 @@ export class WorkstationAnimator {
     const prevMode = ws.lastAnimMode
     ws.lastAnimMode = mode
 
-    // Tear down all animation state — TweenBag destroys every registered tween/timer
-    // in one call, replacing ~30 individual `if (ws.xxx) { ws.xxx.destroy() }` lines.
+    // ── Common teardown ──
+    // TweenBag destroys every registered tween/timer in one call
     ws.tweenBag.killAll()
 
-    // Guard refs: code throughout this file pattern-guards on these as truthiness checks
-    // (e.g. `if (ws.walkBreakTween || ws.headTiltTween) return`). TweenBag destroys the
-    // underlying objects but leaves ws fields pointing to now-dead references, so we
-    // must null the ones used as guards to prevent stale-truthy false positives.
-    ws.walkBreakTween = undefined   // guards at idle micro-variety (lines 887, 930, 947…)
-    ws.headTiltTween  = undefined   // guards at idle micro-variety (lines 887, 947, 988…)
-    ws.kbGlowTween    = undefined   // guard at working branch (line 443 prevents re-create)
+    // Guard refs: null the ones used as truthiness guards
+    ws.walkBreakTween = undefined
+    ws.headTiltTween  = undefined
+    ws.kbGlowTween    = undefined
 
-    // Sprite / layout resets: destroyed tweens were mutating these, restore to neutral
-    ws.statusDot.setAlpha(1)        // dotPulseTween was fading this
-    ws.sprite.x = 0                 // typingTween / pulseTween were offsetting this
+    // Sprite / layout resets
+    ws.statusDot.setAlpha(1)
+    ws.sprite.x = 0
 
     // Non-tween ambient objects cleared on every mode transition
     if (ws.soundWaveGfx) { ws.soundWaveGfx.clear(); ws.soundWaveGfx.setAlpha(1) }
@@ -244,13 +245,12 @@ export class WorkstationAnimator {
     ws.soundWaveSpeaker = undefined
     ws.chairSprite?.setAngle(0)
 
-    // taskReviewRing is a Graphics game object (not a tween) — destroy it explicitly
     ws.taskReviewRing?.destroy()
     ws.taskReviewRing = undefined
 
     ws.speechBubble?.setVisible(false).setAlpha(0)
 
-    // Fade out progress ring if visible; working branch re-starts it from zero
+    // Fade out progress ring
     if (ws.progressRing && ws.progressRing.alpha > 0) {
       this.scene.tweens.add({ targets: ws.progressRing, alpha: 0, duration: 300, ease: 'Sine.easeOut',
         onComplete: () => { ws.progressRing?.clear() },
@@ -265,10 +265,10 @@ export class WorkstationAnimator {
       })
     }
 
-    // Always stop steam when transitioning; idle branch will re-spawn it
+    // Always stop steam when transitioning
     this.host.clearSteamParticles(ws)
 
-    // Restore monitor to neutral state (screensaver tween already killed by killAll above)
+    // Restore monitor to neutral state
     if (ws.monitorSprite?.active) { ws.monitorSprite.clearTint(); ws.monitorSprite.setAlpha(1) }
 
     // Clean up thinking dots when leaving working mode
@@ -276,7 +276,7 @@ export class WorkstationAnimator {
       this.hideThinkingDots(ws)
     }
 
-    // Fade out mood emoji and badge; updateMood will fade the new ones in
+    // Fade out mood emoji and badge
     if (ws.moodEmoji) {
       this.scene.tweens.add({ targets: ws.moodEmoji, alpha: 0, duration: 200, ease: 'Sine.easeOut' })
     }
@@ -286,9 +286,9 @@ export class WorkstationAnimator {
       })
     }
 
-    // Chair swivel on mode change — quick turn as if the agent is shifting in their seat
+    // Chair swivel on mode change
     if (ws.chairSprite?.visible) {
-      const swivelAngle = (Math.random() - 0.5) * 8 // -4 to +4 degrees
+      const swivelAngle = (Math.random() - 0.5) * 8
       this.scene.tweens.add({
         targets: ws.chairSprite,
         angle: swivelAngle,
@@ -298,7 +298,6 @@ export class WorkstationAnimator {
       })
     }
 
-    // GDS mode: sprite angle/frame are locked to stool rotation
     const gdsLock = this.host.getOrAssignGdsDeskSlot != null
 
     ws.sprite.y = WS_SPRITE_Y
@@ -308,830 +307,29 @@ export class WorkstationAnimator {
 
     this.updateMonitorGlow(ws, isWorking, isWaiting)
 
-    const charIdx = this.host.getAgentCharacterIndex(agent)
-    const base = charIdx * CHAR_COLS
+    // ── Delegate to the active state's enter() ──
+    const state = this.getStateHandler(mode)
+    state.enter(ws, agent, prevMode, blendSM, agentId)
+  }
 
-    if (isWaiting) {
-      // any→waiting: fade the sprite in gradually over 400 ms so the waiting
-      // pose doesn't snap in abruptly.  Main-loop tweens are delayed by the
-      // same duration so they only start once the agent is fully visible.
-      const waitingBlendMs = AnimConfig.stateTransitions.anyToWaiting.durationMs
-      ws.sprite.setAlpha(0)
-      blendSM.setState('blending')
-      this.scene.tweens.add({
-        targets: ws.sprite, alpha: 1,
-        duration: waitingBlendMs, ease: 'Sine.easeOut',
-        onComplete: () => this._finishBlend(agentId, blendSM),
-      })
-
-      if (!gdsLock) ws.sprite.setFrame(base + POSE_IDLE)
-      ws.pulseTween = ws.tweenBag.add('pulse', this.scene.tweens.add({
-        targets: ws.sprite, scaleX: CHAR_SCALE * AnimConfig.waiting.pulseScaleFactor, scaleY: CHAR_SCALE * AnimConfig.waiting.pulseScaleFactor,
-        duration: AnimConfig.waiting.pulseDuration, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
-        delay: waitingBlendMs,
-      }))
-      ws.typingTween = ws.tweenBag.add('typing', this.scene.tweens.add({
-        targets: ws.sprite, x: AnimConfig.waiting.swayAmplitude,
-        duration: AnimConfig.waiting.swayDuration, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
-        delay: waitingBlendMs,
-      }))
-      ws.dotPulseTween = ws.tweenBag.add('dotPulse', this.scene.tweens.add({
-        targets: ws.statusDot, alpha: AnimConfig.waiting.dotPulseAlphaMin,
-        duration: AnimConfig.waiting.dotPulseDuration, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
-        delay: waitingBlendMs,
-      }))
-      // LED: waiting — amber steady glow
-      if (ws.ledGlow) {
-        ws.ledGlow.clear()
-        ws.ledGlow.fillStyle(activeTheme.deskStrokeWaiting, 1)
-        ws.ledGlow.fillRoundedRect(-26, WS_DESK_Y + 4, 52, 2, 1)
-        this.scene.tweens.add({ targets: ws.ledGlow, alpha: 0.5, duration: 300, ease: 'Sine.easeOut' })
-      }
-      // Lamp light cone: dim when waiting
-      if (ws.lampLight) {
-        ws.lampLightTween = ws.tweenBag.add('lampLight', this.scene.tweens.add({
-          targets: ws.lampLight, alpha: AnimConfig.waiting.lampDimAlpha,
-          duration: AnimConfig.waiting.ledFadeDuration, ease: 'Sine.easeOut',
-        }))
-      }
-      // Task review ring — yellow rotating arc during accept-edits review phase
-      if (agent.interactionType === 'accept-edits') {
-        const reviewRing = this.scene.add.graphics()
-        ws.container.add(reviewRing)
-        ws.taskReviewRing = reviewRing
-        const REVIEW_RING_R = 14
-        ws.taskReviewRingTween = ws.tweenBag.add('taskReviewRing', this.scene.tweens.addCounter({
-          from: 0,
-          to: Math.PI * 2,
-          duration: 1600,
-          repeat: -1,
-          ease: 'Linear',
-          onUpdate: (tween) => {
-            if (!reviewRing.active) return
-            const a = tween.getValue() ?? 0
-            reviewRing.clear()
-            reviewRing.lineStyle(1.5, activeTheme.statusWaiting, 0.75)
-            reviewRing.beginPath()
-            reviewRing.arc(0, WS_SPRITE_Y, REVIEW_RING_R, a, a + Math.PI * 1.1, false)
-            reviewRing.strokePath()
-          },
-        }))
-      }
-      this.restoreDeskStrokeCallback(ws)
-    } else if (isWorking) {
-      if (!gdsLock) ws.sprite.setFrame(base + POSE_INTERACT)
-
-      // idle→working: squash-compression burst (scaleY) before typing starts.
-      // The sprite compresses to compressionScale over half the blend window,
-      // then bounces back.  Main sprite-motion loops are delayed by the full
-      // blend duration so they begin after the settle.
-      const workingBlendMs = (prevMode === 'idle' || prevMode === undefined)
-        ? AnimConfig.stateTransitions.idleToWorking.durationMs
-        : 0
-      if (workingBlendMs > 0) {
-        blendSM.setState('blending')
-        const halfBlend = workingBlendMs / 2
-        this.scene.tweens.add({
-          targets: ws.sprite,
-          scaleY: CHAR_SCALE * AnimConfig.stateTransitions.idleToWorking.compressionScale,
-          duration: halfBlend,
-          ease: 'Sine.easeIn',
-          yoyo: true,
-          onComplete: () => {
-            ws.sprite.setScale(CHAR_SCALE)
-            this._finishBlend(agentId, blendSM)
-          },
-        })
-      }
-
-      ws.typingTween = ws.tweenBag.add('typing', this.scene.tweens.add({
-        targets: ws.sprite, x: AnimConfig.working.typingAmplitude,
-        duration: AnimConfig.working.typingDuration, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
-        delay: workingBlendMs,
-      }))
-      ws.bounceTween = ws.tweenBag.add('bounce', this.scene.tweens.add({
-        targets: ws.sprite, y: WS_SPRITE_Y - AnimConfig.working.bounceOffset,
-        duration: AnimConfig.working.bounceDuration, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
-        delay: workingBlendMs,
-      }))
-      ws.headTiltTween = ws.tweenBag.add('headTilt', this.scene.tweens.add({
-        targets: ws.sprite, angle: AnimConfig.working.headTiltAngle,
-        duration: AnimConfig.working.headTiltDuration, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
-        delay: workingBlendMs,
-      }))
-      if (!this.host.getOrAssignGdsDeskSlot) ws.deskBody.setStrokeStyle(1, activeTheme.statusWorking, 0.55)
-
-      // Keyboard glow — subtle blue stroke shimmer while typing
-      if (ws.keyboard) {
-        ws.keyboard.setStrokeStyle(0.5, 0x0ea5e9, 0.4)
-        if (!ws.kbGlowTween) {
-          ws.kbGlowTween = ws.tweenBag.add('kbGlow', this.scene.tweens.add({
-            targets: ws.keyboard,
-            alpha: { from: AnimConfig.working.keyboardGlowAlphaMin, to: AnimConfig.working.keyboardGlowAlphaMax },
-            duration: AnimConfig.working.keyboardGlowDuration,
-            yoyo: true,
-            repeat: -1,
-            ease: 'Sine.easeInOut',
-          }))
-        }
-      }
-
-      // ── Game systems: auto-wrap into quest ──
-      if (prevMode !== 'working') {
-        const aid = agent.config.id
-        // Only start a quest if this agent doesn't already have one active
-        if (questSystem.getAgentActiveQuests(aid).length === 0) {
-          const blurb = agent.isOrchestratorTask
-            ? (agent.taskTitle?.slice(0, 40) ?? 'Task')
-            : (agent.lastAssistantBlurb?.slice(0, 40) ?? 'Working')
-          questSystem.startQuest({
-            title: blurb,
-            agentId: aid,
-            priority: 'normal',
-          })
-        }
-        // Ensure agent is registered on the leaderboard (so they appear even before first completion)
-        const xpD = agent.xp
-        leaderboardManager.recordXP(aid, agent.config.name, 0, xpD?.level ?? 1, xpD?.rank ?? 'Intern')
-
-        // Show quest difficulty star with difficulty-proportional animation
-        const activeQ = questSystem.getAgentActiveQuests(aid)[0]
-        if (activeQ && ws.questIcon) {
-          const frame = DIFFICULTY_STAR_FRAME[activeQ.difficulty] ?? ICON_FRAMES.STAR_GREY
-          ws.questIcon.setFrame(frame).setVisible(true).setAlpha(0)
-          ws.tweenBag.kill('questIcon')
-          ws.tweenBag.kill('questIconPulse')
-          this._applyQuestStarStyle(ws, activeQ.difficulty as QuestDifficulty)
-        }
-
-        // Task start VFX: expanding white ring + sparkles (idle→working)
-        for (const room of this.host.getRooms().values()) {
-          if (room.workstations.has(agent.config.id)) {
-            const worldX = room.x + ws.container.x
-            const worldY = room.y + ws.container.y + WS_SPRITE_Y
-            this.host.celebrations?.taskStart(worldX, worldY)
-            break
-          }
-        }
-      }
-      // LED: working — green pulsing glow
-      if (ws.ledGlow) {
-        ws.ledGlow.clear()
-        ws.ledGlow.fillStyle(activeTheme.deskStrokeWorking, 1)
-        ws.ledGlow.fillRoundedRect(-26, WS_DESK_Y + 4, 52, 2, 1)
-        this.scene.tweens.add({ targets: ws.ledGlow, alpha: 0.6, duration: 300, ease: 'Sine.easeOut',
-          onComplete: () => {
-            if (!ws.ledGlow) return
-            ws.ledGlow.setAlpha(AnimConfig.working.ledPulseAlphaBase)
-            ws.ledPulseTween = ws.tweenBag.add('ledPulse', this.scene.tweens.add({
-              targets: ws.ledGlow, alpha: AnimConfig.working.ledPulseAlphaPeak,
-              duration: AnimConfig.working.ledPulseDuration, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
-            }))
-          },
-        })
-      }
-      // Lamp light cone: brighten when working with a warm glow
-      if (ws.lampLight) {
-        ws.lampLightTween = ws.tweenBag.add('lampLight', this.scene.tweens.add({
-          targets: ws.lampLight, alpha: AnimConfig.working.lampBrightAlpha,
-          duration: 300, ease: 'Sine.easeOut',
-        }))
-        // Subtle flicker every 8-15 seconds — tiny alpha dip then recovery
-        ws.lampFlickerTimer = ws.tweenBag.add('lampFlicker', this.scene.time.addEvent({
-          delay: AnimConfig.working.lampFlickerIntervalMin + Math.random() * AnimConfig.working.lampFlickerIntervalVar,
-          loop: true,
-          callback: () => {
-            if (!ws.lampLight || !ws.lampLight.active || ws.lastAnimMode !== 'working') return
-            this.scene.tweens.add({
-              targets: ws.lampLight,
-              alpha: 0.08,
-              duration: 50,
-              yoyo: true,
-              hold: 30,
-              ease: 'Sine.easeInOut',
-            })
-          },
-        }))
-      }
-
-      // Ambient sound-wave indicator — three concentric quarter-circle arcs drawn
-      // to the left of the agent, suggesting keyboard/typing audio ambiance.
-      if (ws.soundWaveGfx) {
-        const gfx = ws.soundWaveGfx
-        gfx.clear()
-        gfx.lineStyle(1, activeTheme.wallInner, 0.15)
-        gfx.beginPath()
-        gfx.arc(0, 0, 3, Phaser.Math.DegToRad(-45), Phaser.Math.DegToRad(45), false)
-        gfx.strokePath()
-        gfx.lineStyle(1, activeTheme.wallInner, 0.10)
-        gfx.beginPath()
-        gfx.arc(0, 0, 5, Phaser.Math.DegToRad(-45), Phaser.Math.DegToRad(45), false)
-        gfx.strokePath()
-        gfx.lineStyle(1, activeTheme.wallInner, 0.05)
-        gfx.beginPath()
-        gfx.arc(0, 0, 7, Phaser.Math.DegToRad(-45), Phaser.Math.DegToRad(45), false)
-        gfx.strokePath()
-        gfx.setAlpha(1)
-        ws.soundWaveTween = ws.tweenBag.add('soundWave', this.scene.tweens.add({
-          targets: gfx, alpha: 0,
-          duration: 1500, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
-        }))
-
-        // Small PLAY_DARK "speaker" sprite at the sound wave origin
-        const speaker = this.scene.add.sprite(0, 0, SPRITESHEET_KEYS.GAME_ICONS, ICON_FRAMES.PLAY_DARK)
-          .setScale(0.14).setAlpha(0.2)
-        ws.container.add(speaker)
-        speaker.setPosition(gfx.x, gfx.y)
-        ws.soundWaveSpeaker = speaker
-        // Gentle pulse matching the sound wave fade
-        this.scene.tweens.add({
-          targets: speaker, alpha: 0.05,
-          duration: 1500, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
-        })
-      }
-
-      // Floating "typing note" sprites — tiny circles that rise like musical notes.
-      // Only spawned at LOD level 3 (full detail zoom) to avoid performance issues.
-      ws.typingNoteTimer = ws.tweenBag.add('typingNote', this.scene.time.addEvent({
-        delay: 500,
-        loop: true,
-        callback: () => {
-          // Gate on LOD 3 — skip at lower zoom levels
-          if (this.scene.cameras.main.zoom <= LOD_L2_MAX) return
-          // Spawn 1-2 tiny CIRCLE_BLUE sprites near the monitor area
-          const count = 1 + Math.floor(Math.random() * 2)
-          for (let n = 0; n < count; n++) {
-            const noteX = (Math.random() - 0.5) * 10
-            const noteY = WS_SPRITE_Y - 2
-            const note = this.scene.add.sprite(noteX, noteY, SPRITESHEET_KEYS.GAME_ICONS, ICON_FRAMES.CIRCLE_BLUE)
-              .setScale(0.12).setAlpha(0.3)
-            ws.container.add(note)
-            this.scene.tweens.add({
-              targets: note,
-              y: noteY - 15,
-              x: noteX + (Math.random() - 0.5) * 6,
-              alpha: 0,
-              duration: 800,
-              ease: 'Sine.easeOut',
-              delay: n * 100,
-              onComplete: () => { try { note.destroy() } catch { /* already gone */ } },
-            })
-          }
-        },
-      }))
-      // Progress ring — circular arc that fills clockwise over 60 seconds.
-      if (ws.progressRing) {
-        ws.workStartTime = Date.now()
-        const ring = ws.progressRing
-        const RING_DURATION_MS = 60_000
-        const RING_R = 10
-        const drawRing = (progress: number) => {
-          if (!ring.active) return
-          ring.clear()
-          // Background track
-          ring.lineStyle(1.5, activeTheme.wall, 0.3)
-          ring.beginPath()
-          ring.arc(0, 0, RING_R, 0, Math.PI * 2, false)
-          ring.strokePath()
-          // Filled arc from top (-90deg) clockwise
-          const fill = Math.min(progress, 1)
-          if (fill > 0) {
-            const arcColor = fill < 0.8 ? activeTheme.statusWorking : activeTheme.statusWaiting
-            ring.lineStyle(1.5, arcColor, 0.5)
-            ring.beginPath()
-            ring.arc(0, 0, RING_R,
-              Phaser.Math.DegToRad(-90),
-              Phaser.Math.DegToRad(fill * 360 - 90),
-              false,
-            )
-            ring.strokePath()
-          }
-        }
-        // Fade in, then start counter tween 0->100 over RING_DURATION_MS
-        ring.setAlpha(0)
-        drawRing(0)
-        this.scene.tweens.add({ targets: ring, alpha: 1, duration: 400, ease: 'Sine.easeOut' })
-        ws.progressRingTween = ws.tweenBag.add('progressRing', this.scene.tweens.addCounter({
-          from: 0, to: 100,
-          duration: RING_DURATION_MS,
-          ease: 'Linear',
-          onUpdate: (tw) => {
-            const pct = tw.getValue() / 100
-            drawRing(pct)
-          },
-          onComplete: () => {
-            // Ring is full — pulse alpha to signal overtime
-            drawRing(1)
-            ws.progressRingTween = ws.tweenBag.add('progressRing', this.scene.tweens.add({
-              targets: ring, alpha: 0.35,
-              duration: 800, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
-            }))
-          },
-        }))
-      }
-
-      // ── Speech bubble — shows lastAssistantBlurb as typewriter text ──
-      this.showSpeechBubble(ws, agent)
-
-    } else {
-      if (!gdsLock) ws.sprite.setFrame(base + POSE_SIT)
-
-      // working→idle: hands-lift + lean-back before settling into the idle pose.
-      // The sprite lifts (y), tilts back (angle), then snaps to resting position.
-      // Breath and chair-rock loops are delayed so they start after the settle.
-      const idleBlendMs = prevMode === 'working'
-        ? AnimConfig.stateTransitions.workingToIdle.durationMs
-        : 0
-      if (idleBlendMs > 0) {
-        blendSM.setState('blending')
-        const halfBlend = idleBlendMs / 3        // lift phase
-        const settleMs  = idleBlendMs * 2 / 3   // settle phase
-        this.scene.tweens.add({
-          targets: ws.sprite,
-          y:     WS_SPRITE_Y - AnimConfig.stateTransitions.workingToIdle.liftPx,
-          angle: AnimConfig.stateTransitions.workingToIdle.leanAngle,
-          duration: halfBlend,
-          ease: 'Sine.easeOut',
-          onComplete: () => {
-            this.scene.tweens.add({
-              targets: ws.sprite,
-              y:     WS_SPRITE_Y,
-              angle: 0,
-              duration: settleMs,
-              ease: 'Sine.easeIn',
-              onComplete: () => this._finishBlend(agentId, blendSM),
-            })
-          },
-        })
-      }
-
-      ws.breathTween = ws.tweenBag.add('breath', this.scene.tweens.add({
-        targets: ws.sprite, scaleY: CHAR_SCALE * AnimConfig.idle.breathScaleFactor,
-        duration: AnimConfig.idle.breathDuration, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
-        delay: idleBlendMs,
-      }))
-
-      // Idle chair rocking — very subtle lean-back oscillation
-      if (ws.chairSprite?.visible) {
-        ws.chairRockTween = ws.tweenBag.add('chairRock', this.scene.tweens.add({
-          targets: ws.chairSprite,
-          angle: { from: -AnimConfig.idle.chairRockAngle, to: AnimConfig.idle.chairRockAngle },
-          duration: AnimConfig.idle.chairRockDuration,
-          yoyo: true,
-          repeat: -1,
-          ease: 'Sine.easeInOut',
-          delay: idleBlendMs,
-        }))
-      }
-
-      // Monitor screensaver — color gradient cycle on unoccupied desk monitors
-      // Colors: dark blue → purple → teal, 12s cycle, alpha 0.45
-      if (ws.monitorSprite) {
-        const SS_COLORS = [activeTheme.wall, activeTheme.screensaverPurple, activeTheme.screensaverTeal]
-        ws.tweenBag.add('screensaver', this.scene.tweens.addCounter({
-          from: 0, to: 1, duration: 12000, repeat: -1, ease: 'Linear',
-          onUpdate: (tw: Phaser.Tweens.Tween) => {
-            if (!ws.monitorSprite?.active) return
-            const raw = tw.getValue() * 3
-            const seg = Math.floor(raw) % 3
-            const frac = raw - Math.floor(raw)
-            const c1 = SS_COLORS[seg] ?? SS_COLORS[0]!
-            const c2 = SS_COLORS[(seg + 1) % 3] ?? SS_COLORS[0]!
-            const lerp = (a: number, b: number) => Math.round(a + (b - a) * frac)
-            const r = lerp((c1 >> 16) & 0xff, (c2 >> 16) & 0xff)
-            const g = lerp((c1 >> 8) & 0xff, (c2 >> 8) & 0xff)
-            const b = lerp(c1 & 0xff, c2 & 0xff)
-            ws.monitorSprite!.setTint((r << 16) | (g << 8) | b)
-            ws.monitorSprite!.setAlpha(0.45)
-          },
-        }))
-      }
-
-      // Coffee mug steam — 3 tiny particles rising from idle agent's desk mug
-      // Params: alpha 0.05, 8px rise, 2s fade
-      if (!ws.steamContainer) {
-        ws.steamContainer = this.scene.add.container(8, WS_DESK_Y - 2)
-        ws.container.add(ws.steamContainer)
-      }
-      const spawnMugSteam = () => {
-        if (ws.lastAnimMode !== 'idle' || !ws.steamContainer?.active) return
-        for (let i = 0; i < 5; i++) {
-          const xOff = (i - 2) * 2.0 + (Math.random() - 0.5) * 0.5
-          const p = this.scene.add.circle(xOff, 0, 1.5, 0xd4d4d8, 0.08)
-          ws.steamContainer.add(p)
-          this.scene.tweens.add({
-            targets: p,
-            y: -8 - Math.random() * 3,
-            alpha: 0,
-            duration: 2000,
-            delay: i * 350,
-            ease: 'Sine.easeOut',
-            onComplete: () => { try { ws.steamContainer?.remove(p, true) } catch { /* gone */ } },
-          })
-        }
-      }
-      spawnMugSteam()
-      ws.mugSteamTimer = ws.tweenBag.add('mugSteam', this.scene.time.addEvent({
-        delay: 2500, loop: true, callback: () => { spawnMugSteam() },
-      }))
-
-      // Fart VFX when entering compressing mode
-      if (agent.sessionMode === 'compressing' && this.scene.anims.exists(EFFECT_ANIM_KEYS.FART)) {
-        const fart = this.scene.add.sprite(0, WS_SPRITE_Y - 8, SPRITESHEET_KEYS.EFFECTS_FART)
-          .setDepth(600).setScale(0.18).setAlpha(0.5)
-        ws.container.add(fart)
-        fart.play(EFFECT_ANIM_KEYS.FART)
-        fart.once('animationcomplete', () => fart.destroy())
-      }
-
-      // Remove keyboard glow
-      ws.tweenBag.kill('kbGlow')
-      ws.kbGlowTween = undefined
-      if (ws.keyboard) ws.keyboard.setStrokeStyle(0, 0, 0).setAlpha(0.8)
-
-      // LED: idle — muted dim glow
-      if (ws.ledGlow) {
-        ws.ledGlow.clear()
-        ws.ledGlow.fillStyle(activeTheme.deskStrokeIdle, 1)
-        ws.ledGlow.fillRoundedRect(-26, WS_DESK_Y + 4, 52, 2, 1)
-        this.scene.tweens.add({ targets: ws.ledGlow, alpha: 0.1, duration: 600, ease: 'Sine.easeOut' })
-      }
-      // Lamp light cone: dim when idle
-      if (ws.lampLight) {
-        ws.lampLightTween = ws.tweenBag.add('lampLight', this.scene.tweens.add({
-          targets: ws.lampLight, alpha: AnimConfig.waiting.lampDimAlpha,
-          duration: AnimConfig.waiting.ledFadeDuration, ease: 'Sine.easeOut',
-        }))
-      }
-      this.restoreDeskStrokeCallback(ws)
-
-      // "Just finished" confetti + game-systems — the Y lift / lean-back is
-      // already handled by the idleBlendMs tween above (working→idle crossfade).
-      if (prevMode === 'working') {
-        // Find the room that owns this workstation to compute world position
-        for (const room of this.host.getRooms().values()) {
-          if (room.workstations.has(agent.config.id)) {
-            const worldX = room.x + ws.container.x
-            const worldY = room.y + ws.container.y - 16  // slightly above the agent head
-            if (agent.sessionMode === 'error' || agent.sessionMode === 'crashed') {
-              // Task failed — play fail VFX instead of confetti
-              this.host.celebrations?.taskFail(worldX, worldY + 16, { agentId: agent.config.id })
-            } else {
-              this.host.burstConfetti(worldX, worldY)
-              // Signature move name flash — delayed 300ms so it layers above confetti
-              const sigMove = agent.config.bestiary?.signature_move?.name
-              const sigColorHex = agent.config.bestiary?.colors?.primary
-              if (sigMove && sigColorHex) {
-                const sigColorInt = parseInt(sigColorHex.replace('#', ''), 16)
-                this.scene.time.delayedCall(300, () => {
-                  this.host.celebrations?.signatureFlash(worldX, worldY - 12, sigMove, sigColorInt)
-                })
-              }
-            }
-            break
-          }
-        }
-
-        // Task completion tally — increment counter and refresh the desk badge
-        ws.localTaskCount++
-        this.refreshTaskCountCallback(ws)
-
-        // ── Game systems: quest complete, leaderboard, season ──
-        const agentId = agent.config.id
-        const agentName = agent.config.name
-        const xpData = agent.xp
-
-        // Complete any active quest for this agent
-        let earnedXP = 0
-        const activeQuest = questSystem.getAgentActiveQuests(agentId)[0]
-        if (activeQuest) {
-          const questDifficulty = activeQuest.difficulty
-          const reward = questSystem.completeQuest(activeQuest.id)
-          if (reward) {
-            earnedXP = reward.xp
-            creditManager.earn(reward.credits)
-            seasonManager.trackCreditsEarned(reward.credits)
-            seasonManager.trackQuestDifficulty(questDifficulty)
-            seasonManager.trackQuestCompleted()
-            // Emit QUEST_COMPLETED so OfficeScene can trigger reward VFX
-            EventBus.emit(
-              EVENTS.QUEST_COMPLETED,
-              activeQuest.id, agentId, reward.xp, reward.credits, questDifficulty,
-            )
-          }
-        }
-
-        // Track in leaderboard — pass quest XP reward so seasonXP accumulates
-        const taskDuration = ws.workStartTime ? Date.now() - ws.workStartTime : 0
-        leaderboardManager.recordTaskComplete(agentId, agentName, taskDuration, xpData?.currentStreak ?? 0)
-        leaderboardManager.recordXP(agentId, agentName, earnedXP, xpData?.level ?? 1, xpData?.rank ?? 'Intern')
-
-        // Track in season
-        seasonManager.trackTaskCompleted(xpData?.currentStreak ?? 0)
-      }
-
-      // Stamp idleSince so later timers can detect prolonged boredom
-      ws.sprite.setData('idleSince', Date.now())
-
-      // Head tilt: tween angle -4..+4 degrees every 8-15s, hold 1s, return to 0
-      // Skip in GDS mode — sprite angle is locked to stool rotation
-      if (!gdsLock) {
-        ws.lookAroundTimer = ws.tweenBag.add('lookAround', this.scene.time.addEvent({
-          delay: 8000 + Math.random() * 7000,
-          loop: true,
-          callback: () => {
-            // bag.add auto-kills any existing headTilt before registering the new one
-            const angle = (Math.random() - 0.5) * 8   // -4 to +4 degrees
-            ws.headTiltTween = ws.tweenBag.add('headTilt', this.scene.tweens.add({
-              targets: ws.sprite, angle,
-              duration: 400, hold: 1000, yoyo: true, ease: 'Sine.easeInOut',
-              onComplete: () => { ws.sprite.setAngle(0); ws.headTiltTween = undefined },
-            }))
-          },
-        }))
-      }
-
-      // Stretch: scaleY 1→1.04 over 300ms, hold 200ms, back to 1 every 20-30s
-      ws.stretchTimer = ws.tweenBag.add('stretch', this.scene.time.addEvent({
-        delay: 20000 + Math.random() * 10000,
-        loop: true,
-        callback: () => {
-          this.scene.tweens.add({
-            targets: ws.sprite,
-            scaleY: CHAR_SCALE * 1.04,
-            duration: 300, ease: 'Sine.easeOut',
-            onComplete: () => {
-              this.scene.time.delayedCall(200, () => {
-                this.scene.tweens.add({
-                  targets: ws.sprite,
-                  scaleY: CHAR_SCALE,
-                  duration: 300, ease: 'Sine.easeIn',
-                })
-              })
-            },
-          })
-        },
-      }))
-
-      // Look at neighbor: tilt -3/+3 degrees toward a working peer every 12-18s
-      ws.lookAtNeighborTimer = ws.tweenBag.add('lookAtNeighbor', this.scene.time.addEvent({
-        delay: 12000 + Math.random() * 6000,
-        loop: true,
-        callback: () => {
-          if (ws.tweenBag.has('walkBreak') || ws.tweenBag.has('headTilt')) return
-          let neighborContainerX: number | null = null
-          for (const room of this.host.getRooms().values()) {
-            if (!room.workstations.has(agent.config.id)) continue
-            for (const [otherId, otherWs] of room.workstations) {
-              if (otherId === agent.config.id) continue
-              const otherMode = otherWs.state?.sessionMode
-              const isOtherWorking =
-                (otherMode === 'working' || otherMode === 'plan') &&
-                !otherWs.state?.needsInteraction
-              if (isOtherWorking) {
-                neighborContainerX = otherWs.container.x
-                break
-              }
-            }
-            break
-          }
-          if (neighborContainerX === null) return
-          const tiltAngle = neighborContainerX < ws.container.x ? -3 : 3
-          // bag.add auto-kills any existing headTilt before registering the new one
-          ws.headTiltTween = ws.tweenBag.add('headTilt', this.scene.tweens.add({
-            targets: ws.sprite, angle: tiltAngle,
-            duration: 350, ease: 'Sine.easeOut',
-            onComplete: () => {
-              this.scene.time.delayedCall(2000, () => {
-                this.scene.tweens.add({
-                  targets: ws.sprite, angle: 0,
-                  duration: 350, ease: 'Sine.easeIn',
-                  onComplete: () => { ws.tweenBag.remove('headTilt') },
-                })
-              })
-            },
-          }))
-        },
-      }))
-
-      // Yawn/bored pose: after 60s+ idle, briefly switch to POSE_INTERACT (fidget) for 1.5s
-      ws.yawnTimer = ws.tweenBag.add('yawn', this.scene.time.addEvent({
-        delay: 65000 + Math.random() * 10000,
-        loop: true,
-        callback: () => {
-          const idleSince: number = ws.sprite.getData('idleSince') ?? Date.now()
-          if (Date.now() - idleSince < 60000) return
-          if (ws.tweenBag.has('walkBreak')) return
-          if (!gdsLock) ws.sprite.setFrame(base + POSE_INTERACT)
-          this.scene.time.delayedCall(1500, () => {
-            if (ws.lastAnimMode === 'idle' && !gdsLock) {
-              ws.sprite.setFrame(base + POSE_SIT)
-            }
-          })
-        },
-      }))
-
-      // Look at desk pet: tilt toward pet + pet bounce every 15-25s
-      if (ws.deskPet && ws.deskPet.visible) {
-        this.scene.time.addEvent({
-          delay: 15000 + Math.random() * 10000,
-          loop: true,
-          callback: () => {
-            if (gdsLock) return
-            if (ws.tweenBag.has('walkBreak') || ws.tweenBag.has('headTilt') || ws.lastAnimMode !== 'idle') return
-            if (!ws.deskPet || !ws.deskPet.visible) return
-            const petDir = ws.deskPet.x > 0 ? 3 : -3
-            ws.headTiltTween = ws.tweenBag.add('headTilt', this.scene.tweens.add({
-              targets: ws.sprite, angle: petDir,
-              duration: 300, hold: 600, yoyo: true, ease: 'Sine.easeInOut',
-              onComplete: () => { ws.sprite.setAngle(0); ws.headTiltTween = undefined },
-            }))
-            // Pet does a tiny bounce in response
-            this.scene.tweens.add({
-              targets: ws.deskPet,
-              y: ws.deskPet.y - 2,
-              duration: 200, yoyo: true, ease: 'Sine.easeOut', delay: 200,
-            })
-          },
-        })
-      }
-
-      // Tap signature item: item bounces every 25-40s
-      if (ws.signatureItem && ws.signatureItem.visible) {
-        this.scene.time.addEvent({
-          delay: 25000 + Math.random() * 15000,
-          loop: true,
-          callback: () => {
-            if (ws.tweenBag.has('walkBreak') || ws.lastAnimMode !== 'idle') return
-            if (!ws.signatureItem || !ws.signatureItem.visible) return
-            this.scene.tweens.add({
-              targets: ws.signatureItem,
-              angle: { from: 0, to: 8 },
-              duration: 150, yoyo: true, repeat: 1, ease: 'Sine.easeInOut',
-            })
-          },
-        })
-      }
-
-      // Glance at energy bar when energy is low (<30%)
-      this.scene.time.addEvent({
-        delay: 18000 + Math.random() * 12000,
-        loop: true,
-        callback: () => {
-          if (gdsLock) return
-          if (ws.tweenBag.has('walkBreak') || ws.tweenBag.has('headTilt') || ws.lastAnimMode !== 'idle') return
-          if ((ws.energyLevel ?? 1) > 0.3) return
-          // Lean slightly toward the energy bar (left side of desk)
-          ws.headTiltTween = ws.tweenBag.add('headTilt', this.scene.tweens.add({
-            targets: ws.sprite, angle: -4,
-            duration: 250, hold: 500, yoyo: true, ease: 'Sine.easeInOut',
-            onComplete: () => { ws.sprite.setAngle(0); ws.headTiltTween = undefined },
-          }))
-        },
-      })
-
-      ws.walkBreakTimer = ws.tweenBag.add('walkBreakTimer', this.scene.time.addEvent({
-        delay: IDLE_WALK_BREAK_MIN_MS + Math.random() * IDLE_WALK_BREAK_VAR_MS,
-        loop: true,
-        callback: () => {
-          if (!ws.state || ws.tweenBag.has('walkBreak') || !ws.sprite.visible) return
-          const stillIdle =
-            !ws.state.needsInteraction &&
-            ws.state.sessionMode !== 'working' &&
-            ws.state.sessionMode !== 'plan' &&
-            ws.state.sessionMode !== 'compressing'
-          if (!stillIdle) return
-          this._executeWalkBreak(ws, agent)
-        },
-      }))
+  /** Map a mode name to its state handler instance. */
+  private getStateHandler(mode: 'idle' | 'working' | 'waiting'): AnimationState {
+    switch (mode) {
+      case 'waiting': return this.waitingState
+      case 'working': return this.workingState
+      case 'idle':    return this.idleState
     }
   }
 
   // ---------------------------------------------------------------------------
-  // Walk break — extracted so it can be triggered programmatically in tests
+  // Walk break — public API delegates to IdleState
   // ---------------------------------------------------------------------------
 
-  private _executeWalkBreak(ws: WorkstationSprite, agent: AgentState): void {
-    const navMesh = this.host.getNavMesh()
-    if (!navMesh) return
-    let ownerRoom: Room | null = null
-    for (const room of this.host.getRooms().values()) {
-      if (room.workstations.has(agent.config.id)) { ownerRoom = room; break }
-    }
-    if (!ownerRoom) return
-
-    const worldX = ownerRoom.x + ws.container.x
-    const worldY = ownerRoom.y + ws.container.y + WS_SPRITE_Y
-
-    // Pick a random nearby walkable point (30-60px away), clamped to own room
-    const angle = Math.random() * Math.PI * 2
-    const dist = 30 + Math.random() * 30
-    const targetX = worldX + Math.cos(angle) * dist
-    const targetY = worldY + Math.sin(angle) * dist
-
-    // Clamp target to own room bounds so agents never aim for another room
-    const roomLeft = ownerRoom.x - ownerRoom.width / 2 + 14
-    const roomTop = ownerRoom.y - ownerRoom.height / 2 + 14
-    const roomRight = ownerRoom.x + ownerRoom.width / 2 - 14
-    const roomBottom = ownerRoom.y + ownerRoom.height / 2 - 14 - ROOM_HEADER_H
-    if (targetX < roomLeft || targetX > roomRight || targetY < roomTop || targetY > roomBottom) return
-
-    // Pass own room so agent can walk within it (base grid has corridors only)
-    const ownRoomRect = buildOwnRoomRect(ownerRoom)
-
-    const goPath = navMesh.findPath({ x: worldX, y: worldY }, { x: targetX, y: targetY }, ownRoomRect)
-    if (!goPath || goPath.length < 2) return
-
-    // gdsLock and base are recomputed since this method may be called outside the idle closure
-    const gdsLock = this.host.getOrAssignGdsDeskSlot != null
-    const base = getAgentCharacterIndex(agent) * CHAR_COLS
-
-    // idle→walking: anticipation lean — the idle sprite tilts forward for
-    // `leanMs` before the walk sprite appears and the path begins.
-    // The sentinel tween is set immediately so the walk-break timer cannot
-    // fire again during the lean window.
-    ws.walkBreakTween = ws.tweenBag.add('walkBreakSentinel', this.scene.tweens.addCounter({ duration: 999999 }))
-
-    const leanMs = AnimConfig.stateTransitions.idleToWalking.durationMs
-    const leanAngle = AnimConfig.stateTransitions.idleToWalking.leanAngle
-    this.scene.tweens.add({
-      targets: ws.sprite,
-      angle: leanAngle,
-      duration: leanMs / 2,
-      ease: 'Sine.easeOut',
-      yoyo: true,
-      onComplete: () => { ws.sprite.setAngle(0) },
-    })
-
-    this.scene.time.delayedCall(leanMs, () => {
-      // Guard: mode may have changed while the lean was playing
-      if (!ws.tweenBag.get('walkBreak')?.isPlaying()) return
-
-      // Create walk sprite + shadow only now (after the lean)
-      const charIdx = getAgentCharacterIndex(agent)
-      const walkSheetKey = charIdx === 1 ? ANIM_KEYS.WALK_2 : ANIM_KEYS.WALK_1
-      const walkSprite = this.scene.add.sprite(worldX, worldY, walkSheetKey, 0)
-        .setScale(CHAR_SCALE).setOrigin(0.5, 1).setDepth(9000)
-      const walkShadow = this.scene.add.ellipse(worldX, worldY + 2, 16, 5, 0x000000, 0.15).setDepth(8999)
-
-      ws.sprite.setVisible(false)
-
-      const pathWalker = new PathWalker(this.scene, walkSprite, walkShadow, walkSheetKey)
-
-      const returnPath = navMesh.findPath({ x: targetX, y: targetY }, { x: worldX, y: worldY }, ownRoomRect)
-        ?? [...goPath].reverse()
-
-      const finishWalk = () => {
-        pathWalker.destroy()
-        walkSprite.destroy()
-        walkShadow.destroy()
-        ws.sprite.setVisible(true)
-        ws.tweenBag.kill('walkBreakSentinel')
-        ws.walkBreakTween = undefined
-        ws.sprite.x = 0
-        ws.sprite.y = WS_SPRITE_Y
-        if (!gdsLock) ws.sprite.setFrame(base + POSE_SIT)
-
-        // walking→idle: momentum overshoot + settle — the sprite drifts slightly
-        // in the walk direction (positive X = rightward) then springs back.
-        const overshootPx = AnimConfig.stateTransitions.walkingToIdle.overshootPx
-        const overshootMs = AnimConfig.stateTransitions.walkingToIdle.durationMs
-        this.scene.tweens.add({
-          targets: ws.sprite,
-          x: overshootPx,
-          duration: overshootMs * 0.4,
-          ease: 'Sine.easeOut',
-          onComplete: () => {
-            this.scene.tweens.add({
-              targets: ws.sprite,
-              x: 0,
-              duration: overshootMs * 0.6,
-              ease: 'Back.easeOut',
-            })
-          },
-        })
-      }
-
-      pathWalker.startPath(goPath, () => {
-        // Brief pause at destination, then walk back
-        this.scene.time.delayedCall(800 + Math.random() * 600, () => {
-          if (!walkSprite.active) { finishWalk(); return }
-          pathWalker.startPath(returnPath, finishWalk)
-        })
-      })
-    })
-  }
-
-  /**
-   * Programmatically trigger a walk break for the agent with the given id.
-   * Returns true if the walk was started, false if the agent was not found,
-   * already walking, or has no state.
-   */
   triggerWalkBreak(agentId: string): boolean {
     for (const room of this.host.getRooms().values()) {
       const ws = room.workstations.get(agentId)
       if (!ws?.state || ws.tweenBag.has('walkBreak')) continue
-      this._executeWalkBreak(ws, ws.state)
+      this.idleState.executeWalkBreak(ws, ws.state)
       return true
     }
     return false
@@ -1145,7 +343,6 @@ export class WorkstationAnimator {
     const icon = ws.questIcon
     if (!icon) return
 
-    // Base fade-in
     const targetAlpha = difficulty === 'hard' ? 0.95 : 1.0
     const bobDuration =
       difficulty === 'legendary' ? 500
@@ -1158,13 +355,11 @@ export class WorkstationAnimator {
       duration: 300, ease: 'Back.easeOut',
     })
 
-    // Bob tween (all difficulties)
     ws.questIconTween = ws.tweenBag.add('questIcon', this.scene.tweens.add({
       targets: icon, y: icon.y - 2,
       duration: bobDuration, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
     }))
 
-    // Higher difficulties get additional scale pulse + tint
     if (difficulty === 'hard' || difficulty === 'epic' || difficulty === 'legendary') {
       const pulseScale = difficulty === 'legendary' ? 0.12 : difficulty === 'epic' ? 0.08 : 0.04
       const pulseDuration = difficulty === 'legendary' ? 600 : difficulty === 'epic' ? 900 : 1600
@@ -1184,7 +379,6 @@ export class WorkstationAnimator {
       icon.setTint(0xf59e0b)
     } else if (difficulty === 'legendary') {
       icon.setTint(0xef4444)
-      // Additional alpha flicker for legendary
       this.scene.tweens.add({
         targets: icon,
         alpha: { from: 1.0, to: 0.8 },
@@ -1203,7 +397,6 @@ export class WorkstationAnimator {
   updateMonitorGlow(ws: WorkstationSprite, isWorking: boolean, isWaiting: boolean): void {
     if (!ws.monitorGlowFx) return
     const isActive = isWorking || isWaiting
-    // Orchestrator tasks get stage-colored monitor glow
     const orchStage = ws.state?.isOrchestratorTask ? (ws.state.taskStage ?? 'executing') : null
     const orchColors: Record<string, number> = { planning: activeTheme.thoughtPlan, executing: activeTheme.stageExecuting, validating: activeTheme.stageValidating }
     const baseColor = orchStage ? (orchColors[orchStage] ?? activeTheme.stageExecuting)
@@ -1229,7 +422,6 @@ export class WorkstationAnimator {
       ws.blockedIndicatorTween = undefined
     }
 
-    // Phone light: stop and hide on every re-evaluation before deciding state
     if (ws.phoneLightTween) {
       ws.phoneLightTween.destroy()
       ws.phoneLightTween = undefined
@@ -1279,7 +471,6 @@ export class WorkstationAnimator {
       ease: 'Sine.easeInOut',
     })
 
-    // Phone notification light — blink the desk communicator dot in interaction-type color
     if (ws.phoneLight) {
       ws.phoneLight.setFillStyle(color, 1)
       ws.phoneLight.setAlpha(0)
@@ -1324,17 +515,14 @@ export class WorkstationAnimator {
 
     if (currentEmoji === emoji) return
 
-    // Emoji changed — stop existing float tween, fade out, then swap and bounce in
     ws.tweenBag.kill('mood')
 
     const moodText = ws.moodEmoji
     moodText.setData('currentEmoji', emoji)
 
-    // Derive the mood key so we can look up the spriteFrame for the badge
     const moodKey = this.deriveMoodKey(agent)
     const badgeFrame = MOOD_CONFIGS[moodKey].spriteFrame
 
-    // Fade out current emoji, then swap and bounce in
     this.scene.tweens.add({
       targets: moodText,
       alpha: 0,
@@ -1344,7 +532,6 @@ export class WorkstationAnimator {
         if (!moodText.active) return
         moodText.setText(emoji)
         moodText.setScale(0)
-        // Bounce in: 0 → 1.2 → 1
         this.scene.tweens.add({
           targets: moodText,
           scaleX: 1.2,
@@ -1362,7 +549,6 @@ export class WorkstationAnimator {
               ease: 'Sine.easeOut',
               onComplete: () => {
                 if (!moodText.active) return
-                // Gentle infinite float: oscillate y ±2px
                 const baseY = moodText.y
                 ws.moodTween = ws.tweenBag.add('mood', this.scene.tweens.add({
                   targets: moodText,
@@ -1379,24 +565,14 @@ export class WorkstationAnimator {
       },
     })
 
-    // Update the sprite-based mood badge alongside the emoji
     this.updateMoodBadge(ws, badgeFrame)
-
-    // React the desk pet mouth to the agent's mood
     this.updatePetMouth(ws, moodKey)
   }
 
-  /**
-   * React desk pet to the agent's current mood.
-   * For animal pets: play hurt animation on frustrated, then resume idle.
-   * For monster pets: swap mouth sprite frame.
-   */
   private updatePetMouth(ws: WorkstationSprite, mood: Mood): void {
-    // Animal pet hurt reaction
     if (ws.animalSpecies && ws.deskPet?.active) {
       if (mood === 'frustrated') {
         const idleKey = `animal-idle-${ws.animalSpecies}`
-        // Brief shake + tint red to show distress, then resume idle
         const baseX = ws.deskPet.x
         this.scene.tweens.add({
           targets: ws.deskPet,
@@ -1416,7 +592,6 @@ export class WorkstationAnimator {
       return
     }
 
-    // Monster pet mouth swap
     if (!ws.petMouth || !ws.petMouth.active) return
 
     let mouthFrame: number
@@ -1443,10 +618,6 @@ export class WorkstationAnimator {
     ws.petMouth.setFrame(mouthFrame)
   }
 
-  /**
-   * Derive a Mood key from agent state — mirrors getAgentMood logic but returns
-   * the typed Mood string so we can index into MOOD_CONFIGS for the spriteFrame.
-   */
   private deriveMoodKey(agent: AgentState): Mood {
     if (agent.needsInteraction && agent.interactionType === 'tool-approval') return 'frustrated'
     if (agent.needsInteraction && agent.interactionType === 'question') return 'zen'
@@ -1456,10 +627,6 @@ export class WorkstationAnimator {
     return 'idle'
   }
 
-  /**
-   * Animate the mood badge sprite to show the given frame.
-   * Fades out, swaps frame, then bounces back in with a gentle float loop.
-   */
   private updateMoodBadge(ws: WorkstationSprite, frame: number): void {
     if (!ws.moodBadge) return
 
@@ -1468,10 +635,8 @@ export class WorkstationAnimator {
     if (currentFrame === frame) return
     badge.setData('currentFrame', frame)
 
-    // Tear down existing badge tween
     ws.tweenBag.kill('moodBadge')
 
-    // Fade out, swap frame, bounce in
     this.scene.tweens.add({
       targets: badge,
       alpha: 0,
@@ -1497,7 +662,6 @@ export class WorkstationAnimator {
               ease: 'Sine.easeOut',
               onComplete: () => {
                 if (!badge.active) return
-                // Gentle float in sync with mood emoji
                 const baseY = badge.y
                 ws.moodBadgeTween = ws.tweenBag.add('moodBadge', this.scene.tweens.add({
                   targets: badge,
@@ -1519,13 +683,12 @@ export class WorkstationAnimator {
   // Speech bubble — small blurb above workstation during working mode
   // ---------------------------------------------------------------------------
 
-  private showSpeechBubble(ws: WorkstationSprite, agent: AgentState): void {
+  private _showSpeechBubble(ws: WorkstationSprite, agent: AgentState): void {
     const blurb = agent.isOrchestratorTask
       ? (agent.taskTitle ? `[Task] ${agent.taskTitle}` : '').trim()
       : (agent.lastAssistantBlurb ?? '').trim()
     if (!blurb) return
 
-    // Avoid duplicate repeat timers if this path runs again before mode teardown
     ws.tweenBag.kill('speechBubble')
     ws.tweenBag.kill('speechBubbleTimer')
 
@@ -1534,7 +697,6 @@ export class WorkstationAnimator {
     const PAD_X = 6
     const PAD_Y = 4
 
-    // Create the container + children lazily on first use
     if (!ws.speechBubble) {
       const bg = this.scene.add.graphics()
       const txt = this.scene.add.text(0, 0, '', {
@@ -1552,13 +714,11 @@ export class WorkstationAnimator {
       ws.speechBubbleText = txt
       ws.speechBubbleBg = bg
 
-      // Register as LOD level 3 so it only shows at close zoom
       ws.lodLevel3Objects.push(container)
     }
 
     const displayText = blurb.length > MAX_CHARS ? blurb.slice(0, MAX_CHARS) + '...' : blurb
 
-    // Helper to draw the rounded-rect background sized to the current text
     const drawBg = () => {
       const g = ws.speechBubbleBg!
       const t = ws.speechBubbleText!
@@ -1579,23 +739,19 @@ export class WorkstationAnimator {
       }
     }
 
-    // Helper to run the typewriter + fade cycle for a given string
     const typewriterCycle = (text: string) => {
       const bubble = ws.speechBubble!
       const txt = ws.speechBubbleText!
       if (!txt.active || !bubble.active || !sceneAlive()) return
 
-      // Reset — avoid setText('') alone on some Phaser builds (frame/texture edge cases)
       txt.setText('\u200b')
       drawBg()
       bubble.setVisible(true)
       bubble.y = BUBBLE_Y
 
-      // Fade in
       ws.tweenBag.kill('speechBubble')
       this.scene.tweens.add({ targets: bubble, alpha: 1, duration: 200, ease: 'Sine.easeOut' })
 
-      // Typewriter — character by character
       const counter = { val: 0 }
       ws.speechBubbleTween = ws.tweenBag.add('speechBubble', this.scene.tweens.add({
         targets: counter,
@@ -1612,7 +768,6 @@ export class WorkstationAnimator {
           if (!txt.active || !bubble.active || !sceneAlive()) return
           txt.setText(text)
           drawBg()
-          // Hold for 4 seconds then fade out
           this.scene.time.delayedCall(4000, () => {
             if (!bubble.active || !sceneAlive()) return
             this.scene.tweens.add({
@@ -1625,10 +780,8 @@ export class WorkstationAnimator {
       }))
     }
 
-    // Show the first blurb immediately
     typewriterCycle(displayText)
 
-    // Repeat every 8-12 seconds with the latest blurb
     ws.speechBubbleTimer = ws.tweenBag.add('speechBubbleTimer', this.scene.time.addEvent({
       delay: 8000 + Math.random() * 4000,
       loop: true,
@@ -1647,7 +800,7 @@ export class WorkstationAnimator {
   }
 
   // ---------------------------------------------------------------------------
-  // Thought bubble — rich live-text with typing animation, auto-sizing, and fade
+  // Thought bubble
   // ---------------------------------------------------------------------------
 
   drawThoughtBubbleBg(ws: WorkstationSprite, accentColor: number): void {
@@ -1663,7 +816,6 @@ export class WorkstationAnimator {
 
     ws.thoughtBubbleText.setPosition(ACCENT_W / 2 + PAD_X / 2, 0)
 
-    // Sprite-based panel background — resize to match text dimensions
     if (ws.thoughtBubbleBgSprite) {
       ws.thoughtBubbleBgSprite.setDisplaySize(bw, bh)
       ws.thoughtBubbleBgSprite.setTint(activeTheme.bg)
@@ -1672,18 +824,15 @@ export class WorkstationAnimator {
     const g = ws.thoughtBubbleBg
     g.clear()
 
-    // Only draw Graphics bg if sprite is not available
     if (!ws.thoughtBubbleBgSprite) {
       g.fillStyle(activeTheme.bg, 0.92)
       g.fillRoundedRect(-bw / 2, -bh / 2, bw, bh, CORNER)
     }
 
-    // Accent left border (always drawn — overlays both sprite and graphics bg)
     g.fillStyle(accentColor, 0.9)
     g.fillRoundedRect(-bw / 2, -bh / 2, ACCENT_W, bh, CORNER)
     if (ws.thoughtBubbleBgSprite) g.setVisible(true)
 
-    // Downward tail
     const tailW = 6
     const tailH = 6
     const tailY = bh / 2
@@ -1801,13 +950,12 @@ export class WorkstationAnimator {
   // ---------------------------------------------------------------------------
 
   showThinkingDots(ws: WorkstationSprite, candidateCount: number): void {
-    if (candidateCount < 2) return // no animation for single candidate
+    if (candidateCount < 2) return
     if (ws.thinkingDotsContainer) {
       if (ws.thinkingCandidateCount === candidateCount) return
       this.hideThinkingDots(ws)
     }
 
-    // Phaser.GameObjects.Arc — scene.add.circle fills as a disc (radius matches issue #19)
     const container = this.scene.add.container(0, THINKING_DOT_Y)
     const dots: Phaser.GameObjects.Arc[] = []
 
@@ -1829,10 +977,8 @@ export class WorkstationAnimator {
     ws.thinkingDots = dots
     ws.thinkingCandidateCount = candidateCount
 
-    // Push to lodLevel3Objects so it hides at L1/L2
     ws.lodLevel3Objects.push(container)
 
-    // Build repeating timeline: dots appear one by one, hold, fade, repeat
     this.startThinkingTimeline(ws)
   }
 
@@ -1845,7 +991,6 @@ export class WorkstationAnimator {
     const totalAppear = dots.length * stepMs
     const cycleDuration = totalAppear + holdMs + THINKING_DOT_FADE_MS
 
-    // Use a single repeating tween on a proxy object to drive the timeline
     const proxy = { progress: 0 }
     ws.thinkingDotsTween = this.scene.tweens.add({
       targets: proxy,
@@ -1859,15 +1004,12 @@ export class WorkstationAnimator {
           if (elapsed < dotStart) {
             dots[i].setAlpha(0)
           } else if (elapsed < dotStart + stepMs) {
-            // Fading in
             dots[i].setAlpha((elapsed - dotStart) / stepMs)
             dots[i].setFillStyle(activeTheme.monitorGlowActive, dots[i].alpha)
           } else if (elapsed < totalAppear + holdMs) {
-            // Hold phase
             dots[i].setAlpha(1)
             dots[i].setFillStyle(activeTheme.monitorGlowActive, 1)
           } else {
-            // Fade out
             const fadeElapsed = elapsed - (totalAppear + holdMs)
             const alpha = Math.max(0, 1 - fadeElapsed / THINKING_DOT_FADE_MS)
             dots[i].setAlpha(alpha)
@@ -1885,19 +1027,16 @@ export class WorkstationAnimator {
       return
     }
 
-    // Stop the looping timeline
     if (ws.thinkingDotsTween) {
       ws.thinkingDotsTween.destroy()
       ws.thinkingDotsTween = undefined
     }
 
-    // Make all dots fully visible for merge
     for (const dot of dots) {
       dot.setAlpha(1)
       dot.setFillStyle(activeTheme.monitorGlowActive, 1)
     }
 
-    // Tween all dots to center (x=0) simultaneously
     const mergeTargets = dots.map(d => ({ ref: d }))
     let completedCount = 0
     for (const mt of mergeTargets) {
@@ -1909,7 +1048,6 @@ export class WorkstationAnimator {
         onComplete: () => {
           completedCount++
           if (completedCount !== mergeTargets.length) return
-          // Hide stacked satellites so only one bright dot pulses
           for (let i = 1; i < dots.length; i++) {
             this.scene.tweens.killTweensOf(dots[i])
             dots[i].setVisible(false)
@@ -1967,10 +1105,6 @@ export class WorkstationAnimator {
   // Quality streak flame effect
   // ---------------------------------------------------------------------------
 
-  /**
-   * Streak that drives the desk flame: max(Command Center XP streak, eval harness
-   * consecutive-success streak when the agent appears in eval reports).
-   */
   private qualityStreakForFlame(agentId: string, xpStreak: number): number {
     const harness = this.evalStreakCache.get(agentId)
     if (harness === undefined) return xpStreak
@@ -2072,7 +1206,7 @@ export class WorkstationAnimator {
   }
 
   // ---------------------------------------------------------------------------
-  // Sleep / Wake lifecycle — pause and resume all per-workstation timers/tweens
+  // Sleep / Wake lifecycle
   // ---------------------------------------------------------------------------
 
   pauseAll(): void {
