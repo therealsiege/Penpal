@@ -44,7 +44,6 @@ import {
 } from './office-constants'
 import type { WorkstationHost } from './office-workstation'
 import { isDeskItemUnlocked, isFlairUnlocked, getRankColor } from './cosmetic-tiers'
-import { TweenBag } from './tween-lifecycle'
 
 // ---------------------------------------------------------------------------
 // Signature item — deterministic per-agent personality item on desk

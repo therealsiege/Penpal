@@ -38,8 +38,6 @@ export interface WorkstationSprite {
   blockedIndicatorStem: Phaser.GameObjects.Rectangle
   blockedIndicatorText: Phaser.GameObjects.Text
   state: AgentState | null
-  /** Managed lifecycle bag for all animation tweens and timer events. */
-  tweenBag: TweenBag
   keyboard?: Phaser.GameObjects.Rectangle
   screenTween?: Phaser.Tweens.Tween
   /** Mutable ref shared with screenTween callback — set .mode to update screen animation */

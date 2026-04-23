@@ -238,7 +238,6 @@ export class AmbientParticles {
     const now = this.scene.time.now
     if (now - this.lastMakoSpawnAt < 300) return
     if (zoom < 0.3) return
-    if (this.makoMotePool.filter(m => m.getData('busy')).length >= MAX_MAKO_POOL) return
     this.lastMakoSpawnAt = now
 
     if (this.makoMotePool.filter(m => m.getData('busy')).length >= MAX_MAKO_MOTE_POOL) return
