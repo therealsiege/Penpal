@@ -298,7 +298,6 @@ export class AmbientParticles {
     const now = this.scene.time.now
     if (now - this.lastSparkBurstAt < 2000) return
     if (zoom < 0.5) return
-    if (this.sparkPool.filter(s => s.getData('busy')).length >= MAX_SPARKS_POOL) return
     this.lastSparkBurstAt = now
 
     const centerX = camX + camW * 0.5
@@ -361,7 +360,6 @@ export class AmbientParticles {
     const now = this.scene.time.now
     if (now - this.lastSteamSpawnAt < 1500) return
     if (zoom < 0.3) return
-    if (this.steamWispPool.filter(g => g.getData('busy')).length >= MAX_STEAM_POOL) return
     this.lastSteamSpawnAt = now
 
     if (this.steamWispPool.filter(g => g.getData('busy')).length >= MAX_STEAM_WISP_POOL) return
