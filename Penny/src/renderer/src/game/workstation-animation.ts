@@ -43,11 +43,9 @@ import {
 } from './office-constants'
 import { ANIM_KEYS, DIFFICULTY_STAR_FRAME, ICON_FRAMES, EFFECT_ANIM_KEYS, SPRITESHEET_KEYS, PET_FACE_FRAMES } from './office-asset-keys'
 import { getAgentCharacterIndex } from './office-helpers'
-import { MOOD_CONFIGS } from './agent-mood'
-import type { Mood } from './agent-mood'
+import { MOOD_CONFIGS, type Mood } from './agent-mood'
 import type { WorkstationHost } from './office-workstation'
-import type { NavMesh } from './nav-mesh'
-import { buildOwnRoomRect } from './nav-mesh'
+import { buildOwnRoomRect, type NavMesh } from './nav-mesh'
 import { PathWalker } from './path-walker'
 import { StateMachine } from './state-machine'
 
