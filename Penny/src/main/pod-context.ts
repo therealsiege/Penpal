@@ -18,6 +18,8 @@ export interface ScopedContext {
   recentChanges: string
   architectureNotes: string
   activeConflicts: string
+  gameFileHistory: string
+  moduleLineCounts: string
 }
 
 // ── File Detection ──────────────────────────────────────────────────────────
@@ -129,12 +131,12 @@ function scoreSection(section: Section, task: string, files: string[]): number {
  * Extract only the relevant sections from CLAUDE.md for a given task.
  * Returns top N sections by relevance score.
  */
-export function extractRelevantSections(claudeMdContent: string, task: string, files: string[], maxSections = 4): string {
+export function extractRelevantSections(claudeMdContent: string, task: string, files: string[], maxSections = 6): string {
   const sections = parseSections(claudeMdContent)
   if (sections.length === 0) return claudeMdContent
 
-  // Always include Stack and Directory Structure (tiny, always useful)
-  const alwaysInclude = new Set(['Stack', 'Directory Structure'])
+  // Always include foundational sections — these are small and always useful
+  const alwaysInclude = new Set(['Stack', 'Directory Structure', 'Game Architecture', 'Key Patterns'])
 
   const scored = sections
     .map(s => ({ section: s, score: scoreSection(s, task, files) }))
@@ -198,6 +200,58 @@ function getActivePodBranches(cwd: string): string {
   }
 }
 
+/**
+ * Get the last 10 commits that touched any file in src/renderer/src/game/.
+ * Gives pods awareness of recent game-layer changes regardless of their task scope.
+ */
+function getGameFileHistory(cwd: string): string {
+  try {
+    const gitOpts = { cwd, encoding: 'utf-8' as const, stdio: 'pipe' as const, timeout: 10_000 }
+    const log = execFileSync(
+      'git',
+      ['log', '--oneline', '-10', '--', 'Penny/src/renderer/src/game/', 'src/renderer/src/game/'],
+      gitOpts,
+    ).toString().trim()
+    return log || '(no game file history)'
+  } catch {
+    return ''
+  }
+}
+
+/**
+ * Compute line counts for game module files.
+ * Returns a compact table so pods know relative module sizes.
+ */
+function getModuleLineCounts(cwd: string): string {
+  const gameDirs = [
+    path.join(cwd, 'Penny', 'src', 'renderer', 'src', 'game'),
+    path.join(cwd, 'src', 'renderer', 'src', 'game'),
+  ]
+  const gameDir = gameDirs.find(d => fs.existsSync(d))
+  if (!gameDir) return ''
+
+  try {
+    const files = fs.readdirSync(gameDir).filter(f => f.endsWith('.ts') || f.endsWith('.tsx')).sort()
+    const counts: Array<{ file: string; lines: number }> = []
+
+    for (const file of files) {
+      const content = fs.readFileSync(path.join(gameDir, file), 'utf-8')
+      counts.push({ file, lines: content.split('\n').length })
+    }
+
+    // Sort by line count descending, show top 20 + total
+    counts.sort((a, b) => b.lines - a.lines)
+    const top = counts.slice(0, 20)
+    const total = counts.reduce((sum, c) => sum + c.lines, 0)
+
+    const rows = top.map(c => `${c.file.padEnd(35)} ${String(c.lines).padStart(5)}`)
+    rows.push(`${'(total across ' + counts.length + ' files)'.padEnd(35)} ${String(total).padStart(5)}`)
+    return rows.join('\n')
+  } catch {
+    return ''
+  }
+}
+
 // ── Public API ──────────────────────────────────────────────────────────────
 
 /**
@@ -217,8 +271,10 @@ export function buildScopedContext(task: string, cwd: string, claudeMdPath?: str
 
   const recentChanges = getFileSpecificHistory(relevantFiles, cwd)
   const activeConflicts = getActivePodBranches(cwd)
+  const gameFileHistory = getGameFileHistory(cwd)
+  const moduleLineCounts = getModuleLineCounts(cwd)
 
-  return { relevantFiles, recentChanges, architectureNotes, activeConflicts }
+  return { relevantFiles, recentChanges, architectureNotes, activeConflicts, gameFileHistory, moduleLineCounts }
 }
 
 /**
@@ -249,6 +305,22 @@ export function formatScopedContext(ctx: ScopedContext, task: string): string {
     sections.push('## Recent Changes to These Files')
     sections.push('```')
     sections.push(ctx.recentChanges)
+    sections.push('```')
+    sections.push('')
+  }
+
+  if (ctx.gameFileHistory) {
+    sections.push('## Recent Game File Changes (last 10 commits)')
+    sections.push('```')
+    sections.push(ctx.gameFileHistory)
+    sections.push('```')
+    sections.push('')
+  }
+
+  if (ctx.moduleLineCounts) {
+    sections.push('## Module Line Counts (top 20 by size)')
+    sections.push('```')
+    sections.push(ctx.moduleLineCounts)
     sections.push('```')
     sections.push('')
   }
