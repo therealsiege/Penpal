@@ -1836,6 +1836,22 @@ export function createPod(task: string, opts: CreatePodOpts = {}): PodWorkflow {
     solver = opts.solverAgent || preset.solver
     reviewer = opts.reviewerAgent || preset.reviewer
     executor = opts.executorAgent || preset.executor
+  } else if (!opts.solverAgent && !opts.reviewerAgent && !opts.executorAgent) {
+    // No preset and no explicit agents — try combo analytics auto-routing
+    const suggested = podComboCollector.suggestBestCombo()
+    if (suggested) {
+      solver = suggested.solverId
+      reviewer = suggested.reviewerId
+      executor = suggested.executorId
+      console.log(
+        `[pods] Auto-routing: selected combo ${suggested.comboKey} ` +
+        `(${suggested.totalRuns} runs, ${(suggested.successRate * 100).toFixed(0)}% success rate)`,
+      )
+    } else {
+      solver = 'fullstack-dev'
+      reviewer = 'backend-arch'
+      executor = 'electron-dev'
+    }
   } else {
     solver = opts.solverAgent || 'fullstack-dev'
     reviewer = opts.reviewerAgent || 'backend-arch'
