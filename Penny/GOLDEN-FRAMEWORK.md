@@ -308,42 +308,127 @@ The game isn't decoration — it's the primary interface for understanding syste
 
 ---
 
-## V. Implementation Roadmap
+## V. Implementation Status & Roadmap
 
-### Phase 1: Foundation (Week 1-2)
-- [ ] Preference collector — hook into approve/reject/complete IPC events
-- [ ] Preference store — write pairs to `data/preferences.jsonl`
-- [ ] Basic eval harness — task pass/fail rate tracking
-- [ ] Eval panel in React — show success rates by agent
+### Done: Foundation + Intelligence Layer
 
-### Phase 2: MCP Server (Week 3-4)
-- [ ] `penny-mcp-server` package with stdio transport
-- [ ] 5 core tool groups: orchestrator, pods, office, vault, graph
-- [ ] Self-documenting `meta:list-tools` and `meta:describe-tool`
-- [ ] Context-engineered responses for the 10 most-called handlers
-- [ ] Wire into agent system prompts via `agents/shared-memory.md`
+| Phase | Status | What Shipped |
+|-------|--------|-------------|
+| Preference capture | Done | Approve/reject signals → `data/preferences.jsonl`, DPO pair generation |
+| Eval harness | Done | Task pass/fail tracking, spot-check queue, weekly digests, agent report cards |
+| MCP server | Done | 5 tool groups (meta, orchestrator, pods, office, vault), stdio transport |
+| Smart pods | Done | Best-of-N candidates, structured critique, self-fix loop, confidence scoring, PhaseConfig |
+| Complexity routing | Done | Auto-select Sonnet/Opus/Opus+N by task signal scoring |
+| ReasoningBank | Done | Pattern storage + similarity matching for solver injection |
+| Governance | Done | Max files/diff/duration, forbidden paths, per-rule actions |
+| Merge queue | Done | Sequential rebase → tsc → dupe-scan → ff-merge → push |
+| Combo analytics | Done | Agent triple performance tracking (JSONL + EvalsPanel UI) |
+| Pod spectator | Done | Real-time stage labels + glow rings during pod execution |
 
-### Phase 3: Smart Pods (Week 5-6)
-- [ ] PhaseConfig system in pods.ts
-- [ ] Best-of-N for Solver (configurable per priority)
-- [ ] Structured Reviewer critique format
-- [ ] Executor self-fix mini-loop
-- [ ] Confidence scoring + escalation thresholds
+### Next: Three Frontiers
 
-### Phase 4: Learning Loop (Week 7-8)
-- [ ] DPO pair generation from preference store (500+ pairs)
-- [ ] Q-LoRA training pipeline (TRL + bitsandbytes)
-- [ ] TinyAgent experiment — fine-tune 7B for Penny function calling
-- [ ] A/B eval: stock model vs DPO-trained on Penny tasks
-- [ ] Context rot detection + automatic context pruning
+**Frontier 1: The Interactive Office**
 
-### Phase 5: Game Polish (Ongoing)
-- [ ] Eval glow on workstations
-- [ ] Thinking animation for best-of-N
-- [ ] MCP connection line rendering
-- [ ] Quality streak flame effect
-- [ ] Preference sparkle particles
-- [ ] Context utilization meter
+The player character exists (WASD movement) but can't interact with the world. This frontier makes the office a place you *manage through*, not just watch.
+
+```
+Walk to desk → E key → Context Menu
+  ├── View Stats (bestiary card, eval history, combo performance)
+  ├── Assign Task (pick from GitHub issues, set priority)
+  ├── Customize (cosmetics shop for this agent)
+  └── Recent Work (last 5 completed tasks with PR links)
+
+Walk to whiteboard → E key → Quest Board
+  ├── Available Issues (agent-ready from GitHub, grouped by repo)
+  ├── Drag issue onto agent to assign
+  ├── See combo predictions (which team would work best?)
+  └── Launch Pod (select 3 agents, see projected success rate)
+
+Walk to cafe → E key → Team Briefing
+  ├── Fleet status (who's idle, who's working, who's blocked)
+  ├── Season progress (challenges, leaderboard, MVP)
+  └── Daily briefing (from scheduler — new leads, RSS intel, alerts)
+```
+
+This isn't about adding game mechanics for fun. It's about making GitHub issues, agent stats, and pod formation accessible *through the world* instead of through panel menus. The office becomes the operating interface.
+
+**Frontier 2: Scene Architecture**
+
+Every scene is a `Phaser.Scene` subclass that follows the same pattern as OfficeScene — orchestrator + modules. The pod system generalizes: different scenes dispatch different *kinds* of work through the same Solver→Reviewer→Executor pipeline.
+
+```
+Scene Architecture:
+  ┌─ WorldMap (CampusScene) ────────────────────────────┐
+  │  Pins per Penpal instance. Double-click to enter.   │
+  └─────────────────────────────────────────────────────┘
+       │              │              │              │
+  ┌────┴────┐   ┌────┴────┐   ┌────┴────┐   ┌────┴────┐
+  │ Dev Lab │   │  Call   │   │ Content │   │  War   │
+  │         │   │ Center  │   │ Studio  │   │  Room  │
+  └─────────┘   └─────────┘   └─────────┘   └─────────┘
+```
+
+What's shared across all scenes:
+- Agent roster + configs (agent-types.yaml)
+- Pod pipeline (pods.ts — Solver→Reviewer→Executor)
+- Eval harness (collectors, spot-check, digests)
+- Leaderboard, XP, seasons, credits
+- MCP server (tools work regardless of active scene)
+- Fleet heartbeat + Slack bridge
+
+What's scene-specific:
+- **Visual layout** — each scene has its own tilemap, props, ambient animations
+- **Agent presets** — the Call Center uses support-triage/specialist/qa presets, not frontend-feature
+- **Work sources** — Dev Lab pulls from GitHub Issues; Call Center pulls from Zendesk/email; Content Studio pulls from content calendar
+- **Workflow templates** — Dev Lab pods write code; Content Studio pods write blog posts; War Room pods write analysis docs
+- **Game mechanics** — Call Center has queue visualization, hold music, escalation chains; Content Studio has mood boards, draft previews, publication animations
+
+Scene registration in OfficeGame.ts:
+```typescript
+this.scene.add('campus', CampusScene)      // world map (done)
+this.scene.add('dev-lab', OfficeScene)      // development (done)
+this.scene.add('call-center', CallCenterScene)  // support (planned)
+this.scene.add('content-studio', ContentStudioScene) // marketing (planned)
+this.scene.add('war-room', WarRoomScene)    // intelligence (planned)
+```
+
+**How this maps to 1Putt Health:**
+- **Dev Lab** → Building MedScrub, MedHook, Penpal itself
+- **Content Studio** → Blog posts for 1putthealth.com, social campaigns, SEO content
+- **War Room** → Competitive intelligence (the knowledge graph + RSS pipeline already feeds this)
+- **Call Center** → Eventually: MedScrub customer support when the product ships
+
+**Frontier 3: The Learning Loop**
+
+The data pipeline is built. Preferences are captured. Combo analytics track which teams work best. What's missing is closing the loop — using this data to make agents autonomously better.
+
+```
+Current state (data collection):
+  Click approve → preference signal → preferences.jsonl
+  Pod completes → combo event → eval-pod-combos.jsonl
+  Pod completes → pattern → reasoning-bank.json
+  Complexity scorer → reads reasoning bank → routes to model tier
+
+Near-term (data-driven routing):
+  Combo analytics → auto-select best-performing preset for task type
+  Reasoning bank → surface failure patterns as warnings in solver prompt
+  Eval trends → alert when agent quality drops below threshold
+  Fleet analytics → weekly digest with actionable recommendations
+
+Mid-term (fine-tuning):
+  500+ preference pairs → DPO training on Qwen-7B via TRL
+  Deploy fine-tuned model via Ollama → economic profile uses it
+  A/B eval: stock Sonnet vs DPO-tuned 7B on routine tasks
+  Cost: $0 inference for 80% of tasks (routine), Opus for 20% (complex)
+
+Long-term (self-improving):
+  Continuous preference collection → monthly retrain
+  TinyAgent: 7B model trained specifically on Penny's function calling patterns
+  Context rot detection → auto-prune stale context, measure quality impact
+  Agent skill trees → track what each agent is good at, route accordingly
+```
+
+The endgame isn't "pods that work." It's a workforce that gets measurably better every week, with the game surface showing you exactly where the improvements are happening and where attention is needed.
 
 ---
 
@@ -374,26 +459,34 @@ Start with what works today. Add one layer at a time. Phase 1 is just logging pr
 
 ## VII. Success Metrics
 
-| Metric | Current | Phase 2 Target | Phase 4 Target |
-|--------|---------|----------------|----------------|
-| Task success rate | Unknown | 70% measured | 85%+ |
-| Avg tasks/day/agent | ~3-5 | 5-8 | 10+ |
-| Preference pairs collected | 0 | 200 | 1000+ |
-| Eval coverage | 0% | 50% of tasks | 90% of tasks |
-| Agent self-fix rate | 0% | N/A | 30% of failures |
-| MCP-connected sessions | 0 | 5+ | All agents |
-| Context rot incidents | Unknown | Tracked | <5% of tasks |
-| Human review cadence | Ad-hoc | Weekly 50 outputs | Weekly 50 outputs |
+| Metric | Current (Apr 2026) | Next Target | Long-term |
+|--------|-------------------|-------------|-----------|
+| Task success rate | ~70% (measured via eval harness) | 80% | 90%+ |
+| Pod completion rate | 69.9% (895 recorded runs) | 80% | 90%+ |
+| Combo analytics coverage | 3 real combos tracked | 20+ combos | All presets |
+| Preference pairs collected | Collector running, ~50 pairs | 500 | 2000+ |
+| Eval coverage | 100% of tasks (auto-tracked) | Maintained | Maintained |
+| Agent self-fix rate | Available (tracked per pod) | 30% of failures | 50%+ |
+| MCP-connected sessions | 5 tool groups active | All agents | All agents |
+| ReasoningBank patterns | 2 entries | 50+ | 500+ |
+| Context rot incidents | Tracked (context-usage collector) | <10% | <5% |
+| Human review cadence | Ad-hoc spot-checks | Weekly 50 | Weekly 50 |
+| Scenes operational | 1 (Dev Lab) | 2 (+ Content Studio) | 5 |
+| Local model inference | Economic profile (qwen3-coder) | DPO-tuned 7B | TinyAgent |
 
 ---
 
-## VIII. What This Isn't
+## VIII. What This Is — And Isn't
 
-- **Not a rewrite.** Every upgrade is additive to the existing 20K-line game codebase.
-- **Not dependent on training infra.** Phases 1-3 work with zero ML training. Phase 4 is optional.
-- **Not a new product.** This is Penny becoming what it was always meant to be — an intelligent workspace that learns.
-- **Not about model size.** A well-tuned 7B model with good evals and preference data beats GPT-4 for your specific workflows.
+Penpal is internal operating infrastructure for running 1Putt Health. It is not a product to sell.
+
+- **Not a rewrite.** Every upgrade is additive to the existing codebase (now 25K+ lines across 50+ game modules).
+- **Not dependent on training infra.** The intelligence layer works today with zero ML training. Fine-tuning amplifies what's already working.
+- **Not a dashboard.** The game surface is the primary interface. If you have to open a panel to understand system state, the game has failed.
+- **Not about model size.** A well-tuned 7B model with good evals and preference data beats Opus for routine tasks at zero cost.
+
+**What it is:** The operating system for a one-person company running an AI workforce across multiple business functions — development, marketing, intelligence, support — visible in real-time through game scenes, improving with every interaction.
 
 ---
 
-*Framework derived from: Lilian Weng, Jason Liu, Hamel Husain, Eugene Yan, Phil Schmid, Kent C. Dodds, Guillermo Rauch, Andrej Karpathy, Sebastian Raschka, Chip Huyen, Boris Cherny, BAIR — March 2026*
+*Framework derived from: Lilian Weng, Jason Liu, Hamel Husain, Eugene Yan, Phil Schmid, Kent C. Dodds, Guillermo Rauch, Andrej Karpathy, Sebastian Raschka, Chip Huyen, Boris Cherny, BAIR — March 2026. Updated April 2026 to reflect Waves 5-8 implementation.*
