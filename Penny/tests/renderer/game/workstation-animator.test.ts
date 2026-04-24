@@ -255,6 +255,15 @@ function makeTweenBagMock(): WorkstationSprite['tweenBag'] {
       for (const entry of entries.values()) destroyEntry(entry)
       entries.clear()
     },
+    killAll: () => {
+      for (const entry of entries.values()) destroyEntry(entry)
+      entries.clear()
+    },
+    kill: (key) => {
+      const entry = entries.get(key)
+      destroyEntry(entry)
+      entries.delete(key)
+    },
     has: (key) => entries.has(key),
     get: (key) => entries.get(key)?.handle as Phaser.Tweens.Tween | undefined,
     setTimerPaused: (key, paused) => {
