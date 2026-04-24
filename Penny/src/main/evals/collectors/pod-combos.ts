@@ -335,6 +335,21 @@ export class PodComboCollector {
 
     return stats
   }
+
+  /**
+   * Suggest the best-performing agent combo with at least `minRuns` completed runs.
+   * Optionally filter by preset. Returns null if no combo qualifies.
+   */
+  suggestBestCombo(opts?: { presetId?: string; minRuns?: number }): ComboStats | null {
+    const minRuns = opts?.minRuns ?? 3
+    const report = this.report(opts?.presetId ? { presetId: opts.presetId } : undefined)
+
+    const qualified = report.topCombos.filter(c => c.totalRuns >= minRuns)
+    if (qualified.length === 0) return null
+
+    // topCombos is already sorted by successRate desc, avgCompletionTime asc
+    return qualified[0]
+  }
 }
 
 // ── Singleton ───────────────────────────────────────────────────────────────
