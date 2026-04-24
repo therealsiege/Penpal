@@ -56,14 +56,12 @@ Three pillars:
 
 ---
 
-## III. The Five Upgrades
+## III. The Five Upgrades — Status
 
-### Upgrade 1: MCP Server Layer — "Penny Speaks Agent"
+### Upgrade 1: MCP Server Layer — "Penny Speaks Agent" ✅ DONE
 *Source: Kent Dodds (EpicAI), Eugene Yan (News Agents), Jason Liu (Context Engineering)*
 
-**Problem**: Agents interact with Penny through IPC handlers designed for React components. No agent can programmatically query the office state, dispatch tasks, or coordinate with siblings.
-
-**Solution**: Expose Penny's core capabilities as MCP tool servers.
+**Shipped.** 5 tool groups (meta, orchestrator, pods, office, vault) with stdio transport. Any Claude session can query the office, dispatch tasks, and coordinate pods.
 
 ```
 penny-mcp-server/
@@ -99,12 +97,14 @@ penny-mcp-server/
 
 ---
 
-### Upgrade 2: Eval Harness — "Measure Everything"
+### Upgrade 2: Eval Harness — "Measure Everything" ⚠️ BUILT BUT DORMANT
 *Source: Hamel Husain (Field Guide, Evals FAQ), Eugene Yan (Product Evals, AlignEval)*
 
-**Problem**: No way to know if agent output quality is improving or degrading. Pod workflows run but quality is untracked. New features ship without baseline measurement.
+**Built but not recording.** The eval harness (`src/main/evals/harness.ts`) has `record()` and `reportAll()` methods, IPC handlers are registered, the EvalsPanel renders agent report cards — but nothing calls `evalHarness.record()`. The `data/eval-outcomes.jsonl` file stays empty. The weekly digest generator exists but has no data to consume.
 
-**Solution**: Eval-driven development baked into the orchestrator.
+**What works:** Pod quality collector (895 events), combo analytics (3 events), spot-check queue (functional), context-usage collector (active).
+
+**What's dead:** The core harness that ties it all together. Need to wire `orchestrator.ts` task completions into `evalHarness.record()`.
 
 ```
 src/main/evals/
@@ -139,12 +139,14 @@ src/main/evals/
 
 ---
 
-### Upgrade 3: Preference Capture — "Penny Learns From You"
+### Upgrade 3: Preference Capture — "Penny Learns From You" ⚠️ COLLECTING, NOT TRAINING
 *Source: Phil Schmid (DPO), Lilian Weng (Why We Think), BAIR (TinyAgent)*
 
-**Problem**: Every approve/reject click in CommandCenter is preference data being thrown away. Penny never learns from your decisions.
+**Collecting.** 101 preference pairs in `data/preferences.jsonl` from approve/reject signals. The `PairGenerator` (`src/main/preferences/pairs.ts`) can convert these to DPO training format — but it's never called. No training pipeline exists yet.
 
-**Solution**: Capture implicit preference signals → generate training pairs → fine-tune agent behavior.
+**What works:** Signal capture (5 types: approve, reject, edit, complete, fail), JSONL persistence, IPC for UI review.
+
+**What's dead:** `PairGenerator.generate()` — dead code. DPO training pipeline — not built. A/B eval — not built.
 
 ```
 src/main/preferences/
@@ -174,12 +176,10 @@ src/main/preferences/
 
 ---
 
-### Upgrade 4: Context-Engineered Tool Responses — "Teach Agents to Think"
+### Upgrade 4: Context-Engineered Tool Responses — "Teach Agents to Think" ⚠️ PARTIAL
 *Source: Jason Liu (Context Engineering), Hamel Husain (Context Rot)*
 
-**Problem**: IPC handlers return raw data. Agents getting tool results don't know what to do next, what's relevant, or what's noise. Long contexts rot quality.
-
-**Solution**: Redesign all tool response schemas to be self-documenting and context-aware.
+**Partially done.** Scoped context injection (`pod-context.ts`) is live and working — reduces CLAUDE.md from 3000+ tokens to ~1500 task-relevant tokens. Context-usage collector tracks token pressure. But most IPC handlers still return raw arrays — the "structured surfaces" pattern hasn't been applied broadly.
 
 **Current pattern** (raw data):
 ```typescript
@@ -215,12 +215,10 @@ return {
 
 ---
 
-### Upgrade 5: Test-Time Compute for Pods — "Think Harder, Not Bigger"
+### Upgrade 5: Test-Time Compute for Pods — "Think Harder, Not Bigger" ✅ DONE
 *Source: Lilian Weng (Why We Think), Sebastian Raschka (Inference-Time Scaling)*
 
-**Problem**: Pod agents get one shot per phase. Solver generates code → Reviewer approves/rejects → Executor runs tests. No iterative refinement within phases.
-
-**Solution**: Add inference-time scaling to each pod phase.
+**Shipped.** Best-of-N solver candidates with self-evaluation selection. Structured reviewer critiques with severity levels. Executor self-fix loop. PhaseConfig per priority tier. Confidence scoring. All integrated into `pods.ts` with runtime profiles (max/sonnet/economic).
 
 **Current flow:**
 ```
@@ -270,9 +268,36 @@ const PHASE_CONFIGS: Record<string, PhaseConfig> = {
 
 ---
 
+## III-B. Data Flow — What's Wired vs What's Dead
+
+The intelligence layer has three data loops. Two are dormant.
+
+```
+LOOP 1: REASONING BANK ✅ (wired end-to-end)
+  Pod completes → storePodPattern() → reasoning-bank.json
+  New pod starts → findSimilar(task) → inject past patterns into solver prompt
+  Status: Working. 2+ patterns stored. Needs more pod runs to be useful.
+
+LOOP 2: EVAL HARNESS ❌ (built but disconnected)
+  [nothing] → evalHarness.record() → eval-outcomes.jsonl (empty)
+  EvalsPanel → evalHarness.reportAll() → empty report
+  Weekly digest → reads eval-outcomes.jsonl → nothing to read
+  Fix: Wire orchestrator task completions into evalHarness.record()
+
+LOOP 3: PREFERENCE → DPO ❌ (collecting, not training)
+  Approve/reject clicks → preferences.jsonl (101 pairs)
+  [nothing] → PairGenerator.generate() → DPO pairs (never called)
+  [nothing] → TRL training pipeline → fine-tuned model (not built)
+  Fix: Call PairGenerator on schedule, build training pipeline
+```
+
+**Combo analytics** are a special case — the collector records data but no decision logic reads the report to auto-route work to better-performing combos. Currently display-only in EvalsPanel.
+
+---
+
 ## IV. Game Surface Evolution
 
-The game isn't decoration — it's the primary interface for understanding system state at a glance.
+The game isn't decoration — it's the primary interface for running the business.
 
 ### What the Game Communicates
 
