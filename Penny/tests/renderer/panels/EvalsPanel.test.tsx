@@ -67,6 +67,24 @@ describe('EvalsPanel', () => {
     ;(usePolling as unknown as ReturnType<typeof vi.fn>)
       .mockReturnValueOnce({ data: mockReports, loading: false, error: null, errorCount: 0, refresh: vi.fn() })
       .mockReturnValueOnce({ data: mockStats, loading: false, error: null, errorCount: 0, refresh: vi.fn() })
+      .mockReturnValueOnce({
+        data: {
+          period: { from: '2026-03-22', to: '2026-03-29' },
+          totalPods: 0,
+          topCombos: [],
+          agentRoleStats: [],
+          stageTimingOverall: {
+            avgSolving_ms: 0,
+            avgReviewing_ms: 0,
+            avgExecuting_ms: 0,
+            avgSelfFixing_ms: 0,
+          },
+        },
+        loading: false,
+        error: null,
+        errorCount: 0,
+        refresh: vi.fn(),
+      })
       .mockReturnValueOnce({ data: [], loading: false, error: null, errorCount: 0, refresh: vi.fn() })
       .mockReturnValueOnce({ data: { total: 0, agreed: 0, rate: 0 }, loading: false, error: null, errorCount: 0, refresh: vi.fn() })
   })
