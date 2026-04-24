@@ -1628,6 +1628,7 @@ async function completePodWithPR(wf: PodWorkflow): Promise<void> {
     console.warn('[pods] Rebase step threw unexpectedly, skipping PR:', err)
     setStatus(wf, 'complete')
     appendWorkflowSummary(wf)
+    storePodPattern(wf)
     return
   }
 
@@ -1869,7 +1870,14 @@ export function createPod(task: string, opts: CreatePodOpts = {}): PodWorkflow {
     ?? phaseConfig.candidates
   const maxSelfFixes = opts.maxSelfFixes ?? phaseConfig.maxSelfFixes
 
-  const presetId = opts.presetId ?? 'default'
+  // Infer preset from agent assignment if not explicitly provided
+  let presetId = opts.presetId
+  if (!presetId) {
+    const match = getPresets().find(
+      p => p.solver === solver && p.reviewer === reviewer && p.executor === executor,
+    )
+    presetId = match?.id ?? 'manual'
+  }
   const profile = resolveRuntimeProfile(opts.runtimeProfile ?? complexity?.recommendedProfile)
 
   const cwdErr = validatePodCwd(cwd)

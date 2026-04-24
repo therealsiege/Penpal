@@ -221,6 +221,174 @@ function SpotCheckCard({
   )
 }
 
+// ── Pod Combo Analytics ──────────────────────────────────────────────────────
+
+interface ComboStats {
+  comboKey: string
+  solverId: string
+  reviewerId: string
+  executorId: string
+  totalRuns: number
+  completed: number
+  successRate: number
+  avgIterations: number
+  avgCompletionTime_ms: number
+  firstPassRate: number
+  executorPassRate: number
+}
+
+interface AgentRoleStats {
+  agentId: string
+  asSolver: { runs: number; successRate: number; avgDuration_ms: number }
+  asReviewer: { runs: number; successRate: number; firstPassRate: number; avgDuration_ms: number }
+  asExecutor: { runs: number; successRate: number; passRate: number; selfFixRate: number; avgDuration_ms: number }
+}
+
+interface PodComboReport {
+  period: { from: string; to: string }
+  totalPods: number
+  topCombos: ComboStats[]
+  agentRoleStats: AgentRoleStats[]
+  stageTimingOverall: { avgSolving_ms: number; avgReviewing_ms: number; avgExecuting_ms: number; avgSelfFixing_ms: number }
+}
+
+function StageTimingBar({ label, ms, maxMs }: { label: string; ms: number; maxMs: number }) {
+  const pct = maxMs > 0 ? Math.min(100, (ms / maxMs) * 100) : 0
+  return (
+    <div className="flex items-center gap-2 text-xs">
+      <span className="w-16 text-right text-[var(--c-text-secondary)] font-mono">{label}</span>
+      <div className="flex-1 h-2 bg-[var(--c-bg-elevated)]/50 rounded overflow-hidden">
+        <div className="h-full bg-indigo-500/70 rounded" style={{ width: `${pct}%` }} />
+      </div>
+      <span className="w-14 text-right text-[var(--c-text-muted)] tabular-nums">{formatDuration(ms)}</span>
+    </div>
+  )
+}
+
+function PodCombosSection() {
+  const { data: report } = usePolling<PodComboReport>(
+    () => window.api.evalsPodCombos(),
+    15_000,
+  )
+
+  if (!report || report.totalPods === 0) {
+    return (
+      <div className="flex flex-col gap-3">
+        <h2 className="text-sm font-bold text-[var(--c-text-heading)] tracking-tight">Pod Combos</h2>
+        <div className="rounded-xl bg-[var(--c-bg-surface)]/50 border border-[var(--c-border-subtle)] px-5 py-6 text-center text-[var(--c-text-muted)] text-sm">
+          No pod combo data yet. Run pods to start collecting agent performance data.
+        </div>
+      </div>
+    )
+  }
+
+  const maxStageMs = Math.max(
+    report.stageTimingOverall.avgSolving_ms,
+    report.stageTimingOverall.avgReviewing_ms,
+    report.stageTimingOverall.avgExecuting_ms,
+    report.stageTimingOverall.avgSelfFixing_ms,
+    1,
+  )
+
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="flex items-center justify-between">
+        <h2 className="text-sm font-bold text-[var(--c-text-heading)] tracking-tight">Pod Combos</h2>
+        <span className="text-xs text-[var(--c-text-muted)]">{report.totalPods} pods tracked</span>
+      </div>
+
+      {/* Combo Leaderboard */}
+      {report.topCombos.length > 0 && (
+        <div className="rounded-xl border border-[var(--c-border-subtle)] overflow-hidden">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="bg-[var(--c-bg-surface)]/70 text-[var(--c-text-secondary)] text-xs uppercase tracking-wider">
+                <th scope="col" className="px-3 py-2 text-left font-semibold">Solver</th>
+                <th scope="col" className="px-3 py-2 text-left font-semibold">Reviewer</th>
+                <th scope="col" className="px-3 py-2 text-left font-semibold">Executor</th>
+                <th scope="col" className="px-3 py-2 text-right font-semibold">Runs</th>
+                <th scope="col" className="px-3 py-2 text-right font-semibold">Success</th>
+                <th scope="col" className="px-3 py-2 text-right font-semibold">Avg Time</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[var(--c-border-subtle)]/60">
+              {report.topCombos.map((c) => (
+                <tr key={c.comboKey} className="hover:bg-[var(--c-bg-elevated)]/30 transition-colors">
+                  <td className="px-3 py-2 text-[var(--c-text-primary)] font-mono text-xs">{c.solverId}</td>
+                  <td className="px-3 py-2 text-[var(--c-text-primary)] font-mono text-xs">{c.reviewerId}</td>
+                  <td className="px-3 py-2 text-[var(--c-text-primary)] font-mono text-xs">{c.executorId}</td>
+                  <td className="px-3 py-2 text-right text-[var(--c-text-secondary)] tabular-nums">{c.totalRuns}</td>
+                  <td className={`px-3 py-2 text-right font-semibold tabular-nums ${rateColor(c.successRate)}`}>
+                    {(c.successRate * 100).toFixed(0)}%
+                  </td>
+                  <td className="px-3 py-2 text-right text-[var(--c-text-secondary)] tabular-nums">
+                    {formatDuration(c.avgCompletionTime_ms)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* Stage Timing */}
+      <div className="rounded-xl bg-[var(--c-bg-surface)]/50 border border-[var(--c-border-subtle)] p-4 flex flex-col gap-2">
+        <h3 className="text-xs font-semibold text-[var(--c-text-secondary)] uppercase tracking-wider mb-1">Avg Stage Timing</h3>
+        <StageTimingBar label="Solve" ms={report.stageTimingOverall.avgSolving_ms} maxMs={maxStageMs} />
+        <StageTimingBar label="Review" ms={report.stageTimingOverall.avgReviewing_ms} maxMs={maxStageMs} />
+        <StageTimingBar label="Execute" ms={report.stageTimingOverall.avgExecuting_ms} maxMs={maxStageMs} />
+        <StageTimingBar label="Self-fix" ms={report.stageTimingOverall.avgSelfFixing_ms} maxMs={maxStageMs} />
+      </div>
+
+      {/* Agent Role Stats */}
+      {report.agentRoleStats.length > 0 && (
+        <div className="rounded-xl border border-[var(--c-border-subtle)] overflow-hidden">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="bg-[var(--c-bg-surface)]/70 text-[var(--c-text-secondary)] text-xs uppercase tracking-wider">
+                <th scope="col" className="px-3 py-2 text-left font-semibold">Agent</th>
+                <th scope="col" className="px-3 py-2 text-right font-semibold">Solver</th>
+                <th scope="col" className="px-3 py-2 text-right font-semibold">Reviewer</th>
+                <th scope="col" className="px-3 py-2 text-right font-semibold">Executor</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[var(--c-border-subtle)]/60">
+              {report.agentRoleStats
+                .filter(a => a.asSolver.runs + a.asReviewer.runs + a.asExecutor.runs > 0)
+                .map((a) => (
+                <tr key={a.agentId} className="hover:bg-[var(--c-bg-elevated)]/30 transition-colors">
+                  <td className="px-3 py-2 text-[var(--c-text-heading)] font-mono text-xs">{a.agentId}</td>
+                  <td className="px-3 py-2 text-right">
+                    {a.asSolver.runs > 0 ? (
+                      <span className={`text-xs tabular-nums ${rateColor(a.asSolver.successRate)}`}>
+                        {(a.asSolver.successRate * 100).toFixed(0)}% <span className="text-[var(--c-text-muted)]">({a.asSolver.runs})</span>
+                      </span>
+                    ) : <span className="text-[var(--c-text-muted)]">--</span>}
+                  </td>
+                  <td className="px-3 py-2 text-right">
+                    {a.asReviewer.runs > 0 ? (
+                      <span className={`text-xs tabular-nums ${rateColor(a.asReviewer.firstPassRate)}`}>
+                        {(a.asReviewer.firstPassRate * 100).toFixed(0)}% <span className="text-[var(--c-text-muted)]">({a.asReviewer.runs})</span>
+                      </span>
+                    ) : <span className="text-[var(--c-text-muted)]">--</span>}
+                  </td>
+                  <td className="px-3 py-2 text-right">
+                    {a.asExecutor.runs > 0 ? (
+                      <span className={`text-xs tabular-nums ${rateColor(a.asExecutor.passRate)}`}>
+                        {(a.asExecutor.passRate * 100).toFixed(0)}% <span className="text-[var(--c-text-muted)]">({a.asExecutor.runs})</span>
+                      </span>
+                    ) : <span className="text-[var(--c-text-muted)]">--</span>}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  )
+}
+
 function SpotCheckSection() {
   const { data: pending, refresh: refreshPending } = usePolling<SpotCheck[]>(
     () => window.api.evalsSpotCheckQueue(),
@@ -392,6 +560,7 @@ export function EvalsPanel() {
           </div>
         )}
 
+        <PodCombosSection />
         <SpotCheckSection />
       </div>
     </PanelBackground>
