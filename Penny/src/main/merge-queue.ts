@@ -176,6 +176,17 @@ export class MergeQueue {
         return next
       }
 
+      // 4b. Scan for duplicate class members (catches squash-merge artifacts)
+      const dupeIssues = detectDuplicateMembers(this.repoCwd, next.branch)
+      if (dupeIssues.length > 0) {
+        next.status = 'failed'
+        next.failReason = `Duplicate class members detected: ${dupeIssues.slice(0, 3).join('; ')}`
+        saveQueue(this.entries)
+        git(['checkout', 'main'], this.repoCwd)
+        console.warn(`[merge-queue] PR #${next.prNumber} failed: duplicate members — ${dupeIssues.join(', ')}`)
+        return next
+      }
+
       // 5. Switch to main, merge with fast-forward
       next.status = 'merging'
       saveQueue(this.entries)
@@ -264,4 +275,58 @@ export class MergeQueue {
       failed: this.entries.filter(e => e.status === 'failed').length,
     }
   }
+}
+
+// ── Post-merge validation ─────────────────────────────────────────────────
+
+/**
+ * Scan TypeScript files changed on `branch` (vs main) for duplicate class
+ * members. Returns an array of human-readable issue strings, empty if clean.
+ *
+ * Catches the squash-merge artifact pattern where both the original and
+ * merged version of a method/field end up in the same class body.
+ */
+function detectDuplicateMembers(repoCwd: string, branch: string): string[] {
+  const issues: string[] = []
+
+  // Get list of .ts files changed on this branch vs main
+  let changedFiles: string[]
+  try {
+    const diff = execFileSync('git', ['diff', '--name-only', 'main', branch, '--', '*.ts'], {
+      cwd: repoCwd, encoding: 'utf-8', stdio: 'pipe',
+    }).trim()
+    changedFiles = diff ? diff.split('\n').filter(f => f.endsWith('.ts')) : []
+  } catch {
+    return [] // can't diff — skip check
+  }
+
+  for (const file of changedFiles) {
+    let content: string
+    try {
+      content = execFileSync('git', ['show', `${branch}:${file}`], {
+        cwd: repoCwd, encoding: 'utf-8', stdio: 'pipe',
+      })
+    } catch { continue }
+
+    // Find class method/field declarations and check for duplicates
+    const members = new Map<string, number>()
+    const lines = content.split('\n')
+    for (let i = 0; i < lines.length; i++) {
+      // Match: optional access modifier + optional async/static + method name + ( or :
+      const m = lines[i].match(/^\s{2,4}(?:private |public |protected )?(?:readonly )?(?:async |static |get |set )?([a-zA-Z_]\w*)\s*[\(:<]/)
+      if (!m) continue
+      const name = m[1]
+      // Skip keywords that look like method names
+      if (['if', 'for', 'while', 'switch', 'return', 'throw', 'new', 'const', 'let', 'var', 'else', 'catch', 'try', 'import', 'export', 'class', 'interface', 'type', 'function', 'constructor'].includes(name)) continue
+
+      const prev = members.get(name)
+      if (prev !== undefined) {
+        issues.push(`${file}: duplicate "${name}" at lines ${prev + 1} and ${i + 1}`)
+      } else {
+        members.set(name, i)
+      }
+    }
+  }
+
+  return issues
 }

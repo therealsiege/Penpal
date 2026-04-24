@@ -192,6 +192,15 @@ function createWorktree(repoCwd: string, slug: string): { worktreePath: string; 
 function pushAndCreatePR(worktreePath: string, branch: string, task: string): void {
   const gitOpts = { cwd: worktreePath, encoding: 'utf-8' as const, stdio: 'pipe' as const, timeout: 60_000 }
   try {
+    // Restore CLAUDE.md from the base branch before staging — the pod replaced
+    // it with a scoped context version that should NOT be committed to the PR.
+    try {
+      execSync('git checkout HEAD -- CLAUDE.md', { ...gitOpts, stdio: 'ignore' })
+    } catch { /* CLAUDE.md may not exist at root — that's fine */ }
+    try {
+      execSync('git checkout HEAD -- Penny/CLAUDE.md', { ...gitOpts, stdio: 'ignore' })
+    } catch { /* ditto */ }
+
     // Stage any uncommitted changes
     execSync('git add -A', gitOpts)
     const status = execSync('git status --porcelain', gitOpts).toString().trim()

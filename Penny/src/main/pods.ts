@@ -1625,7 +1625,10 @@ async function completePodWithPR(wf: PodWorkflow): Promise<void> {
   try {
     rebaseResult = rebaseBeforePR(wf.cwd)
   } catch (err) {
-    console.warn('[pods] Rebase step threw unexpectedly, skipping PR:', err)
+    console.warn('[pods] Rebase step threw unexpectedly — creating PR with needs-rebase label:', err)
+    wf.rebaseConflict = true
+    const prUrl = createPodPR(wf, 'needs-rebase')
+    wf.prUrl = prUrl
     setStatus(wf, 'complete')
     appendWorkflowSummary(wf)
     storePodPattern(wf)
