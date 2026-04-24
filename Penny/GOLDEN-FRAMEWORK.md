@@ -50,9 +50,9 @@ Three pillars:
 └─────────────────────────────────────────────────┘
 ```
 
-**What exists today**: L0 through L5 — a fully functional game-office with 18 decomposed modules, pod workflows, XP system, 150+ IPC handlers.
+**What exists today**: All six layers are functional. L1 (Intelligence Layer) was built in Waves 7-8: MCP server with 5 tool groups, eval harness with spot-check queue and weekly digests, preference capture (approve/reject signals to JSONL), combo analytics tracking agent performance, scoped context injection, complexity-based model routing, and ReasoningBank pattern learning.
 
-**What's missing**: L1 — the intelligence layer that makes Penny learn and improve.
+**What's next**: Closing the learning loop — DPO fine-tuning from preference data, TinyAgent local inference, and context rot detection.
 
 ---
 
@@ -289,14 +289,22 @@ The game isn't decoration — it's the primary interface for understanding syste
 | Cafe occupancy | Idle agents socializing |
 | Rivalry sparks | Agents within 5% XP of each other |
 
-### New Game Elements from Framework
+### Game Elements — Status
 
-1. **Eval glow** — Workstations pulse green/amber/red based on recent eval scores
-2. **Context meter** — Small bar showing agent context window utilization (warns on rot)
-3. **Preference sparkles** — Brief particle burst when you approve an agent action
-4. **Thinking animation** — Visible multi-step reasoning (dots appearing in sequence) when best-of-N is running
-5. **MCP connection lines** — Dashed lines showing which external tools an agent is connected to
-6. **Quality streak** — Flame effect on desk when agent has 5+ consecutive successful tasks
+| Element | Status | Description |
+|---------|--------|-------------|
+| Eval glow | Done | Workstations pulse green/amber/red based on recent eval scores |
+| Quality streak flames | Done | Flame effect on desk scales with consecutive successful tasks (3-tier hotness) |
+| Pod spectator labels | Done | Real-time SOLVING/REVIEWING/EXECUTING stage labels on active workstations |
+| Bestiary cards | Done | Full character cards with stats, lore, powers, rival/ally (I key) |
+| Natural rivalry lines | Done | Crimson dashed lines between bestiary-defined rival pairs with clash VFX |
+| Combo analytics panel | Done | Agent combo leaderboard + stage timing in EvalsPanel |
+| Context meter | Done | Small bar showing agent context window utilization |
+| Preference sparkles | Planned | Brief particle burst when you approve an agent action |
+| Thinking animation | Planned | Visible multi-step reasoning (dots appearing in sequence) for best-of-N |
+| MCP connection lines | Planned | Dashed lines showing which external tools an agent is connected to |
+| Agent interaction (E key) | Planned | Walk to desk → context menu → assign task / view stats / dialog |
+| Quest board at whiteboard | Planned | Click whiteboard → see GitHub issues as quests, drag-to-assign |
 
 ---
 
