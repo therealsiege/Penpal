@@ -1,12 +1,12 @@
 {
-  "timestamp": 1776797473421,
+  "timestamp": 1777042198785,
   "weekStart": 1776661200000,
   "agents": [
     {
       "id": "fullstack-dev",
       "name": "Sun Wukong",
       "title": "The Monkey King",
-      "status": "idle",
+      "status": "active",
       "room": "sidekick",
       "roomPath": "/Users/fuzeelogik/sidekick",
       "currentTask": null,
@@ -17,8 +17,8 @@
       "tasksCompleted": 0,
       "tasksFailed": 0,
       "currentStreak": 0,
-      "sessionMode": "waiting",
-      "uptime": "1d 5h"
+      "sessionMode": "working",
+      "uptime": "1d 21h"
     },
     {
       "id": "nextjs-frontend",
@@ -150,7 +150,7 @@
       "id": "product-mgr",
       "name": "Tang Sanzang",
       "title": "The Monk Tripitaka",
-      "status": "idle",
+      "status": "active",
       "room": "sidekick",
       "roomPath": "/Users/fuzeelogik/sidekick",
       "currentTask": null,
@@ -161,8 +161,8 @@
       "tasksCompleted": 0,
       "tasksFailed": 0,
       "currentStreak": 0,
-      "sessionMode": "waiting",
-      "uptime": "1d 5h"
+      "sessionMode": "working",
+      "uptime": "1d 21h"
     },
     {
       "id": "product-marketer",
@@ -186,7 +186,7 @@
       "id": "exec-assistant",
       "name": "Zhu Bajie",
       "title": "Marshal of the Heavenly Canopy",
-      "status": "idle",
+      "status": "active",
       "room": "sidekick",
       "roomPath": "/Users/fuzeelogik/sidekick",
       "currentTask": null,
@@ -197,8 +197,8 @@
       "tasksCompleted": 0,
       "tasksFailed": 0,
       "currentStreak": 0,
-      "sessionMode": "waiting",
-      "uptime": "1d 5h"
+      "sessionMode": "working",
+      "uptime": "1d 21h"
     },
     {
       "id": "issue-planner",
@@ -229,8 +229,8 @@
         "Zhu Bajie"
       ],
       "agentCount": 3,
-      "idleCount": 3,
-      "activeCount": 0,
+      "idleCount": 0,
+      "activeCount": 3,
       "blockedCount": 0
     },
     {

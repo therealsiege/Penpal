@@ -145,29 +145,31 @@ Two graph databases are available. Use the right one for the job:
 
 
 
+### Workflow: Implement GitHub issue therealsiege/Penpal#337: Refactor 3a: (2026-04-20)
+- Task: Implement GitHub issue therealsiege/Penpal#337: Refactor 3a: Sync walk animation frame rate to movement speed in path-walker.ts
+- Team: nextjs-frontend / ui-designer / electron-dev
+- Result: PASS (1/3 iterations)
+- Key output: All checks complete. Here is the structured result:
 
+```
+RESULT: PASS
 
+Test Case 1: TypeScript compilation (npx tsc --noEmit) — PASS
+  Details: Exit c
 
+### Workflow: Implement GitHub issue therealsiege/Penpal#334: Refactor 1b: (2026-04-20)
+- Task: Implement GitHub issue therealsiege/Penpal#334: Refactor 1b: Fix audio-manager setTimeout leak on scene destroy — add destroy method, clear all timeouts
+- Team: nextjs-frontend / ui-designer / electron-dev
+- Result: PASS (1/3 iterations)
+- Key output: All checks complete. Here is the structured QA report:
 
+---
 
+```
+RESULT: PASS
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+Test Case 1: TypeScript compilation (npx tsc --noEmit) — PASS
+  Details
 
 ### Workflow: Implement GitHub issue therealsiege/Penpal#339: Infra 1a: Po (2026-04-20)
 - Task: Implement GitHub issue therealsiege/Penpal#339: Infra 1a: Pod pipeline — add rebase before PR in pushAndCreatePR, add cleanup flag for stale worktrees, push local main if ahead
@@ -271,121 +273,59 @@ origin/pod-204-rpg-layer-2-player-character-with-wasd-m
   origin/pod-320-polish-1b-session-replay-record-and-play
 ```
 
-### Workflow: single candidate task (2026-04-23)
-- Task: single candidate task
-- Team: solver-a / reviewer-b / executor-c
-- Result: PASS (1/1 iterations)
-- Key output: RESULT: PASS
-
-### Workflow: multi candidate task (2026-04-23)
-- Task: multi candidate task
-- Team: solver-a / reviewer-b / executor-c
-- Result: PASS (1/1 iterations)
-- Key output: RESULT: PASS
-
-### Workflow: invalid self eval task (2026-04-23)
-- Task: invalid self eval task
-- Team: solver-a / reviewer-b / executor-c
-- Result: PASS (1/1 iterations)
-- Key output: RESULT: PASS
-
-### Workflow: task (2026-04-23)
-- Task: task
-- Team: fullstack-dev / backend-arch / electron-dev
-- Result: PASS (1/2 iterations)
-- Key output: RESULT: PASS
-
-ey output: RESULT: PASS
-
-### Workflow: task (2026-04-23)
-- Task: task
-- Team: fullstack-dev / backend-arch / electron-dev
-- Result: FAIL (1/1 iterations)
-- Key output: RESULT: FAIL
-broken
-
-### Workflow: rejected (2026-04-23)
-- Task: rejected
-- Team: fullstack-dev / backend-arch / electron-dev
-- Result: FAIL (1/2 iterations)
-- Key output: solver output
-
-### Workflow: task (2026-04-23)
-- Task: task
-- Team: fullstack-dev / backend-arch / electron-dev
-- Result: PASS (1/2 iterations)
-- Key output:
-
-### Workflow: pod quality pass (2026-04-23)
-- Task: pod quality pass
-- Team: nextjs-frontend / ui-designer / electron-dev
-- Result: PASS (1/1 iterations)
-- Key output: RESULT: PASS
-
-### Workflow: invalid self eval task (2026-04-23)
-- Task: invalid self eval task
-- Team: solver-a / reviewer-b / executor-c
-- Result: PASS (1/1 iterations)
-- Key output: RESULT: PASS
-
-### Workflow: task (2026-04-23)
-- Task: task
-- Team: fullstack-dev / backend-arch / electron-dev
-- Result: PASS (1/2 iterations)
-- Key output: RESULT: PASS
-
-### Workflow: rejected (2026-04-23)
-- Task: rejected
-- Team: fullstack-dev / backend-arch / electron-dev
-- Result: FAIL (1/2 iterations)
-- Key output: solver output
-
-### Workflow: task (2026-04-23)
-- Task: task
-- Team: fullstack-dev / backend-arch / electron-dev
-- Result: FAIL (1/2 iterations)
-- Key output: solver
-
-### Workflow: task (2026-04-23)
-- Task: task
+### Workflow: Implement GitHub issue therealsiege/Penpal#340: Expand agent (2026-04-23)
+- Task: Implement GitHub issue therealsiege/Penpal#340: Expand agents/CLAUDE.md context for pods. Increase workflow log from 5 to 20 entries. Auto-append recent git context (last 10 commits touching game file
 - Team: fullstack-dev / backend-arch / electron-dev
 - Result: PASS (1/3 iterations)
-- Self-fix attempts: 2
-- Key output: RESULT: PASS
+- Key output: All tests pass. Here are the results:
 
-### Workflow: task (2026-04-23)
-- Task: task
-- Team: fullstack-dev / backend-arch / electron-dev
-- Result: PASS (2/2 iterations)
-- Key output: RESULT: PASS
+```
+RESULT: PASS
 
-### Workflow: task (2026-04-23)
-- Task: task
-- Team: fullstack-dev / backend-arch / electron-dev
-- Result: FAIL (1/1 iterations)
-- Key output: solver
+Test Case 1: Workflow log limit set to 20 - PASS
+  Details: pods.ts:1580 has `MAX_WORKFLOW_LO
 
-### Workflow: task (2026-04-23)
-- Task: task
+### Workflow: Implement GitHub issue therealsiege/Penpal#335: Extract anim (2026-04-23)
+- Task: Implement GitHub issue therealsiege/Penpal#335: Extract animation state classes from workstation-animation.ts. The TweenBag from #333 is already merged and available via tween-lifecycle.ts. Break the 
+- Team: videogame-dev / ui-designer / electron-dev
+- Result: PASS (1/3 iterations)
+- Self-fix attempts: 1
+- Key output: All 41 tests pass.
+
+---
+
+```
+RESULT: PASS
+
+Test Case 1: TypeScript compilation — PASS
+  Details: `npx tsc --noEmit` exits cleanly (no new errors intro
+
+### Workflow: Implement GitHub issue therealsiege/Penpal#360: Combo analyt (2026-04-24)
+- Task: Implement GitHub issue therealsiege/Penpal#360: Combo analytics auto-routing. Add suggestBestCombo(taskKeywords?) to src/main/evals/collectors/pod-combos.ts that returns the highest success-rate combo
 - Team: fullstack-dev / backend-arch / electron-dev
-- Result: PASS (1/2 iterations)
+- Result: PASS (1/3 iterations)
+- Key output: Sort at line 278 confirms: `topCombos` is sorted by `successRate` desc, then `avgCompletionTime_ms` asc — exactly as the Solver's comment states. The
+
+### Workflow: Implement GitHub issue therealsiege/Penpal#358: Wire eval ha (2026-04-24)
+- Task: Implement GitHub issue therealsiege/Penpal#358: Wire eval harness to orchestrator task completions. The eval harness (src/main/evals/harness.ts) has record() and reportAll() methods but nothing calls 
+- Team: fullstack-dev / backend-arch / electron-dev
+- Result: PASS (1/3 iterations)
+- Key output: All 9 tests across 4 eval test files pass. Here is the structured QA report:
+
+---
+
+```
+RESULT: PASS
+
+Test Case 1: Implementation wiring — PASS
+  Detai
+
+### Workflow: Implement GitHub issue therealsiege/Penpal#359: Activate DPO (2026-04-24)
+- Task: Implement GitHub issue therealsiege/Penpal#359: Activate DPO pair generator. 101 preference pairs exist in data/preferences.jsonl. The PairGenerator in src/main/preferences/pairs.ts has generate() and
+- Team: fullstack-dev / backend-arch / electron-dev
+- Result: PASS (2/3 iterations)
 - Self-fix attempts: 1
 - Key output: RESULT: PASS
 
-### Workflow: task (2026-04-23)
-- Task: task
-- Team: fullstack-dev / backend-arch / electron-dev
-- Result: PASS (2/2 iterations)
-- Key output: RESULT: PASS
-
-### Workflow: rebase pr task (2026-04-23)
-- Task: rebase pr task
-- Team: solver-a / reviewer-b / executor-c
-- Result: PASS (1/1 iterations)
-- Key output: RESULT: PASS
-
-### Workflow: rebase conflict task (2026-04-23)
-- Task: rebase conflict task
-- Team: solver-a / reviewer-b / executor-c
-- Result: PASS (1/1 iterations)
-- Key output: RESULT: PASS
+Test Case 1: IPC handler registration (`evals:generate-dpo-pairs`) - PASS  
+  Details: Re-verified in `Penny/src/main/ipc.ts` that `regi

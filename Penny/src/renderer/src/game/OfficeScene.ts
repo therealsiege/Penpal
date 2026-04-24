@@ -2156,5 +2156,7 @@ export class OfficeScene extends Phaser.Scene {
     }
     this.rooms.clear()
     audioManager.destroy()
+    this.bestiaryPanel.destroy()
+    this.podSpectator.destroy()
   }
 }
