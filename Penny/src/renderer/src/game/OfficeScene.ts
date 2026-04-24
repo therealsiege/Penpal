@@ -43,6 +43,8 @@ import { CelebrationManager, themeIconFrameForTheme, type CameraJuiceHint } from
 import { AgentMoodManager } from './agent-mood'
 import { InteractivePropsManager } from './interactive-props'
 import { SeasonHUD } from './season-hud'
+import { BestiaryPanel } from './bestiary-panel'
+import { PodSpectator } from './pod-spectator'
 import { QuestPanel } from './quest-panel'
 import { AchievementPanel } from './achievement-panel'
 import { questSystem } from './quest-system'
@@ -163,6 +165,8 @@ export class OfficeScene extends Phaser.Scene {
   private moodManager!: AgentMoodManager
   private propsManager!: InteractivePropsManager
   private seasonHud!: SeasonHUD
+  private bestiaryPanel!: BestiaryPanel
+  private podSpectator!: PodSpectator
   private questPanel!: QuestPanel
   private achievementPanel!: AchievementPanel
   private lastQuestPanelUpdateAt = 0
@@ -715,6 +719,16 @@ export class OfficeScene extends Phaser.Scene {
           this.ui.showOpsBoardOverlay(this._capRows)
         }
       })
+
+      // I — toggle bestiary / agent info panel for selected agent
+      this.input.keyboard.on('keydown-I', (e: KeyboardEvent) => {
+        if (shouldIgnoreKeyboardShortcuts(e)) return
+        e.preventDefault()
+        const idx = this.selection.selectedAgentIndex
+        if (idx >= 0 && idx < this.agents.length) {
+          this.bestiaryPanel.toggle(this.agents[idx].config)
+        }
+      })
     }
 
     // Vignette — subtle edge framing only (strong strength + tight radius read as “too dark” on wide labs)
@@ -779,6 +793,10 @@ export class OfficeScene extends Phaser.Scene {
     this.questPanel.init(this.viewWidth, this.viewHeight)
     this.achievementPanel = new AchievementPanel(this)
     this.achievementPanel.init(this.viewWidth, this.viewHeight)
+    this.bestiaryPanel = new BestiaryPanel(this)
+    this.podSpectator = new PodSpectator(this)
+    this.podSpectator.setRoomsAccessor(() => this.rooms)
+    this.podSpectator.wire()
 
     soundEngine.setScene(this)
     soundEngine.wireEvents()

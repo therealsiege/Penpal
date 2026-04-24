@@ -193,6 +193,12 @@ contextBridge.exposeInMainWorld('api', {
   evalsSpotCheckSample: (count: number) => ipcRenderer.invoke('evals:spot-check-sample', count),
   evalsSpotCheckReview: (id: string, verdict: string, notes?: string) => ipcRenderer.invoke('evals:spot-check-review', id, verdict, notes),
   evalsSpotCheckAgreement: () => ipcRenderer.invoke('evals:spot-check-agreement'),
+  // Pod Stage Change (spectator mode)
+  onPodStageChanged: (callback: (event: { podId: string; status: string; solverId: string; reviewerId: string; executorId: string; iteration: number }) => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, data: { podId: string; status: string; solverId: string; reviewerId: string; executorId: string; iteration: number }) => callback(data)
+    ipcRenderer.on('pod:stage-changed', handler)
+    return () => ipcRenderer.removeListener('pod:stage-changed', handler)
+  },
   // Context Health
   contextHealth: () => ipcRenderer.invoke('evals:context-health'),
   contextHealthAgent: (agentId: string) => ipcRenderer.invoke('evals:context-health-agent', agentId),

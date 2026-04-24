@@ -151,6 +151,7 @@ import { computeCapabilitiesStatus } from './capabilities-status'
 import { taskOutcomeCollector } from './evals/collectors/task-outcomes'
 import { podQualityCollector } from './evals/collectors/pod-quality'
 import { podComboCollector } from './evals/collectors/pod-combos'
+import { podEvents } from './pods'
 import { evalHarness } from './evals/harness'
 import { generateWeeklyDigest } from './evals/reports/weekly-digest'
 import { contextMonitor } from './evals/collectors/context-usage'
@@ -1522,4 +1523,20 @@ export function registerPreferenceIpc(store: PreferenceStore) {
     const count = await generator.export(outPath, 'jsonl')
     return { count, path: outPath }
   }))
+
+  // ── Pod Stage Change Forwarding ──────────────────────────────────────────
+  // Forward pod status-change events to the renderer for spectator mode
+  podEvents.on('status-change', (wf: { id: string; status: string; solver: { agentId: string }; reviewer: { agentId: string }; executor: { agentId: string }; iteration: number }) => {
+    const payload = {
+      podId: wf.id,
+      status: wf.status,
+      solverId: wf.solver.agentId,
+      reviewerId: wf.reviewer.agentId,
+      executorId: wf.executor.agentId,
+      iteration: wf.iteration,
+    }
+    for (const win of BrowserWindow.getAllWindows()) {
+      win.webContents.send('pod:stage-changed', payload)
+    }
+  })
 }
