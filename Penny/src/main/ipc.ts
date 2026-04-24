@@ -175,6 +175,24 @@ export const ipcEvents = new EventEmitter()
 const VAULT_ROOT = DOCS_ROOT
 const BRIEFINGS_DIR = path.join(VAULT_ROOT, '1Putt', 'Daily Briefings')
 const DATA_DIR = path.resolve(__dirname, '..', '..', 'data')
+const DPO_PAIRS_FILENAME = 'dpo-pairs.jsonl'
+
+function resolveDataExportPath(fileName: string): string {
+  const dataDir = path.resolve(DATA_DIR)
+  const safeName = path.basename(fileName)
+  if (safeName !== fileName) {
+    throw new Error(`Invalid export filename: ${fileName}`)
+  }
+  if (path.extname(safeName).toLowerCase() !== '.jsonl') {
+    throw new Error('DPO export file must use .jsonl extension')
+  }
+  const outPath = path.resolve(dataDir, safeName)
+  const relative = path.relative(dataDir, outPath)
+  if (relative.startsWith('..') || path.isAbsolute(relative)) {
+    throw new Error(`Invalid export path outside data directory: ${outPath}`)
+  }
+  return outPath
+}
 
 interface VaultFolder {
   name: string
@@ -1500,6 +1518,44 @@ export function registerIpcHandlers() {
 }
 
 export function registerPreferenceIpc(store: PreferenceStore) {
+  const runDpoPairExport = async (): Promise<{ count: number; path: string }> => {
+    const { PairGenerator } = await import('./preferences/pairs')
+    const generator = new PairGenerator(store)
+    const dataDir = path.resolve(DATA_DIR)
+    const outPath = resolveDataExportPath(DPO_PAIRS_FILENAME)
+
+    await fs.promises.mkdir(dataDir, { recursive: true })
+    const dataDirStat = await fs.promises.stat(dataDir)
+    if (!dataDirStat.isDirectory()) {
+      throw new Error(`Data path is not a directory: ${dataDir}`)
+    }
+    await fs.promises.access(dataDir, fs.constants.W_OK)
+
+    let generatedCount = 0
+    try {
+      for await (const _pair of generator.generate()) {
+        generatedCount++
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      throw new Error(`Failed to generate DPO pairs from preferences: ${message}`)
+    }
+    if (!Number.isInteger(generatedCount) || generatedCount < 0) {
+      throw new Error(`Invalid DPO pair count generated: ${generatedCount}`)
+    }
+
+    try {
+      const count = await generator.export(outPath, 'jsonl')
+      if (!Number.isInteger(count) || count < 0) {
+        throw new Error(`Invalid DPO pair export count: ${count}`)
+      }
+      return { count, path: outPath }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      throw new Error(`Failed to export DPO pairs to ${outPath}: ${message}`)
+    }
+  }
+
   ipcMain.handle('preferences:stats', wrapHandler(() => store.stats()))
   ipcMain.handle('preferences:count', wrapHandler(() => store.count()))
   ipcMain.handle('preferences:query', wrapHandler(async (filter?: unknown) => {
@@ -1515,14 +1571,8 @@ export function registerPreferenceIpc(store: PreferenceStore) {
     }
     return events
   }))
-  ipcMain.handle('preferences:generate-pairs', wrapHandler(async () => {
-    const { PairGenerator } = await import('./preferences/pairs')
-    const generator = new PairGenerator(store)
-    const dataDir = path.resolve(__dirname, '..', 'data')
-    const outPath = path.join(dataDir, 'dpo-pairs.jsonl')
-    const count = await generator.export(outPath, 'jsonl')
-    return { count, path: outPath }
-  }))
+  ipcMain.handle('preferences:generate-pairs', wrapHandler(runDpoPairExport))
+  ipcMain.handle('evals:generate-dpo-pairs', wrapHandler(runDpoPairExport))
 
   // ── Pod Stage Change Forwarding ──────────────────────────────────────────
   // Forward pod status-change events to the renderer for spectator mode

@@ -4,6 +4,18 @@ import { contextBridge, ipcRenderer } from 'electron'
 const unwrap = <T>(result: T): T =>
   (result && typeof result === 'object' && 'data' in result && 'summary' in result) ? (result as { data: T }).data : result
 
+const throwOnIpcError = <T>(result: T): T => {
+  if (
+    result &&
+    typeof result === 'object' &&
+    'error' in result &&
+    typeof (result as { error?: unknown }).error === 'string'
+  ) {
+    throw new Error((result as { error: string }).error)
+  }
+  return result
+}
+
 contextBridge.exposeInMainWorld('pty', {
   create: (cwd: string, command?: string, args?: string[], env?: Record<string, string>) =>
     ipcRenderer.invoke('pty:create', cwd, command, args, env),
@@ -138,7 +150,7 @@ contextBridge.exposeInMainWorld('api', {
   preferencesCount: () => ipcRenderer.invoke('preferences:count'),
   preferencesQuery: (filter?: { agentId?: string; signal?: string; since?: string }) =>
     ipcRenderer.invoke('preferences:query', filter),
-  preferencesGeneratePairs: () => ipcRenderer.invoke('preferences:generate-pairs'),
+  preferencesGeneratePairs: () => ipcRenderer.invoke('preferences:generate-pairs').then(throwOnIpcError),
   // Config Snapshot + Editing
   getConfigSnapshot: () => ipcRenderer.invoke('config:snapshot'),
   addProjectMcpServer: (server: { name: string; command: string; args: string[]; env?: Record<string, string>; cwd?: string }) =>
@@ -193,6 +205,8 @@ contextBridge.exposeInMainWorld('api', {
   evalsSpotCheckSample: (count: number) => ipcRenderer.invoke('evals:spot-check-sample', count),
   evalsSpotCheckReview: (id: string, verdict: string, notes?: string) => ipcRenderer.invoke('evals:spot-check-review', id, verdict, notes),
   evalsSpotCheckAgreement: () => ipcRenderer.invoke('evals:spot-check-agreement'),
+  // DPO Pair Generation
+  evalsGenerateDpoPairs: () => ipcRenderer.invoke('evals:generate-dpo-pairs').then(throwOnIpcError),
   // Pod Stage Change (spectator mode)
   onPodStageChanged: (callback: (event: { podId: string; status: string; solverId: string; reviewerId: string; executorId: string; iteration: number }) => void) => {
     const handler = (_event: Electron.IpcRendererEvent, data: { podId: string; status: string; solverId: string; reviewerId: string; executorId: string; iteration: number }) => callback(data)

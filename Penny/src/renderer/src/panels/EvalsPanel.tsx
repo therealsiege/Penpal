@@ -389,6 +389,92 @@ function PodCombosSection() {
   )
 }
 
+function DpoPairsSection() {
+  const [generating, setGenerating] = useState(false)
+  const [result, setResult] = useState<{ count: number; path: string } | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  const handleGenerate = useCallback(async () => {
+    setGenerating(true)
+    setError(null)
+    setResult(null)
+    try {
+      const res = await window.api.evalsGenerateDpoPairs()
+      if (
+        typeof res?.count !== 'number' ||
+        !Number.isFinite(res.count) ||
+        res.count < 0 ||
+        typeof res.path !== 'string' ||
+        res.path.trim().length === 0
+      ) {
+        throw new Error('Main process returned an invalid DPO export result.')
+      }
+      setResult({ count: Math.trunc(res.count), path: res.path })
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      setError(`Failed to generate DPO pairs: ${message}`)
+    } finally {
+      setGenerating(false)
+    }
+  }, [])
+
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="flex items-center justify-between">
+        <h2 className="text-sm font-bold text-[var(--c-text-heading)] tracking-tight">DPO Pairs</h2>
+        <div className="flex items-center gap-3">
+          {result && (
+            <span className="text-xs text-[var(--c-text-secondary)]">
+              <span className="font-semibold text-[var(--c-text-bright)]">{result.count}</span> pairs exported
+            </span>
+          )}
+          <button
+            type="button"
+            onClick={handleGenerate}
+            disabled={generating}
+            aria-busy={generating}
+            aria-label="Generate DPO training pairs from preference data"
+            className="px-3 py-1 rounded bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-xs font-semibold text-white transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
+          >
+            {generating ? 'Generating...' : 'Generate Pairs'}
+          </button>
+        </div>
+      </div>
+
+      {error && (
+        <div
+          role="alert"
+          className="rounded-xl border border-red-800/80 bg-red-950/40 px-4 py-3 text-sm text-red-100"
+        >
+          {error}
+        </div>
+      )}
+
+      {generating && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="rounded-xl border border-indigo-900/60 bg-indigo-950/40 px-4 py-3 text-sm text-indigo-100"
+        >
+          Generating DPO pairs from preferences...
+        </div>
+      )}
+
+      {!result && !error && !generating && (
+        <div className="rounded-xl bg-[var(--c-bg-surface)]/50 border border-[var(--c-border-subtle)] px-5 py-6 text-center text-[var(--c-text-muted)] text-sm">
+          Generate DPO training pairs from preference signals. Output: data/dpo-pairs.jsonl
+        </div>
+      )}
+
+      {result && (
+        <div className="rounded-xl bg-[var(--c-bg-surface)]/50 border border-[var(--c-border-subtle)] px-5 py-3 text-sm text-[var(--c-text-secondary)]">
+          Exported <span className="font-semibold text-[var(--c-text-bright)]">{result.count}</span> pairs to <span className="font-mono text-xs text-[var(--c-text-muted)]">{result.path}</span>
+        </div>
+      )}
+    </div>
+  )
+}
+
 function SpotCheckSection() {
   const { data: pending, refresh: refreshPending } = usePolling<SpotCheck[]>(
     () => window.api.evalsSpotCheckQueue(),
@@ -560,6 +646,7 @@ export function EvalsPanel() {
           </div>
         )}
 
+        <DpoPairsSection />
         <PodCombosSection />
         <SpotCheckSection />
       </div>

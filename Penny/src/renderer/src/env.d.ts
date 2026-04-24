@@ -177,6 +177,7 @@ declare global {
       evalsSpotCheckSample: (count: number) => Promise<import('./types').SpotCheck[]>
       evalsSpotCheckReview: (id: string, verdict: 'pass' | 'fail' | 'partial', notes?: string) => Promise<void>
       evalsSpotCheckAgreement: () => Promise<import('./types').SpotCheckAgreement>
+      evalsGenerateDpoPairs: () => Promise<{ count: number; path: string }>
       // Pod Quality Metrics
       evalsPodQuality: (since?: string) => Promise<{
         period: { from: string; to: string }
