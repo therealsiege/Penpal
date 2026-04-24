@@ -675,7 +675,380 @@ Penpal's job is to make one person's attention go as far as a 10-person team's a
 
 ---
 
-## V-E. A Day Running 1Putt Health Through Penpal
+## V-E. The Knowledge Graph as Operating Memory
+
+The knowledge graph (`sidekick-graph/`) is Penpal's long-term memory — the persistent understanding of leads, competitors, markets, and relationships that agents draw on when doing real work. Currently read-only from Penny's perspective. That changes.
+
+### What Exists Today
+
+**Infrastructure:** Memgraph (graph DB) + Qdrant (vector embeddings), populated via ETL from the Vault markdown files.
+
+**Node types (20):** Document, Folder, Tag, Person, Company, Technology, EHRSystem, Skill, Regulation, Lead, Market, Event, SalesStage, Territory, Practice, BillingCode, Program, Specialty, CompetitorProduct.
+
+**Data sources feeding the graph:**
+- Vault markdown files (parsed → entities extracted via Claude → nodes + relationships)
+- NPPES CSV (11GB, streaming parse → Practice nodes with NPI, taxonomy, address)
+- NPI API enrichment (Firecrawl scraping practice websites → EHR detection, specialty confirmation)
+- RSS feeds (HIStalk, Becker's, Healthcare IT News, Fierce, ONC, CMS → intel nodes)
+- Google Alerts (competitor mentions → event nodes)
+- Web intelligence (`data/web-intel.json` → CompetitorProduct nodes)
+
+**Queries Penny runs today** (10 Cypher queries in `src/main/graph.ts`):
+- Pipeline summary (leads by stage × venture)
+- Hot leads (score ≥45)
+- Territory stats (lead count + avg score by state)
+- New leads (last 24h)
+- Full-text lead search with state/EHR/stage filters
+- Lead detail with event timeline
+- Graph stats with data freshness indicator
+
+### How the Graph Connects to Scenes
+
+```
+                     Vault (markdown files)
+                           │
+                     ┌─────┴─────┐
+                     │  ETL      │ ← sidekick-graph/src/etl/
+                     │ (parse,   │
+                     │  extract, │
+                     │  embed)   │
+                     └─────┬─────┘
+                           │
+                    ┌──────┴──────┐
+                    │  Memgraph   │   ← graph DB
+                    │  + Qdrant   │   ← vector store
+                    └──────┬──────┘
+                           │
+              ┌────────────┼────────────┐
+              │            │            │
+         ┌────┴────┐ ┌────┴────┐ ┌────┴────┐
+         │ Dev Lab │ │War Room │ │ Content │
+         │         │ │         │ │ Studio  │
+         └─────────┘ └─────────┘ └─────────┘
+
+  Dev Lab:      Lead detail in agent context → MedScrub features
+  War Room:     Pipeline queries, territory maps, competitor data
+  Content Stud: Lead personas for content targeting, SEO keyword data
+```
+
+### Where It's Going: Read-Write Graph
+
+Today the graph is a data source. Agents query but never write. The next step is closing the loop:
+
+**Agent → Graph writes:**
+- Pod completes a lead enrichment task → writes enrichment data back to graph (EHR detected, contact found)
+- Content Studio pod publishes blog post → creates Document node linked to leads it targets
+- War Room pod produces competitor analysis → creates/updates CompetitorProduct nodes
+
+**Graph → Agent context injection:**
+- When a pod solver starts a MedScrub task, auto-inject relevant lead profiles from the graph
+- When the Content Studio plans a blog post, query the graph for lead personas in the target market
+- When the War Room analyzes a competitor, pull all existing intel nodes as context
+
+**Graph as shared memory across scenes:**
+- A lead identified by the War Room (RSS alert) → enriched by Dev Lab (NPI data) → targeted by Content Studio (SEO content) → supported by Call Center (when they sign up)
+- The graph is the thread connecting all four scenes. Without it, scenes are isolated workflows. With it, they're a coordinated business.
+
+---
+
+## V-F. The Slack Command Surface
+
+Slack is the remote control for Penpal. The game is for deep situational awareness. Slack is for quick actions from anywhere — your phone, your iPad, between meetings.
+
+### What Works Today
+
+**Channel structure:**
+- `#sk-{project}` per workspace directory (e.g., `#sk-sidekick-2`, `#sk-medscrub`)
+- `#sk-fleet` for instance heartbeats
+- `#sk-pipeline` for GitHub issue workflow notifications
+
+**Message routing:**
+- Agent assistant messages → channel (every 5s poll, deduped by conversation index)
+- User message in channel → agent TTY (via `sendToSession()`)
+- Multi-agent channels require `@agent-name` mention; single-agent channels route implicitly
+- Status emoji in agent messages: `:hammer_and_wrench:` working, `:hourglass_flowing_sand:` waiting, `:warning:` needs approval
+
+**The one command that exists:**
+```
+!task Fix the login validation bug priority:high agent:fullstack-dev
+```
+Parses into: title, description, priority, preferred agent. Enqueues to orchestrator.
+
+**DM alerts:**
+- `dmOwner()` sends to `SLACK_OWNER_USER_ID` when pipeline escalates
+- No DM on tool approval requests yet (status shown in channel, human approves in terminal)
+
+### Where It's Going
+
+The Slack surface needs to grow from 1 command to a full operating vocabulary. Each command maps to an existing IPC handler — the work is routing, not building:
+
+```
+Operations:
+  !task "description" [priority:P] [agent:A]  → orchestrator:enqueue (exists)
+  !queue                                       → orchestrator:queue (exists)
+  !agents                                      → agents:statuses (exists)
+
+Pods:
+  !pod "task description" [preset:P]           → pod:create (exists)
+  !pod status                                  → pod:list (exists)
+  !pod cancel <id>                             → pod:cancel (exists)
+  !pods                                        → pod:list with summary (exists)
+
+Intelligence:
+  !intel "query"                               → War Room pod dispatch (new)
+  !brief                                       → Latest daily briefing from Vault (read file)
+  !leads [state] [stage]                       → graph:search-leads (exists)
+  !lead "Dr. Smith"                            → graph:lead-detail (exists)
+
+Content:
+  !content "brief description"                 → Content Studio pod dispatch (new)
+  !publish                                     → List drafted content awaiting publish (new)
+
+Fleet:
+  !fleet                                       → fleet:status (exists)
+  !health                                      → health:check (exists)
+
+Evals:
+  !eval                                        → This week's success rates + MVP (exists)
+  !combos                                      → Top 3 agent combos by success rate (exists)
+```
+
+**DM escalation (planned):**
+```
+When an agent needs tool approval:
+  → DM to owner: "Sun Wukong needs approval: delete-file on src/old-module.ts"
+  → Slack action buttons: [Approve] [Reject] [View Context]
+  → Tapping Approve → IPC sessions:approve → agent resumes
+
+When a pod fails:
+  → DM: "Pod #412 failed (executor: test timeout). Solver: Sun Wukong."
+  → Action buttons: [Retry] [View PR] [Cancel]
+
+When quality drops:
+  → DM: "Erlang Shen's success rate dropped below 70% this week (was 85%)"
+  → Action buttons: [View Stats] [Pause Agent] [Ignore]
+```
+
+This turns Slack into a genuine command line for the business. You can manage agents from your phone while walking the dog. The game is for depth; Slack is for speed.
+
+### Approval Flow: Terminal vs Slack
+
+Today: Agent shows tool call in terminal → human sees it in Penpal or iTerm → types approve/reject. Slack shows status but can't act.
+
+Target: Slack interactive messages with action buttons that call IPC directly. This requires Slack Block Kit actions + a thin HTTP endpoint or Socket Mode handler. The `@slack/bolt` library (already installed) supports this natively — it's routing work, not infrastructure.
+
+---
+
+## V-G. The Fleet — Multiple Machines, One Workforce
+
+Fleet is the simplest piece of Penpal — and the most underexplored. Today it's read-only discovery. The vision is coordinated work distribution.
+
+### What Exists Today
+
+Each Penpal instance posts a heartbeat to `#sk-fleet` every 60 seconds:
+```json
+{
+  "instanceId": "a230eaf0",
+  "hostname": "Clints-Mac-Studio-422",
+  "user": "fuzeelogik",
+  "status": "healthy",
+  "sessions": { "total": 5, "active": 3, "idle": 1, "waiting": 1 },
+  "pods": { "active": 2, "total": 45 },
+  "repos": ["Penpal", "medscrub", "1putthealth.com"],
+  "uptime": 43200,
+  "geo": { "lat": 36.16, "lon": -86.86, "city": "Nashville, Tennessee" }
+}
+```
+
+Heartbeats are updated in-place (`chat.update`) — one message per instance. The CampusScene world map renders pins for each instance: red for self, blue for remote, gray for stale (>5 min).
+
+**Instances are fully independent.** No work-stealing, no shared task queue, no cross-instance pod execution. Each machine runs its own agents on its own repos.
+
+### Where It's Going
+
+**Phase 1: Visibility (already works)**
+- See all instances on the world map
+- Know which repos each instance is working on
+- Spot unhealthy instances (degraded/down status)
+
+**Phase 2: Specialization (planned)**
+Each machine runs a different scene optimized for its hardware:
+
+```
+Mac Studio (Nashville):
+  - Dev Lab (primary) — 12 agents, 3 concurrent pods
+  - War Room — scheduled intelligence jobs
+  - Ollama running locally → economic profile for routine tasks
+
+MacBook Pro (mobile):
+  - Content Studio — lightweight content pods
+  - Slack-first operation (no game needed)
+  - Sonnet profile only (no local GPU)
+
+Cloud VM (optional):
+  - Headless Penpal — no game, just pod engine + Slack bridge
+  - Batch processing: NPI enrichment, RSS ingestion, ETL
+  - Economic profile via cloud Ollama instance
+```
+
+**Phase 3: Work Distribution (vision)**
+The fleet channel becomes a task queue, not just discovery:
+
+```
+Instance A has 3 idle agents, Instance B has 0 idle.
+New issue labeled agent-ready.
+Instance A's pipeline picks it up (it has capacity).
+Instance B sees the heartbeat update — A claimed the issue.
+No conflict, no coordination protocol needed beyond Slack message ordering.
+```
+
+This is lightweight distributed computing via Slack as the message bus. No gRPC, no central broker, no consensus protocol. Slack's message ordering is sufficient for a fleet of 2-5 instances. At scale, you'd need a real queue — but a solo founder doesn't need 50 instances.
+
+**Fleet economics:**
+- Mac Studio running 24/7: ~$0.10/day electricity, $0 compute (local Ollama)
+- Cloud VM (if needed): ~$5-15/month for a GPU instance running Ollama
+- Total fleet cost: <$20/month for 3 instances running 30+ agents across 4 business functions
+
+---
+
+## V-H. How Agents Actually Learn — The DPO Pipeline
+
+The learning loop is the most important piece of the vision and the least built. Here's the concrete path from "101 preference pairs in a JSONL file" to "a fine-tuned model running locally at zero cost."
+
+### What Exists Today
+
+**Data collection (working):**
+```
+Human clicks approve → PreferenceCollector captures:
+  { agentId, signal: "approve", strength: "strong",
+    context: { toolCall, toolResult, recentMessages } }
+  → appended to data/preferences.jsonl
+
+101 events collected so far (approve, reject, edit, complete, fail)
+```
+
+**Pair generation (built, not called automatically):**
+```
+PairGenerator reads preferences.jsonl → yields DPO pairs:
+  { prompt, chosen, rejected, source, agentId }
+
+Three pair types:
+  1. approve_reject — same agent, same session, approve vs reject
+  2. complete_fail — same agent, complete vs fail on similar tasks
+  3. edit_corrective — user's edit vs agent's original draft
+
+Export: data/dpo-pairs.jsonl (TRL-compatible format)
+```
+
+**What's NOT built:**
+- Training pipeline (nothing reads dpo-pairs.jsonl and produces a model)
+- Model registry (no versioning of fine-tuned checkpoints)
+- Deployment pipeline (no automatic Ollama model swap)
+- A/B evaluation (no framework for running stock vs tuned side-by-side)
+
+### The Concrete Pipeline (Vision)
+
+```
+Phase 1: Data Accumulation (NOW → 500 pairs)
+  ┌─────────────────────────────────────────────┐
+  │ Human uses Penpal normally                   │
+  │ Approve/reject clicks → preferences.jsonl    │
+  │ Pod outcomes → combo analytics               │
+  │ Weekly: click "Generate Pairs" in EvalsPanel │
+  │ → dpo-pairs.jsonl grows                      │
+  └─────────────────────────────────────────────┘
+  
+  No training. No model changes. Just accumulate data.
+  Target: 500 pairs over ~4-6 weeks of normal usage.
+
+Phase 2: First Training Run (at 500 pairs)
+  ┌─────────────────────────────────────────────┐
+  │ Export dpo-pairs.jsonl to training machine   │
+  │ Base model: Qwen-7B (or Qwen3-Coder-7B)    │
+  │ Training: TRL DPOTrainer, QLoRA (4-bit)     │
+  │ Hardware: Mac Studio M-series (MLX)          │
+  │   or cloud GPU for ~2 hours ($2-5)          │
+  │ Output: LoRA adapter weights (~50MB)         │
+  │ → Merge into base model via mergekit         │
+  │ → Create Ollama Modelfile                    │
+  │ → ollama create penny-7b -f Modelfile        │
+  └─────────────────────────────────────────────┘
+  
+  The fine-tuned model knows YOUR patterns:
+  - Which tool calls you approve vs reject
+  - What code quality you accept vs send back
+  - How you phrase corrections
+
+Phase 3: Deployment + A/B Eval (after training)
+  ┌─────────────────────────────────────────────┐
+  │ Update agent-types.yaml economic profile:    │
+  │   model: "ollama:penny-7b"                   │
+  │                                              │
+  │ Run 20 tasks on Sonnet (control)             │
+  │ Run 20 tasks on penny-7b (experiment)        │
+  │ Compare: success rate, iteration count,      │
+  │   human approval rate, duration              │
+  │                                              │
+  │ If penny-7b ≥ 90% of Sonnet quality:         │
+  │   → Route routine tasks to penny-7b ($0)     │
+  │   → Keep Opus/Sonnet for complex tasks       │
+  │                                              │
+  │ If penny-7b < 80% of Sonnet:                 │
+  │   → Collect 500 more pairs, retrain          │
+  └─────────────────────────────────────────────┘
+
+Phase 4: Continuous Learning (ongoing)
+  ┌─────────────────────────────────────────────┐
+  │ Preferences accumulate continuously          │
+  │ Monthly: export new pairs, retrain, redeploy │
+  │ Version tracking: penny-7b-v1, v2, v3...    │
+  │ A/B eval each version vs previous            │
+  │ Skill specialization: train per-agent models │
+  │   (penny-wukong-7b for fullstack work,       │
+  │    penny-erlang-7b for frontend work)        │
+  └─────────────────────────────────────────────┘
+```
+
+### What 500 Pairs Actually Gets You
+
+DPO with 500 high-quality pairs on a 7B model is enough to learn:
+- **Tool call patterns** — which MCP tools to reach for, in what order
+- **Code style preferences** — formatting, naming, error handling patterns you approve
+- **Scope discipline** — how much to change per task (you reject over-scoped PRs)
+- **Communication style** — how to phrase PR descriptions, commit messages, reviewer comments
+
+It's NOT enough to learn:
+- Deep architectural decisions (need 2000+ pairs with rich context)
+- Novel problem-solving (the base model handles this; DPO just aligns preferences)
+- Multi-step planning (need chain-of-thought training data, not just preference pairs)
+
+### The Economics of Learning
+
+```
+Cost to collect 500 pairs: $0 (captured passively during normal work)
+Cost to train (QLoRA on 7B):
+  - Mac Studio M2 Ultra: ~4 hours, $0 (local)
+  - Cloud A100 GPU: ~2 hours, $3-5
+Cost to deploy: $0 (Ollama local, ollama create + modelfile)
+Cost to run inference: $0 (local)
+
+Monthly retrain cycle:
+  - Export pairs: 1 click in EvalsPanel
+  - Train: 2-4 hours (can run overnight)
+  - Deploy: ollama create, update agent-types.yaml
+  - Eval: 40 tasks × 2 (A/B) = ~$4 in Sonnet for control group
+
+Total monthly learning cost: ~$4-9
+Value: 80% of pod inference drops to $0
+```
+
+The learning loop pays for itself within the first week of deployment. Every month it gets more accurate because it has more data about *your specific* preferences.
+
+---
+
+## V-I. A Day Running 1Putt Health Through Penpal
+
+> Note: This section was written as V-E earlier. Renumbered after inserting infrastructure sections.
 
 This is what the operating system looks like in practice. Not a product demo — a real workday.
 
@@ -774,7 +1147,7 @@ Close Penpal. The agents keep working.
 
 ---
 
-## V-F. The Three Surfaces — Game, Slack, GitHub
+## V-J. The Three Surfaces — Game, Slack, GitHub
 
 Penpal has three interaction surfaces. They're not alternatives — they're concurrent. Each handles what it's best at.
 
@@ -860,7 +1233,7 @@ You see through the game. You talk through Slack. Work moves through GitHub. All
 
 ---
 
-## V-G. The Self-Building Machine
+## V-K. The Self-Building Machine
 
 Penpal builds itself. This isn't a metaphor — it's the core operational loop.
 
