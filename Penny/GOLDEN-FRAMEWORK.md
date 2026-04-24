@@ -457,6 +457,224 @@ The endgame isn't "pods that work." It's a workforce that gets measurably better
 
 ---
 
+## V-B. Scene Deep Dives
+
+Each scene is a business function with its own visual language, workflow templates, and game mechanics. The pod pipeline is shared. Everything else is scene-local.
+
+### Dev Lab (Current — Operational)
+
+**Business function:** Build software — MedScrub, MedHook, Penpal itself, 1putthealth.com.
+
+**Visual language:** Isometric office with workstations, monitors, cafe. Dark industrial aesthetic. Agents sit at desks with status indicators. Rooms group agents by project (cwd).
+
+**Workflow templates:**
+- `frontend-feature` — Erlang Shen solves, Ao Guang reviews, Sha Wujing executes
+- `backend-feature` — Sun Wukong solves, Guanyin reviews, Sha Wujing executes
+- `game-feature` — Red Boy solves, Ao Guang reviews, Sha Wujing executes
+- `content-pipeline` — Ao Run solves, Tripitaka reviews, Zhu Bajie executes
+
+**Work sources:** GitHub Issues (`agent-ready` label), manual dispatch, MCP `pod:create`.
+
+**Game mechanics unique to this scene:**
+- Workstation cosmetics (desk items, RGB underglow, name glow) gated by XP rank
+- Code-themed celebrations (checkmark sprites, confetti on PR merge)
+- Monitor screen content changes by agent state (scrolling code lines vs plan dots vs amber warning)
+- Quality streak flames on desk (consecutive successful tasks)
+- Eval glow ring (green/amber/red based on recent success rate)
+
+### Content Studio (Next — Planned)
+
+**Business function:** Produce marketing content for 1Putt Health — blog posts, social media, SEO, email campaigns, documentation.
+
+**Visual language:** Open-plan creative space. Drafting tables instead of desks. Mood boards on walls showing current campaign themes. Publication wall showing recently published pieces. Lighter, warmer palette than the Lab.
+
+**Workflow templates:**
+- `blog-post` — Writer (solver) drafts article → Editor (reviewer) checks tone/accuracy/SEO → Publisher (executor) formats and publishes via git commit to 1putthealth.com repo
+- `social-campaign` — Strategist (solver) creates multi-platform content plan → Brand reviewer validates voice consistency → Scheduler (executor) formats for each platform
+- `seo-audit` — Analyst (solver) crawls site, identifies gaps → Editor (reviewer) prioritizes → Writer (executor) produces optimized content
+
+**Work sources:**
+- Content calendar (markdown files in `Ventures/1Putt/Content Calendar/`)
+- RSS-triggered responses (competitor publishes something → Content Studio drafts a response)
+- Manual brief from Slack (`!content "Write a blog post about CRC screening compliance"`)
+
+**Game mechanics unique to this scene:**
+- Draft preview on "monitors" — shows actual markdown rendered as text blocks
+- Mood board prop — click to see current campaign themes, brand colors, voice guidelines
+- Publication wall — recently merged content PRs shown as framed thumbnails
+- Social reach counter — tracks impressions/clicks via Fathom Analytics API
+- Editing animation — agent's "monitor" shows red-line markup during review phase
+
+**Scene-specific agents (extend agent-types.yaml):**
+- `content-writer` — Specialized in blog/article writing, SEO awareness
+- `brand-editor` — Reviews for voice consistency, factual accuracy, readability
+- `social-strategist` — Multi-platform content planning, engagement optimization
+
+### War Room (Planned)
+
+**Business function:** Competitive intelligence, market analysis, strategic planning. Already partially powered by the sidekick-graph knowledge graph + RSS pipeline.
+
+**Visual language:** Dark room with multiple screens. Data walls showing live feeds. Map table in center. Red/amber accent lighting. Feels like a SCIF or mission control.
+
+**Workflow templates:**
+- `intel-brief` — Analyst (solver) gathers data from knowledge graph + RSS feeds → Reviewer validates accuracy/sourcing → Briefer (executor) formats and delivers as markdown to `Ventures/1Putt/Daily Briefings/`
+- `competitor-analysis` — Researcher (solver) deep-dives a competitor using web-intel.json + Firecrawl → Analyst (reviewer) identifies strategic implications → Writer (executor) produces Competitive Intelligence Matrix update
+- `market-scan` — Scanner (solver) processes NPI data + CMS feeds → Analyst reviews for lead potential → Scorer (executor) updates lead scores in knowledge graph
+
+**Work sources:**
+- Scheduled jobs (daily briefing, weekly competitive scan — already running via scheduler)
+- RSS feed triggers (new article about a competitor → auto-dispatch analysis pod)
+- Manual request from Slack (`!intel "What's Athenahealth doing in the CRC screening space?"`)
+- Knowledge graph queries via MCP
+
+**Game mechanics unique to this scene:**
+- Data wall screens show live RSS headlines, NPI enrichment progress, lead pipeline status
+- Threat level indicator (green/amber/red) based on competitor activity volume
+- Map table shows territory coverage (TX, TN, CO, NC, AL — the target states)
+- Briefing animation — agent walks to map table, "presents" with pointer, document appears
+- Intel quality score — tracks how many briefing recommendations led to action
+
+### Call Center (Later)
+
+**Business function:** Customer support for MedScrub when it launches. Ticket resolution, escalation, knowledge base maintenance.
+
+**Visual language:** Cubicle farm. Agents wear headsets. Queue board shows waiting tickets. Escalation paths drawn as connecting lines between tiers. Hold music plays when queue is deep.
+
+**Workflow templates:**
+- `support-ticket` — Triage (solver) classifies and drafts response → Specialist (reviewer) validates accuracy → QA (executor) sends response and verifies resolution
+- `escalation` — Tier-1 agent flags complex issue → Tier-2 specialist investigates → Resolution agent closes loop
+
+**Work sources:**
+- Email inbox (future — Zendesk/Intercom integration)
+- In-app support widget (future — MedScrub ships with embedded support)
+- Knowledge base gaps (agent couldn't answer → creates KB update ticket)
+
+This scene is furthest out — depends on MedScrub having actual customers.
+
+---
+
+## V-C. Agent Progression System
+
+Agents aren't interchangeable workers. They develop specializations over time based on real performance data.
+
+### Skill Trees (Planned)
+
+Each agent accumulates evidence of what they're good at:
+
+```
+Performance data (from combo analytics + eval harness):
+  Agent X as solver:    85% success rate on frontend tasks, 60% on backend
+  Agent X as reviewer:  92% first-pass accept rate on game code
+  Agent X as executor:  70% pass rate overall
+
+  → Agent X's skill profile: frontend-solver (strong), game-reviewer (strong)
+```
+
+**How skill data accumulates:**
+- Every pod completion → combo analytics records agent + role + outcome
+- Every eval → harness records agent + task type + pass/fail
+- ReasoningBank → records which agent patterns succeeded
+- Over time: statistical profile of each agent's strengths by role × task type
+
+**How skill data is used:**
+- Combo analytics `suggestBestCombo()` already uses success rate — extend to weight by task-type match
+- Display skill bars in bestiary card (currently static from YAML; replace with computed stats)
+- Season challenges: "Have Agent X reach 90% success rate as solver" — skill-based progression
+- Alert when an agent's quality drops: "Sun Wukong's executor pass rate dropped from 80% to 55% this week"
+
+### Agent Personality Evolution (Vision)
+
+The Journey to the West personas aren't just flavor text. They should influence agent behavior:
+
+```
+Current: Static system prompts with persona injected once at pod creation
+Future:  Dynamic system prompts that incorporate:
+  - Agent's actual performance history ("You've been strong on frontend tasks")
+  - Recent mistakes to avoid ("Last 3 executor runs on test files failed — be careful")
+  - Rival's performance ("Erlang Shen is outperforming you on frontend tasks — step up")
+  - Season challenge progress ("You need 3 more successful reviews to complete the challenge")
+```
+
+This doesn't require fine-tuning. It's context engineering — the system prompt adapts to include real performance data. The persona makes the data feel natural rather than clinical.
+
+### Cosmetic Progression Tied to Performance
+
+The cosmetic tier system (desk items gated by XP rank) is currently passive — agents earn XP just by completing tasks. Extend it so cosmetics reflect real achievement:
+
+| Cosmetic | Current Gate | Proposed Gate |
+|----------|-------------|---------------|
+| Keyboard | L3 (Associate) | 50 tasks completed |
+| Lamp | L4 (Senior) | 80% success rate sustained for 1 week |
+| Plant | L6 (Staff) | Complete a season challenge |
+| Phone | L7 (Principal) | Top 3 in seasonal leaderboard |
+| Gold trim | L8 (Master) | 5+ consecutive successful pods |
+| RGB underglow | L9 (Distinguished) | Complete 100 tasks with >85% success |
+
+This makes desk appearance a reliable signal: a fully-decorated desk means the agent is genuinely performing well, not just accumulating XP from easy tasks.
+
+---
+
+## V-D. Operational Economics
+
+Penpal's value is measured in leverage: how much business output per dollar of compute and hour of human attention.
+
+### Cost Model
+
+```
+Current state:
+  Sonnet profile: ~$0.05-0.20 per pod (3 phases, ~5K tokens each)
+  Opus profile:   ~$0.50-2.00 per pod (3 phases, higher token usage)
+  Economic:       ~$0.00 per pod (local Ollama, free)
+
+  10 pods/day on Sonnet = ~$1-2/day
+  10 pods/day on Opus   = ~$5-20/day
+
+Target state (with DPO-tuned local model):
+  80% of tasks → economic profile (DPO-tuned 7B) = $0
+  20% of tasks → Opus profile (complex work)      = ~$1-4/day
+  Total: ~$1-4/day for 10 pods
+
+Long-term (TinyAgent):
+  95% of tasks → TinyAgent (7B tuned on Penny patterns) = $0
+  5% of tasks  → Opus (novel/complex)                    = ~$0.25-1/day
+```
+
+### Attention Model
+
+The game surface exists to minimize human attention cost:
+
+```
+Without Penpal:
+  Check each agent's terminal → read output → decide if it's good → approve/reject
+  Time: 2-5 min per agent check × 10 agents × 3x/day = 60-150 min/day
+
+With Penpal (current):
+  Glance at the office → spot red/amber indicators → investigate only those
+  Time: 30 sec glance + 5 min per flagged agent × 2 flags/day = ~11 min/day
+
+With Penpal (vision — interactive office):
+  Walk through office → E-key flagged agents → review in-game → approve/assign
+  Time: 5 min game walkthrough including actions = ~5 min/day
+  Plus: weekly 50-output spot-check review = ~30 min/week
+```
+
+The interactive office isn't about adding game mechanics for fun. It's about reducing the management overhead from 2+ hours/day to 5 minutes/day by making the information-dense actions (review, assign, approve) accessible through spatial navigation instead of panel-switching.
+
+### Revenue Leverage
+
+Each scene maps to a revenue-generating business function:
+
+| Scene | Revenue Path | Current State |
+|-------|-------------|---------------|
+| Dev Lab | Ship MedScrub faster → first customers | Building product |
+| Content Studio | SEO content → inbound leads → consulting revenue | Blog live, need volume |
+| War Room | Intelligence → better positioning → win deals faster | RSS + NPI pipeline running |
+| Call Center | Support at scale → retain customers → reduce churn | Waiting for customers |
+
+Penpal's job is to make one person's attention go as far as a 10-person team's across all four functions. The game makes that possible by collapsing four monitoring surfaces into one spatial world.
+
+---
+
 ## VI. Design Principles
 
 ### 1. Visibility Over Abstraction
