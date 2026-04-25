@@ -340,16 +340,17 @@ async function fetchAgentReadyIssues(config: RepoConfig): Promise<GHIssue[]> {
     }
   }
 
-  // Fallback: gh CLI (may hit EBADF in Electron)
+  // Fallback: gh CLI via spawn proxy (avoids Electron EBADF)
   try {
-    const { stdout } = await execFileAsync('gh', [
+    const { proxyExecFile } = await import('./spawn-proxy')
+    const { stdout } = await proxyExecFile('gh', [
       'issue', 'list',
       '--repo', `${config.owner}/${config.repo}`,
       '--label', config.label,
       '--state', 'open',
       '--json', 'number,title,body,labels,assignees,url',
       '--limit', '20',
-    ], { encoding: 'utf-8', timeout: 30_000 })
+    ], { timeout: 30_000 })
     return JSON.parse(stdout)
   } catch (err) {
     console.error(`[github-issues] Failed to fetch issues from ${config.owner}/${config.repo}:`, err)

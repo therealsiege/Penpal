@@ -13,8 +13,12 @@ import { promisify } from 'util'
 import fs from 'fs'
 import path from 'path'
 import os from 'os'
+import { proxyExecFile } from './spawn-proxy'
 
-const execFileAsync = promisify(execFile)
+// Use spawn proxy to avoid Electron EBADF — routes through forked Node worker.
+// Falls back to direct execFile if proxy returns an unexpected error.
+const execFileAsync = (cmd: string, args: string[], opts?: { encoding?: string; timeout?: number; cwd?: string }) =>
+  proxyExecFile(cmd, args, opts)
 import { createPod, getPodStatus, type PodWorkflow } from './pods'
 import { atomicWrite } from './atomic-store'
 import { postPipelineNotification, dmOwner } from './slack-bridge'
@@ -74,7 +78,7 @@ async function setLabel(config: RepoConfig, issueNumber: number, removeLabels: s
     const args = ['issue', 'edit', String(issueNumber), '--repo', `${config.owner}/${config.repo}`]
     for (const l of removeLabels) args.push('--remove-label', l)
     args.push('--add-label', addLabel)
-    await execFileAsync('gh', args, { encoding: 'utf-8', timeout: 15_000 })
+    await proxyExecFile('gh', args, { timeout: 15_000 })
   } catch (err) {
     console.error(`[github-pipeline] Failed to set label ${addLabel} on #${issueNumber}:`, err)
   }
@@ -82,11 +86,11 @@ async function setLabel(config: RepoConfig, issueNumber: number, removeLabels: s
 
 async function addComment(config: RepoConfig, issueNumber: number, body: string): Promise<void> {
   try {
-    await execFileAsync('gh', [
+    await proxyExecFile('gh', [
       'issue', 'comment', String(issueNumber),
       '--repo', `${config.owner}/${config.repo}`,
       '--body', body,
-    ], { encoding: 'utf-8', timeout: 15_000 })
+    ], { timeout: 15_000 })
   } catch (err) {
     console.error(`[github-pipeline] Failed to comment on #${issueNumber}:`, err)
   }

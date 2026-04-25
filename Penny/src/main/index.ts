@@ -37,6 +37,7 @@ import { registerSoundboardProtocol } from './soundboard'
 protocol.registerSchemesAsPrivileged([
   { scheme: 'penny-sfx', privileges: { stream: true, supportFetchAPI: true, bypassCSP: true } },
 ])
+import { startSpawnProxy, stopSpawnProxy } from './spawn-proxy'
 import { startFileWatcher, stopFileWatcher } from './file-watcher'
 import { startOrchestrator, stopOrchestrator, orchestratorEvents } from './orchestrator'
 import { podEvents } from './pods'
@@ -129,6 +130,10 @@ function createWindow() {
   })
 }
 
+// Start spawn proxy BEFORE app.whenReady — forks a clean Node process
+// before Electron corrupts the fd table during renderer initialization.
+startSpawnProxy()
+
 app.whenReady().then(() => {
   // Set dock icon (macOS) — ensures custom icon in dev mode
   if (process.platform === 'darwin') {
@@ -180,4 +185,5 @@ app.on('before-quit', async () => {
   await stopSlackBridge()
   await closeGraph()
   await infraDown()
+  stopSpawnProxy()
 })
