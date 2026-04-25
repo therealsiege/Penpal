@@ -1046,9 +1046,327 @@ The learning loop pays for itself within the first week of deployment. Every mon
 
 ---
 
-## V-I. A Day Running 1Putt Health Through Penpal
+## V-I. The Agent Pantheon — Journey to the West as Operating Metaphor
 
-> Note: This section was written as V-E earlier. Renumbered after inserting infrastructure sections.
+The agent persona system isn't flavor text bolted onto coding tools. It's a narrative framework that makes an invisible workforce legible, memorable, and manageable.
+
+### Why Personas Matter Operationally
+
+Without personas, agents are `fullstack-dev`, `nextjs-frontend`, `electron-dev`. You manage them by ID. You remember their capabilities by reading config files. When one fails, you check logs.
+
+With personas, agents are Sun Wukong, Erlang Shen, Sha Wujing. You manage them by character. You remember that Wukong is brilliant but imprecise, Erlang Shen is methodical but slow, Sha Wujing is reliable but uncreative. When one fails, the game shows you a struggling character at a desk — not a log line.
+
+This isn't anthropomorphization for fun. It's a cognitive shortcut. The human brain tracks 150 social relationships effortlessly (Dunbar's number). It cannot track 12 statistically-differentiated JSON configs. Personas convert agent configs into social intuition.
+
+### The Mythology
+
+All agents are characters from *Journey to the West* (西遊記), the 16th-century Chinese novel about the monk Tripitaka's pilgrimage to retrieve Buddhist sutras, accompanied by Sun Wukong (the Monkey King), Zhu Bajie (the pig marshal), and Sha Wujing (the river demon).
+
+The mapping isn't random — each character's mythological role matches their pod function:
+
+**The Pilgrims (Core Team):**
+- **Sun Wukong** (fullstack-dev, Solver) — The Monkey King. Brilliant, rebellious, impossibly powerful. In the novel, he fights gods and demons. In Penpal, he's the strongest solver — high creativity (10), high speed (9), lower precision (7). His weapon is the Ruyi Jingu Bang (the size-shifting iron staff) — "scales from one-liner to distributed system." His weakness: overconfidence. He'll solve the wrong problem brilliantly.
+
+- **Tripitaka** (product-mgr, Reviewer) — The monk. No combat skills, but the moral compass of the group. In the novel, he keeps the team on the path. In Penpal, he reviews for product alignment — does this PR actually address the user need? His power is "Sutra Recitation" (requirements crystallization). His weakness: indecision. He'll request changes on things that are fine.
+
+- **Zhu Bajie** (exec-assistant, Executor) — The pig marshal. Lazy, gluttonous, but surprisingly capable when motivated. In the novel, he carries the luggage and complains. In Penpal, he's the executor — runs tests, validates output, does the unglamorous work. His signature move: "Rake Through the Evidence" (exhaustive test coverage). His weakness: shortcuts.
+
+- **Sha Wujing** (electron-dev, Executor) — The river demon. Silent, dependable, never flashy. In the novel, he carries the luggage without complaint. In Penpal, he's the default executor — low creativity (4) but high precision (9) and teamwork (9). The reliable one.
+
+**The Heavenly Court (Specialists):**
+- **Erlang Shen** (nextjs-frontend, Solver) — The three-eyed god. Wukong's rival in the mythology — their battle is one of the novel's great set pieces. In Penpal, they're rival solvers (frontend vs fullstack). Erlang Shen has higher precision (9) but lower creativity (6). The rivalry is data-backed: combo analytics track which one produces better PRs.
+
+- **Guanyin** (backend-arch, Reviewer) — The Bodhisattva of Compassion. In the novel, she's the one who orchestrates the entire pilgrimage. In Penpal, she reviews backend architecture with depth (10) and precision (9). Her power: "Thousand-Arm Inspection" (parallel review of every file). The most trusted reviewer.
+
+- **Nezha** (expo-mobile, Solver) — The Third Lotus Prince. Young, hot-headed, armed with wind-fire wheels. In the novel, he fights Wukong to a standstill. In Penpal, he's the mobile specialist — fast (10), creative (8), but low teamwork (4). Works best solo.
+
+- **Ao Guang** (ui-designer, Reviewer) — Dragon King of the East Sea. In the novel, Wukong steals his treasure (the iron staff). In Penpal, he reviews UI/UX — his realm is "The Crystal Palace" (design systems). His power: "Tidal Inspection" (systematic visual review).
+
+**The Demons (Wild Cards):**
+- **Red Boy** (videogame-dev, Solver) — Bull Demon King's son, the "Holy Child King." Controls samadhi fire. In Penpal, he's the game dev — the one who builds Penpal's own visual layer. His rivalry with Ao Guang (reviewer for his code) mirrors the mythology where demons and dragons clash.
+
+- **Bull Demon King** (embedded-dev, Solver) — Wukong's sworn brother turned enemy. Immensely powerful but stubborn. In Penpal, he handles embedded/low-level work — slow (4) but deep (10). The one you send for hard problems.
+
+- **Ao Run** (product-marketer, Solver) — White Dragon Horse. In the novel, a dragon prince transformed into Tripitaka's horse — the most humble role. In Penpal, he's the content writer. Quiet, reliable, produces clean copy.
+
+### Rivalries as Performance Narrative
+
+Rivalries aren't decoration. They create a narrative lens on performance analytics:
+
+```
+Sun Wukong (fullstack) vs Erlang Shen (frontend):
+  Both are solvers. Both handle frontend issues.
+  Combo analytics show: Wukong 85% success, Erlang Shen 72% this week.
+  The game shows: crimson rivalry line between their desks, Wukong's desk
+  has a 5-streak flame, Erlang Shen's eval glow is amber.
+  
+  What this MEANS operationally: Route frontend issues to Wukong until
+  Erlang Shen's prompt is tuned. The mythology gives you a story to
+  remember this by — "the Monkey King is winning the battle."
+```
+
+Six reciprocal rivalries exist:
+- Wukong ↔ Erlang Shen (fullstack vs frontend — the novel's greatest battle)
+- Nezha ↔ Bull Demon King (mobile vs embedded — speed vs depth)
+- Red Boy ↔ Ao Guang (game dev vs UI reviewer — fire vs water)
+
+Each rivalry is visible in the game as crimson dashed lines with clash VFX. The leaderboard shows rivalry sections. Seasonal challenges include rivalry outcomes ("Have Wukong outperform Erlang Shen for 2 consecutive weeks").
+
+### Character Arcs Through Performance Data
+
+The persona system becomes truly alive when performance data writes the story:
+
+**Week 1:** Erlang Shen assigned to frontend tasks. 85% success rate. Desk has lamp and plant (rank gated). Eval glow green.
+
+**Week 3:** New task type — Next.js App Router server components. Erlang Shen struggles. Success drops to 60%. Eval glow turns amber. Desk flame extinguishes.
+
+**Week 4:** You notice in the morning walkthrough. Press I on his desk — bestiary shows his weakness: "Struggles with paradigm shifts." You update his system prompt with App Router rules.
+
+**Week 6:** Erlang Shen recovers to 80%. The rivalry with Wukong tightens — 80% vs 82%. Rivalry sparks intensify. Seasonal challenge: "Erlang Shen finishes a week above Wukong" — not yet.
+
+**Week 8:** DPO training includes Erlang Shen's approve/reject patterns. His fine-tuned model variant (`penny-erlang-7b`) handles routine frontend better. 88% success. He overtakes Wukong for the first time. The leaderboard updates. The cafe shows them sitting at adjacent stools — the social system pairs rivals.
+
+None of this is scripted. It emerges from real data flowing through a narrative framework. The Journey to the West mythology provides the emotional scaffolding that makes statistical trends feel like a story.
+
+---
+
+## V-J. Integration Architecture — How Everything Connects
+
+Penpal is the hub in a star topology. Eight external systems connect to the Electron main process, each through a different protocol.
+
+```
+                        ┌──────────────────────┐
+                        │   Penny Main Process  │
+                        │   (Electron Node.js)  │
+                        └──┬──┬──┬──┬──┬──┬──┬─┘
+                           │  │  │  │  │  │  │
+          ┌────────────────┘  │  │  │  │  │  └────────────────┐
+          │     ┌─────────────┘  │  │  │  └──────────┐        │
+          │     │     ┌──────────┘  │  └──────┐      │        │
+          │     │     │      ┌──────┘         │      │        │
+          ▼     ▼     ▼      ▼                ▼      ▼        ▼
+       ┌─────┐┌────┐┌─────┐┌──────┐      ┌──────┐┌─────┐┌────────┐
+       │Slack││Git ││Mem- ││Qdrant│      │Ollama││iTerm││Claude  │
+       │Bolt ││Hub ││graph││      │      │HTTP  ││Apple││Sessions│
+       │Sock ││CLI ││Bolt ││HTTP  │      │      ││Scrpt││JSONL   │
+       └─────┘└────┘└─────┘└──────┘      └──────┘└─────┘└────────┘
+```
+
+### Connection Details
+
+| System | Protocol | File | Auth | Failure Mode |
+|--------|----------|------|------|-------------|
+| **Memgraph** | Bolt (neo4j-driver) | `graph.ts` | User/pass env vars | Silent — queries return empty |
+| **Qdrant** | HTTP REST | via sidekick-graph | API key | Not accessed from Penny directly |
+| **Slack** | WebSocket (Socket Mode) | `slack-bridge.ts` | Bot + App tokens | Reconnects automatically |
+| **GitHub** | CLI (`gh` via execFile) | `github-issues.ts`, `pods.ts` | PAT in env | EBADF on fd exhaustion — retries next poll |
+| **Ollama** | HTTP (`/api/generate`) | `ollama-client.ts` | None (localhost) | Timeout → pod falls back to cloud model |
+| **iTerm2** | AppleScript (osascript) | `sessions.ts` | None (macOS perms) | Circuit breaker after 2 timeouts, 30s backoff |
+| **Claude Sessions** | File read (JSONL) | `sessions.ts` | None (filesystem) | Stale data if session crashed |
+| **Scheduler** | File read (JSON/YAML) | `scheduler-bridge.ts` | None | Shows last-known state |
+| **MCP Servers** | stdio / SSE | `mcp-manager.ts` | Per-server config | Discovery-only from Penny |
+
+### What Each Connection Provides
+
+**Memgraph (Knowledge Graph):**
+- 10 Cypher query functions: pipeline summary, hot leads, territories, lead search/detail, graph stats
+- Read-only from Penny — ETL writes happen in sidekick-graph process
+- Used by: DataPanel UI, future War Room scene, MCP `vault:` tools
+
+**Slack (Communication):**
+- Per-project channels with agent message routing (5s poll)
+- `!task` command parsing → orchestrator enqueue
+- DM escalation to owner on pipeline events
+- Fleet heartbeat to `#sk-fleet` (60s)
+- Used by: all surfaces (primary async interface)
+
+**GitHub (Work Source):**
+- Issue polling for `agent-ready` labels across 5+ repos
+- PR creation from completed pods (gh pr create)
+- Issue state management (label updates, close on merge)
+- Used by: github-pipeline.ts → pod creation
+
+**Ollama (Local Inference):**
+- `/api/generate` for economic runtime profile
+- `/api/tags` for model availability check
+- Currently: qwen3-coder:30b
+- Future: penny-7b (DPO fine-tuned)
+- Used by: pods.ts when runtime profile selects ollama backend
+
+**Claude Sessions (Agent Runtime):**
+- Discover running sessions via `~/.claude/sessions/*.json`
+- Read conversation history from JSONL transcripts
+- Send messages via TTY (sendToSession)
+- Focus terminal via iTerm2 AppleScript
+- Used by: sessions.ts, CommandCenter UI, Slack bridge
+
+**Scheduler (Background Jobs):**
+- Reads `schedule.yaml` for job definitions
+- Reads `data/scheduler-state.json` for last run times + history
+- Bridges to scheduler runner (crontab `* * * * *`)
+- Jobs: health check, RSS ingest, daily briefing, NPI enrich, full ETL
+- Used by: SchedulerPanel UI, fleet heartbeat (job status)
+
+### Error Handling Reality
+
+Most connections fail silently:
+```
+graph.ts:     try { query() } catch { return [] }
+slack:        Auto-reconnect via @slack/bolt Socket Mode
+github:       EBADF errors logged, retried on next 60s poll
+ollama:       Timeout → pod engine falls back to cloud model
+iTerm:        Circuit breaker → cached names for 30s
+sessions:     Stale JSONL → shows last-known state
+scheduler:    File read failure → shows "unknown" status
+```
+
+This is the right default for a single-user system — silent degradation over hard failure. But it means you can miss that Memgraph is down for days and not notice until you check the DataPanel. The fleet heartbeat reports `status: healthy|degraded|down` based on health checks, but only for Memgraph + Qdrant + Docker — not for Slack or GitHub.
+
+**Gap:** No unified health dashboard showing all 8 connections with last-successful timestamps. The Health panel checks infrastructure (Memgraph, Qdrant, Docker) but not application-level connectivity (Slack connected? GitHub polling? Ollama responding?).
+
+---
+
+## V-K. Operating Playbook — What To Do When Things Break
+
+This is the runbook that didn't exist until now. Every failure mode we've encountered, with the fix.
+
+### Pod Failures
+
+**Symptom: Pod stuck in `solving` for >30 minutes**
+```
+Cause: Agent session died, TTY gone, pod polling never sees completion.
+Check: data/pod-workflows.json — find the stuck workflow, check stageHistory timestamps.
+Fix:
+  1. npm run pod:create -- --cleanup  (prune stale worktrees)
+  2. Cancel via UI: Pod List → Cancel button
+  3. If pod engine is unresponsive: restart Penny (Cmd+Q, npm run dev)
+  4. Relaunch: label the issue agent-ready again, or npm run pod:create --task "..."
+```
+
+**Symptom: Pod completes but no PR created**
+```
+Cause: Rebase failed with unsafe conflicts, or git push failed (auth, network).
+Check: Worktree exists in .penny-worktrees/ with commits but no remote branch.
+Fix:
+  1. cd .penny-worktrees/<slug>/
+  2. git fetch origin main && git rebase origin/main
+  3. Resolve conflicts manually
+  4. git push -u origin <branch>
+  5. gh pr create --title "..." --body "..."
+We fixed this in Wave 8: rebase exceptions now create PRs with needs-rebase label.
+```
+
+**Symptom: Pod creates PR but it has merge conflicts**
+```
+Cause: Main branch advanced while pod was working (parallel pods, manual commits).
+Fix:
+  1. cd .penny-worktrees/<slug>/
+  2. git fetch origin main
+  3. git rebase origin/main -X theirs  (for CLAUDE.md conflicts, take theirs)
+  4. git push --force-with-lease
+  5. gh pr merge <num> --squash --admin
+After merge: run `npx tsc --noEmit` to check for duplicate members.
+```
+
+**Symptom: Merged PR crashes the app at runtime**
+```
+Cause: Squash merge produced duplicate class members (TypeScript compiles, runtime crashes).
+Fix:
+  1. Check DevTools console for "X is not defined" or "duplicate member" errors
+  2. Grep for the undefined symbol — likely a misnamed constant from the merge
+  3. Find the correct constant name in office-constants.ts
+  4. Remove the duplicate line (keep the one with correct name/better comments)
+  5. npx tsc --noEmit to verify
+We fixed this in Wave 8: MergeQueue now scans for duplicate members before pushing.
+```
+
+### CLAUDE.md Clobber
+
+**Symptom: CLAUDE.md replaced with short pod context stub**
+```
+Cause: Pod's scoped context injection overwrites CLAUDE.md, then git add -A stages it.
+Fix:
+  1. git log --oneline -5 -- CLAUDE.md (find the last good commit)
+  2. git checkout <good-commit> -- CLAUDE.md
+  3. git add CLAUDE.md && git commit -m "Restore CLAUDE.md"
+We fixed this in Wave 8: pod-cli.ts now restores CLAUDE.md from git before staging.
+```
+
+### App Won't Load
+
+**Symptom: Electron opens but game canvas is black/empty**
+```
+Cause: Runtime error in Phaser scene create() or update().
+Fix:
+  1. Open DevTools: Cmd+Option+I → Console tab
+  2. Look for red errors — usually "X is not defined" in a game module
+  3. The error points to the exact file and line
+  4. Common: undefined constant (merge artifact), missing import, duplicate method
+```
+
+**Symptom: Cmd+R freezes Electron**
+```
+Cause: Phaser WebGL context destruction races with page reload.
+Fix: Don't use Cmd+R. Use Cmd+Q and relaunch with npm run dev.
+HMR handles renderer changes automatically — no reload needed.
+```
+
+**Symptom: `npm run dev` fails with TransformError**
+```
+Cause: Duplicate variable declaration from merge (e.g., duplicate `baseBranch`).
+Fix:
+  1. Error message shows the file and variable name
+  2. Search for the duplicate: grep -n "variableName" <file>
+  3. Remove the duplicate block (keep the one with better context)
+  4. npx tsc --noEmit to verify
+```
+
+### Service Connectivity
+
+**Symptom: GitHub issue polling fails with EBADF**
+```
+Cause: File descriptor exhaustion — too many child processes.
+Not critical: Poller retries on next 60s cycle. Issues still picked up, just delayed.
+If persistent: Restart Penny to reset fd table.
+```
+
+**Symptom: iTerm2 circuit breaker active**
+```
+Cause: iTerm2 AppleScript calls timing out (iTerm not running, or macOS permissions).
+Not critical: Agent names served from cache. Terminal focus falls back.
+Fix: Ensure iTerm2 is running. Grant Accessibility permissions in System Preferences.
+```
+
+**Symptom: Slack bridge not connecting**
+```
+Cause: Missing or expired SLACK_BOT_TOKEN / SLACK_APP_TOKEN in .env.
+Fix: Regenerate tokens in Slack app settings. Update .env. Restart Penny.
+Check: Console shows "[slack-bridge] Connected to Slack (Socket Mode)" on success.
+```
+
+### Maintenance Tasks
+
+**Weekly:**
+- Spot-check review: 50 outputs in EvalsPanel → manual pass/fail verdict
+- Clean stale worktrees: `npm run pod:create -- --cleanup`
+- Check eval trends: EvalsPanel → combo leaderboard → any agent dropping?
+
+**Monthly:**
+- Export DPO pairs: EvalsPanel → Generate Pairs button
+- Review reasoning bank: `cat data/reasoning-bank.json | jq '.length'` — growing?
+- Prune old pod workflows: Automatic (capped at 100), but verify
+- Update agent prompts if performance patterns suggest weaknesses
+
+**When onboarding a new venture/project:**
+1. Add the repo to GitHub watched sources (Dispatch panel → Sources)
+2. Create project-specific pod presets in agent-types.yaml if needed
+3. Label first few issues `agent-ready` and monitor pod performance
+4. After 10+ pods: check combo analytics for best-performing team
+5. Adjust presets based on data
+
+---
+
+## V-L. A Day Running 1Putt Health Through Penpal
 
 This is what the operating system looks like in practice. Not a product demo — a real workday.
 
@@ -1147,7 +1465,7 @@ Close Penpal. The agents keep working.
 
 ---
 
-## V-J. The Three Surfaces — Game, Slack, GitHub
+## V-M. The Three Surfaces — Game, Slack, GitHub
 
 Penpal has three interaction surfaces. They're not alternatives — they're concurrent. Each handles what it's best at.
 
@@ -1233,7 +1551,7 @@ You see through the game. You talk through Slack. Work moves through GitHub. All
 
 ---
 
-## V-K. The Self-Building Machine
+## V-N. The Self-Building Machine
 
 Penpal builds itself. This isn't a metaphor — it's the core operational loop.
 
