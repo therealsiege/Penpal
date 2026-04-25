@@ -510,6 +510,32 @@ Each scene is a business function with its own visual language, workflow templat
 - `brand-editor` — Reviews for voice consistency, factual accuracy, readability
 - `social-strategist` — Multi-platform content planning, engagement optimization
 
+**How content pods differ from code pods mechanically:**
+
+The pod pipeline (Solver→Reviewer→Executor) is the same. What changes is what each role *does*:
+
+```
+Code pod (Dev Lab):
+  Solver:   Reads issue → writes code → commits to worktree
+  Reviewer: Reads diff (NOT solver's reasoning) → structured critique
+  Executor: Runs tsc --noEmit → PASS/FAIL
+
+Content pod (Content Studio):
+  Solver:   Reads brief → writes markdown draft → commits to content repo
+  Reviewer: Reads draft (NOT solver's notes) → checks tone/accuracy/SEO
+  Executor: Validates frontmatter, checks links, runs markdownlint → PASS/FAIL
+            On pass: formats for target platform (MDX for blog, plain for social)
+```
+
+The executor's test plan is the key difference. Code executors run `tsc`. Content executors run a content-specific validation:
+- Frontmatter fields present (title, description, date, tags)
+- Internal links resolve
+- Word count within target range
+- SEO: title length <60 chars, meta description <160 chars
+- No placeholder text ("Lorem ipsum", "TODO", "TBD")
+
+This validation is a simple script — not an LLM call. The deterministic check keeps the executor fast and cheap. The creative work (writing, reviewing) stays with the solver and reviewer LLMs.
+
 ### War Room (Planned)
 
 **Business function:** Competitive intelligence, market analysis, strategic planning. Already partially powered by the sidekick-graph knowledge graph + RSS pipeline.
@@ -731,6 +757,39 @@ The knowledge graph (`sidekick-graph/`) is Penpal's long-term memory — the per
   Content Stud: Lead personas for content targeting, SEO keyword data
 ```
 
+### The ETL Pipeline That Feeds It
+
+The knowledge graph is populated by a 16-stage ETL pipeline (`sidekick-graph/src/etl/index.ts`):
+
+```
+ 1. Connect to Memgraph + Qdrant
+ 2. Drop schema (if --clean)
+ 3. Create schema (indexes, constraints)
+ 4. Seed dictionary nodes (companies, people, technologies, EHR systems,
+    regulations, skills, billing codes, programs, specialties)
+ 5. Build dictionary relationships
+ 6. Walk Vault directories → Folder nodes
+ 7. Parse markdown files → Document nodes, Tags, Links, Leads
+ 8. Resolve internal wikilinks → LINKS_TO relationships
+ 9. Parse CRM CSVs → Lead enrichment
+10. Update lead scores as node properties
+11. NPI enrichment (NPPES CSV streaming + NPI API, --skip-npi to skip)
+12. Web intelligence ingestion (data/web-intel.json → CompetitorProduct nodes)
+13. Final graph flush
+14. Embeddings → Qdrant (text-embedding-3-small, 1536 dimensions, --skip-embeddings)
+15. LLM entity extraction via Claude (batches of 10, --skip-llm)
+16. MAGE analytics + wiki generation (--skip-analytics)
+```
+
+**Qdrant collections:**
+- `document_chunks` — heading path + content per chunk, indexed by documentType/documentPath/venture
+- `document_summaries` — title + preview per document, same indexes
+- Both: 1536-dimension vectors from OpenAI `text-embedding-3-small`, batched 100 points per upsert
+
+**Control flags:** `--clean`, `--skip-embeddings`, `--skip-llm`, `--skip-analytics`, `--skip-npi`, `--skip-wiki`, `--venture <name>`, `--sync-atlas`
+
+The ETL runs as a scheduled job (daily via crontab) or manually via `npm run etl`. It's a separate Node process from Penny — they share Memgraph as the data bus.
+
 ### Where It's Going: Read-Write Graph
 
 Today the graph is a data source. Agents query but never write. The next step is closing the loop:
@@ -835,7 +894,57 @@ This turns Slack into a genuine command line for the business. You can manage ag
 
 Today: Agent shows tool call in terminal → human sees it in Penpal or iTerm → types approve/reject. Slack shows status but can't act.
 
-Target: Slack interactive messages with action buttons that call IPC directly. This requires Slack Block Kit actions + a thin HTTP endpoint or Socket Mode handler. The `@slack/bolt` library (already installed) supports this natively — it's routing work, not infrastructure.
+Target: Slack interactive messages with action buttons that call IPC directly.
+
+**How the approval DM looks (Block Kit design):**
+
+```
+┌─────────────────────────────────────────────────┐
+│ 🔧 Sun Wukong needs approval                    │
+│                                                  │
+│ Tool: delete-file                                │
+│ Path: src/renderer/src/game/old-module.ts        │
+│ Reason: "Removing deprecated module replaced     │
+│ by animation-states.ts in #335"                  │
+│                                                  │
+│ Context: Working on issue #414 (MedScrub repo)   │
+│ Pod: backend-feature, iteration 1/3              │
+│                                                  │
+│ [✅ Approve]  [❌ Reject]  [📋 View Full Context] │
+└─────────────────────────────────────────────────┘
+```
+
+**On tap (from phone or desktop):**
+- Approve → `@slack/bolt` action handler → IPC `sessions:approve(tty, 'approve')` → agent resumes
+- Reject → IPC `sessions:approve(tty, 'reject')` → agent receives rejection
+- View Full Context → opens a Slack modal with the last 5 conversation messages
+
+**Implementation:** `@slack/bolt` (already installed) supports interactive messages natively via Socket Mode — no HTTP endpoints needed. The `app.action('approve_tool')` handler routes through the existing IPC bridge. The only new code is the Block Kit message builder and 3 action handlers (~50 lines).
+
+**What this enables:** Approve agent tool calls from your phone while walking the dog. The 3 AM blocked-agent DM becomes a 5-second tap instead of a context switch to the terminal.
+
+### The Mobile Experience
+
+Slack on mobile is the minimum viable remote interface:
+
+```
+Morning (phone, before sitting down):
+  • Check #sk-sidekick-2 — scan overnight agent messages
+  • Tap any blocked-agent DM → Approve/Reject
+  • !pod status — see what's active
+  • !brief — read today's intelligence briefing
+
+On the go:
+  • !task "Fix the signup flow bug" priority:high → queued
+  • Get DM when pod completes → tap View PR → review on GitHub mobile
+
+Evening:
+  • !eval — check today's success rate
+  • !agents — see who's idle
+  • Label 3 issues agent-ready on GitHub mobile → pods auto-dispatch
+```
+
+No game needed. No laptop needed. Slack is the operating system's mobile app.
 
 ---
 
@@ -900,6 +1009,22 @@ New issue labeled agent-ready.
 Instance A's pipeline picks it up (it has capacity).
 Instance B sees the heartbeat update — A claimed the issue.
 No conflict, no coordination protocol needed beyond Slack message ordering.
+```
+
+**How work-claiming works via Slack:**
+
+```
+1. GitHub pipeline on Instance A detects new agent-ready issue
+2. Instance A posts to #sk-pipeline: "Claiming issue #415: Fix CRC validation"
+3. Instance A creates worktree + pod immediately
+4. Instance B's pipeline sees the claim message during its next poll (60s)
+5. Instance B skips issue #415 — already claimed
+
+Conflict resolution: first-post-wins via Slack message timestamps.
+No locks, no distributed state. If two instances post claims within
+the same second (unlikely with 60s poll intervals), both create pods
+and the merge queue handles the duplicate — second PR gets
+conflict-aborted and labeled needs-rebase.
 ```
 
 This is lightweight distributed computing via Slack as the message bus. No gRPC, no central broker, no consensus protocol. Slack's message ordering is sufficient for a fleet of 2-5 instances. At scale, you'd need a real queue — but a solo founder doesn't need 50 instances.
@@ -1128,6 +1253,37 @@ The persona system becomes truly alive when performance data writes the story:
 
 None of this is scripted. It emerges from real data flowing through a narrative framework. The Journey to the West mythology provides the emotional scaffolding that makes statistical trends feel like a story.
 
+### How Persona Data Flows Into Agent Prompts
+
+The path from YAML config to running agent:
+
+```
+agents/agent-types.yaml
+  ├── persona: { name, backstory, style, catchphrase }
+  ├── systemPrompt: "You are a senior full-stack developer..."
+  ├── bestiary: { realm, powers, weapon, stats, rival, ... }
+  └── allowedTools: [...]
+         │
+         ▼
+agents.ts: buildAgentTaggedSystemPrompt(agentId, opts)
+  1. Load persona context: name + backstory + style
+  2. Load shared team knowledge: full agents/CLAUDE.md
+  3. Wrap with [AGENT_ID:agent:agentId] tag
+  4. Write to agents/agent-files/{agentId}.md (YAML frontmatter + body)
+         │
+         ▼
+pods.ts: runAgentHeadless(agentId, task)
+  1. Read agent-files/{agentId}.md as system prompt
+  2. Concatenate scoped task context (from pod-context.ts)
+  3. Launch via claude CLI with --system-prompt flag
+```
+
+**What's in the prompt today:** Persona name/backstory/style, system instructions, team knowledge (CLAUDE.md), task context.
+
+**What's NOT in the prompt:** Bestiary data (realm, powers, stats, rival). It's defined in YAML and rendered in the game (bestiary panel, rivalry lines, character colors) but never injected into the agent's system prompt.
+
+**Why this matters:** The bestiary is currently decorative. When we add performance-aware prompts (V-C Agent Progression), the bestiary becomes functional — an agent's actual strengths and weaknesses replace the static lore stats. The prompt would include: "Your precision rate is 92% on frontend tasks but 61% on backend. Your rival Erlang Shen is at 78% frontend this week." The persona gives this data emotional weight.
+
 ---
 
 ## V-J. Integration Architecture — How Everything Connects
@@ -1164,7 +1320,7 @@ Penpal is the hub in a star topology. Eight external systems connect to the Elec
 | **iTerm2** | AppleScript (osascript) | `sessions.ts` | None (macOS perms) | Circuit breaker after 2 timeouts, 30s backoff |
 | **Claude Sessions** | File read (JSONL) | `sessions.ts` | None (filesystem) | Stale data if session crashed |
 | **Scheduler** | File read (JSON/YAML) | `scheduler-bridge.ts` | None | Shows last-known state |
-| **MCP Servers** | stdio / SSE | `mcp-manager.ts` | Per-server config | Discovery-only from Penny |
+| **MCP Servers** | stdio / SSE | `mcp-manager.ts` | Per-server config | Discovery-only, no start/stop |
 
 ### What Each Connection Provides
 
@@ -1199,6 +1355,13 @@ Penpal is the hub in a star topology. Eight external systems connect to the Elec
 - Send messages via TTY (sendToSession)
 - Focus terminal via iTerm2 AppleScript
 - Used by: sessions.ts, CommandCenter UI, Slack bridge
+
+**MCP Servers (Tool Discovery):**
+- Scans 4 config locations: `~/.mcp.json` (global Claude), `~/sidekick/.mcp.json` (project), `~/.cursor/mcp.json` (Cursor), VS Code `settings.json`
+- Transport auto-detected: http/https URLs → SSE, anything else → stdio
+- Master config: `.penpal/mcp-servers.json` — merged from all sources
+- Per-agent profiles: `agents/mcp-profiles/<profileName>.json` — which tools each agent can access
+- Discovery only — Penny doesn't start/stop MCP servers, just discovers and syncs configs
 
 **Scheduler (Background Jobs):**
 - Reads `schedule.yaml` for job definitions
@@ -1363,6 +1526,131 @@ Check: Console shows "[slack-bridge] Connected to Slack (Socket Mode)" on succes
 3. Label first few issues `agent-ready` and monitor pod performance
 4. After 10+ pods: check combo analytics for best-performing team
 5. Adjust presets based on data
+
+### Scaling: When to Add a Machine
+
+**Signs you need a second instance:**
+- Pod queue depth consistently >3 (pods waiting for agents)
+- Overnight pods take >8 hours to clear the queue
+- You're working on 2+ repos that need concurrent pods
+
+**How to add an instance:**
+```bash
+# On the new machine:
+git clone git@github.com:therealsiege/Penpal.git
+cd Penpal && npm install
+cp .env.example .env  # add Slack tokens, API keys
+npm run dev
+
+# The new instance appears on the world map within 60 seconds.
+# Fleet heartbeat shows both machines in #sk-fleet.
+```
+
+**What to specialize:**
+- Mac Studio: Dev Lab (GPU for Ollama, always-on)
+- MacBook: Content Studio (portable, Sonnet-only)
+- Cloud VM: Batch jobs (NPI enrichment, ETL, RSS ingestion — no game needed)
+
+For headless cloud deployment, skip the Electron shell:
+```bash
+# Run just the pod engine + scheduler + Slack bridge:
+node --import tsx src/main/headless.ts  # (planned — not built yet)
+```
+
+### DPO Training: Terminal Commands
+
+When you have 500+ preference pairs and want to train:
+
+```bash
+# 1. Export DPO pairs from Penny
+#    (or click "Generate Pairs" in EvalsPanel)
+cd Penny && node --import tsx -e "
+  const { PairGenerator } = require('./src/main/preferences/pairs');
+  const { preferenceStore } = require('./src/main/preferences');
+  const gen = new PairGenerator(preferenceStore);
+  gen.export('data/dpo-pairs.jsonl', 'jsonl').then(n => console.log(n + ' pairs'));
+"
+
+# 2. Train with TRL (on a machine with GPU or Apple Silicon)
+pip install trl transformers peft bitsandbytes
+python train_dpo.py \
+  --model_name Qwen/Qwen2.5-Coder-7B \
+  --dataset_path data/dpo-pairs.jsonl \
+  --output_dir models/penny-7b-v1 \
+  --lora_r 16 \
+  --num_epochs 3 \
+  --per_device_batch_size 2
+
+# 3. Merge LoRA adapter into base model
+python merge_lora.py \
+  --base Qwen/Qwen2.5-Coder-7B \
+  --adapter models/penny-7b-v1 \
+  --output models/penny-7b-v1-merged
+
+# 4. Create Ollama Modelfile
+cat > Modelfile << 'EOF'
+FROM ./models/penny-7b-v1-merged
+PARAMETER temperature 0.7
+PARAMETER num_ctx 32768
+SYSTEM "You are a coding agent trained on 1Putt Health development patterns."
+EOF
+
+# 5. Deploy to Ollama
+ollama create penny-7b -f Modelfile
+ollama run penny-7b "Hello"  # verify
+
+# 6. Update agent-types.yaml economic profile
+#    Change: model: "ollama:qwen3-coder:30b"
+#    To:     model: "ollama:penny-7b"
+
+# 7. A/B eval: run 20 tasks on Sonnet, 20 on penny-7b
+#    Compare in EvalsPanel: success rate, iterations, duration
+```
+
+**Training takes:** ~2-4 hours on Mac Studio M2 Ultra (MLX), ~1-2 hours on cloud A100. Cost: $0 local, $3-5 cloud.
+
+**Retrain cadence:** Monthly, or after any major system prompt change. Export fresh pairs, retrain from base (not from previous LoRA — avoids drift).
+
+### Disaster Recovery
+
+**Corrupted pod-workflows.json:**
+```bash
+# Symptoms: Penny crashes on startup, JSON parse errors in console
+# The file is 1-2MB of pod state — corruption usually means truncated write
+
+# Option 1: Reset (lose in-flight pod state)
+mv data/pod-workflows.json data/pod-workflows.json.bak
+echo "[]" > data/pod-workflows.json
+# Restart Penny — all active pods show as gone, completed pods are in JSONL anyway
+
+# Option 2: Repair
+node -e "
+  const raw = require('fs').readFileSync('data/pod-workflows.json','utf8');
+  // Find last valid JSON array close
+  const lastBracket = raw.lastIndexOf(']');
+  const fixed = raw.slice(0, lastBracket + 1);
+  require('fs').writeFileSync('data/pod-workflows.json', fixed);
+"
+```
+
+**Lost CLAUDE.md (clobbered beyond git history):**
+```bash
+# The canonical CLAUDE.md is maintained by hand. If all versions are clobbered:
+# 1. Check git reflog for the last good version
+git reflog -- CLAUDE.md | head -5
+git checkout <ref> -- CLAUDE.md
+
+# 2. If reflog is clean, reconstruct from Penny/CLAUDE.md template
+#    (the file documents architecture — regenerate from current codebase)
+```
+
+**Memgraph data loss:**
+```bash
+# The graph is regenerated from Vault markdown files — no data loss possible
+# as long as the Vault exists. Just re-run ETL:
+cd sidekick-graph && npm run etl -- --clean
+# Takes ~20 minutes for full rebuild with embeddings
+```
 
 ---
 
