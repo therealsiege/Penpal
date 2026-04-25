@@ -12,10 +12,13 @@
  */
 
 import { App, LogLevel } from '@slack/bolt'
-import { getClaudeSessions, sendToSession, getSessionConversation, type ClaudeSession } from './sessions'
+import { getClaudeSessions, sendToSession, getSessionConversation, type ClaudeSession, type InteractionType } from './sessions'
 import { startFleetHeartbeat, stopFleetHeartbeat, getFleetStatus } from './fleet-heartbeat'
 import { getAgentConfigs, loadAgentSessionMap, type AgentConfig } from './agents'
-import { enqueueTask, orchestratorEvents, type Task } from './orchestrator'
+import { enqueueTask, orchestratorEvents, getOrchestratorStats, type Task } from './orchestrator'
+import { listPods } from './pods'
+import { checkHealth } from './health'
+import { podQualityCollector } from './evals/collectors/pod-quality'
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
@@ -400,9 +403,13 @@ async function pollAndSync(): Promise<void> {
 
     // Detect interaction type changes (e.g. started waiting for approval)
     const prevIType = lastInteractionType.get(snapshotKey) || 'none'
-    const currIType = session.interactionType || 'none'
+    const currIType: InteractionType = session.interactionType || 'none'
     if (currIType !== prevIType && currIType !== 'none') {
       await postStatusUpdate(channel.channelId, agentName, session)
+      // DM owner with interactive approval buttons for tool-approval
+      if (currIType === 'tool-approval') {
+        await dmToolApproval(agentName, session)
+      }
     }
     lastInteractionType.set(snapshotKey, currIType)
   }
@@ -496,6 +503,31 @@ export async function startSlackBridge(): Promise<boolean> {
       logLevel: LogLevel.WARN,
     })
 
+    // ── Interactive button handlers for tool approval DMs ──
+    slackApp.action('penny_approve_tool', async ({ ack, action, respond }) => {
+      await ack()
+      const tty = (action as { value?: string }).value
+      if (!tty) { await respond(':x: Missing session TTY'); return }
+      try {
+        await sendToSession(tty, 'y')
+        await respond(':white_check_mark: Approved — agent resuming')
+      } catch (err) {
+        await respond(`:x: Failed to approve: ${(err as Error).message}`)
+      }
+    })
+
+    slackApp.action('penny_reject_tool', async ({ ack, action, respond }) => {
+      await ack()
+      const tty = (action as { value?: string }).value
+      if (!tty) { await respond(':x: Missing session TTY'); return }
+      try {
+        await sendToSession(tty, 'n')
+        await respond(':no_entry_sign: Rejected — agent notified')
+      } catch (err) {
+        await respond(`:x: Failed to reject: ${(err as Error).message}`)
+      }
+    })
+
     // Handle incoming messages — route to the correct agent
     slackApp.message(async ({ message, say }) => {
       // Ignore bot messages (our own posts)
@@ -532,6 +564,100 @@ export async function startSlackBridge(): Promise<boolean> {
           username: 'Penny',
           icon_emoji: ':clipboard:',
         })
+        return
+      }
+
+      // ── !pods / !pod status — list active pods ──
+      if (text === '!pods' || text === '!pod status') {
+        const pods = listPods()
+        const active = pods.filter(p => !['complete', 'failed'].includes(p.status))
+        const recent = pods.filter(p => ['complete', 'failed'].includes(p.status)).slice(-3)
+        const lines: string[] = []
+        if (active.length === 0) {
+          lines.push(':zzz: No active pods')
+        } else {
+          lines.push(`:rocket: *${active.length} active pod(s):*`)
+          for (const p of active) {
+            lines.push(`  • \`${p.name.slice(0, 50)}\` — *${p.status}* (iter ${p.iteration}/${p.maxIterations})`)
+          }
+        }
+        if (recent.length > 0) {
+          lines.push(`\n_Recent:_`)
+          for (const p of recent) {
+            const icon = p.status === 'complete' ? ':white_check_mark:' : ':x:'
+            lines.push(`  ${icon} \`${p.name.slice(0, 50)}\``)
+          }
+        }
+        await say({ text: lines.join('\n'), username: 'Penny', icon_emoji: ':robot_face:' })
+        return
+      }
+
+      // ── !agents — agent status summary ──
+      if (text === '!agents') {
+        const sessions = await getClaudeSessions()
+        const configs = getAgentConfigs()
+        const agentMap = loadAgentSessionMap()
+        const lines: string[] = [`:busts_in_silhouette: *${configs.length} agents:*`]
+        for (const cfg of configs) {
+          const sessionId = agentMap.get(cfg.id)
+          const session = sessionId ? sessions.find(s => s.sessionId === sessionId) : undefined
+          const mode = session?.mode ?? 'offline'
+          const icon = mode === 'working' ? ':hammer_and_wrench:' : mode === 'idle' ? ':zzz:' : mode === 'waiting' ? ':hourglass_flowing_sand:' : ':black_circle:'
+          lines.push(`  ${icon} *${cfg.name}* (${cfg.id}) — ${mode}`)
+        }
+        await say({ text: lines.join('\n'), username: 'Penny', icon_emoji: ':robot_face:' })
+        return
+      }
+
+      // ── !eval — this week's quality metrics ──
+      if (text === '!eval') {
+        const report = podQualityCollector.report(new Date(Date.now() - 7 * 86400000))
+        const stats = getOrchestratorStats()
+        const lines = [
+          `:bar_chart: *This week's eval:*`,
+          `  Pods: ${report.totalPods} total, ${(report.completionRate * 100).toFixed(0)}% completion`,
+          `  Reviewer first-pass: ${(report.reviewerFirstPassRate * 100).toFixed(0)}%`,
+          `  Executor pass: ${(report.executorPassRate * 100).toFixed(0)}%`,
+          `  Avg time: ${Math.round(report.avgCompletionTime_ms / 1000)}s`,
+          `  Orchestrator: ${stats.completedToday} completed today, ${stats.failedToday} failed`,
+        ]
+        await say({ text: lines.join('\n'), username: 'Penny', icon_emoji: ':bar_chart:' })
+        return
+      }
+
+      // ── !health — infrastructure status ──
+      if (text === '!health') {
+        const h = await checkHealth()
+        const icon = h.status === 'healthy' ? ':large_green_circle:' : h.status === 'degraded' ? ':large_yellow_circle:' : ':red_circle:'
+        const lines = [`${icon} *System: ${h.status}*`]
+        for (const [service, check] of Object.entries(h.checks ?? {})) {
+          const sIcon = (check as { ok: boolean }).ok ? ':white_check_mark:' : ':x:'
+          lines.push(`  ${sIcon} ${service}`)
+        }
+        await say({ text: lines.join('\n'), username: 'Penny', icon_emoji: ':stethoscope:' })
+        return
+      }
+
+      // ── !queue — orchestrator task queue ──
+      if (text === '!queue') {
+        const stats = getOrchestratorStats()
+        await say({
+          text: `:inbox_tray: *Queue:* ${stats.queueDepth} pending, ${stats.activeTasks} active, ${stats.completedToday} done today`,
+          username: 'Penny',
+          icon_emoji: ':inbox_tray:',
+        })
+        return
+      }
+
+      // ── !fleet — fleet instance status ──
+      if (text === '!fleet') {
+        const fleet = getFleetStatus()
+        const lines = [`:globe_with_meridians: *Fleet: ${fleet.instances.length} instance(s)*`]
+        for (const inst of fleet.instances) {
+          const icon = inst.status === 'healthy' ? ':large_green_circle:' : ':large_yellow_circle:'
+          lines.push(`  ${icon} *${inst.hostname}* (${inst.geo?.city ?? 'unknown'}) — ${inst.sessions?.active ?? 0} active, ${inst.pods?.active ?? 0} pods`)
+        }
+        await say({ text: lines.join('\n'), username: 'Penny', icon_emoji: ':globe_with_meridians:' })
         return
       }
 
@@ -691,6 +817,68 @@ export async function postPipelineNotification(text: string, emoji = ':robot_fac
  * Send a direct message to the workspace owner.
  * Requires SLACK_OWNER_USER_ID in env (Slack member ID, e.g. U07XXXXXXXX).
  */
+/**
+ * DM the owner with interactive Approve/Reject buttons when an agent needs tool approval.
+ * Buttons route through @slack/bolt action handlers (penny_approve_tool / penny_reject_tool)
+ * which call sendToSession() to approve/reject in the agent's TTY.
+ */
+async function dmToolApproval(agentName: string, session: ClaudeSession): Promise<void> {
+  if (!slackApp) return
+  const userId = process.env.SLACK_OWNER_USER_ID
+  if (!userId) return
+
+  // Extract context from the last assistant message
+  const lastMsg = session.lastAssistantBlurb || 'Tool call details not available'
+  const context = lastMsg.slice(0, 300)
+
+  try {
+    const dm = await slackApp.client.conversations.open({ users: userId })
+    const channelId = dm.channel?.id
+    if (!channelId) return
+
+    await slackApp.client.chat.postMessage({
+      channel: channelId,
+      text: `🔧 ${agentName} needs tool approval`, // fallback for notifications
+      blocks: [
+        {
+          type: 'section',
+          text: { type: 'mrkdwn', text: `:wrench: *${agentName}* needs tool approval` },
+        },
+        {
+          type: 'section',
+          text: { type: 'mrkdwn', text: `\`\`\`${context}\`\`\`` },
+        },
+        {
+          type: 'section',
+          text: { type: 'mrkdwn', text: `_Project: ${session.project || session.cwd}_` },
+        },
+        {
+          type: 'actions',
+          elements: [
+            {
+              type: 'button',
+              text: { type: 'plain_text', text: '✅ Approve' },
+              style: 'primary',
+              action_id: 'penny_approve_tool',
+              value: session.tty,
+            },
+            {
+              type: 'button',
+              text: { type: 'plain_text', text: '❌ Reject' },
+              style: 'danger',
+              action_id: 'penny_reject_tool',
+              value: session.tty,
+            },
+          ],
+        },
+      ],
+    })
+    console.log(`[slack-bridge] DM'd owner: ${agentName} needs tool approval`)
+  } catch (err) {
+    console.error('[slack-bridge] Failed to DM tool approval:', err)
+  }
+}
+
 export async function dmOwner(text: string, emoji = ':robot_face:'): Promise<void> {
   if (!slackApp) return
   const userId = process.env.SLACK_OWNER_USER_ID
