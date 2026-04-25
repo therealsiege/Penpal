@@ -1,4 +1,9 @@
 import { app, BrowserWindow, nativeImage, shell } from 'electron'
+
+// Disable Electron's process sandbox globally — the sandbox initialization
+// corrupts the fd table on macOS, causing EBADF on all subsequent child process
+// spawns (gh, git, osascript). This is safe for a single-user desktop app.
+app.commandLine.appendSwitch('no-sandbox')
 import fs from 'fs'
 import path from 'path'
 import dotenv from 'dotenv'
