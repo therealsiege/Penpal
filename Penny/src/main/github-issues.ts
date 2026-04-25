@@ -299,31 +299,62 @@ interface GHIssue {
   url: string
 }
 
-async function fetchAgentReadyIssues(config: RepoConfig, retries = 2): Promise<GHIssue[]> {
-  for (let attempt = 0; attempt <= retries; attempt++) {
+/**
+ * Fetch agent-ready issues via GitHub REST API (no child process spawn).
+ * Falls back to `gh` CLI if GITHUB_PERSONAL_ACCESS_TOKEN is not set.
+ */
+async function fetchAgentReadyIssues(config: RepoConfig): Promise<GHIssue[]> {
+  const token = process.env.GITHUB_PERSONAL_ACCESS_TOKEN
+  if (token) {
+    // Use fetch — no spawn, no EBADF
     try {
-      const { stdout } = await execFileAsync('gh', [
-        'issue', 'list',
-        '--repo', `${config.owner}/${config.repo}`,
-        '--label', config.label,
-        '--state', 'open',
-        '--json', 'number,title,body,labels,assignees,url',
-        '--limit', '20',
-      ], { encoding: 'utf-8', timeout: 30_000 })
-      return JSON.parse(stdout)
-    } catch (err) {
-      const code = (err as { code?: string }).code
-      if (code === 'EBADF' && attempt < retries) {
-        // File descriptor exhaustion — back off and retry
-        console.warn(`[github-issues] EBADF fetching ${config.owner}/${config.repo}, retrying in ${(attempt + 1) * 3}s...`)
-        await new Promise(r => setTimeout(r, (attempt + 1) * 3000))
-        continue
+      const url = `https://api.github.com/repos/${config.owner}/${config.repo}/issues?labels=${encodeURIComponent(config.label)}&state=open&per_page=20`
+      const res = await fetch(url, {
+        headers: {
+          Authorization: `token ${token}`,
+          Accept: 'application/vnd.github.v3+json',
+          'User-Agent': 'Penpal',
+        },
+        signal: AbortSignal.timeout(15_000),
+      })
+      if (!res.ok) {
+        console.warn(`[github-issues] GitHub API ${res.status} for ${config.owner}/${config.repo}: ${res.statusText}`)
+        return []
       }
-      console.error(`[github-issues] Failed to fetch issues from ${config.owner}/${config.repo}:`, err)
+      const data = await res.json() as Array<{
+        number: number; title: string; body: string | null;
+        labels: Array<{ name: string }>; assignees: Array<{ login: string }>;
+        html_url: string;
+      }>
+      return data.map(i => ({
+        number: i.number,
+        title: i.title,
+        body: i.body || '',
+        labels: i.labels.map(l => ({ name: l.name })),
+        assignees: i.assignees.map(a => ({ login: a.login })),
+        url: i.html_url,
+      }))
+    } catch (err) {
+      console.error(`[github-issues] GitHub API error for ${config.owner}/${config.repo}:`, (err as Error).message)
       return []
     }
   }
-  return []
+
+  // Fallback: gh CLI (may hit EBADF in Electron)
+  try {
+    const { stdout } = await execFileAsync('gh', [
+      'issue', 'list',
+      '--repo', `${config.owner}/${config.repo}`,
+      '--label', config.label,
+      '--state', 'open',
+      '--json', 'number,title,body,labels,assignees,url',
+      '--limit', '20',
+    ], { encoding: 'utf-8', timeout: 30_000 })
+    return JSON.parse(stdout)
+  } catch (err) {
+    console.error(`[github-issues] Failed to fetch issues from ${config.owner}/${config.repo}:`, err)
+    return []
+  }
 }
 
 async function swapLabel(config: RepoConfig, issueNumber: number): Promise<void> {
