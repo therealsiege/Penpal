@@ -1,5 +1,40 @@
 import { EventEmitter } from 'events'
-import { execSync, execFileSync } from 'child_process'
+import { execSync as _rawExecSync, execFileSync as _rawExecFileSync, type ExecSyncOptions, type ExecFileSyncOptions } from 'child_process'
+import { proxyExecFile } from './spawn-proxy'
+
+/**
+ * EBADF-safe execSync: runs the command in a clean Node subprocess via
+ * ELECTRON_RUN_AS_NODE to bypass Electron's fd table corruption.
+ */
+function execSync(cmd: string, opts?: ExecSyncOptions): string | Buffer {
+  try {
+    return _rawExecSync(cmd, opts)
+  } catch (err) {
+    if ((err as { code?: string }).code === 'EBADF') {
+      // Fallback: run via a helper node process
+      const escaped = cmd.replace(/'/g, "'\\''")
+      return _rawExecSync(
+        `"${process.execPath}" -e "const{execSync}=require('child_process');process.stdout.write(String(execSync('${escaped}',{encoding:'utf-8',cwd:process.argv[1]||undefined,timeout:60000})))"` +
+        (opts?.cwd ? ` "${opts.cwd}"` : ''),
+        { ...opts, env: { ...process.env, ...(opts?.env as Record<string, string> || {}), ELECTRON_RUN_AS_NODE: '1' } },
+      )
+    }
+    throw err
+  }
+}
+
+function execFileSync(cmd: string, args: string[], opts?: ExecFileSyncOptions): string | Buffer {
+  try {
+    return _rawExecFileSync(cmd, args, opts)
+  } catch (err) {
+    if ((err as { code?: string }).code === 'EBADF') {
+      // Fallback: use the spawn proxy async path, but block with a sync wrapper
+      // This won't work for truly sync contexts, but pod completion is async anyway
+      throw new Error(`EBADF on execFileSync — convert caller to use proxyExecFile: ${cmd} ${args.join(' ')}`)
+    }
+    throw err
+  }
+}
 import fs from 'fs'
 import os from 'os'
 import path from 'path'
