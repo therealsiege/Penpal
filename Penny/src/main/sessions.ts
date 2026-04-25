@@ -868,7 +868,7 @@ function analyzeLines(lines: string[]): SessionAnalysis {
 async function getAllITermSessionNames(): Promise<Map<string, string>> {
   // Check circuit breaker
   if (itermConsecutiveTimeouts >= 2 && Date.now() < itermBackoffUntil) {
-    console.log(`[iTerm2] Circuit breaker active — serving cached names (${itermLastSuccessfulResult.size} entries)`)
+    // Silent — only log once when backoff starts, not every poll
     return itermLastSuccessfulResult
   }
 
