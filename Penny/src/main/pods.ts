@@ -1,5 +1,5 @@
 import { EventEmitter } from 'events'
-import { execSync } from 'child_process'
+import { execSync, execFileSync } from 'child_process'
 import fs from 'fs'
 import os from 'os'
 import path from 'path'
@@ -1038,6 +1038,84 @@ export function executorOutputIndicatesPass(output: string | undefined | null): 
   return parseTestPassed(output)
 }
 
+// ── Real validation — run actual test commands ──────────────────────────────
+
+interface RealValidationResult {
+  passed: boolean
+  tscPassed: boolean
+  tscError?: string
+  testsPassed: boolean | null  // null = no test runner found
+  testsError?: string
+}
+
+/**
+ * Run real validation commands in the pod's working directory.
+ * Always runs `tsc --noEmit`. Runs `npx vitest run` or `npm test` if a
+ * test config exists. Returns structured result with per-check status.
+ *
+ * This is the hard gate — agent output parsing (parseTestPassed) is advisory,
+ * this is authoritative.
+ */
+function runRealValidation(cwd: string): RealValidationResult {
+  const opts = { cwd, encoding: 'utf-8' as const, stdio: 'pipe' as const }
+  const result: RealValidationResult = { passed: false, tscPassed: false, testsPassed: null }
+
+  // 1. TypeScript compilation check (always)
+  try {
+    execFileSync('npx', ['tsc', '--noEmit'], { ...opts, timeout: 120_000 })
+    result.tscPassed = true
+    console.log('[pods] Real validation: tsc --noEmit PASSED')
+  } catch (err) {
+    result.tscPassed = false
+    const msg = (err as { stderr?: string; stdout?: string }).stderr
+      || (err as { stdout?: string }).stdout
+      || (err as Error).message
+    result.tscError = typeof msg === 'string' ? msg.slice(0, 2000) : String(msg).slice(0, 2000)
+    console.warn('[pods] Real validation: tsc --noEmit FAILED')
+  }
+
+  // 2. Test runner (if available)
+  const hasVitest = fs.existsSync(path.join(cwd, 'vitest.config.ts'))
+    || fs.existsSync(path.join(cwd, 'vitest.config.mts'))
+    || fs.existsSync(path.join(cwd, 'vitest.config.js'))
+  const hasJest = fs.existsSync(path.join(cwd, 'jest.config.ts'))
+    || fs.existsSync(path.join(cwd, 'jest.config.js'))
+
+  if (hasVitest) {
+    try {
+      execFileSync('npx', ['vitest', 'run', '--reporter=verbose'], { ...opts, timeout: 180_000 })
+      result.testsPassed = true
+      console.log('[pods] Real validation: vitest run PASSED')
+    } catch (err) {
+      result.testsPassed = false
+      const msg = (err as { stderr?: string; stdout?: string }).stderr
+        || (err as { stdout?: string }).stdout
+        || (err as Error).message
+      result.testsError = typeof msg === 'string' ? msg.slice(0, 2000) : String(msg).slice(0, 2000)
+      console.warn('[pods] Real validation: vitest run FAILED')
+    }
+  } else if (hasJest) {
+    try {
+      execFileSync('npx', ['jest', '--passWithNoTests'], { ...opts, timeout: 180_000 })
+      result.testsPassed = true
+      console.log('[pods] Real validation: jest PASSED')
+    } catch (err) {
+      result.testsPassed = false
+      const msg = (err as { stderr?: string; stdout?: string }).stderr
+        || (err as { stdout?: string }).stdout
+        || (err as Error).message
+      result.testsError = typeof msg === 'string' ? msg.slice(0, 2000) : String(msg).slice(0, 2000)
+      console.warn('[pods] Real validation: jest FAILED')
+    }
+  } else {
+    console.log('[pods] Real validation: no test runner found, skipping test execution')
+  }
+
+  // Overall: tsc must pass. Tests must pass if they exist.
+  result.passed = result.tscPassed && (result.testsPassed === null || result.testsPassed)
+  return result
+}
+
 export type PodFailureCategory =
   | 'headless-solver'
   | 'headless-reviewer'
@@ -1527,9 +1605,29 @@ async function runExecuteStage(wf: PodWorkflow): Promise<{ passed: boolean }> {
   wf.executor.output = result.output
   console.log(`[pods] Executor done (${Math.round(result.durationMs / 1000)}s)`)
 
-  const passed = parseTestPassed(wf.executor.output || '')
-  wf.lastExecutorPassed = passed
-  return { passed }
+  // Agent's opinion (advisory — based on output format parsing)
+  const agentPassed = parseTestPassed(wf.executor.output || '')
+
+  // Real validation (authoritative — runs actual commands)
+  const real = runRealValidation(wf.cwd)
+  if (!real.passed) {
+    const reasons: string[] = []
+    if (!real.tscPassed) reasons.push(`tsc: ${real.tscError?.split('\n')[0] ?? 'compilation error'}`)
+    if (real.testsPassed === false) reasons.push(`tests: ${real.testsError?.split('\n')[0] ?? 'test failure'}`)
+    console.warn(`[pods] Real validation FAILED (agent said ${agentPassed ? 'PASS' : 'FAIL'}): ${reasons.join('; ')}`)
+
+    // Append real validation errors to executor output so solver gets feedback
+    wf.executor.output = (wf.executor.output || '') +
+      '\n\n--- REAL VALIDATION (authoritative) ---\n' +
+      (real.tscError ? `TSC ERRORS:\n${real.tscError}\n` : '') +
+      (real.testsError ? `TEST ERRORS:\n${real.testsError}\n` : '')
+  } else {
+    console.log(`[pods] Real validation PASSED (agent said ${agentPassed ? 'PASS' : 'FAIL'})`)
+  }
+
+  // Real validation is authoritative — agent opinion is logged but doesn't override
+  wf.lastExecutorPassed = real.passed
+  return { passed: real.passed }
 }
 
 function finalizePodQuality(wf: PodWorkflow): void {
