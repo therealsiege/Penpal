@@ -873,19 +873,29 @@ async function getAllITermSessionNames(): Promise<Map<string, string>> {
 
   const result = new Map<string, string>()
   try {
-    const { stdout } = await execAsync(`osascript -e '
-      set output to ""
-      tell application "iTerm2"
-        repeat with w in windows
-          repeat with t in tabs of w
-            repeat with s in sessions of t
-              set output to output & (tty of s) & "|||" & (name of s) & "\\n"
+    // Use spawn instead of exec to ensure we can SIGKILL the child on timeout.
+    // exec + timeout sends SIGTERM which osascript may ignore, leaking file descriptors.
+    const stdout = await new Promise<string>((resolve, reject) => {
+      let out = ''
+      const child = spawn('osascript', ['-e', `
+        set output to ""
+        tell application "iTerm2"
+          repeat with w in windows
+            repeat with t in tabs of w
+              repeat with s in sessions of t
+                set output to output & (tty of s) & "|||" & (name of s) & "\n"
+              end repeat
             end repeat
           end repeat
-        end repeat
-      end tell
-      return output
-    '`, { timeout: 2000 })
+        end tell
+        return output
+      `], { stdio: ['ignore', 'pipe', 'ignore'] })
+      child.stdout!.on('data', (d: Buffer) => { out += d.toString() })
+      child.on('close', (code) => code === 0 ? resolve(out) : reject(new Error(`osascript exited ${code}`)))
+      child.on('error', reject)
+      const timer = setTimeout(() => { child.kill('SIGKILL'); reject(new Error('timeout')) }, 2000)
+      child.on('close', () => clearTimeout(timer))
+    })
     for (const line of stdout.trim().split('\n')) {
       const sep = line.indexOf('|||')
       if (sep === -1) continue
