@@ -131,21 +131,20 @@ const REQUIRED_LABELS = [
 
 /** Ensure all required labels exist in a repo. Silently skips existing ones. */
 async function ensureLabels(owner: string, repo: string): Promise<void> {
-  await Promise.allSettled(
-    REQUIRED_LABELS.map(async (label) => {
-      try {
-        await execFileAsync('gh', [
-          'label', 'create', label.name,
-          '--color', label.color,
-          '--description', label.description,
-          '--repo', `${owner}/${repo}`,
-        ], { encoding: 'utf-8', timeout: 15_000 })
-        console.log(`[github-issues] Created label "${label.name}" in ${owner}/${repo}`)
-      } catch {
-        // Label already exists — expected, ignore
-      }
-    }),
-  )
+  // Serialize label creation to avoid spawning N concurrent gh processes
+  for (const label of REQUIRED_LABELS) {
+    try {
+      await execFileAsync('gh', [
+        'label', 'create', label.name,
+        '--color', label.color,
+        '--description', label.description,
+        '--repo', `${owner}/${repo}`,
+      ], { encoding: 'utf-8', timeout: 15_000 })
+      console.log(`[github-issues] Created label "${label.name}" in ${owner}/${repo}`)
+    } catch {
+      // Label already exists — expected, ignore
+    }
+  }
 }
 
 // ── Git branch helpers ────────────────────────────────────────────────────
@@ -541,13 +540,17 @@ export function startGithubIssuePoller(): void {
   consolidateTrackedIssues()
   console.log(`[github-issues] Starting poller (${POLL_INTERVAL / 1000}s) for ${REPOS.map(r => `${r.owner}/${r.repo}`).join(', ')}`)
 
-  // Ensure labels exist in all watched repos (fire-and-forget)
-  for (const config of REPOS) {
-    ensureLabels(config.owner, config.repo).catch(console.error)
-  }
-
-  // Initial poll on startup (delayed 5s)
-  setTimeout(() => { executePollOnce().catch(console.error) }, 5_000)
+  // Ensure labels exist in all watched repos — serialized with delay to avoid
+  // spawning 48+ concurrent gh processes during Electron renderer initialization.
+  // Delayed 15s to let the sandbox finish initializing.
+  setTimeout(async () => {
+    for (const config of REPOS) {
+      await ensureLabels(config.owner, config.repo).catch(console.error)
+      await new Promise(r => setTimeout(r, 500))
+    }
+    // First poll after labels are ensured
+    executePollOnce().catch(console.error)
+  }, 15_000)
 
   pollTimer = setInterval(() => { executePollOnce().catch(console.error) }, POLL_INTERVAL)
 
