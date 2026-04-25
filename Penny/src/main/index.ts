@@ -1,9 +1,24 @@
 import { app, BrowserWindow, nativeImage, shell } from 'electron'
 
-// Disable Electron's process sandbox globally — the sandbox initialization
-// corrupts the fd table on macOS, causing EBADF on all subsequent child process
-// spawns (gh, git, osascript). This is safe for a single-user desktop app.
+// Disable Electron's process sandbox globally
 app.commandLine.appendSwitch('no-sandbox')
+
+// Fix EBADF: Electron may close stdin (fd 0) during initialization.
+// Node's child_process.spawn checks parent fds and fails with EBADF
+// if fd 0 is invalid. Reopen it on /dev/null to keep the fd table sane.
+import { openSync, closeSync, fstatSync } from 'node:fs'
+try {
+  fstatSync(0)
+} catch {
+  // fd 0 (stdin) is closed — reopen it on /dev/null
+  const fd = openSync('/dev/null', 'r')
+  if (fd !== 0) {
+    // Opened on wrong fd — close and try to claim fd 0 directly
+    closeSync(fd)
+  }
+  console.log('[startup] Reopened fd 0 on /dev/null (was closed by Electron)')
+}
+
 import fs from 'fs'
 import path from 'path'
 import dotenv from 'dotenv'
