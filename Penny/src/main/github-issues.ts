@@ -300,21 +300,31 @@ interface GHIssue {
   url: string
 }
 
-async function fetchAgentReadyIssues(config: RepoConfig): Promise<GHIssue[]> {
-  try {
-    const { stdout } = await execFileAsync('gh', [
-      'issue', 'list',
-      '--repo', `${config.owner}/${config.repo}`,
-      '--label', config.label,
-      '--state', 'open',
-      '--json', 'number,title,body,labels,assignees,url',
-      '--limit', '20',
-    ], { encoding: 'utf-8', timeout: 30_000 })
-    return JSON.parse(stdout)
-  } catch (err) {
-    console.error(`[github-issues] Failed to fetch issues from ${config.owner}/${config.repo}:`, err)
-    return []
+async function fetchAgentReadyIssues(config: RepoConfig, retries = 2): Promise<GHIssue[]> {
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      const { stdout } = await execFileAsync('gh', [
+        'issue', 'list',
+        '--repo', `${config.owner}/${config.repo}`,
+        '--label', config.label,
+        '--state', 'open',
+        '--json', 'number,title,body,labels,assignees,url',
+        '--limit', '20',
+      ], { encoding: 'utf-8', timeout: 30_000 })
+      return JSON.parse(stdout)
+    } catch (err) {
+      const code = (err as { code?: string }).code
+      if (code === 'EBADF' && attempt < retries) {
+        // File descriptor exhaustion — back off and retry
+        console.warn(`[github-issues] EBADF fetching ${config.owner}/${config.repo}, retrying in ${(attempt + 1) * 3}s...`)
+        await new Promise(r => setTimeout(r, (attempt + 1) * 3000))
+        continue
+      }
+      console.error(`[github-issues] Failed to fetch issues from ${config.owner}/${config.repo}:`, err)
+      return []
+    }
   }
+  return []
 }
 
 async function swapLabel(config: RepoConfig, issueNumber: number): Promise<void> {
@@ -390,7 +400,10 @@ function deriveSkills(issue: GHIssue): string[] {
 async function pollOnce(): Promise<number> {
   let enqueued = 0
 
-  for (const config of REPOS) {
+  for (let ri = 0; ri < REPOS.length; ri++) {
+    const config = REPOS[ri]
+    // Stagger repo fetches to reduce fd pressure from concurrent child processes
+    if (ri > 0) await new Promise(r => setTimeout(r, 1000))
     const repoKey = `${config.owner}/${config.repo}`
     const issues = await fetchAgentReadyIssues(config)
     if (issues.length > 0) {
