@@ -1,6 +1,7 @@
 import fs from 'fs'
 import path from 'path'
 import { exec, execFileSync, spawn } from 'child_process'
+import { proxySpawn } from './spawn-proxy'
 import { promisify } from 'util'
 import os from 'os'
 import {
@@ -1512,10 +1513,11 @@ function spawnHeadlessCli(invocation: HeadlessInvocation, timeoutMs: number): Pr
     // When a spawned agent uses the Agent tool internally, it will fork rather than cold-start.
     childEnv.CLAUDE_CODE_FORK_SUBAGENT = '1'
 
-    const child = spawn(resolvedCommand, invocation.args, {
+    // Use spawn proxy to avoid Electron EBADF — routes through clean Node worker
+    const child = proxySpawn(resolvedCommand, invocation.args, {
       cwd: invocation.cwd,
-      stdio: ['ignore', 'pipe', 'pipe'],
       env: childEnv,
+      timeout: timeoutMs + 10_000, // worker-side kill after timeout + buffer
     })
 
     let stdout = ''
@@ -1541,8 +1543,8 @@ function spawnHeadlessCli(invocation: HeadlessInvocation, timeoutMs: number): Pr
       })
     }, timeoutMs)
 
-    child.stdout.on('data', (chunk: Buffer) => { stdout += chunk.toString() })
-    child.stderr.on('data', (chunk: Buffer) => { stderr += chunk.toString() })
+    child.stdout.on('data', (chunk: string | Buffer) => { stdout += typeof chunk === 'string' ? chunk : chunk.toString() })
+    child.stderr.on('data', (chunk: string | Buffer) => { stderr += typeof chunk === 'string' ? chunk : chunk.toString() })
 
     child.on('error', (err) => {
       clearTimeout(timer)

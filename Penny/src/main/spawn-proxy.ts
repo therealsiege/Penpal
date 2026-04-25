@@ -22,9 +22,37 @@ const pending = new Map<number, { resolve: (v: { stdout: string; stderr: string 
 // Inline worker script — written to a temp file at startup because electron-vite
 // bundles the main process and doesn't copy standalone .js files to out/main/.
 const WORKER_SCRIPT = `
-const { execFile } = require('child_process');
+const { execFile, spawn } = require('child_process');
+const children = new Map();
+
 process.on('message', (msg) => {
-  const { id, command, args, cwd, timeout } = msg;
+  const { id, type, command, args, cwd, timeout, env, signal } = msg;
+
+  if (type === 'kill') {
+    const child = children.get(id);
+    if (child) child.kill(signal || 'SIGTERM');
+    return;
+  }
+
+  if (type === 'spawn') {
+    // Long-running process with streaming output
+    const child = spawn(command, args, {
+      cwd: cwd || undefined,
+      stdio: ['ignore', 'pipe', 'pipe'],
+      env: env ? { ...process.env, ...env } : { ...process.env },
+    });
+    children.set(id, child);
+    child.stdout.on('data', (d) => process.send({ id, type: 'stdout', data: d.toString() }));
+    child.stderr.on('data', (d) => process.send({ id, type: 'stderr', data: d.toString() }));
+    child.on('close', (code) => { children.delete(id); process.send({ id, type: 'close', code: code || 0 }); });
+    child.on('error', (err) => { children.delete(id); process.send({ id, type: 'error', error: err.message }); });
+    if (timeout) {
+      setTimeout(() => { if (children.has(id)) { child.kill('SIGKILL'); } }, timeout);
+    }
+    return;
+  }
+
+  // Default: execFile (one-shot, returns stdout/stderr)
   execFile(command, args, {
     encoding: 'utf-8',
     cwd: cwd || undefined,
@@ -97,6 +125,59 @@ export function stopSpawnProxy(): void {
   if (worker) {
     worker.kill()
     worker = null
+  }
+}
+
+/**
+ * Spawn a long-running command via the forked worker (EBADF-safe).
+ * Returns an object with stdout/stderr event emitters and a kill method.
+ * Used for headless agent processes that stream output.
+ */
+export function proxySpawn(
+  command: string,
+  args: string[],
+  opts?: { cwd?: string; env?: Record<string, string>; timeout?: number },
+): { stdout: { on: (e: 'data', cb: (d: string) => void) => void }; stderr: { on: (e: 'data', cb: (d: string) => void) => void }; on: (e: 'close' | 'error', cb: (codeOrErr: number | Error) => void) => void; kill: (sig?: string) => void } {
+  const id = ++requestId
+  const stdoutCbs: Array<(d: string) => void> = []
+  const stderrCbs: Array<(d: string) => void> = []
+  const closeCbs: Array<(code: number) => void> = []
+  const errorCbs: Array<(err: Error) => void> = []
+
+  if (!worker) {
+    // Return a fake that immediately errors
+    setTimeout(() => errorCbs.forEach(cb => cb(new Error('Spawn proxy not started'))), 0)
+    return {
+      stdout: { on: (_e, cb) => { stdoutCbs.push(cb) } },
+      stderr: { on: (_e, cb) => { stderrCbs.push(cb) } },
+      on: (e, cb) => { if (e === 'error') errorCbs.push(cb as (err: Error) => void); if (e === 'close') closeCbs.push(cb as (code: number) => void) },
+      kill: () => {},
+    }
+  }
+
+  worker.send({ id, type: 'spawn', command, args, cwd: opts?.cwd, env: opts?.env, timeout: opts?.timeout })
+
+  // Listen for streamed messages from the worker
+  const msgHandler = (msg: { id: number; type?: string; stream?: string; data?: string; code?: number; error?: string }) => {
+    if (msg.id !== id) return
+    if (msg.type === 'stdout') stdoutCbs.forEach(cb => cb(msg.data || ''))
+    else if (msg.type === 'stderr') stderrCbs.forEach(cb => cb(msg.data || ''))
+    else if (msg.type === 'close') {
+      worker?.removeListener('message', msgHandler)
+      closeCbs.forEach(cb => cb(msg.code ?? 1))
+    }
+    else if (msg.type === 'error') {
+      worker?.removeListener('message', msgHandler)
+      errorCbs.forEach(cb => cb(new Error(msg.error || 'unknown')))
+    }
+  }
+  worker.on('message', msgHandler)
+
+  return {
+    stdout: { on: (_e, cb) => { stdoutCbs.push(cb) } },
+    stderr: { on: (_e, cb) => { stderrCbs.push(cb) } },
+    on: (e, cb) => { if (e === 'error') errorCbs.push(cb as (err: Error) => void); if (e === 'close') closeCbs.push(cb as (code: number) => void) },
+    kill: (sig) => { worker?.send({ id, type: 'kill', signal: sig || 'SIGTERM' }) },
   }
 }
 
