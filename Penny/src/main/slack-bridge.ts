@@ -826,6 +826,8 @@ async function dmToolApproval(agentName: string, session: ClaudeSession): Promis
   if (!slackApp) return
   const userId = process.env.SLACK_OWNER_USER_ID
   if (!userId) return
+  // Slack buttons require non-empty value — skip DM if TTY is unknown
+  if (!session.tty) return
 
   // Extract context from the last assistant message
   const lastMsg = session.lastAssistantBlurb || 'Tool call details not available'
