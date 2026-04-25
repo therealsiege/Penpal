@@ -1,22 +1,17 @@
 {
   "mcpServers": {
-    "penny": {
+    "context7": {
       "command": "npx",
-      "args": ["tsx", "src/mcp/index.ts"],
-      "cwd": "Penny"
+      "args": [
+        "-y",
+        "@upstash/context7-mcp@latest"
+      ]
     },
     "playwright": {
       "command": "npx",
-      "args": ["@anthropic-ai/mcp-server-playwright"]
-    },
-    "serena": {
-      "command": "uvx",
-      "args": ["serena-mcp-server", "--project-root", "."],
-      "env": {}
-    },
-    "context7": {
-      "command": "npx",
-      "args": ["-y", "@upstash/context7-mcp@latest"]
+      "args": [
+        "@anthropic-ai/mcp-server-playwright"
+      ]
     }
   }
 }
