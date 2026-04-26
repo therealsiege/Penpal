@@ -336,15 +336,15 @@ function IssueCard({
       {/* Main card — always visible */}
       <button
         type="button"
-        className="w-full text-left px-6 py-10 flex items-center gap-6 hover:bg-[var(--c-bg-elevated)] rounded-xl transition-colors min-h-[180px]"
+        className="w-full text-left px-8 py-12 flex items-center gap-8 hover:bg-[var(--c-bg-elevated)] rounded-2xl transition-colors min-h-[250px]"
         onClick={() => hasPod && setExpanded(e => !e)}
       >
         {/* Active agent avatar or priority dot */}
         {activeAvatar ? (
-          <img src={activeAvatar} alt="" className="w-[104px] h-[104px] rounded-full object-cover shrink-0 ring-2 ring-[var(--c-border)]" />
+          <img src={activeAvatar} alt="" className="w-[140px] h-[140px] rounded-full object-cover shrink-0 ring-2 ring-[var(--c-border)]" />
         ) : (
-          <div className="w-[104px] h-[104px] rounded-full bg-[var(--c-bg-elevated)] flex items-center justify-center shrink-0 border border-[var(--c-border)]">
-            <span className="text-[32px] text-[var(--c-text-faint)]">#{card.issueNumber}</span>
+          <div className="w-[140px] h-[140px] rounded-full bg-[var(--c-bg-elevated)] flex items-center justify-center shrink-0 border border-[var(--c-border)]">
+            <span className="text-[36px] text-[var(--c-text-faint)]">#{card.issueNumber}</span>
           </div>
         )}
 
