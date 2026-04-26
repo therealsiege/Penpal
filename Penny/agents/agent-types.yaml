@@ -1504,6 +1504,19 @@ runtime_profiles:
       validate:
         model: sonnet
 
+  haiku:
+    description: "Budget — Haiku for all three phases. Content, docs, simple tasks."
+    timeout_multiplier: 2
+    max_iterations: 4
+    max_self_fixes: 2
+    phases:
+      plan:
+        model: haiku
+      execute:
+        model: haiku
+      validate:
+        model: haiku
+
 # ── Per-Phase MCP Tool Allowlisting ───────────────────────────────────
 # Restricts which MCP profiles are available per pod phase.
 # If not specified, agents use their own default mcpProfile.
