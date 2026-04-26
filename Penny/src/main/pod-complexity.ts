@@ -117,15 +117,15 @@ export function assessComplexity(task: string, cwd?: string): ComplexityAssessme
 
   if (score < 35) {
     tier = 'simple'
-    recommendedProfile = 'economic' // Sonnet-class
+    recommendedProfile = 'haiku'   // cheapest — content, config, docs
     recommendedCandidates = 1
   } else if (score < 70) {
     tier = 'moderate'
-    recommendedProfile = 'max' // Opus standard
+    recommendedProfile = 'sonnet'  // balanced — most features and refactors
     recommendedCandidates = 1
   } else {
     tier = 'complex'
-    recommendedProfile = 'max' // Opus with candidates
+    recommendedProfile = 'max'     // Opus — architecture, multi-file, novel problems
     recommendedCandidates = 2
   }
 

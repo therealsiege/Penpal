@@ -65,7 +65,7 @@ interface GHIssue {
 // ── Concurrency ─────────────────────────────────────────────────────────────
 
 /** Max pods running at once. Set to Infinity to disable the cap. */
-export const MAX_CONCURRENT_PODS = 3
+export const MAX_CONCURRENT_PODS = 10
 
 export function getActivePodCount(): number {
   return state.issues.filter(p => p.stage === 'executing').length
