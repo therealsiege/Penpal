@@ -35,6 +35,8 @@ interface RepoConfig {
   localPath: string
   /** Default project name for task routing */
   project: string
+  /** Override runtime profile for this repo (e.g. 'haiku', 'sonnet', 'max') */
+  runtimeProfile?: string
 }
 
 const REPOS: RepoConfig[] = [
@@ -777,6 +779,7 @@ function loadPersistedRepos(): void {
               workingLabel: r.workingLabel || 'agent-working',
               localPath: resolveHome(r.localPath || ''),
               project: r.project || r.repo,
+              runtimeProfile: r.runtimeProfile || undefined,
             })
           }
         }
@@ -791,6 +794,7 @@ function savePersistedRepos(): void {
     fs.writeFileSync(REPOS_PATH, JSON.stringify(REPOS.map(r => ({
       owner: r.owner, repo: r.repo, label: r.label,
       workingLabel: r.workingLabel, localPath: r.localPath, project: r.project,
+      ...(r.runtimeProfile ? { runtimeProfile: r.runtimeProfile } : {}),
     })), null, 2))
   } catch { /* ignore */ }
 }

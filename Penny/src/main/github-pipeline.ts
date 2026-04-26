@@ -476,9 +476,9 @@ export async function ingestIssue(config: RepoConfig, issue: GHIssue): Promise<P
     return existing
   }
 
-  // Preserve escalated profile from previous retry, fall back to label-derived
+  // Preserve escalated profile from previous retry, then repo-level override, then label-derived
   // Reset retryCount on manual re-queue so issues get fresh attempts
-  const runtimeProfile = existing?.runtimeProfile || deriveRuntimeProfile(issue.labels)
+  const runtimeProfile = existing?.runtimeProfile || config.runtimeProfile || deriveRuntimeProfile(issue.labels)
   const retryCount = 0
   const presetId = derivePresetFromLabels(issue.labels)
 
@@ -660,7 +660,7 @@ export async function drivePipeline(repos: RepoConfig[]): Promise<void> {
 
         // Escalate profile on retry: economic → sonnet → max
         const prevProfile = tracked.runtimeProfile || 'economic'
-        const escalation: Record<string, string> = { economic: 'sonnet', sonnet: 'max' }
+        const escalation: Record<string, string> = { haiku: 'sonnet', economic: 'sonnet', sonnet: 'max' }
         const nextProfile = isBranchError ? prevProfile : (escalation[prevProfile] || prevProfile)
         if (nextProfile !== prevProfile) {
           tracked.runtimeProfile = nextProfile
