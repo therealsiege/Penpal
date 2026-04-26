@@ -341,11 +341,11 @@ function IssueCard({
       >
         {/* Hero image — fills top half, no border, no rounding */}
         {activeAvatar ? (
-          <div className="w-full h-[200px] overflow-hidden">
+          <div className="w-full h-[360px] overflow-hidden">
             <img src={activeAvatar} alt="" className="w-full h-full object-cover object-top" />
           </div>
         ) : (
-          <div className="w-full h-[200px] bg-[var(--c-bg-elevated)] flex items-center justify-center">
+          <div className="w-full h-[360px] bg-[var(--c-bg-elevated)] flex items-center justify-center">
             <span className="text-[56px] text-[var(--c-text-faint)]">#{card.issueNumber}</span>
           </div>
         )}
