@@ -342,7 +342,7 @@ function IssueCard({
         {/* Hero image — fills top half, no border, no rounding */}
         {activeAvatar ? (
           <div className="w-full flex justify-center py-4">
-            <img src={activeAvatar} alt="" className="h-[250px] w-auto rounded-xl border border-[var(--c-border)] object-cover object-top" />
+            <img src={activeAvatar} alt="" className="h-[250px] w-[250px] rounded-full border-2 border-[var(--c-border)] object-cover object-top" />
           </div>
         ) : (
           <div className="w-full h-[250px] bg-[var(--c-bg-elevated)] flex items-center justify-center">
