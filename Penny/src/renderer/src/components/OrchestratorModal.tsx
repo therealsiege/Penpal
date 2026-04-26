@@ -336,7 +336,7 @@ function IssueCard({
       {/* Main card — always visible */}
       <button
         type="button"
-        className="w-full text-left px-6 py-8 flex items-center gap-6 hover:bg-[var(--c-bg-elevated)] rounded-xl transition-colors min-h-[140px]"
+        className="w-full text-left px-6 py-10 flex items-center gap-6 hover:bg-[var(--c-bg-elevated)] rounded-xl transition-colors min-h-[180px]"
         onClick={() => hasPod && setExpanded(e => !e)}
       >
         {/* Active agent avatar or priority dot */}
