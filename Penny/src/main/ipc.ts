@@ -988,6 +988,15 @@ export function registerIpcHandlers() {
     return cancelPod(workflowId)
   }))
 
+  // Merge a PR via gh CLI (used by Results panel merge-all)
+  ipcMain.handle('pod:merge-pr', wrapHandler(async (prNumber: unknown, repo: unknown) => {
+    if (typeof prNumber !== 'string' && typeof prNumber !== 'number') throw new Error('prNumber required')
+    if (typeof repo !== 'string') throw new Error('repo required')
+    const { proxyExecFile } = await import('./spawn-proxy')
+    await proxyExecFile('gh', ['pr', 'merge', String(prNumber), '--repo', repo, '--squash', '--admin'], { timeout: 30_000 })
+    return { merged: true }
+  }))
+
   ipcMain.handle('pod:override', wrapHandler((workflowId: unknown, phase: unknown, override: unknown) => {
     if (typeof workflowId !== 'string') throw new Error('workflowId must be a string')
     if (typeof phase !== 'string' || !['plan', 'execute', 'validate'].includes(phase)) throw new Error('invalid phase')

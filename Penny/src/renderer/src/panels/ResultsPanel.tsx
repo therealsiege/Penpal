@@ -29,7 +29,7 @@ function formatAge(ms: number): string {
   return `${Math.floor(hrs / 24)}d ago`
 }
 
-function RepoGroup({ repo, pods, onMergeAll }: { repo: string; pods: PodResult[]; onMergeAll: (repo: string) => void }) {
+function RepoGroup({ repo, pods, onMergeAll, onRetry }: { repo: string; pods: PodResult[]; onMergeAll: (repo: string) => void; onRetry: (pod: PodResult) => void }) {
   const completed = pods.filter(p => p.status === 'complete')
   const failed = pods.filter(p => p.status === 'failed')
   const withPR = completed.filter(p => p.prUrl)
@@ -42,6 +42,15 @@ function RepoGroup({ repo, pods, onMergeAll }: { repo: string; pods: PodResult[]
           <span className="text-xs text-[var(--c-text-muted)]">
             {completed.length} done, {failed.length} failed
           </span>
+          {failed.length > 0 && (
+            <button
+              type="button"
+              onClick={() => failed.forEach(p => onRetry(p))}
+              className="px-2 py-0.5 rounded bg-amber-600 hover:bg-amber-500 text-xs font-semibold text-white transition-colors"
+            >
+              Retry Failed ({failed.length})
+            </button>
+          )}
           {withPR.length > 0 && (
             <button
               type="button"
@@ -71,6 +80,15 @@ function RepoGroup({ repo, pods, onMergeAll }: { repo: string; pods: PodResult[]
             <span className="text-xs text-[var(--c-text-muted)] whitespace-nowrap">
               {formatAge(Date.now() - p.updatedAt)}
             </span>
+            {p.status === 'failed' && (
+              <button
+                type="button"
+                onClick={() => onRetry(p)}
+                className="px-2 py-0.5 rounded bg-amber-600 hover:bg-amber-500 text-xs font-semibold text-white transition-colors whitespace-nowrap"
+              >
+                Retry
+              </button>
+            )}
             {p.prUrl && (
               <a
                 href={p.prUrl}
@@ -114,30 +132,38 @@ export function ResultsPanel() {
   const withPR = terminal.filter(p => p.prUrl).length
   const rate = total > 0 ? completed / total : 0
 
+  const handleRetry = useCallback(async (pod: PodResult) => {
+    try {
+      await window.api.createPod(pod.task, {
+        name: pod.name,
+        presetId: pod.presetId,
+        issueNumber: pod.issueNumber,
+        issueRepo: pod.issueRepo,
+      })
+      setMergeResult(`Retried: ${pod.name}`)
+    } catch (err) {
+      setMergeResult(`Retry failed: ${(err as Error).message?.slice(0, 100)}`)
+    }
+  }, [])
+
   const handleMergeAll = useCallback(async (repo: string) => {
     setMerging(repo)
     setMergeResult(null)
     const repoPods = byRepo.get(repo) || []
     const prsToMerge = repoPods.filter(p => p.prUrl).map(p => {
       const match = p.prUrl!.match(/\/pull\/(\d+)$/)
-      return match ? { num: match[1], repo: p.issueRepo || repo } : null
+      const repoPath = p.issueRepo || repo
+      return match ? { num: match[1], repo: repoPath } : null
     }).filter(Boolean) as Array<{ num: string; repo: string }>
 
     let merged = 0
     let errors = 0
     for (const pr of prsToMerge) {
       try {
-        // Use the Slack merge command's same pattern — gh pr merge via proxyExecFile
-        await fetch(`/api/merge?pr=${pr.num}&repo=${pr.repo}`)
+        await window.api.mergePr(pr.num, pr.repo)
         merged++
       } catch {
-        // Try via IPC if fetch doesn't work
-        try {
-          // Fallback: direct IPC not available, skip
-          errors++
-        } catch {
-          errors++
-        }
+        errors++
       }
     }
     setMergeResult(`Merged ${merged}/${prsToMerge.length}${errors > 0 ? ` (${errors} failed)` : ''}`)
@@ -189,7 +215,7 @@ export function ResultsPanel() {
         ) : (
           <div className="flex flex-col gap-4">
             {[...byRepo.entries()].map(([repo, repoPods]) => (
-              <RepoGroup key={repo} repo={repo} pods={repoPods} onMergeAll={handleMergeAll} />
+              <RepoGroup key={repo} repo={repo} pods={repoPods} onMergeAll={handleMergeAll} onRetry={handleRetry} />
             ))}
           </div>
         )}

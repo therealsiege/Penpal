@@ -49,8 +49,6 @@ const LANES: { key: LaneId; label: string; dot: string; border: string }[] = [
   { key: 'planning', label: 'Planning', dot: 'bg-amber-400', border: 'border-amber-500/35' },
   { key: 'executing', label: 'Executing', dot: 'bg-blue-400', border: 'border-blue-500/35' },
   { key: 'validating', label: 'Validating', dot: 'bg-violet-400', border: 'border-violet-500/35' },
-  { key: 'done', label: 'Done', dot: 'bg-emerald-400', border: 'border-emerald-500/35' },
-  { key: 'failed', label: 'Failed', dot: 'bg-red-400', border: 'border-red-500/35' },
 ]
 
 function cardLane(card: GitHubIssueCard): LaneId {

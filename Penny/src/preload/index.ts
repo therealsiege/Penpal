@@ -81,6 +81,7 @@ contextBridge.exposeInMainWorld('api', {
   pausePod: (workflowId: string) => ipcRenderer.invoke('pod:pause', workflowId),
   resumePod: (workflowId: string) => ipcRenderer.invoke('pod:resume', workflowId),
   cancelPod: (workflowId: string) => ipcRenderer.invoke('pod:cancel', workflowId),
+  mergePr: (prNumber: string, repo: string) => ipcRenderer.invoke('pod:merge-pr', prNumber, repo),
   getPodPresets: () => ipcRenderer.invoke('pod:presets'),
   overridePod: (workflowId: string, phase: string, override: { model?: string; timeoutMultiplier?: number }) =>
     ipcRenderer.invoke('pod:override', workflowId, phase, override),
