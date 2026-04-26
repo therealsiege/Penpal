@@ -336,46 +336,44 @@ function IssueCard({
       {/* Main card — always visible */}
       <button
         type="button"
-        className="w-full text-left px-4 py-5 flex flex-col items-center gap-3 hover:bg-[var(--c-bg-elevated)] rounded-2xl transition-colors"
+        className="w-full text-left flex flex-col overflow-hidden hover:bg-[var(--c-bg-elevated)] rounded-2xl transition-colors"
         onClick={() => hasPod && setExpanded(e => !e)}
       >
-        {/* Big avatar */}
+        {/* Hero image — fills top half, no border, no rounding */}
         {activeAvatar ? (
-          <img src={activeAvatar} alt="" className="w-[240px] h-[240px] rounded-full object-cover ring-2 ring-[var(--c-border)]" />
+          <div className="w-full h-[200px] overflow-hidden">
+            <img src={activeAvatar} alt="" className="w-full h-full object-cover" />
+          </div>
         ) : (
-          <div className="w-[240px] h-[240px] rounded-full bg-[var(--c-bg-elevated)] flex items-center justify-center border border-[var(--c-border)]">
-            <span className="text-[48px] text-[var(--c-text-faint)]">#{card.issueNumber}</span>
+          <div className="w-full h-[200px] bg-[var(--c-bg-elevated)] flex items-center justify-center">
+            <span className="text-[56px] text-[var(--c-text-faint)]">#{card.issueNumber}</span>
           </div>
         )}
 
-        {/* Title + issue link below avatar */}
-        <div className="w-full text-center">
-          <span className="text-[22px] font-semibold text-[var(--c-text-heading)] line-clamp-2 leading-tight block">{card.title}</span>
-          <div className="flex items-center justify-center gap-3 mt-1.5">
+        {/* Title + issue link in bottom half */}
+        <div className="w-full px-5 py-4">
+          <span className="text-[20px] font-semibold text-[var(--c-text-heading)] line-clamp-2 leading-tight block">{card.title}</span>
+          <div className="flex items-center gap-3 mt-2">
             {card.url ? (
               <a
                 href={card.url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-[15px] text-indigo-400 hover:text-indigo-300 hover:underline"
+                className="text-[14px] text-indigo-400 hover:text-indigo-300 hover:underline"
                 onClick={(e) => e.stopPropagation()}
               >
                 {repoShort}#{card.issueNumber}
               </a>
             ) : (
-              <span className="text-[15px] text-[var(--c-text-muted)]">{repoShort} #{card.issueNumber}</span>
+              <span className="text-[14px] text-[var(--c-text-muted)]">{repoShort} #{card.issueNumber}</span>
             )}
             {activeName && (
-              <span className="text-[14px] text-[var(--c-text-secondary)]">{activeName}</span>
+              <span className="text-[13px] text-[var(--c-text-secondary)]">{activeName}</span>
             )}
-            <span className="text-[13px] text-[var(--c-text-faint)]">{formatAge(card.ingestedAt)}</span>
+            <span className="text-[12px] text-[var(--c-text-faint)] ml-auto">{formatAge(card.ingestedAt)}</span>
+            {hasPod && <span className="text-[12px] text-[var(--c-text-faint)]">{expanded ? '\u25B2' : '\u25BC'}</span>}
           </div>
         </div>
-
-        {/* Expand hint */}
-        {hasPod && (
-          <span className="text-[14px] text-[var(--c-text-faint)]">{expanded ? '\u25B2' : '\u25BC'}</span>
-        )}
       </button>
 
       {/* Pod agents strip — show team avatars when pod is assigned */}
