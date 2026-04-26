@@ -20,6 +20,7 @@ import { DataPanel } from './panels/DataPanel'
 import { ProfilesPanel } from './panels/ProfilesPanel'
 import { McpPanel } from './panels/McpPanel'
 import { ReplayPanel } from './panels/ReplayPanel'
+import { ResultsPanel } from './panels/ResultsPanel'
 import type { SystemPaths } from './types'
 import { getPathPresets } from './utils/path-presets'
 import { EventBus, EVENTS } from './game/events'
@@ -322,6 +323,7 @@ function AppContent() {
           />
         )}
         {activePanel === 'tasks' && <TasksPanel />}
+        {activePanel === 'results' && <ResultsPanel />}
         {activePanel === 'profiles' && <ProfilesPanel />}
         {activePanel === 'data' && <DataPanel />}
         {activePanel === 'vault' && <VaultPanel />}
