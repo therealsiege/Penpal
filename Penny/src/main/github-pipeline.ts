@@ -733,6 +733,12 @@ export function getPipelineIssues(): PipelineIssue[] {
   return state.issues
 }
 
+/** Remove a pipeline issue so it can be re-ingested on the next poll. */
+export function clearPipelineIssue(repo: string, issueNumber: number): void {
+  state.issues = state.issues.filter(i => !(i.repo === repo && i.number === issueNumber))
+  saveState()
+}
+
 /** Initialize — load persisted state and migrate old 2-agent entries. */
 export function initPipeline(): void {
   loadState()

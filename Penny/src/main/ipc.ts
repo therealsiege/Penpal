@@ -988,6 +988,24 @@ export function registerIpcHandlers() {
     return cancelPod(workflowId)
   }))
 
+  // Retry a failed issue: reset labels to agent-ready so pipeline re-ingests it
+  ipcMain.handle('pod:retry-issue', wrapHandler(async (repo: unknown, issueNumber: unknown) => {
+    if (typeof repo !== 'string') throw new Error('repo required')
+    if (typeof issueNumber !== 'number' && typeof issueNumber !== 'string') throw new Error('issueNumber required')
+    const num = String(issueNumber)
+    const { proxyExecFile } = await import('./spawn-proxy')
+    // Remove failure/executing labels
+    for (const label of ['agent-failed', 'agent-executing', 'agent-working', 'agent-done']) {
+      await proxyExecFile('gh', ['issue', 'edit', num, '--repo', repo, '--remove-label', label], { timeout: 10_000 }).catch(() => {})
+    }
+    // Add agent-ready to re-enter pipeline
+    await proxyExecFile('gh', ['issue', 'edit', num, '--repo', repo, '--add-label', 'agent-ready'], { timeout: 10_000 })
+    // Clear from pipeline state so it gets re-ingested
+    const { clearPipelineIssue } = await import('./github-pipeline')
+    clearPipelineIssue(repo, Number(num))
+    return { retried: true }
+  }))
+
   // Merge a PR via gh CLI (used by Results panel merge-all)
   ipcMain.handle('pod:merge-pr', wrapHandler(async (prNumber: unknown, repo: unknown) => {
     if (typeof prNumber !== 'string' && typeof prNumber !== 'number') throw new Error('prNumber required')

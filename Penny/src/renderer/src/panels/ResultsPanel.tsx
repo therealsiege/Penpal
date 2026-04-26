@@ -133,14 +133,15 @@ export function ResultsPanel() {
   const rate = total > 0 ? completed / total : 0
 
   const handleRetry = useCallback(async (pod: PodResult) => {
+    if (!pod.issueNumber || !pod.issueRepo) {
+      setMergeResult(`Can't retry: no issue number for ${pod.name}`)
+      return
+    }
     try {
-      await window.api.createPod(pod.task, {
-        name: pod.name,
-        presetId: pod.presetId,
-        issueNumber: pod.issueNumber,
-        issueRepo: pod.issueRepo,
-      })
-      setMergeResult(`Retried: ${pod.name}`)
+      // Reset labels on the GitHub issue: remove agent-failed/agent-executing, add agent-ready
+      // This puts it back into the pipeline for fresh ingestion
+      await window.api.retryIssue(pod.issueRepo, pod.issueNumber)
+      setMergeResult(`Queued retry: ${pod.issueRepo}#${pod.issueNumber}`)
     } catch (err) {
       setMergeResult(`Retry failed: ${(err as Error).message?.slice(0, 100)}`)
     }
