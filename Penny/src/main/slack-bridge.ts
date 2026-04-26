@@ -661,6 +661,40 @@ export async function startSlackBridge(): Promise<boolean> {
         return
       }
 
+      // ── !merge <PR#> [repo] — merge a PR from Slack ──
+      if (text.startsWith('!merge ')) {
+        const parts = text.slice(7).trim().split(/\s+/)
+        const prNum = parts[0]?.replace('#', '')
+        // Default repo: try to infer from channel, fall back to Penpal
+        let repo = parts[1] || ''
+        if (!repo) {
+          for (const [cwd, ch] of channelMap) {
+            if (ch.channelId === channelId) {
+              // Try to extract owner/repo from cwd
+              const ghMatch = cwd.match(/([^/]+)\/([^/]+)\/?$/)
+              if (ghMatch) repo = `${ghMatch[1]}/${ghMatch[2]}`
+              break
+            }
+          }
+        }
+        if (!repo) repo = 'therealsiege/Penpal'
+        if (!repo.includes('/')) repo = `therealsiege/${repo}`
+
+        if (!prNum || isNaN(Number(prNum))) {
+          await say({ text: ':x: Usage: `!merge <PR#> [owner/repo]`', username: 'Penny', icon_emoji: ':warning:' })
+          return
+        }
+
+        try {
+          const { proxyExecFile } = await import('./spawn-proxy')
+          await proxyExecFile('gh', ['pr', 'merge', prNum, '--repo', repo, '--squash', '--admin'], { timeout: 30_000 })
+          await say({ text: `:white_check_mark: Merged PR #${prNum} in ${repo}`, username: 'Penny', icon_emoji: ':rocket:' })
+        } catch (err) {
+          await say({ text: `:x: Failed to merge PR #${prNum}: ${(err as Error).message?.slice(0, 200)}`, username: 'Penny', icon_emoji: ':warning:' })
+        }
+        return
+      }
+
       // Find which project this channel maps to
       let targetCwd: string | null = null
       for (const [cwd, ch] of channelMap) {
