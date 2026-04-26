@@ -336,22 +336,22 @@ function IssueCard({
       {/* Main card — always visible */}
       <button
         type="button"
-        className="w-full text-left px-4 py-4 flex items-center gap-5 hover:bg-[var(--c-bg-elevated)] rounded-2xl transition-colors"
+        className="w-full text-left px-4 py-5 flex flex-col items-center gap-3 hover:bg-[var(--c-bg-elevated)] rounded-2xl transition-colors"
         onClick={() => hasPod && setExpanded(e => !e)}
       >
         {/* Big avatar */}
         {activeAvatar ? (
-          <img src={activeAvatar} alt="" className="w-[240px] h-[240px] rounded-full object-cover shrink-0 ring-2 ring-[var(--c-border)]" />
+          <img src={activeAvatar} alt="" className="w-[240px] h-[240px] rounded-full object-cover ring-2 ring-[var(--c-border)]" />
         ) : (
-          <div className="w-[240px] h-[240px] rounded-full bg-[var(--c-bg-elevated)] flex items-center justify-center shrink-0 border border-[var(--c-border)]">
-            <span className="text-[32px] text-[var(--c-text-faint)]">#{card.issueNumber}</span>
+          <div className="w-[240px] h-[240px] rounded-full bg-[var(--c-bg-elevated)] flex items-center justify-center border border-[var(--c-border)]">
+            <span className="text-[48px] text-[var(--c-text-faint)]">#{card.issueNumber}</span>
           </div>
         )}
 
-        {/* Title + issue link */}
-        <div className="flex-1 min-w-0">
-          <span className="text-[24px] font-semibold text-[var(--c-text-heading)] line-clamp-2 leading-tight block">{card.title}</span>
-          <div className="flex items-center gap-3 mt-1.5">
+        {/* Title + issue link below avatar */}
+        <div className="w-full text-center">
+          <span className="text-[22px] font-semibold text-[var(--c-text-heading)] line-clamp-2 leading-tight block">{card.title}</span>
+          <div className="flex items-center justify-center gap-3 mt-1.5">
             {card.url ? (
               <a
                 href={card.url}
@@ -374,7 +374,7 @@ function IssueCard({
 
         {/* Expand hint */}
         {hasPod && (
-          <span className="text-[14px] text-[var(--c-text-faint)] flex-none">{expanded ? '\u25B2' : '\u25BC'}</span>
+          <span className="text-[14px] text-[var(--c-text-faint)]">{expanded ? '\u25B2' : '\u25BC'}</span>
         )}
       </button>
 
