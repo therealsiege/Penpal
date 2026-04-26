@@ -342,7 +342,7 @@ function IssueCard({
         {/* Hero image — fills top half, no border, no rounding */}
         {activeAvatar ? (
           <div className="w-full h-[200px] overflow-hidden">
-            <img src={activeAvatar} alt="" className="w-full h-full object-cover" />
+            <img src={activeAvatar} alt="" className="w-full h-full object-cover object-top" />
           </div>
         ) : (
           <div className="w-full h-[200px] bg-[var(--c-bg-elevated)] flex items-center justify-center">
