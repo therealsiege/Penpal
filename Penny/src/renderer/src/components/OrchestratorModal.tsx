@@ -336,24 +336,24 @@ function IssueCard({
       {/* Main card — always visible */}
       <button
         type="button"
-        className="w-full text-left px-4 py-4 flex items-center gap-4 hover:bg-[var(--c-bg-elevated)] rounded-xl transition-colors"
+        className="w-full text-left px-5 py-5 flex items-center gap-5 hover:bg-[var(--c-bg-elevated)] rounded-xl transition-colors"
         onClick={() => hasPod && setExpanded(e => !e)}
       >
         {/* Active agent avatar or priority dot */}
         {activeAvatar ? (
-          <img src={activeAvatar} alt="" className="w-[72px] h-[72px] rounded-full object-cover shrink-0 ring-2 ring-[var(--c-border)]" />
+          <img src={activeAvatar} alt="" className="w-[88px] h-[88px] rounded-full object-cover shrink-0 ring-2 ring-[var(--c-border)]" />
         ) : (
-          <div className="w-[72px] h-[72px] rounded-full bg-[var(--c-bg-elevated)] flex items-center justify-center shrink-0 border border-[var(--c-border)]">
-            <span className="text-[24px] text-[var(--c-text-faint)]">#{card.issueNumber}</span>
+          <div className="w-[88px] h-[88px] rounded-full bg-[var(--c-bg-elevated)] flex items-center justify-center shrink-0 border border-[var(--c-border)]">
+            <span className="text-[28px] text-[var(--c-text-faint)]">#{card.issueNumber}</span>
           </div>
         )}
 
         {/* Title + repo */}
         <div className="flex-1 min-w-0">
-          <span className="text-[18px] font-semibold text-[var(--c-text-heading)] line-clamp-2 leading-snug block">{card.title}</span>
-          <div className="flex items-center gap-2 mt-1">
-            <span className="text-[14px] text-[var(--c-text-muted)]">{repoShort}</span>
-            <span className="text-[13px] text-[var(--c-border)]">#{card.issueNumber}</span>
+          <span className="text-[22px] font-semibold text-[var(--c-text-heading)] line-clamp-2 leading-snug block">{card.title}</span>
+          <div className="flex items-center gap-2 mt-1.5">
+            <span className="text-[16px] text-[var(--c-text-muted)]">{repoShort}</span>
+            <span className="text-[15px] text-[var(--c-border)]">#{card.issueNumber}</span>
             {activeName && (
               <span className="text-[13px] text-[var(--c-text-muted)]">{activeName}</span>
             )}
