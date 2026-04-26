@@ -341,9 +341,9 @@ function IssueCard({
       >
         {/* Big avatar */}
         {activeAvatar ? (
-          <img src={activeAvatar} alt="" className="w-[120px] h-[120px] rounded-full object-cover shrink-0 ring-2 ring-[var(--c-border)]" />
+          <img src={activeAvatar} alt="" className="w-[240px] h-[240px] rounded-full object-cover shrink-0 ring-2 ring-[var(--c-border)]" />
         ) : (
-          <div className="w-[120px] h-[120px] rounded-full bg-[var(--c-bg-elevated)] flex items-center justify-center shrink-0 border border-[var(--c-border)]">
+          <div className="w-[240px] h-[240px] rounded-full bg-[var(--c-bg-elevated)] flex items-center justify-center shrink-0 border border-[var(--c-border)]">
             <span className="text-[32px] text-[var(--c-text-faint)]">#{card.issueNumber}</span>
           </div>
         )}
