@@ -510,6 +510,13 @@ export async function ingestIssue(config: RepoConfig, issue: GHIssue): Promise<P
     entry.branch = wt.branch
     entry.worktreePath = wt.worktreePath
     console.log(`[github-pipeline] Worktree created: ${wt.branch} at ${wt.worktreePath}`)
+    // Copy opencode.json into worktree if it exists in the main repo (for Ollama routing)
+    const opencodeConfig = path.join(resolvedPath, 'opencode.json')
+    if (fs.existsSync(opencodeConfig)) {
+      try {
+        fs.copyFileSync(opencodeConfig, path.join(wt.worktreePath, 'opencode.json'))
+      } catch { /* non-critical */ }
+    }
   } else {
     const br = await createIssueBranch(resolvedPath, issue.number, slug)
     if (br.ok) {
