@@ -336,7 +336,7 @@ function IssueCard({
       {/* Main card — always visible */}
       <button
         type="button"
-        className="w-full text-left px-6 py-6 flex items-center gap-6 hover:bg-[var(--c-bg-elevated)] rounded-xl transition-colors"
+        className="w-full text-left px-6 py-8 flex items-center gap-6 hover:bg-[var(--c-bg-elevated)] rounded-xl transition-colors min-h-[140px]"
         onClick={() => hasPod && setExpanded(e => !e)}
       >
         {/* Active agent avatar or priority dot */}
@@ -355,15 +355,15 @@ function IssueCard({
             <span className="text-[18px] text-[var(--c-text-muted)]">{repoShort}</span>
             <span className="text-[17px] text-[var(--c-border)]">#{card.issueNumber}</span>
             {activeName && (
-              <span className="text-[13px] text-[var(--c-text-muted)]">{activeName}</span>
+              <span className="text-[15px] text-[var(--c-text-muted)]">{activeName}</span>
             )}
           </div>
         </div>
 
         {/* Right side — elapsed + expand hint */}
-        <div className="flex flex-col items-end gap-1 flex-none">
-          <span className="text-[13px] text-[var(--c-border-hover)]">{formatAge(card.ingestedAt)}</span>
-          {hasPod && <span className="text-[12px] text-[var(--c-text-faint)]">{expanded ? '\u25B2' : '\u25BC'}</span>}
+        <div className="flex flex-col items-end gap-2 flex-none">
+          <span className="text-[15px] text-[var(--c-border-hover)]">{formatAge(card.ingestedAt)}</span>
+          {hasPod && <span className="text-[14px] text-[var(--c-text-faint)]">{expanded ? '\u25B2' : '\u25BC'}</span>}
         </div>
       </button>
 
