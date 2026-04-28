@@ -145,187 +145,306 @@ Two graph databases are available. Use the right one for the job:
 
 
 
-### Workflow: Implement GitHub issue therealsiege/Penpal#337: Refactor 3a: (2026-04-20)
-- Task: Implement GitHub issue therealsiege/Penpal#337: Refactor 3a: Sync walk animation frame rate to movement speed in path-walker.ts
-- Team: nextjs-frontend / ui-designer / electron-dev
-- Result: PASS (1/3 iterations)
-- Key output: All checks complete. Here is the structured result:
 
-```
-RESULT: PASS
 
-Test Case 1: TypeScript compilation (npx tsc --noEmit) — PASS
-  Details: Exit c
 
-### Workflow: Implement GitHub issue therealsiege/Penpal#334: Refactor 1b: (2026-04-20)
-- Task: Implement GitHub issue therealsiege/Penpal#334: Refactor 1b: Fix audio-manager setTimeout leak on scene destroy — add destroy method, clear all timeouts
-- Team: nextjs-frontend / ui-designer / electron-dev
-- Result: PASS (1/3 iterations)
-- Key output: All checks complete. Here is the structured QA report:
 
----
 
-```
-RESULT: PASS
 
-Test Case 1: TypeScript compilation (npx tsc --noEmit) — PASS
-  Details
 
-### Workflow: Implement GitHub issue therealsiege/Penpal#339: Infra 1a: Po (2026-04-20)
-- Task: Implement GitHub issue therealsiege/Penpal#339: Infra 1a: Pod pipeline — add rebase before PR in pushAndCreatePR, add cleanup flag for stale worktrees, push local main if ahead
-- Team: nextjs-frontend / ui-designer / electron-dev
-- Result: PASS (1/3 iterations)
-- Key output: All three requirements verified. Here is my structured QA report:
 
----
 
-```
-RESULT: PASS
 
-Test Case 1: Crossfade transitions implemented in workstation-animation.ts — PASS
 
-## Recent Context (auto-generated for this pod — do not edit)
 
-### Last 20 commits on main
-```
-4bd81eb fix: misplaced closing brace in boot-scene RPG animation registration
-3bd5c47 Merge remote-tracking branch 'origin/pod-320-polish-1b-session-replay-record-and-play' into release/wave-5-audio-polish
-25aff7b Merge remote-tracking branch 'origin/pod-319-polish-1a-in-game-settings-menu-volumes' into release/wave-5-audio-polish
-be05077 Merge remote-tracking branch 'origin/pod-318-camera-1a-cinematic-letterbox-bars-for-k' into release/wave-5-audio-polish
-24b882f Merge remote-tracking branch 'origin/pod-317-theme-1a-audit-rendering-eliminate-hardc' into release/wave-5-audio-polish
-ba8fd08 Merge remote-tracking branch 'origin/pod-316-audio-1b-sfx-triggers-task-lifecycle-cel' into release/wave-5-audio-polish
-026e0c6 Merge remote-tracking branch 'origin/pod-315-audio-1a-enable-phaser-audio-connect-aud' into release/wave-5-audio-polish
-4ac25b7 Merge remote-tracking branch 'origin/pod-204-rpg-layer-2-player-character-with-wasd-m' into release/wave-5-audio-polish
-58e11f8 Merge remote-tracking branch 'origin/pod-212-rpg-anim-1-8-direction-character-sprites' into release/wave-5-audio-polish
-86c2652 Implement GitHub issue therealsiege/Penpal#317: Theme 1a: Audit renderin
-f40c449 Implement GitHub issue therealsiege/Penpal#319: Polish 1a: In-game setti
-a7a9213 Implement GitHub issue therealsiege/Penpal#320: Polish 1b: Session repla
-b1e18ff fix: restore tailwind + vite configs deleted during release merge
-20fb4cf Implement GitHub issue therealsiege/Penpal#316: Audio 1b: SFX triggers —
-26ba312 Implement GitHub issue therealsiege/Penpal#315: Audio 1a: Enable Phaser
-8f857f9 Implement GitHub issue therealsiege/Penpal#318: Camera 1a: Cinematic let
-8447c25 fix: restore ipc.ts + fix duplicate members in particles-weather
-bc08c1c Implement GitHub issue therealsiege/Penpal#212: RPG Anim 1: 8-direction
-54fefa8 Implement GitHub issue therealsiege/Penpal#204: RPG Layer 2: Player char
-b923e01 Merge pull request #308 from therealsiege/release/living-lab-wave-1-2
-```
 
-### Recently modified files
-```
-Penny/electron.vite.config.ts
-Penny/public/sprites/characters-rpg.png
-Penny/scripts/build-sprites.mjs
-Penny/src/main/ipc.ts
-Penny/src/main/session-replay.ts
-Penny/src/preload/index.ts
-Penny/src/renderer/src/App.tsx
-Penny/src/renderer/src/components/Layout.tsx
-Penny/src/renderer/src/env.d.ts
-Penny/src/renderer/src/game/OfficeGame.ts
-Penny/src/renderer/src/game/OfficeScene.ts
-Penny/src/renderer/src/game/atmosphere-lighting.ts
-Penny/src/renderer/src/game/audio-manager.ts
-Penny/src/renderer/src/game/boot-scene.ts
-Penny/src/renderer/src/game/cafe-chat.ts
-Penny/src/renderer/src/game/camera-cinematics.ts
-Penny/src/renderer/src/game/celebrations.ts
-Penny/src/renderer/src/game/events.ts
-Penny/src/renderer/src/game/interactive-props.ts
-Penny/src/renderer/src/game/lab-editor.ts
-Penny/src/renderer/src/game/office-asset-keys.ts
-Penny/src/renderer/src/game/office-background.ts
-Penny/src/renderer/src/game/office-broadcast.ts
-Penny/src/renderer/src/game/office-constants.ts
-Penny/src/renderer/src/game/office-helpers.ts
-Penny/src/renderer/src/game/office-interior.ts
-Penny/src/renderer/src/game/office-minimap.ts
-Penny/src/renderer/src/game/office-particles.ts
-Penny/src/renderer/src/game/office-pods.ts
-Penny/src/renderer/src/game/office-rooms.ts
-Penny/src/renderer/src/game/office-settings.ts
-Penny/src/renderer/src/game/office-terrain.ts
-Penny/src/renderer/src/game/office-theme.ts
-Penny/src/renderer/src/game/office-ui.ts
-Penny/src/renderer/src/game/office-workstation.ts
-Penny/src/renderer/src/game/particles-ambient.ts
-Penny/src/renderer/src/game/penny-cafe.ts
-Penny/src/renderer/src/game/player-controller.ts
-Penny/src/renderer/src/game/workstation-animation.ts
-Penny/src/renderer/src/game/workstation-creation.ts
-Penny/src/renderer/src/panels/ReplayPanel.tsx
-Penny/src/renderer/src/types.ts
-Penny/tailwind.config.js
-```
 
-### Active pod branches (avoid conflicting)
-```
-origin/pod-204-rpg-layer-2-player-character-with-wasd-m
-  origin/pod-212-rpg-anim-1-8-direction-character-sprites
-  origin/pod-241-living-lab-2c-monitor-screensaver-pipe-p
-  origin/pod-244-living-lab-3c-room-zone-ambient-lights-c
-  origin/pod-251-living-lab-6b-task-lifecycle-vfx-start-c
-  origin/pod-252-living-lab-6c-pod-communication-pulse-ce
-  origin/pod-315-audio-1a-enable-phaser-audio-connect-aud
-  origin/pod-316-audio-1b-sfx-triggers-task-lifecycle-cel
-  origin/pod-317-theme-1a-audit-rendering-eliminate-hardc
-  origin/pod-318-camera-1a-cinematic-letterbox-bars-for-k
-  origin/pod-319-polish-1a-in-game-settings-menu-volumes
-  origin/pod-320-polish-1b-session-replay-record-and-play
-```
 
-### Workflow: Implement GitHub issue therealsiege/Penpal#340: Expand agent (2026-04-23)
-- Task: Implement GitHub issue therealsiege/Penpal#340: Expand agents/CLAUDE.md context for pods. Increase workflow log from 5 to 20 entries. Auto-append recent git context (last 10 commits touching game file
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+### Workflow: therealsiege/hitchhikers-guide-to-religion#56 (2026-04-26)
+- Task: Implement GitHub issue therealsiege/hitchhikers-guide-to-religion#56: Generate additional Conspiracies event art (10 more scenes)
+
+## Task
+Generate 10 more dramatic scenes for Conspiracies.md beyond w
 - Team: fullstack-dev / backend-arch / electron-dev
-- Result: PASS (1/3 iterations)
-- Key output: All tests pass. Here are the results:
-
-```
-RESULT: PASS
-
-Test Case 1: Workflow log limit set to 20 - PASS
-  Details: pods.ts:1580 has `MAX_WORKFLOW_LO
-
-### Workflow: Implement GitHub issue therealsiege/Penpal#335: Extract anim (2026-04-23)
-- Task: Implement GitHub issue therealsiege/Penpal#335: Extract animation state classes from workstation-animation.ts. The TweenBag from #333 is already merged and available via tween-lifecycle.ts. Break the 
-- Team: videogame-dev / ui-designer / electron-dev
 - Result: PASS (1/3 iterations)
 - Self-fix attempts: 1
-- Key output: All 41 tests pass.
+- Key output: The TSC/Jest failures are **infrastructure-level EBADF errors** in the Penny test runner, not actual TypeScript or test errors. The error message itse
 
----
+### Workflow: therealsiege/hitchhikers-guide-to-religion#69 (2026-04-26)
+- Task: Implement GitHub issue therealsiege/hitchhikers-guide-to-religion#69: Generate 'championship portrait' art for Top 10 most powerful entities
 
-```
-RESULT: PASS
-
-Test Case 1: TypeScript compilation — PASS
-  Details: `npx tsc --noEmit` exits cleanly (no new errors intro
-
-### Workflow: Implement GitHub issue therealsiege/Penpal#360: Combo analyt (2026-04-24)
-- Task: Implement GitHub issue therealsiege/Penpal#360: Combo analytics auto-routing. Add suggestBestCombo(taskKeywords?) to src/main/evals/collectors/pod-combos.ts that returns the highest success-rate combo
+Premium museum-quality portraits for the 10 highest-stat e
 - Team: fullstack-dev / backend-arch / electron-dev
 - Result: PASS (1/3 iterations)
-- Key output: Sort at line 278 confirms: `topCombos` is sorted by `successRate` desc, then `avgCompletionTime_ms` asc — exactly as the Solver's comment states. The
-
-### Workflow: Implement GitHub issue therealsiege/Penpal#358: Wire eval ha (2026-04-24)
-- Task: Implement GitHub issue therealsiege/Penpal#358: Wire eval harness to orchestrator task completions. The eval harness (src/main/evals/harness.ts) has record() and reportAll() methods but nothing calls 
-- Team: fullstack-dev / backend-arch / electron-dev
-- Result: PASS (1/3 iterations)
-- Key output: All 9 tests across 4 eval test files pass. Here is the structured QA report:
-
----
-
-```
-RESULT: PASS
-
-Test Case 1: Implementation wiring — PASS
-  Detai
-
-### Workflow: Implement GitHub issue therealsiege/Penpal#359: Activate DPO (2026-04-24)
-- Task: Implement GitHub issue therealsiege/Penpal#359: Activate DPO pair generator. 101 preference pairs exist in data/preferences.jsonl. The PairGenerator in src/main/preferences/pairs.ts has generate() and
-- Team: fullstack-dev / backend-arch / electron-dev
-- Result: PASS (2/3 iterations)
 - Self-fix attempts: 1
-- Key output: RESULT: PASS
+- Key output: The TSC error is a test infrastructure issue, not a code problem. This is a pure Python project with:
+- No `.ts` files
+- No `tsconfig.json`
+- No `pack
 
-Test Case 1: IPC handler registration (`evals:generate-dpo-pairs`) - PASS  
-  Details: Re-verified in `Penny/src/main/ipc.ts` that `regi
+### Workflow: therealsiege/hitchhikers-guide-to-religion#158 (2026-04-26)
+- Task: Implement GitHub issue therealsiege/hitchhikers-guide-to-religion#158: Create 'The Promises' -- every divine promise of future restoration with art
+
+## Task
+Create a section on what every tradition pr
+- Team: fullstack-dev / backend-arch / electron-dev
+- Result: PASS (1/3 iterations)
+- Self-fix attempts: 1
+- Key output: The test output shows **RESULT: PASS** for all 7 test cases. The only issue flagged is:
+
+```
+TSC ERRORS:
+EBADF on execFileSync — convert caller to use
+
+### Workflow: therealsiege/hitchhikers-guide-to-religion#67 (2026-04-26)
+- Task: Implement GitHub issue therealsiege/hitchhikers-guide-to-religion#67: Generate 'championship portrait' art for Top 10 most powerful entities
+
+Premium museum-quality portraits for the 10 highest-stat e
+- Team: fullstack-dev / backend-arch / electron-dev
+- Result: PASS (1/3 iterations)
+- Self-fix attempts: 1
+- Key output: The failure is not caused by my code. The "REAL VALIDATION" error is:
+
+```
+EBADF on execFileSync — convert caller to use proxyExecFile: npx tsc --noEm
+
+### Workflow: therealsiege/hitchhikers-guide-to-religion#160 (2026-04-26)
+- Task: Implement GitHub issue therealsiege/hitchhikers-guide-to-religion#160: Add Thracian/Orphic tradition -- the mystery behind the mystery (8 entities)
+
+## Task
+Create \`Bestiary/Orphic.md\`. The Orphic m
+- Team: fullstack-dev / backend-arch / electron-dev
+- Result: PASS (1/3 iterations)
+- Self-fix attempts: 1
+- Key output: The TSC error is in the test harness infrastructure itself (`EBADF on execFileSync`), not in any code I changed. This is a markdown/content repository
+
+### Workflow: therealsiege/hitchhikers-guide-to-religion#70 (2026-04-26)
+- Task: Implement GitHub issue therealsiege/hitchhikers-guide-to-religion#70: Add Siberian Shamanism -- the origin of ALL shamanism (8 entities)
+
+Create Bestiary/Siberian.md. Tengri, Erlik, World Tree, Shaman
+- Team: fullstack-dev / backend-arch / electron-dev
+- Result: PASS (1/3 iterations)
+- Self-fix attempts: 1
+- Key output: The repository contains no TypeScript files and no `tsconfig.json`. The `TSC ERRORS` line is a test-runner infrastructure issue — the harness's `execF
+
+### Workflow: therealsiege/hitchhikers-guide-to-religion#157 (2026-04-26)
+- Task: Implement GitHub issue therealsiege/hitchhikers-guide-to-religion#157: Add Afro-Brazilian traditions -- Candomblé and Umbanda (10 entities)
+
+## Task
+Create \`Bestiary/AfroBrazilian.md\` covering Cando
+- Team: fullstack-dev / backend-arch / electron-dev
+- Result: PASS (1/3 iterations)
+- Self-fix attempts: 1
+- Key output: The repository contains no TypeScript files and no `tsconfig.json`. The TSC error is a harness-internal `EBADF` on `execFileSync` — an infrastructure
+
+### Workflow: therealsiege/hitchhikers-guide-to-religion#68 (2026-04-26)
+- Task: Implement GitHub issue therealsiege/hitchhikers-guide-to-religion#68: Add Siberian Shamanism -- the origin of ALL shamanism (8 entities)
+
+Create Bestiary/Siberian.md. The word 'shaman' is Siberian. Te
+- Team: fullstack-dev / backend-arch / electron-dev
+- Result: PASS (1/3 iterations)
+- Self-fix attempts: 1
+- Key output: The project contains no TypeScript — it's a Markdown/Python knowledge vault. The TSC error is the test harness attempting `npx tsc --noEmit` on a proj
+
+### Workflow: therealsiege/hitchhikers-guide-to-religion#159 (2026-04-26)
+- Task: Implement GitHub issue therealsiege/hitchhikers-guide-to-religion#159: Create 'The Numbers of the Dead' -- body counts across traditions ranked
+
+## Task
+Create a (deliberately irreverent) section rank
+- Team: fullstack-dev / backend-arch / electron-dev
+- Result: PASS (1/3 iterations)
+- Self-fix attempts: 1
+- Key output: No TypeScript files exist in this worktree. The TSC error (`EBADF on execFileSync`) is a test harness infrastructure issue — the harness attempted to
+
+### Workflow: therealsiege/hitchhikers-guide-to-religion#69 (2026-04-26)
+- Task: Implement GitHub issue therealsiege/hitchhikers-guide-to-religion#69: Generate 'championship portrait' art for Top 10 most powerful entities
+
+Premium museum-quality portraits for the 10 highest-stat e
+- Team: fullstack-dev / backend-arch / electron-dev
+- Result: PASS (1/3 iterations)
+- Self-fix attempts: 1
+- Key output: Looking at the output, all 10 test cases **PASS**. The only issue reported is:
+
+```
+EBADF on execFileSync — convert caller to use proxyExecFile: npx t
+
+### Workflow: therealsiege/hitchhikers-guide-to-religion#155 (2026-04-26)
+- Task: Implement GitHub issue therealsiege/hitchhikers-guide-to-religion#155: Create 'The Exiles' -- every forced journey and wandering across traditions with art (15 scenes)
+
+## Task
+Create a section on exi
+- Team: fullstack-dev / backend-arch / electron-dev
+- Result: PASS (1/3 iterations)
+- Self-fix attempts: 1
+- Key output: There are no TypeScript files in this project — it's a pure Markdown/JSON content repo. The `EBADF on execFileSync` error is a test-runner infrastruct
+
+### Workflow: therealsiege/hitchhikers-guide-to-religion#173 (2026-04-26)
+- Task: Implement GitHub issue therealsiege/hitchhikers-guide-to-religion#173: Create 'The Questions' -- the one question each tradition can't answer
+
+## Task
+The definitive final section of the Bestiary. Eve
+- Team: fullstack-dev / backend-arch / electron-dev
+- Result: PASS (1/3 iterations)
+- Self-fix attempts: 1
+- Key output: All 8 test cases passed. The TSC error shown is a test infrastructure issue (`EBADF on execFileSync` when attempting to run `npx tsc --noEmit`), not a
+
+### Workflow: therealsiege/hitchhikers-guide-to-religion#160 (2026-04-26)
+- Task: Implement GitHub issue therealsiege/hitchhikers-guide-to-religion#160: Add Thracian/Orphic tradition -- the mystery behind the mystery (8 entities)
+
+## Task
+Create \`Bestiary/Orphic.md\`. The Orphic m
+- Team: fullstack-dev / backend-arch / electron-dev
+- Result: PASS (1/3 iterations)
+- Self-fix attempts: 1
+- Key output: All 10 test cases passed. The "REAL VALIDATION" error (`EBADF on execFileSync`) is an infrastructure issue with the test runner attempting to run `npx
+
+### Workflow: therealsiege/hitchhikers-guide-to-religion#171 (2026-04-26)
+- Task: Implement GitHub issue therealsiege/hitchhikers-guide-to-religion#171: Create 'The Paradoxes' -- logical impossibilities that traditions embrace
+
+## Task
+Create a section on the paradoxes, contradicti
+- Team: fullstack-dev / backend-arch / electron-dev
+- Result: PASS (1/3 iterations)
+- Self-fix attempts: 1
+- Key output: The TSC error is in the test harness infrastructure, not in the task output. All files changed in this task are `.md` and `.py` — no TypeScript was cr
+
+### Workflow: therealsiege/hitchhikers-guide-to-religion#66 (2026-04-26)
+- Task: Implement GitHub issue therealsiege/hitchhikers-guide-to-religion#66: Create 'The Flood -- Complete Forensic Comparison' with art
+
+Create Bestiary/FloodComparison.md -- verse-by-verse comparison of fl
+- Team: fullstack-dev / backend-arch / electron-dev
+- Result: PASS (1/3 iterations)
+- Self-fix attempts: 1
+- Key output: The TSC error ("EBADF on execFileSync") is a test infrastructure issue — there are no TypeScript files in this repository, so `npx tsc --noEmit` canno
+
+### Workflow: therealsiege/hitchhikers-guide-to-religion#158 (2026-04-26)
+- Task: Implement GitHub issue therealsiege/hitchhikers-guide-to-religion#158: Create 'The Promises' -- every divine promise of future restoration with art
+
+## Task
+Create a section on what every tradition pr
+- Team: fullstack-dev / backend-arch / electron-dev
+- Result: PASS (1/3 iterations)
+- Self-fix attempts: 1
+- Key output: The QA tests all passed (12/12). The "failure" is in the test infrastructure itself, not in the code.
+
+**Diagnosis:**
+
+The error `EBADF on execFileSyn
+
+### Workflow: therealsiege/hitchhikers-guide-to-religion#157 (2026-04-26)
+- Task: Implement GitHub issue therealsiege/hitchhikers-guide-to-religion#157: Add Afro-Brazilian traditions -- Candomblé and Umbanda (10 entities)
+
+## Task
+Create \`Bestiary/AfroBrazilian.md\` covering Cando
+- Team: fullstack-dev / backend-arch / electron-dev
+- Result: PASS (1/3 iterations)
+- Self-fix attempts: 1
+- Key output: The content is intact and committed. The TSC error is a test-runner infrastructure issue (`EBADF on execFileSync`) — it cannot execute `npx tsc --noEm
+
+### Workflow: therealsiege/hitchhikers-guide-to-religion#55 (2026-04-26)
+- Task: Implement GitHub issue therealsiege/hitchhikers-guide-to-religion#55: Add Jain tradition to the Bestiary (8 entities)
+
+## Task
+Create \`Bestiary/Jain.md\`. Jainism has ~5 million practitioners, is one
+- Team: fullstack-dev / backend-arch / electron-dev
+- Result: PASS (1/3 iterations)
+- Self-fix attempts: 1
+- Key output: Looking at the failure output, all 9 test cases show **PASS**. The only issue reported is:
+
+```
+TSC ERRORS:
+EBADF on execFileSync — convert caller to
+
+### Workflow: therealsiege/hitchhikers-guide-to-religion#54 (2026-04-26)
+- Task: Implement GitHub issue therealsiege/hitchhikers-guide-to-religion#54: Generate art for key alignment shift moments (12 scenes)
+
+## Task
+Generate dramatic art for the most powerful alignment shift mome
+- Team: fullstack-dev / backend-arch / electron-dev
+- Result: PASS (1/3 iterations)
+- Self-fix attempts: 1
+- Key output: All 9 test cases are PASS. The "TSC ERRORS" line shows an infrastructure error (`EBADF on execFileSync`) — that's a test runner issue with how `tsc` i
+
+### Workflow: therealsiege/hitchhikers-guide-to-religion#60 (2026-04-26)
+- Task: Implement GitHub issue therealsiege/hitchhikers-guide-to-religion#60: Create 'Sacred Meals' cross-tradition section with art (12 images)
+
+## Task
+Create a new analytical section in Bestiary/README.md 
+- Team: fullstack-dev / backend-arch / electron-dev
+- Result: PASS (1/3 iterations)
+- Self-fix attempts: 1
+- Key output: ---
+
+```
+RESULT: PASS
+
+Test Case 1: SacredMeals.md created with correct content - PASS
+  Details: File exists at Bestiary/SacredMeals.md (320 lines). 
