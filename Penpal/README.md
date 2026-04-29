@@ -47,15 +47,70 @@ Sound effects for meetings and fun. Vault and soundboard files live in your home
 
 ## Vision
 
-**Theme: Run your agentic business like an RPG video game.**
+**Run your agentic business like an RPG video game.**
 
-Agents are characters with personas from *Journey to the West*. Pods are quests. The office is a scene. XP, leaderboards, seasons, and cosmetic rewards make the work visible and engaging.
+Penpal collapses the distance between "what are my agents doing" and "how do I make them better" into a single interface — a living game world where AI agents are visible colleagues with personalities, progression, and rivalries.
 
-The long-term goal: manage the operations of an entire business through Slack, GitHub Issues, and Linear — with Penpal as the operating system that turns those inputs into coordinated agent work, visible in real-time through game scenes.
+Agents are characters from *Journey to the West*. Pods are quests. The office is a scene. XP, leaderboards, seasons, and cosmetic rewards make invisible background work visible and engaging. You don't read logs — you watch the office.
 
-### Current Scene: Development Lab
+### The Core Loop
 
-We're eating our own dogfood — Penpal's pod system is used to build Penpal itself. The lab scene shows an isometric office where agent characters work at desks, take coffee breaks in the cafe, and celebrate task completions with particle effects.
+```
+Business Input (Slack, GitHub, Linear)
+        ↓
+  Penpal dispatches a Pod (3-agent team)
+        ↓
+  Agents work in the game world (visible, real-time)
+        ↓
+  Pod produces a PR (tested, reviewed, merged)
+        ↓
+  Analytics feed back into routing + learning
+        ↓
+  You tune the team, adjust presets, launch more pods
+```
+
+Every loop iteration makes the system smarter — the ReasoningBank remembers what worked, complexity routing picks better models, combo analytics reveal which agent teams produce the best code.
+
+### Where We Are
+
+The development lab is the first scene. It's self-referential — Penpal's pod system builds Penpal itself. The lab shows an isometric office where agent characters work at desks, take coffee breaks in the cafe, compete on leaderboards, and celebrate task completions with particle effects. You can press I to inspect any agent's bestiary card, watch pods solve issues in real-time with stage labels on workstations, and track which agent combos perform best in the Eval dashboard.
+
+### Where We're Going
+
+The game isn't decoration — it's the primary interface for managing AI-augmented operations.
+
+**Near-term: Agent Interaction Layer**
+
+The player character (WASD movement) is built but can't interact with the world yet. The next step is making the office interactive:
+
+- Walk up to an agent's desk, press E → context menu: view stats, assign task, customize desk, check recent work
+- Agents respond with dialog reflecting their Journey to the West persona and current mood
+- Quest-giver NPCs at the whiteboard — click to see available GitHub issues, drag-to-assign to an agent
+- Pod formation as a ritual — select 3 agents, see their combo stats, launch with a ceremony animation
+
+**Mid-term: Multiple Scenes**
+
+Each scene is a self-contained workspace with its own agent team, workflow patterns, and game mechanics — all managed from the world map.
+
+| Scene | Purpose | Agent Team |
+|-------|---------|------------|
+| **Development Lab** (current) | Code — GitHub issues → PRs | Solvers, reviewers, executors |
+| **Virtual Call Center** | Support — tickets → resolutions | Triage agents, escalation, QA |
+| **Content Studio** | Marketing — briefs → published content | Writers, designers, SEO, social |
+| **Mail Room** | Comms — inbox → responses + lead qualification | Email triage, auto-reply, CRM sync |
+| **War Room** | Strategy — data → intelligence reports | Analysts, researchers, competitive intel |
+
+**Long-term: The Self-Improving Workforce**
+
+The intelligence layer (mostly built) closes the loop between work and learning:
+
+1. **Preference capture** — every approve/reject is training data (DPO pairs logged to JSONL)
+2. **Combo analytics** — track which agent triples produce the best code (collector running)
+3. **Reasoning bank** — successful patterns injected into future solver prompts (integrated)
+4. **Complexity routing** — auto-select Sonnet/Opus/local models by task difficulty (running)
+5. **Fine-tuned local models** — DPO-train a 7B model on your preference data for zero-cost inference (planned)
+
+The endgame: a 7B model trained on *your* patterns, running locally via Ollama, handling routine work at zero cost while Opus handles the hard problems. The game shows you which agents are learning and which need attention.
 
 ### Feature Status
 
@@ -82,12 +137,18 @@ We're eating our own dogfood — Penpal's pod system is used to build Penpal its
 | MRAP reflection | Done | W7 | Efficiency rating, bottleneck detection, fleet analytics |
 | Merge queue (Refinery) | Done | W7 | Sequential rebase → tsc → merge → push pipeline |
 | Shell injection hardening | Done | W7 | All `execSync` with user input → `execFileSync` |
-| TweenBag lifecycle manager | PR ready | W6 | Replace 55-line manual tween teardown (#333 → PR #346) |
-| Audio-manager setTimeout leak fix | PR ready | W6 | Cleanup timeouts on scene destroy (#334 → PR #343) |
-| Walk animation speed sync | PR ready | W6 | Tie frame rate to movement speed (#337 → PR #342) |
-| Particle pool size caps | PR ready | W6 | MAX constants per particle type + debug overlay (#338 → PR #345) |
-| Pod pipeline cleanup CLI | PR ready | W6 | Cleanup flag + push-if-ahead (#339 → PR #344) |
-| Animation state classes | Planned | W6 | Extract idle/working/waiting into separate classes (#335) |
+| TweenBag lifecycle manager | Done | W6 | Replace 55-line manual tween teardown (#333) |
+| Audio-manager setTimeout leak fix | Done | W6 | Cleanup timeouts on scene destroy (#334) |
+| Walk animation speed sync | Done | W6 | Tie frame rate to movement speed (#337) |
+| Particle pool size caps | Done | W6 | MAX constants per particle type + debug overlay (#338) |
+| Pod pipeline cleanup CLI | Done | W6 | Cleanup flag + push-if-ahead (#339) |
+| CLAUDE.md clobber prevention | Done | W8 | Restore CLAUDE.md from git before staging pod commits |
+| Rebase exception → create PR | Done | W8 | Create PR with `needs-rebase` label instead of silent fail |
+| Post-merge duplicate detection | Done | W8 | MergeQueue scans for duplicate class members before push |
+| Combo analytics collector | Done | W8 | Track agent combo performance per pod run (JSONL) |
+| presetId inference | Done | W8 | Reverse-lookup preset from agent IDs, no more "default" tag |
+| storePodPattern on rebase path | Done | W8 | ReasoningBank captures patterns from all completion paths |
+| Animation state classes | In progress | W6 | Extract idle/working/waiting into separate classes (#335) |
 | Game-system hooks extraction | Planned | W6 | Decouple quest/leaderboard/credits from animation (#336) |
 
 #### Game Surface (Isometric Lab)
@@ -108,17 +169,18 @@ We're eating our own dogfood — Penpal's pod system is used to build Penpal its
 | NavMesh A* pathfinding | Done | — | 12px grid, line-of-sight smoothing |
 | Pod connecting lines + chat dots | Done | — | Visual links between pod team members |
 | Minimap with click-to-pan | Done | — | Room outlines, viewport indicator, hover labels |
-| Phaser audio + AudioManager | PR ready | W5 | Web Audio synthesis, M-key mute |
-| SFX triggers (task lifecycle) | PR ready | W5 | Keyboard clatter, celebration sounds |
-| Theme audit (3 themes work) | PR ready | W5 | All hardcoded hex eliminated |
-| Cinematic letterbox bars | PR ready | W5 | Rank-up and season ceremony framing |
-| In-game settings menu | PR ready | W5 | Volume sliders, theme selector, keybinds |
-| Session replay (record/playback) | PR ready | W5 | Record and replay agent activity |
-| 8-direction character spritesheet | PR ready | W5 | Walk cycle overhaul |
-| Player character (WASD) | PR ready | W5 | Free-roaming player with keyboard movement |
-| Monitor + desk lamp point lights | In progress | — | Light2D point lights responding to agent state (#243) |
-| Agent dialog panel (E key) | In progress | — | NPC dialog showing persona info + current task (#206) |
-| Laser doors → lab-map.json | In progress | — | Extract hardcoded positions to config (#153) |
+| Phaser audio + AudioManager | Done | W5 | Web Audio synthesis, M-key mute, 4-channel mixing |
+| SFX triggers (task lifecycle) | Done | W5 | Keyboard clatter, celebration sounds, pod launch |
+| Theme audit (3 themes work) | Done | W5+W8 | All hardcoded hex eliminated, particle pool re-init on theme switch |
+| Cinematic letterbox bars | Done | W5 | Rank-up and season ceremony framing |
+| In-game settings menu | Done | W5 | Volume sliders, theme selector, keybinds |
+| Session replay (record/playback) | Done | W5 | Record and replay agent activity |
+| 8-direction character spritesheet | Done | W5 | Walk cycle overhaul |
+| Player character (WASD) | Done | W5 | Free-roaming player with keyboard movement |
+| Agent bestiary viewer (I key) | Done | W8 | Character card with stats, lore, powers, rival/ally |
+| Pod spectator mode | Done | W8 | Real-time stage labels + glow rings on active workstations |
+| Combo analytics panel | Done | W8 | Combo leaderboard, agent role stats, stage timing in EvalsPanel |
+| Bestiary integration | Done | W8 | Character colors on monitors, names, XP bars, natural rivalries |
 
 #### Platform
 
@@ -131,20 +193,27 @@ We're eating our own dogfood — Penpal's pod system is used to build Penpal its
 | Dispatch board | Done | Unified GitHub issue + pod workflow board |
 | Eval dashboard | Done | Pod quality metrics, spot-check queue, digests |
 | Embedded terminal (xterm.js) | Done | node-pty, inline agent interaction |
+| Pod combo analytics | Done | Agent triple performance tracking (JSONL + EvalsPanel UI) |
+| Pod spectator IPC | Done | Real-time stage changes forwarded to renderer |
 | Linear integration | Planned | Pull tasks from Linear alongside GitHub Issues |
 | Dispatch in game | Planned | Issues as quest markers, click desk to see pod |
 | Slack-first operations | Planned | `!task`, `!pod status`, `!dispatch` from Slack |
+| Agent interaction (E key) | Planned | Walk to desk → context menu → assign task / view stats |
+| Multiple scenes | Vision | Dev Lab → Call Center → Content Studio → Mail Room → War Room |
 
 ### Future Scenes
 
-| Scene | Purpose |
-|-------|---------|
-| **Virtual Call Center** | Customer support agents handling tickets, escalating to humans, tracking resolution |
-| **Marketing Content & Design Studio** | Content creation pipelines — blog posts, social campaigns, design assets, SEO optimization |
-| **Mail Room** | Email triage, automated responses, lead qualification, correspondence management |
-| **Strategic War Room** | Competitive intelligence, market analysis, product strategy, OKR tracking |
+Each scene is a self-contained workspace with its own agent team, workflow patterns, and game mechanics — all managed from the world map. The pod system generalizes across scenes: every scene dispatches work through the same Solver→Reviewer→Executor pipeline, but the agents, presets, and game visuals change.
 
-Each scene is a self-contained workspace with its own agent team, workflow patterns, and game mechanics — all managed from the same world map.
+| Scene | Visual Metaphor | Work Pattern | Agent Types |
+|-------|----------------|-------------|-------------|
+| **Development Lab** (current) | Isometric office with desks, monitors, cafe | GitHub issues → PRs | Coders, reviewers, testers |
+| **Virtual Call Center** | Cubicle farm with headsets, call queues, escalation board | Support tickets → resolutions | Triage, specialist, QA |
+| **Content Studio** | Open-plan creative space with drafting tables, mood boards | Briefs → published content | Writers, designers, SEO analysts |
+| **Mail Room** | Sorting room with conveyor belts, mailboxes, priority bins | Inbox → responses + CRM entries | Email triage, auto-reply, lead qual |
+| **War Room** | Dark room with screens, maps, data walls | Data → intelligence reports | Analysts, researchers, competitive intel |
+
+The world map (CampusScene) is the hub. Each pin on the map is a Penpal instance. Double-click a pin to enter its scene. Same fleet, different workspaces.
 
 ---
 
@@ -154,17 +223,17 @@ Agents have personas from *Journey to the West* with unique backstories, working
 
 | | Agent ID | Persona | Role | Pod Role |
 |---|----------|---------|------|----------|
-| <img src="Penpal/public/sprites/avatars/WuKong.png" width="48"> | `fullstack-dev` | **Sun Wukong** — The Monkey King | Senior full-stack developer | Solver |
-| <img src="Penpal/public/sprites/avatars/ErlangShen.png" width="48"> | `nextjs-frontend` | **Erlang Shen** — The Three-Eyed God | Next.js / React frontend specialist | Solver |
-| <img src="Penpal/public/sprites/avatars/ShaWujing.png" width="48"> | `electron-dev` | **Sha Wujing** — The Curtain-Lifting General | Electron / desktop specialist | Executor |
-| <img src="Penpal/public/sprites/avatars/Guanyin.png" width="48"> | `backend-arch` | **Guanyin** — Bodhisattva of Compassion | Backend architecture reviewer | Reviewer |
-| <img src="Penpal/public/sprites/avatars/Nezha.png" width="48"> | `expo-mobile` | **Nezha** — The Third Lotus Prince | React Native / Expo mobile | Solver |
-| <img src="Penpal/public/sprites/avatars/BullDemonKing.png" width="48"> | `embedded-dev` | **Bull Demon King** — Great Sage Who Pacifies Heaven | Embedded systems / low-level | Solver |
-| <img src="Penpal/public/sprites/avatars/RedBoy.png" width="48"> | `videogame-dev` | **Red Boy** — Holy Child King | Phaser / game development | Solver |
-| <img src="Penpal/public/sprites/avatars/AoGuang.png" width="48"> | `ui-designer` | **Ao Guang** — Dragon King of the East Sea | UI/UX design reviewer | Reviewer |
-| <img src="Penpal/public/sprites/avatars/Tripitaka.png" width="48"> | `product-mgr` | **Tripitaka** — The Monk | Product management / planning | Reviewer |
-| <img src="Penpal/public/sprites/avatars/AoRun.png" width="48"> | `product-marketer` | **Ao Run** — White Dragon Horse | Content marketing | Solver |
-| <img src="Penpal/public/sprites/avatars/ZhuBajie.png" width="48"> | `exec-assistant` | **Zhu Bajie** — Marshal of the Heavenly Canopy | Executive assistant / ops | Executor |
+| <img src="public/sprites/avatars/WuKong.png" width="48"> | `fullstack-dev` | **Sun Wukong** — The Monkey King | Senior full-stack developer | Solver |
+| <img src="public/sprites/avatars/ErlangShen.png" width="48"> | `nextjs-frontend` | **Erlang Shen** — The Three-Eyed God | Next.js / React frontend specialist | Solver |
+| <img src="public/sprites/avatars/ShaWujing.png" width="48"> | `electron-dev` | **Sha Wujing** — The Curtain-Lifting General | Electron / desktop specialist | Executor |
+| <img src="public/sprites/avatars/Guanyin.png" width="48"> | `backend-arch` | **Guanyin** — Bodhisattva of Compassion | Backend architecture reviewer | Reviewer |
+| <img src="public/sprites/avatars/Nezha.png" width="48"> | `expo-mobile` | **Nezha** — The Third Lotus Prince | React Native / Expo mobile | Solver |
+| <img src="public/sprites/avatars/BullDemonKing.png" width="48"> | `embedded-dev` | **Bull Demon King** — Great Sage Who Pacifies Heaven | Embedded systems / low-level | Solver |
+| <img src="public/sprites/avatars/RedBoy.png" width="48"> | `videogame-dev` | **Red Boy** — Holy Child King | Phaser / game development | Solver |
+| <img src="public/sprites/avatars/AoGuang.png" width="48"> | `ui-designer` | **Ao Guang** — Dragon King of the East Sea | UI/UX design reviewer | Reviewer |
+| <img src="public/sprites/avatars/Tripitaka.png" width="48"> | `product-mgr` | **Tripitaka** — The Monk | Product management / planning | Reviewer |
+| <img src="public/sprites/avatars/AoRun.png" width="48"> | `product-marketer` | **Ao Run** — White Dragon Horse | Content marketing | Solver |
+| <img src="public/sprites/avatars/ZhuBajie.png" width="48"> | `exec-assistant` | **Zhu Bajie** — Marshal of the Heavenly Canopy | Executive assistant / ops | Executor |
 
 Each agent has a catchphrase, backstory, and working style injected into their system prompt. Pod presets combine agents into teams:
 
@@ -279,8 +348,8 @@ Penpal instances discover each other via Slack. No port forwarding, no central b
 ### Setup on a New Machine
 
 1. Clone the repo
-2. `npm install` in `Penpal/`
-3. Add Slack tokens to `Penpal/.env` (or they auto-load from `.env.shared`)
+2. `npm install` in this directory
+3. Add Slack tokens to `.env` (or they auto-load from `.env.shared`)
 4. `npm run dev` — your pin appears on the world map within 60 seconds
 
 Fleet pins show the OS username as a hover label. Same-city instances nudge apart slightly so both are clickable.
@@ -316,8 +385,32 @@ The isometric lab isn't just a visualizer — it's a game layer on top of real w
 | **Leaderboard** | Season XP rankings. Weekly MVP. Rivalries detected when agents are within 5% XP. Toggle with `L` key |
 | **Seasons** | 30-day arcs with themed challenges (Neon Sprint, Deep Focus, Ship It, Blitz Mode). Auto-rotates on expiry |
 | **Credits** | Cosmetic-only currency earned from quests. Shop: room themes, desk LED colors, particle effects, name colors |
+| **Achievements** | 13 badges with unlock triggers: first hire, full house, speed demon, marathon, night owl, team player |
+| **Bestiary** | Journey to the West character cards per agent — realm, stats (5 axes), weapon, powers, rival/ally, signature move. Press `I` to view |
+| **Natural Rivalries** | Bestiary-defined rival pairs shown as crimson dashed lines between desks, with periodic clash VFX at midpoints |
+| **Pod Spectator** | Real-time stage labels (SOLVING/REVIEWING/EXECUTING) + glow rings on active workstations during pod runs |
 | **Day/Night** | Atmospheric cycle with sky gradients, starfield, clouds, shadows, dawn/dusk flash transitions |
 | **Cafe** | Agents take coffee breaks, sit at stools, social emoji interactions between seated agents |
+| **Audio** | 4-channel Web Audio synthesis (ambient/sfx/ui/music), day/night phase shifts, keyboard clatter scaling, M-key mute |
+| **Settings** | In-game ESC menu with volume sliders, theme selector, keybind reference |
+
+### Keyboard Shortcuts
+
+| Key | Action |
+|-----|--------|
+| Tab / Shift-Tab | Cycle agent selection |
+| Enter | Open selected agent in terminal |
+| I | Toggle bestiary card for selected agent |
+| L | Toggle leaderboard overlay |
+| C | Toggle season challenges |
+| B | Toggle cosmetic shop |
+| T | Cycle color theme (dark/light/neon) |
+| M | Toggle audio mute |
+| H / ? | Help overlay |
+| ESC | Settings / deselect |
+| WASD / Arrows | Move player character |
+| F | Toggle focus mode |
+| Backtick | Debug overlay |
 
 ---
 
@@ -331,10 +424,10 @@ npm run build     # production build to out/
 
 ### Environment Setup
 
-Secrets go in `Penpal/.env` (gitignored). Shared config lives in `.env.shared` (committed).
+Secrets go in `.env` (gitignored). Shared config lives in `.env.shared` (committed).
 
 ```bash
-# Penpal/.env (required for full functionality)
+# .env (required for full functionality)
 SLACK_BOT_TOKEN=xoxb-...
 SLACK_APP_TOKEN=xapp-...
 SLACK_OWNER_USER_ID=U...        # Your Slack member ID for DM alerts
