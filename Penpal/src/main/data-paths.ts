@@ -1,19 +1,19 @@
 import path from 'path'
 import fs from 'fs'
+import { findDevCheckout } from './paths'
 
 let cachedDataDir: string | null = null
 
 /**
  * Writable data directory for Penpal.
  *
- * Dev: Penpal/data/ (resolved from this file's __dirname).
- * Packaged: app.getPath('userData')/data — typically
- *   ~/Library/Application Support/Penpal/data on macOS.
- *
- * The packaged app cannot write inside its read-only .asar archive,
- * so all persistent state must live under userData. The PENPAL_DATA_DIR
- * env var overrides both — useful when a compiled .app should share
- * state with a developer checkout.
+ * Resolution order:
+ *   1. PENPAL_DATA_DIR env var (explicit override)
+ *   2. Dev checkout at SIDEKICK_ROOT/Penpal/data (packaged-only —
+ *      keeps the .app sharing state with `npm run dev`)
+ *   3. app.getPath('userData')/data when packaged
+ *      (~/Library/Application Support/Penpal/data on macOS)
+ *   4. Penpal/data/ relative to this file (dev)
  */
 export function getDataDir(): string {
   if (cachedDataDir) return cachedDataDir
@@ -28,10 +28,21 @@ export function getDataDir(): string {
   try {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { app } = require('electron') as typeof import('electron')
-    if (app?.isPackaged && typeof app.getPath === 'function') {
-      cachedDataDir = path.join(app.getPath('userData'), 'data')
-      fs.mkdirSync(cachedDataDir, { recursive: true })
-      return cachedDataDir
+    if (app?.isPackaged) {
+      const dev = findDevCheckout()
+      if (dev) {
+        const devData = path.join(dev, 'data')
+        if (fs.existsSync(devData)) {
+          cachedDataDir = devData
+          console.log(`[data-paths] Using dev checkout data dir: ${cachedDataDir}`)
+          return cachedDataDir
+        }
+      }
+      if (typeof app.getPath === 'function') {
+        cachedDataDir = path.join(app.getPath('userData'), 'data')
+        fs.mkdirSync(cachedDataDir, { recursive: true })
+        return cachedDataDir
+      }
     }
   } catch {
     /* electron unavailable in unit tests */

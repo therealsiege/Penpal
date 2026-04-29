@@ -39,10 +39,20 @@ export async function startFileWatcher() {
     }
   }
 
+  let errorLogged = false
   watcher
     .on('change', (p: string) => notify('change', p))
     .on('add', (p: string) => notify('add', p))
     .on('unlink', (p: string) => notify('unlink', p))
+    // Swallow watcher errors so EMFILE (hit when launchd's low fd limit
+    // meets a large Vault) doesn't surface as unhandled rejections that
+    // flood the log every poll cycle. Log once for visibility.
+    .on('error', (err: Error) => {
+      if (!errorLogged) {
+        console.warn('[file-watcher] error (suppressing duplicates):', err.message)
+        errorLogged = true
+      }
+    })
 }
 
 export function stopFileWatcher() {

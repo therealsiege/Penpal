@@ -1,7 +1,39 @@
+import fs from 'fs'
 import os from 'os'
 import path from 'path'
 
 export const HOME_DIR = os.homedir()
+
+let cachedDevCheckout: string | null | undefined = undefined
+
+/**
+ * Detects a developer checkout of Penpal at SIDEKICK_ROOT/Penpal/.
+ * Used by the packaged .app to pick up the user's existing data/, .env,
+ * and analytics/ from their `npm run dev` tree — Penpal is internal
+ * tooling, so "compiled .app + dev analytics service" is the canonical
+ * runtime for the maintainer.
+ *
+ * Returns the absolute path to the Penpal/ dir, or null if no valid
+ * checkout exists at that location.
+ */
+export function findDevCheckout(): string | null {
+  if (cachedDevCheckout !== undefined) return cachedDevCheckout
+  const root = process.env.SIDEKICK_ROOT
+    ? path.resolve(process.env.SIDEKICK_ROOT)
+    : path.join(HOME_DIR, 'sidekick')
+  const candidate = path.join(root, 'Penpal')
+  try {
+    const pkg = JSON.parse(fs.readFileSync(path.join(candidate, 'package.json'), 'utf-8'))
+    if (pkg?.name === 'penpal') {
+      cachedDevCheckout = candidate
+      return cachedDevCheckout
+    }
+  } catch {
+    /* not a valid checkout */
+  }
+  cachedDevCheckout = null
+  return null
+}
 
 export function resolveUserPath(input: string): string {
   const value = input.trim()

@@ -47,6 +47,7 @@ import { initAutoUpdater } from './auto-updater'
 import { infraUp, infraDown } from './data-scripts'
 import { taskOutcomeCollector } from './evals/collectors/task-outcomes'
 import { getDataDir } from './data-paths'
+import { findDevCheckout } from './paths'
 
 // Electron apps launched from Dock/Finder get a minimal PATH (/usr/bin:/bin:/usr/sbin:/sbin).
 // Ensure common tool locations are reachable (homebrew, nvm, local bin, etc.)
@@ -81,6 +82,25 @@ if (fs.existsSync(controlPlaneEnvPath)) {
 const sharedEnvPath = path.join(ELECTRON_ROOT, '.env.shared')
 if (fs.existsSync(sharedEnvPath)) {
   dotenv.config({ path: sharedEnvPath, override: false })
+}
+
+// Packaged .app on a maintainer's machine: also pull env from the dev
+// checkout at SIDEKICK_ROOT/Penpal/. This is the canonical config source
+// when running the compiled .app alongside `npm run dev` analytics.
+if (app.isPackaged) {
+  const devCheckout = findDevCheckout()
+  if (devCheckout) {
+    console.log(`[startup] Loading env from dev checkout: ${devCheckout}`)
+    for (const candidate of [
+      path.join(devCheckout, 'analytics', '.env'),
+      path.join(devCheckout, '.env'),
+      path.join(devCheckout, '.env.shared'),
+    ]) {
+      if (fs.existsSync(candidate)) {
+        dotenv.config({ path: candidate, override: false })
+      }
+    }
+  }
 }
 
 // Prevent EPIPE from Slack bridge logger crashing the app

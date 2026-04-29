@@ -4,6 +4,13 @@ All notable changes to Penpal are documented here. Format follows [Keep a Change
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-04-29
+
+### Fixed
+- **Packaged .app now picks up the maintainer's dev tree automatically.** When `app.isPackaged`, the data dir falls back to `SIDEKICK_ROOT/Penpal/data` if it exists (validated by reading `package.json` at that location), and the env loader pulls `analytics/.env`, `.env`, and `.env.shared` from the same checkout. Without this, a fresh install had empty userData + no API keys, so all panels hung on missing Memgraph/Qdrant connections.
+- **File watcher EMFILE flood silenced.** Launchd's low fd limit (256 vs. terminal's 4096+) made chokidar throw on every poll cycle when watching the Vault, producing thousands of `UnhandledPromiseRejectionWarning` lines per minute. Now caught + logged once.
+- **CI lockfile drift fixed** — `@types/express` transitive deps were missing from `package-lock.json`, breaking `npm ci`.
+
 ## [0.1.1] - 2026-04-28
 
 ### Fixed
