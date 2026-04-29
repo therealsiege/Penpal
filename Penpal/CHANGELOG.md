@@ -4,6 +4,8 @@ All notable changes to Penpal are documented here. Format follows [Keep a Change
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-04-28
+
 ### Fixed
 - **Packaged .app no longer crashes at startup.** Centralized writable state under `app.getPath('userData')/data` via a new `src/main/data-paths.ts::getDataDir()` helper. Previously ~17 modules wrote to `__dirname/../../data/`, which resolves inside the read-only `app.asar` archive once packaged — `PreferenceStore`, `orchestrator`, `pods`, `flight-board`, `merge-queue`, `reasoning-bank`, `pod-governance`, `github-pipeline`, `github-issues`, `evals/*`, etc. are now packaged-safe. `PENPAL_DATA_DIR` env var overrides for users who want the .app to share state with a developer checkout.
 - **Packaged .app reads MCP profiles + agent-types.yaml from the bundled `agents/` dir** (previously `config-reader.ts` resolved them under `~/sidekick/Penpal/agents/`, so they were invisible without a developer checkout). Mirrors the existing pattern in `agents.ts`.
@@ -11,8 +13,6 @@ All notable changes to Penpal are documented here. Format follows [Keep a Change
 - **Data-script IPC handlers** (`data:run-script`, `data:set-briefing-schedule`) and `infraUp/infraDown`, `forceRunJob` short-circuit with a friendly error in packaged mode instead of spawning npm against the absent `analytics/` directory.
 - **CI artifact upload** in `.github/workflows/release.yml` now points at `Penpal/dist-forge/` (Forge's actual `outDir`) instead of `Penpal/out/make/`. Without this, every release artifact upload was empty.
 - **App icon** is regenerated from `public/logo.png` (the canonical Penpal mark) instead of the inline golden-retriever-on-blue-circle SVG previously hard-coded in `scripts/generate-icon.mjs`.
-
-## [0.1.1] - 2026-04-28
 
 ### Changed
 - Renamed source folder `Penny/` → `Penpal/` to match the product name. Internal character references (the `PennyCafe` cafe owner, `.penny-worktrees` git worktree dir, slack bot username, MCP server id, `penny-sfx://` protocol) are unchanged — Penny is a character within the Penpal app.
@@ -36,7 +36,7 @@ All notable changes to Penpal are documented here. Format follows [Keep a Change
 
 ### Known limitations
 - **Analytics is dev-mode-only in v0.1.1.** The `Penpal/analytics/` Node service is not bundled inside the packaged `.app`; it expects to run from a developer checkout (`cd Penpal/analytics && npm install`). A future v0.2 release may bundle analytics as `extraResource` so the .app is fully self-contained.
-- **macOS signing requires GitHub secrets to be configured.** Until `APPLE_CERTIFICATE`, `APPLE_CERTIFICATE_PASSWORD`, `APPLE_IDENTITY`, `APPLE_ID`, `APPLE_ID_PASSWORD`, `APPLE_TEAM_ID` are set in the repo's GitHub Actions secrets, releases will publish unsigned builds (which need `xattr -rd com.apple.quarantine` to launch on a fresh machine).
+- **Local `npm run make` produces an unsigned .app** (signing only fires in CI, where the Apple certificate + notarization secrets live). For local launches you may need `xattr -rd com.apple.quarantine dist-forge/Penpal-darwin-arm64/Penpal.app`.
 
 ## [0.1.0] - 2026-03-15
 
