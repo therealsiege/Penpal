@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import { useAppearanceStore, type ThemePreference } from '../stores/appearance-store'
 import { PanelBackground } from '../components/PanelBackground'
 
@@ -12,16 +11,6 @@ const FONT_OPTIONS = [
   { label: 'Georgia', value: "Georgia, 'Times New Roman', serif" },
 ]
 
-const MONO_FONT_OPTIONS = [
-  { label: 'System Mono', value: "ui-monospace, 'SF Mono', 'Cascadia Code', 'Fira Code', Menlo, monospace" },
-  { label: 'SF Mono', value: "'SF Mono', ui-monospace, monospace" },
-  { label: 'Fira Code', value: "'Fira Code', ui-monospace, monospace" },
-  { label: 'JetBrains Mono', value: "'JetBrains Mono', ui-monospace, monospace" },
-  { label: 'Cascadia Code', value: "'Cascadia Code', ui-monospace, monospace" },
-  { label: 'Menlo', value: "Menlo, ui-monospace, monospace" },
-]
-
-// Theme palette definitions — used both in cards and for visual identity
 const THEME_PALETTES: Record<ThemePreference, {
   label: string
   bg: string
@@ -64,26 +53,6 @@ const THEME_PALETTES: Record<ThemePreference, {
     textColor: '#94a3b8',
     icon: 'system',
   },
-}
-
-const ANIM_STORAGE_KEY = 'sidekick-animation-prefs'
-
-interface AnimPrefs {
-  ambientParticles: boolean
-  rainEffects: boolean
-  agentAnimations: boolean
-}
-
-function loadAnimPrefs(): AnimPrefs {
-  try {
-    const raw = localStorage.getItem(ANIM_STORAGE_KEY)
-    if (raw) return { ambientParticles: true, rainEffects: false, agentAnimations: true, ...JSON.parse(raw) }
-  } catch { /* ignore */ }
-  return { ambientParticles: true, rainEffects: false, agentAnimations: true }
-}
-
-function saveAnimPrefs(prefs: AnimPrefs) {
-  try { localStorage.setItem(ANIM_STORAGE_KEY, JSON.stringify(prefs)) } catch { /* ignore */ }
 }
 
 // ── Sub-components ─────────────────────────────────────────────────────────────
@@ -157,7 +126,6 @@ function ThemeCard({ themeName, isActive, onSelect }: {
       ].join(' ')}
       style={{ width: 120, height: 80, background: p.bg, flexShrink: 0 }}
     >
-      {/* Room rect */}
       <div
         style={{
           position: 'absolute',
@@ -170,7 +138,6 @@ function ThemeCard({ themeName, isActive, onSelect }: {
           border: `1px solid ${p.accent}22`,
         }}
       />
-      {/* System icon overlay */}
       {p.icon === 'system' && (
         <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -55%)', opacity: 0.5 }}>
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -180,7 +147,6 @@ function ThemeCard({ themeName, isActive, onSelect }: {
           </svg>
         </div>
       )}
-      {/* Accent dots */}
       <div style={{ position: 'absolute', bottom: 8, left: 12, display: 'flex', gap: 4 }}>
         {[p.dot1, p.dot2, p.dot3].map((color, i) => (
           <div
@@ -189,7 +155,6 @@ function ThemeCard({ themeName, isActive, onSelect }: {
           />
         ))}
       </div>
-      {/* Active checkmark */}
       {isActive && (
         <div
           style={{
@@ -210,7 +175,6 @@ function ThemeCard({ themeName, isActive, onSelect }: {
           </svg>
         </div>
       )}
-      {/* Label */}
       <div
         style={{
           position: 'absolute',
@@ -271,22 +235,10 @@ export function SettingsPanel() {
   const {
     themePreference, setTheme,
     uiFontFamily, setUiFontFamily, uiFontSize, setUiFontSize,
-    editorFontFamily, setEditorFontFamily, editorFontSize, setEditorFontSize,
-    editorLineHeight, setEditorLineHeight,
     zoom, setZoom,
     scanlinesOverlay, setScanlinesOverlay,
     crtVignette, setCrtVignette,
   } = useAppearanceStore()
-
-  const [animPrefs, setAnimPrefs] = useState<AnimPrefs>(loadAnimPrefs)
-
-  const updateAnim = (key: keyof AnimPrefs) => {
-    setAnimPrefs(prev => {
-      const next = { ...prev, [key]: !prev[key] }
-      saveAnimPrefs(next)
-      return next
-    })
-  }
 
   return (
     <PanelBackground>
@@ -294,12 +246,11 @@ export function SettingsPanel() {
       <div className="max-w-xl mx-auto py-8 px-6">
         <h1 className="text-[1.35rem] font-semibold text-[var(--c-text-heading)] mb-6">Settings</h1>
 
-        {/* Appearance — Theme picker */}
+        {/* Appearance */}
         <section className="mb-8">
           <h2 className="text-[0.9rem] font-semibold text-[var(--c-text-muted)] uppercase tracking-wider mb-4">Appearance</h2>
           <div className="space-y-5 bg-[color-mix(in_srgb,var(--c-bg-surface)_85%,transparent)] rounded-lg p-4 border border-[color-mix(in_srgb,var(--c-border)_90%,transparent)]">
 
-            {/* Theme preview cards */}
             <div>
               <p className="text-[1.05rem] text-[var(--c-text-primary)] mb-3">Theme</p>
               <div className="flex items-center gap-3 flex-wrap">
@@ -315,7 +266,6 @@ export function SettingsPanel() {
             </div>
 
             <NumberStepper label="Zoom Level" value={+(zoom * 100).toFixed(0)} onChange={v => setZoom(v / 100)} min={70} max={200} step={10} />
-            <div className="text-[0.9rem] text-[var(--c-text-faint)]">Tip: Use Cmd+= / Cmd+- in the Vault to zoom quickly</div>
 
             <div className="pt-2 border-t border-[color-mix(in_srgb,var(--c-border)_80%,transparent)] space-y-4">
               <p className="text-[1.05rem] text-[var(--c-text-primary)]">Shell effects</p>
@@ -335,32 +285,7 @@ export function SettingsPanel() {
           </div>
         </section>
 
-        {/* Animation toggles */}
-        <section className="mb-8">
-          <h2 className="text-[0.9rem] font-semibold text-[var(--c-text-muted)] uppercase tracking-wider mb-4">Animations</h2>
-          <div className="space-y-4 bg-[color-mix(in_srgb,var(--c-bg-surface)_85%,transparent)] rounded-lg p-4 border border-[color-mix(in_srgb,var(--c-border)_90%,transparent)]">
-            <ToggleSwitch
-              label="Ambient particles"
-              description="Floating particle effects in the background"
-              enabled={animPrefs.ambientParticles}
-              onToggle={() => updateAnim('ambientParticles')}
-            />
-            <ToggleSwitch
-              label="Rain effects"
-              description="Animated rain overlay on the office scene"
-              enabled={animPrefs.rainEffects}
-              onToggle={() => updateAnim('rainEffects')}
-            />
-            <ToggleSwitch
-              label="Agent animations"
-              description="Avatar movement and idle animations"
-              enabled={animPrefs.agentAnimations}
-              onToggle={() => updateAnim('agentAnimations')}
-            />
-          </div>
-        </section>
-
-        {/* UI Font */}
+        {/* Interface Font */}
         <section className="mb-8">
           <h2 className="text-[0.9rem] font-semibold text-[var(--c-text-muted)] uppercase tracking-wider mb-4">Interface Font</h2>
           <div className="space-y-4 bg-[color-mix(in_srgb,var(--c-bg-surface)_85%,transparent)] rounded-lg p-4 border border-[color-mix(in_srgb,var(--c-border)_90%,transparent)]">
@@ -374,31 +299,11 @@ export function SettingsPanel() {
           </div>
         </section>
 
-        {/* Editor Font */}
-        <section className="mb-8">
-          <h2 className="text-[0.9rem] font-semibold text-[var(--c-text-muted)] uppercase tracking-wider mb-4">Editor Font</h2>
-          <div className="space-y-4 bg-[color-mix(in_srgb,var(--c-bg-surface)_85%,transparent)] rounded-lg p-4 border border-[color-mix(in_srgb,var(--c-border)_90%,transparent)]">
-            <FontSelect label="Font Family" value={editorFontFamily} onChange={setEditorFontFamily} options={MONO_FONT_OPTIONS} />
-            <NumberStepper label="Font Size" value={editorFontSize} onChange={setEditorFontSize} min={10} max={28} />
-            <NumberStepper label="Line Height" value={editorLineHeight} onChange={setEditorLineHeight} min={1.0} max={2.5} step={0.1} />
-            <div className="mt-3 p-3 rounded bg-[color-mix(in_srgb,var(--c-bg-elevated)_60%,transparent)] border border-[color-mix(in_srgb,var(--c-border)_90%,transparent)] overflow-hidden">
-              <pre className="text-[var(--c-text-secondary)]" style={{ fontFamily: editorFontFamily, fontSize: `${editorFontSize}px`, lineHeight: editorLineHeight }}>
-{`# Heading
-The quick brown fox jumps
-over the lazy dog.
-
-- Item one
-- Item two`}
-              </pre>
-            </div>
-          </div>
-        </section>
-
         {/* About */}
         <section className="mb-4">
           <div className="animate-card-enter bg-[color-mix(in_srgb,var(--c-bg-surface)_85%,transparent)] rounded-lg p-5 border border-[color-mix(in_srgb,var(--c-border)_90%,transparent)] flex flex-col items-center gap-1.5 text-center">
             <div className="flex items-center gap-2">
-              <span className="text-[1.05rem] font-semibold text-[var(--c-text-heading)]">Penpal v0.1.0</span>
+              <span className="text-[1.05rem] font-semibold text-[var(--c-text-heading)]">Penpal v0.1.3</span>
               <svg
                 aria-hidden="true"
                 width="14"
@@ -413,7 +318,7 @@ over the lazy dog.
                 />
               </svg>
             </div>
-            <p className="text-[0.9rem] text-[var(--c-text-muted)]">Built with Electron + Phaser + React</p>
+            <p className="text-[0.9rem] text-[var(--c-text-muted)]">Built with Electron + React</p>
           </div>
         </section>
 
