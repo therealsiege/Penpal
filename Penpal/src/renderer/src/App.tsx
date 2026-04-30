@@ -2,39 +2,18 @@ import { useState, useMemo, useEffect } from 'react'
 import { Layout } from './components/Layout'
 import { ToastProvider, useToast } from './components/Toast'
 import { CommandPalette, type CommandAction } from './components/CommandPalette'
-import { HealthModal } from './components/HealthModal'
-import { SchedulerModal } from './components/SchedulerModal'
-import { VenturesModal } from './components/VenturesModal'
-import { BriefingModal } from './components/BriefingModal'
-import { PipelineModal } from './components/PipelineModal'
-import { ActivityModal } from './components/ActivityModal'
-import { OrchestratorModal, TasksPanel } from './components/OrchestratorModal'
-import { PodAgentModal } from './components/PodAgentModal'
-import type { AgentState } from './types'
-import { CommandCenter } from './panels/CommandCenter'
-import { VaultPanel } from './panels/VaultPanel'
+import { TasksPanel } from './components/OrchestratorModal'
 import { SettingsPanel } from './panels/SettingsPanel'
-import { SoundboardPanel } from './panels/SoundboardPanel'
 import { EvalsPanel } from './panels/EvalsPanel'
-import { DataPanel } from './panels/DataPanel'
 import { ProfilesPanel } from './panels/ProfilesPanel'
 import { McpPanel } from './panels/McpPanel'
 import { ReplayPanel } from './panels/ReplayPanel'
 import { ResultsPanel } from './panels/ResultsPanel'
 import type { SystemPaths } from './types'
 import { getPathPresets } from './utils/path-presets'
-import { EventBus, EVENTS } from './game/events'
 
 function AppContent() {
-  const [activePanel, setActivePanel] = useState('office')
-  const [showHealthModal, setShowHealthModal] = useState(false)
-  const [showSchedulerModal, setShowSchedulerModal] = useState(false)
-  const [showVenturesModal, setShowVenturesModal] = useState(false)
-  const [showBriefingModal, setShowBriefingModal] = useState(false)
-  const [showPipelineModal, setShowPipelineModal] = useState(false)
-  const [showActivityModal, setShowActivityModal] = useState(false)
-  const [showTasksModal, setShowTasksModal] = useState(false)
-  const [podAgentDetail, setPodAgentDetail] = useState<AgentState | null>(null)
+  const [activePanel, setActivePanel] = useState('tasks')
   const [systemPaths, setSystemPaths] = useState<SystemPaths | null>(null)
   const { toast } = useToast()
 
@@ -48,15 +27,6 @@ function AppContent() {
         // Keep UI functional with fallback presets if IPC fails.
       })
     return () => { cancelled = true }
-  }, [])
-
-  // Listen for pod agent clicks from the Phaser game
-  useEffect(() => {
-    const handler = (_agentId: string, state: AgentState) => {
-      setPodAgentDetail(state)
-    }
-    EventBus.on(EVENTS.POD_AGENT_CLICKED, handler)
-    return () => { EventBus.off(EVENTS.POD_AGENT_CLICKED, handler) }
   }, [])
 
   const resolvePathPresets = async () => {
@@ -73,67 +43,11 @@ function AppContent() {
   const actions = useMemo<CommandAction[]>(() => [
     // Modals / navigation
     {
-      id: 'open-health',
-      label: 'Open System Status',
-      description: 'View infrastructure health & config',
-      category: 'Navigation',
-      action: () => setShowHealthModal(true),
-    },
-    {
-      id: 'open-scheduler',
-      label: 'Open Scheduler',
-      description: 'View and run scheduled jobs',
-      category: 'Navigation',
-      action: () => setShowSchedulerModal(true),
-    },
-    {
-      id: 'open-ventures',
-      label: 'Open Vault',
-      description: 'Browse vault files and send to agents',
-      category: 'Navigation',
-      action: () => setActivePanel('vault'),
-    },
-    {
-      id: 'open-data',
-      label: 'Open Data',
-      description: 'Run ETL, ingestion, and enrichment scripts',
-      category: 'Navigation',
-      action: () => setActivePanel('data'),
-    },
-    {
-      id: 'open-soundboard',
-      label: 'Open Soundboard',
-      description: 'Play any mp3 from Penpal sound effects folder',
-      category: 'Navigation',
-      action: () => setActivePanel('soundboard'),
-    },
-    {
       id: 'open-tasks',
       label: 'Open Dispatch',
       description: 'View dispatch board',
       category: 'Navigation',
-      action: () => setShowTasksModal(true),
-    },
-    {
-      id: 'open-briefing',
-      label: 'Open Briefing',
-      description: 'View daily briefing from Mission Control',
-      category: 'Navigation',
-      action: () => setShowBriefingModal(true),
-    },
-    {
-      id: 'open-pipeline',
-      label: 'Open Pipeline',
-      description: 'View sales pipeline, hot leads, and territories',
-      category: 'Navigation',
-      action: () => setShowPipelineModal(true),
-    },
-    {
-      id: 'open-activity',
-      label: 'Open Activity',
-      description: 'View recent job runs, new leads, and briefings',
-      category: 'Navigation',
-      action: () => setShowActivityModal(true),
+      action: () => setActivePanel('tasks'),
     },
     // Scheduler jobs
     {
@@ -178,7 +92,7 @@ function AppContent() {
     {
       id: 'run-etl-full',
       label: 'Run Full ETL',
-      description: 'Full vault re-ingestion',
+      description: 'Full graph re-ingestion',
       category: 'Jobs',
       action: async () => {
         toast('Starting full ETL (this will take a while)...', 'info')
@@ -236,7 +150,6 @@ function AppContent() {
       category: 'Agents',
       action: async () => {
         const r = await window.api.approveAllSessions('1')
-        if (r.sent > 0) EventBus.emit(EVENTS.AGENT_APPROVED, '__all__', '')
         toast(`Approved ${r.sent} sessions`, 'success')
       },
     },
@@ -247,7 +160,6 @@ function AppContent() {
       category: 'Agents',
       action: async () => {
         const r = await window.api.approveAllSessions('2')
-        if (r.sent > 0) EventBus.emit(EVENTS.AGENT_APPROVED, '__all__', '')
         toast(`Approved ${r.sent} sessions for their sessions`, 'success')
       },
     },
@@ -260,7 +172,6 @@ function AppContent() {
         const msg = 'what are you working on right now? give me a one-line summary'
         const r = await window.api.broadcastToSessions(msg)
         toast(`Status check sent to ${r.sent} agents`, 'success')
-        if (r.sent > 0) EventBus.emit(EVENTS.BROADCAST, msg)
       },
     },
     {
@@ -272,7 +183,6 @@ function AppContent() {
         const msg = '/commit'
         const r = await window.api.broadcastToSessions(msg)
         toast(`Commit sent to ${r.sent} agents`, 'success')
-        if (r.sent > 0) EventBus.emit(EVENTS.BROADCAST, msg)
       },
     },
     {
@@ -284,51 +194,21 @@ function AppContent() {
         const msg = 'pause what you are doing and wait for further instructions'
         const r = await window.api.broadcastToSessions(msg)
         toast(`Pause sent to ${r.sent} agents`, 'success')
-        if (r.sent > 0) EventBus.emit(EVENTS.BROADCAST, msg)
       },
-    },
-    {
-      id: 'vault-open',
-      label: 'Open Vault',
-      description: 'Browse and edit vault files',
-      category: 'Vault',
-      action: () => setActivePanel('vault'),
     },
   ], [toast, systemPaths])
 
   return (
     <>
       <CommandPalette actions={actions} />
-      {showHealthModal && <HealthModal onClose={() => setShowHealthModal(false)} />}
-      {showSchedulerModal && <SchedulerModal onClose={() => setShowSchedulerModal(false)} />}
-      {showVenturesModal && <VenturesModal onClose={() => setShowVenturesModal(false)} />}
-      {showBriefingModal && <BriefingModal onClose={() => setShowBriefingModal(false)} />}
-      {showPipelineModal && <PipelineModal onClose={() => setShowPipelineModal(false)} />}
-      {showActivityModal && <ActivityModal onClose={() => setShowActivityModal(false)} />}
-      {showTasksModal && <OrchestratorModal onClose={() => setShowTasksModal(false)} />}
-      {podAgentDetail && <PodAgentModal agent={podAgentDetail} onClose={() => setPodAgentDetail(null)} />}
       <Layout
         activePanel={activePanel}
         onNavigate={setActivePanel}
       >
-        {activePanel === 'office' && (
-          <CommandCenter
-            onOpenHealth={() => setShowHealthModal(true)}
-            onOpenScheduler={() => setShowSchedulerModal(true)}
-            onOpenVentures={() => setActivePanel('vault')}
-            onOpenBriefing={() => setShowBriefingModal(true)}
-            onOpenPipeline={() => setShowPipelineModal(true)}
-            onOpenActivity={() => setShowActivityModal(true)}
-            onOpenTasks={() => setActivePanel('tasks')}
-          />
-        )}
         {activePanel === 'tasks' && <TasksPanel />}
         {activePanel === 'results' && <ResultsPanel />}
         {activePanel === 'profiles' && <ProfilesPanel />}
-        {activePanel === 'data' && <DataPanel />}
-        {activePanel === 'vault' && <VaultPanel />}
         {activePanel === 'evals' && <EvalsPanel />}
-        {activePanel === 'soundboard' && <SoundboardPanel />}
         {activePanel === 'settings' && <SettingsPanel />}
         {activePanel === 'mcp' && <McpPanel />}
         {activePanel === 'replay' && <ReplayPanel />}

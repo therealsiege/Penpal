@@ -128,17 +128,6 @@ export function Layout({ activePanel, onNavigate, children }: LayoutProps) {
           >
           <NavSectionLabel>Workspace</NavSectionLabel>
           <NavButton
-            label="Mission Control"
-            active={activePanel === 'office'}
-            onClick={() => onNavigate('office')}
-            icon={
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M9 3h6v7l4 8H5l4-8V3z" />
-                <line x1="8" y1="3" x2="16" y2="3" />
-              </svg>
-            }
-          />
-          <NavButton
             label="Dispatch"
             active={activePanel === 'tasks'}
             onClick={() => onNavigate('tasks')}
@@ -172,32 +161,6 @@ export function Layout({ activePanel, onNavigate, children }: LayoutProps) {
               </svg>
             }
           />
-          <NavButton
-            label="Data"
-            active={activePanel === 'data'}
-            onClick={() => onNavigate('data')}
-            icon={
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <ellipse cx="12" cy="5" rx="9" ry="3" />
-                <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3" />
-                <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5" />
-              </svg>
-            }
-          />
-          <NavButton
-            label="Vault"
-            active={activePanel === 'vault'}
-            onClick={() => onNavigate('vault')}
-            icon={
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                <polyline points="14 2 14 8 20 8" />
-                <line x1="16" y1="13" x2="8" y2="13" />
-                <line x1="16" y1="17" x2="8" y2="17" />
-                <polyline points="10 9 9 9 8 9" />
-              </svg>
-            }
-          />
 
           <div className="my-3 mx-2 h-px bg-gradient-to-r from-transparent via-[color-mix(in_srgb,var(--c-border)_90%,transparent)] to-transparent" role="presentation" />
 
@@ -211,18 +174,6 @@ export function Layout({ activePanel, onNavigate, children }: LayoutProps) {
                 <line x1="18" y1="20" x2="18" y2="10" />
                 <line x1="12" y1="20" x2="12" y2="4" />
                 <line x1="6" y1="20" x2="6" y2="14" />
-              </svg>
-            }
-          />
-          <NavButton
-            label="Soundboard"
-            active={activePanel === 'soundboard'}
-            onClick={() => onNavigate('soundboard')}
-            icon={
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
-                <path d="M15.5 8.5a5 5 0 0 1 0 7" />
-                <path d="M19 5a10 10 0 0 1 0 14" />
               </svg>
             }
           />

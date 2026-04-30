@@ -135,20 +135,6 @@ export interface SystemPaths {
   docsRoot: string
 }
 
-export interface SoundboardClip {
-  id: string
-  name: string
-  relativePath: string
-  absolutePath: string
-  url: string
-}
-
-export interface SoundboardListing {
-  directory: string
-  clips: SoundboardClip[]
-  source: 'configured' | 'candidate' | 'fallback-scan' | 'default'
-}
-
 export interface AgentPersona {
   backstory: string
   style: string

@@ -72,14 +72,11 @@ declare global {
       listBriefings: () => Promise<string[]>
       getBriefing: (date: string) => Promise<string | null>
       getVaultFolders: () => Promise<{ name: string; fileCount: number; subfolders: string[] }[]>
-      listVentures: (relativePath: string) => Promise<{ name: string; isDirectory: boolean; path: string }[]>
-      readVentureFile: (relativePath: string) => Promise<string | null>
       // Shell APIs
       openUrl: (url: string) => Promise<{ success: boolean }>
       openDownloads: () => Promise<{ success: boolean }>
       pickDirectory: () => Promise<string | null>
       getSystemPaths: () => Promise<SystemPaths>
-      soundboardList: () => Promise<import('./types').SoundboardListing>
       // Approval APIs
       approveSession: (tty: string, choice: string) => Promise<SessionActionResult>
       approveAllSessions: (choice: string) => Promise<BroadcastResult>
