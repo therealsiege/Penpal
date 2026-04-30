@@ -4,6 +4,11 @@ All notable changes to Penpal are documented here. Format follows [Keep a Change
 
 ## [Unreleased]
 
+## [0.1.3] - 2026-04-29
+
+### Changed
+- **Dispatch and Results panel sizing rolled back to pre-size-up baseline.** A run of ~10 "make it bigger" commits accumulated while iterating without live preview (compiled .app vs. dev server) and rendered comically oversized at native resolution. OrchestratorModal back to 72px avatars + 18px titles + horizontal cards; ResultsPanel back to pre-1.4x text.
+
 ## [0.1.2] - 2026-04-29
 
 ### Fixed
