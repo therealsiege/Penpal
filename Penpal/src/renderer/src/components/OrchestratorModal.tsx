@@ -336,43 +336,34 @@ function IssueCard({
       {/* Main card — always visible */}
       <button
         type="button"
-        className="w-full text-left flex flex-col overflow-hidden hover:bg-[var(--c-bg-elevated)] rounded-2xl transition-colors"
+        className="w-full text-left px-4 py-4 flex items-center gap-4 hover:bg-[var(--c-bg-elevated)] rounded-xl transition-colors"
         onClick={() => hasPod && setExpanded(e => !e)}
       >
-        {/* Hero image — fills top half, no border, no rounding */}
+        {/* Active agent avatar or priority dot */}
         {activeAvatar ? (
-          <div className="w-full flex justify-center py-4">
-            <img src={activeAvatar} alt="" className="h-[250px] w-[250px] rounded-full border-2 border-[var(--c-border)] object-cover object-top" />
-          </div>
+          <img src={activeAvatar} alt="" className="w-[72px] h-[72px] rounded-full object-cover shrink-0 ring-2 ring-[var(--c-border)]" />
         ) : (
-          <div className="w-full h-[250px] bg-[var(--c-bg-elevated)] flex items-center justify-center">
-            <span className="text-[56px] text-[var(--c-text-faint)]">#{card.issueNumber}</span>
+          <div className="w-[72px] h-[72px] rounded-full bg-[var(--c-bg-elevated)] flex items-center justify-center shrink-0 border border-[var(--c-border)]">
+            <span className="text-[24px] text-[var(--c-text-faint)]">#{card.issueNumber}</span>
           </div>
         )}
 
-        {/* Title + issue link in bottom half */}
-        <div className="w-full px-5 py-4">
-          <span className="text-[20px] font-semibold text-[var(--c-text-heading)] line-clamp-2 leading-tight block">{card.title}</span>
-          <div className="flex items-center gap-3 mt-2">
-            {card.url ? (
-              <a
-                href={card.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-[14px] text-indigo-400 hover:text-indigo-300 hover:underline"
-                onClick={(e) => e.stopPropagation()}
-              >
-                {repoShort}#{card.issueNumber}
-              </a>
-            ) : (
-              <span className="text-[14px] text-[var(--c-text-muted)]">{repoShort} #{card.issueNumber}</span>
-            )}
+        {/* Title + repo */}
+        <div className="flex-1 min-w-0">
+          <span className="text-[18px] font-semibold text-[var(--c-text-heading)] line-clamp-2 leading-snug block">{card.title}</span>
+          <div className="flex items-center gap-2 mt-1">
+            <span className="text-[14px] text-[var(--c-text-muted)]">{repoShort}</span>
+            <span className="text-[13px] text-[var(--c-border)]">#{card.issueNumber}</span>
             {activeName && (
-              <span className="text-[13px] text-[var(--c-text-secondary)]">{activeName}</span>
+              <span className="text-[13px] text-[var(--c-text-muted)]">{activeName}</span>
             )}
-            <span className="text-[12px] text-[var(--c-text-faint)] ml-auto">{formatAge(card.ingestedAt)}</span>
-            {hasPod && <span className="text-[12px] text-[var(--c-text-faint)]">{expanded ? '\u25B2' : '\u25BC'}</span>}
           </div>
+        </div>
+
+        {/* Right side — elapsed + expand hint */}
+        <div className="flex flex-col items-end gap-1 flex-none">
+          <span className="text-[13px] text-[var(--c-border-hover)]">{formatAge(card.ingestedAt)}</span>
+          {hasPod && <span className="text-[12px] text-[var(--c-text-faint)]">{expanded ? '\u25B2' : '\u25BC'}</span>}
         </div>
       </button>
 

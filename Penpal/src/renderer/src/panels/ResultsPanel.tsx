@@ -36,17 +36,17 @@ function RepoGroup({ repo, pods, onMergeAll, onRetry }: { repo: string; pods: Po
 
   return (
     <div className="rounded-xl border border-[var(--c-border-subtle)] overflow-hidden">
-      <div className="bg-[var(--c-bg-surface)]/70 px-5 py-3 flex items-center justify-between">
-        <span className="text-[18px] font-semibold text-[var(--c-text-heading)]">{repo}</span>
-        <div className="flex items-center gap-4">
-          <span className="text-[15px] text-[var(--c-text-muted)]">
+      <div className="bg-[var(--c-bg-surface)]/70 px-4 py-2 flex items-center justify-between">
+        <span className="text-sm font-semibold text-[var(--c-text-heading)]">{repo}</span>
+        <div className="flex items-center gap-3">
+          <span className="text-xs text-[var(--c-text-muted)]">
             {completed.length} done, {failed.length} failed
           </span>
           {failed.length > 0 && (
             <button
               type="button"
               onClick={() => failed.forEach(p => onRetry(p))}
-              className="px-3 py-1 rounded bg-amber-600 hover:bg-amber-500 text-[14px] font-semibold text-white transition-colors"
+              className="px-2 py-0.5 rounded bg-amber-600 hover:bg-amber-500 text-xs font-semibold text-white transition-colors"
             >
               Retry Failed ({failed.length})
             </button>
@@ -55,7 +55,7 @@ function RepoGroup({ repo, pods, onMergeAll, onRetry }: { repo: string; pods: Po
             <button
               type="button"
               onClick={() => onMergeAll(repo)}
-              className="px-3 py-1 rounded bg-emerald-600 hover:bg-emerald-500 text-[14px] font-semibold text-white transition-colors"
+              className="px-2 py-0.5 rounded bg-emerald-600 hover:bg-emerald-500 text-xs font-semibold text-white transition-colors"
             >
               Merge All ({withPR.length})
             </button>
@@ -64,27 +64,27 @@ function RepoGroup({ repo, pods, onMergeAll, onRetry }: { repo: string; pods: Po
       </div>
       <div className="divide-y divide-[var(--c-border-subtle)]/60">
         {pods.map(p => (
-          <div key={p.id} className="px-5 py-3 flex items-center gap-4 hover:bg-[var(--c-bg-elevated)]/30 transition-colors">
-            <span className={`text-[15px] font-bold ${p.status === 'complete' ? 'text-emerald-400' : 'text-red-400'}`}>
+          <div key={p.id} className="px-4 py-2 flex items-center gap-3 hover:bg-[var(--c-bg-elevated)]/30 transition-colors">
+            <span className={`text-xs font-bold ${p.status === 'complete' ? 'text-emerald-400' : 'text-red-400'}`}>
               {p.status === 'complete' ? 'PASS' : 'FAIL'}
             </span>
             <div className="flex-1 min-w-0">
-              <div className="text-[17px] text-[var(--c-text-primary)] truncate">{p.name}</div>
+              <div className="text-sm text-[var(--c-text-primary)] truncate">{p.name}</div>
               {p.status === 'failed' && p.error && (
-                <div className="text-[14px] text-red-400/80 truncate">{p.error.slice(0, 100)}</div>
+                <div className="text-xs text-red-400/80 truncate">{p.error.slice(0, 100)}</div>
               )}
             </div>
-            <span className="text-[14px] text-[var(--c-text-muted)] tabular-nums whitespace-nowrap">
+            <span className="text-xs text-[var(--c-text-muted)] tabular-nums whitespace-nowrap">
               {p.iteration}/{p.maxIterations} iter
             </span>
-            <span className="text-[14px] text-[var(--c-text-muted)] whitespace-nowrap">
+            <span className="text-xs text-[var(--c-text-muted)] whitespace-nowrap">
               {formatAge(Date.now() - p.updatedAt)}
             </span>
             {p.status === 'failed' && (
               <button
                 type="button"
                 onClick={() => onRetry(p)}
-                className="px-3 py-1 rounded bg-amber-600 hover:bg-amber-500 text-[14px] font-semibold text-white transition-colors whitespace-nowrap"
+                className="px-2 py-0.5 rounded bg-amber-600 hover:bg-amber-500 text-xs font-semibold text-white transition-colors whitespace-nowrap"
               >
                 Retry
               </button>
@@ -94,7 +94,7 @@ function RepoGroup({ repo, pods, onMergeAll, onRetry }: { repo: string; pods: Po
                 href={p.prUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-[14px] text-indigo-400 hover:text-indigo-300 whitespace-nowrap"
+                className="text-xs text-indigo-400 hover:text-indigo-300 whitespace-nowrap"
               >
                 PR
               </a>
@@ -182,7 +182,7 @@ export function ResultsPanel() {
         </div>
 
         {/* Stats bar */}
-        <div className="rounded-xl bg-[var(--c-bg-surface)]/50 border border-[var(--c-border-subtle)] px-5 py-3 flex items-center gap-6 text-[16px] text-[var(--c-text-primary)]">
+        <div className="rounded-xl bg-[var(--c-bg-surface)]/50 border border-[var(--c-border-subtle)] px-5 py-3 flex items-center gap-6 text-sm text-[var(--c-text-primary)]">
           <span>
             <span className="font-semibold text-[var(--c-text-bright)]">{total}</span> pods
           </span>
