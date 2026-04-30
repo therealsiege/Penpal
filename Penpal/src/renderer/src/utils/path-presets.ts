@@ -6,12 +6,6 @@ export interface PathPresets {
   docsRoot: string
   analyticsRoot: string
   pennyRoot: string
-  medscrubRoot: string
-  medhookRoot: string
-  onePuttWebRoot: string
-  atlasRoot: string
-  givingPrintsRoot: string
-  eSpiralRoot: string
 }
 
 function joinPosix(base: string, ...parts: string[]): string {
@@ -36,11 +30,5 @@ export function getPathPresets(paths?: SystemPaths | null): PathPresets {
     docsRoot,
     pennyRoot: joinPosix(sidekickRoot, 'Penpal'),
     analyticsRoot: joinPosix(sidekickRoot, 'Penpal', 'analytics'),
-    medscrubRoot: joinPosix(homeDir, 'ComSci', 'Workspace', '1putthealth', 'medscrub'),
-    medhookRoot: joinPosix(homeDir, 'ComSci', 'Workspace', '1putthealth', 'medhook'),
-    onePuttWebRoot: joinPosix(homeDir, 'ComSci', 'Workspace', '1putthealth', '1putthealth.com'),
-    atlasRoot: joinPosix(homeDir, 'ComSci', 'Workspace', 'graphiteatlas', 'atlas'),
-    givingPrintsRoot: joinPosix(homeDir, 'ComSci', 'Workspace', 'givingprints'),
-    eSpiralRoot: joinPosix(homeDir, 'ComSci', 'Workspace', 'espiral.healthcare'),
   }
 }

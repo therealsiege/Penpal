@@ -113,17 +113,7 @@ function AppContent() {
         toast(r.success ? 'Full Stack Dev launched' : r.error || 'Failed', r.success ? 'success' : 'error')
       },
     },
-    {
-      id: 'launch-frontend',
-      label: 'Launch: NextJS Front End',
-      category: 'Agents',
-      action: async () => {
-        const paths = await resolvePathPresets()
-        const r = await window.api.launchAgent('nextjs-frontend', paths.onePuttWebRoot)
-        toast(r.success ? 'Frontend Dev launched' : r.error || 'Failed', r.success ? 'success' : 'error')
-      },
-    },
-    {
+{
       id: 'launch-electron',
       label: 'Launch: Electron Developer',
       category: 'Agents',
