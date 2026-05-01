@@ -1,8 +1,8 @@
 # Penpal
 
-An operating system for running an AI workforce.
+A self-orchestrating operating system for running an AI workforce.
 
-Penpal started as a way to manage terminal sessions across Claude Code, OpenCode, and Cursor Agent. It grew into a full operating system for orchestrating AI coding agents — visible as characters in an isometric game world, working autonomously on GitHub issues, communicating via Slack, and running across multiple machines.
+Penpal started as a way to manage terminal sessions across Claude Code, OpenCode, and Cursor Agent. It grew into a full operating system for orchestrating AI coding agents — visible as characters in an isometric game world, working autonomously on GitHub issues, communicating via Slack, and running across multiple machines. Agents claim tasks from a priority queue (pull model), execute in isolated git worktrees with no merge conflicts, and are monitored by heartbeat-based health detection. Workspace garbage collection and scheduled autopilot keep the system running autonomously around the clock.
 
 Built by [1Putt Health](https://1putthealth.com) for creating and launching digital health products and software tools. Penpal builds itself — the pod system that solves GitHub issues is the same system we use to develop Penpal.
 
@@ -27,6 +27,9 @@ Label a GitHub issue `agent-ready`, walk away, come back to a PR.
 - **GitHub issue pipeline** — polls for `agent-ready` issues, spins up a 3-agent pod in an isolated worktree, pushes a PR on completion
 - **Configurable runtime profiles** — run on Claude Opus (max quality), Sonnet (balanced), or local Ollama via OpenCode (zero cost)
 - **Pod workflow**: Solver implements -> Reviewer validates independently -> Executor tests. Feedback loops on failure
+- **Workspace isolation** — each pod gets its own git worktree, so parallel pods never cause merge conflicts
+- **Claim-based dispatch** — agents pull tasks from a priority queue instead of being pushed, preventing double-assignment
+- **Heartbeat health detection** — stale agents auto-detected (30s default) and their claimed tasks released back to the queue
 - **Dispatch board** — unified view of all issues and pods in phase columns with agent avatars and controls
 - **MCP servers** surfaced in one configurable area
 
@@ -39,9 +42,13 @@ A vault of markdown files backed by a knowledge graph.
 - **Google GOG CLI** integration for research and data access
 - **Live file watching** — external edits sync immediately
 
-### 4. Soundboard
+### 4. Autopilot & Scheduling
 
-Sound effects for meetings and fun. Vault and soundboard files live in your home directory where Apple iCloud handles backup.
+Penpal runs itself when you're not looking.
+
+- **Scheduled recurring tasks** — define hourly, daily, weekly, or custom cron expression tasks that auto-enqueue into the dispatch queue
+- **Automatic workspace garbage collection** — 3-tier GC pipeline: soft-delete completed worktrees → archive → hard delete. Keeps disk usage under control across long-running autopilot sessions
+- **Configurable via `data/autopilot-config.json`** — add scheduled tasks, tune GC intervals, enable/disable autopilot without code changes
 
 ---
 
@@ -60,20 +67,24 @@ Business Input (Slack, GitHub, Linear)
         ↓
   Penpal dispatches a Pod (3-agent team)
         ↓
-  Agents work in the game world (visible, real-time)
+  Isolated worktree created (conflict-free)
+        ↓
+  Agents claim tasks and work in the game world
         ↓
   Pod produces a PR (tested, reviewed, merged)
         ↓
+  Worktree garbage-collected
+        ↓
   Analytics feed back into routing + learning
         ↓
-  You tune the team, adjust presets, launch more pods
+  Autopilot schedules the next batch
 ```
 
 Every loop iteration makes the system smarter — the ReasoningBank remembers what worked, complexity routing picks better models, combo analytics reveal which agent teams produce the best code.
 
 ### Where We Are
 
-The development lab is the first scene. It's self-referential — Penpal's pod system builds Penpal itself. The lab shows an isometric office where agent characters work at desks, take coffee breaks in the cafe, compete on leaderboards, and celebrate task completions with particle effects. You can press I to inspect any agent's bestiary card, watch pods solve issues in real-time with stage labels on workstations, and track which agent combos perform best in the Eval dashboard.
+The development lab is the first scene. It's self-referential — Penpal's pod system builds Penpal itself. The lab shows an isometric office where agent characters work at desks, take coffee breaks in the cafe, compete on leaderboards, and celebrate task completions with particle effects. You can press I to inspect any agent's bestiary card, watch pods solve issues in real-time with stage labels on workstations, and track which agent combos perform best in the Eval dashboard. The latest wave adds workspace isolation (each pod gets its own conflict-free git worktree), claim-based dispatch (agents pull tasks from a queue instead of being pushed), heartbeat health monitoring, automated garbage collection, and a scheduled autopilot that keeps pods running autonomously.
 
 ### Where We're Going
 
@@ -108,7 +119,8 @@ The intelligence layer (mostly built) closes the loop between work and learning:
 2. **Combo analytics** — track which agent triples produce the best code (collector running)
 3. **Reasoning bank** — successful patterns injected into future solver prompts (integrated)
 4. **Complexity routing** — auto-select Sonnet/Opus/local models by task difficulty (running)
-5. **Fine-tuned local models** — DPO-train a 7B model on your preference data for zero-cost inference (planned)
+5. **Autopilot** — scheduled recurring tasks and workspace garbage collection enable fully autonomous operation cycles (running)
+6. **Fine-tuned local models** — DPO-train a 7B model on your preference data for zero-cost inference (planned)
 
 The endgame: a 7B model trained on *your* patterns, running locally via Ollama, handling routine work at zero cost while Opus handles the hard problems. The game shows you which agents are learning and which need attention.
 
@@ -148,6 +160,12 @@ The endgame: a 7B model trained on *your* patterns, running locally via Ollama, 
 | Combo analytics collector | Done | W8 | Track agent combo performance per pod run (JSONL) |
 | presetId inference | Done | W8 | Reverse-lookup preset from agent IDs, no more "default" tag |
 | storePodPattern on rebase path | Done | W8 | ReasoningBank captures patterns from all completion paths |
+| Workspace isolation (per-pod) | Done | W9 | Each pod gets isolated git worktree via createIsolatedWorkspace |
+| Claim-based task dispatch | Done | W9 | Pull model — agents claim tasks instead of push assignment |
+| Heartbeat health detection | Done | W9 | Stale agent detection (30s default), auto-release of claimed tasks |
+| Workspace garbage collection | Done | W9 | 3-tier GC: soft-delete worktrees → archive → hard delete |
+| Autopilot scheduler | Done | W9 | Recurring tasks with cron expressions, hourly/daily/weekly presets |
+| Task release on failure | Done | W9 | Failed/stale agent tasks automatically released back to queue |
 | Animation state classes | In progress | W6 | Extract idle/working/waiting into separate classes (#335) |
 | Game-system hooks extraction | Planned | W6 | Decouple quest/leaderboard/credits from animation (#336) |
 
@@ -195,6 +213,8 @@ The endgame: a 7B model trained on *your* patterns, running locally via Ollama, 
 | Embedded terminal (xterm.js) | Done | node-pty, inline agent interaction |
 | Pod combo analytics | Done | Agent triple performance tracking (JSONL + EvalsPanel UI) |
 | Pod spectator IPC | Done | Real-time stage changes forwarded to renderer |
+| Autopilot scheduler | Done | Recurring task scheduling with cron, hourly, daily, weekly |
+| Workspace GC | Done | 3-tier garbage collection for pod worktrees |
 | Linear integration | Planned | Pull tasks from Linear alongside GitHub Issues |
 | Dispatch in game | Planned | Issues as quest markers, click desk to see pod |
 | Slack-first operations | Planned | `!task`, `!pod status`, `!dispatch` from Slack |
@@ -299,9 +319,18 @@ flowchart TD
 
 **Max iterations**: configurable per profile. Economic mode gets 5 rounds; max gets 3.
 
+#### Dispatch Model: Push → Pull
+
+The dispatch system evolved from a push model (orchestrator assigns tasks to agents) to a **claim-based pull model** inspired by [multica-ai/multica](https://github.com/multica-ai/multica):
+
+- **Old (push)**: Orchestrator selects an agent and pushes a task to it. Risk of double-assignment if two dispatch cycles overlap.
+- **New (pull)**: Tasks enter a priority queue. Agents call `claimTask()` to atomically claim the next available task. No double-assignment possible.
+- **Heartbeat monitoring**: Every agent records a heartbeat every 30 seconds. The dispatch loop checks for stale agents (no heartbeat in 30s) and automatically releases their claimed tasks back to the queue via `releaseTask()`.
+- **Benefits**: Automatic recovery from crashed/stale agents, no coordinator bottleneck, natural load balancing — fast agents claim more work.
+
 ### Intelligence Modules
 
-Six modules wrap the execution pipeline. Inspired by patterns from [ruflo](https://github.com/ruvnet/ruflo) (3-tier routing), [agentic-flow](https://github.com/ruvnet/agentic-flow) (ReasoningBank), [Dossier](https://github.com/rwliebs/Dossier) (scoped context), [gastown](https://github.com/gastownhall/gastown) (merge queue), and [DAA](https://github.com/ruvnet/daa) (governance + MRAP loop).
+Six modules wrap the execution pipeline, plus four new modules for workspace isolation, garbage collection, autopilot, and health monitoring. Inspired by patterns from [ruflo](https://github.com/ruvnet/ruflo) (3-tier routing), [agentic-flow](https://github.com/ruvnet/agentic-flow) (ReasoningBank), [Dossier](https://github.com/rwliebs/Dossier) (scoped context), [gastown](https://github.com/gastownhall/gastown) (merge queue), [DAA](https://github.com/ruvnet/daa) (governance + MRAP loop), and [multica-ai/multica](https://github.com/multica-ai/multica) (claim-based dispatch, workspace isolation, autopilot).
 
 | Module | File | When |
 |--------|------|------|
@@ -311,6 +340,10 @@ Six modules wrap the execution pipeline. Inspired by patterns from [ruflo](https
 | **Governance** | `pod-governance.ts` | After solver — checks file count, diff size, duration, forbidden paths |
 | **Reflection** | `pod-reflection.ts` | After completion — rates efficiency, detects bottleneck |
 | **Merge Queue** | `merge-queue.ts` | After PR — sequential rebase-test-merge pipeline |
+| **Workspace Isolation** | `workspace-isolation.ts` | At pod creation — creates isolated git worktree per task |
+| **Workspace GC** | `workspace-gc.ts` | Background timer — 3-tier cleanup of completed worktrees |
+| **Autopilot** | `autopilot.ts` | Background timer — enqueues scheduled recurring tasks |
+| **Heartbeat Monitor** | `dispatch-loop.ts` | Every 30s — detects stale agents, reclaims tasks |
 
 ### Governance Rules
 
@@ -485,7 +518,12 @@ Requires Ollama running locally with `qwen3-coder:30b` pulled: `ollama pull qwen
 | `fleet-heartbeat.ts` | Multi-instance discovery via Slack `#sk-fleet`, IP geolocation, 60s cycle |
 | `slack-bridge.ts` | Per-project Slack channels, bidirectional message routing, `!task` commands, fleet re-export |
 | `sessions.ts` | Discovers Claude Code / Cursor / OpenCode sessions, reads JSONL transcripts, headless agent execution |
-| `orchestrator.ts` | Task queue with priority routing, agent scoring, dispatch loop (10s), health monitor (30s) |
+| `orchestrator.ts` | Barrel re-export of dispatch-queue.ts and dispatch-loop.ts |
+| `dispatch-queue.ts` | Task queue with priority routing, claim/release pull model, XP tracking |
+| `dispatch-loop.ts` | Dispatch loop with heartbeat monitoring, stale agent detection, health checks |
+| `workspace-isolation.ts` | Per-pod git worktree creation and cleanup — conflict-free parallel execution |
+| `workspace-gc.ts` | 3-tier garbage collection for worktrees (soft-delete → archive → hard delete) |
+| `autopilot.ts` | Scheduled task system — cron/hourly/daily/weekly recurring task enqueue |
 | `agents.ts` | Agent configs from `agent-types.yaml`, CLI arg building, headless backend chains, model mapping |
 | `ollama-client.ts` | Local Ollama HTTP client (`/api/generate`, `/api/tags`) |
 | `pod-context.ts` | Scoped context builder — task-aware CLAUDE.md filtering, file-specific git history |
@@ -562,6 +600,7 @@ Runtime state files (JSON, gitignored):
 | `governance-rules.json` | Optional custom governance rules (overrides defaults) |
 | `github-pipeline.json` | Pipeline issue tracking state |
 | `spot-checks.json` | Eval spot-check queue |
+| `autopilot-config.json` | Autopilot scheduled tasks and configuration |
 
 ---
 
@@ -608,7 +647,7 @@ Connect via `.mcp.json`:
 | Graph | neo4j-driver (Memgraph) |
 | Slack | @slack/bolt 4 (Socket Mode) |
 | Language | TypeScript 5.7 |
-| Testing | Vitest (315 unit tests), Playwright (E2E) |
+| Testing | Vitest (840 unit tests), Playwright (E2E) |
 
 ## Scripts
 
