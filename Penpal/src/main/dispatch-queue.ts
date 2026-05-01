@@ -449,6 +449,60 @@ export function getOrchestratorStats(): OrchestratorStats {
   }
 }
 
+// ── Pull-Model Claim API ─────────────────────────────────────────────────────
+
+export function claimTask(agentId: string, taskId: string): Task | null {
+  const task = getTasksInternal().find(t => t.id === taskId)
+  if (!task || task.status !== 'queued') return null
+  task.status = 'assigned'
+  task.assignedAgent = agentId
+  task.assignedAt = Date.now()
+  saveTasks()
+  orchestratorEvents.emit('task-claimed', task)
+  return task
+}
+
+export function releaseTask(taskId: string, reason?: string): boolean {
+  const task = getTasksInternal().find(t => t.id === taskId)
+  if (!task) return false
+  if (task.status === 'completed' || task.status === 'failed' || task.status === 'cancelled') return false
+  task.status = 'queued'
+  task.assignedAgent = undefined
+  task.assignedSessionId = undefined
+  task.assignedAt = undefined
+  if (reason) task.error = reason
+  saveTasks()
+  orchestratorEvents.emit('task-released', task)
+  return true
+}
+
+export function claimNextTask(
+  agentId: string,
+  filter?: { project?: string; priority?: TaskPriority },
+): Task | null {
+  let queued = getTasksInternal()
+    .filter(t => t.status === 'queued')
+
+  if (filter?.project) {
+    queued = queued.filter(t => t.project === filter.project)
+  }
+
+  if (filter?.priority) {
+    const maxOrder = PRIORITY_ORDER[filter.priority]
+    queued = queued.filter(t => PRIORITY_ORDER[t.priority] <= maxOrder)
+  }
+
+  // Sort by priority (critical first), then by createdAt (oldest first)
+  queued.sort((a, b) => {
+    const pDiff = PRIORITY_ORDER[a.priority] - PRIORITY_ORDER[b.priority]
+    if (pDiff !== 0) return pDiff
+    return a.createdAt - b.createdAt
+  })
+
+  if (queued.length === 0) return null
+  return claimTask(agentId, queued[0].id)
+}
+
 // ── Test Reset ──────────────────────────────────────────────────────────────
 
 /** Reset all lazy state — for tests only. */
