@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useMemo } from 'react'
 import { usePolling } from '../hooks/usePolling'
 import { PanelBackground } from '../components/PanelBackground'
 
@@ -114,16 +114,23 @@ export function ResultsPanel() {
   const [merging, setMerging] = useState<string | null>(null)
   const [mergeResult, setMergeResult] = useState<string | null>(null)
 
-  const terminal = (pods || []).filter(p => p.status === 'complete' || p.status === 'failed')
-    .sort((a, b) => b.updatedAt - a.updatedAt)
+  const terminal = useMemo(
+    () => (pods || [])
+      .filter(p => p.status === 'complete' || p.status === 'failed')
+      .sort((a, b) => b.updatedAt - a.updatedAt),
+    [pods],
+  )
 
-  // Group by repo
-  const byRepo = new Map<string, PodResult[]>()
-  for (const p of terminal) {
-    const repo = p.issueRepo || 'manual'
-    if (!byRepo.has(repo)) byRepo.set(repo, [])
-    byRepo.get(repo)!.push(p)
-  }
+  // Group by repo — memoised so handleMergeAll gets a stable reference
+  const byRepo = useMemo(() => {
+    const map = new Map<string, PodResult[]>()
+    for (const p of terminal) {
+      const repo = p.issueRepo || 'manual'
+      if (!map.has(repo)) map.set(repo, [])
+      map.get(repo)!.push(p)
+    }
+    return map
+  }, [terminal])
 
   // Stats
   const total = terminal.length

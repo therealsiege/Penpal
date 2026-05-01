@@ -28,15 +28,7 @@ import { closeGraph } from './graph'
 import { loadAgentConfigs } from './agents'
 import { registerPtyHandlers, destroyAllPtys, stopPtySweep } from './pty'
 import { startSlackBridge, stopSlackBridge } from './slack-bridge'
-import { protocol } from 'electron'
 import { registerVaultProtocol } from './vault'
-import { registerSoundboardProtocol } from './soundboard'
-
-// Register custom schemes as privileged before app is ready
-// This allows them to be used by media elements (Audio, Video)
-protocol.registerSchemesAsPrivileged([
-  { scheme: 'penny-sfx', privileges: { stream: true, supportFetchAPI: true, bypassCSP: true } },
-])
 import { startSpawnProxy, stopSpawnProxy } from './spawn-proxy'
 import { startFileWatcher, stopFileWatcher } from './file-watcher'
 import { startOrchestrator, stopOrchestrator, orchestratorEvents } from './orchestrator'
@@ -163,7 +155,6 @@ app.whenReady().then(() => {
   }
 
   registerVaultProtocol()
-  registerSoundboardProtocol()
   loadAgentConfigs()
   registerIpcHandlers()
   registerMcpIpcHandlers()

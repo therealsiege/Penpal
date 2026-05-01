@@ -1,13 +1,20 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useAppearanceStore } from '../stores/appearance-store'
 import type {
   PodWorkflow,
   GitHubIssueCard,
   GithubPollerStatus,
+  LinearIssueCard,
+  LinearTeamConfig,
 } from '../types'
+
 import { GithubPollStatusBadge, SourcesModal } from './SourcesModal'
 import { usePolling } from '../hooks/usePolling'
 import { useToast } from './Toast'
+
+// DisplayCard is a union of the two card types. Both satisfy all fields that
+// cardLane() and IssueCard read, so no cast is required when merging them.
+type DisplayCard = GitHubIssueCard | LinearIssueCard
 
 // ── Persona lookups ──────────────────────────────────────────────────────────
 
@@ -51,7 +58,7 @@ const LANES: { key: LaneId; label: string; dot: string; border: string }[] = [
   { key: 'validating', label: 'Validating', dot: 'bg-violet-400', border: 'border-violet-500/35' },
 ]
 
-function cardLane(card: GitHubIssueCard): LaneId {
+function cardLane(card: DisplayCard): LaneId {
   const status = card.taskStatus
   const stage = (card.taskStage || '').toLowerCase()
 
@@ -104,7 +111,15 @@ function DispatchContent({ onClose }: { onClose?: () => void }) {
   // ── GitHub issues ──
   const [cards, setCards] = useState<GitHubIssueCard[]>([])
   const [pollerStatus, setPollerStatus] = useState<GithubPollerStatus | null>(null)
+  const [githubError, setGithubError] = useState(false)
   const [showSources, setShowSources] = useState(false)
+
+  // ── Linear issues ──
+  const [linearCards, setLinearCards] = useState<LinearIssueCard[]>([])
+  const [linearPollerStatus, setLinearPollerStatus] = useState<{ running: boolean; polling: boolean } | null>(null)
+  const [linearError, setLinearError] = useState(false)
+  const [linearTeams, setLinearTeams] = useState<LinearTeamConfig[]>([])
+  const [addTeamForm, setAddTeamForm] = useState({ teamKey: '', localPath: '', label: 'agent-ready', open: false })
 
   const loadGithub = useCallback(async () => {
     try {
@@ -114,14 +129,64 @@ function DispatchContent({ onClose }: { onClose?: () => void }) {
       ])
       if (Array.isArray(c)) setCards(c)
       if (s && typeof s.running === 'boolean' && typeof s.polling === 'boolean') setPollerStatus(s)
-    } catch { /* keep last known */ }
+      setGithubError(false)
+    } catch {
+      setGithubError(true)
+    }
   }, [])
 
-  useEffect(() => { void loadGithub() }, [loadGithub])
+  const loadLinear = useCallback(async () => {
+    try {
+      const [c, s, teams] = await Promise.all([
+        window.api.linearIssueCards(),
+        window.api.linearPollerStatus(),
+        window.api.linearListTeams(),
+      ])
+      if (Array.isArray(c)) setLinearCards(c)
+      if (s) setLinearPollerStatus(s)
+      if (Array.isArray(teams)) setLinearTeams(teams)
+      setLinearError(false)
+    } catch {
+      setLinearError(true)
+    }
+  }, [])
+
   useEffect(() => {
-    const id = setInterval(() => { void loadGithub() }, 3000)
-    return () => clearInterval(id)
-  }, [loadGithub])
+    let cancelled = false
+    const tick = async () => {
+      try {
+        const [c, s] = await Promise.all([
+          window.api.githubIssueCards(),
+          window.api.githubPollerStatus(),
+        ])
+        if (!cancelled) {
+          if (Array.isArray(c)) setCards(c)
+          if (s && typeof s.running === 'boolean' && typeof s.polling === 'boolean') setPollerStatus(s)
+          setGithubError(false)
+        }
+      } catch {
+        if (!cancelled) setGithubError(true)
+      }
+      try {
+        const [lc, ls, teams] = await Promise.all([
+          window.api.linearIssueCards(),
+          window.api.linearPollerStatus(),
+          window.api.linearListTeams(),
+        ])
+        if (!cancelled) {
+          if (Array.isArray(lc)) setLinearCards(lc)
+          if (ls) setLinearPollerStatus(ls)
+          if (Array.isArray(teams)) setLinearTeams(teams)
+          setLinearError(false)
+        }
+      } catch {
+        if (!cancelled) setLinearError(true)
+      }
+    }
+    void tick()
+    const id = setInterval(() => { void tick() }, 3000)
+    return () => { cancelled = true; clearInterval(id) }
+  }, [])
 
   // ── Pod controls ──
   const handlePodPause = useCallback(async (id: string) => {
@@ -143,33 +208,49 @@ function DispatchContent({ onClose }: { onClose?: () => void }) {
     catch { toast('Failed to set override', 'error') }
   }, [toast])
 
-  // Build a map from taskId → PodWorkflow for enrichment
-  // Primary: match on pod.issueNumber === card.issueNumber (explicit link)
-  // Fallback: match on pod.name containing #issueNumber (legacy pods)
-  const podByTask = new Map<string, PodWorkflow>()
-  const matchedPodIds = new Set<string>()
-  if (podWorkflows) {
-    for (const card of cards) {
-      const pod = podWorkflows.find(p =>
-        // Explicit match (new pods)
-        (p.issueNumber === card.issueNumber && p.issueRepo && card.repo.endsWith(p.issueRepo)) ||
-        // Fallback: name/task contains issue number (legacy)
-        p.name?.includes(`#${card.issueNumber}`) ||
-        p.task?.includes(`#${card.issueNumber}`)
-      )
-      if (pod) {
-        podByTask.set(card.taskId, pod)
-        matchedPodIds.add(pod.id)
-      }
-    }
-  }
-
-  // Orphaned pods — active pods not linked to any GitHub issue
-  const orphanedPods = (podWorkflows ?? []).filter(p =>
-    !matchedPodIds.has(p.id) && !['complete', 'failed'].includes(p.status)
+  // Merge GitHub + Linear cards into a single DisplayCard array without casting.
+  // Both types share every field that cardLane() and IssueCard consume.
+  const allCards = useMemo<DisplayCard[]>(
+    () => [...cards, ...linearCards],
+    [cards, linearCards],
   )
 
-  const activeCount = cards.filter(c => !['done', 'failed'].includes(cardLane(c))).length
+  // Build a map from taskId → PodWorkflow for enrichment.
+  // Primary: match on pod.issueNumber === card.issueNumber (explicit link)
+  // Fallback: match on pod.name containing #issueNumber (legacy pods)
+  const { podByTask, matchedPodIds } = useMemo(() => {
+    const podByTask = new Map<string, PodWorkflow>()
+    const matchedPodIds = new Set<string>()
+    if (podWorkflows) {
+      for (const card of allCards) {
+        const pod = podWorkflows.find(p =>
+          // Explicit match (new pods)
+          (p.issueNumber === card.issueNumber && p.issueRepo && card.repo.endsWith(p.issueRepo)) ||
+          // Fallback: name/task contains issue number (legacy)
+          p.name?.includes(`#${card.issueNumber}`) ||
+          p.task?.includes(`#${card.issueNumber}`)
+        )
+        if (pod) {
+          podByTask.set(card.taskId, pod)
+          matchedPodIds.add(pod.id)
+        }
+      }
+    }
+    return { podByTask, matchedPodIds }
+  }, [allCards, podWorkflows])
+
+  // Orphaned pods — active pods not linked to any issue
+  const orphanedPods = useMemo(
+    () => (podWorkflows ?? []).filter(p =>
+      !matchedPodIds.has(p.id) && !['complete', 'failed'].includes(p.status)
+    ),
+    [podWorkflows, matchedPodIds],
+  )
+
+  const activeCount = useMemo(
+    () => allCards.filter(c => !['done', 'failed'].includes(cardLane(c))).length,
+    [allCards],
+  )
 
   return (
     <div className="flex flex-col h-full min-h-0">
@@ -178,11 +259,38 @@ function DispatchContent({ onClose }: { onClose?: () => void }) {
         <div className="flex items-center gap-3">
           <span className="text-[20px] font-semibold text-[var(--c-text-primary)]">Dispatch</span>
           <span className="text-[14px] text-[var(--c-text-muted)]">
-            {cards.length} issues{activeCount > 0 && <span className="text-blue-400 ml-2">{activeCount} in progress</span>}
+            {allCards.length} issues{activeCount > 0 && <span className="text-blue-400 ml-2">{activeCount} in progress</span>}
           </span>
         </div>
         <div className="flex items-center gap-2">
-          <GithubPollStatusBadge status={pollerStatus} className="text-[12px]" />
+          {githubError && (
+            <span className="text-amber-400 text-xs">
+              GitHub connection failed — check your token in Settings
+            </span>
+          )}
+          {linearError && (
+            <span className="text-amber-400 text-xs">
+              Linear connection failed — check your token in Settings
+            </span>
+          )}
+          <span
+            aria-label={`GitHub poller: ${pollerStatus?.polling ? 'polling' : pollerStatus?.running ? 'connected' : 'disconnected'}`}
+          >
+            <GithubPollStatusBadge status={pollerStatus} className="text-[12px]" />
+          </span>
+          {linearPollerStatus && (
+            <div className="flex items-center gap-1.5">
+              <div
+                className={`w-1.5 h-1.5 rounded-full ${linearPollerStatus.running ? 'bg-violet-400' : 'bg-slate-600'}`}
+                aria-label={`Linear poller: ${linearPollerStatus.running ? 'connected' : 'disconnected'}`}
+              />
+              <span className="text-[11px] text-[var(--c-text-faint)]">Linear</span>
+              <button
+                onClick={() => window.api.linearPollNow().catch(() => {})}
+                className="text-[10px] text-[var(--c-text-faint)] hover:text-[var(--c-accent)] transition-colors"
+              >Poll</button>
+            </div>
+          )}
           <button
             type="button"
             onClick={() => setShowSources(true)}
@@ -210,7 +318,7 @@ function DispatchContent({ onClose }: { onClose?: () => void }) {
 
       {/* Board */}
       <div className="flex-1 overflow-x-auto overflow-y-hidden px-5 py-4 min-h-0">
-        {cards.length === 0 ? (
+        {allCards.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-[var(--c-border-hover)] gap-3">
             <p className="text-[16px]">No issues tracked yet</p>
             <p className="text-[14px] text-[var(--c-border)]">
@@ -220,7 +328,7 @@ function DispatchContent({ onClose }: { onClose?: () => void }) {
         ) : (
           <div className="flex gap-3 h-full min-w-0">
             {LANES.map(lane => {
-              const laneCards = cards.filter(c => cardLane(c) === lane.key)
+              const laneCards = allCards.filter(c => cardLane(c) === lane.key)
               return (
                 <div
                   key={lane.key}
@@ -230,7 +338,7 @@ function DispatchContent({ onClose }: { onClose?: () => void }) {
                   <div className="px-4 py-3 border-b border-[color-mix(in_srgb,var(--c-border)_30%,transparent)] flex items-center justify-between">
                     <span className="flex items-center gap-2">
                       <span className={`w-2.5 h-2.5 rounded-full ${lane.dot}`} />
-                      <span className="text-[15px] font-semibold text-[var(--c-text-secondary)]">{lane.label}</span>
+                      <h3 className="text-[15px] font-semibold text-[var(--c-text-secondary)] m-0">{lane.label}</h3>
                     </span>
                     <span className="text-[13px] text-[var(--c-border-hover)] bg-[var(--c-bg-elevated)] px-2 py-0.5 rounded-full tabular-nums">
                       {laneCards.length}
@@ -238,6 +346,11 @@ function DispatchContent({ onClose }: { onClose?: () => void }) {
                   </div>
                   {/* Cards */}
                   <div className="flex-1 overflow-y-auto p-3 space-y-3 min-h-0">
+                    {laneCards.length === 0 && lane.key === 'planning' && (
+                      <p className="text-[12px] text-[var(--c-text-faint)] leading-relaxed px-1 pt-1">
+                        No issues yet — add a GitHub repo or Linear team to start dispatching
+                      </p>
+                    )}
                     {laneCards.map(card => (
                       <IssueCard
                         key={card.taskId}
@@ -295,6 +408,86 @@ function DispatchContent({ onClose }: { onClose?: () => void }) {
             </div>
           </div>
         )}
+
+        {/* Linear Teams */}
+        <div className="mt-6 px-4 pb-4">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-[11px] font-semibold text-[var(--c-text-muted)] uppercase tracking-wider">Linear Teams</h3>
+            <button
+              onClick={() => setAddTeamForm(f => ({ ...f, open: !f.open }))}
+              className="text-[11px] text-[var(--c-accent)] hover:text-[var(--c-text-primary)] transition-colors"
+            >
+              {addTeamForm.open ? 'Cancel' : '+ Add Team'}
+            </button>
+          </div>
+
+          {/* Add team form */}
+          {addTeamForm.open && (
+            <div className="mb-3 p-3 rounded-lg bg-[var(--c-bg-surface)] border border-[var(--c-border)] space-y-2">
+              <input
+                type="text"
+                placeholder="Team key (e.g. META)"
+                value={addTeamForm.teamKey}
+                onChange={e => setAddTeamForm(f => ({ ...f, teamKey: e.target.value.toUpperCase() }))}
+                className="w-full px-2 py-1.5 rounded bg-[var(--c-bg-elevated)] border border-[var(--c-border)] text-[12px] text-[var(--c-text-primary)] placeholder-[var(--c-text-faint)] outline-none focus:border-[color-mix(in_srgb,var(--c-accent)_45%,transparent)]"
+              />
+              <input
+                type="text"
+                placeholder="Local repo path (e.g. ~/projects/my-repo)"
+                value={addTeamForm.localPath}
+                onChange={e => setAddTeamForm(f => ({ ...f, localPath: e.target.value }))}
+                className="w-full px-2 py-1.5 rounded bg-[var(--c-bg-elevated)] border border-[var(--c-border)] text-[12px] text-[var(--c-text-primary)] placeholder-[var(--c-text-faint)] outline-none focus:border-[color-mix(in_srgb,var(--c-accent)_45%,transparent)]"
+              />
+              <input
+                type="text"
+                placeholder="Trigger label (default: agent-ready)"
+                value={addTeamForm.label}
+                onChange={e => setAddTeamForm(f => ({ ...f, label: e.target.value }))}
+                className="w-full px-2 py-1.5 rounded bg-[var(--c-bg-elevated)] border border-[var(--c-border)] text-[12px] text-[var(--c-text-primary)] placeholder-[var(--c-text-faint)] outline-none focus:border-[color-mix(in_srgb,var(--c-accent)_45%,transparent)]"
+              />
+              <button
+                onClick={async () => {
+                  if (!addTeamForm.teamKey || !addTeamForm.localPath) return
+                  try {
+                    await window.api.linearAddTeam(addTeamForm.teamKey, addTeamForm.localPath, addTeamForm.label || undefined)
+                    setAddTeamForm({ teamKey: '', localPath: '', label: 'agent-ready', open: false })
+                    void loadLinear()
+                  } catch (e) {
+                    console.error('Failed to add team', e)
+                  }
+                }}
+                disabled={!addTeamForm.teamKey || !addTeamForm.localPath}
+                className="w-full py-1.5 rounded bg-[var(--c-accent)] text-white text-[12px] font-medium hover:opacity-90 disabled:opacity-40 transition-opacity"
+              >
+                Connect Team
+              </button>
+            </div>
+          )}
+
+          {/* Team list */}
+          {linearTeams.length === 0 ? (
+            <p className="text-[11px] text-[var(--c-text-faint)]">No Linear teams connected. Add a team to dispatch from Linear tickets.</p>
+          ) : (
+            <div className="space-y-1.5">
+              {linearTeams.map(team => (
+                <div key={team.teamKey} className="flex items-center justify-between px-3 py-2 rounded-lg bg-[var(--c-bg-surface)] border border-[var(--c-border)]">
+                  <div>
+                    <span className="text-[12px] font-semibold text-[var(--c-text-primary)]">{team.teamKey}</span>
+                    <span className="ml-2 text-[11px] text-[var(--c-text-faint)]">{team.label}</span>
+                    <p className="text-[10px] text-[var(--c-text-faint)] mt-0.5 truncate max-w-[280px]">{team.localPath}</p>
+                  </div>
+                  <button
+                    onClick={async () => {
+                      await window.api.linearRemoveTeam(team.teamKey).catch(() => {})
+                      void loadLinear()
+                    }}
+                    className="text-[11px] text-rose-400 hover:text-rose-300 transition-colors"
+                  >Remove</button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
       <SourcesModal open={showSources} onClose={() => setShowSources(false)} onReposChanged={() => { void loadGithub() }} />
@@ -307,7 +500,7 @@ function DispatchContent({ onClose }: { onClose?: () => void }) {
 function IssueCard({
   card, pod, onRefresh, onPodPause, onPodResume, onPodCancel, onPodOverride,
 }: {
-  card: GitHubIssueCard
+  card: DisplayCard
   pod?: PodWorkflow
   onRefresh: () => void
   onPodPause: (id: string) => void
@@ -338,6 +531,14 @@ function IssueCard({
         type="button"
         className="w-full text-left px-4 py-4 flex items-center gap-4 hover:bg-[var(--c-bg-elevated)] rounded-xl transition-colors"
         onClick={() => hasPod && setExpanded(e => !e)}
+        aria-expanded={hasPod ? expanded : undefined}
+        aria-label={`${card.title} — issue #${card.issueNumber}${hasPod ? (expanded ? ', collapse details' : ', expand details') : ''}`}
+        onKeyDown={hasPod ? (e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault()
+            setExpanded(v => !v)
+          }
+        } : undefined}
       >
         {/* Active agent avatar or priority dot */}
         {activeAvatar ? (
@@ -353,7 +554,17 @@ function IssueCard({
           <span className="text-[18px] font-semibold text-[var(--c-text-heading)] line-clamp-2 leading-snug block">{card.title}</span>
           <div className="flex items-center gap-2 mt-1">
             <span className="text-[14px] text-[var(--c-text-muted)]">{repoShort}</span>
-            <span className="text-[13px] text-[var(--c-border)]">#{card.issueNumber}</span>
+            {/* Source badge */}
+            {(card as { source?: string }).source === 'linear' ? (
+              <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-violet-500/20 text-violet-400 border border-violet-500/30">L</span>
+            ) : (
+              <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-blue-500/20 text-blue-400 border border-blue-500/30">GH</span>
+            )}
+            <span className="text-[13px] text-[var(--c-border)]">
+              {(card as { source?: string; identifier?: string }).source === 'linear'
+                ? (card as { identifier?: string }).identifier
+                : `#${card.issueNumber}`}
+            </span>
             {activeName && (
               <span className="text-[13px] text-[var(--c-text-muted)]">{activeName}</span>
             )}

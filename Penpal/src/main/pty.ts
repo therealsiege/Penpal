@@ -15,6 +15,23 @@ interface PtySession {
 const MAX_CONCURRENT_PTYS = 10
 const SWEEP_INTERVAL_MS = 60_000
 
+// ── Security ────────────────────────────────────────────────────────────────
+
+const BLOCKED_ENV_KEYS = new Set([
+  'LD_PRELOAD', 'LD_LIBRARY_PATH', 'DYLD_INSERT_LIBRARIES', 'DYLD_LIBRARY_PATH',
+  'DYLD_FORCE_FLAT_NAMESPACE', 'LD_AUDIT', 'LD_DEBUG',
+])
+
+function sanitizePtyEnv(env: Record<string, string>): Record<string, string> {
+  const out: Record<string, string> = {}
+  for (const [k, v] of Object.entries(env)) {
+    if (!BLOCKED_ENV_KEYS.has(k) && typeof v === 'string') {
+      out[k] = v
+    }
+  }
+  return out
+}
+
 // ── State ───────────────────────────────────────────────────────────────────
 
 const sessions = new Map<string, PtySession>()
@@ -77,7 +94,7 @@ export function createPty(
     cols: 120,
     rows: 30,
     cwd,
-    env: { ...process.env, ...env } as Record<string, string>,
+    env: { ...process.env, ...(env ? sanitizePtyEnv(env) : {}) } as Record<string, string>,
   })
 
   const session: PtySession = { id, proc }

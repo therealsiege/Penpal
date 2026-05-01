@@ -32,6 +32,7 @@ export default defineConfig({
             'src/main/pods-workflow-review.test.ts',
             'src/main/pods-self-fix-workflow.test.ts',
             'src/main/pods/__tests__/**/*.test.ts',
+            'src/main/__tests__/**/*.test.ts',
             'src/main/context-response.test.ts',
             'src/main/evals/reports/__tests__/**/*.test.ts',
             'src/main/evals/__tests__/**/*.test.ts',

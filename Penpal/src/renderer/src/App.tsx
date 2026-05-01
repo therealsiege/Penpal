@@ -9,13 +9,28 @@ import { ProfilesPanel } from './panels/ProfilesPanel'
 import { McpPanel } from './panels/McpPanel'
 import { ReplayPanel } from './panels/ReplayPanel'
 import { ResultsPanel } from './panels/ResultsPanel'
+import { OnboardingScreen } from './components/OnboardingScreen'
 import type { SystemPaths } from './types'
 import { getPathPresets } from './utils/path-presets'
 
 function AppContent() {
   const [activePanel, setActivePanel] = useState('tasks')
   const [systemPaths, setSystemPaths] = useState<SystemPaths | null>(null)
+  const [onboardingDone, setOnboardingDone] = useState<boolean | null>(null)
   const { toast } = useToast()
+
+  useEffect(() => {
+    let cancelled = false
+    window.api.onboardingStatus()
+      .then(status => {
+        if (!cancelled) setOnboardingDone(status.complete)
+      })
+      .catch(() => {
+        // If the IPC call fails (backend not yet wired), fall through to the app.
+        if (!cancelled) setOnboardingDone(true)
+      })
+    return () => { cancelled = true }
+  }, [])
 
   useEffect(() => {
     let cancelled = false
@@ -187,6 +202,22 @@ function AppContent() {
       },
     },
   ], [toast, systemPaths])
+
+  if (onboardingDone === null) {
+    return (
+      <div className="fixed inset-0 flex items-center justify-center bg-[#020617]" style={{ backgroundColor: 'var(--c-bg-app, #020617)' }}>
+        <div
+          className="w-8 h-8 rounded-full border-2 border-[var(--c-border)] border-t-[var(--c-accent)] animate-spin"
+          role="status"
+          aria-label="Loading"
+        />
+      </div>
+    )
+  }
+
+  if (onboardingDone === false) {
+    return <OnboardingScreen onComplete={() => setOnboardingDone(true)} />
+  }
 
   return (
     <>

@@ -353,14 +353,24 @@ function getPresets(): PodPreset[] {
 
 // ── Persistence ─────────────────────────────────────────────────────────────
 
-const PERSIST_PATH = path.join(getDataDir(), 'pod-workflows.json')
-const CRITIQUES_DIR = path.join(getDataDir(), 'pod-critiques')
+let _persistPath: string | null = null
+let _critiquesDir: string | null = null
+
+function getPersistPath(): string {
+  if (!_persistPath) _persistPath = path.join(getDataDir(), 'pod-workflows.json')
+  return _persistPath
+}
+
+function getCritiquesDir(): string {
+  if (!_critiquesDir) _critiquesDir = path.join(getDataDir(), 'pod-critiques')
+  return _critiquesDir
+}
 
 function writeCritiqueArtifactFile(wf: PodWorkflow, critique: ReviewerCritique): string {
   try {
-    if (!fs.existsSync(CRITIQUES_DIR)) fs.mkdirSync(CRITIQUES_DIR, { recursive: true })
+    if (!fs.existsSync(getCritiquesDir())) fs.mkdirSync(getCritiquesDir(), { recursive: true })
     const fileName = `${wf.id}-review-i${wf.iteration}.json`
-    const fullPath = path.join(CRITIQUES_DIR, fileName)
+    const fullPath = path.join(getCritiquesDir(), fileName)
     fs.writeFileSync(fullPath, JSON.stringify(critique, null, 2), 'utf-8')
     return path.join('data', 'pod-critiques', fileName)
   } catch (err) {
@@ -373,7 +383,7 @@ const MAX_PERSISTED_WORKFLOWS = 100
 
 function savePods(): void {
   try {
-    const dir = path.dirname(PERSIST_PATH)
+    const dir = path.dirname(getPersistPath())
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
     const all = Array.from(workflows.values())
     // Keep active workflows + most recent completed/failed, capped at MAX_PERSISTED_WORKFLOWS
@@ -383,7 +393,7 @@ function savePods(): void {
       .sort((a, b) => b.updatedAt - a.updatedAt)
       .slice(0, MAX_PERSISTED_WORKFLOWS - active.length)
     const data = [...active, ...finished]
-    fs.writeFileSync(PERSIST_PATH, JSON.stringify(data, null, 2))
+    fs.writeFileSync(getPersistPath(), JSON.stringify(data, null, 2))
   } catch (err) {
     console.error('[pods] Failed to save workflows:', err)
   }
@@ -391,8 +401,8 @@ function savePods(): void {
 
 function loadPods(): void {
   try {
-    if (!fs.existsSync(PERSIST_PATH)) return
-    const raw = fs.readFileSync(PERSIST_PATH, 'utf-8').trim()
+    if (!fs.existsSync(getPersistPath())) return
+    const raw = fs.readFileSync(getPersistPath(), 'utf-8').trim()
     if (!raw) return
     const data = JSON.parse(raw) as PodWorkflow[]
     for (const wf of data) {
@@ -418,7 +428,13 @@ const activeWorkflowPromises = new Map<string, Promise<void>>()
 
 export const podEvents = new EventEmitter()
 
-loadPods()
+let _podsLoaded = false
+
+function ensurePodsLoaded(): void {
+  if (_podsLoaded) return
+  _podsLoaded = true
+  loadPods()
+}
 
 function generateId(): string {
   workflowCounter += 1
@@ -1093,6 +1109,12 @@ interface RealValidationResult {
  * this is authoritative.
  */
 function runRealValidation(cwd: string): RealValidationResult {
+  // Skip real validation in test environment to prevent infinite recursion:
+  // vitest run → createPod → runExecuteStage → runRealValidation → vitest run → ...
+  if (process.env.VITEST === 'true') {
+    return { passed: true, tscPassed: true, testsPassed: true }
+  }
+
   const opts = { cwd, encoding: 'utf-8' as const, stdio: 'pipe' as const }
   const result: RealValidationResult = { passed: false, tscPassed: false, testsPassed: null }
 
@@ -1958,6 +1980,7 @@ export interface CreatePodOpts {
 }
 
 export function createPod(task: string, opts: CreatePodOpts = {}): PodWorkflow {
+  ensurePodsLoaded()
   let solver: string
   let reviewer: string
   let executor: string
@@ -2130,10 +2153,12 @@ export function createPod(task: string, opts: CreatePodOpts = {}): PodWorkflow {
 }
 
 export function getPodStatus(workflowId: string): PodWorkflow | null {
+  ensurePodsLoaded()
   return workflows.get(workflowId) ?? null
 }
 
 export function listPods(): PodWorkflow[] {
+  ensurePodsLoaded()
   return Array.from(workflows.values()).sort((a, b) => b.updatedAt - a.updatedAt)
 }
 
@@ -2142,6 +2167,7 @@ export function overridePod(
   phase: PodPhase,
   override: { model?: string; timeoutMultiplier?: number },
 ): boolean {
+  ensurePodsLoaded()
   const VALID_PHASES: PodPhase[] = ['plan', 'execute', 'validate']
   if (!VALID_PHASES.includes(phase)) return false
   const wf = workflows.get(workflowId)
@@ -2153,6 +2179,7 @@ export function overridePod(
 }
 
 export function pausePod(workflowId: string): boolean {
+  ensurePodsLoaded()
   const wf = workflows.get(workflowId)
   if (!wf || wf.status === 'complete' || wf.status === 'failed' || wf.status === 'paused') return false
   setStatus(wf, 'paused')
@@ -2160,6 +2187,7 @@ export function pausePod(workflowId: string): boolean {
 }
 
 export function resumePod(workflowId: string): boolean {
+  ensurePodsLoaded()
   const wf = workflows.get(workflowId)
   if (!wf || wf.status !== 'paused') return false
 
@@ -2174,6 +2202,7 @@ export function resumePod(workflowId: string): boolean {
 }
 
 export function cancelPod(workflowId: string): boolean {
+  ensurePodsLoaded()
   const wf = workflows.get(workflowId)
   if (!wf) return false
   wf.error = 'Cancelled by user'
@@ -2186,5 +2215,18 @@ export function getPodPresets(): PodPreset[] {
 }
 
 export function getPodAnalytics(lookbackHours?: number) {
+  ensurePodsLoaded()
   return getFleetAnalytics(Array.from(workflows.values()), lookbackHours)
+}
+
+/**
+ * Reset ALL module-level state for test isolation.
+ * Call in afterEach() to prevent cross-test leaks.
+ */
+export function _resetForTest(): void {
+  workflows.clear()
+  activeWorkflowPromises.clear()
+  podEvents.removeAllListeners()
+  workflowCounter = 0
+  _podsLoaded = false
 }

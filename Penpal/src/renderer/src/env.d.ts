@@ -71,7 +71,6 @@ declare global {
       getLatestBriefing: () => Promise<{ date: string; content: string } | null>
       listBriefings: () => Promise<string[]>
       getBriefing: (date: string) => Promise<string | null>
-      getVaultFolders: () => Promise<{ name: string; fileCount: number; subfolders: string[] }[]>
       // Shell APIs
       openUrl: (url: string) => Promise<{ success: boolean }>
       openDownloads: () => Promise<{ success: boolean }>
@@ -92,11 +91,16 @@ declare global {
       pausePod: (workflowId: string) => Promise<boolean>
       resumePod: (workflowId: string) => Promise<boolean>
       cancelPod: (workflowId: string) => Promise<boolean>
+      mergePr: (prNumber: string, repo: string) => Promise<unknown>
+      retryIssue: (repo: string, issueNumber: number) => Promise<unknown>
       getPodPresets: () => Promise<import('./types').PodPreset[]>
       podProfiles: () => Promise<import('./types').ProfilesData>
       podSaveProfile: (name: string, profile: import('./types').RuntimeProfile) => Promise<{ success: boolean }>
       podDeleteProfile: (name: string) => Promise<{ success: boolean }>
       podSetDefaultProfile: (name: string) => Promise<{ success: boolean }>
+      overridePod: (workflowId: string, phase: string, override: { model?: string; timeoutMultiplier?: number }) => Promise<unknown>
+      // Pod Stage Change (spectator mode)
+      onPodStageChanged: (callback: (data: { podId: string; status: string; solverId: string; reviewerId: string; executorId: string; iteration: number }) => void) => () => void
       // Vault File Manager
       vaultList: (relativePath: string) => Promise<import('./types').VaultEntry[]>
       vaultRead: (relativePath: string) => Promise<import('./types').VaultFileContent | null>
@@ -114,6 +118,8 @@ declare global {
       vaultBuildSearchIndex: () => Promise<number>
       vaultGraphData: (scope?: string, centerPath?: string) => Promise<{ nodes: { id: string; label: string; type: string; path?: string }[]; links: { source: string; target: string; type: string }[] }>
       onVaultFileChanged: (callback: (event: { eventType: string; path: string }) => void) => () => void
+      // Session Health
+      getITermStatus: () => Promise<{ healthy: boolean; consecutiveTimeouts: number; backoffUntil: number }>
       // Cursor Agent APIs
       focusCursorIDE: () => Promise<SessionActionResult>
       // Slack Bridge
@@ -150,6 +156,17 @@ declare global {
       githubAddRepo: (owner: string, repo: string, localPath: string) => Promise<{ ok: boolean }>
       githubRemoveRepo: (owner: string, repo: string) => Promise<{ ok: boolean }>
       githubListRepos: () => Promise<{ owner: string; repo: string; localPath: string }[]>
+      // Linear Issue Poller
+      linearPollerStatus: () => Promise<{ running: boolean; polling: boolean }>
+      linearPollNow: () => Promise<{ enqueued: number }>
+      linearIssueCards: () => Promise<import('./types').LinearIssueCard[]>
+      linearAddTeam: (teamKey: string, localPath: string, label?: string) => Promise<{ ok: boolean; error?: string }>
+      linearRemoveTeam: (teamKey: string) => Promise<{ ok: boolean }>
+      linearListTeams: () => Promise<import('./types').LinearTeamConfig[]>
+      // Onboarding
+      onboardingStatus: () => Promise<{ complete: boolean; hasAnthropicKey: boolean; hasGithubToken: boolean; hasLinearKey: boolean }>
+      onboardingSave: (payload: { anthropicKey: string; githubToken: string; linearKey: string; addGithubRepo?: { owner: string; repo: string; localPath: string } }) => Promise<{ ok: boolean; error?: string }>
+      onboardingSkip: () => Promise<{ ok: boolean }>
       // Opencode Sessions
       getOpencodeSessions: () => Promise<OpencodeSession[]>
       // Data Scripts
@@ -175,6 +192,11 @@ declare global {
       evalsSpotCheckReview: (id: string, verdict: 'pass' | 'fail' | 'partial', notes?: string) => Promise<void>
       evalsSpotCheckAgreement: () => Promise<import('./types').SpotCheckAgreement>
       evalsGenerateDpoPairs: () => Promise<{ count: number; path: string }>
+      // Pod Combo Analytics
+      evalsPodCombos: (opts?: { since?: string; until?: string; presetId?: string; agentId?: string }) => Promise<unknown>
+      // Eval Harness (per-agent and all-agent reports)
+      evalReportAgent: (agentId: string, since?: string) => Promise<unknown>
+      evalReportAll: (since?: string) => Promise<unknown>
       // Pod Quality Metrics
       evalsPodQuality: (since?: string) => Promise<{
         period: { from: string; to: string }
@@ -201,6 +223,25 @@ declare global {
       vaultSearchRich: (query: string, glob?: string, limit?: number) => Promise<ContextEngineeredResponse<VaultSearchResult[]>>
       orchestratorQueueRich: () => Promise<ContextEngineeredResponse<Task[]>>
       orchestratorAgentHealthRich: () => Promise<ContextEngineeredResponse<AgentHealthStatus[]>>
+      // Flight Board
+      flightBoardList: () => Promise<import('./types').FlightBoardEntry[]>
+      flightBoardFilesInFlight: () => Promise<Record<string, import('./types').FlightBoardEntry>>
+      // Config Snapshot + Editing
+      getConfigSnapshot: () => Promise<import('./types').ConfigSnapshot>
+      addProjectMcpServer: (server: { name: string; command: string; args: string[]; env?: Record<string, string>; cwd?: string }) => Promise<unknown>
+      removeProjectMcpServer: (name: string) => Promise<unknown>
+      addProfileMcpServer: (profile: string, server: { name: string; command: string; args: string[]; env?: Record<string, string>; cwd?: string }) => Promise<unknown>
+      removeProfileMcpServer: (profile: string, serverName: string) => Promise<unknown>
+      updateAgentTools: (agentId: string, tools: string[]) => Promise<unknown>
+      // MCP Server Management
+      listMcpServers: () => Promise<{ success: boolean; data?: import('./types').ManagedMcpServer[]; error?: string }>
+      addMcpServer: (server: Omit<import('./types').ManagedMcpServer, 'id'>) => Promise<{ success: boolean; data?: import('./types').ManagedMcpServer; error?: string }>
+      updateMcpServer: (id: string, updates: Partial<Omit<import('./types').ManagedMcpServer, 'id'>>) => Promise<{ success: boolean; data?: import('./types').ManagedMcpServer; error?: string }>
+      deleteMcpServer: (id: string) => Promise<{ success: boolean; deleted?: boolean; error?: string }>
+      toggleMcpServer: (id: string, enabled: boolean) => Promise<{ success: boolean; toggled?: boolean; error?: string }>
+      importMcpConfigs: () => Promise<{ success: boolean; data?: import('./types').ManagedMcpServer[]; error?: string }>
+      getMcpTemplates: () => Promise<{ success: boolean; data?: import('./types').ManagedMcpServer[]; error?: string }>
+      syncMcpTargets: () => Promise<{ success: boolean; error?: string }>
       // Session Replay
       replayStatus: () => Promise<{ active: boolean; recordingId: string | null; startedAt: number | null; durationMs: number }>
       replayStart: (label?: string) => Promise<{ id: string }>

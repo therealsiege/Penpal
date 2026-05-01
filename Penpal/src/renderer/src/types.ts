@@ -135,6 +135,34 @@ export interface SystemPaths {
   docsRoot: string
 }
 
+export interface LinearTeamConfig {
+  teamKey: string
+  label: string
+  localPath: string
+  /** Linear team UUID — resolved from teamKey on first add */
+  teamId?: string
+  /** Optional runtime profile override (e.g. 'economic', 'sonnet', 'max') */
+  runtimeProfile?: string
+}
+
+export interface LinearIssueCard {
+  source: 'linear'
+  issueId: string
+  issueNumber: number
+  identifier: string    // e.g. "META-123"
+  repo: string          // teamKey, e.g. "META"
+  title: string
+  taskId: string
+  taskStatus: string
+  taskStage: string | null
+  priority: string
+  assignedAgent: string | null
+  podAgents?: { role: 'solver' | 'reviewer' | 'executor'; agentId: string; active: boolean }[]
+  ingestedAt: number
+  url: string
+  podWorkflowId?: string
+}
+
 export interface AgentPersona {
   backstory: string
   style: string
@@ -564,6 +592,7 @@ export interface OrchestratorStats {
 }
 
 export interface GitHubIssueCard {
+  source?: 'github' | 'linear'
   issueNumber: number
   repo: string
   title: string
@@ -796,6 +825,42 @@ export interface RecordingMeta {
   eventCount: number
   durationMs: number
   isActive: boolean
+}
+
+// ── MCP Manager Types ─────────────────────────────────────────────────────────
+
+export interface ManagedMcpServer {
+  id: string
+  name: string
+  transport: 'stdio' | 'sse'
+  command: string
+  args: string[]
+  env: Record<string, string>
+  enabled: boolean
+  targets: Array<'claude-global' | 'claude-project' | 'cursor' | 'vscode'>
+  notes?: string
+}
+
+// ── Flight Board Types ────────────────────────────────────────────────────────
+
+export type FlightBoardStatus =
+  | 'planning'
+  | 'solving'
+  | 'reviewing'
+  | 'executing'
+  | 'pr-created'
+  | 'merged'
+  | 'failed'
+
+export interface FlightBoardEntry {
+  podId: string
+  task: string
+  status: FlightBoardStatus
+  filesInFlight: string[]
+  startedAt: string   // ISO 8601
+  updatedAt: string   // ISO 8601
+  cwd?: string
+  planSummary?: string
 }
 
 export interface Recording extends RecordingMeta {

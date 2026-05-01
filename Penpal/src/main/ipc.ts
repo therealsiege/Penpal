@@ -60,7 +60,6 @@ import {
   type RuntimeProfile,
 } from './pods'
 import { getActiveEntries, getFilesInFlight } from './flight-board'
-import { startWaveDispatcher, stopWaveDispatcher, isWaveDispatcherEnabled } from './wave-dispatcher'
 import { getSessionReplayRecorder } from './session-replay'
 
 function parsePodCreateOpts(opts: unknown): CreatePodOpts {
@@ -126,10 +125,8 @@ import {
   shutdownAgent,
   getOrchestratorStats,
   getAllAgentXP,
-  getAllAgentCredits,
   setModelProvider,
   getModelProvider,
-  pruneTaskQueue,
   type AgentXP,
   type ModelProvider,
 } from './orchestrator'
@@ -143,7 +140,6 @@ import {
   addWatchedRepo,
   removeWatchedRepo,
   getWatchedRepos,
-  consolidateTrackedIssues,
 } from './github-issues'
 import { getPipelineIssues } from './github-pipeline'
 import { getEvalReportAll, getEvalReportAgent, getEvalStats } from './evals'
@@ -156,7 +152,6 @@ import { evalHarness } from './evals/harness'
 import { generateWeeklyDigest } from './evals/reports/weekly-digest'
 import { contextMonitor } from './evals/collectors/context-usage'
 import { spotCheckQueue } from './evals/judges/human-judge'
-import { listSoundboardClips } from './soundboard'
 import { DOCS_ROOT, getSystemPaths } from './paths'
 import { registerDataScriptHandlers } from './data-scripts'
 import {
@@ -458,7 +453,9 @@ export function registerIpcHandlers() {
   ipcMain.handle('briefing:latest', wrapHandler(() => getLatestBriefing()))
   ipcMain.handle('briefing:list', wrapHandler(() => listBriefings()))
   ipcMain.handle('briefing:get', wrapHandler((date: unknown) => {
-    if (typeof date !== 'string') throw new Error('date must be a string')
+    if (typeof date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      throw new Error('Invalid date format')
+    }
     return getBriefing(date)
   }))
 
@@ -857,7 +854,6 @@ export function registerIpcHandlers() {
     return result.filePaths[0]
   }))
   ipcMain.handle('system:paths', wrapHandler(() => getSystemPaths()))
-  ipcMain.handle('soundboard:list', wrapHandler(() => listSoundboardClips()))
 
   ipcMain.handle('agents:focus', wrapHandler(async (agentId: unknown) => {
     if (typeof agentId !== 'string') throw new Error('agentId must be a string')
@@ -991,7 +987,9 @@ export function registerIpcHandlers() {
 
   // Retry a failed issue: reset labels to agent-ready so pipeline re-ingests it
   ipcMain.handle('pod:retry-issue', wrapHandler(async (repo: unknown, issueNumber: unknown) => {
-    if (typeof repo !== 'string') throw new Error('repo required')
+    if (typeof repo !== 'string' || !/^[a-zA-Z0-9_.-]+\/[a-zA-Z0-9_.-]+$/.test(repo)) {
+      throw new Error('Invalid repo format — expected owner/repo')
+    }
     if (typeof issueNumber !== 'number' && typeof issueNumber !== 'string') throw new Error('issueNumber required')
     const num = String(issueNumber)
     const { proxyExecFile } = await import('./spawn-proxy')
@@ -1217,20 +1215,6 @@ export function registerIpcHandlers() {
     return contextResponse(result, summary, [], ['sessions:list'])
   }))
 
-  // ── Wave Dispatcher ────────────────────────────────────────────────────────
-  ipcMain.handle('wave:start', wrapHandler((repo: unknown) => {
-    if (typeof repo !== 'string') throw new Error('repo must be a string')
-    startWaveDispatcher(repo)
-    return { success: true }
-  }))
-  ipcMain.handle('wave:stop', wrapHandler(() => {
-    stopWaveDispatcher()
-    return { success: true }
-  }))
-  ipcMain.handle('wave:status', wrapHandler(() => ({
-    enabled: isWaveDispatcherEnabled(),
-  })))
-
   // ── Opencode Sessions ──────────────────────────────────────────────────────
   ipcMain.handle('opencode:sessions', wrapHandler(async () => {
     const sessions = await getOpencodeSessions()
@@ -1332,13 +1316,6 @@ export function registerIpcHandlers() {
   }))
   ipcMain.handle('orchestrator:stats', wrapHandler(() => getOrchestratorStats()))
   ipcMain.handle('orchestrator:xp', wrapHandler(() => getAllAgentXP()))
-  ipcMain.handle('orchestrator:credits', wrapHandler(() => getAllAgentCredits()))
-  ipcMain.handle('orchestrator:prune', wrapHandler(() => {
-    const result = pruneTaskQueue()
-    const summary = `Pruned ${result.removed} terminal tasks, kept ${result.kept} (active + 20 most recent).`
-    console.log(`[orchestrator:prune] ${summary}`)
-    return contextResponse(result, summary, [], ['orchestrator:queue'])
-  }))
   ipcMain.handle('orchestrator:set-provider', wrapHandler((provider: unknown) => {
     if (provider !== 'claude' && provider !== 'ollama') throw new Error('provider must be "claude" or "ollama"')
     setModelProvider(provider as ModelProvider)
@@ -1428,7 +1405,6 @@ export function registerIpcHandlers() {
   ipcMain.handle('github:poll-now', wrapHandler(() => pollGithubIssuesNow()))
   ipcMain.handle('github:seen', wrapHandler(() => getSeenIssues()))
   ipcMain.handle('github:cards', wrapHandler(() => getGithubIssueCards()))
-  ipcMain.handle('github:consolidate', wrapHandler(() => consolidateTrackedIssues()))
   ipcMain.handle('github:add-repo', wrapHandler((owner: unknown, repo: unknown, localPath: unknown) => {
     if (typeof owner !== 'string' || typeof repo !== 'string' || typeof localPath !== 'string') {
       throw new Error('owner, repo, and localPath must be strings')
@@ -1444,6 +1420,34 @@ export function registerIpcHandlers() {
     return { ok: true }
   }))
   ipcMain.handle('github:list-repos', wrapHandler(() => getWatchedRepos()))
+
+  // ── Linear issue poller ──────────────────────────────────────────────────
+  ipcMain.handle('linear:status', wrapHandler(() => {
+    const { getLinearPollerStatus } = require('./linear-poller') as typeof import('./linear-poller')
+    return getLinearPollerStatus()
+  }))
+  ipcMain.handle('linear:poll-now', wrapHandler(async () => {
+    const { pollLinearNow } = require('./linear-poller') as typeof import('./linear-poller')
+    return pollLinearNow()
+  }))
+  ipcMain.handle('linear:cards', wrapHandler(async () => {
+    const { getLinearIssueCards } = require('./linear-poller') as typeof import('./linear-poller')
+    return getLinearIssueCards()
+  }))
+  ipcMain.handle('linear:add-team', wrapHandler(async (teamKey: unknown, localPath: unknown, label: unknown) => {
+    if (typeof teamKey !== 'string' || typeof localPath !== 'string') throw new Error('teamKey and localPath must be strings')
+    const { addLinearTeam } = require('./linear-poller') as typeof import('./linear-poller')
+    return addLinearTeam(teamKey, localPath, typeof label === 'string' ? label : undefined)
+  }))
+  ipcMain.handle('linear:remove-team', wrapHandler(async (teamKey: unknown) => {
+    if (typeof teamKey !== 'string') throw new Error('teamKey must be a string')
+    const { removeLinearTeam } = require('./linear-poller') as typeof import('./linear-poller')
+    return removeLinearTeam(teamKey)
+  }))
+  ipcMain.handle('linear:list-teams', wrapHandler(() => {
+    const { getLinearTeams } = require('./linear-poller') as typeof import('./linear-poller')
+    return getLinearTeams()
+  }))
 
   // ── Config Snapshot + Editing ───────────────────────────────────────
   ipcMain.handle('config:snapshot', wrapHandler(() => getConfigSnapshot()))
@@ -1601,6 +1605,23 @@ export function registerPreferenceIpc(store: PreferenceStore) {
   }))
   ipcMain.handle('preferences:generate-pairs', wrapHandler(runDpoPairExport))
   ipcMain.handle('evals:generate-dpo-pairs', wrapHandler(runDpoPairExport))
+
+  // ── Onboarding ──────────────────────────────────────────────────────────────
+  ipcMain.handle('onboarding:status', wrapHandler(() => {
+    const { getOnboardingStatus } = require('./onboarding') as typeof import('./onboarding')
+    return getOnboardingStatus()
+  }))
+
+  ipcMain.handle('onboarding:save', wrapHandler(async (payload: unknown) => {
+    const { saveOnboarding } = require('./onboarding') as typeof import('./onboarding')
+    return saveOnboarding(payload as import('./onboarding').OnboardingSavePayload)
+  }))
+
+  ipcMain.handle('onboarding:skip', wrapHandler(async () => {
+    const { skipOnboarding } = require('./onboarding') as typeof import('./onboarding')
+    await skipOnboarding()
+    return { ok: true }
+  }))
 
   // ── Pod Stage Change Forwarding ──────────────────────────────────────────
   // Forward pod status-change events to the renderer for spectator mode

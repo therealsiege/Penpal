@@ -9,13 +9,13 @@ import { toolRegistry } from '../tools.js'
 import {
   enqueueTask,
   getTaskQueue,
-  getAgentHealthStatuses,
   getOrchestratorStats,
   type Task,
   type TaskPriority,
   type AgentHealthStatus,
   type OrchestratorStats,
-} from '../../main/orchestrator.js'
+} from '../../main/dispatch-queue.js'
+import { getAgentHealthStatuses } from '../../main/dispatch-loop.js'
 import { wrapResponse, type ContextEngineeredResponse } from '../response.js'
 
 // ── Exported handler functions (testable without MCP transport) ─────────────

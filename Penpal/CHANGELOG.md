@@ -4,6 +4,26 @@ All notable changes to Penpal are documented here. Format follows [Keep a Change
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-05-01
+
+### Changed
+- **Orchestrator split into dispatch-queue + dispatch-loop.** The 1,127-line monolith `orchestrator.ts` is now a thin barrel re-export backed by `dispatch-queue.ts` (pure state — queue, priorities, status transitions) and `dispatch-loop.ts` (side effects — agent spawn, health checks, retries). All existing import paths still work.
+- **OrchestratorModal now renders Linear issues alongside GitHub issues.** Cards from both sources appear in the same kanban lanes; a new `DisplayCard` union type and `LinearIssueCard` / `LinearTeamConfig` types support this.
+- **Input validation tightened** on `briefing:get` (date format regex) and `pod:retry-issue` (owner/repo regex) IPC handlers.
+
+### Added
+- **Linear issue poller** (`linear-poller.ts`) — polls Linear GraphQL API for `agent-ready` labeled issues and feeds them into the pod pipeline, mirroring the GitHub issue flow.
+- **Onboarding screen** (`onboarding.ts` + `OnboardingScreen.tsx`) — first-run setup wizard that checks for API keys and git repo config before showing the main app. `App.tsx` gates on onboarding status.
+- **New test suites** — `linear-poller.test.ts`, `onboarding.test.ts`, `security-validation.test.ts`, `OnboardingScreen.test.tsx`, `OrchestratorModal.test.tsx`.
+- `.env.example` — documents required env vars for new contributors.
+- `src/renderer/src/types.ts` — shared renderer type definitions extracted from inline types.
+
+### Removed
+- **SoundboardPanel** and `soundboard.ts` — the `penny-sfx://` custom protocol registration, `soundboard:list` IPC handler, and entire `SoundboardPanel.tsx` component are removed.
+- **Wave Dispatcher** — `wave:start`, `wave:stop`, `wave:status` IPC handlers and `wave-dispatcher` import removed.
+- `pruneTaskQueue` and `getAllAgentCredits` exports pruned from orchestrator surface.
+- `consolidateTrackedIssues` export removed from github-issues.
+
 ## [0.1.3] - 2026-04-29
 
 ### Changed
@@ -54,6 +74,9 @@ All notable changes to Penpal are documented here. Format follows [Keep a Change
 
 Initial private release. Electron + Phaser 3 office simulator visualizing Claude Code agent sessions as animated characters. Includes pod system (Solver/Reviewer/Executor), Slack bridge, GitHub issue pipeline, Vault editor, knowledge graph integration, and seasonal game systems (quests, leaderboards, cosmetic credits).
 
-[Unreleased]: https://github.com/therealsiege/Penpal/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/therealsiege/Penpal/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/therealsiege/Penpal/compare/v0.1.3...v0.2.0
+[0.1.3]: https://github.com/therealsiege/Penpal/compare/v0.1.2...v0.1.3
+[0.1.2]: https://github.com/therealsiege/Penpal/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/therealsiege/Penpal/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/therealsiege/Penpal/releases/tag/v0.1.0

@@ -50,16 +50,12 @@ contextBridge.exposeInMainWorld('api', {
   focusSessionByName: (name: string, cwd?: string) => ipcRenderer.invoke('sessions:focus-by-name', name, cwd),
   createNewSession: (cwd: string) => ipcRenderer.invoke('sessions:create', cwd),
   broadcastToSessions: (message: string) => ipcRenderer.invoke('sessions:broadcast', message),
-  pruneStaleSessions: (maxIdleMinutes?: number) => ipcRenderer.invoke('sessions:prune', maxIdleMinutes),
   getGraphStats: () => ipcRenderer.invoke('graph:stats'),
   searchLeads: (query: string) => ipcRenderer.invoke('leads:search', query).then(unwrap),
   getLeadDetail: (name: string) => ipcRenderer.invoke('leads:detail', name).then(unwrap),
   getLatestBriefing: () => ipcRenderer.invoke('briefing:latest'),
   listBriefings: () => ipcRenderer.invoke('briefing:list'),
   getBriefing: (date: string) => ipcRenderer.invoke('briefing:get', date),
-  getVaultFolders: () => ipcRenderer.invoke('vault:folders'),
-  listVentures: (relativePath: string) => ipcRenderer.invoke('ventures:list', relativePath),
-  readVentureFile: (relativePath: string) => ipcRenderer.invoke('ventures:read', relativePath),
   // Approval APIs
   approveSession: (tty: string, choice: string) => ipcRenderer.invoke('sessions:approve', tty, choice),
   approveAllSessions: (choice: string) => ipcRenderer.invoke('sessions:approve-all', choice),
@@ -68,7 +64,6 @@ contextBridge.exposeInMainWorld('api', {
   openDownloads: () => ipcRenderer.invoke('shell:open-downloads'),
   pickDirectory: () => ipcRenderer.invoke('dialog:open-directory') as Promise<string | null>,
   getSystemPaths: () => ipcRenderer.invoke('system:paths'),
-  soundboardList: () => ipcRenderer.invoke('soundboard:list'),
   // Agent APIs
   getAgents: () => ipcRenderer.invoke('agents:list'),
   getAgentStatuses: () => ipcRenderer.invoke('agents:statuses').then(unwrap),
@@ -143,6 +138,19 @@ contextBridge.exposeInMainWorld('api', {
   githubRemoveRepo: (owner: string, repo: string) =>
     ipcRenderer.invoke('github:remove-repo', owner, repo),
   githubListRepos: () => ipcRenderer.invoke('github:list-repos'),
+  // Linear Issue Poller
+  linearPollerStatus: () => ipcRenderer.invoke('linear:status'),
+  linearPollNow: () => ipcRenderer.invoke('linear:poll-now'),
+  linearIssueCards: () => ipcRenderer.invoke('linear:cards'),
+  linearAddTeam: (teamKey: string, localPath: string, label?: string) =>
+    ipcRenderer.invoke('linear:add-team', teamKey, localPath, label),
+  linearRemoveTeam: (teamKey: string) => ipcRenderer.invoke('linear:remove-team', teamKey),
+  linearListTeams: () => ipcRenderer.invoke('linear:list-teams'),
+  // Onboarding
+  onboardingStatus: () => ipcRenderer.invoke('onboarding:status'),
+  onboardingSave: (payload: { anthropicKey: string; githubToken: string; linearKey: string; addGithubRepo?: { owner: string; repo: string; localPath: string } }) =>
+    ipcRenderer.invoke('onboarding:save', payload),
+  onboardingSkip: () => ipcRenderer.invoke('onboarding:skip'),
   // Eval Dashboard (report-* are plain payloads; stats uses contextResponse — unwrap)
   evalsReportAll: () => ipcRenderer.invoke('evals:report-all'),
   evalsReportAgent: (agentId: string) => ipcRenderer.invoke('evals:report-agent', agentId),

@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import type { Task, AgentHealthStatus, OrchestratorStats, TaskPriority } from '../../main/orchestrator'
+import type { Task, AgentHealthStatus, OrchestratorStats, TaskPriority } from '../../main/dispatch-queue'
 
-// Mock the orchestrator module before importing handlers
-vi.mock('../../main/orchestrator', () => {
+// Mock dispatch-queue (pure state) — no side effects
+vi.mock('../../main/dispatch-queue', () => {
   const tasks: Task[] = []
   let taskCounter = 0
 
@@ -28,7 +28,6 @@ vi.mock('../../main/orchestrator', () => {
       return task
     }),
     getTaskQueue: vi.fn(() => [...tasks]),
-    getAgentHealthStatuses: vi.fn(async () => [] as AgentHealthStatus[]),
     getOrchestratorStats: vi.fn((): OrchestratorStats => ({
       queueDepth: 0,
       activeTasks: 0,
@@ -39,9 +38,15 @@ vi.mock('../../main/orchestrator', () => {
   }
 })
 
+// Mock dispatch-loop separately — only need getAgentHealthStatuses
+vi.mock('../../main/dispatch-loop', () => ({
+  getAgentHealthStatuses: vi.fn(async () => [] as AgentHealthStatus[]),
+}))
+
 // Import after mocks are set up
 import { handleEnqueue, handleQueue, handleAgentHealth } from './orchestrator'
-import { enqueueTask, getTaskQueue, getAgentHealthStatuses, getOrchestratorStats } from '../../main/orchestrator'
+import { enqueueTask, getTaskQueue, getOrchestratorStats } from '../../main/dispatch-queue'
+import { getAgentHealthStatuses } from '../../main/dispatch-loop'
 
 const mockEnqueueTask = vi.mocked(enqueueTask)
 const mockGetTaskQueue = vi.mocked(getTaskQueue)

@@ -97,7 +97,7 @@ function cleanupWorktrees(repoCwd: string): void {
     try {
       const stat = fs.statSync(entryPath)
       if (!stat.isDirectory() || stat.mtimeMs >= cutoffMs) continue
-      try { execSync(`git worktree remove "${entryPath}" --force`, gitOpts) } catch { /* not a registered worktree */ }
+      try { execFileSync('git', ['worktree', 'remove', entryPath, '--force'], gitOpts) } catch { /* not a registered worktree */ }
       if (fs.existsSync(entryPath)) fs.rmSync(entryPath, { recursive: true, force: true })
       console.error(`[pod-cli] Removed stale worktree: ${entry}`)
       removed++
@@ -138,27 +138,27 @@ function createWorktree(repoCwd: string, slug: string): { worktreePath: string; 
     // If local main is ahead of origin, push it first so the worktree starts from current code
     try {
       const localAhead = parseInt(
-        execSync(`git rev-list --count origin/${baseBranch}..${baseBranch}`, gitOpts).toString().trim(),
+        execFileSync('git', ['rev-list', '--count', `origin/${baseBranch}..${baseBranch}`], gitOpts).toString().trim(),
         10,
       )
       if (localAhead > 0) {
         console.error(`[pod-cli] Local ${baseBranch} is ${localAhead} commits ahead — pushing to origin`)
-        execSync(`git push origin ${baseBranch}`, { ...gitOpts, timeout: 60_000 })
+        execFileSync('git', ['push', 'origin', baseBranch], { ...gitOpts, timeout: 60_000 })
       }
     } catch { /* non-fatal — proceed with fetch */ }
 
     // Fetch latest
-    execSync(`git fetch origin ${baseBranch}`, { ...gitOpts, timeout: 60_000 })
+    execFileSync('git', ['fetch', 'origin', baseBranch], { ...gitOpts, timeout: 60_000 })
 
     // Push local main if it's ahead of origin so the worktree branches from current work
     try {
       const localAhead = parseInt(
-        execSync(`git rev-list --count origin/${baseBranch}..${baseBranch}`, gitOpts).toString().trim(),
+        execFileSync('git', ['rev-list', '--count', `origin/${baseBranch}..${baseBranch}`], gitOpts).toString().trim(),
         10,
       )
       if (localAhead > 0) {
         console.error(`[pod-cli] Local ${baseBranch} is ${localAhead} commits ahead — pushing to origin`)
-        execSync(`git push origin ${baseBranch}`, { ...gitOpts, timeout: 60_000 })
+        execFileSync('git', ['push', 'origin', baseBranch], { ...gitOpts, timeout: 60_000 })
       }
     } catch (err) {
       console.error(`[pod-cli] Could not check/push local ${baseBranch}:`, (err as Error).message)
@@ -166,15 +166,15 @@ function createWorktree(repoCwd: string, slug: string): { worktreePath: string; 
 
     // Prune stale worktrees and clean up old branch if it exists
     try { execSync('git worktree prune', gitOpts) } catch { /* */ }
-    try { execSync(`git branch -D ${branch}`, gitOpts) } catch { /* */ }
+    try { execFileSync('git', ['branch', '-D', branch], gitOpts) } catch { /* */ }
 
     // Remove stale worktree directory
     if (fs.existsSync(worktreePath)) {
-      try { execSync(`git worktree remove ${worktreePath} --force`, gitOpts) } catch { /* */ }
+      try { execFileSync('git', ['worktree', 'remove', worktreePath, '--force'], gitOpts) } catch { /* */ }
       if (fs.existsSync(worktreePath)) fs.rmSync(worktreePath, { recursive: true, force: true })
     }
 
-    execSync(`git worktree add --force -b ${branch} ${worktreePath} origin/${baseBranch}`, {
+    execFileSync('git', ['worktree', 'add', '--force', '-b', branch, worktreePath, `origin/${baseBranch}`], {
       ...gitOpts, timeout: 60_000,
     })
 
@@ -216,9 +216,9 @@ function pushAndCreatePR(worktreePath: string, branch: string, task: string): vo
     } catch { /* default to main */ }
 
     // Fetch latest and rebase onto it before pushing
-    execSync(`git fetch origin ${baseBranch}`, { ...gitOpts, timeout: 60_000 })
+    execFileSync('git', ['fetch', 'origin', baseBranch], { ...gitOpts, timeout: 60_000 })
     try {
-      execSync(`git rebase origin/${baseBranch}`, gitOpts)
+      execFileSync('git', ['rebase', `origin/${baseBranch}`], gitOpts)
       console.error(`[pod-cli] Rebased onto origin/${baseBranch}`)
     } catch {
       try { execSync('git rebase --abort', gitOpts) } catch { /* */ }
@@ -228,7 +228,7 @@ function pushAndCreatePR(worktreePath: string, branch: string, task: string): vo
 
     // Check if there's anything to push
     const ahead = parseInt(
-      execSync(`git rev-list --count origin/${baseBranch}..HEAD`, { ...gitOpts, timeout: 10_000 }).toString().trim(),
+      execFileSync('git', ['rev-list', '--count', `origin/${baseBranch}..HEAD`], { ...gitOpts, timeout: 10_000 }).toString().trim(),
       10,
     )
     if (ahead === 0) {
@@ -236,15 +236,12 @@ function pushAndCreatePR(worktreePath: string, branch: string, task: string): vo
       return
     }
 
-    execSync(`git push -u origin ${branch}`, gitOpts)
+    execFileSync('git', ['push', '-u', 'origin', branch], gitOpts)
     console.error(`[pod-cli] Pushed ${branch}`)
 
     const title = task.slice(0, 72)
     const body = `Automated implementation by pod-cli.\n\nTask: ${task.slice(0, 500)}`
-    execSync(
-      `gh pr create --title "${title.replace(/"/g, '\\"')}" --body "${body.replace(/"/g, '\\"')}"`,
-      gitOpts,
-    )
+    execFileSync('gh', ['pr', 'create', '--title', title, '--body', body], gitOpts)
     console.error(`[pod-cli] PR created for ${branch}`)
   } catch (err) {
     console.error(`[pod-cli] Push/PR failed:`, (err as Error).message)

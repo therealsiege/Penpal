@@ -10,7 +10,7 @@
  * On completion/failure: orchestrator events update labels via callbacks.
  */
 
-import { execFile } from 'child_process'
+import { execFile, execFileSync } from 'child_process'
 import { promisify } from 'util'
 import fs from 'fs'
 import path from 'path'
@@ -24,6 +24,17 @@ import { atomicWrite } from './atomic-store'
 import { getAtlasRoot } from './project-paths'
 import { driveWaves } from './wave-dispatcher'
 import { getDataDir } from './data-paths'
+
+// ── Git helpers ─────────────────────────────────────────────────────────────
+
+function isGitRepo(dirPath: string): boolean {
+  try {
+    execFileSync('git', ['rev-parse', '--git-dir'], { cwd: dirPath, stdio: 'pipe' })
+    return true
+  } catch {
+    return false
+  }
+}
 
 // ── Config ──────────────────────────────────────────────────────────────────
 
@@ -792,11 +803,14 @@ function loadPersistedRepos(): void {
 function savePersistedRepos(): void {
   try {
     fs.mkdirSync(DATA_DIR, { recursive: true })
-    fs.writeFileSync(REPOS_PATH, JSON.stringify(REPOS.map(r => ({
+    const data = REPOS.map(r => ({
       owner: r.owner, repo: r.repo, label: r.label,
       workingLabel: r.workingLabel, localPath: r.localPath, project: r.project,
       ...(r.runtimeProfile ? { runtimeProfile: r.runtimeProfile } : {}),
-    })), null, 2))
+    }))
+    const tmpPath = REPOS_PATH + '.tmp'
+    fs.writeFileSync(tmpPath, JSON.stringify(data, null, 2), 'utf-8')
+    fs.renameSync(tmpPath, REPOS_PATH)
   } catch { /* ignore */ }
 }
 
@@ -805,6 +819,9 @@ loadPersistedRepos()
 
 /** Add a repo to watch. Persisted to disk. Ensures labels exist. */
 export function addWatchedRepo(owner: string, repo: string, localPath: string): void {
+  if (!path.isAbsolute(localPath) || !fs.existsSync(localPath) || !isGitRepo(localPath)) {
+    throw new Error(`${localPath} is not a git repository`)
+  }
   const existing = REPOS.find(r => r.owner === owner && r.repo === repo)
   if (existing) return
   REPOS.push({

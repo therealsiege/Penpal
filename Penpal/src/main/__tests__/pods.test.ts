@@ -117,23 +117,23 @@ describe('parseReviewerCritique', () => {
 
   it('falls back on malformed JSON', () => {
     const result = parseReviewerCritique('This is not JSON at all, just some text.')
-    expect(result.verdict).toBe('approve')
-    expect(result.confidence).toBe(0.5)
-    expect(result.summary).toContain('falling back')
+    expect(result.verdict).toBe('reject')
+    expect(result.confidence).toBe(0)
+    expect(result.summary).toContain('Reviewer output unparseable')
   })
 
   it('falls back when required fields are missing', () => {
     const raw = '```json\n' + JSON.stringify({ confidence: 0.8 }) + '\n```'
     const result = parseReviewerCritique(raw)
-    expect(result.verdict).toBe('approve')
-    expect(result.confidence).toBe(0.5)
-    expect(result.summary).toContain('Missing required fields')
+    expect(result.verdict).toBe('reject')
+    expect(result.confidence).toBe(0)
+    expect(result.summary).toContain('Reviewer output unparseable')
   })
 
   it('falls back on null/undefined input', () => {
     const result = parseReviewerCritique(null)
-    expect(result.verdict).toBe('approve')
-    expect(result.confidence).toBe(0.5)
+    expect(result.verdict).toBe('reject')
+    expect(result.confidence).toBe(0)
   })
 
   it('parses approve-with-notes verdict', () => {
