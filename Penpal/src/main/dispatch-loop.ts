@@ -14,6 +14,7 @@ import {
   awardXP,
   awardCredits,
   getModelProvider,
+  claimTask,
   PRIORITY_ORDER,
   PRIORITY_CREDITS,
   type Task,
@@ -51,6 +52,10 @@ const MEMORY_WARNING_MB = 2048
 
 let dispatchTimer: ReturnType<typeof setInterval> | null = null
 let healthTimer: ReturnType<typeof setInterval> | null = null
+
+// Heartbeat tracking: agentId → last heartbeat timestamp
+const agentHeartbeats = new Map<string, number>()
+const HEARTBEAT_STALE_MS = 120_000  // 2 min without heartbeat = stale
 
 // ── Stage Prompt Builders ───────────────────────────────────────────────────
 
@@ -286,9 +291,13 @@ export async function dispatchLoop(): Promise<void> {
       const agent = await selectAgent(task)
       if (!agent) continue
 
+      // Use pull-model claim — if another loop iteration already claimed it, skip
+      const claimed = claimTask(agent.config.id, task.id)
+      if (!claimed) continue
+
       // Fire and forget — headless agent runs in background
       activeDispatches.add(task.id)
-      dispatchTask(task, agent)
+      dispatchTask(claimed, agent)
         .catch(err => console.error(`[orchestrator] Dispatch error for task ${task.id}:`, err))
         .finally(() => activeDispatches.delete(task.id))
     } catch (err) {
@@ -328,9 +337,7 @@ export function handleStageFailure(task: Task, stage: TaskStage, error: string):
 }
 
 export async function dispatchTask(task: Task, agent: ScoredAgent): Promise<void> {
-  task.status = 'assigned'
-  task.assignedAgent = agent.config.id
-  task.assignedAt = Date.now()
+  // status = 'assigned', assignedAgent, assignedAt already set by claimTask()
   task.stageResults = task.stageResults ?? []
   saveTasks()
   orchestratorEvents.emit('task-updated', task)
@@ -601,6 +608,14 @@ export async function getAgentHealthStatuses(): Promise<AgentHealthStatus[]> {
     let alive = false
     let status: AgentHealthStatus['status'] = 'dead'
 
+    // Check heartbeat staleness first
+    if (isAgentStale(config.id) && activeTasks > 0) {
+      const lastHb = agentHeartbeats.get(config.id)!
+      const staleMs = Date.now() - lastHb
+      warnings.push(`No heartbeat for ${staleMs}ms`)
+      status = 'warning'
+    }
+
     if (session) {
       alive = true
       status = 'healthy'
@@ -667,6 +682,20 @@ async function healthMonitorLoop(): Promise<void> {
     }
   }
 
+  // Stale heartbeat detection for agents with active tasks
+  for (const config of configs) {
+    if (isAgentStale(config.id)) {
+      const hasActiveTasks = tasks.some(
+        t => t.assignedAgent === config.id && (t.status === 'assigned' || t.status === 'active'),
+      )
+      if (hasActiveTasks) {
+        const lastHb = agentHeartbeats.get(config.id)!
+        console.warn(`[orchestrator] Agent ${config.id} stale — last heartbeat at ${lastHb}`)
+        orchestratorEvents.emit('agent-stale', { agentId: config.id, lastHeartbeat: lastHb })
+      }
+    }
+  }
+
   if (dirty) saveTasks()
 }
 
@@ -715,6 +744,22 @@ export async function shutdownAgent(agentId: string): Promise<{ success: boolean
   }
 }
 
+// ── Heartbeat API ────────────────────────────────────────────────────────────
+
+export function recordHeartbeat(agentId: string): void {
+  agentHeartbeats.set(agentId, Date.now())
+}
+
+export function getHeartbeat(agentId: string): number | undefined {
+  return agentHeartbeats.get(agentId)
+}
+
+export function isAgentStale(agentId: string): boolean {
+  const last = agentHeartbeats.get(agentId)
+  if (!last) return false  // no heartbeat recorded yet = not stale
+  return (Date.now() - last) > HEARTBEAT_STALE_MS
+}
+
 // ── Start / Stop ────────────────────────────────────────────────────────────
 
 export function startOrchestrator(): void {
@@ -754,4 +799,5 @@ export function stopOrchestrator(): void {
 export function _resetForTest(): void {
   stopOrchestrator()
   activeDispatches.clear()
+  agentHeartbeats.clear()
 }
