@@ -1,6 +1,7 @@
 import { EventEmitter } from 'events'
 import { execSync as _rawExecSync, execFileSync as _rawExecFileSync, type ExecSyncOptions, type ExecFileSyncOptions } from 'child_process'
 import { proxyExecFile } from './spawn-proxy'
+import { createIsolatedWorkspace } from './workspace-isolation'
 
 /**
  * EBADF-safe execSync: runs the command in a clean Node subprocess via
@@ -2026,6 +2027,19 @@ export function createPod(task: string, opts: CreatePodOpts = {}): PodWorkflow {
     cwd = pickPodDefaultCwd(solver)
   }
 
+  const podId = generateId()
+
+  // Attempt workspace isolation for this pod
+  try {
+    const workspace = createIsolatedWorkspace(cwd, podId)
+    if (workspace.isolated) {
+      cwd = workspace.worktreePath
+      console.log(`[pods] Isolated workspace for ${podId}: ${cwd}`)
+    }
+  } catch (err) {
+    console.warn(`[pods] Workspace isolation skipped: ${(err as Error).message}`)
+  }
+
   const phaseConfig = getPhaseConfig(opts.priority)
 
   // Auto-assess complexity if no explicit runtime profile or candidate count set
@@ -2058,7 +2072,7 @@ export function createPod(task: string, opts: CreatePodOpts = {}): PodWorkflow {
 
   const cwdErr = validatePodCwd(cwd)
   const wf: PodWorkflow = {
-    id: generateId(),
+    id: podId,
     name: opts.name || task.slice(0, 60),
     status: cwdErr ? 'failed' : 'pending',
     task,

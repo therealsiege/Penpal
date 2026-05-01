@@ -32,6 +32,8 @@ import { registerVaultProtocol } from './vault'
 import { startSpawnProxy, stopSpawnProxy } from './spawn-proxy'
 import { startFileWatcher, stopFileWatcher } from './file-watcher'
 import { startOrchestrator, stopOrchestrator, orchestratorEvents } from './orchestrator'
+import { startGC, stopGC } from './workspace-gc'
+import { startAutopilot, stopAutopilot } from './autopilot'
 import { podEvents } from './pods'
 import { writeGameStateSnapshot } from './game-state-snapshot'
 import { PreferenceCollector, PreferenceStore, connectCollector } from './preferences'
@@ -169,6 +171,8 @@ app.whenReady().then(() => {
   startFileWatcher()
   taskOutcomeCollector.start()
   startOrchestrator()
+  startGC()
+  startAutopilot()
   initAutoUpdater()
   infraUp()
 
@@ -187,6 +191,8 @@ app.on('window-all-closed', () => {
 })
 
 app.on('before-quit', async () => {
+  stopGC()
+  stopAutopilot()
   stopFileWatcher()
   taskOutcomeCollector.stop()
   stopOrchestrator()
