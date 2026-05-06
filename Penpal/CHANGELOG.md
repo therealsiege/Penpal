@@ -4,6 +4,11 @@ All notable changes to Penpal are documented here. Format follows [Keep a Change
 
 ## [Unreleased]
 
+## [0.3.4] - 2026-05-06
+
+### Changed
+- **Sources config moved to Settings panel.** GitHub repo and Linear team management now lives in a dedicated Sources section at the top of Settings, with full inline CRUD (add form with validation, remove, inline error display). The Dispatch "Sources" button navigates to Settings instead of opening a layered modal. The Linear Teams management form is removed from the kanban board.
+
 ## [0.3.3] - 2026-05-05
 
 ### Removed
@@ -94,7 +99,8 @@ All notable changes to Penpal are documented here. Format follows [Keep a Change
 
 Initial private release. Electron + Phaser 3 office simulator visualizing Claude Code agent sessions as animated characters. Includes pod system (Solver/Reviewer/Executor), Slack bridge, GitHub issue pipeline, Vault editor, knowledge graph integration, and seasonal game systems (quests, leaderboards, cosmetic credits).
 
-[Unreleased]: https://github.com/therealsiege/Penpal/compare/v0.3.3...HEAD
+[Unreleased]: https://github.com/therealsiege/Penpal/compare/v0.3.4...HEAD
+[0.3.4]: https://github.com/therealsiege/Penpal/compare/v0.3.3...v0.3.4
 [0.3.3]: https://github.com/therealsiege/Penpal/compare/v0.3.2...v0.3.3
 [0.3.2]: https://github.com/therealsiege/Penpal/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/therealsiege/Penpal/compare/v0.2.0...v0.3.1
