@@ -39,10 +39,6 @@ contextBridge.exposeInMainWorld('api', {
   getSchedulerStatus: () => ipcRenderer.invoke('scheduler:status'),
   getSchedulerHistory: (jobName?: string) => ipcRenderer.invoke('scheduler:history', jobName),
   runJob: (name: string) => ipcRenderer.invoke('scheduler:run', name),
-  getPipelineSummary: () => ipcRenderer.invoke('pipeline:summary'),
-  getHotLeads: () => ipcRenderer.invoke('pipeline:hot-leads'),
-  getTerritories: () => ipcRenderer.invoke('pipeline:territories'),
-  getNewLeads: () => ipcRenderer.invoke('pipeline:new-leads'),
   getClaudeSessions: () => ipcRenderer.invoke('sessions:list').then(unwrap),
   getSessionConversation: (sessionId: string, source?: string) => ipcRenderer.invoke('sessions:conversation', sessionId, source),
   sendToSession: (tty: string, message: string) => ipcRenderer.invoke('sessions:send', tty, message),
@@ -50,12 +46,6 @@ contextBridge.exposeInMainWorld('api', {
   focusSessionByName: (name: string, cwd?: string) => ipcRenderer.invoke('sessions:focus-by-name', name, cwd),
   createNewSession: (cwd: string) => ipcRenderer.invoke('sessions:create', cwd),
   broadcastToSessions: (message: string) => ipcRenderer.invoke('sessions:broadcast', message),
-  getGraphStats: () => ipcRenderer.invoke('graph:stats'),
-  searchLeads: (query: string) => ipcRenderer.invoke('leads:search', query).then(unwrap),
-  getLeadDetail: (name: string) => ipcRenderer.invoke('leads:detail', name).then(unwrap),
-  getLatestBriefing: () => ipcRenderer.invoke('briefing:latest'),
-  listBriefings: () => ipcRenderer.invoke('briefing:list'),
-  getBriefing: (date: string) => ipcRenderer.invoke('briefing:get', date),
   // Approval APIs
   approveSession: (tty: string, choice: string) => ipcRenderer.invoke('sessions:approve', tty, choice),
   approveAllSessions: (choice: string) => ipcRenderer.invoke('sessions:approve-all', choice),
@@ -85,27 +75,6 @@ contextBridge.exposeInMainWorld('api', {
   podSaveProfile: (name: string, profile: unknown) => ipcRenderer.invoke('pod:save-profile', name, profile),
   podDeleteProfile: (name: string) => ipcRenderer.invoke('pod:delete-profile', name),
   podSetDefaultProfile: (name: string) => ipcRenderer.invoke('pod:set-default-profile', name),
-  // Vault File Manager
-  vaultList: (relativePath: string) => ipcRenderer.invoke('vault:list', relativePath),
-  vaultRead: (relativePath: string) => ipcRenderer.invoke('vault:read', relativePath).then(unwrap),
-  vaultWrite: (relativePath: string, content: string) => ipcRenderer.invoke('vault:write', relativePath, content),
-  vaultSearch: (query: string, glob?: string, limit?: number) => ipcRenderer.invoke('vault:search', query, glob, limit).then(unwrap),
-  vaultTags: () => ipcRenderer.invoke('vault:tags'),
-  vaultFilesByTag: (tag: string) => ipcRenderer.invoke('vault:files-by-tag', tag),
-  vaultBacklinks: (relativePath: string) => ipcRenderer.invoke('vault:backlinks', relativePath),
-  vaultCreate: (relativePath: string, content?: string) => ipcRenderer.invoke('vault:create', relativePath, content),
-  vaultCreateFolder: (relativePath: string) => ipcRenderer.invoke('vault:create-folder', relativePath),
-  vaultRename: (oldPath: string, newPath: string) => ipcRenderer.invoke('vault:rename', oldPath, newPath),
-  vaultDelete: (relativePath: string) => ipcRenderer.invoke('vault:delete', relativePath),
-  vaultIndex: () => ipcRenderer.invoke('vault:index'),
-  vaultSearchIndexed: (query: string, limit?: number) => ipcRenderer.invoke('vault:search-indexed', query, limit),
-  vaultBuildSearchIndex: () => ipcRenderer.invoke('vault:build-search-index'),
-  vaultGraphData: (scope?: string, centerPath?: string) => ipcRenderer.invoke('vault:graph-data', scope, centerPath),
-  onVaultFileChanged: (callback: (event: { eventType: string; path: string }) => void) => {
-    const handler = (_event: Electron.IpcRendererEvent, data: { eventType: string; path: string }) => callback(data)
-    ipcRenderer.on('vault:file-changed', handler)
-    return () => ipcRenderer.removeListener('vault:file-changed', handler)
-  },
   // Cursor Agent APIs
   focusCursorIDE: () => ipcRenderer.invoke('cursor:focus'),
   // Slack Bridge
@@ -185,22 +154,6 @@ contextBridge.exposeInMainWorld('api', {
   getITermStatus: () => ipcRenderer.invoke('sessions:iterm-status'),
   // Opencode Sessions
   getOpencodeSessions: () => ipcRenderer.invoke('opencode:sessions'),
-  // Data Scripts
-  runDataScript: (script: string, opts?: { rootDir?: string }) =>
-    ipcRenderer.invoke('data:run-script', script, opts),
-  cancelDataScript: (runId: string) => ipcRenderer.invoke('data:cancel-script', runId),
-  onScriptOutput: (callback: (data: { id: string; stream: string; line: string }) => void) => {
-    const handler = (_event: Electron.IpcRendererEvent, data: { id: string; stream: string; line: string }) => callback(data)
-    ipcRenderer.on('data:script-output', handler)
-    return () => ipcRenderer.removeListener('data:script-output', handler)
-  },
-  onScriptDone: (callback: (data: { id: string; exitCode: number; durationMs: number; error?: string }) => void) => {
-    const handler = (_event: Electron.IpcRendererEvent, data: { id: string; exitCode: number; durationMs: number; error?: string }) => callback(data)
-    ipcRenderer.on('data:script-done', handler)
-    return () => ipcRenderer.removeListener('data:script-done', handler)
-  },
-  getBriefingSchedule: () => ipcRenderer.invoke('data:get-briefing-schedule') as Promise<{ cron: string; enabled: boolean }>,
-  setBriefingSchedule: (cron: string, enabled: boolean) => ipcRenderer.invoke('data:set-briefing-schedule', cron, enabled),
   // Eval Harness
   evalReportAgent: (agentId: string, since?: string) => ipcRenderer.invoke('evals:harness-report-agent', agentId, since),
   evalReportAll: (since?: string) => ipcRenderer.invoke('evals:harness-report-all', since),
@@ -229,12 +182,8 @@ contextBridge.exposeInMainWorld('api', {
   // Context-Engineered Rich APIs (full ContextEngineeredResponse shape)
   getAgentStatusesRich: () => ipcRenderer.invoke('agents:statuses'),
   getClaudeSessionsRich: () => ipcRenderer.invoke('sessions:list'),
-  searchLeadsRich: (query: string) => ipcRenderer.invoke('leads:search', query),
-  getLeadDetailRich: (name: string) => ipcRenderer.invoke('leads:detail', name),
   listPodsRich: () => ipcRenderer.invoke('pod:list'),
   getPodStatusRich: (workflowId: string) => ipcRenderer.invoke('pod:status', workflowId),
-  vaultReadRich: (relativePath: string) => ipcRenderer.invoke('vault:read', relativePath),
-  vaultSearchRich: (query: string, glob?: string, limit?: number) => ipcRenderer.invoke('vault:search', query, glob, limit),
   orchestratorQueueRich: () => ipcRenderer.invoke('orchestrator:queue'),
   orchestratorAgentHealthRich: () => ipcRenderer.invoke('orchestrator:agent-health'),
   // Flight Board

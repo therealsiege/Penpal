@@ -7,16 +7,6 @@ import { checkHealth } from './health'
 import { startSlackBridge, stopSlackBridge, isSlackBridgeRunning, getFleetStatus } from './slack-bridge'
 import { getJobStatuses, getJobHistory, forceRunJob } from './scheduler-bridge'
 import {
-  getPipelineSummary,
-  getHotLeads,
-  getTerritories,
-  getNewLeads,
-  getGraphStatsWithFreshness,
-  searchLeads,
-  getLeadDetail,
-} from './graph'
-import { suggestedActionsForStage } from './stage-suggestions'
-import {
   getClaudeSessions,
   getSessionConversation,
   sendToSession,
@@ -27,7 +17,6 @@ import {
   broadcastToSessions,
   getOpenClawInfo,
   getITermStatus,
-  pruneStaleSessions,
 } from './sessions'
 import {
   getCursorAgentSessions,
@@ -169,7 +158,6 @@ import { getDataDir } from './data-paths'
 export const ipcEvents = new EventEmitter()
 
 const VAULT_ROOT = DOCS_ROOT
-const BRIEFINGS_DIR = path.join(VAULT_ROOT, '1Putt', 'Daily Briefings')
 const DATA_DIR = getDataDir()
 const DPO_PAIRS_FILENAME = 'dpo-pairs.jsonl'
 
@@ -190,12 +178,6 @@ function resolveDataExportPath(fileName: string): string {
   return outPath
 }
 
-interface VaultFolder {
-  name: string
-  fileCount: number
-  subfolders: string[]
-}
-
 function ageBucket(ms: number | null): string {
   if (ms === null || ms <= 0) return 'none'
   const minutes = Math.floor(ms / 60000)
@@ -205,70 +187,6 @@ function ageBucket(ms: number | null): string {
   return '>4h'
 }
 
-function scanVaultFolders(): VaultFolder[] {
-  const folders: VaultFolder[] = []
-  // Dynamically discover top-level folders in the vault
-  let topDirs: string[] = []
-  try {
-    topDirs = fs.readdirSync(VAULT_ROOT, { withFileTypes: true })
-      .filter(e => e.isDirectory() && !e.name.startsWith('.'))
-      .map(e => e.name)
-  } catch { /* vault root not found */ }
-
-  for (const dir of topDirs) {
-    const fullPath = path.join(VAULT_ROOT, dir)
-    try {
-      if (!fs.existsSync(fullPath) || !fs.statSync(fullPath).isDirectory()) continue
-      const entries = fs.readdirSync(fullPath)
-      const mdFiles = entries.filter(e => e.endsWith('.md'))
-      const subdirs = entries.filter(e => {
-        try { return fs.statSync(path.join(fullPath, e)).isDirectory() && !e.startsWith('.') }
-        catch { return false }
-      })
-      folders.push({ name: dir, fileCount: mdFiles.length, subfolders: subdirs.slice(0, 6) })
-    } catch { /* skip */ }
-  }
-  return folders
-}
-
-function getLatestBriefing(): { date: string; content: string } | null {
-  try {
-    if (!fs.existsSync(BRIEFINGS_DIR)) return null
-    const files = fs.readdirSync(BRIEFINGS_DIR)
-      .filter(f => f.endsWith('.md'))
-      .sort()
-      .reverse()
-    if (files.length === 0) return null
-    const latest = files[0]
-    const content = fs.readFileSync(path.join(BRIEFINGS_DIR, latest), 'utf-8')
-    return { date: latest.replace('.md', ''), content }
-  } catch {
-    return null
-  }
-}
-
-function listBriefings(): string[] {
-  try {
-    if (!fs.existsSync(BRIEFINGS_DIR)) return []
-    return fs.readdirSync(BRIEFINGS_DIR)
-      .filter(f => f.endsWith('.md'))
-      .sort()
-      .reverse()
-      .map(f => f.replace('.md', ''))
-  } catch {
-    return []
-  }
-}
-
-function getBriefing(date: string): string | null {
-  try {
-    const filePath = path.join(BRIEFINGS_DIR, `${date}.md`)
-    if (!fs.existsSync(filePath)) return null
-    return fs.readFileSync(filePath, 'utf-8')
-  } catch {
-    return null
-  }
-}
 
 function wrapHandler<T>(fn: (...args: unknown[]) => Promise<T> | T) {
   return async (_event: Electron.IpcMainInvokeEvent, ...args: unknown[]) => {
@@ -290,10 +208,6 @@ export function registerIpcHandlers() {
     if (typeof jobName !== 'string') throw new Error('jobName must be a string')
     return forceRunJob(jobName)
   }))
-  ipcMain.handle('pipeline:summary', wrapHandler(() => getPipelineSummary()))
-  ipcMain.handle('pipeline:hot-leads', wrapHandler(() => getHotLeads()))
-  ipcMain.handle('pipeline:territories', wrapHandler(() => getTerritories()))
-  ipcMain.handle('pipeline:new-leads', wrapHandler(() => getNewLeads()))
   // Context-engineered IPC handlers (issue #11): return ContextEngineeredResponse from main;
   // preload unwrap() strips to `.data` for window.api so React keeps legacy shapes — use *Rich APIs for the full envelope.
   ipcMain.handle('sessions:list', wrapHandler(async () => {
@@ -354,141 +268,6 @@ export function registerIpcHandlers() {
     if (typeof message !== 'string') throw new Error('message must be a string')
     return broadcastToSessions(message)
   }))
-  ipcMain.handle('graph:stats', wrapHandler(async () => {
-    const stats = await getGraphStatsWithFreshness()
-    const totalNodes = stats?.totalNodes ?? 0
-    const totalRels = stats?.totalRelationships ?? 0
-    const leadCount = stats?.nodesByLabel?.['Lead'] ?? 0
-
-    const summary = `Graph: ${totalNodes} nodes, ${totalRels} relationships.${leadCount > 0 ? ` ${leadCount} leads indexed.` : ''} Freshness: ${stats.freshness.status}.`
-
-    const suggestions: string[] = []
-    if (totalNodes === 0) suggestions.push('Graph is empty — run ETL to populate data.')
-    if (leadCount > 0) suggestions.push(`${leadCount} leads available — search via leads:search.`)
-    if (totalNodes > 0 && leadCount === 0) suggestions.push('No lead nodes — run sales ingestion pipeline.')
-    if (stats.freshness.status === 'stale') suggestions.push('Lead timestamps look stale — refresh ETL.')
-
-    return contextResponse(stats, summary, suggestions,
-      ['leads:search', 'leads:detail', 'pipeline:summary'],
-      { totalNodes, totalRels, leadCount, freshness: stats.freshness },
-    )
-  }))
-  const handleLeadsSearch = wrapHandler(async (query: unknown) => {
-    if (typeof query !== 'string') throw new Error('query must be a string')
-    const results = await searchLeads(query)
-
-    const scores = results.map(r => r.score)
-    const avgScore = scores.length > 0 ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : 0
-    const topScore = scores.length > 0 ? Math.max(...scores) : 0
-    const lowScoreCount = scores.filter(s => s < 40).length
-    const mediumScoreCount = scores.filter(s => s >= 40 && s < 70).length
-    const highScoreCount = scores.filter(s => s >= 70).length
-    const stageDistribution: Record<string, number> = {}
-    const armDistribution: Record<string, number> = {}
-    for (const r of results) {
-      stageDistribution[r.stage] = (stageDistribution[r.stage] || 0) + 1
-      armDistribution[r.businessArm] = (armDistribution[r.businessArm] || 0) + 1
-    }
-    const topLead = results.length > 0 ? results.reduce((best, r) => r.score > best.score ? r : best) : null
-
-    const stageStr = Object.entries(stageDistribution).map(([s, n]) => `${n} ${s}`).join(', ')
-    const summary = `Found ${results.length} leads matching '${query}': avg score ${avgScore}${stageStr ? `, ${stageStr}` : ''}.`
-
-    const suggestions: string[] = []
-    if (topLead) suggestions.push(`Top lead: ${topLead.name} (score ${topLead.score}) — view details via leads:detail.`)
-    const prospecting = stageDistribution['prospecting'] || 0
-    if (highScoreCount > 0) suggestions.push(`${highScoreCount} high-scoring lead(s) are ready for immediate outreach.`)
-    if (prospecting > 0) suggestions.push(`${prospecting} leads in prospecting — prioritize qualification workflows.`)
-    if (lowScoreCount > 0 && results.length > 0) suggestions.push(`${lowScoreCount} low-score lead(s) may need enrichment before outreach.`)
-    if (results.length === 0) suggestions.push('No results — try a broader query or check graph:stats for indexed data.')
-
-    return contextResponse(results, summary, suggestions,
-      ['leads:detail', 'graph:lead-detail', 'vault:search', 'orchestrator:enqueue'],
-      {
-        avgScore,
-        topScore,
-        scoreDistribution: { low: lowScoreCount, medium: mediumScoreCount, high: highScoreCount },
-        stageDistribution,
-        businessArmDistribution: armDistribution,
-        topLead: topLead?.name ?? null,
-        topLeadId: topLead?.leadId ?? null,
-      },
-    )
-  })
-  ipcMain.handle('leads:search', handleLeadsSearch)
-  ipcMain.handle('graph:search-leads', handleLeadsSearch)
-
-  const handleLeadDetail = wrapHandler(async (name: unknown) => {
-    if (typeof name !== 'string') throw new Error('name must be a string')
-    const detail = await getLeadDetail(name)
-
-    if (!detail) {
-      return contextResponse(null, 'Lead not found.', ['Search via leads:search to find available leads.'],
-        ['leads:search', 'vault:search'])
-    }
-
-    const suggestions = [...suggestedActionsForStage(detail.stage)]
-
-    const lastEvent = detail.events.length > 0 ? detail.events[detail.events.length - 1] : null
-    const daysSinceLastEvent = lastEvent ? Math.floor((Date.now() - new Date(lastEvent.date).getTime()) / 86400000) : null
-    if (daysSinceLastEvent !== null && daysSinceLastEvent > 14) {
-      suggestions.push(`No activity in ${daysSinceLastEvent} days — consider follow-up.`)
-    }
-
-    const summary = `${detail.name} at ${detail.company} — score ${detail.score}, stage: ${detail.stage}, EHR: ${detail.ehr || 'unknown'}.`
-
-    return contextResponse(detail, summary, suggestions,
-      ['leads:search', 'graph:search-leads', 'vault:search', 'vault:read', 'orchestrator:enqueue'],
-      {
-        eventCount: detail.events.length,
-        documentCount: detail.documents.length,
-        stageHistory: detail.stageHistory,
-        daysSinceLastEvent,
-        suggestedStageActions: suggestedActionsForStage(detail.stage),
-      },
-    )
-  })
-  ipcMain.handle('leads:detail', handleLeadDetail)
-  ipcMain.handle('graph:lead-detail', handleLeadDetail)
-  ipcMain.handle('briefing:latest', wrapHandler(() => getLatestBriefing()))
-  ipcMain.handle('briefing:list', wrapHandler(() => listBriefings()))
-  ipcMain.handle('briefing:get', wrapHandler((date: unknown) => {
-    if (typeof date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-      throw new Error('Invalid date format')
-    }
-    return getBriefing(date)
-  }))
-
-  ipcMain.handle('vault:folders', wrapHandler(() => scanVaultFolders()))
-
-  // ── Docs File Browser ────────────────────────────────────────────
-  ipcMain.handle('ventures:list', wrapHandler((relativePath: unknown) => {
-    const rel = typeof relativePath === 'string' ? relativePath : ''
-    const fullPath = path.resolve(path.join(VAULT_ROOT, rel))
-    if (!fullPath.startsWith(VAULT_ROOT)) throw new Error('Path traversal denied')
-    if (!fs.existsSync(fullPath)) return []
-    const entries = fs.readdirSync(fullPath, { withFileTypes: true })
-    return entries
-      .filter(e => !e.name.startsWith('.'))
-      .map(e => ({
-        name: e.name,
-        isDirectory: e.isDirectory(),
-        path: path.join(rel, e.name),
-      }))
-      .sort((a, b) => {
-        if (a.isDirectory !== b.isDirectory) return a.isDirectory ? -1 : 1
-        return a.name.localeCompare(b.name)
-      })
-  }))
-
-  ipcMain.handle('ventures:read', wrapHandler((relativePath: unknown) => {
-    if (typeof relativePath !== 'string') throw new Error('relativePath must be a string')
-    const fullPath = path.resolve(path.join(VAULT_ROOT, relativePath))
-    if (!fullPath.startsWith(VAULT_ROOT)) throw new Error('Path traversal denied')
-    if (!fs.existsSync(fullPath)) return null
-    return fs.readFileSync(fullPath, 'utf-8')
-  }))
-
   // ── Agent Handlers ──────────────────────────────────────────────────────
 
   ipcMain.handle('agents:list', wrapHandler(() => getAgentConfigs()))
@@ -1204,16 +983,6 @@ export function registerIpcHandlers() {
 
   // ── iTerm2 / Session Health ──────────────────────────────────────────────
   ipcMain.handle('sessions:iterm-status', wrapHandler(() => getITermStatus()))
-
-  ipcMain.handle('sessions:prune', wrapHandler(async (maxIdleMinutes?: unknown) => {
-    const mins = typeof maxIdleMinutes === 'number' ? maxIdleMinutes : 60
-    const result = await pruneStaleSessions(mins)
-    const summary = result.killed.length > 0
-      ? `Pruned ${result.killed.length} stale session(s): ${result.killed.map(k => `PID ${k.pid} (${k.uptime})`).join(', ')}`
-      : `No stale sessions to prune (${result.skipped.length} checked, all active or recent).`
-    console.log(`[sessions:prune] ${summary}`)
-    return contextResponse(result, summary, [], ['sessions:list'])
-  }))
 
   // ── Opencode Sessions ──────────────────────────────────────────────────────
   ipcMain.handle('opencode:sessions', wrapHandler(async () => {

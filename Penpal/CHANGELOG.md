@@ -4,6 +4,14 @@ All notable changes to Penpal are documented here. Format follows [Keep a Change
 
 ## [Unreleased]
 
+## [0.3.3] - 2026-05-05
+
+### Removed
+- **Dead graph/pipeline/leads IPC handlers stripped.** `graph:stats`, `leads:search`, `leads:detail`, `graph:search-leads`, `graph:lead-detail`, `pipeline:summary`, `pipeline:hot-leads`, `pipeline:territories`, `pipeline:new-leads`, `vault:folders`, `ventures:list`, `ventures:read`, `sessions:prune`, `briefing:latest`, `briefing:list`, `briefing:get` handlers removed from `ipc.ts`. Their corresponding preload entries and local helper functions (`scanVaultFolders`, `getLatestBriefing`, `listBriefings`, `getBriefing`, `VaultFolder` interface) removed.
+- **Graph module imports removed from main process.** `getPipelineSummary`, `getHotLeads`, `getTerritories`, `getNewLeads`, `getGraphStatsWithFreshness`, `searchLeads`, `getLeadDetail` from `graph.ts` and `suggestedActionsForStage` from `stage-suggestions.ts` no longer imported into `ipc.ts`. Prevents `neo4j-driver` from initializing at startup.
+- **8 unused renderer panels deleted.** `ActivityPanel`, `CommandCenter`, `DataPanel`, `GitHubPanel`, `GraphPanel`, `HandbookPanel`, `PipelinePanel`, `VaultPanel` — none were imported in `App.tsx`. Removes ~188KB of dead renderer source.
+- **Dead preload surface removed.** Pipeline, graph, leads, briefing, vault, data-script, and `searchLeadsRich`/`getLeadDetailRich`/`vaultReadRich`/`vaultSearchRich` entries stripped from `contextBridge` exposure.
+
 ## [0.3.2] - 2026-05-06
 
 ### Fixed
@@ -86,7 +94,10 @@ All notable changes to Penpal are documented here. Format follows [Keep a Change
 
 Initial private release. Electron + Phaser 3 office simulator visualizing Claude Code agent sessions as animated characters. Includes pod system (Solver/Reviewer/Executor), Slack bridge, GitHub issue pipeline, Vault editor, knowledge graph integration, and seasonal game systems (quests, leaderboards, cosmetic credits).
 
-[Unreleased]: https://github.com/therealsiege/Penpal/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/therealsiege/Penpal/compare/v0.3.3...HEAD
+[0.3.3]: https://github.com/therealsiege/Penpal/compare/v0.3.2...v0.3.3
+[0.3.2]: https://github.com/therealsiege/Penpal/compare/v0.3.1...v0.3.2
+[0.3.1]: https://github.com/therealsiege/Penpal/compare/v0.2.0...v0.3.1
 [0.2.0]: https://github.com/therealsiege/Penpal/compare/v0.1.3...v0.2.0
 [0.1.3]: https://github.com/therealsiege/Penpal/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/therealsiege/Penpal/compare/v0.1.1...v0.1.2
