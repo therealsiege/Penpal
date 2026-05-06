@@ -35,12 +35,17 @@ const GIT_BIN = (() => {
 })()
 
 function isGitRepo(dirPath: string): boolean {
+  // Fast path: .git exists as file or dir (covers regular repos and worktrees).
+  // Avoids git env var interference (GIT_DIR inherited from the parent shell
+  // causes execFileSync to ignore cwd and check the wrong repo).
+  if (fs.existsSync(path.join(dirPath, '.git'))) return true
+  // Fallback for non-standard git-dir setups, with inherited env vars stripped.
   try {
-    execFileSync(GIT_BIN, ['rev-parse', '--git-dir'], {
-      cwd: dirPath,
-      stdio: 'pipe',
-      env: { ...process.env, HOME: os.homedir() },
-    })
+    const env = { ...process.env, HOME: os.homedir() }
+    delete env['GIT_DIR']
+    delete env['GIT_WORK_TREE']
+    delete env['GIT_INDEX_FILE']
+    execFileSync(GIT_BIN, ['rev-parse', '--git-dir'], { cwd: dirPath, stdio: 'pipe', env })
     return true
   } catch {
     return false
