@@ -4,6 +4,11 @@ All notable changes to Penpal are documented here. Format follows [Keep a Change
 
 ## [Unreleased]
 
+## [0.3.5] - 2026-05-06
+
+### Fixed
+- **`isGitRepo` no longer fails when `GIT_DIR` is inherited from the shell.** electron-vite (dev) and some shell launchers propagate `GIT_DIR` into the Electron main process, causing `execFileSync` to ignore `cwd` and check the wrong repository. Fix: fast-path with `fs.existsSync('.git')` bypasses the git binary entirely; fallback strips `GIT_DIR`, `GIT_WORK_TREE`, and `GIT_INDEX_FILE` before exec.
+
 ## [0.3.4] - 2026-05-06
 
 ### Changed
@@ -99,7 +104,8 @@ All notable changes to Penpal are documented here. Format follows [Keep a Change
 
 Initial private release. Electron + Phaser 3 office simulator visualizing Claude Code agent sessions as animated characters. Includes pod system (Solver/Reviewer/Executor), Slack bridge, GitHub issue pipeline, Vault editor, knowledge graph integration, and seasonal game systems (quests, leaderboards, cosmetic credits).
 
-[Unreleased]: https://github.com/therealsiege/Penpal/compare/v0.3.4...HEAD
+[Unreleased]: https://github.com/therealsiege/Penpal/compare/v0.3.5...HEAD
+[0.3.5]: https://github.com/therealsiege/Penpal/compare/v0.3.4...v0.3.5
 [0.3.4]: https://github.com/therealsiege/Penpal/compare/v0.3.3...v0.3.4
 [0.3.3]: https://github.com/therealsiege/Penpal/compare/v0.3.2...v0.3.3
 [0.3.2]: https://github.com/therealsiege/Penpal/compare/v0.3.1...v0.3.2
