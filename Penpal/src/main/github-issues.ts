@@ -819,7 +819,10 @@ loadPersistedRepos()
 
 /** Add a repo to watch. Persisted to disk. Ensures labels exist. */
 export function addWatchedRepo(owner: string, repo: string, localPath: string): void {
-  if (!path.isAbsolute(localPath) || !fs.existsSync(localPath) || !isGitRepo(localPath)) {
+  const resolved = localPath.startsWith('~')
+    ? path.join(os.homedir(), localPath.slice(1))
+    : localPath
+  if (!path.isAbsolute(resolved) || !fs.existsSync(resolved) || !isGitRepo(resolved)) {
     throw new Error(`${localPath} is not a git repository`)
   }
   const existing = REPOS.find(r => r.owner === owner && r.repo === repo)
@@ -829,7 +832,7 @@ export function addWatchedRepo(owner: string, repo: string, localPath: string): 
     repo,
     label: 'agent-ready',
     workingLabel: 'agent-working',
-    localPath,
+    localPath: resolved,
     project: repo,
   })
   savePersistedRepos()

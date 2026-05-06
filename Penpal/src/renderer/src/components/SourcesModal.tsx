@@ -60,6 +60,7 @@ export function SourcesModal({
 }) {
   const [repos, setRepos] = useState<WatchedRepoRow[]>([])
   const [showAddRepo, setShowAddRepo] = useState(false)
+  const [addRepoError, setAddRepoError] = useState<string | null>(null)
 
   async function refreshRepos() {
     try {
@@ -150,13 +151,19 @@ export function SourcesModal({
 
       {showAddRepo && (
         <AddRepoWatchModal
+          error={addRepoError}
           onSubmit={async (owner, repo, localPath) => {
-            await window.api.githubAddRepo(owner, repo, localPath)
+            const result = await window.api.githubAddRepo(owner, repo, localPath) as { ok?: boolean; error?: string }
+            if (result?.error) {
+              setAddRepoError(result.error)
+              return
+            }
+            setAddRepoError(null)
             setShowAddRepo(false)
             await refreshRepos()
             onReposChanged?.()
           }}
-          onClose={() => setShowAddRepo(false)}
+          onClose={() => { setAddRepoError(null); setShowAddRepo(false) }}
         />
       )}
     </div>
@@ -166,9 +173,11 @@ export function SourcesModal({
 function AddRepoWatchModal({
   onSubmit,
   onClose,
+  error,
 }: {
   onSubmit: (owner: string, repo: string, localPath: string) => void
   onClose: () => void
+  error?: string | null
 }) {
   const [repoUrl, setRepoUrl] = useState('')
   const [localPath, setLocalPath] = useState('')
@@ -204,6 +213,11 @@ function AddRepoWatchModal({
             className="w-full px-3 py-2 bg-[var(--c-bg-elevated)] border border-[var(--c-border)] rounded-lg text-[length:var(--penny-task-fs-14)] text-[var(--c-text-primary)] placeholder-[var(--c-border)] focus:outline-none focus:border-[var(--c-accent-blue)]"
           />
         </div>
+        {error && (
+          <p className="text-[length:var(--penny-task-fs-12)] text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">
+            {error}
+          </p>
+        )}
         <div className="flex justify-end gap-2 pt-2">
           <button type="button" onClick={onClose} className="px-4 py-2 text-[length:var(--penny-task-fs-14)] text-[var(--c-text-muted)] hover:text-[var(--c-text-primary)]">
             Cancel

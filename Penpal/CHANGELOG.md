@@ -4,6 +4,12 @@ All notable changes to Penpal are documented here. Format follows [Keep a Change
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-05-05
+
+### Fixed
+- **Sources modal now works with `~/...` paths.** `addWatchedRepo` was calling `path.isAbsolute()` on tilde-prefixed paths, which always returns false, causing every watch attempt to silently fail. The path is now expanded to an absolute path before validation and stored as the resolved absolute path for agent `cwd`.
+- **Sources modal shows inline error on failure** instead of closing silently. The IPC error response is now checked and surfaced as a red error message inside the "Watch repository" modal so users know what went wrong without the modal dismissing.
+
 ## [0.2.0] - 2026-05-01
 
 ### Changed
