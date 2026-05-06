@@ -226,7 +226,7 @@ function AppContent() {
         activePanel={activePanel}
         onNavigate={setActivePanel}
       >
-        {activePanel === 'tasks' && <TasksPanel />}
+        {activePanel === 'tasks' && <TasksPanel onNavigate={setActivePanel} />}
         {activePanel === 'results' && <ResultsPanel />}
         {activePanel === 'profiles' && <ProfilesPanel />}
         {activePanel === 'evals' && <EvalsPanel />}

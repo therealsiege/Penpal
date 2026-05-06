@@ -1,5 +1,9 @@
+import { useState, useEffect, useCallback } from 'react'
 import { useAppearanceStore, type ThemePreference } from '../stores/appearance-store'
 import { PanelBackground } from '../components/PanelBackground'
+import type { LinearTeamConfig } from '../types'
+
+type WatchedRepoRow = { owner: string; repo: string; localPath: string }
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -229,6 +233,270 @@ function ToggleSwitch({ enabled, onToggle, label, description }: {
 }
 
 
+// ── Sources section ────────────────────────────────────────────────────────────
+
+function SourcesSection() {
+  const [repos, setRepos] = useState<WatchedRepoRow[]>([])
+  const [linearTeams, setLinearTeams] = useState<LinearTeamConfig[]>([])
+
+  // GitHub add form
+  const [addRepoOpen, setAddRepoOpen] = useState(false)
+  const [repoUrl, setRepoUrl] = useState('')
+  const [localPath, setLocalPath] = useState('')
+  const [repoError, setRepoError] = useState<string | null>(null)
+
+  // Linear add form
+  const [addTeamOpen, setAddTeamOpen] = useState(false)
+  const [teamKey, setTeamKey] = useState('')
+  const [teamPath, setTeamPath] = useState('')
+  const [teamLabel, setTeamLabel] = useState('agent-ready')
+  const [teamError, setTeamError] = useState<string | null>(null)
+
+  const refresh = useCallback(async () => {
+    const [r, t] = await Promise.all([
+      window.api.githubListRepos().catch(() => []),
+      window.api.linearListTeams().catch(() => []),
+    ])
+    if (Array.isArray(r)) setRepos(r)
+    if (Array.isArray(t)) setLinearTeams(t)
+  }, [])
+
+  useEffect(() => { void refresh() }, [refresh])
+
+  const parsedRepo = repoUrl.match(/github\.com\/([^/]+)\/([^/\s]+)/) || repoUrl.match(/^([^/\s]+)\/([^/\s]+)$/)
+  const parsedOwner = parsedRepo?.[1] || ''
+  const parsedName = parsedRepo?.[2]?.replace(/\.git$/, '') || ''
+
+  const inputCls = 'w-full px-3 py-2 bg-[var(--c-bg-elevated)] border border-[var(--c-border)] rounded-lg text-[1rem] text-[var(--c-text-primary)] placeholder-[var(--c-text-faint)] outline-none focus:border-[color-mix(in_srgb,var(--c-accent)_45%,transparent)]'
+  const sectionCardCls = 'space-y-4 bg-[color-mix(in_srgb,var(--c-bg-surface)_85%,transparent)] rounded-lg p-4 border border-[color-mix(in_srgb,var(--c-border)_90%,transparent)]'
+
+  return (
+    <div className="space-y-6">
+      {/* ── GitHub Repos ─────────────────────────────── */}
+      <div className={sectionCardCls}>
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-[1.05rem] text-[var(--c-text-primary)] font-medium">GitHub Repositories</p>
+            <p className="text-[0.9rem] text-[var(--c-text-muted)] mt-0.5">
+              Polled for <code className="px-1 py-0.5 rounded bg-[var(--c-bg-elevated)] text-emerald-400 text-[0.85rem]">agent-ready</code> issues.
+            </p>
+          </div>
+          {!addRepoOpen && (
+            <button
+              type="button"
+              onClick={() => setAddRepoOpen(true)}
+              className="shrink-0 px-3 py-1.5 text-[0.9rem] rounded-md bg-[var(--c-bg-elevated)] text-[var(--c-accent-blue)] border border-[var(--c-border)] hover:bg-[var(--c-border-subtle)] transition-colors"
+            >
+              + Add repository
+            </button>
+          )}
+        </div>
+
+        {repos.length === 0 && !addRepoOpen && (
+          <p className="text-[0.9rem] text-[var(--c-text-faint)]">No repositories yet.</p>
+        )}
+
+        {repos.length > 0 && (
+          <ul className="space-y-2">
+            {repos.map(r => (
+              <li
+                key={`${r.owner}/${r.repo}`}
+                className="flex items-start justify-between gap-3 px-3 py-2.5 rounded-lg bg-[color-mix(in_srgb,var(--c-bg-elevated)_70%,transparent)] border border-[color-mix(in_srgb,var(--c-border)_40%,transparent)]"
+              >
+                <div className="min-w-0">
+                  <div className="text-[1rem] text-[var(--c-text-primary)] font-mono truncate">{r.owner}/{r.repo}</div>
+                  {r.localPath && (
+                    <div className="text-[0.85rem] text-[var(--c-text-muted)] truncate mt-0.5" title={r.localPath}>{r.localPath}</div>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    await window.api.githubRemoveRepo(r.owner, r.repo)
+                    void refresh()
+                  }}
+                  className="shrink-0 text-[0.85rem] text-red-400/70 hover:text-red-400 px-2 py-1 rounded border border-transparent hover:border-red-500/30 transition-colors"
+                >
+                  Remove
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        {addRepoOpen && (
+          <div className="space-y-3 pt-2 border-t border-[color-mix(in_srgb,var(--c-border)_60%,transparent)]">
+            <div>
+              <label className="text-[0.875rem] text-[var(--c-text-muted)] mb-1 block">Repository (URL or owner/repo)</label>
+              <input
+                className={inputCls}
+                value={repoUrl}
+                onChange={e => setRepoUrl(e.target.value)}
+                placeholder="e.g. org/repo or https://github.com/org/repo"
+                autoFocus
+              />
+              {parsedOwner && parsedName && (
+                <p className="text-[0.85rem] text-[var(--c-accent-blue)] mt-1">{parsedOwner}/{parsedName}</p>
+              )}
+            </div>
+            <div>
+              <label className="text-[0.875rem] text-[var(--c-text-muted)] mb-1 block">Local clone path (for agent cwd)</label>
+              <input
+                className={inputCls}
+                value={localPath}
+                onChange={e => setLocalPath(e.target.value)}
+                placeholder="e.g. ~/workspace/org/repo"
+              />
+            </div>
+            {repoError && (
+              <p className="text-[0.875rem] text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">{repoError}</p>
+            )}
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => { setAddRepoOpen(false); setRepoUrl(''); setLocalPath(''); setRepoError(null) }}
+                className="px-4 py-2 text-[0.9rem] text-[var(--c-text-muted)] hover:text-[var(--c-text-primary)] transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={!parsedOwner || !parsedName || !localPath.trim()}
+                onClick={async () => {
+                  const result = await window.api.githubAddRepo(parsedOwner, parsedName, localPath.trim()) as { ok?: boolean; error?: string }
+                  if (result?.error) { setRepoError(result.error); return }
+                  setAddRepoOpen(false); setRepoUrl(''); setLocalPath(''); setRepoError(null)
+                  void refresh()
+                }}
+                className="px-4 py-2 text-[0.9rem] bg-[var(--c-accent)] hover:bg-[#00cc6e] disabled:opacity-30 text-[var(--c-bg-chrome)] font-medium rounded-lg transition-colors"
+              >
+                Watch
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* ── Linear Teams ─────────────────────────────── */}
+      <div className={sectionCardCls}>
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-[1.05rem] text-[var(--c-text-primary)] font-medium">Linear Teams</p>
+            <p className="text-[0.9rem] text-[var(--c-text-muted)] mt-0.5">
+              Polled for <code className="px-1 py-0.5 rounded bg-[var(--c-bg-elevated)] text-violet-400 text-[0.85rem]">agent-ready</code> labeled issues.
+            </p>
+          </div>
+          {!addTeamOpen && (
+            <button
+              type="button"
+              onClick={() => setAddTeamOpen(true)}
+              className="shrink-0 px-3 py-1.5 text-[0.9rem] rounded-md bg-[var(--c-bg-elevated)] text-[var(--c-accent-blue)] border border-[var(--c-border)] hover:bg-[var(--c-border-subtle)] transition-colors"
+            >
+              + Add team
+            </button>
+          )}
+        </div>
+
+        {linearTeams.length === 0 && !addTeamOpen && (
+          <p className="text-[0.9rem] text-[var(--c-text-faint)]">No Linear teams connected.</p>
+        )}
+
+        {linearTeams.length > 0 && (
+          <ul className="space-y-2">
+            {linearTeams.map(team => (
+              <li
+                key={team.teamKey}
+                className="flex items-start justify-between gap-3 px-3 py-2.5 rounded-lg bg-[color-mix(in_srgb,var(--c-bg-elevated)_70%,transparent)] border border-[color-mix(in_srgb,var(--c-border)_40%,transparent)]"
+              >
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[1rem] font-semibold text-[var(--c-text-primary)] font-mono">{team.teamKey}</span>
+                    <span className="text-[0.8rem] text-violet-400/80 bg-violet-500/10 border border-violet-500/20 px-1.5 py-0.5 rounded">{team.label}</span>
+                  </div>
+                  {team.localPath && (
+                    <div className="text-[0.85rem] text-[var(--c-text-muted)] truncate mt-0.5" title={team.localPath}>{team.localPath}</div>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    await window.api.linearRemoveTeam(team.teamKey).catch(() => {})
+                    void refresh()
+                  }}
+                  className="shrink-0 text-[0.85rem] text-red-400/70 hover:text-red-400 px-2 py-1 rounded border border-transparent hover:border-red-500/30 transition-colors"
+                >
+                  Remove
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        {addTeamOpen && (
+          <div className="space-y-3 pt-2 border-t border-[color-mix(in_srgb,var(--c-border)_60%,transparent)]">
+            <div>
+              <label className="text-[0.875rem] text-[var(--c-text-muted)] mb-1 block">Team key</label>
+              <input
+                className={inputCls}
+                value={teamKey}
+                onChange={e => setTeamKey(e.target.value.toUpperCase())}
+                placeholder="e.g. META"
+                autoFocus
+              />
+            </div>
+            <div>
+              <label className="text-[0.875rem] text-[var(--c-text-muted)] mb-1 block">Local repo path</label>
+              <input
+                className={inputCls}
+                value={teamPath}
+                onChange={e => setTeamPath(e.target.value)}
+                placeholder="e.g. ~/projects/my-repo"
+              />
+            </div>
+            <div>
+              <label className="text-[0.875rem] text-[var(--c-text-muted)] mb-1 block">Trigger label</label>
+              <input
+                className={inputCls}
+                value={teamLabel}
+                onChange={e => setTeamLabel(e.target.value)}
+                placeholder="agent-ready"
+              />
+            </div>
+            {teamError && (
+              <p className="text-[0.875rem] text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">{teamError}</p>
+            )}
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => { setAddTeamOpen(false); setTeamKey(''); setTeamPath(''); setTeamLabel('agent-ready'); setTeamError(null) }}
+                className="px-4 py-2 text-[0.9rem] text-[var(--c-text-muted)] hover:text-[var(--c-text-primary)] transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={!teamKey.trim() || !teamPath.trim()}
+                onClick={async () => {
+                  try {
+                    await window.api.linearAddTeam(teamKey.trim(), teamPath.trim(), teamLabel.trim() || undefined)
+                    setAddTeamOpen(false); setTeamKey(''); setTeamPath(''); setTeamLabel('agent-ready'); setTeamError(null)
+                    void refresh()
+                  } catch (e) {
+                    setTeamError((e as Error).message || 'Failed to add team')
+                  }
+                }}
+                className="px-4 py-2 text-[0.9rem] bg-[var(--c-accent)] hover:bg-[#00cc6e] disabled:opacity-30 text-[var(--c-bg-chrome)] font-medium rounded-lg transition-colors"
+              >
+                Connect
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 // ── Main panel ─────────────────────────────────────────────────────────────────
 
 export function SettingsPanel() {
@@ -245,6 +513,12 @@ export function SettingsPanel() {
     <div className="h-full overflow-y-auto relative z-[1]">
       <div className="max-w-xl mx-auto py-8 px-6">
         <h1 className="text-[1.35rem] font-semibold text-[var(--c-text-heading)] mb-6">Settings</h1>
+
+        {/* Sources */}
+        <section className="mb-8">
+          <h2 className="text-[0.9rem] font-semibold text-[var(--c-text-muted)] uppercase tracking-wider mb-4">Sources</h2>
+          <SourcesSection />
+        </section>
 
         {/* Appearance */}
         <section className="mb-8">
@@ -303,7 +577,7 @@ export function SettingsPanel() {
         <section className="mb-4">
           <div className="animate-card-enter bg-[color-mix(in_srgb,var(--c-bg-surface)_85%,transparent)] rounded-lg p-5 border border-[color-mix(in_srgb,var(--c-border)_90%,transparent)] flex flex-col items-center gap-1.5 text-center">
             <div className="flex items-center gap-2">
-              <span className="text-[1.05rem] font-semibold text-[var(--c-text-heading)]">Penpal v0.1.3</span>
+              <span className="text-[1.05rem] font-semibold text-[var(--c-text-heading)]">Penpal v0.3.3</span>
               <svg
                 aria-hidden="true"
                 width="14"

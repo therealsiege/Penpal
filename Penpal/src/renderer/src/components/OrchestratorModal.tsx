@@ -5,10 +5,9 @@ import type {
   GitHubIssueCard,
   GithubPollerStatus,
   LinearIssueCard,
-  LinearTeamConfig,
 } from '../types'
 
-import { GithubPollStatusBadge, SourcesModal } from './SourcesModal'
+import { GithubPollStatusBadge } from './SourcesModal'
 import { usePolling } from '../hooks/usePolling'
 import { useToast } from './Toast'
 
@@ -99,7 +98,7 @@ const TIMEOUT_MULTIPLIERS = [1, 2, 5]
 
 // ── DispatchContent — unified issue + pod board ─────────────────────────────
 
-function DispatchContent({ onClose }: { onClose?: () => void }) {
+function DispatchContent({ onClose, onNavigate }: { onClose?: () => void; onNavigate?: (panel: string) => void }) {
   const { toast } = useToast()
 
   // ── Pod workflows ──
@@ -112,14 +111,11 @@ function DispatchContent({ onClose }: { onClose?: () => void }) {
   const [cards, setCards] = useState<GitHubIssueCard[]>([])
   const [pollerStatus, setPollerStatus] = useState<GithubPollerStatus | null>(null)
   const [githubError, setGithubError] = useState(false)
-  const [showSources, setShowSources] = useState(false)
 
   // ── Linear issues ──
   const [linearCards, setLinearCards] = useState<LinearIssueCard[]>([])
   const [linearPollerStatus, setLinearPollerStatus] = useState<{ running: boolean; polling: boolean } | null>(null)
   const [linearError, setLinearError] = useState(false)
-  const [linearTeams, setLinearTeams] = useState<LinearTeamConfig[]>([])
-  const [addTeamForm, setAddTeamForm] = useState({ teamKey: '', localPath: '', label: 'agent-ready', open: false })
 
   const loadGithub = useCallback(async () => {
     try {
@@ -137,14 +133,12 @@ function DispatchContent({ onClose }: { onClose?: () => void }) {
 
   const loadLinear = useCallback(async () => {
     try {
-      const [c, s, teams] = await Promise.all([
+      const [c, s] = await Promise.all([
         window.api.linearIssueCards(),
         window.api.linearPollerStatus(),
-        window.api.linearListTeams(),
       ])
       if (Array.isArray(c)) setLinearCards(c)
       if (s) setLinearPollerStatus(s)
-      if (Array.isArray(teams)) setLinearTeams(teams)
       setLinearError(false)
     } catch {
       setLinearError(true)
@@ -168,15 +162,13 @@ function DispatchContent({ onClose }: { onClose?: () => void }) {
         if (!cancelled) setGithubError(true)
       }
       try {
-        const [lc, ls, teams] = await Promise.all([
+        const [lc, ls] = await Promise.all([
           window.api.linearIssueCards(),
           window.api.linearPollerStatus(),
-          window.api.linearListTeams(),
         ])
         if (!cancelled) {
           if (Array.isArray(lc)) setLinearCards(lc)
           if (ls) setLinearPollerStatus(ls)
-          if (Array.isArray(teams)) setLinearTeams(teams)
           setLinearError(false)
         }
       } catch {
@@ -293,7 +285,7 @@ function DispatchContent({ onClose }: { onClose?: () => void }) {
           )}
           <button
             type="button"
-            onClick={() => setShowSources(true)}
+            onClick={() => onNavigate?.('settings')}
             className="px-3 py-1.5 text-[13px] rounded-md bg-[var(--c-bg-elevated)] hover:bg-[var(--c-border)] border border-[color-mix(in_srgb,var(--c-border)_60%,transparent)] transition-colors"
           >
             Sources
@@ -409,88 +401,7 @@ function DispatchContent({ onClose }: { onClose?: () => void }) {
           </div>
         )}
 
-        {/* Linear Teams */}
-        <div className="mt-6 px-4 pb-4">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="text-[11px] font-semibold text-[var(--c-text-muted)] uppercase tracking-wider">Linear Teams</h3>
-            <button
-              onClick={() => setAddTeamForm(f => ({ ...f, open: !f.open }))}
-              className="text-[11px] text-[var(--c-accent)] hover:text-[var(--c-text-primary)] transition-colors"
-            >
-              {addTeamForm.open ? 'Cancel' : '+ Add Team'}
-            </button>
-          </div>
-
-          {/* Add team form */}
-          {addTeamForm.open && (
-            <div className="mb-3 p-3 rounded-lg bg-[var(--c-bg-surface)] border border-[var(--c-border)] space-y-2">
-              <input
-                type="text"
-                placeholder="Team key (e.g. META)"
-                value={addTeamForm.teamKey}
-                onChange={e => setAddTeamForm(f => ({ ...f, teamKey: e.target.value.toUpperCase() }))}
-                className="w-full px-2 py-1.5 rounded bg-[var(--c-bg-elevated)] border border-[var(--c-border)] text-[12px] text-[var(--c-text-primary)] placeholder-[var(--c-text-faint)] outline-none focus:border-[color-mix(in_srgb,var(--c-accent)_45%,transparent)]"
-              />
-              <input
-                type="text"
-                placeholder="Local repo path (e.g. ~/projects/my-repo)"
-                value={addTeamForm.localPath}
-                onChange={e => setAddTeamForm(f => ({ ...f, localPath: e.target.value }))}
-                className="w-full px-2 py-1.5 rounded bg-[var(--c-bg-elevated)] border border-[var(--c-border)] text-[12px] text-[var(--c-text-primary)] placeholder-[var(--c-text-faint)] outline-none focus:border-[color-mix(in_srgb,var(--c-accent)_45%,transparent)]"
-              />
-              <input
-                type="text"
-                placeholder="Trigger label (default: agent-ready)"
-                value={addTeamForm.label}
-                onChange={e => setAddTeamForm(f => ({ ...f, label: e.target.value }))}
-                className="w-full px-2 py-1.5 rounded bg-[var(--c-bg-elevated)] border border-[var(--c-border)] text-[12px] text-[var(--c-text-primary)] placeholder-[var(--c-text-faint)] outline-none focus:border-[color-mix(in_srgb,var(--c-accent)_45%,transparent)]"
-              />
-              <button
-                onClick={async () => {
-                  if (!addTeamForm.teamKey || !addTeamForm.localPath) return
-                  try {
-                    await window.api.linearAddTeam(addTeamForm.teamKey, addTeamForm.localPath, addTeamForm.label || undefined)
-                    setAddTeamForm({ teamKey: '', localPath: '', label: 'agent-ready', open: false })
-                    void loadLinear()
-                  } catch (e) {
-                    console.error('Failed to add team', e)
-                  }
-                }}
-                disabled={!addTeamForm.teamKey || !addTeamForm.localPath}
-                className="w-full py-1.5 rounded bg-[var(--c-accent)] text-white text-[12px] font-medium hover:opacity-90 disabled:opacity-40 transition-opacity"
-              >
-                Connect Team
-              </button>
-            </div>
-          )}
-
-          {/* Team list */}
-          {linearTeams.length === 0 ? (
-            <p className="text-[11px] text-[var(--c-text-faint)]">No Linear teams connected. Add a team to dispatch from Linear tickets.</p>
-          ) : (
-            <div className="space-y-1.5">
-              {linearTeams.map(team => (
-                <div key={team.teamKey} className="flex items-center justify-between px-3 py-2 rounded-lg bg-[var(--c-bg-surface)] border border-[var(--c-border)]">
-                  <div>
-                    <span className="text-[12px] font-semibold text-[var(--c-text-primary)]">{team.teamKey}</span>
-                    <span className="ml-2 text-[11px] text-[var(--c-text-faint)]">{team.label}</span>
-                    <p className="text-[10px] text-[var(--c-text-faint)] mt-0.5 truncate max-w-[280px]">{team.localPath}</p>
-                  </div>
-                  <button
-                    onClick={async () => {
-                      await window.api.linearRemoveTeam(team.teamKey).catch(() => {})
-                      void loadLinear()
-                    }}
-                    className="text-[11px] text-rose-400 hover:text-rose-300 transition-colors"
-                  >Remove</button>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
       </div>
-
-      <SourcesModal open={showSources} onClose={() => setShowSources(false)} onReposChanged={() => { void loadGithub() }} />
     </div>
   )
 }
@@ -734,7 +645,7 @@ function IssueCard({
 
 // ── TasksPanel — standalone Dispatch panel ─────────────────────────────────
 
-export function TasksPanel() {
+export function TasksPanel({ onNavigate }: { onNavigate?: (panel: string) => void }) {
   const uiTheme = useAppearanceStore((s) => s.theme)
   return (
     <div className="relative h-full overflow-hidden">
@@ -744,7 +655,7 @@ export function TasksPanel() {
       />
       <div className="absolute inset-0 bg-[color-mix(in_srgb,var(--c-bg-app)_94%,transparent)]" />
       <div className="relative h-full flex flex-col text-[var(--c-text-primary)]">
-        <DispatchContent />
+        <DispatchContent onNavigate={onNavigate} />
       </div>
     </div>
   )
