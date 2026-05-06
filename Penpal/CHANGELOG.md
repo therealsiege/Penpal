@@ -4,6 +4,12 @@ All notable changes to Penpal are documented here. Format follows [Keep a Change
 
 ## [Unreleased]
 
+## [0.3.2] - 2026-05-06
+
+### Fixed
+- **`isGitRepo` now uses an absolute git path and explicit `HOME` env.** The packaged app's `execFileSync('git', ...)` call was unreliable because git's env resolution behaves differently outside a terminal. Now resolves to `/usr/bin/git` (or first available absolute path) and passes `HOME` explicitly so git can find its config.
+- **Add-repo error messages now distinguish the exact failure.** "Path must be absolute", "Path does not exist", and "Not a git repository" are three distinct errors instead of one generic message, making it easier to diagnose what went wrong.
+
 ## [0.3.1] - 2026-05-05
 
 ### Fixed

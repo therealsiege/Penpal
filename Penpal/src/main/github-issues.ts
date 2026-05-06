@@ -27,9 +27,20 @@ import { getDataDir } from './data-paths'
 
 // ── Git helpers ─────────────────────────────────────────────────────────────
 
+const GIT_BIN = (() => {
+  for (const p of ['/usr/bin/git', '/opt/homebrew/bin/git', '/usr/local/bin/git']) {
+    try { if (fs.existsSync(p)) return p } catch { /* */ }
+  }
+  return 'git'
+})()
+
 function isGitRepo(dirPath: string): boolean {
   try {
-    execFileSync('git', ['rev-parse', '--git-dir'], { cwd: dirPath, stdio: 'pipe' })
+    execFileSync(GIT_BIN, ['rev-parse', '--git-dir'], {
+      cwd: dirPath,
+      stdio: 'pipe',
+      env: { ...process.env, HOME: os.homedir() },
+    })
     return true
   } catch {
     return false
@@ -822,8 +833,14 @@ export function addWatchedRepo(owner: string, repo: string, localPath: string): 
   const resolved = localPath.startsWith('~')
     ? path.join(os.homedir(), localPath.slice(1))
     : localPath
-  if (!path.isAbsolute(resolved) || !fs.existsSync(resolved) || !isGitRepo(resolved)) {
-    throw new Error(`${localPath} is not a git repository`)
+  if (!path.isAbsolute(resolved)) {
+    throw new Error(`Path must be absolute: ${localPath}`)
+  }
+  if (!fs.existsSync(resolved)) {
+    throw new Error(`Path does not exist: ${resolved}`)
+  }
+  if (!isGitRepo(resolved)) {
+    throw new Error(`Not a git repository: ${resolved}`)
   }
   const existing = REPOS.find(r => r.owner === owner && r.repo === repo)
   if (existing) return
