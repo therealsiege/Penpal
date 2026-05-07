@@ -1037,16 +1037,38 @@ export function getITermStatus(): { healthy: boolean; consecutiveTimeouts: numbe
   }
 }
 
+// Cache to avoid scanning 275+ project directories on every call (1.7 GB of JSONL).
+// Slack bridge and game-state-snapshot both call this; without caching it blocks
+// the main thread on every poll cycle.
+let _sessionCache: ClaudeSession[] | null = null
+let _sessionCacheTime = 0
+const SESSION_CACHE_TTL = 60_000 // 60 seconds
+
+export function invalidateSessionCache(): void {
+  _sessionCache = null
+}
+
 export async function getClaudeSessions(): Promise<ClaudeSession[]> {
+  const now = Date.now()
+  if (_sessionCache && now - _sessionCacheTime < SESSION_CACHE_TTL) return _sessionCache
+
   // Legacy path: if ~/.claude/sessions/ has session files, use file-based discovery
   if (fs.existsSync(CLAUDE_SESSIONS_DIR)) {
     const legacySessions = await getClaudeSessionsLegacy()
-    if (legacySessions.length > 0) return legacySessions
+    if (legacySessions.length > 0) {
+      _sessionCache = legacySessions
+      _sessionCacheTime = now
+      return legacySessions
+    }
   }
 
   // Process-based discovery
   const processes = await findClaudeProcesses()
-  if (processes.length === 0) return []
+  if (processes.length === 0) {
+    _sessionCache = []
+    _sessionCacheTime = now
+    return []
+  }
 
   // Batch: iTerm names + process stats in parallel
   const [itermNames, ...statsResults] = await Promise.all([
@@ -1098,6 +1120,8 @@ export async function getClaudeSessions(): Promise<ClaudeSession[]> {
   }
 
   sessions.sort((a, b) => b.memoryMB - a.memoryMB)
+  _sessionCache = sessions
+  _sessionCacheTime = now
   return sessions
 }
 

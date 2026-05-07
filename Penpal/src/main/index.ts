@@ -182,12 +182,12 @@ app.whenReady().then(() => {
     initAutoUpdater()
   }, 1500)
 
-  // Write game state snapshot for MCP tools (every 5s)
+  // Write game state snapshot for MCP tools (every 5min — reads 1.7GB of JSONL, keep slow)
   setTimeout(() => {
     writeGameStateSnapshot()
-    const snapshotTimer = setInterval(() => { writeGameStateSnapshot().catch(console.error) }, 5000)
+    const snapshotTimer = setInterval(() => { writeGameStateSnapshot().catch(console.error) }, 5 * 60 * 1000)
     app.on('before-quit', () => clearInterval(snapshotTimer))
-  }, 250)
+  }, 5000)
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
