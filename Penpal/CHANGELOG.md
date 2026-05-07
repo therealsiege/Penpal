@@ -4,6 +4,22 @@ All notable changes to Penpal are documented here. Format follows [Keep a Change
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-05-06
+
+### Removed
+- **Phaser 3 game layer removed.** `src/renderer/src/game/` (~115 files, ~57k lines) deleted — the isometric office simulator, all game systems (quest engine, leaderboard, seasons, cosmetics, soundboard, bestiary, café, weather, particles), and every associated test. The dispatch board is now the sole UI. Game will be restored in a future release.
+- **Dead main-process files removed.** `soundboard.ts`, `wave-dispatcher.ts`, `graph-env.ts`, `vault-graph.ts` — all orphaned after earlier feature removals. Corresponding `driveWaves` call in `github-issues.ts` and all `vault:*` IPC handlers in `ipc.ts` removed.
+- **Dead API surface stripped.** 30+ `Window.api` entries removed from `env.d.ts` (graph, vault, leads, briefing, pipeline methods and their `*Rich` variants). 9 dead types removed from `types.ts`.
+- **Orphaned renderer components deleted.** `ActivityModal.tsx`, `PipelineModal.tsx`.
+- **35+ dead test files deleted.** Graph, capabilities, vault, game, and MCP-graph tests removed. Remaining suite: 54 files, 495 tests, all passing.
+
+### Fixed
+- **Pod self-fix test mock.** `runRealValidation` in `pods.ts` was returning `passed: true` in test mode regardless of mock output, masking self-fix loop failures.
+
+### Documentation
+- **CLAUDE.md rewritten** to reflect dispatch-system scope — game architecture, sprite sheet docs, and Dev Studio Tycoon system descriptions removed.
+- **README trimmed** to match actual panels and working features.
+
 ## [0.3.9] - 2026-05-06
 
 ### Changed
