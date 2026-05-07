@@ -696,16 +696,3 @@ export function TasksPanel({ onNavigate }: { onNavigate?: (panel: string) => voi
   )
 }
 
-/** Modal version — still available for command palette / hotkey use. */
-export function OrchestratorModal({ onClose }: { onClose: () => void }) {
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 backdrop-blur-[2px] animate-backdrop-fade-in"
-      data-disable-office-hotkeys="true"
-    >
-      <div className="bg-[var(--c-bg-surface)] border border-[var(--c-border)] rounded-xl w-[min(96vw,calc(900px+120px*var(--penny-ui-nav-scale)))] max-h-[84vh] flex flex-col shadow-2xl animate-modal-scale-in">
-        <DispatchContent onClose={onClose} />
-      </div>
-    </div>
-  )
-}

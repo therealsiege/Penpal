@@ -397,42 +397,6 @@ export interface PodPreset {
   description: string
 }
 
-// ── Vault Types ──────────────────────────────────────────────────────────────
-
-export interface VaultEntry {
-  name: string
-  isDirectory: boolean
-  path: string
-  size?: number
-  mtime?: number
-}
-
-export interface VaultSearchResult {
-  path: string
-  line: number
-  text: string
-}
-
-export interface VaultTag {
-  name: string
-  count: number
-}
-
-export interface VaultBacklink {
-  title: string
-  path: string
-  snippet: string
-}
-
-export interface VaultIndexEntry {
-  path: string
-  name: string
-  title: string
-  mtime: number
-  size: number
-  tags: string[]
-}
-
 // ── Orchestrator Types ──────────────────────────────────────────────────────
 
 export type TaskPriority = 'critical' | 'high' | 'normal' | 'low'

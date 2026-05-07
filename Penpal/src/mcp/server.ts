@@ -11,7 +11,6 @@ import './tools/meta.js'
 import './tools/orchestrator.js'
 import './tools/pods.js'
 import './tools/vault.js'
-import './tools/graph.js'
 import './tools/office.js'
 
 /**

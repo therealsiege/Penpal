@@ -17,7 +17,7 @@ import path from 'path'
 import os from 'os'
 
 const execFileAsync = promisify(execFile)
-import { enqueueTask, getTaskQueue, getTask, type TaskPriority } from './orchestrator'
+import { getTaskQueue, getTask, type TaskPriority } from './orchestrator'
 import { ingestIssue, drivePipeline, initPipeline, getPipelineIssues, getActivePodCount, MAX_CONCURRENT_PODS } from './github-pipeline'
 import { getPodStatus } from './pods'
 import { atomicWrite } from './atomic-store'

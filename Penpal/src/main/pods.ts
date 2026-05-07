@@ -53,10 +53,10 @@ import { podComboCollector, computeStageDurations, makeComboKey } from './evals/
 import { resolveProjectPath } from './project-paths'
 import { addEntry, updateEntry, getActiveEntries, getFileConflicts, type FlightBoardEntry, type FileConflict } from './flight-board'
 import { reasoningBank, inferTaskType, formatPastPatterns, type PodPattern } from './reasoning-bank'
-import { checkGovernance, formatViolations, type GovernanceViolation } from './pod-governance'
+import { checkGovernance, formatViolations } from './pod-governance'
 import { assessComplexity } from './pod-complexity'
 import { MergeQueue } from './merge-queue'
-import { reflectOnPod, getFleetAnalytics, type ReflectionReport } from './pod-reflection'
+import { reflectOnPod, getFleetAnalytics } from './pod-reflection'
 import { getDataDir } from './data-paths'
 
 export type { PhaseConfig } from './pods/phase-config'

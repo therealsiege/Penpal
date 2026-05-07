@@ -125,7 +125,6 @@ import { generateWeeklyDigest } from './evals/reports/weekly-digest'
 import { contextMonitor } from './evals/collectors/context-usage'
 import { spotCheckQueue } from './evals/judges/human-judge'
 import { getSystemPaths } from './paths'
-import { registerDataScriptHandlers } from './data-scripts'
 import {
   getConfigSnapshot,
   addProjectMcpServer,
@@ -1092,9 +1091,6 @@ export function registerIpcHandlers() {
     if (!Array.isArray(tools)) throw new Error('tools must be an array')
     return updateAgentTools(agentId, tools as string[])
   }))
-
-  // ── Data Scripts ──────────────────────────────────────────────────────
-  registerDataScriptHandlers()
 
   // ── Session Replay ────────────────────────────────────────────────────
   {
