@@ -4,25 +4,16 @@ import type {
   HealthResult,
   JobStatus,
   JobRun,
-  StageSummary,
-  HotLead,
-  TerritoryData,
-  NewLead,
   ClaudeSession,
   ConversationMessage,
   SessionActionResult,
   BroadcastResult,
   SystemPaths,
-  GraphStats,
-  LeadSearchResult,
-  LeadDetail,
   AgentConfig,
   AgentState,
   AgentHealthStatus,
   OpencodeSession,
   PodWorkflow,
-  VaultFileContent,
-  VaultSearchResult,
   Task,
   ContextHealth,
   EvalAgentReport,
@@ -54,10 +45,6 @@ declare global {
       getSchedulerStatus: () => Promise<JobStatus[]>
       getSchedulerHistory: (jobName?: string) => Promise<JobRun[]>
       runJob: (name: string) => Promise<JobRun>
-      getPipelineSummary: () => Promise<StageSummary[]>
-      getHotLeads: () => Promise<HotLead[]>
-      getTerritories: () => Promise<TerritoryData[]>
-      getNewLeads: () => Promise<NewLead[]>
       getClaudeSessions: () => Promise<ClaudeSession[]>
       getSessionConversation: (sessionId: string, source?: string) => Promise<ConversationMessage[]>
       sendToSession: (tty: string, message: string) => Promise<SessionActionResult>
@@ -65,12 +52,6 @@ declare global {
       focusSessionByName: (name: string, cwd?: string) => Promise<SessionActionResult>
       createNewSession: (cwd: string) => Promise<SessionActionResult>
       broadcastToSessions: (message: string) => Promise<BroadcastResult>
-      getGraphStats: () => Promise<GraphStats>
-      searchLeads: (query: string) => Promise<LeadSearchResult[]>
-      getLeadDetail: (name: string) => Promise<LeadDetail | null>
-      getLatestBriefing: () => Promise<{ date: string; content: string } | null>
-      listBriefings: () => Promise<string[]>
-      getBriefing: (date: string) => Promise<string | null>
       // Shell APIs
       openUrl: (url: string) => Promise<{ success: boolean }>
       openDownloads: () => Promise<{ success: boolean }>
@@ -101,23 +82,6 @@ declare global {
       overridePod: (workflowId: string, phase: string, override: { model?: string; timeoutMultiplier?: number }) => Promise<unknown>
       // Pod Stage Change (spectator mode)
       onPodStageChanged: (callback: (data: { podId: string; status: string; solverId: string; reviewerId: string; executorId: string; iteration: number }) => void) => () => void
-      // Vault File Manager
-      vaultList: (relativePath: string) => Promise<import('./types').VaultEntry[]>
-      vaultRead: (relativePath: string) => Promise<import('./types').VaultFileContent | null>
-      vaultWrite: (relativePath: string, content: string) => Promise<{ success: boolean; mtime: number; error?: string }>
-      vaultSearch: (query: string, glob?: string, limit?: number) => Promise<import('./types').VaultSearchResult[]>
-      vaultTags: () => Promise<import('./types').VaultTag[]>
-      vaultFilesByTag: (tag: string) => Promise<string[]>
-      vaultBacklinks: (relativePath: string) => Promise<import('./types').VaultBacklink[]>
-      vaultCreate: (relativePath: string, content?: string) => Promise<{ success: boolean; mtime: number }>
-      vaultCreateFolder: (relativePath: string) => Promise<{ success: boolean }>
-      vaultRename: (oldPath: string, newPath: string) => Promise<{ success: boolean; mtime?: number }>
-      vaultDelete: (relativePath: string) => Promise<{ success: boolean }>
-      vaultIndex: () => Promise<import('./types').VaultIndexEntry[]>
-      vaultSearchIndexed: (query: string, limit?: number) => Promise<{ path: string; title: string; snippet: string; score: number }[]>
-      vaultBuildSearchIndex: () => Promise<number>
-      vaultGraphData: (scope?: string, centerPath?: string) => Promise<{ nodes: { id: string; label: string; type: string; path?: string }[]; links: { source: string; target: string; type: string }[] }>
-      onVaultFileChanged: (callback: (event: { eventType: string; path: string }) => void) => () => void
       // Session Health
       getITermStatus: () => Promise<{ healthy: boolean; consecutiveTimeouts: number; backoffUntil: number }>
       // Cursor Agent APIs
@@ -206,12 +170,8 @@ declare global {
       // Context-Engineered Rich APIs (full ContextEngineeredResponse shape)
       getAgentStatusesRich: () => Promise<ContextEngineeredResponse<AgentState[]>>
       getClaudeSessionsRich: () => Promise<ContextEngineeredResponse<ClaudeSession[]>>
-      searchLeadsRich: (query: string) => Promise<ContextEngineeredResponse<LeadSearchResult[]>>
-      getLeadDetailRich: (name: string) => Promise<ContextEngineeredResponse<LeadDetail | null>>
       listPodsRich: () => Promise<ContextEngineeredResponse<PodWorkflow[]>>
       getPodStatusRich: (workflowId: string) => Promise<ContextEngineeredResponse<PodWorkflow | null>>
-      vaultReadRich: (relativePath: string) => Promise<ContextEngineeredResponse<VaultFileContent | null>>
-      vaultSearchRich: (query: string, glob?: string, limit?: number) => Promise<ContextEngineeredResponse<VaultSearchResult[]>>
       orchestratorQueueRich: () => Promise<ContextEngineeredResponse<Task[]>>
       orchestratorAgentHealthRich: () => Promise<ContextEngineeredResponse<AgentHealthStatus[]>>
       // Flight Board

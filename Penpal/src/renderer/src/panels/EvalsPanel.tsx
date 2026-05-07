@@ -271,7 +271,7 @@ function PodCombosSection() {
     15_000,
   )
 
-  if (!report || report.totalPods === 0) {
+  if (!report || !report.stageTimingOverall || !report.totalPods) {
     return (
       <div className="flex flex-col gap-3">
         <h2 className="text-sm font-bold text-[var(--c-text-heading)] tracking-tight">Pod Combos</h2>

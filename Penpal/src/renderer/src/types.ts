@@ -33,70 +33,6 @@ export interface JobRun {
   stderr_tail: string
 }
 
-export interface StageSummary {
-  stage: string
-  total: number
-  avgScore: number
-  byArm: Record<string, number>
-}
-
-export interface HotLead {
-  name: string
-  company: string
-  score: number
-  businessArm: string
-  stage: string
-  ehr: string
-  nextAction: string
-}
-
-export interface TerritoryData {
-  territory: string
-  leads: number
-  avgScore: number
-}
-
-export interface NewLead {
-  name: string
-  company: string
-  businessArm: string
-  score: number
-  source: string
-}
-
-export type GraphFreshnessStatus = 'fresh' | 'recent' | 'stale' | 'unknown'
-
-export interface GraphFreshness {
-  lastLeadUpdate: string | null
-  lastLeadCreated: string | null
-  daysSinceLastUpdate: number | null
-  status: GraphFreshnessStatus
-}
-
-export interface GraphStats {
-  totalNodes: number
-  totalRelationships: number
-  nodesByLabel: Record<string, number>
-  relsByType: Record<string, number>
-  totalLeads?: number
-  leadsByStage?: Record<string, number>
-  freshness?: GraphFreshness
-}
-
-export interface LeadSearchResult {
-  leadId?: string
-  name: string
-  company: string
-  score: number
-  businessArm: string
-  stage: string
-  ehr: string
-  territory?: string
-  location: string
-  nextAction: string
-  source: string
-}
-
 export interface ClaudeSession {
   pid: number
   sessionId: string
@@ -330,25 +266,6 @@ export function getRankForXP(xp: number): { level: number; title: string } {
   return { level: 1, title: 'Intern' }
 }
 
-export interface LeadDetail {
-  name: string
-  company: string
-  score: number
-  businessArm: string
-  stage: string
-  ehr: string
-  location: string
-  nextAction: string
-  source: string
-  npi: string
-  phone: string
-  specialty: string
-  website: string
-  events: { type: string; date: string; detail: string }[]
-  documents: { title: string; path: string }[]
-  stageHistory: { stage: string; enteredAt: string }[]
-}
-
 export interface ProjectLeaderboardEntry {
   directory: string
   projectName: string
@@ -488,11 +405,6 @@ export interface VaultEntry {
   path: string
   size?: number
   mtime?: number
-}
-
-export interface VaultFileContent {
-  content: string
-  mtime: number
 }
 
 export interface VaultSearchResult {

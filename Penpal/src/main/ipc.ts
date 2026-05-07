@@ -90,22 +90,6 @@ function parsePodCreateOpts(opts: unknown): CreatePodOpts {
   return out
 }
 import {
-  listVaultDir,
-  readVaultFile,
-  writeVaultFile,
-  createVaultFile,
-  createVaultFolder,
-  renameVaultFile,
-  deleteVaultFile,
-  indexVault,
-  searchVault,
-  getVaultTags,
-  getFilesByTag,
-  getBacklinks,
-} from './vault'
-import { buildSearchIndex, searchIndexed } from './search-index'
-import { getVaultGraph } from './vault-graph'
-import {
   enqueueTask,
   getTaskQueue,
   cancelTask,
@@ -140,7 +124,7 @@ import { evalHarness } from './evals/harness'
 import { generateWeeklyDigest } from './evals/reports/weekly-digest'
 import { contextMonitor } from './evals/collectors/context-usage'
 import { spotCheckQueue } from './evals/judges/human-judge'
-import { DOCS_ROOT, getSystemPaths } from './paths'
+import { getSystemPaths } from './paths'
 import { registerDataScriptHandlers } from './data-scripts'
 import {
   getConfigSnapshot,
@@ -156,7 +140,6 @@ import { getDataDir } from './data-paths'
 
 export const ipcEvents = new EventEmitter()
 
-const VAULT_ROOT = DOCS_ROOT
 const DATA_DIR = getDataDir()
 const DPO_PAIRS_FILENAME = 'dpo-pairs.jsonl'
 
@@ -824,142 +807,6 @@ export function registerIpcHandlers() {
   ipcMain.handle('flight-board:files-in-flight', wrapHandler(() =>
     Object.fromEntries(getFilesInFlight()),
   ))
-
-  // ── Vault File Manager ───────────────────────────────────────────────────
-  ipcMain.handle('vault:list', wrapHandler((relativePath: unknown) => {
-    return listVaultDir(typeof relativePath === 'string' ? relativePath : '')
-  }))
-
-  ipcMain.handle('vault:read', wrapHandler(async (relativePath: unknown) => {
-    if (typeof relativePath !== 'string') throw new Error('relativePath must be a string')
-    const [fileContent, backlinks] = await Promise.all([
-      readVaultFile(relativePath),
-      getBacklinks(relativePath).catch(() => []),
-    ])
-
-    if (!fileContent) {
-      return contextResponse(null, 'File not found.', ['Check path and try vault:list to browse available files.'],
-        ['vault:list', 'vault:search'])
-    }
-
-    const folder = relativePath.includes('/') ? relativePath.split('/').slice(0, -1).join('/') : ''
-    const fileName = relativePath.split('/').pop() || relativePath
-    const sizeKB = (Buffer.byteLength(fileContent.content, 'utf-8') / 1024).toFixed(1)
-
-    // Extract inline tags
-    const tagMatches = fileContent.content.match(/#[a-zA-Z][\w/-]*/g) || []
-    const tags = [...new Set(tagMatches)]
-
-    // Count wikilinks
-    const wikilinkMatches = fileContent.content.match(/\[\[[^\]]+\]\]/g) || []
-
-    const summary = `Read '${fileName}' (${sizeKB}KB) with ${backlinks.length} backlink(s) and ${wikilinkMatches.length} inline link(s).`
-    const suggestions: string[] = []
-    if (backlinks.length > 0) suggestions.push(`${backlinks.length} file(s) link here — explore via vault:backlinks.`)
-    if (folder) suggestions.push(`File is in ${folder} — list siblings via vault:list.`)
-    if (wikilinkMatches.length > 0) suggestions.push(`Contains ${wikilinkMatches.length} wikilink(s) — follow references for related content.`)
-    if (tags.length > 0) suggestions.push(`Tags present (${tags.slice(0, 3).join(', ')}) — pivot via vault:files-by-tag for related notes.`)
-
-    return contextResponse(fileContent, summary, suggestions,
-      ['vault:backlinks', 'vault:list', 'vault:search', 'vault:write'],
-      {
-        backlinks: backlinks.map(b => b.title),
-        tags,
-        folder,
-        relatedFiles: backlinks.slice(0, 5).map(b => b.path),
-        fileSizeBytes: Buffer.byteLength(fileContent.content, 'utf-8'),
-        mtime: fileContent.mtime,
-      },
-    )
-  }))
-
-  ipcMain.handle('vault:write', wrapHandler((relativePath: unknown, content: unknown) => {
-    if (typeof relativePath !== 'string') throw new Error('relativePath must be a string')
-    if (typeof content !== 'string') throw new Error('content must be a string')
-    return writeVaultFile(relativePath, content)
-  }))
-
-  ipcMain.handle('vault:search', wrapHandler(async (query: unknown, glob?: unknown, limit?: unknown) => {
-    if (typeof query !== 'string') throw new Error('query must be a string')
-    const results = await searchVault(
-      query,
-      typeof glob === 'string' ? glob : undefined,
-      typeof limit === 'number' ? limit : undefined,
-    )
-
-    const folders = [...new Set(results.map(r => r.path.includes('/') ? r.path.split('/').slice(0, -1).join('/') : '(root)'))]
-    const fileCount = new Set(results.map(r => r.path)).size
-    const folderCounts: Record<string, number> = {}
-    const tagCounts: Record<string, number> = {}
-    for (const r of results) {
-      const folder = r.path.includes('/') ? r.path.split('/').slice(0, -1).join('/') : '(root)'
-      folderCounts[folder] = (folderCounts[folder] || 0) + 1
-      const tags = (r.text.match(/#[a-zA-Z][\w/-]*/g) || []).slice(0, 4)
-      for (const t of tags) tagCounts[t] = (tagCounts[t] || 0) + 1
-    }
-    const topFolders = Object.entries(folderCounts).sort((a, b) => b[1] - a[1]).slice(0, 3)
-    const topTags = Object.entries(tagCounts).sort((a, b) => b[1] - a[1]).slice(0, 4)
-
-    const summary = `Found ${results.length} result(s) for '${query}' across ${fileCount} file(s) in ${folders.length} folder(s).`
-    const suggestions: string[] = []
-    if (folders.length > 1) suggestions.push(`Results span ${folders.slice(0, 3).join(', ')}${folders.length > 3 ? ` and ${folders.length - 3} more` : ''} — narrow with glob parameter.`)
-    if (topTags.length > 0) suggestions.push(`Top tags in matches: ${topTags.map(([t]) => t).join(', ')} — pivot using vault:files-by-tag.`)
-    if (results.length >= (typeof limit === 'number' ? limit : 20)) suggestions.push('Result limit reached — use vault:search with higher limit or glob filter.')
-    suggestions.push('Read specific files via vault:read for full content.')
-
-    return contextResponse(results, summary, suggestions,
-      ['vault:read', 'vault:backlinks', 'vault:tags', 'vault:files-by-tag'],
-      { folders, topFolders, topTags, folderHierarchyDepth: Math.max(0, ...folders.map(f => f === '(root)' ? 0 : f.split('/').length)), matchCount: results.length, fileCount, query },
-    )
-  }))
-
-  ipcMain.handle('vault:tags', wrapHandler(() => getVaultTags()))
-
-  ipcMain.handle('vault:files-by-tag', wrapHandler((tag: unknown) => {
-    if (typeof tag !== 'string') throw new Error('tag must be a string')
-    return getFilesByTag(tag)
-  }))
-
-  ipcMain.handle('vault:backlinks', wrapHandler((relativePath: unknown) => {
-    if (typeof relativePath !== 'string') throw new Error('relativePath must be a string')
-    return getBacklinks(relativePath)
-  }))
-
-  ipcMain.handle('vault:create', wrapHandler((relativePath: unknown, content?: unknown) => {
-    if (typeof relativePath !== 'string') throw new Error('relativePath must be a string')
-    return createVaultFile(relativePath, typeof content === 'string' ? content : '')
-  }))
-
-  ipcMain.handle('vault:create-folder', wrapHandler((relativePath: unknown) => {
-    if (typeof relativePath !== 'string') throw new Error('relativePath must be a string')
-    return createVaultFolder(relativePath)
-  }))
-
-  ipcMain.handle('vault:rename', wrapHandler((oldPath: unknown, newPath: unknown) => {
-    if (typeof oldPath !== 'string' || typeof newPath !== 'string') throw new Error('paths must be strings')
-    return renameVaultFile(oldPath, newPath)
-  }))
-
-  ipcMain.handle('vault:delete', wrapHandler((relativePath: unknown) => {
-    if (typeof relativePath !== 'string') throw new Error('relativePath must be a string')
-    return deleteVaultFile(relativePath)
-  }))
-
-  ipcMain.handle('vault:index', wrapHandler(() => indexVault()))
-
-  ipcMain.handle('vault:search-indexed', wrapHandler((query: unknown, limit?: unknown) => {
-    if (typeof query !== 'string') throw new Error('query must be a string')
-    return searchIndexed(query, typeof limit === 'number' ? limit : undefined)
-  }))
-
-  ipcMain.handle('vault:build-search-index', wrapHandler(() => buildSearchIndex()))
-
-  ipcMain.handle('vault:graph-data', wrapHandler((scope?: unknown, centerPath?: unknown) => {
-    return getVaultGraph(
-      typeof scope === 'string' ? scope as 'full' | 'local' | 'tag' : 'full',
-      typeof centerPath === 'string' ? centerPath : undefined,
-    )
-  }))
 
   // ── Slack Bridge ──────────────────────────────────────────────────────
   ipcMain.handle('slack:status', wrapHandler(() => ({

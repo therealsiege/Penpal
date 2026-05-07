@@ -212,9 +212,9 @@ describe('TasksPanel — rendered output', () => {
 
   // ── Empty state ────────────────────────────────────────────────────────────
 
-  it('test 13 — empty allCards shows "No issues tracked yet" empty state', async () => {
+  it('test 13 — empty allCards shows "No issues in queue" empty state', async () => {
     await render()
-    expect(container.textContent).toContain('No issues tracked yet')
+    expect(container.textContent).toContain('No issues in queue')
   })
 
   it('planning lane empty state message appears when cards exist but planning lane is empty', async () => {

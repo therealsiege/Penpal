@@ -22,7 +22,6 @@ import { ingestIssue, drivePipeline, initPipeline, getPipelineIssues, getActiveP
 import { getPodStatus } from './pods'
 import { atomicWrite } from './atomic-store'
 import { getAtlasRoot } from './project-paths'
-import { driveWaves } from './wave-dispatcher'
 import { getDataDir } from './data-paths'
 
 // ── Git helpers ─────────────────────────────────────────────────────────────
@@ -621,7 +620,6 @@ export function startGithubIssuePoller(): void {
   syncTimer = setInterval(() => {
     syncTaskStatuses().catch(console.error)
     drivePipeline(repoConfigs).catch(console.error)
-    driveWaves().catch(console.error)
   }, TASK_SYNC_INTERVAL)
 }
 

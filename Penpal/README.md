@@ -33,7 +33,6 @@ Per-issue override: label an issue with `economic`, `max`, or `sonnet`.
 
 - Per-project channels — agent activity routed to its own channel
 - DMs to the owner when an agent needs tool approval
-- Fleet heartbeat — multiple Penpal instances post heartbeats to `#sk-fleet`
 
 ---
 
@@ -133,105 +132,15 @@ Override via `~/.penpal/data/governance-rules.json`.
 
 ## Panels
 
-| Panel | Status | Purpose |
-|-------|--------|---------|
-| **Dispatch** (default) | Live | GitHub issue board with phase columns, agent avatars, pod controls |
-| **Profiles** | Live | Runtime profile editor — model per phase, timeouts, iteration limits |
-| **Settings** | Live | Sources (GitHub repos), appearance, config snapshot |
-| **MCP** | Live | MCP server configuration |
-| **Results** | Wired | Pod outcome history with diffs, logs, PR links |
-| **Evals** | Wired | Pod quality metrics, combo analytics, spot-check queue (worked in earlier versions, not recently exercised) |
-| **Replay** | Wired | Session replay viewer (untested) |
-
----
-
-## Not yet shipped
-
-Code exists in the tree for these but they aren't reliably working today:
-
-- **Linear integration** — `linear-poller.ts` is in the tree but the integration isn't finished
-- **Autopilot** — `autopilot.ts` exists, scheduling syntax is defined, but recurring tasks aren't enqueueing reliably
-- **Workspace GC** — 3-tier garbage collection logic is implemented but hasn't been validated end-to-end
-- **Heartbeat health detection** — stale-agent reclaim logic is in `dispatch-loop.ts` but unconfirmed in practice
-
----
-
-## Architecture
-
-### Main Process (`src/main/`)
-
-| Module | Purpose |
-|--------|---------|
-| `pods.ts` | 3-agent workflow engine |
-| `github-pipeline.ts` | `agent-ready` issues → worktree → pod → PR |
-| `github-issues.ts` | Issue poller, watched repo management, card aggregation |
-| `dispatch-queue.ts` | Priority queue, claim/release pull model |
-| `dispatch-loop.ts` | Dispatch loop, heartbeat monitoring (latter unconfirmed) |
-| `workspace-isolation.ts` | Per-pod git worktree |
-| `slack-bridge.ts` | Per-project channels, fleet heartbeat, DM alerts |
-| `fleet-heartbeat.ts` | Multi-instance discovery via `#sk-fleet` |
-| `agents.ts` | Agent configs from `agent-types.yaml`, headless backend chains |
-| `health.ts` | Memgraph/Qdrant/Docker probes (used by Slack `/health`) |
-| `merge-queue.ts` | Sequential rebase → tsc → ff-merge → push pipeline |
-| `flight-board.ts` | Active file claims for conflict detection |
-| `reasoning-bank.ts` | Pattern storage for solver injection |
-
-### Renderer (`src/renderer/src/`)
-
-React 18 + Tailwind. Panels render in a flat `Layout` switched via `App.tsx`.
-
-### Agents (`agents/`)
-
-| File | Purpose |
-|------|---------|
-| `agent-types.yaml` | Persona, skills, model, pod role, presets |
-| `CLAUDE.md` | Shared team memory injected into all agent prompts |
-| `mcp-profiles/` | Per-agent MCP server configs (e.g. `qa-executor.json` with Playwright) |
-
-### Data (`~/.penpal/data/`)
-
-Runtime state files (JSON, written to user home, not the repo):
-
-| File | Purpose |
-|------|---------|
-| `pod-workflows.json` | Pod state — active + recent completed |
-| `task-queue.json` | Orchestrator task queue |
-| `flight-board.json` | Active file claims |
-| `reasoning-bank.json` | Pod pattern history (max 200) |
-| `merge-queue.json` | Merge queue state (last 50) |
-| `github-watched-repos.json` | Configured GitHub repos |
-| `github-pipeline.json` | Pipeline issue tracking |
-| `governance-rules.json` | Optional custom governance overrides |
-| `workspaces/` | Per-pod isolated git worktrees |
-
-Override location with `PENPAL_DATA_DIR=/some/path`.
-
----
-
-## MCP Server
-
-```bash
-npm run mcp:start   # stdio transport
-```
-
-| Group | Tools |
-|-------|-------|
-| `meta` | `meta:list-tools`, `meta:describe-tool` |
-| `orchestrator` | `orchestrator:enqueue`, `orchestrator:queue`, `orchestrator:agent-health` |
-| `pods` | `pod:list`, `pod:status`, `pod:create` |
-
-Connect via `.mcp.json`:
-
-```json
-{
-  "mcpServers": {
-    "penny-mcp": {
-      "command": "npm",
-      "args": ["run", "--prefix", "Penpal", "mcp:start"]
-    }
-  }
-}
-```
+| Panel | Purpose |
+|-------|---------|
+| **Dispatch** (default) | GitHub issue board with phase columns, agent avatars, pod controls |
+| **Profiles** | Runtime profile editor — model per phase, timeouts, iteration limits |
+| **Settings** | Sources (GitHub repos), appearance, config snapshot |
+| **MCP** | MCP server configuration |
+| **Results** | Pod outcome history with diffs, logs, PR links |
+| **Evals** | Pod quality metrics, combo analytics, spot-check queue |
+| **Replay** | Session replay viewer |
 
 ---
 
@@ -241,28 +150,5 @@ Connect via `.mcp.json`:
 |-------|-----------|
 | Shell | Electron 33, electron-vite 5 |
 | UI | React 18, Tailwind 3, Zustand |
-| Editor | CodeMirror 6 |
-| Terminal | xterm.js + node-pty |
-| Slack | @slack/bolt 4 (Socket Mode) |
 | Language | TypeScript 5.7 |
 | Testing | Vitest, Playwright |
-
-## Scripts
-
-```bash
-npm run dev       # electron-vite dev with HMR
-npm run build     # production build
-npm run test      # vitest unit tests
-npm run mcp:start # start MCP server
-npm run pod:create -- --task "..." --preset frontend-feature
-npm run typecheck # tsc --noEmit
-npm run package   # electron-forge package
-npm run make      # electron-forge make (distributable)
-npm run release   # bump version, tag, push (triggers CI release build)
-```
-
-## macOS Notes
-
-- `titleBarStyle: hiddenInset` with custom traffic light offset
-- Auto-updater via electron-updater pulling from GitHub Releases
-- Spawn proxy forks a clean Node worker before Electron's renderer corrupts the parent fd table

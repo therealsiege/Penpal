@@ -59,6 +59,7 @@ describe('EvalsPanel', () => {
     mockUsePolling
       .mockReturnValueOnce({ data: reports, loading: false, error: null, errorCount: 0, refresh: vi.fn() })
       .mockReturnValueOnce({ data: stats, loading: false, error: null, errorCount: 0, refresh: vi.fn() })
+      .mockReturnValueOnce({ data: null, loading: false, error: null, errorCount: 0, refresh: vi.fn() })
       .mockReturnValueOnce({ data: [], loading: false, error: null, errorCount: 0, refresh: vi.fn() })
       .mockReturnValueOnce({ data: { total: 0, agreed: 0, rate: 0 }, loading: false, error: null, errorCount: 0, refresh: vi.fn() })
   })

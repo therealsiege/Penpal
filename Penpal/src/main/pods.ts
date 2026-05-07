@@ -373,7 +373,7 @@ function writeCritiqueArtifactFile(wf: PodWorkflow, critique: ReviewerCritique):
     const fileName = `${wf.id}-review-i${wf.iteration}.json`
     const fullPath = path.join(getCritiquesDir(), fileName)
     fs.writeFileSync(fullPath, JSON.stringify(critique, null, 2), 'utf-8')
-    return path.join('data', 'pod-critiques', fileName)
+    return fullPath
   } catch (err) {
     console.warn('[pods] Failed to write critique artifact file — using in-workflow only:', err)
     return 'reviewer-critique'
@@ -627,6 +627,25 @@ export function routeAfterReview(critique: ReviewerCritique): ReviewRoute {
   }
 }
 
+export function formatCritiqueFeedback(c: ReviewerCritique): string {
+  const lines: string[] = [
+    `Verdict: ${c.verdict}`,
+    `Confidence: ${c.confidence}`,
+    `Summary: ${c.summary}`,
+  ]
+  if (c.strengths.length > 0) {
+    lines.push(`Strengths: ${c.strengths.join('; ')}`)
+  }
+  if (c.issues.length > 0) {
+    lines.push('Issues to address:')
+    for (const issue of c.issues) {
+      lines.push(`[${issue.severity.toUpperCase()}] ${issue.location}: ${issue.description}`)
+      lines.push(`  Suggestion: ${issue.suggestion}`)
+    }
+  }
+  return lines.join('\n')
+}
+
 export function formatCritiqueForSolver(c: ReviewerCritique): string {
   const lines: string[] = [
     `**Summary**: ${c.summary}`,
@@ -806,7 +825,7 @@ function formatSolverMessage(
   ].filter(s => s !== '').join('\n')
 }
 
-function formatReviewerMessage(wf: PodWorkflow): string {
+export function formatReviewerMessage(wf: PodWorkflow): string {
   return [
     `## Pod Workflow: ${wf.name}`,
     `### Stage: Review (Iteration ${wf.iteration}/${wf.maxIterations})`,
@@ -819,11 +838,19 @@ function formatReviewerMessage(wf: PodWorkflow): string {
     '',
     '**Output (required)**: Respond with **only** a JSON object inside one markdown fenced block.',
     'Use an opening line ```json then the JSON body, then a closing ``` line.',
-    'The JSON must include: verdict, confidence (0–1), issues (array — empty [] if none), strengths (string array), summary (string).',
-    'Each object in issues must include all four fields: severity, location, description, suggestion (use empty string if not applicable).',
-    'severity must be one of: critical | major | minor | nitpick.',
+    'The JSON schema is:',
+    '```json',
+    JSON.stringify({
+      "verdict": "approve | approve-with-notes | request-changes | reject",
+      "confidence": 0.0,
+      "issues": [{ "severity": "critical | major | minor | nitpick", "location": "", "description": "", "suggestion": "" }],
+      "strengths": ["string"],
+      "summary": "string",
+    }, null, 2),
+    '```',
     'verdict must be one of: approve | approve-with-notes | request-changes | reject.',
-    'Do not include prose outside the fenced JSON block.',
+    'severity must be one of: critical | major | minor | nitpick.',
+    'issues must be an empty array [] if there are none. Do not include prose outside the fenced JSON block.',
   ].join('\n')
 }
 
@@ -845,7 +872,7 @@ function formatConflictWarning(conflicts: FileConflict[]): string {
   ].join('\n')
 }
 
-function formatExecutorMessage(
+export function formatExecutorMessage(
   wf: PodWorkflow,
   solverOutput?: string,
   reviewerRawOutput?: string,
@@ -857,12 +884,19 @@ function formatExecutorMessage(
         `**Reviewer summary**: ${critique.summary}`,
         critique.strengths.length > 0 ? `**Strengths**: ${critique.strengths.join('; ')}` : '',
         critique.issues.length > 0
-          ? `**Reviewer issues**:\n${critique.issues
-              .map(
-                i =>
-                  `- [${i.severity}] ${i.location}: ${i.description}\n  Suggestion: ${i.suggestion}`,
-              )
-              .join('\n')}`
+          ? (critique.verdict === 'approve-with-notes'
+              ? `**Reviewer Notes** (non-blocking):\n${critique.issues
+                  .map(
+                    i =>
+                      `- [${i.severity}] ${i.location}: ${i.description}\n  Suggestion: ${i.suggestion}`,
+                  )
+                  .join('\n')}`
+              : `**Reviewer issues**:\n${critique.issues
+                  .map(
+                    i =>
+                      `- [${i.severity}] ${i.location}: ${i.description}\n  Suggestion: ${i.suggestion}`,
+                  )
+                  .join('\n')}`)
           : '',
         critique.verdict === 'approve-with-notes'
           ? '**Note**: approve-with-notes — treat minor/nitpick items as non-blocking notes unless they affect correctness.'
@@ -1012,12 +1046,11 @@ function createPodPR(wf: PodWorkflow, label?: string): string {
     const rebaseNote = wf.rebaseConflict ? '\n\n⚠️ Rebase conflict detected — manual resolution required.' : ''
     const body = `Pod workflow: ${wf.name}\n\nTask: ${wf.task}${rebaseNote}`
 
-    // Use execFileSync to avoid shell injection from task strings
-    const { execFileSync: execFileSyncPR } = require('child_process')
-    const ghArgs = ['pr', 'create', '--title', title, '--body', body]
-    if (label) ghArgs.push('--label', label)
-
-    const url = (execFileSyncPR('gh', ghArgs, opts) as string).trim()
+    const labelArg = label ? ` --label ${JSON.stringify(label)}` : ''
+    const url = execSync(
+      `gh pr create --title ${JSON.stringify(title)} --body ${JSON.stringify(body)}${labelArg}`,
+      opts,
+    ).trim()
     console.log(`[pods] PR created: ${url}`)
     return url
   } catch (err) {
@@ -1109,11 +1142,13 @@ interface RealValidationResult {
  * This is the hard gate — agent output parsing (parseTestPassed) is advisory,
  * this is authoritative.
  */
-function runRealValidation(cwd: string): RealValidationResult {
+function runRealValidation(cwd: string, agentPassed?: boolean): RealValidationResult {
   // Skip real validation in test environment to prevent infinite recursion:
   // vitest run → createPod → runExecuteStage → runRealValidation → vitest run → ...
+  // Defer to the agent's opinion (parsed from mock output) so tests can control pass/fail.
   if (process.env.VITEST === 'true') {
-    return { passed: true, tscPassed: true, testsPassed: true }
+    const p = agentPassed ?? true
+    return { passed: p, tscPassed: p, testsPassed: p }
   }
 
   const opts = { cwd, encoding: 'utf-8' as const, stdio: 'pipe' as const }
@@ -1668,7 +1703,7 @@ async function runExecuteStage(wf: PodWorkflow): Promise<{ passed: boolean }> {
   const agentPassed = parseTestPassed(wf.executor.output || '')
 
   // Real validation (authoritative — runs actual commands)
-  const real = runRealValidation(wf.cwd)
+  const real = runRealValidation(wf.cwd, agentPassed)
   if (!real.passed) {
     const reasons: string[] = []
     if (!real.tscPassed) reasons.push(`tsc: ${real.tscError?.split('\n')[0] ?? 'compilation error'}`)
