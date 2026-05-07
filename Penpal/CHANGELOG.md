@@ -4,7 +4,7 @@ All notable changes to Penpal are documented here. Format follows [Keep a Change
 
 ## [Unreleased]
 
-## [0.3.6] - 2026-05-06
+## [0.3.8] - 2026-05-06
 
 ### Fixed
 - **"Poll Now" now shows a result toast.** Previously clicking Poll Now gave no feedback — if the poll found 0 issues it silently did nothing. Now shows "Queued N issues" on success or "No new issues found — check that labels are applied on GitHub" when the poll completes with nothing to enqueue.
