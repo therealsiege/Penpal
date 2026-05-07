@@ -82,7 +82,6 @@ contextBridge.exposeInMainWorld('api', {
   slackStart: () => ipcRenderer.invoke('slack:start'),
   slackStop: () => ipcRenderer.invoke('slack:stop'),
   fleetStatus: () => ipcRenderer.invoke('fleet:status').then(unwrap),
-  capabilitiesStatus: () => ipcRenderer.invoke('capabilities:status'),
   // Orchestrator
   orchestratorQueue: () => ipcRenderer.invoke('orchestrator:queue').then(unwrap),
   orchestratorEnqueue: (title: string, description: string, project: string, priority: string) =>

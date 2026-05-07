@@ -132,7 +132,6 @@ import {
 } from './github-issues'
 import { getPipelineIssues } from './github-pipeline'
 import { getEvalReportAll, getEvalReportAgent, getEvalStats } from './evals'
-import { computeCapabilitiesStatus } from './capabilities-status'
 import { taskOutcomeCollector } from './evals/collectors/task-outcomes'
 import { podQualityCollector } from './evals/collectors/pod-quality'
 import { podComboCollector } from './evals/collectors/pod-combos'
@@ -977,9 +976,6 @@ export function registerIpcHandlers() {
     const status = getFleetStatus()
     return { ...status, debug: `ok-${status.instances.length}-instances` }
   }))
-
-  // ── Capabilities (epic #50) — #54/#55 aggregated snapshot
-  ipcMain.handle('capabilities:status', wrapHandler(() => computeCapabilitiesStatus()))
 
   // ── iTerm2 / Session Health ──────────────────────────────────────────────
   ipcMain.handle('sessions:iterm-status', wrapHandler(() => getITermStatus()))

@@ -4,6 +4,19 @@ All notable changes to Penpal are documented here. Format follows [Keep a Change
 
 ## [Unreleased]
 
+## [0.3.9] - 2026-05-06
+
+### Changed
+- **Heavy startup work deferred behind first paint.** `startSlackBridge()` and `initAutoUpdater()` (network-bound) now run 1500ms after `createWindow()`. `startFileWatcher()`, `startOrchestrator()`, `startGC()`, `startAutopilot()`, and `infraUp()` (disk-bound) run 250ms after the window appears. Result: window paints noticeably faster on cold start because the first 1.5s of work is no longer blocking the renderer's initial commit.
+
+### Removed
+- **Dead `graph.ts` deleted.** All exported lead/territory/stats/search functions were unused after the graph IPC handlers were removed in v0.3.3. Eliminates the `neo4j-driver` import from the main process critical path. (`neo4j-driver` is still pulled in transitively by `health.ts` for the Slack `/health` command, but it no longer loads as the very first thing on startup.)
+- **`capabilities-status.ts` deleted.** The `capabilities:status` IPC handler and its renderer surface (`window.api.capabilitiesStatus`) were leftovers from the deleted Handbook panel.
+- **`HealthModal.tsx` and `src/renderer/src/capabilities/` deleted.** Both unused after panel cleanup.
+
+### Documentation
+- **README rewritten to match actual scope.** Removed references to: Phaser 3 isometric office game, world map / CampusScene, knowledge graph / Memgraph / ETL features in the app, vault editor, 8 deleted panels (CommandCenter, VaultPanel, DataPanel, GraphPanel, HandbookPanel, PipelinePanel, GitHubPanel, ActivityPanel), MCP `office:*` and `vault:*` tool groups, Dev Studio Tycoon game systems (quests, cosmetic tiers, leaderboards, seasons, credits, achievements, bestiary), agent roster table with avatars, future scenes vision (call center, content studio, etc.), keyboard shortcuts (game-specific). The new README is ~190 lines vs the old 700+ and accurately reflects the dispatch-system-only scope.
+
 ## [0.3.8] - 2026-05-06
 
 ### Fixed

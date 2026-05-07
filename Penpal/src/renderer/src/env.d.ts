@@ -127,15 +127,6 @@ declare global {
       slackStart: () => Promise<boolean>
       slackStop: () => Promise<void>
       fleetStatus: () => Promise<import('./types').FleetStatus>
-      capabilitiesStatus: () => Promise<{
-        updatedAt: string
-        overall: string
-        items: Record<string, string>
-        facets: {
-          graph_orchestrator: Record<string, string>
-          evals_vault: Record<string, string>
-        }
-      }>
       // Orchestrator
       orchestratorQueue: () => Promise<import('./types').Task[]>
       orchestratorEnqueue: (title: string, description: string, project: string, priority: string) => Promise<import('./types').Task>

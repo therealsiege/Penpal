@@ -24,7 +24,6 @@ import path from 'path'
 import dotenv from 'dotenv'
 import { registerIpcHandlers, registerPreferenceIpc, ipcEvents } from './ipc'
 import { registerMcpIpcHandlers } from './mcp-manager'
-import { closeGraph } from './graph'
 import { loadAgentConfigs } from './agents'
 import { registerPtyHandlers, destroyAllPtys, stopPtySweep } from './pty'
 import { startSlackBridge, stopSlackBridge } from './slack-bridge'
@@ -156,6 +155,7 @@ app.whenReady().then(() => {
     if (!dockIcon.isEmpty()) app.dock.setIcon(dockIcon)
   }
 
+  // ── Critical path — must complete before window is interactive ──
   registerVaultProtocol()
   loadAgentConfigs()
   registerIpcHandlers()
@@ -167,19 +167,30 @@ app.whenReady().then(() => {
   connectCollector(preferenceCollector, preferenceStore)
   registerPreferenceIpc(preferenceStore)
   createWindow()
-  startSlackBridge()
-  startFileWatcher()
-  taskOutcomeCollector.start()
-  startOrchestrator()
-  startGC()
-  startAutopilot()
-  initAutoUpdater()
-  infraUp()
+
+  // ── Deferred — runs after first paint so the window appears faster ──
+  // 250ms: lightweight background services that touch disk but not network
+  setTimeout(() => {
+    startFileWatcher()
+    taskOutcomeCollector.start()
+    startOrchestrator()
+    startGC()
+    startAutopilot()
+    infraUp()
+  }, 250)
+
+  // 1500ms: network-bound services (Slack websocket, GitHub releases check)
+  setTimeout(() => {
+    startSlackBridge()
+    initAutoUpdater()
+  }, 1500)
 
   // Write game state snapshot for MCP tools (every 5s)
-  writeGameStateSnapshot()
-  const snapshotTimer = setInterval(() => { writeGameStateSnapshot().catch(console.error) }, 5000)
-  app.on('before-quit', () => clearInterval(snapshotTimer))
+  setTimeout(() => {
+    writeGameStateSnapshot()
+    const snapshotTimer = setInterval(() => { writeGameStateSnapshot().catch(console.error) }, 5000)
+    app.on('before-quit', () => clearInterval(snapshotTimer))
+  }, 250)
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
@@ -199,7 +210,6 @@ app.on('before-quit', async () => {
   stopPtySweep()
   destroyAllPtys()
   await stopSlackBridge()
-  await closeGraph()
   await infraDown()
   stopSpawnProxy()
 })
