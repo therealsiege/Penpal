@@ -29,7 +29,6 @@ import { registerPtyHandlers, destroyAllPtys, stopPtySweep } from './pty'
 import { startSlackBridge, stopSlackBridge } from './slack-bridge'
 import { registerVaultProtocol } from './vault'
 import { startSpawnProxy, stopSpawnProxy } from './spawn-proxy'
-import { startFileWatcher, stopFileWatcher } from './file-watcher'
 import { startOrchestrator, stopOrchestrator, orchestratorEvents } from './orchestrator'
 import { startGC, stopGC } from './workspace-gc'
 import { startAutopilot, stopAutopilot } from './autopilot'
@@ -142,11 +141,10 @@ function createWindow() {
   })
 }
 
-// Start spawn proxy BEFORE app.whenReady — forks a clean Node process
-// before Electron corrupts the fd table during renderer initialization.
-startSpawnProxy()
-
 app.whenReady().then(() => {
+  // Spawn proxy must start before createWindow() — forks a clean Node process
+  // before Electron corrupts the fd table during renderer initialization.
+  startSpawnProxy()
   // Set dock icon (macOS) — ensures custom icon in dev mode
   if (process.platform === 'darwin') {
     const dockIcon = nativeImage.createFromPath(
@@ -157,7 +155,6 @@ app.whenReady().then(() => {
 
   // ── Critical path — must complete before window is interactive ──
   registerVaultProtocol()
-  loadAgentConfigs()
   registerIpcHandlers()
   registerMcpIpcHandlers()
   registerPtyHandlers()
@@ -171,7 +168,7 @@ app.whenReady().then(() => {
   // ── Deferred — runs after first paint so the window appears faster ──
   // 250ms: lightweight background services that touch disk but not network
   setTimeout(() => {
-    startFileWatcher()
+    loadAgentConfigs()
     taskOutcomeCollector.start()
     startOrchestrator()
     startGC()
@@ -204,7 +201,6 @@ app.on('window-all-closed', () => {
 app.on('before-quit', async () => {
   stopGC()
   stopAutopilot()
-  stopFileWatcher()
   taskOutcomeCollector.stop()
   stopOrchestrator()
   stopPtySweep()
