@@ -292,7 +292,15 @@ function DispatchContent({ onClose, onNavigate }: { onClose?: () => void; onNavi
           </button>
           <button
             type="button"
-            onClick={async () => { await window.api.githubPollNow(); await loadGithub() }}
+            onClick={async () => {
+              const result = await window.api.githubPollNow() as { enqueued?: number; error?: string } | null
+              await loadGithub()
+              if (result?.error) {
+                toast(`Poll failed: ${result.error}`, 'error')
+              } else if (result?.enqueued != null) {
+                toast(result.enqueued > 0 ? `Queued ${result.enqueued} issue${result.enqueued !== 1 ? 's' : ''}` : 'No new issues found — check that labels are applied on GitHub', result.enqueued > 0 ? 'success' : 'info')
+              }
+            }}
             className="px-3 py-1.5 text-[13px] rounded-md bg-[var(--c-bg-elevated)] hover:bg-[var(--c-border)] border border-[color-mix(in_srgb,var(--c-border)_60%,transparent)] transition-colors"
           >
             Poll Now
@@ -311,11 +319,38 @@ function DispatchContent({ onClose, onNavigate }: { onClose?: () => void; onNavi
       {/* Board */}
       <div className="flex-1 overflow-x-auto overflow-y-hidden px-5 py-4 min-h-0">
         {allCards.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full text-[var(--c-border-hover)] gap-3">
-            <p className="text-[16px]">No issues tracked yet</p>
-            <p className="text-[14px] text-[var(--c-border)]">
-              Label issues with <code className="px-1.5 py-0.5 bg-[var(--c-bg-elevated)] rounded text-emerald-400">agent-ready</code> to queue them
+          <div className="flex flex-col items-center justify-center h-full text-[var(--c-border-hover)] gap-4">
+            <p className="text-[16px]">No issues in queue</p>
+            <p className="text-[14px] text-[var(--c-text-muted)]">
+              Apply the <code className="px-1.5 py-0.5 bg-[var(--c-bg-elevated)] rounded text-emerald-400">agent-ready</code> label to a GitHub issue to queue it
             </p>
+            {pollerStatus && pollerStatus.repos.length > 0 && (
+              <div className="mt-2 flex flex-col gap-2 items-center">
+                <p className="text-[12px] text-[var(--c-text-faint)]">Watching {pollerStatus.repos.length} repo{pollerStatus.repos.length !== 1 ? 's' : ''}:</p>
+                <div className="flex flex-col gap-1 items-center">
+                  {pollerStatus.repos.map(repo => (
+                    <a
+                      key={repo}
+                      href={`https://github.com/${repo}/issues`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-[13px] text-blue-400 hover:text-blue-300 transition-colors"
+                    >
+                      {repo} →
+                    </a>
+                  ))}
+                </div>
+              </div>
+            )}
+            {(!pollerStatus || pollerStatus.repos.length === 0) && (
+              <button
+                type="button"
+                onClick={() => onNavigate?.('settings')}
+                className="text-[13px] text-blue-400 hover:text-blue-300 transition-colors"
+              >
+                Add a repository in Settings →
+              </button>
+            )}
           </div>
         ) : (
           <div className="flex gap-3 h-full min-w-0">

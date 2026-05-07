@@ -4,6 +4,12 @@ All notable changes to Penpal are documented here. Format follows [Keep a Change
 
 ## [Unreleased]
 
+## [0.3.6] - 2026-05-06
+
+### Fixed
+- **"Poll Now" now shows a result toast.** Previously clicking Poll Now gave no feedback — if the poll found 0 issues it silently did nothing. Now shows "Queued N issues" on success or "No new issues found — check that labels are applied on GitHub" when the poll completes with nothing to enqueue.
+- **Empty dispatch board now shows watched repos with GitHub links.** Instead of just "No issues tracked yet", the empty state now lists each watched repository with a direct link to its issues page on GitHub, making it easy to apply the `agent-ready` label to the right issues. If no repos are configured, a "Add a repository in Settings" link is shown instead.
+
 ## [0.3.5] - 2026-05-06
 
 ### Fixed
