@@ -5,14 +5,17 @@
  *   Tier 1 — Completed task cleanup (finished tasks older than TTL)
  *   Tier 2 — Orphan cleanup (directories on disk not tracked in memory)
  *   Tier 3 — Artifact cleanup (node_modules, .next, etc. in stale worktrees)
+ *
+ * All subprocess calls are routed through `proxyExecFile` so the main
+ * thread never blocks (Electron 33 / macOS Tahoe spawn-proxy pattern).
  */
 
 import path from 'path'
 import fs from 'fs'
-import { execFileSync } from 'child_process'
 import { listWorkspaces, cleanupWorkspace } from './workspace-isolation'
-import { getTaskQueue } from './dispatch-queue'
+import { getTaskQueue, type TaskStatus } from './dispatch-queue'
 import { getDataDir } from './data-paths'
+import { proxyExecFile } from './spawn-proxy'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -40,6 +43,22 @@ const DEFAULT_CONFIG: GCConfig = {
 
 const ARTIFACT_DIRS = ['node_modules', '.next', '.turbo', 'dist', 'out', '.vite']
 
+/**
+ * Tasks in any of these statuses are still "live" — their workspace must
+ * NOT be touched by the GC, even for artifact pruning.
+ */
+const LIVE_STATUSES: ReadonlySet<TaskStatus> = new Set<TaskStatus>([
+  'queued',    // pending pickup
+  'assigned',  // claimed but not yet executing
+  'active',    // currently running
+])
+
+const TERMINAL_STATUSES: ReadonlySet<TaskStatus> = new Set<TaskStatus>([
+  'completed',
+  'failed',
+  'cancelled',
+])
+
 // ── Module state ─────────────────────────────────────────────────────────────
 
 let config: GCConfig = { ...DEFAULT_CONFIG }
@@ -48,32 +67,56 @@ let totalCompleted = 0
 let totalOrphans = 0
 let totalArtifacts = 0
 let lastRun: string | null = null
+let inFlight: Promise<GCCounts> | null = null
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+/**
+ * Best-effort wrapper around cleanupWorkspace — never throws so a single
+ * stuck workspace can't take down the entire GC pass.
+ */
+function safeCleanup(taskId: string): boolean {
+  try {
+    return cleanupWorkspace(taskId)
+  } catch (err) {
+    console.warn(`[workspace-gc] cleanupWorkspace(${taskId}) threw — continuing`, err)
+    return false
+  }
+}
+
+/** Build an O(1) lookup of taskId → status from the queue snapshot. */
+function buildTaskStatusMap(): Map<string, TaskStatus> {
+  const map = new Map<string, TaskStatus>()
+  for (const task of getTaskQueue()) {
+    map.set(task.id, task.status)
+  }
+  return map
+}
 
 // ── Tier 1: Completed task cleanup ───────────────────────────────────────────
 
-function runTier1(): number {
+async function runTier1(): Promise<number> {
   let cleaned = 0
   const now = Date.now()
   const workspaces = listWorkspaces()
-  const tasks = getTaskQueue()
-
-  // Build a task status lookup by id
-  const taskStatusMap = new Map<string, string>()
-  for (const task of tasks) {
-    taskStatusMap.set(task.id, task.status)
-  }
-
-  const terminalStatuses = new Set(['completed', 'failed', 'cancelled'])
+  const taskStatusMap = buildTaskStatusMap()
 
   for (const ws of workspaces) {
     if (!ws.isolated) continue
 
     const status = taskStatusMap.get(ws.taskId)
-    if (!status || !terminalStatuses.has(status)) continue
+
+    // Hard safety: never touch a live task's workspace.
+    if (status && LIVE_STATUSES.has(status)) continue
+
+    // Only clean workspaces whose task is in a terminal state. Workspaces
+    // with no matching task are handled by Tier 2 (orphan cleanup) so we
+    // don't accidentally race the dispatcher between enqueue and claim.
+    if (!status || !TERMINAL_STATUSES.has(status)) continue
 
     const age = now - new Date(ws.createdAt).getTime()
     if (age > config.completedTaskTTL) {
-      if (cleanupWorkspace(ws.taskId)) {
+      if (safeCleanup(ws.taskId)) {
         cleaned++
       }
     }
@@ -84,15 +127,15 @@ function runTier1(): number {
 
 // ── Tier 2: Orphan cleanup ───────────────────────────────────────────────────
 
-function runTier2(): number {
+async function runTier2(): Promise<number> {
   let cleaned = 0
   const now = Date.now()
   const workspacesDir = path.join(getDataDir(), 'workspaces')
 
-  // Get set of actively tracked workspace directory names
-  const workspaces = listWorkspaces()
+  // Get the set of actively tracked workspace directory names so we don't
+  // remove a worktree that workspace-isolation still believes it owns.
   const trackedDirs = new Set<string>()
-  for (const ws of workspaces) {
+  for (const ws of listWorkspaces()) {
     trackedDirs.add(path.basename(ws.worktreePath))
   }
 
@@ -100,7 +143,7 @@ function runTier2(): number {
   try {
     entries = fs.readdirSync(workspacesDir)
   } catch {
-    // Directory doesn't exist — nothing to clean
+    // Directory doesn't exist yet — nothing to clean.
     return 0
   }
 
@@ -109,7 +152,8 @@ function runTier2(): number {
 
     const fullPath = path.join(workspacesDir, entry)
 
-    // Check age via mtime or metadata file
+    // Resolve the orphan's age. Prefer the persisted metadata file written
+    // by createIsolatedWorkspace; fall back to the directory's mtime.
     let age: number
     try {
       const metadataPath = path.join(fullPath, '.penpal-workspace.json')
@@ -121,25 +165,32 @@ function runTier2(): number {
         age = now - stat.mtimeMs
       }
     } catch {
-      // Can't determine age, skip
+      // Can't determine age — skip rather than guess.
       continue
     }
 
-    if (age > config.orphanTTL) {
+    if (age <= config.orphanTTL) continue
+
+    // Try the proper git path first; fall back to rmSync if the worktree
+    // is corrupt, was never tracked by git, or git itself is unavailable.
+    let removed = false
+    try {
+      await proxyExecFile(
+        'git',
+        ['worktree', 'remove', '--force', fullPath],
+        { timeout: 30_000 },
+      )
+      removed = true
+    } catch {
       try {
-        execFileSync('git', ['worktree', 'remove', '--force', fullPath], {
-          stdio: 'pipe',
-        })
+        fs.rmSync(fullPath, { recursive: true, force: true })
+        removed = true
       } catch {
-        // git worktree remove failed, try manual removal
-        try {
-          fs.rmSync(fullPath, { recursive: true, force: true })
-        } catch {
-          // Best effort
-        }
+        // Best effort — skip and try again next pass.
       }
-      cleaned++
     }
+
+    if (removed) cleaned++
   }
 
   return cleaned
@@ -147,13 +198,20 @@ function runTier2(): number {
 
 // ── Tier 3: Artifact cleanup ─────────────────────────────────────────────────
 
-function runTier3(): number {
+async function runTier3(): Promise<number> {
   let cleaned = 0
   const now = Date.now()
   const workspaces = listWorkspaces()
+  const taskStatusMap = buildTaskStatusMap()
 
   for (const ws of workspaces) {
     if (!ws.isolated) continue
+
+    // Never strip artifacts out from under a live task — node_modules
+    // rebuilds are slow and they may have an in-flight build relying on
+    // .next/.turbo caches.
+    const status = taskStatusMap.get(ws.taskId)
+    if (status && LIVE_STATUSES.has(status)) continue
 
     const age = now - new Date(ws.createdAt).getTime()
     if (age <= config.artifactTTL) continue
@@ -166,7 +224,7 @@ function runTier3(): number {
           cleaned++
         }
       } catch {
-        // Best effort — directory may be locked or already gone
+        // Best effort — directory may be locked or already gone.
       }
     }
   }
@@ -178,18 +236,31 @@ function runTier3(): number {
 
 /**
  * Run a single GC pass across all three tiers.
+ *
+ * Concurrent calls are coalesced — if a pass is already in flight, the
+ * second caller awaits the same promise.
  */
-export function runGC(): GCCounts {
-  const completed = runTier1()
-  const orphans = runTier2()
-  const artifacts = runTier3()
+export function runGC(): Promise<GCCounts> {
+  if (inFlight) return inFlight
 
-  totalCompleted += completed
-  totalOrphans += orphans
-  totalArtifacts += artifacts
-  lastRun = new Date().toISOString()
+  inFlight = (async () => {
+    try {
+      const completed = await runTier1()
+      const orphans = await runTier2()
+      const artifacts = await runTier3()
 
-  return { completed, orphans, artifacts }
+      totalCompleted += completed
+      totalOrphans += orphans
+      totalArtifacts += artifacts
+      lastRun = new Date().toISOString()
+
+      return { completed, orphans, artifacts }
+    } finally {
+      inFlight = null
+    }
+  })()
+
+  return inFlight
 }
 
 /**
@@ -205,7 +276,11 @@ export function startGC(overrides?: Partial<GCConfig>): void {
   }
 
   gcTimer = setInterval(() => {
-    runGC()
+    // We intentionally don't await — the timer fires-and-forgets and
+    // runGC() coalesces overlapping passes.
+    runGC().catch(err => {
+      console.error('[workspace-gc] pass failed:', err)
+    })
   }, config.interval)
 }
 
@@ -248,4 +323,5 @@ export function _resetForTest(): void {
   totalOrphans = 0
   totalArtifacts = 0
   lastRun = null
+  inFlight = null
 }

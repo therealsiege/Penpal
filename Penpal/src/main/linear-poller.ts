@@ -381,16 +381,23 @@ interface WorktreeResult {
 /**
  * Try to create an isolated git worktree. Falls back to using `localPath` directly
  * if worktree creation fails.
+ *
+ * Branch naming mirrors the user-facing spec:
+ *   linear/<IDENT>-<slug>  (e.g. `linear/ENG-123-fix-thing`)
+ *
+ * The identifier case is preserved (Linear identifiers are typically uppercase,
+ * e.g. "ENG-123"); only the slug is lowercased for safety.
  */
 function createWorktreeOrFallback(localPath: string, identifier: string, slug: string): WorktreeResult {
-  const branch = `linear-${identifier.toLowerCase()}-${slug}`
+  const safeSlug = slug.replace(/[^a-z0-9-]/gi, '-').slice(0, 40).replace(/-$/, '') || 'issue'
+  const branch = `linear/${identifier}-${safeSlug}`
   if (!isGitRepo(localPath)) {
     console.warn(`[linear-poller] ${localPath} is not a git repo — using as-is, no branch will be created`)
     return { branch, worktreePath: null }
   }
 
-  const safeSlug = slug.replace(/[^a-z0-9-]/gi, '-').slice(0, 40).replace(/-$/, '') || 'issue'
   const worktreesRoot = path.join(localPath, '.penny-worktrees')
+  // Worktree dir name keeps a flat, filesystem-safe form (no slashes).
   const worktreePath = path.join(worktreesRoot, `${identifier.toLowerCase()}-${safeSlug}`)
 
   try {
@@ -546,12 +553,19 @@ async function pollOnce(): Promise<{ enqueued: number }> {
         break
       }
 
-      // Skip if already seen
-      if (seenIssueIds.includes(issue.id)) continue
-
-      // Skip if already in active pipeline
+      // The pipeline is the source of truth for in-flight / completed work.
+      //   executing → still running, skip
+      //   done      → already shipped a PR, skip (user must clear the entry to re-run)
+      //   failed    → allow re-ingest so re-applying `agent-ready` retries the issue
+      // Note: Linear has no API for label removal in our config, so the trigger
+      // for retry is simply the user removing+re-adding the label. We must NOT
+      // permanently remember every id we've ever seen, or retries are impossible.
       const existing = pipeline.find(p => p.issueId === issue.id)
-      if (existing && existing.stage === 'executing') continue
+      if (existing && (existing.stage === 'executing' || existing.stage === 'done')) continue
+      if (existing && existing.stage === 'failed') {
+        // Drop the failed entry so the new one replaces it cleanly.
+        pipeline = pipeline.filter(p => p.issueId !== issue.id)
+      }
 
       const slug = issue.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 40).replace(/-$/, '') || 'issue'
 
@@ -606,7 +620,8 @@ async function pollOnce(): Promise<{ enqueued: number }> {
       await postComment(issue.id, '🤖 Agent dispatched. Working on it...').catch(() => false)
       await updateIssueState(issue.id, team.teamId, 'In Progress').catch(() => false)
 
-      // Mark as seen
+      // Record a soft trace of every id we've dispatched. Not used for gating
+      // (the pipeline is the source of truth); kept for debugging only.
       if (!seenIssueIds.includes(issue.id)) {
         seenIssueIds.push(issue.id)
       }

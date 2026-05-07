@@ -150,13 +150,27 @@ export function cleanupWorkspace(taskId: string): boolean {
   // Only attempt cleanup if it was actually isolated
   if (!info.isolated) return true
 
+  // If the worktree directory is already gone, skip the git command
+  // entirely — `git worktree remove` would fail and we'd just fall back
+  // to a no-op rmSync anyway. This keeps the GC quiet when the directory
+  // was nuked out-of-band (e.g. by the user or another GC tier).
+  let worktreeOnDisk = false
+  try {
+    worktreeOnDisk = fs.existsSync(info.worktreePath)
+  } catch {
+    worktreeOnDisk = false
+  }
+
+  if (!worktreeOnDisk) return true
+
   try {
     execFileSync('git', ['worktree', 'remove', '--force', info.worktreePath], {
       cwd: info.projectPath,
       stdio: 'pipe',
     })
   } catch {
-    // Fallback: remove the directory manually
+    // Fallback: remove the directory manually. `force: true` is a no-op
+    // if it has already been removed, so this never throws ENOENT.
     try {
       fs.rmSync(info.worktreePath, { recursive: true, force: true })
     } catch {

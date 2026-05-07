@@ -67,6 +67,8 @@ contextBridge.exposeInMainWorld('api', {
   resumePod: (workflowId: string) => ipcRenderer.invoke('pod:resume', workflowId),
   cancelPod: (workflowId: string) => ipcRenderer.invoke('pod:cancel', workflowId),
   mergePr: (prNumber: string, repo: string) => ipcRenderer.invoke('pod:merge-pr', prNumber, repo),
+  getPrDiff: (owner: string, repo: string, prNumber: string | number) =>
+    ipcRenderer.invoke('pod:get-pr-diff', { owner, repo, prNumber }).then(throwOnIpcError),
   retryIssue: (repo: string, issueNumber: number) => ipcRenderer.invoke('pod:retry-issue', repo, issueNumber),
   getPodPresets: () => ipcRenderer.invoke('pod:presets'),
   overridePod: (workflowId: string, phase: string, override: { model?: string; timeoutMultiplier?: number }) =>
@@ -175,6 +177,44 @@ contextBridge.exposeInMainWorld('api', {
     ipcRenderer.on('pod:stage-changed', handler)
     return () => ipcRenderer.removeListener('pod:stage-changed', handler)
   },
+  // Pod Log Streaming — subscribe to live stdout/stderr from a running pod.
+  subscribePodLogs: (
+    podId: string,
+    callback: (entry: {
+      podId: string
+      agentRole: 'solver' | 'reviewer' | 'executor' | 'system'
+      stream: 'stdout' | 'stderr' | 'system'
+      line: string
+      timestamp: number
+      seq: number
+    }) => void,
+  ) => {
+    const handler = (_event: Electron.IpcRendererEvent, data: {
+      podId: string
+      agentRole: 'solver' | 'reviewer' | 'executor' | 'system'
+      stream: 'stdout' | 'stderr' | 'system'
+      line: string
+      timestamp: number
+      seq: number
+    }) => {
+      if (data && data.podId === podId) callback(data)
+    }
+    ipcRenderer.on('pod:log', handler)
+    // Fire and forget; backlog is delivered via the same callback after the
+    // main process responds with the buffered entries.
+    void ipcRenderer.invoke('pod:subscribe-logs', podId).then((res: unknown) => {
+      const r = res as { backlog?: unknown[]; error?: string } | undefined
+      if (r && Array.isArray(r.backlog)) {
+        for (const entry of r.backlog) callback(entry as Parameters<typeof callback>[0])
+      }
+    }).catch(() => {})
+    return () => {
+      ipcRenderer.removeListener('pod:log', handler)
+      void ipcRenderer.invoke('pod:unsubscribe-logs', podId).catch(() => {})
+    }
+  },
+  unsubscribePodLogs: (podId: string) => ipcRenderer.invoke('pod:unsubscribe-logs', podId),
+  getPodLogs: (podId: string) => ipcRenderer.invoke('pod:get-logs', podId),
   // Context Health
   contextHealth: () => ipcRenderer.invoke('evals:context-health'),
   contextHealthAgent: (agentId: string) => ipcRenderer.invoke('evals:context-health-agent', agentId),
@@ -188,6 +228,15 @@ contextBridge.exposeInMainWorld('api', {
   // Flight Board
   flightBoardList: () => ipcRenderer.invoke('flight-board:list'),
   flightBoardFilesInFlight: () => ipcRenderer.invoke('flight-board:files-in-flight'),
+  // Autopilot (scheduled recurring tasks)
+  autopilotStatus: () => ipcRenderer.invoke('autopilot:status'),
+  autopilotList: () => ipcRenderer.invoke('autopilot:list'),
+  autopilotAdd: (opts: { title: string; description: string; project: string; cronExpression: string }) =>
+    ipcRenderer.invoke('autopilot:add', opts),
+  autopilotRemove: (taskId: string) => ipcRenderer.invoke('autopilot:remove', taskId),
+  autopilotToggle: (taskId: string, enabled: boolean) => ipcRenderer.invoke('autopilot:toggle', taskId, enabled),
+  autopilotStart: () => ipcRenderer.invoke('autopilot:start'),
+  autopilotStop: () => ipcRenderer.invoke('autopilot:stop'),
   // Session Replay
   replayStatus: () => ipcRenderer.invoke('replay:status'),
   replayStart: (label?: string) => ipcRenderer.invoke('replay:start', label),

@@ -10,6 +10,7 @@ import type {
 import { GithubPollStatusBadge } from './SourcesModal'
 import { usePolling } from '../hooks/usePolling'
 import { useToast } from './Toast'
+import { PodLogDrawer } from './PodLogDrawer'
 
 // DisplayCard is a union of the two card types. Both satisfy all fields that
 // cardLane() and IssueCard read, so no cast is required when merging them.
@@ -100,6 +101,11 @@ const TIMEOUT_MULTIPLIERS = [1, 2, 5]
 
 function DispatchContent({ onClose, onNavigate }: { onClose?: () => void; onNavigate?: (panel: string) => void }) {
   const { toast } = useToast()
+
+  // ── Live log drawer state ──
+  // Stores the pod whose logs are currently being viewed. Drawer renders at
+  // modal scope so it can overlay the entire dispatch board.
+  const [logDrawerPod, setLogDrawerPod] = useState<{ id: string; name: string; isLive: boolean } | null>(null)
 
   // ── Pod workflows ──
   const { data: podWorkflows } = usePolling<PodWorkflow[]>(
@@ -199,6 +205,14 @@ function DispatchContent({ onClose, onNavigate }: { onClose?: () => void; onNavi
     try { await window.api.overridePod(wfId, phase, override); toast(`Override set for ${phase}`, 'success') }
     catch { toast('Failed to set override', 'error') }
   }, [toast])
+
+  // Open the live log drawer for a specific pod. Computed `isLive` here so the
+  // drawer's badge stays accurate even if the pod transitions while open —
+  // the drawer also re-checks via parent re-render when podWorkflows refreshes.
+  const handleViewPodLogs = useCallback((pod: PodWorkflow) => {
+    const isLive = !['complete', 'failed'].includes(pod.status)
+    setLogDrawerPod({ id: pod.id, name: pod.name || pod.id, isLive })
+  }, [])
 
   // Merge GitHub + Linear cards into a single DisplayCard array without casting.
   // Both types share every field that cardLane() and IssueCard consume.
@@ -388,6 +402,7 @@ function DispatchContent({ onClose, onNavigate }: { onClose?: () => void; onNavi
                         onPodResume={handlePodResume}
                         onPodCancel={handlePodCancel}
                         onPodOverride={handlePodOverride}
+                        onViewLogs={handleViewPodLogs}
                       />
                     ))}
                   </div>
@@ -430,6 +445,7 @@ function DispatchContent({ onClose, onNavigate }: { onClose?: () => void; onNavi
                   onPodResume={handlePodResume}
                   onPodCancel={handlePodCancel}
                   onPodOverride={handlePodOverride}
+                  onViewLogs={handleViewPodLogs}
                 />
               ))}
             </div>
@@ -437,6 +453,24 @@ function DispatchContent({ onClose, onNavigate }: { onClose?: () => void; onNavi
         )}
 
       </div>
+
+      {/* Live log drawer — overlays the dispatch board */}
+      {logDrawerPod && (
+        <PodLogDrawer
+          podId={logDrawerPod.id}
+          podName={logDrawerPod.name}
+          isLive={
+            // Re-derive isLive from the latest pod state so the badge flips to
+            // "Ended" when the pod transitions while the drawer is open.
+            (podWorkflows ?? []).find(p => p.id === logDrawerPod.id)
+              ? !['complete', 'failed'].includes(
+                  (podWorkflows ?? []).find(p => p.id === logDrawerPod.id)!.status,
+                )
+              : logDrawerPod.isLive
+          }
+          onClose={() => setLogDrawerPod(null)}
+        />
+      )}
     </div>
   )
 }
@@ -444,7 +478,7 @@ function DispatchContent({ onClose, onNavigate }: { onClose?: () => void; onNavi
 // ── IssueCard — GitHub issue enriched with pod workflow ──────────────────────
 
 function IssueCard({
-  card, pod, onRefresh, onPodPause, onPodResume, onPodCancel, onPodOverride,
+  card, pod, onRefresh, onPodPause, onPodResume, onPodCancel, onPodOverride, onViewLogs,
 }: {
   card: DisplayCard
   pod?: PodWorkflow
@@ -453,6 +487,7 @@ function IssueCard({
   onPodResume: (id: string) => void
   onPodCancel: (id: string) => void
   onPodOverride: (wfId: string, phase: string, override: { model?: string; timeoutMultiplier?: number }) => void
+  onViewLogs?: (pod: PodWorkflow) => void
 }) {
   const [expanded, setExpanded] = useState(false)
   const [overrideModel, setOverrideModel] = useState(MODEL_OPTIONS[0])
@@ -650,6 +685,17 @@ function IssueCard({
 
           {/* Controls */}
           <div className="flex gap-3 flex-wrap">
+            {onViewLogs && (
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); onViewLogs(pod) }}
+                className="text-[14px] px-4 py-2 rounded-lg bg-[var(--c-bg-elevated)] hover:bg-[var(--c-bg-hover)] border border-[var(--c-border)] text-[var(--c-text-secondary)] transition-colors flex items-center gap-2"
+                title="View live agent output"
+              >
+                <span className={`w-2 h-2 rounded-full ${podActive ? 'bg-emerald-400 animate-pulse' : 'bg-slate-400'}`} />
+                View Logs
+              </button>
+            )}
             {podActive && (
               <>
                 <button type="button" onClick={() => onPodPause(pod.id)}

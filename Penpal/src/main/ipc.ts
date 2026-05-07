@@ -45,11 +45,22 @@ import {
   saveProfile,
   deleteProfile,
   setDefaultProfile,
+  getPodLogs,
   type CreatePodOpts,
   type RuntimeProfile,
+  type PodLogLine,
 } from './pods'
 import { getActiveEntries, getFilesInFlight } from './flight-board'
 import { getSessionReplayRecorder } from './session-replay'
+import {
+  addScheduledTask,
+  removeScheduledTask,
+  toggleScheduledTask,
+  getAutopilotStatus,
+  startAutopilot,
+  stopAutopilot,
+  loadAutopilotConfig,
+} from './autopilot'
 
 function parsePodCreateOpts(opts: unknown): CreatePodOpts {
   const raw = opts && typeof opts === 'object' && !Array.isArray(opts) ? (opts as Record<string, unknown>) : {}
@@ -774,6 +785,69 @@ export function registerIpcHandlers() {
     return { merged: true }
   }))
 
+  // Fetch a PR's changed files + patches + meta (used by Results panel "View Diff")
+  ipcMain.handle('pod:get-pr-diff', wrapHandler(async (params: unknown) => {
+    if (!params || typeof params !== 'object') throw new Error('params object required')
+    const { owner, repo, prNumber } = params as { owner?: unknown; repo?: unknown; prNumber?: unknown }
+    if (typeof owner !== 'string' || !/^[a-zA-Z0-9_.-]+$/.test(owner)) throw new Error('invalid owner')
+    if (typeof repo !== 'string' || !/^[a-zA-Z0-9_.-]+$/.test(repo)) throw new Error('invalid repo')
+    const numStr = typeof prNumber === 'number' ? String(prNumber) : (typeof prNumber === 'string' ? prNumber : '')
+    if (!/^\d+$/.test(numStr)) throw new Error('invalid prNumber')
+
+    const token = process.env.GITHUB_PERSONAL_ACCESS_TOKEN
+    const headers: Record<string, string> = {
+      Accept: 'application/vnd.github.v3+json',
+      'User-Agent': 'Penpal',
+    }
+    if (token) headers.Authorization = `token ${token}`
+
+    // Fetch PR meta (title, state, merged) and files (patches) in parallel
+    const base = `https://api.github.com/repos/${owner}/${repo}/pulls/${numStr}`
+    const [metaRes, filesRes] = await Promise.all([
+      fetch(base, { headers, signal: AbortSignal.timeout(15_000) }),
+      fetch(`${base}/files?per_page=100`, { headers, signal: AbortSignal.timeout(15_000) }),
+    ])
+
+    if (!metaRes.ok) throw new Error(`GitHub API ${metaRes.status} (meta): ${metaRes.statusText}`)
+    if (!filesRes.ok) throw new Error(`GitHub API ${filesRes.status} (files): ${filesRes.statusText}`)
+
+    const meta = await metaRes.json() as {
+      title?: string
+      state?: string
+      merged?: boolean
+      additions?: number
+      deletions?: number
+      changed_files?: number
+      html_url?: string
+    }
+    const files = await filesRes.json() as Array<{
+      filename: string
+      status: string
+      additions: number
+      deletions: number
+      changes: number
+      patch?: string
+    }>
+
+    return {
+      title: meta.title || '',
+      state: meta.merged ? 'merged' : (meta.state || 'open'),
+      merged: !!meta.merged,
+      htmlUrl: meta.html_url || '',
+      additions: meta.additions ?? files.reduce((s, f) => s + (f.additions || 0), 0),
+      deletions: meta.deletions ?? files.reduce((s, f) => s + (f.deletions || 0), 0),
+      changedFiles: meta.changed_files ?? files.length,
+      files: files.map(f => ({
+        filename: f.filename,
+        status: f.status,
+        additions: f.additions,
+        deletions: f.deletions,
+        changes: f.changes,
+        patch: f.patch || '',
+      })),
+    }
+  }))
+
   ipcMain.handle('pod:override', wrapHandler((workflowId: unknown, phase: unknown, override: unknown) => {
     if (typeof workflowId !== 'string') throw new Error('workflowId must be a string')
     if (typeof phase !== 'string' || !['plan', 'execute', 'validate'].includes(phase)) throw new Error('invalid phase')
@@ -1155,6 +1229,53 @@ export function registerIpcHandlers() {
       return { ok }
     }))
   }
+
+  // ── Autopilot (scheduled recurring tasks) ──────────────────────────────
+  ipcMain.handle('autopilot:status', wrapHandler(() => getAutopilotStatus()))
+
+  ipcMain.handle('autopilot:list', wrapHandler(() => {
+    const config = loadAutopilotConfig()
+    return { enabled: config.enabled, schedules: config.schedules }
+  }))
+
+  ipcMain.handle('autopilot:add', wrapHandler((opts: unknown) => {
+    const o = (opts && typeof opts === 'object' && !Array.isArray(opts))
+      ? opts as Record<string, unknown>
+      : {}
+    if (typeof o.title !== 'string' || !o.title.trim()) throw new Error('title must be a non-empty string')
+    if (typeof o.description !== 'string') throw new Error('description must be a string')
+    if (typeof o.project !== 'string' || !o.project.trim()) throw new Error('project must be a non-empty string')
+    if (typeof o.cronExpression !== 'string' || !o.cronExpression.trim()) {
+      throw new Error('cronExpression must be a non-empty string (daily, hourly, weekly, or "M H * * *")')
+    }
+    return addScheduledTask({
+      title: o.title,
+      description: o.description,
+      project: o.project,
+      cronExpression: o.cronExpression,
+    })
+  }))
+
+  ipcMain.handle('autopilot:remove', wrapHandler((taskId: unknown) => {
+    if (typeof taskId !== 'string') throw new Error('taskId must be a string')
+    return { removed: removeScheduledTask(taskId) }
+  }))
+
+  ipcMain.handle('autopilot:toggle', wrapHandler((taskId: unknown, enabled: unknown) => {
+    if (typeof taskId !== 'string') throw new Error('taskId must be a string')
+    if (typeof enabled !== 'boolean') throw new Error('enabled must be a boolean')
+    return { toggled: toggleScheduledTask(taskId, enabled) }
+  }))
+
+  ipcMain.handle('autopilot:start', wrapHandler(() => {
+    startAutopilot()
+    return getAutopilotStatus()
+  }))
+
+  ipcMain.handle('autopilot:stop', wrapHandler(() => {
+    stopAutopilot()
+    return getAutopilotStatus()
+  }))
 }
 
 export function registerPreferenceIpc(store: PreferenceStore) {
@@ -1246,4 +1367,89 @@ export function registerPreferenceIpc(store: PreferenceStore) {
       win.webContents.send('pod:stage-changed', payload)
     }
   })
+
+  // ── Pod Log Streaming ────────────────────────────────────────────────────
+  // Subscribers map: podId → set of webContents.id values for windows that
+  // want live log updates. Also store '*' for "all pods" subscriptions.
+  const podLogSubscribers = new Map<string, Set<number>>()
+
+  function addLogSubscriber(podId: string, webContentsId: number): void {
+    let set = podLogSubscribers.get(podId)
+    if (!set) {
+      set = new Set()
+      podLogSubscribers.set(podId, set)
+    }
+    set.add(webContentsId)
+  }
+
+  function removeLogSubscriber(podId: string, webContentsId: number): void {
+    const set = podLogSubscribers.get(podId)
+    if (!set) return
+    set.delete(webContentsId)
+    if (set.size === 0) podLogSubscribers.delete(podId)
+  }
+
+  function removeAllSubscriptionsFor(webContentsId: number): void {
+    for (const [podId, set] of podLogSubscribers) {
+      set.delete(webContentsId)
+      if (set.size === 0) podLogSubscribers.delete(podId)
+    }
+  }
+
+  // Fan out log events to subscribed windows.
+  podEvents.on('log', (entry: PodLogLine) => {
+    const subs = podLogSubscribers.get(entry.podId)
+    if (!subs || subs.size === 0) return
+    for (const win of BrowserWindow.getAllWindows()) {
+      if (win.isDestroyed()) continue
+      if (!subs.has(win.webContents.id)) continue
+      try { win.webContents.send('pod:log', entry) } catch { /* window gone */ }
+    }
+  })
+
+  // Clean up subscriptions when a window goes away.
+  for (const win of BrowserWindow.getAllWindows()) {
+    win.webContents.once('destroyed', () => removeAllSubscriptionsFor(win.webContents.id))
+  }
+
+  // Track webContents that have already had a destroy listener attached so we
+  // don't accumulate duplicates as the renderer subscribes to multiple pods.
+  const trackedWebContents = new Set<number>()
+  function trackWebContents(wc: Electron.WebContents): void {
+    if (trackedWebContents.has(wc.id)) return
+    trackedWebContents.add(wc.id)
+    wc.once('destroyed', () => {
+      removeAllSubscriptionsFor(wc.id)
+      trackedWebContents.delete(wc.id)
+    })
+  }
+
+  ipcMain.handle('pod:subscribe-logs', async (event: Electron.IpcMainInvokeEvent, podId: unknown) => {
+    try {
+      if (typeof podId !== 'string' || !podId) throw new Error('podId must be a non-empty string')
+      const wc = event.sender
+      addLogSubscriber(podId, wc.id)
+      trackWebContents(wc)
+      // Return the buffered backlog so the renderer can replay before live events arrive.
+      return { backlog: getPodLogs(podId) }
+    } catch (err) {
+      return { error: (err as Error).message }
+    }
+  })
+
+  ipcMain.handle('pod:unsubscribe-logs', async (event: Electron.IpcMainInvokeEvent, podId: unknown) => {
+    try {
+      if (typeof podId !== 'string' || !podId) throw new Error('podId must be a non-empty string')
+      removeLogSubscriber(podId, event.sender.id)
+      return { ok: true }
+    } catch (err) {
+      return { error: (err as Error).message }
+    }
+  })
+
+  ipcMain.handle('pod:get-logs', wrapHandler(async (...args: unknown[]) => {
+    const podId = args[0]
+    if (typeof podId !== 'string' || !podId) throw new Error('podId must be a non-empty string')
+    return { backlog: getPodLogs(podId) }
+  }))
 }

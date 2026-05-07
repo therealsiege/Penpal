@@ -180,6 +180,8 @@ describe('workspace-isolation', () => {
       // Reset mock to track cleanup calls
       cpMocks.execFileSync.mockClear()
       cpMocks.execFileSync.mockImplementation(() => Buffer.from(''))
+      // Worktree dir exists on disk so cleanup invokes git
+      fsMocks.existsSync.mockReturnValue(true)
 
       const result = cleanupWorkspace('task-clean')
 
@@ -223,6 +225,8 @@ describe('workspace-isolation', () => {
       cpMocks.execFileSync.mockImplementation(() => {
         throw new Error('worktree remove failed')
       })
+      // Worktree dir is present on disk so we still try git first
+      fsMocks.existsSync.mockReturnValue(true)
 
       const result = cleanupWorkspace('task-rm')
       expect(result).toBe(true)
@@ -232,6 +236,23 @@ describe('workspace-isolation', () => {
         expect.stringContaining('workspaces/task-rm'),
         { recursive: true, force: true },
       )
+    })
+
+    it('skips git worktree remove when the directory is already gone', () => {
+      cpMocks.execFileSync.mockImplementation(() => Buffer.from(''))
+
+      createIsolatedWorkspace('/projects/my-app', 'task-gone')
+      cpMocks.execFileSync.mockClear()
+      // Directory was nuked out-of-band — existsSync returns false
+      fsMocks.existsSync.mockReturnValue(false)
+
+      const result = cleanupWorkspace('task-gone')
+
+      expect(result).toBe(true)
+      expect(getWorkspace('task-gone')).toBeUndefined()
+      // No git command should have been issued for a missing worktree
+      expect(cpMocks.execFileSync).not.toHaveBeenCalled()
+      expect(fsMocks.rmSync).not.toHaveBeenCalled()
     })
   })
 })

@@ -11,6 +11,10 @@ const fsMocks = vi.hoisted(() => ({
   readFileSync: vi.fn(() => '{}'),
   writeFileSync: vi.fn(),
   mkdirSync: vi.fn(),
+  // atomic-store uses temp-file + rename for durability — stub both so the
+  // mocked fs surface stays in sync with the implementation.
+  renameSync: vi.fn(),
+  unlinkSync: vi.fn(),
 }))
 
 const enqueueMock = vi.hoisted(() => vi.fn(() => ({ id: 'task-mock-1' })))
@@ -50,6 +54,9 @@ import {
   getAutopilotStatus,
   _resetForTest,
   calculateNextRun,
+  isTaskDue,
+  intervalMs,
+  type ScheduledTask,
 } from '../autopilot'
 
 // ── Setup / Teardown ─────────────────────────────────────────────────────────
@@ -446,5 +453,173 @@ describe('calculateNextRun', () => {
     const from = new Date('2025-06-15T10:00:00.000Z')
     const next = calculateNextRun('0 9 * * *', from)
     expect(next).toBe('2025-06-16T09:00:00.000Z')
+  })
+
+  it('cron-like "30 9 * * *" honours minute offset', () => {
+    const from = new Date('2025-06-15T07:00:00.000Z')
+    const next = calculateNextRun('30 9 * * *', from)
+    expect(next).toBe('2025-06-15T09:30:00.000Z')
+  })
+})
+
+// ── isTaskDue (the recurring-task fix) ───────────────────────────────────────
+
+describe('isTaskDue', () => {
+  function makeTask(overrides: Partial<ScheduledTask> = {}): ScheduledTask {
+    return {
+      id: 'sched-test',
+      title: 'Test',
+      description: 'Test task',
+      project: 'proj',
+      cronExpression: 'daily',
+      enabled: true,
+      lastRunAt: null,
+      nextRunAt: null,
+      createdAt: '2025-06-14T00:00:00.000Z',
+      ...overrides,
+    }
+  }
+
+  it('reports a daily task with lastRunAt set to yesterday as due', () => {
+    const now = new Date('2025-06-15T10:00:00.000Z')
+    const yesterday = new Date('2025-06-14T10:00:00.000Z').toISOString()
+    const task = makeTask({
+      cronExpression: 'daily',
+      lastRunAt: yesterday,
+      nextRunAt: '2025-06-15T00:00:00.000Z', // already past `now`
+    })
+    expect(isTaskDue(task, now)).toBe(true)
+  })
+
+  it('reports a daily task as due even if nextRunAt is missing (recovery path)', () => {
+    // Simulates a config that lost its nextRunAt — must not silently skip forever.
+    const now = new Date('2025-06-15T10:00:00.000Z')
+    const yesterday = new Date('2025-06-14T10:00:00.000Z').toISOString()
+    const task = makeTask({
+      cronExpression: 'daily',
+      lastRunAt: yesterday,
+      nextRunAt: null,
+    })
+    expect(isTaskDue(task, now)).toBe(true)
+  })
+
+  it('reports an hourly task with lastRunAt = 1h ago as due', () => {
+    const now = new Date('2025-06-15T10:00:00.000Z')
+    const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000).toISOString()
+    const task = makeTask({
+      cronExpression: 'hourly',
+      lastRunAt: oneHourAgo,
+      nextRunAt: '2025-06-15T10:00:00.000Z',
+    })
+    expect(isTaskDue(task, now)).toBe(true)
+  })
+
+  it('reports a freshly-run task as NOT due', () => {
+    const now = new Date('2025-06-15T10:00:00.000Z')
+    const justNow = new Date(now.getTime() - 5_000).toISOString() // 5s ago
+    const task = makeTask({
+      cronExpression: 'hourly',
+      lastRunAt: justNow,
+      nextRunAt: '2025-06-15T11:00:00.000Z', // future
+    })
+    expect(isTaskDue(task, now)).toBe(false)
+  })
+
+  it('skips disabled tasks even when overdue', () => {
+    const now = new Date('2025-06-15T10:00:00.000Z')
+    const task = makeTask({
+      enabled: false,
+      cronExpression: 'daily',
+      lastRunAt: '2020-01-01T00:00:00.000Z',
+      nextRunAt: '2020-01-02T00:00:00.000Z',
+    })
+    expect(isTaskDue(task, now)).toBe(false)
+  })
+
+  it('treats a never-run task with no nextRunAt as immediately due', () => {
+    const now = new Date('2025-06-15T10:00:00.000Z')
+    const task = makeTask({ lastRunAt: null, nextRunAt: null })
+    expect(isTaskDue(task, now)).toBe(true)
+  })
+})
+
+// ── intervalMs ───────────────────────────────────────────────────────────────
+
+describe('intervalMs', () => {
+  it('maps hourly/daily/weekly to ms', () => {
+    expect(intervalMs('hourly')).toBe(60 * 60 * 1000)
+    expect(intervalMs('daily')).toBe(24 * 60 * 60 * 1000)
+    expect(intervalMs('weekly')).toBe(7 * 24 * 60 * 60 * 1000)
+  })
+
+  it('maps "M H * * *" cron to daily-equivalent', () => {
+    expect(intervalMs('0 9 * * *')).toBe(24 * 60 * 60 * 1000)
+    expect(intervalMs('30 14 * * *')).toBe(24 * 60 * 60 * 1000)
+  })
+
+  it('returns null for unknown expressions', () => {
+    expect(intervalMs('garbage')).toBeNull()
+    expect(intervalMs('* * * * *')).toBeNull() // hour=NaN ('*')
+  })
+})
+
+// ── checkAndEnqueue: recovery from missing nextRunAt ─────────────────────────
+
+describe('checkAndEnqueue (recovery)', () => {
+  it('enqueues a task whose nextRunAt is missing but lastRunAt is stale', () => {
+    vi.setSystemTime(new Date('2025-06-15T10:00:00.000Z'))
+
+    addScheduledTask({
+      title: 'Recovery task',
+      description: 'Was missing nextRunAt',
+      project: 'proj',
+      cronExpression: 'daily',
+    })
+
+    // Corrupt the schedule: drop nextRunAt, set stale lastRunAt
+    const config = loadAutopilotConfig()
+    config.enabled = true
+    config.schedules[0].nextRunAt = null
+    config.schedules[0].lastRunAt = '2025-06-14T00:00:00.000Z'
+    saveAutopilotConfig(config)
+
+    enqueueMock.mockClear()
+
+    const count = checkAndEnqueue()
+
+    expect(count).toBe(1)
+    expect(enqueueMock).toHaveBeenCalledTimes(1)
+
+    // After enqueue, schedule should have a fresh nextRunAt
+    const reloaded = loadAutopilotConfig()
+    expect(reloaded.schedules[0].nextRunAt).toBeTruthy()
+    expect(reloaded.schedules[0].lastRunAt).toBe('2025-06-15T10:00:00.000Z')
+  })
+
+  it('does not advance lastRunAt when enqueueTask throws', () => {
+    vi.setSystemTime(new Date('2025-06-15T10:00:00.000Z'))
+
+    addScheduledTask({
+      title: 'Failing enqueue',
+      description: 'Simulate downstream failure',
+      project: 'proj',
+      cronExpression: 'daily',
+    })
+
+    const config = loadAutopilotConfig()
+    config.enabled = true
+    config.schedules[0].nextRunAt = '2025-06-15T09:00:00.000Z'
+    config.schedules[0].lastRunAt = null
+    saveAutopilotConfig(config)
+
+    enqueueMock.mockImplementationOnce(() => { throw new Error('queue full') })
+
+    const count = checkAndEnqueue()
+
+    expect(count).toBe(0)
+    // Schedule untouched so it retries on the next tick
+    const reloaded = loadAutopilotConfig()
+    expect(reloaded.schedules[0].lastRunAt).toBeNull()
+    expect(reloaded.schedules[0].nextRunAt).toBe('2025-06-15T09:00:00.000Z')
   })
 })

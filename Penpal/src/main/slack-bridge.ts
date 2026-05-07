@@ -341,15 +341,30 @@ function findTargetSession(
 // Track last known interaction type per session to detect transitions
 const lastInteractionType = new Map<string, string>()
 
+/** Returns the set of session IDs currently owned by dispatch pods (any status). */
+function getPodSessionIds(): Set<string> {
+  const ids = new Set<string>()
+  for (const pod of listPods()) {
+    if (pod.solver.sessionId) ids.add(pod.solver.sessionId)
+    if (pod.reviewer.sessionId) ids.add(pod.reviewer.sessionId)
+    if (pod.executor.sessionId) ids.add(pod.executor.sessionId)
+  }
+  return ids
+}
+
 async function pollAndSync(): Promise<void> {
   if (!slackApp) return
 
-  let sessions: ClaudeSession[]
+  let allSessions: ClaudeSession[]
   try {
-    sessions = await getClaudeSessions()
+    allSessions = await getClaudeSessions()
   } catch {
     return
   }
+
+  // Only monitor sessions that belong to dispatch pods — not the user's own Claude sessions
+  const podSessionIds = getPodSessionIds()
+  const sessions = allSessions.filter(s => podSessionIds.has(s.sessionId))
 
   const activeCwds = new Set(sessions.map(s => s.cwd))
 
@@ -594,7 +609,8 @@ export async function startSlackBridge(): Promise<boolean> {
 
       // ── !agents — agent status summary ──
       if (text === '!agents') {
-        const sessions = await getClaudeSessions()
+        const podIds = getPodSessionIds()
+        const sessions = (await getClaudeSessions()).filter(s => podIds.has(s.sessionId))
         const configs = getAgentConfigs()
         const agentMap = loadAgentSessionMap()
         const lines: string[] = [`:busts_in_silhouette: *${configs.length} agents:*`]
@@ -706,7 +722,8 @@ export async function startSlackBridge(): Promise<boolean> {
 
       if (!targetCwd) return
 
-      const sessions = await getClaudeSessions()
+      const podIds = getPodSessionIds()
+      const sessions = (await getClaudeSessions()).filter(s => podIds.has(s.sessionId))
       const target = findTargetSession(text, targetCwd, sessions)
 
       if (!target) {

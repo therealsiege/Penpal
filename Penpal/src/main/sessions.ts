@@ -1518,9 +1518,19 @@ export interface RunHeadlessOptions {
   phase?: HeadlessPhase
   /** Override the agent's default model (e.g. 'opus', 'sonnet', 'haiku'). */
   modelOverride?: string
+  /**
+   * Optional live-stream callback. Invoked with each chunk read from the spawned
+   * agent's stdout/stderr — used by the pod log streamer to populate per-pod
+   * ring buffers without waiting for the process to exit.
+   */
+  onLogChunk?: (stream: 'stdout' | 'stderr', chunk: string) => void
 }
 
-function spawnHeadlessCli(invocation: HeadlessInvocation, timeoutMs: number): Promise<HeadlessResult> {
+function spawnHeadlessCli(
+  invocation: HeadlessInvocation,
+  timeoutMs: number,
+  onLogChunk?: (stream: 'stdout' | 'stderr', chunk: string) => void,
+): Promise<HeadlessResult> {
   const start = Date.now()
 
   return new Promise<HeadlessResult>((resolve) => {
@@ -1567,8 +1577,20 @@ function spawnHeadlessCli(invocation: HeadlessInvocation, timeoutMs: number): Pr
       })
     }, timeoutMs)
 
-    child.stdout.on('data', (chunk: string | Buffer) => { stdout += typeof chunk === 'string' ? chunk : chunk.toString() })
-    child.stderr.on('data', (chunk: string | Buffer) => { stderr += typeof chunk === 'string' ? chunk : chunk.toString() })
+    child.stdout.on('data', (chunk: string | Buffer) => {
+      const text = typeof chunk === 'string' ? chunk : chunk.toString()
+      stdout += text
+      if (onLogChunk) {
+        try { onLogChunk('stdout', text) } catch { /* swallow listener errors */ }
+      }
+    })
+    child.stderr.on('data', (chunk: string | Buffer) => {
+      const text = typeof chunk === 'string' ? chunk : chunk.toString()
+      stderr += text
+      if (onLogChunk) {
+        try { onLogChunk('stderr', text) } catch { /* swallow listener errors */ }
+      }
+    })
 
     child.on('error', (err) => {
       clearTimeout(timer)
@@ -1598,7 +1620,13 @@ async function runSingleHeadlessBackend(
   agentId: string,
   cwd: string,
   prompt: string,
-  opts: { permissionMode?: string; timeoutMs: number; modelOverride?: string; ollamaModel?: string },
+  opts: {
+    permissionMode?: string
+    timeoutMs: number
+    modelOverride?: string
+    ollamaModel?: string
+    onLogChunk?: (stream: 'stdout' | 'stderr', chunk: string) => void
+  },
 ): Promise<HeadlessResult> {
   if (backend === 'ollama') {
     const r = await runOllama(prompt, { timeoutMs: opts.timeoutMs, model: opts.ollamaModel })
@@ -1622,7 +1650,7 @@ async function runSingleHeadlessBackend(
     return { success: false, output: '', error: (err as Error).message, durationMs: 0 }
   }
 
-  return spawnHeadlessCli(invocation, opts.timeoutMs)
+  return spawnHeadlessCli(invocation, opts.timeoutMs, opts.onLogChunk)
 }
 
 export async function runAgentHeadless(
@@ -1641,6 +1669,7 @@ export async function runAgentHeadless(
       permissionMode: opts.permissionMode,
       timeoutMs,
       modelOverride: opts.modelOverride,
+      onLogChunk: opts.onLogChunk,
     })
   }
 
@@ -1662,6 +1691,7 @@ export async function runAgentHeadless(
       permissionMode: opts.permissionMode,
       timeoutMs,
       modelOverride: opts.modelOverride,
+      onLogChunk: opts.onLogChunk,
     })
 
     if (last.success) return last

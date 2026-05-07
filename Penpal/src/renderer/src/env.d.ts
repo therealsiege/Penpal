@@ -73,6 +73,23 @@ declare global {
       resumePod: (workflowId: string) => Promise<boolean>
       cancelPod: (workflowId: string) => Promise<boolean>
       mergePr: (prNumber: string, repo: string) => Promise<unknown>
+      getPrDiff: (owner: string, repo: string, prNumber: string | number) => Promise<{
+        title: string
+        state: string
+        merged: boolean
+        htmlUrl: string
+        additions: number
+        deletions: number
+        changedFiles: number
+        files: Array<{
+          filename: string
+          status: string
+          additions: number
+          deletions: number
+          changes: number
+          patch: string
+        }>
+      }>
       retryIssue: (repo: string, issueNumber: number) => Promise<unknown>
       getPodPresets: () => Promise<import('./types').PodPreset[]>
       podProfiles: () => Promise<import('./types').ProfilesData>
@@ -82,6 +99,30 @@ declare global {
       overridePod: (workflowId: string, phase: string, override: { model?: string; timeoutMultiplier?: number }) => Promise<unknown>
       // Pod Stage Change (spectator mode)
       onPodStageChanged: (callback: (data: { podId: string; status: string; solverId: string; reviewerId: string; executorId: string; iteration: number }) => void) => () => void
+      // Pod Log Streaming — live stdout/stderr from running pods
+      subscribePodLogs: (
+        podId: string,
+        callback: (entry: {
+          podId: string
+          agentRole: 'solver' | 'reviewer' | 'executor' | 'system'
+          stream: 'stdout' | 'stderr' | 'system'
+          line: string
+          timestamp: number
+          seq: number
+        }) => void,
+      ) => () => void
+      unsubscribePodLogs: (podId: string) => Promise<{ ok?: boolean; error?: string }>
+      getPodLogs: (podId: string) => Promise<{
+        backlog: Array<{
+          podId: string
+          agentRole: 'solver' | 'reviewer' | 'executor' | 'system'
+          stream: 'stdout' | 'stderr' | 'system'
+          line: string
+          timestamp: number
+          seq: number
+        }>
+        error?: string
+      }>
       // Session Health
       getITermStatus: () => Promise<{ healthy: boolean; consecutiveTimeouts: number; backoffUntil: number }>
       // Cursor Agent APIs

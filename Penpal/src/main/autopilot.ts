@@ -9,6 +9,7 @@
 
 import fs from 'fs'
 import path from 'path'
+import { atomicWrite } from './atomic-store'
 import { getDataDir } from './data-paths'
 import { enqueueTask } from './dispatch-queue'
 
@@ -61,6 +62,25 @@ function generateId(): string {
 }
 
 /**
+ * Approximate interval (ms) for a recurring expression. Used to decide when a
+ * task is overdue relative to its `lastRunAt`. Returns null for unknown
+ * expressions (callers should fall back to `nextRunAt` only).
+ */
+export function intervalMs(cronExpression: string): number | null {
+  const expr = cronExpression.trim().toLowerCase()
+  if (expr === 'hourly') return 60 * 60 * 1000
+  if (expr === 'daily') return 24 * 60 * 60 * 1000
+  if (expr === 'weekly') return 7 * 24 * 60 * 60 * 1000
+  // 'M H * * *' — any value of H counts as daily for due-detection
+  const parts = expr.split(/\s+/)
+  if (parts.length === 5) {
+    const hour = parseInt(parts[1], 10)
+    if (!isNaN(hour) && hour >= 0 && hour <= 23) return 24 * 60 * 60 * 1000
+  }
+  return null
+}
+
+/**
  * Calculate the next run time for a given cron expression relative to `from`.
  *
  * Supported expressions:
@@ -96,18 +116,24 @@ export function calculateNextRun(cronExpression: string, from: Date): string {
     return next.toISOString()
   }
 
-  // Cron-like: parse '0 H * * *' → daily at hour H (UTC)
+  // Cron-like: parse 'M H * * *' → daily at hour H (UTC), minute M
   const parts = expr.split(/\s+/)
   if (parts.length === 5) {
+    const minute = parseInt(parts[0], 10)
     const hour = parseInt(parts[1], 10)
-    if (!isNaN(hour) && hour >= 0 && hour <= 23) {
+    if (
+      !isNaN(hour) && hour >= 0 && hour <= 23 &&
+      !isNaN(minute) && minute >= 0 && minute <= 59
+    ) {
       const next = new Date(from)
-      next.setUTCMinutes(0, 0, 0)
-      if (from.getUTCHours() >= hour) {
-        // Already past this hour today → next day
+      const fromMinute = from.getUTCMinutes()
+      const fromHour = from.getUTCHours()
+      // Already past today's slot? roll to tomorrow.
+      const pastToday = fromHour > hour || (fromHour === hour && fromMinute >= minute)
+      if (pastToday) {
         next.setUTCDate(next.getUTCDate() + 1)
       }
-      next.setUTCHours(hour, 0, 0, 0)
+      next.setUTCHours(hour, minute, 0, 0)
       return next.toISOString()
     }
   }
@@ -117,6 +143,31 @@ export function calculateNextRun(cronExpression: string, from: Date): string {
   fallback.setUTCHours(0, 0, 0, 0)
   fallback.setUTCDate(fallback.getUTCDate() + 1)
   return fallback.toISOString()
+}
+
+/**
+ * Decide whether a scheduled task is due to run, given the current time.
+ *
+ * A task is due when:
+ *   - it has a `nextRunAt` and `now >= nextRunAt`, OR
+ *   - it has no `nextRunAt` but its `lastRunAt` is older than one interval
+ *     (recovers from missing/corrupt nextRunAt values), OR
+ *   - it has neither — never run, treat as immediately due so the recurrence
+ *     starts on the next tick instead of being silently skipped forever.
+ */
+export function isTaskDue(task: ScheduledTask, now: Date): boolean {
+  if (!task.enabled) return false
+
+  if (task.nextRunAt) {
+    return now.getTime() >= new Date(task.nextRunAt).getTime()
+  }
+
+  // No nextRunAt — recover. Use lastRunAt + interval, or fire immediately.
+  const interval = intervalMs(task.cronExpression)
+  if (task.lastRunAt && interval !== null) {
+    return now.getTime() - new Date(task.lastRunAt).getTime() >= interval
+  }
+  return true
 }
 
 // ── Config Persistence ──────────────────────────────────────────────────────
@@ -142,8 +193,7 @@ export function loadAutopilotConfig(): AutopilotConfig {
 export function saveAutopilotConfig(config: AutopilotConfig): void {
   _config = config
   try {
-    const fp = configPath()
-    fs.writeFileSync(fp, JSON.stringify(config, null, 2), 'utf-8')
+    atomicWrite(configPath(), config)
   } catch (err) {
     console.error('[autopilot] Failed to save config:', err)
   }
@@ -211,26 +261,27 @@ export function checkAndEnqueue(): number {
   let enqueued = 0
 
   for (const schedule of config.schedules) {
-    if (!schedule.enabled) continue
-    if (!schedule.nextRunAt) continue
+    if (!isTaskDue(schedule, now)) continue
 
-    const nextRun = new Date(schedule.nextRunAt)
-    if (now >= nextRun) {
-      // Enqueue the task
+    try {
       enqueueTask({
         title: schedule.title,
         description: schedule.description,
         project: schedule.project,
         source: 'api',
       })
-
-      // Update schedule times
-      schedule.lastRunAt = now.toISOString()
-      schedule.nextRunAt = calculateNextRun(schedule.cronExpression, now)
       enqueued++
-
-      console.log(`[autopilot] Enqueued "${schedule.title}" — next run: ${schedule.nextRunAt}`)
+    } catch (err) {
+      console.error(`[autopilot] enqueueTask failed for "${schedule.title}":`, err)
+      // Don't update schedule times — let it retry on the next tick.
+      continue
     }
+
+    // Update schedule times only after a successful enqueue.
+    schedule.lastRunAt = now.toISOString()
+    schedule.nextRunAt = calculateNextRun(schedule.cronExpression, now)
+
+    console.log(`[autopilot] Enqueued "${schedule.title}" — next run: ${schedule.nextRunAt}`)
   }
 
   if (enqueued > 0) {
@@ -249,7 +300,11 @@ export function startAutopilot(): void {
 
   if (_timer) clearInterval(_timer)
   _timer = setInterval(() => {
-    checkAndEnqueue()
+    try {
+      checkAndEnqueue()
+    } catch (err) {
+      console.error('[autopilot] tick failed:', err)
+    }
   }, config.checkInterval)
 
   console.log(`[autopilot] Started (check every ${config.checkInterval}ms)`)

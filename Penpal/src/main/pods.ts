@@ -428,6 +428,87 @@ const workflows = new Map<string, PodWorkflow>()
 const activeWorkflowPromises = new Map<string, Promise<void>>()
 
 export const podEvents = new EventEmitter()
+// Many subscribers (renderer windows + internal listeners) attach to log events;
+// raise the cap so Node doesn't warn during typical multi-pod runs.
+podEvents.setMaxListeners(50)
+
+// ── Pod log streaming ───────────────────────────────────────────────────────
+// Each pod keeps a ring buffer of the last MAX_LOG_LINES_PER_POD lines so the
+// renderer can replay recent output when the user opens the log drawer.
+export type PodAgentRole = 'solver' | 'reviewer' | 'executor' | 'system'
+export type PodLogStream = 'stdout' | 'stderr' | 'system'
+
+export interface PodLogLine {
+  podId: string
+  agentRole: PodAgentRole
+  stream: PodLogStream
+  line: string
+  timestamp: number
+  /** Monotonic sequence number per pod — lets the UI dedupe / order. */
+  seq: number
+}
+
+const MAX_LOG_LINES_PER_POD = 500
+const podLogBuffers = new Map<string, PodLogLine[]>()
+const podLogSeq = new Map<string, number>()
+
+/** Append a single log line to a pod's ring buffer and emit it. */
+export function recordPodLogLine(
+  podId: string,
+  agentRole: PodAgentRole,
+  stream: PodLogStream,
+  line: string,
+): void {
+  if (!line) return
+  const seq = (podLogSeq.get(podId) ?? 0) + 1
+  podLogSeq.set(podId, seq)
+  const entry: PodLogLine = {
+    podId,
+    agentRole,
+    stream,
+    line,
+    timestamp: Date.now(),
+    seq,
+  }
+  let buf = podLogBuffers.get(podId)
+  if (!buf) {
+    buf = []
+    podLogBuffers.set(podId, buf)
+  }
+  buf.push(entry)
+  if (buf.length > MAX_LOG_LINES_PER_POD) {
+    buf.splice(0, buf.length - MAX_LOG_LINES_PER_POD)
+  }
+  podEvents.emit('log', entry)
+}
+
+/** Split a raw chunk on newlines and record each non-empty line. */
+function recordPodLogChunk(
+  podId: string,
+  agentRole: PodAgentRole,
+  stream: PodLogStream,
+  chunk: string,
+): void {
+  if (!chunk) return
+  // Preserve trailing partial line by splitting and dropping empty trailing
+  // entries; a fresh newline at the end is fine to drop.
+  const parts = chunk.split(/\r?\n/)
+  for (const part of parts) {
+    if (part.length === 0) continue
+    recordPodLogLine(podId, agentRole, stream, part)
+  }
+}
+
+/** Return the buffered log lines for a pod (oldest first). */
+export function getPodLogs(podId: string): PodLogLine[] {
+  return podLogBuffers.get(podId)?.slice() ?? []
+}
+
+/** Drop a pod's log buffer (called when a pod is removed). */
+export function clearPodLogs(podId: string): void {
+  podLogBuffers.delete(podId)
+  podLogSeq.delete(podId)
+}
 
 let _podsLoaded = false
 
@@ -452,11 +533,15 @@ function isPodFailed(wf: PodWorkflow): boolean {
 }
 
 function setStatus(wf: PodWorkflow, status: PodStatus): void {
+  const prev = wf.status
   wf.status = status
   wf.updatedAt = Date.now()
   wf.stageHistory.push({ stage: status, enteredAt: Date.now() })
   if (status === 'complete' || status === 'failed') {
     finalizePodQuality(wf)
+  }
+  if (prev !== status) {
+    recordPodLogLine(wf.id, 'system', 'system', `→ status changed: ${prev} → ${status}`)
   }
   podEvents.emit('status-change', wf)
   savePods()
@@ -1359,10 +1444,12 @@ async function runSelfFixStage(wf: PodWorkflow): Promise<boolean> {
     setStatus(wf, 'self-fixing')
     wf.executor.status = 'active'
     console.log(`[pods] Executor self-fix ${wf.selfFixAttempts + 1}/${wf.maxSelfFixes} in ${wf.cwd}`)
+    recordPodLogLine(wf.id, 'system', 'system', `[self-fix ${wf.selfFixAttempts + 1}/${wf.maxSelfFixes}] executor=${wf.executor.agentId}`)
     const result = await runAgentHeadless(wf.executor.agentId, wf.cwd, prompt, {
       timeoutMs: getTimeout(wf, EXECUTE_TIMEOUT_MS, 'validate'),
       phase: 'executing',
       modelOverride: getModelOverride(wf, 'validate'),
+      onLogChunk: (stream, chunk) => recordPodLogChunk(wf.id, 'executor', stream, chunk),
     })
 
     wf.selfFixAttempts += 1
@@ -1422,11 +1509,13 @@ async function runSolveStage(wf: PodWorkflow, feedback?: string): Promise<boolea
     // ── Single candidate path (original behavior) ──
     const prompt = formatSolverMessage(wf, feedback, reviewerFeedback, flightBoardContext)
     console.log(`[pods] Running solver ${wf.solver.agentId} headless in ${wf.cwd}`)
+    recordPodLogLine(wf.id, 'system', 'system', `[solve i${wf.iteration}] solver=${wf.solver.agentId}`)
     const startMs = Date.now()
     const result = await runAgentHeadless(wf.solver.agentId, wf.cwd, prompt, {
       timeoutMs: getTimeout(wf, EXECUTE_TIMEOUT_MS, 'execute'),
       phase: 'executing',
       modelOverride: getModelOverride(wf, 'execute'),
+      onLogChunk: (stream, chunk) => recordPodLogChunk(wf.id, 'solver', stream, chunk),
     })
 
     if (!result.success) {
@@ -1492,6 +1581,7 @@ async function runSolveStage(wf: PodWorkflow, feedback?: string): Promise<boolea
 
   // ── Multi-candidate path (best-of-N) ──
   console.log(`[pods] Running ${candidateCount} solver candidates in parallel`)
+  recordPodLogLine(wf.id, 'system', 'system', `[solve i${wf.iteration}] running ${candidateCount} solver candidates in parallel`)
   const prompt = formatSolverMessage(wf, feedback, reviewerFeedback, flightBoardContext)
   const startMs = Date.now()
 
@@ -1500,6 +1590,7 @@ async function runSolveStage(wf: PodWorkflow, feedback?: string): Promise<boolea
       timeoutMs: getTimeout(wf, EXECUTE_TIMEOUT_MS, 'execute'),
       phase: 'executing',
       modelOverride: getModelOverride(wf, 'execute'),
+      onLogChunk: (stream, chunk) => recordPodLogChunk(wf.id, 'solver', stream, `[c${i + 1}] ${chunk}`),
     }).then(result => ({
       index: i + 1,
       result,
@@ -1544,6 +1635,7 @@ async function runSolveStage(wf: PodWorkflow, feedback?: string): Promise<boolea
   // ── Self-evaluation ──
   if (candidates.length > 1 && wf.phaseConfig?.selfEvaluation) {
     console.log(`[pods] Running self-evaluation on ${candidates.length} candidates`)
+    recordPodLogLine(wf.id, 'system', 'system', `[self-eval] picking among ${candidates.length} candidates`)
     const evalPrompt = formatSelfEvalMessage(wf.task, candidates)
 
     const evalResult = await runAgentHeadless(wf.solver.agentId, wf.cwd, evalPrompt, {
@@ -1551,6 +1643,7 @@ async function runSolveStage(wf: PodWorkflow, feedback?: string): Promise<boolea
       timeoutMs: getTimeout(wf, PLAN_TIMEOUT_MS, 'plan'),
       phase: 'planning',
       modelOverride: getModelOverride(wf, 'plan'),
+      onLogChunk: (stream, chunk) => recordPodLogChunk(wf.id, 'solver', stream, `[self-eval] ${chunk}`),
     })
 
     let selection: SelfEvalResult | null = null
@@ -1642,11 +1735,13 @@ async function runReviewStage(wf: PodWorkflow): Promise<boolean> {
 
   const prompt = formatReviewerMessage(wf)
   console.log(`[pods] Running reviewer ${wf.reviewer.agentId} headless (plan mode) in ${wf.cwd}`)
+  recordPodLogLine(wf.id, 'system', 'system', `[review i${wf.iteration}] reviewer=${wf.reviewer.agentId}`)
   const result = await runAgentHeadless(wf.reviewer.agentId, wf.cwd, prompt, {
     permissionMode: 'plan',
     timeoutMs: getTimeout(wf, PLAN_TIMEOUT_MS, 'plan'),
     phase: 'reviewing',
     modelOverride: getModelOverride(wf, 'plan'),
+    onLogChunk: (stream, chunk) => recordPodLogChunk(wf.id, 'reviewer', stream, chunk),
   })
 
   if (!result.success) {
@@ -1682,10 +1777,12 @@ async function runExecuteStage(wf: PodWorkflow): Promise<{ passed: boolean }> {
 
   const prompt = formatExecutorMessage(wf, wf.solver.output, wf.reviewer.output, wf.critique)
   console.log(`[pods] Running executor ${wf.executor.agentId} headless in ${wf.cwd}`)
+  recordPodLogLine(wf.id, 'system', 'system', `[execute i${wf.iteration}] executor=${wf.executor.agentId}`)
   const result = await runAgentHeadless(wf.executor.agentId, wf.cwd, prompt, {
     timeoutMs: getTimeout(wf, EXECUTE_TIMEOUT_MS, 'validate'),
     phase: 'executing',
     modelOverride: getModelOverride(wf, 'validate'),
+    onLogChunk: (stream, chunk) => recordPodLogChunk(wf.id, 'executor', stream, chunk),
   })
 
   if (!result.success) {
@@ -2276,6 +2373,8 @@ export function _resetForTest(): void {
   workflows.clear()
   activeWorkflowPromises.clear()
   podEvents.removeAllListeners()
+  podLogBuffers.clear()
+  podLogSeq.clear()
   workflowCounter = 0
   _podsLoaded = false
 }

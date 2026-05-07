@@ -18,8 +18,8 @@ const fsMocks = vi.hoisted(() => ({
   mkdirSync: vi.fn(),
 }))
 
-const cpMocks = vi.hoisted(() => ({
-  execFileSync: vi.fn(),
+const spawnProxyMocks = vi.hoisted(() => ({
+  proxyExecFile: vi.fn(async () => ({ stdout: '', stderr: '' })),
 }))
 
 const isolationMocks = vi.hoisted(() => ({
@@ -38,8 +38,8 @@ vi.mock('fs', () => ({
   ...fsMocks,
 }))
 
-vi.mock('child_process', () => ({
-  execFileSync: cpMocks.execFileSync,
+vi.mock('../spawn-proxy', () => ({
+  proxyExecFile: spawnProxyMocks.proxyExecFile,
 }))
 
 vi.mock('../data-paths', () => ({
@@ -119,7 +119,7 @@ describe('workspace-gc', () => {
   // ── Tier 1: Completed task cleanup ──────────────────────────────────────
 
   describe('Tier 1 — completed task cleanup', () => {
-    it('removes completed task workspace older than TTL', () => {
+    it('removes completed task workspace older than TTL', async () => {
       const ws = makeWorkspace({ taskId: 'task-old-done' })
       isolationMocks.listWorkspaces.mockReturnValue([ws])
       dispatchMocks.getTaskQueue.mockReturnValue([
@@ -127,26 +127,26 @@ describe('workspace-gc', () => {
       ])
       isolationMocks.cleanupWorkspace.mockReturnValue(true)
 
-      const result = runGC()
+      const result = await runGC()
 
       expect(result.completed).toBe(1)
       expect(isolationMocks.cleanupWorkspace).toHaveBeenCalledWith('task-old-done')
     })
 
-    it('keeps active task workspace', () => {
+    it('keeps active task workspace', async () => {
       const ws = makeWorkspace({ taskId: 'task-active' })
       isolationMocks.listWorkspaces.mockReturnValue([ws])
       dispatchMocks.getTaskQueue.mockReturnValue([
         makeTask({ id: 'task-active', status: 'active' }),
       ])
 
-      const result = runGC()
+      const result = await runGC()
 
       expect(result.completed).toBe(0)
       expect(isolationMocks.cleanupWorkspace).not.toHaveBeenCalled()
     })
 
-    it('keeps completed task workspace younger than TTL', () => {
+    it('keeps completed task workspace younger than TTL', async () => {
       // Created 5 minutes ago — within the default 1h TTL
       const ws = makeWorkspace({
         taskId: 'task-recent',
@@ -157,7 +157,7 @@ describe('workspace-gc', () => {
         makeTask({ id: 'task-recent', status: 'completed' }),
       ])
 
-      const result = runGC()
+      const result = await runGC()
 
       expect(result.completed).toBe(0)
       expect(isolationMocks.cleanupWorkspace).not.toHaveBeenCalled()
@@ -167,7 +167,7 @@ describe('workspace-gc', () => {
   // ── Tier 2: Orphan cleanup ────────────────────────────────────────────────
 
   describe('Tier 2 — orphan cleanup', () => {
-    it('removes orphan directory older than TTL', () => {
+    it('removes orphan directory older than TTL', async () => {
       // No tracked workspaces — all dirs on disk are orphans
       isolationMocks.listWorkspaces.mockReturnValue([])
       dispatchMocks.getTaskQueue.mockReturnValue([])
@@ -180,17 +180,17 @@ describe('workspace-gc', () => {
         mtimeMs: Date.now() - 48 * 60 * 60 * 1000, // 48h ago
       } as any)
 
-      const result = runGC()
+      const result = await runGC()
 
       expect(result.orphans).toBe(1)
-      expect(cpMocks.execFileSync).toHaveBeenCalledWith(
+      expect(spawnProxyMocks.proxyExecFile).toHaveBeenCalledWith(
         'git',
         ['worktree', 'remove', '--force', '/tmp/penpal-test-data/workspaces/orphan-task-123'],
-        expect.objectContaining({ stdio: 'pipe' }),
+        expect.objectContaining({ timeout: expect.any(Number) }),
       )
     })
 
-    it('keeps directory that matches active workspace', () => {
+    it('keeps directory that matches active workspace', async () => {
       const ws = makeWorkspace({ taskId: 'active-ws' })
       isolationMocks.listWorkspaces.mockReturnValue([ws])
       dispatchMocks.getTaskQueue.mockReturnValue([
@@ -200,27 +200,31 @@ describe('workspace-gc', () => {
       // The directory on disk matches the tracked workspace
       fsMocks.readdirSync.mockReturnValue(['active-ws'] as any)
 
-      const result = runGC()
+      const result = await runGC()
 
       expect(result.orphans).toBe(0)
-      // git worktree remove should NOT be called for tracked directories
-      expect(cpMocks.execFileSync).not.toHaveBeenCalled()
+      // proxyExecFile should NOT be called for tracked directories
+      expect(spawnProxyMocks.proxyExecFile).not.toHaveBeenCalled()
     })
   })
 
   // ── Tier 3: Artifact cleanup ──────────────────────────────────────────────
 
   describe('Tier 3 — artifact cleanup', () => {
-    it('removes artifact dirs from stale worktrees', () => {
-      // Workspace older than 6h artifact TTL (created 8h ago)
+    it('removes artifact dirs from stale worktrees', async () => {
+      // Workspace older than 6h artifact TTL (created 8h ago) and the
+      // task is in a terminal state — Tier 3 only touches non-live tasks.
       const ws = makeWorkspace({
         taskId: 'task-stale',
         createdAt: new Date(Date.now() - 8 * 60 * 60 * 1000).toISOString(),
       })
       isolationMocks.listWorkspaces.mockReturnValue([ws])
       dispatchMocks.getTaskQueue.mockReturnValue([
-        makeTask({ id: 'task-stale', status: 'active' }),
+        makeTask({ id: 'task-stale', status: 'completed' }),
       ])
+      // Tier 1 cleanup is mocked out to a no-op so it doesn't claim the
+      // workspace before Tier 3 runs.
+      isolationMocks.cleanupWorkspace.mockReturnValue(false)
 
       // Simulate that node_modules and .next exist
       fsMocks.existsSync.mockImplementation((p: string) => {
@@ -233,7 +237,7 @@ describe('workspace-gc', () => {
       // For Tier 2 — readdirSync returns nothing (no orphans)
       fsMocks.readdirSync.mockReturnValue([] as any)
 
-      const result = runGC()
+      const result = await runGC()
 
       expect(result.artifacts).toBe(2) // node_modules + .next
       expect(fsMocks.rmSync).toHaveBeenCalledWith(
@@ -245,12 +249,30 @@ describe('workspace-gc', () => {
         { recursive: true, force: true },
       )
     })
+
+    it('does NOT touch artifacts when task is still active', async () => {
+      const ws = makeWorkspace({
+        taskId: 'task-running',
+        createdAt: new Date(Date.now() - 8 * 60 * 60 * 1000).toISOString(),
+      })
+      isolationMocks.listWorkspaces.mockReturnValue([ws])
+      dispatchMocks.getTaskQueue.mockReturnValue([
+        makeTask({ id: 'task-running', status: 'active' }),
+      ])
+      fsMocks.existsSync.mockReturnValue(true)
+      fsMocks.readdirSync.mockReturnValue([] as any)
+
+      const result = await runGC()
+
+      expect(result.artifacts).toBe(0)
+      expect(fsMocks.rmSync).not.toHaveBeenCalled()
+    })
   })
 
   // ── startGC / stopGC lifecycle ────────────────────────────────────────────
 
   describe('startGC / stopGC lifecycle', () => {
-    it('runs GC on interval and stops cleanly', () => {
+    it('runs GC on interval and stops cleanly', async () => {
       // Set up minimal mocks so runGC does nothing
       isolationMocks.listWorkspaces.mockReturnValue([])
       dispatchMocks.getTaskQueue.mockReturnValue([])
@@ -258,8 +280,8 @@ describe('workspace-gc', () => {
 
       startGC({ interval: 1000 })
 
-      // Advance time by 3 intervals
-      vi.advanceTimersByTime(3000)
+      // Advance time by 3 intervals — flush async GC work between ticks.
+      await vi.advanceTimersByTimeAsync(3000)
 
       const stats = getGCStats()
       expect(stats.lastRun).not.toBeNull()
@@ -272,7 +294,7 @@ describe('workspace-gc', () => {
       isolationMocks.listWorkspaces.mockReturnValue([])
       dispatchMocks.getTaskQueue.mockReturnValue([])
       fsMocks.readdirSync.mockReturnValue([] as any)
-      vi.advanceTimersByTime(3000)
+      await vi.advanceTimersByTimeAsync(3000)
 
       // listWorkspaces should not have been called after stop
       expect(isolationMocks.listWorkspaces).not.toHaveBeenCalled()
@@ -282,13 +304,13 @@ describe('workspace-gc', () => {
   // ── _resetForTest ─────────────────────────────────────────────────────────
 
   describe('_resetForTest', () => {
-    it('clears all accumulated state', () => {
+    it('clears all accumulated state', async () => {
       // Accumulate some stats
       isolationMocks.listWorkspaces.mockReturnValue([])
       dispatchMocks.getTaskQueue.mockReturnValue([])
       fsMocks.readdirSync.mockReturnValue([] as any)
 
-      runGC()
+      await runGC()
       const beforeReset = getGCStats()
       expect(beforeReset.lastRun).not.toBeNull()
 
