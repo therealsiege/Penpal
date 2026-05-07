@@ -27,36 +27,11 @@ Label a GitHub issue `agent-ready`, walk away, come back to a PR.
 - **Dispatch board** — unified view of all issues and pods in phase columns with agent avatars and controls
 - **MCP servers** surfaced in one configurable area
 
-### 3. Knowledge Management
-
-A vault of markdown files backed by a knowledge graph.
-
-- **Full markdown editor** — CodeMirror 6 with wikilinks, frontmatter, outline, templates, tabs, search
-- **Knowledge graph** — ETL scripts generate a graph in Memgraph with embeddings in Qdrant
-- **Google GOG CLI** integration for research and data access
-- **Live file watching** — external edits sync immediately
-
-### 4. Soundboard
-
-Sound effects for meetings and fun. Vault and soundboard files live in your home directory where Apple iCloud handles backup.
-
 ---
 
 ## Vision
 
-**Theme: Run your agentic business like an RPG video game.**
-
-Agents are characters with personas from *Journey to the West*. Pods are quests. The office is a scene. XP, leaderboards, seasons, and cosmetic rewards make the work visible and engaging.
-
-The long-term goal: manage the operations of an entire business through Slack, GitHub Issues, and Linear — with Penpal as the operating system that turns those inputs into coordinated agent work, visible in real-time through game scenes.
-
-### Current Scene: Development Lab
-
-We're eating our own dogfood — Penpal's pod system is used to build Penpal itself. The lab scene shows an isometric office where agent characters work at desks, take coffee breaks in the cafe, and celebrate task completions with particle effects.
-
-### Feature Status
-
-#### Pod System
+### Pod System
 
 | Feature | Status | Wave | Description |
 |---------|--------|------|-------------|
@@ -79,98 +54,18 @@ We're eating our own dogfood — Penpal's pod system is used to build Penpal its
 | MRAP reflection | Done | W7 | Efficiency rating, bottleneck detection, fleet analytics |
 | Merge queue (Refinery) | Done | W7 | Sequential rebase → tsc → merge → push pipeline |
 | Shell injection hardening | Done | W7 | All `execSync` with user input → `execFileSync` |
-| TweenBag lifecycle manager | PR ready | W6 | Replace 55-line manual tween teardown (#333 → PR #346) |
-| Audio-manager setTimeout leak fix | PR ready | W6 | Cleanup timeouts on scene destroy (#334 → PR #343) |
-| Walk animation speed sync | PR ready | W6 | Tie frame rate to movement speed (#337 → PR #342) |
-| Particle pool size caps | PR ready | W6 | MAX constants per particle type + debug overlay (#338 → PR #345) |
 | Pod pipeline cleanup CLI | PR ready | W6 | Cleanup flag + push-if-ahead (#339 → PR #344) |
-| Animation state classes | Planned | W6 | Extract idle/working/waiting into separate classes (#335) |
-| Game-system hooks extraction | Planned | W6 | Decouple quest/leaderboard/credits from animation (#336) |
-
-#### Game Surface (Isometric Lab)
-
-| Feature | Status | Wave | Description |
-|---------|--------|------|-------------|
-| Agent workstations with sprites | Done | — | Desk, chair, monitor, sprite per agent |
-| LOD system (3 levels) | Done | — | Overview → room-level → full detail based on zoom |
-| Day/night atmosphere cycle | Done | — | Sky gradients, starfield, clouds, shadows, dawn/dusk flash |
-| Cafe with coffee runs | Done | — | Agents walk to cafe, barista service, social interactions |
-| Quest auto-wrapper | Done | — | Tasks → quests with difficulty inference, XP multipliers |
-| Cosmetic tiers (rank-gated) | Done | — | Desk items unlock by XP rank (keyboard, lamp, plant, phone, gold, RGB) |
-| Leaderboard + rivalries | Done | — | Season XP rankings, weekly MVP, 5% rivalry detection |
-| 30-day seasons | Done | — | Themed challenges, 4 templates, auto-rotation |
-| Credits economy | Done | — | Cosmetic currency, shop catalog |
-| Celebration VFX | Done | — | Rank-up, task-complete, milestone, error effects |
-| Particle systems (weather, ambient) | Done | — | Rain, snow, mako motes, sparks, steam |
-| NavMesh A* pathfinding | Done | — | 12px grid, line-of-sight smoothing |
-| Pod connecting lines + chat dots | Done | — | Visual links between pod team members |
-| Minimap with click-to-pan | Done | — | Room outlines, viewport indicator, hover labels |
-| Phaser audio + AudioManager | PR ready | W5 | Web Audio synthesis, M-key mute |
-| SFX triggers (task lifecycle) | PR ready | W5 | Keyboard clatter, celebration sounds |
-| Theme audit (3 themes work) | PR ready | W5 | All hardcoded hex eliminated |
-| Cinematic letterbox bars | PR ready | W5 | Rank-up and season ceremony framing |
-| In-game settings menu | PR ready | W5 | Volume sliders, theme selector, keybinds |
-| Session replay (record/playback) | PR ready | W5 | Record and replay agent activity |
-| 8-direction character spritesheet | PR ready | W5 | Walk cycle overhaul |
-| Player character (WASD) | PR ready | W5 | Free-roaming player with keyboard movement |
-| Monitor + desk lamp point lights | In progress | — | Light2D point lights responding to agent state (#243) |
-| Agent dialog panel (E key) | In progress | — | NPC dialog showing persona info + current task (#206) |
-| Laser doors → lab-map.json | In progress | — | Extract hardcoded positions to config (#153) |
 
 #### Platform
 
 | Feature | Status | Description |
 |---------|--------|-------------|
 | Multi-machine fleet (Slack) | Done | Heartbeat discovery, world map pins, DM alerts |
-| Vault markdown editor | Done | CodeMirror 6, wikilinks, graph view, file tree |
-| Knowledge graph (Memgraph + Qdrant) | Done | ETL pipeline, entity extraction, embeddings |
 | MCP server | Done | 5 tool groups (meta, orchestrator, pods, office, vault) |
 | Dispatch board | Done | Unified GitHub issue + pod workflow board |
 | Eval dashboard | Done | Pod quality metrics, spot-check queue, digests |
-| Embedded terminal (xterm.js) | Done | node-pty, inline agent interaction |
 | Linear integration | Planned | Pull tasks from Linear alongside GitHub Issues |
-| Dispatch in game | Planned | Issues as quest markers, click desk to see pod |
 | Slack-first operations | Planned | `!task`, `!pod status`, `!dispatch` from Slack |
-
-### Future Scenes
-
-| Scene | Purpose |
-|-------|---------|
-| **Virtual Call Center** | Customer support agents handling tickets, escalating to humans, tracking resolution |
-| **Marketing Content & Design Studio** | Content creation pipelines — blog posts, social campaigns, design assets, SEO optimization |
-| **Mail Room** | Email triage, automated responses, lead qualification, correspondence management |
-| **Strategic War Room** | Competitive intelligence, market analysis, product strategy, OKR tracking |
-
-Each scene is a self-contained workspace with its own agent team, workflow patterns, and game mechanics — all managed from the same world map.
-
----
-
-## The Agent Roster
-
-Agents have personas from *Journey to the West* with unique backstories, working styles, and roles.
-
-| | Agent ID | Persona | Role | Pod Role |
-|---|----------|---------|------|----------|
-| <img src="Penpal/public/sprites/avatars/WuKong.png" width="48"> | `fullstack-dev` | **Sun Wukong** — The Monkey King | Senior full-stack developer | Solver |
-| <img src="Penpal/public/sprites/avatars/ErlangShen.png" width="48"> | `nextjs-frontend` | **Erlang Shen** — The Three-Eyed God | Next.js / React frontend specialist | Solver |
-| <img src="Penpal/public/sprites/avatars/ShaWujing.png" width="48"> | `electron-dev` | **Sha Wujing** — The Curtain-Lifting General | Electron / desktop specialist | Executor |
-| <img src="Penpal/public/sprites/avatars/Guanyin.png" width="48"> | `backend-arch` | **Guanyin** — Bodhisattva of Compassion | Backend architecture reviewer | Reviewer |
-| <img src="Penpal/public/sprites/avatars/Nezha.png" width="48"> | `expo-mobile` | **Nezha** — The Third Lotus Prince | React Native / Expo mobile | Solver |
-| <img src="Penpal/public/sprites/avatars/BullDemonKing.png" width="48"> | `embedded-dev` | **Bull Demon King** — Great Sage Who Pacifies Heaven | Embedded systems / low-level | Solver |
-| <img src="Penpal/public/sprites/avatars/RedBoy.png" width="48"> | `videogame-dev` | **Red Boy** — Holy Child King | Phaser / game development | Solver |
-| <img src="Penpal/public/sprites/avatars/AoGuang.png" width="48"> | `ui-designer` | **Ao Guang** — Dragon King of the East Sea | UI/UX design reviewer | Reviewer |
-| <img src="Penpal/public/sprites/avatars/Tripitaka.png" width="48"> | `product-mgr` | **Tripitaka** — The Monk | Product management / planning | Reviewer |
-| <img src="Penpal/public/sprites/avatars/AoRun.png" width="48"> | `product-marketer` | **Ao Run** — White Dragon Horse | Content marketing | Solver |
-| <img src="Penpal/public/sprites/avatars/ZhuBajie.png" width="48"> | `exec-assistant` | **Zhu Bajie** — Marshal of the Heavenly Canopy | Executive assistant / ops | Executor |
-
-Each agent has a catchphrase, backstory, and working style injected into their system prompt. Pod presets combine agents into teams:
-
-| Preset | Solver | Reviewer | Executor |
-|--------|--------|----------|----------|
-| `frontend-feature` | Erlang Shen | Ao Guang | Sha Wujing |
-| `backend-feature` | Sun Wukong | Guanyin | Sha Wujing |
-| `full-stack` | Sun Wukong | Guanyin | Sha Wujing |
-| `content-pipeline` | Ao Run | Tripitaka | Zhu Bajie |
 
 ---
 
@@ -409,65 +304,11 @@ Requires Ollama running locally with `qwen3-coder:30b` pulled: `ollama pull qwen
 
 | Panel | Description |
 |-------|-------------|
-| `CommandCenter.tsx` | World map (CampusScene with fleet pins) + isometric lab (OfficeScene with agent visualization), status bar with fleet pill, scheduler, health, leaderboard |
 | `OrchestratorModal.tsx` | Dispatch board — unified GitHub issue + pod workflow board with phase columns, agent avatars, expand for pod detail with team grid and controls |
 | `ProfilesPanel.tsx` | Runtime profile editor — visual Plan/Execute/Validate pipeline, model dropdowns, timeout/iteration/self-fix knobs, default selection |
-| `VaultPanel.tsx` | Full markdown editor with file tree, wikilinks, graph view, frontmatter, search, tags, backlinks |
 | `EvalsPanel.tsx` | Agent evaluation dashboard — pod quality metrics, spot-check queue, weekly digests |
-| `DataPanel.tsx` | Data exploration, ETL scripts, graph queries |
 | `SettingsPanel.tsx` | Appearance/theme, GitHub repo management, config snapshot viewer |
-| `SoundboardPanel.tsx` | Sound effect browser and playback |
 
-**Game (`game/`):**
-
-50+ modules, ~20,000 lines. Two Phaser 3 scenes:
-
-| Scene | Description |
-|-------|-------------|
-| `CampusScene.ts` | World map — illustrated 3840x2160 backdrop, sprite marker pins per fleet instance, anchor-based lat/lon projection, hover labels, click-to-zoom, double-click-to-enter-lab |
-| `OfficeScene.ts` | Isometric lab orchestrator (~4700 lines) — delegates to 18+ modules for workstations, rooms, animations, atmosphere, particles, UI overlays, cafe, pods, minimap, camera |
-
-Key game modules:
-
-| Module | Lines | Description |
-|--------|------:|-------------|
-| `workstation-animation.ts` | ~2100 | Status bubbles, mood, monitor glow, idle micro-variety (refactor in progress — Wave 6 splits into animation state classes) |
-| `workstation-creation.ts` | ~1100 | Desk/chair/monitor/sprite creation, rank-gated cosmetics |
-| `office-workstation.ts` | ~1700 | Workstation lifecycle, XP bars, sparklines, progress rings |
-| `celebrations.ts` | ~1130 | Rank-up, task-complete, milestone, error effects |
-| `penny-cafe.ts` | ~830 | Cafe with stools, coffee runs, social interactions |
-| `office-atmosphere.ts` | ~740 | Day/night cycle, sky, starfield, clouds, shadows |
-| `office-rooms.ts` | ~1070 | Room creation, doors, headers, animated resize |
-| `quest-system.ts` | ~220 | Quest auto-wrapper, difficulty inference, XP multipliers |
-| `seasons.ts` | ~310 | 30-day seasonal arcs with themed challenges |
-| `leaderboard.ts` | ~235 | XP rankings, weekly MVP, rivalry detection |
-
-### Agents (`agents/`)
-
-| File | Description |
-|------|-------------|
-| `agent-types.yaml` | Agent definitions — persona (name, backstory, style, catchphrase), skills, model, pod role, runtime profiles, pod presets |
-| `CLAUDE.md` | Shared team memory — injected into all agent system prompts. Pod results are appended here as team knowledge |
-| `mcp-profiles/` | MCP server configurations per agent role (e.g. `qa-executor.json` with Playwright tools) |
-
-### Data (`data/`)
-
-Runtime state files (JSON, gitignored):
-
-| File | Description |
-|------|-------------|
-| `pod-workflows.json` | Pod workflow state (all active + recent completed) |
-| `pod-profiles.json` | Custom runtime profiles (merged with YAML built-ins) |
-| `agent-sessions.json` | Agent ID -> session/PID mapping |
-| `task-queue.json` | Orchestrator task queue |
-| `flight-board.json` | Active file claims for conflict detection |
-| `reasoning-bank.json` | Pod pattern history for similarity matching (max 200 entries) |
-| `merge-queue.json` | Merge queue state (last 50 entries) |
-| `governance-rules.json` | Optional custom governance rules (overrides defaults) |
-| `github-pipeline.json` | Pipeline issue tracking state |
-| `spot-checks.json` | Eval spot-check queue |
-
----
 
 ## MCP Server
 
@@ -483,7 +324,6 @@ npm run mcp:start        # stdio transport
 | **orchestrator** | `orchestrator:enqueue`, `orchestrator:queue`, `orchestrator:agent-health` |
 | **pods** | `pod:list`, `pod:status`, `pod:create` |
 | **office** | `office:rooms`, `office:agents`, `office:leaderboard` |
-| **vault** | `vault:read`, `vault:search`, `vault:write` |
 
 Connect via `.mcp.json`:
 
@@ -506,10 +346,6 @@ Connect via `.mcp.json`:
 |-------|-----------|
 | Shell | Electron 33, electron-vite 5 |
 | UI | React 18, Tailwind 3, Zustand |
-| Game | Phaser 3.90 |
-| Editor | CodeMirror 6 |
-| Terminal | xterm.js + node-pty |
-| Graph | neo4j-driver (Memgraph) |
 | Slack | @slack/bolt 4 (Socket Mode) |
 | Language | TypeScript 5.7 |
 | Testing | Vitest (315 unit tests), Playwright (E2E) |
@@ -562,6 +398,4 @@ All IPC calls go through `window.api.*`. Each handler uses `wrapHandler` which c
 ## macOS Notes
 
 - `titleBarStyle: hiddenInset` with custom traffic light offset
-- Agent terminal interaction via iTerm2 AppleScript (requires iTerm2)
 - Session focus uses `AXRaise` for reliable window foregrounding
-- Vault + soundboard files in home directory for iCloud backup
