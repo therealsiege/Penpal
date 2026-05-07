@@ -14,11 +14,8 @@ Built by [1Putt Health](https://1putthealth.com) for creating and launching digi
 
 See every AI agent session running across your machines in one place.
 
-- **Focus any terminal** running a Claude Code, OpenCode, or Cursor Agent session
 - **Communicate via Slack** — each project gets its own channel, messages route to the right agent
 - **Get DM'd** when an agent has a question or needs tool approval
-- **World map** shows all your Penpal instances as pins with live status (fleet heartbeat via Slack)
-- **Isometric lab view** — agents visualized as animated characters at workstations with status bubbles
 
 ### 2. Tee Up Background Work
 
