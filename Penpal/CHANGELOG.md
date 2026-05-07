@@ -4,6 +4,20 @@ All notable changes to Penpal are documented here. Format follows [Keep a Change
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-05-06
+
+### Fixed
+- **Startup freezing eliminated.** `chokidar` was watching `~/Documents/Vault/` at the 250ms mark — a full recursive scan for vault file-change events that nothing was listening to (vault panel removed in v0.3.3). File watcher removed entirely. `loadAgentConfigs()` (synchronous YAML parse) moved off the critical path to the 250ms deferred batch. `startSpawnProxy()` moved from before `app.whenReady()` to inside the ready handler, still before `createWindow()`.
+
+### Removed
+- **Dead npm packages:** `phaser`, `react-force-graph-2d`, `chokidar`, `@xterm/addon-webgl`, `remark-frontmatter`.
+- **Orphaned main-process files:** `file-watcher.ts`, `search-index.ts`.
+- **Vault and editor UI:** `components/vault/` (6 files), `components/editor/` (16 files), `stores/vault-index.ts`, `stores/editor-store.ts`.
+- **Orphaned components:** `AgentAvatar`, `Terminal`, `StatusBadge`, `PodModal`, `VenturesModal`, `BriefingModal`, `SchedulerModal`, `PodAgentModal`.
+- **Dead MCP tool:** `src/mcp/tools/graph.ts` (graph search tools with no backing module).
+- **22 game/sprite build scripts** from `scripts/` (`build-*.mjs`, `convert-gds-*.mjs`, etc.).
+- **Dead code:** `registerDataScriptHandlers()` from `ipc.ts`, graph tool import from `mcp/server.ts`, unused type imports in `pods.ts` and `github-issues.ts`, dead `OrchestratorModal` named export, vault types from `types.ts`, dead npm scripts (`sprites:*`, `test:e2e`, `test:visual`).
+
 ## [0.4.0] - 2026-05-06
 
 ### Removed
