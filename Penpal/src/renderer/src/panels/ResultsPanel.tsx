@@ -67,9 +67,9 @@ function parsePrUrl(url: string | undefined, fallbackRepo: string | undefined): 
 /** Render a single unified-diff line with color (green = add, red = remove, hunk = blue). */
 function DiffLine({ line }: { line: string }) {
   let cls = 'text-[var(--c-text-muted)]'
-  if (line.startsWith('+') && !line.startsWith('+++')) cls = 'text-emerald-400 bg-emerald-500/10'
-  else if (line.startsWith('-') && !line.startsWith('---')) cls = 'text-red-400 bg-red-500/10'
-  else if (line.startsWith('@@')) cls = 'text-indigo-400 bg-indigo-500/10'
+  if (line.startsWith('+') && !line.startsWith('+++')) cls = 'text-white bg-emerald-900/60'
+  else if (line.startsWith('-') && !line.startsWith('---')) cls = 'text-white bg-red-900/60'
+  else if (line.startsWith('@@')) cls = 'text-sky-300 bg-sky-950/60'
   else if (line.startsWith('+++') || line.startsWith('---')) cls = 'text-[var(--c-text-faint)]'
   return <div className={`px-3 ${cls} whitespace-pre`}>{line || ' '}</div>
 }
