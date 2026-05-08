@@ -13,6 +13,7 @@
     "typecheck": "tsc --noEmit",
     "package": "electron-vite build && electron-forge package",
     "make": "electron-vite build && electron-forge make",
+    "publish": "electron-vite build && electron-forge publish",
     "release": "scripts/release.sh"
   },
   "dependencies": {
