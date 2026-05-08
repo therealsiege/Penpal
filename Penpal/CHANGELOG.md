@@ -4,6 +4,24 @@ All notable changes to Penpal are documented here. Format follows [Keep a Change
 
 ## [Unreleased]
 
+## [0.4.2] - 2026-05-07
+
+### Added
+- **Pod log streaming.** Each running pod now captures a 500-line ring buffer of agent output. Click "View Logs" on any active pod card to open a slide-in `PodLogDrawer` with color-coded output by role (solver=amber, reviewer=violet, executor=blue), stderr highlighting, auto-scroll toggle, and copy-to-clipboard.
+- **PR diff and merge in Results panel.** Each completed pod row now shows a "View Diff" toggle (lazy-loaded from GitHub REST API with per-file +/- counts and line-level coloring) and a "Merge PR" button with a spinner.
+- **Autopilot IPC.** Seven new IPC handlers wired (`autopilot:status`, `autopilot:list`, `autopilot:add`, `autopilot:remove`, `autopilot:toggle`, `autopilot:start`, `autopilot:stop`) — autopilot was previously uncontrollable from the renderer.
+
+### Fixed
+- **Autopilot silent skip.** Tasks with no `nextRunAt` were skipped forever. New `isTaskDue()` logic falls back to "due now" on first run so tasks actually fire.
+- **Autopilot writes.** Config saves now use atomic writes (`atomicWrite`) — no more partial-write corruption on crash.
+- **Linear poller retries.** `seenIssueIds` was permanently blocking failed issues from re-entering the pipeline. Dropped — the pipeline state (`executing`/`done`/`failed`) is now the source of truth.
+- **Linear branch naming.** Branches were named `linear-eng-123-slug` instead of `linear/ENG-123-slug`. Now uses the correct `linear/<identifier>-<slug>` format.
+- **Workspace GC blocking.** `execFileSync` calls in all three GC tiers blocked the main thread during cleanup. Replaced with `proxyExecFile` (async, routes through the spawn proxy).
+- **Workspace GC double-cleanup.** Added in-flight coalescing and live-pod safety guard so GC never removes a worktree that a running pod is still using.
+
+### Changed
+- **Slack bridge scope.** The poll loop, `!agents` command, and inbound message routing now filter to dispatch pod sessions only. Personal Claude sessions (user's own terminal work) are no longer monitored or reported to Slack channels.
+
 ## [0.4.1] - 2026-05-06
 
 ### Fixed
