@@ -1,12 +1,12 @@
 {
-  "timestamp": 1777178979430,
-  "weekStart": 1776661200000,
+  "timestamp": 1778203306085,
+  "weekStart": 1777870800000,
   "agents": [
     {
       "id": "fullstack-dev",
       "name": "Sun Wukong",
       "title": "The Monkey King",
-      "status": "blocked",
+      "status": "active",
       "room": "sidekick",
       "roomPath": "/Users/fuzeelogik/sidekick",
       "currentTask": null,
@@ -17,8 +17,8 @@
       "tasksCompleted": 0,
       "tasksFailed": 0,
       "currentStreak": 0,
-      "sessionMode": "waiting",
-      "uptime": "3d 11h"
+      "sessionMode": "working",
+      "uptime": "1d 21h"
     },
     {
       "id": "nextjs-frontend",
@@ -150,7 +150,7 @@
       "id": "product-mgr",
       "name": "Tang Sanzang",
       "title": "The Monk Tripitaka",
-      "status": "blocked",
+      "status": "active",
       "room": "sidekick",
       "roomPath": "/Users/fuzeelogik/sidekick",
       "currentTask": null,
@@ -161,8 +161,8 @@
       "tasksCompleted": 0,
       "tasksFailed": 0,
       "currentStreak": 0,
-      "sessionMode": "waiting",
-      "uptime": "3d 11h"
+      "sessionMode": "working",
+      "uptime": "1d 21h"
     },
     {
       "id": "product-marketer",
@@ -186,7 +186,7 @@
       "id": "exec-assistant",
       "name": "Zhu Bajie",
       "title": "Marshal of the Heavenly Canopy",
-      "status": "blocked",
+      "status": "active",
       "room": "sidekick",
       "roomPath": "/Users/fuzeelogik/sidekick",
       "currentTask": null,
@@ -197,8 +197,8 @@
       "tasksCompleted": 0,
       "tasksFailed": 0,
       "currentStreak": 0,
-      "sessionMode": "waiting",
-      "uptime": "3d 11h"
+      "sessionMode": "working",
+      "uptime": "1d 21h"
     },
     {
       "id": "issue-planner",
@@ -230,8 +230,8 @@
       ],
       "agentCount": 3,
       "idleCount": 0,
-      "activeCount": 0,
-      "blockedCount": 3
+      "activeCount": 3,
+      "blockedCount": 0
     },
     {
       "name": "1putthealth.com",
@@ -730,6 +730,6 @@
     "activeTasks": 0,
     "completedToday": 0,
     "failedToday": 0,
-    "totalProcessed": 10
+    "totalProcessed": 0
   }
 }
