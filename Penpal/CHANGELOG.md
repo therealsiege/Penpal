@@ -4,6 +4,18 @@ All notable changes to Penpal are documented here. Format follows [Keep a Change
 
 ## [Unreleased]
 
+## [0.4.4] - 2026-05-09
+
+### Added
+- **Webhook dispatch.** New HTTP server (port 3141, `PENPAL_WEBHOOK_PORT`) receives GitHub `issues:labeled` webhooks and triggers a targeted poll immediately — no more 60s wait. HMAC-validated with `PENPAL_WEBHOOK_SECRET`. Settings panel shows the webhook URL with a copy button.
+- **Post-merge branch and worktree cleanup.** Every 5 minutes, completed pipeline pods with a PR URL are checked against GitHub. Merged PRs get their remote branch deleted and worktree removed; closed-without-merge PRs are archived. GC skips pipeline-owned worktrees to avoid races.
+- **Dispatch board live activity.** Active issue cards now show: time elapsed in the current phase (live ticking), last log line from the agent (color-coded by role), `+N / -N` diff count, and an `iter N` badge on retry pods.
+- **Reasoning bank inspector.** Evals panel has a new collapsible "Reasoning Patterns" section — view all stored solver patterns with task type, summary, score, and timestamp. Delete individual patterns or clear all.
+
+### Fixed
+- **MCP panel Import crash.** `getMasterConfigPath()` pointed to a directory that doesn't exist, causing ENOENT on every import. Repointed to the standard data dir with auto-mkdir.
+- **MCP panel UX.** Split error state into load-error (full-screen with retry) vs action-error (dismissible inline banner). Pending state on toggle/delete buttons. Fixed race where `deleteServer` read `selectedServer.id` after it was already cleared. Disabled dead "Add from Template" buttons.
+
 ## [0.4.3] - 2026-05-08
 
 ### Fixed
