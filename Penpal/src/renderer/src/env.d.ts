@@ -241,6 +241,14 @@ declare global {
       replayList: () => Promise<import('./types').RecordingMeta[]>
       replayGet: (id: string) => Promise<import('./types').Recording>
       replayDelete: (id: string) => Promise<{ ok: boolean }>
+      // Autopilot (scheduled recurring tasks)
+      autopilotStatus: () => Promise<{ enabled: boolean; scheduledTasks: import('./types').ScheduledTask[]; nextCheck: string | null }>
+      autopilotList: () => Promise<{ enabled: boolean; schedules: import('./types').ScheduledTask[] }>
+      autopilotAdd: (opts: { title: string; description: string; project: string; cronExpression: string }) => Promise<import('./types').ScheduledTask & { error?: string }>
+      autopilotRemove: (taskId: string) => Promise<{ removed: boolean; error?: string }>
+      autopilotToggle: (taskId: string, enabled: boolean) => Promise<{ toggled: boolean; error?: string }>
+      autopilotStart: () => Promise<{ enabled: boolean; scheduledTasks: import('./types').ScheduledTask[]; nextCheck: string | null }>
+      autopilotStop: () => Promise<{ enabled: boolean; scheduledTasks: import('./types').ScheduledTask[]; nextCheck: string | null }>
     }
   }
 }

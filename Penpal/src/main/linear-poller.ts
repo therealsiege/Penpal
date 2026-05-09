@@ -8,13 +8,13 @@
  *   3. Drive pipeline every 15s: detect pod completion, push branch + create PR,
  *      post comment with PR URL, transition state to "In Review"
  */
-import { execSync } from 'child_process'
 import fs from 'fs'
 import path from 'path'
 import os from 'os'
 import { atomicWrite } from './atomic-store'
 import { createPod, getPodStatus } from './pods'
 import { getDataDir } from './data-paths'
+import { proxyExecFile } from './spawn-proxy'
 
 // ── Constants ───────────────────────────────────────────────────────────────
 
@@ -352,7 +352,7 @@ async function postComment(issueId: string, body: string): Promise<boolean> {
   }
 }
 
-// ── Git helpers (execSync, mirror github-pipeline.ts behavior) ─────────────
+// ── Git helpers (proxyExecFile, mirror github-pipeline.ts behavior) ────────
 
 function isGitRepo(p: string): boolean {
   try {
@@ -362,12 +362,12 @@ function isGitRepo(p: string): boolean {
   }
 }
 
-function resolveBaseBranch(repoPath: string): string {
+async function resolveBaseBranch(repoPath: string): Promise<string> {
   try {
-    const out = execSync('git symbolic-ref refs/remotes/origin/HEAD', {
-      cwd: repoPath, stdio: 'pipe', encoding: 'utf-8', timeout: 10_000,
+    const { stdout } = await proxyExecFile('git', ['symbolic-ref', 'refs/remotes/origin/HEAD'], {
+      cwd: repoPath, encoding: 'utf-8', timeout: 10_000,
     })
-    return String(out).trim().replace(/^refs\/remotes\/origin\//, '') || 'main'
+    return stdout.trim().replace(/^refs\/remotes\/origin\//, '') || 'main'
   } catch {
     return 'main'
   }
@@ -388,7 +388,7 @@ interface WorktreeResult {
  * The identifier case is preserved (Linear identifiers are typically uppercase,
  * e.g. "ENG-123"); only the slug is lowercased for safety.
  */
-function createWorktreeOrFallback(localPath: string, identifier: string, slug: string): WorktreeResult {
+async function createWorktreeOrFallback(localPath: string, identifier: string, slug: string): Promise<WorktreeResult> {
   const safeSlug = slug.replace(/[^a-z0-9-]/gi, '-').slice(0, 40).replace(/-$/, '') || 'issue'
   const branch = `linear/${identifier}-${safeSlug}`
   if (!isGitRepo(localPath)) {
@@ -405,20 +405,20 @@ function createWorktreeOrFallback(localPath: string, identifier: string, slug: s
 
     // Best-effort fetch
     try {
-      execSync('git fetch origin --prune', {
-        cwd: localPath, stdio: 'pipe', encoding: 'utf-8', timeout: 60_000,
+      await proxyExecFile('git', ['fetch', 'origin', '--prune'], {
+        cwd: localPath, encoding: 'utf-8', timeout: 60_000,
       })
     } catch (err) {
       console.warn('[linear-poller] git fetch failed (continuing):', (err as Error).message)
     }
 
-    const baseBranch = resolveBaseBranch(localPath)
+    const baseBranch = await resolveBaseBranch(localPath)
 
     // Clean up any pre-existing worktree at this path
     if (fs.existsSync(worktreePath)) {
       try {
-        execSync(`git worktree remove "${worktreePath}" --force`, {
-          cwd: localPath, stdio: 'pipe', timeout: 30_000,
+        await proxyExecFile('git', ['worktree', 'remove', worktreePath, '--force'], {
+          cwd: localPath, encoding: 'utf-8', timeout: 30_000,
         })
       } catch {
         try { fs.rmSync(worktreePath, { recursive: true, force: true }) } catch { /* ignore */ }
@@ -426,13 +426,19 @@ function createWorktreeOrFallback(localPath: string, identifier: string, slug: s
     }
 
     // Prune stale entries and delete branch if it lingered
-    try { execSync('git worktree prune', { cwd: localPath, stdio: 'pipe', timeout: 10_000 }) } catch { /* ignore */ }
-    try { execSync(`git branch -D ${branch}`, { cwd: localPath, stdio: 'pipe', timeout: 10_000 }) } catch { /* ignore */ }
-    try { execSync(`git push origin --delete ${branch}`, { cwd: localPath, stdio: 'pipe', timeout: 15_000 }) } catch { /* ignore */ }
+    await proxyExecFile('git', ['worktree', 'prune'], {
+      cwd: localPath, encoding: 'utf-8', timeout: 10_000,
+    }).catch(() => {})
+    await proxyExecFile('git', ['branch', '-D', branch], {
+      cwd: localPath, encoding: 'utf-8', timeout: 10_000,
+    }).catch(() => {})
+    await proxyExecFile('git', ['push', 'origin', '--delete', branch], {
+      cwd: localPath, encoding: 'utf-8', timeout: 15_000,
+    }).catch(() => {})
 
-    execSync(`git worktree add --force -b ${branch} "${worktreePath}" origin/${baseBranch}`, {
-      cwd: localPath, stdio: 'pipe', timeout: 60_000,
-    })
+    await proxyExecFile('git', [
+      'worktree', 'add', '--force', '-b', branch, worktreePath, `origin/${baseBranch}`,
+    ], { cwd: localPath, encoding: 'utf-8', timeout: 60_000 })
 
     console.log(`[linear-poller] Worktree ${worktreePath} branch ${branch}`)
     return { branch, worktreePath }
@@ -442,11 +448,11 @@ function createWorktreeOrFallback(localPath: string, identifier: string, slug: s
   }
 }
 
-function cleanupWorktree(localPath: string, worktreePath: string | undefined): void {
+async function cleanupWorktree(localPath: string, worktreePath: string | undefined): Promise<void> {
   if (!worktreePath) return
   try {
-    execSync(`git worktree remove "${worktreePath}" --force`, {
-      cwd: localPath, stdio: 'pipe', timeout: 30_000,
+    await proxyExecFile('git', ['worktree', 'remove', worktreePath, '--force'], {
+      cwd: localPath, encoding: 'utf-8', timeout: 30_000,
     })
   } catch (err) {
     console.warn(`[linear-poller] cleanupWorktree failed for ${worktreePath}:`, (err as Error).message)
@@ -459,52 +465,61 @@ interface PrPushResult {
   error?: string
 }
 
-function pushBranchAndCreatePR(
+async function pushBranchAndCreatePR(
   cwd: string,
   branch: string,
   identifier: string,
   title: string,
   url: string,
-): PrPushResult {
+): Promise<PrPushResult> {
   try {
     // Stage + commit any uncommitted work
-    execSync('git add -A', { cwd, stdio: 'pipe', timeout: 15_000 })
+    await proxyExecFile('git', ['add', '-A'], { cwd, encoding: 'utf-8', timeout: 15_000 })
     let status = ''
     try {
-      status = String(execSync('git status --porcelain', { cwd, stdio: 'pipe', encoding: 'utf-8', timeout: 10_000 })).trim()
+      const { stdout } = await proxyExecFile('git', ['status', '--porcelain'], {
+        cwd, encoding: 'utf-8', timeout: 10_000,
+      })
+      status = stdout.trim()
     } catch { /* ignore */ }
     if (status) {
       const commitMsg = `${title}\n\nLinear: ${identifier}\n\nCo-Authored-By: Penny Pod <noreply@penny.dev>`
       try {
-        execSync(`git commit -m ${JSON.stringify(commitMsg)}`, { cwd, stdio: 'pipe', timeout: 15_000 })
+        await proxyExecFile('git', ['commit', '-m', commitMsg], {
+          cwd, encoding: 'utf-8', timeout: 15_000,
+        })
       } catch (err) {
         console.warn(`[linear-poller] git commit failed:`, (err as Error).message)
       }
     }
 
-    const baseBranch = resolveBaseBranch(cwd)
+    const baseBranch = await resolveBaseBranch(cwd)
     let ahead = 0
     try {
-      const out = execSync(`git rev-list --count origin/${baseBranch}..HEAD`, {
-        cwd, stdio: 'pipe', encoding: 'utf-8', timeout: 10_000,
+      const { stdout } = await proxyExecFile('git', ['rev-list', '--count', `origin/${baseBranch}..HEAD`], {
+        cwd, encoding: 'utf-8', timeout: 10_000,
       })
-      ahead = parseInt(String(out).trim(), 10) || 0
+      ahead = parseInt(stdout.trim(), 10) || 0
     } catch { /* ignore */ }
 
     if (ahead === 0) {
       return { ok: false, error: 'No commits to push' }
     }
 
-    execSync(`git push -u origin ${branch}`, { cwd, stdio: 'pipe', timeout: 60_000 })
+    await proxyExecFile('git', ['push', '-u', 'origin', branch], {
+      cwd, encoding: 'utf-8', timeout: 60_000,
+    })
 
     const prTitle = `[${identifier}] ${title}`
     const prBody = `Closes Linear: ${url}\n\nAutomated implementation by Penny pod (solver + reviewer + executor).`
-    const out = execSync(
-      `gh pr create --base ${baseBranch} --head ${branch} --title ${JSON.stringify(prTitle)} --body ${JSON.stringify(prBody)}`,
-      { cwd, stdio: 'pipe', encoding: 'utf-8', timeout: 30_000 },
-    )
-    const stdout = String(out).trim()
-    const match = stdout.match(/https?:\/\/\S+/)
+    const { stdout } = await proxyExecFile('gh', [
+      'pr', 'create',
+      '--base', baseBranch,
+      '--head', branch,
+      '--title', prTitle,
+      '--body', prBody,
+    ], { cwd, encoding: 'utf-8', timeout: 30_000 })
+    const match = stdout.trim().match(/https?:\/\/\S+/)
     return { ok: true, prUrl: match ? match[0] : undefined }
   } catch (err) {
     return { ok: false, error: (err as Error).message }
@@ -571,7 +586,7 @@ async function pollOnce(): Promise<{ enqueued: number }> {
 
       console.log(`[linear] Dispatching pod for ${issue.identifier}: "${issue.title}" (team: ${team.teamKey})`)
 
-      const wt = createWorktreeOrFallback(team.localPath, issue.identifier, slug)
+      const wt = await createWorktreeOrFallback(team.localPath, issue.identifier, slug)
       const podCwd = wt.worktreePath ?? team.localPath
 
       const prompt = buildPrompt(issue.identifier, issue.title, issue.description ?? '')
@@ -590,7 +605,7 @@ async function pollOnce(): Promise<{ enqueued: number }> {
       } catch (err) {
         console.error(`[linear-poller] createPod failed for ${issue.identifier}:`, (err as Error).message)
         // Cleanup worktree on failure
-        cleanupWorktree(team.localPath, wt.worktreePath ?? undefined)
+        await cleanupWorktree(team.localPath, wt.worktreePath ?? undefined)
         continue
       }
 
@@ -670,7 +685,7 @@ async function drivePipeline(): Promise<void> {
       let prUrl: string | undefined
       let prError: string | undefined
       if (entry.branch && isGitRepo(cwd)) {
-        const result = pushBranchAndCreatePR(cwd, entry.branch, entry.identifier, entry.title, entry.url)
+        const result = await pushBranchAndCreatePR(cwd, entry.branch, entry.identifier, entry.title, entry.url)
         if (result.ok) {
           prUrl = result.prUrl
           if (prUrl) console.log(`[linear] PR created: ${prUrl} for ${entry.identifier}`)
@@ -680,7 +695,7 @@ async function drivePipeline(): Promise<void> {
       }
 
       // Cleanup worktree
-      cleanupWorktree(team.localPath, entry.worktreePath)
+      await cleanupWorktree(team.localPath, entry.worktreePath)
 
       const commentBody = prUrl
         ? `✅ **Implementation complete**\n\nPull request: ${prUrl}`
@@ -698,7 +713,7 @@ async function drivePipeline(): Promise<void> {
     } else if (pod.status === 'failed') {
       const errorMsg = pod.error || 'Pod failed without error message'
       console.log(`[linear] Pod ${entry.podWorkflowId} failed for ${entry.identifier}: ${errorMsg}`)
-      cleanupWorktree(team.localPath, entry.worktreePath)
+      await cleanupWorktree(team.localPath, entry.worktreePath)
       await postComment(
         entry.issueId,
         `❌ **Pod failed**\n\n\`\`\`\n${errorMsg.slice(0, 1000)}\n\`\`\`\n\nTo retry, remove and re-add the \`agent-ready\` label.`,

@@ -1910,6 +1910,17 @@ async function completePodWithPR(wf: PodWorkflow): Promise<void> {
     return
   }
 
+  // GitHub-pipeline pods: the pipeline driver (drivePipeline in
+  // github-pipeline.ts) is responsible for pushing the issue branch and
+  // opening the PR — it owns the issue/repo metadata and labels. The pod
+  // just needs to mark itself complete so drivePipeline can pick it up.
+  if (wf.issueNumber != null && wf.issueRepo != null) {
+    setStatus(wf, 'complete')
+    appendWorkflowSummary(wf)
+    storePodPattern(wf)
+    return
+  }
+
   let rebaseResult: RebaseResult
   try {
     rebaseResult = rebaseBeforePR(wf.cwd)
@@ -2161,15 +2172,25 @@ export function createPod(task: string, opts: CreatePodOpts = {}): PodWorkflow {
 
   const podId = generateId()
 
-  // Attempt workspace isolation for this pod
-  try {
-    const workspace = createIsolatedWorkspace(cwd, podId)
-    if (workspace.isolated) {
-      cwd = workspace.worktreePath
-      console.log(`[pods] Isolated workspace for ${podId}: ${cwd}`)
+  // Skip workspace isolation when the github-pipeline already prepared a
+  // dedicated worktree+branch for this issue — otherwise we'd create a
+  // nested worktree on a `penpal/task-*` branch and the pod's commits
+  // would never land on the issue branch, breaking the PR push step.
+  const isGithubIssuePod = opts.issueNumber != null && opts.issueRepo != null
+
+  if (!isGithubIssuePod) {
+    // Attempt workspace isolation for this pod
+    try {
+      const workspace = createIsolatedWorkspace(cwd, podId)
+      if (workspace.isolated) {
+        cwd = workspace.worktreePath
+        console.log(`[pods] Isolated workspace for ${podId}: ${cwd}`)
+      }
+    } catch (err) {
+      console.warn(`[pods] Workspace isolation skipped: ${(err as Error).message}`)
     }
-  } catch (err) {
-    console.warn(`[pods] Workspace isolation skipped: ${(err as Error).message}`)
+  } else {
+    console.log(`[pods] GitHub-pipeline pod ${podId}: reusing prepared worktree at ${cwd}`)
   }
 
   const phaseConfig = getPhaseConfig(opts.priority)

@@ -742,3 +742,17 @@ export interface FlightBoardEntry {
 export interface Recording extends RecordingMeta {
   events: ReplayEvent[]
 }
+
+// ── Autopilot Types ───────────────────────────────────────────────────────────
+
+export interface ScheduledTask {
+  id: string
+  title: string
+  description: string
+  project: string
+  cronExpression: string
+  enabled: boolean
+  lastRunAt: string | null
+  nextRunAt: string | null
+  createdAt: string
+}

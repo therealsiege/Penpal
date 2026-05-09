@@ -7,8 +7,8 @@ import { SettingsPanel } from './panels/SettingsPanel'
 import { EvalsPanel } from './panels/EvalsPanel'
 import { ProfilesPanel } from './panels/ProfilesPanel'
 import { McpPanel } from './panels/McpPanel'
-import { ReplayPanel } from './panels/ReplayPanel'
 import { ResultsPanel } from './panels/ResultsPanel'
+import { AutopilotPanel } from './panels/AutopilotPanel'
 import { OnboardingScreen } from './components/OnboardingScreen'
 import type { SystemPaths } from './types'
 import { getPathPresets } from './utils/path-presets'
@@ -232,7 +232,7 @@ function AppContent() {
         {activePanel === 'evals' && <EvalsPanel />}
         {activePanel === 'settings' && <SettingsPanel />}
         {activePanel === 'mcp' && <McpPanel />}
-        {activePanel === 'replay' && <ReplayPanel />}
+        {activePanel === 'autopilot' && <AutopilotPanel />}
       </Layout>
     </>
   )
