@@ -46,3 +46,4 @@ agents/agent-files/
 
 # Visual regression diff artifacts (regenerate on failure locally / CI)
 tests/screenshots/diffs/
+analytics/data/
