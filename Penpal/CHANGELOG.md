@@ -4,6 +4,16 @@ All notable changes to Penpal are documented here. Format follows [Keep a Change
 
 ## [Unreleased]
 
+## [0.4.3] - 2026-05-08
+
+### Fixed
+- **Critical dispatch bug: PRs were never pushed from GitHub issues.** `createPod()` was unconditionally creating a second nested worktree on a fresh `penpal/task-pod-<id>` branch, overriding the worktree the pipeline had already prepared on the issue branch. All solver commits landed on the wrong branch; the pipeline's push step saw 0 commits ahead of main and no-oped. Fixed: github-pipeline pods now skip `createIsolatedWorkspace` and reuse the prepared worktree. `completePodWithPR` is also short-circuited for pipeline pods — the pipeline driver owns push + PR creation.
+- **Sources "Add repository" silently failed on tilde paths.** `addWatchedRepo` called `path.isAbsolute('~/path')` which returns `false`, throwing immediately. `wrapHandler` swallowed the error so the modal closed looking like success. Fixed: tilde expanded before validation; inline error now shown in the modal on failure.
+- **Linear pipeline EBADF crashes.** All `execSync` / `execFileSync` calls in `linear-poller.ts` replaced with async `proxyExecFile` to match `github-pipeline.ts` and avoid Electron's fd table corruption on macOS.
+
+### Added
+- **Autopilot panel.** New nav entry (clock icon) replaces Replay. Shows scheduler running status, task list with enable toggles and last/next run times, and an Add Task form. Backed by the 7 IPC handlers wired in v0.4.2.
+
 ## [0.4.2] - 2026-05-07
 
 ### Added
