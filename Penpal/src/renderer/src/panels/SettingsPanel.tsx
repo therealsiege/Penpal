@@ -497,6 +497,91 @@ function SourcesSection() {
   )
 }
 
+// ── Webhook section ────────────────────────────────────────────────────────────
+
+function WebhookSection() {
+  const [status, setStatus] = useState<{ port: number; running: boolean; url: string; secretConfigured: boolean } | null>(null)
+  const [copied, setCopied] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+    const refresh = () => {
+      window.api.webhookStatus()
+        .then(s => { if (!cancelled) setStatus(s) })
+        .catch(() => { if (!cancelled) setStatus(null) })
+    }
+    refresh()
+    const t = setInterval(refresh, 5000)
+    return () => { cancelled = true; clearInterval(t) }
+  }, [])
+
+  const sectionCardCls = 'space-y-4 bg-[color-mix(in_srgb,var(--c-bg-surface)_85%,transparent)] rounded-lg p-4 border border-[color-mix(in_srgb,var(--c-border)_90%,transparent)]'
+
+  const url = status?.url ?? 'http://localhost:3141/webhook'
+  const running = status?.running ?? false
+  const secretConfigured = status?.secretConfigured ?? false
+
+  const onCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(url)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1500)
+    } catch {
+      // ignore
+    }
+  }
+
+  return (
+    <div className={sectionCardCls}>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-[1.05rem] text-[var(--c-text-primary)] font-medium">GitHub Webhook</p>
+          <p className="text-[0.9rem] text-[var(--c-text-muted)] mt-0.5">
+            Instant pickup for <code className="px-1 py-0.5 rounded bg-[var(--c-bg-elevated)] text-emerald-400 text-[0.85rem]">agent-ready</code> labels — no 60s polling delay.
+          </p>
+        </div>
+        <span
+          className={[
+            'shrink-0 px-2 py-0.5 text-[0.8rem] rounded-full border',
+            running
+              ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
+              : 'bg-zinc-500/10 text-zinc-400 border-zinc-500/30',
+          ].join(' ')}
+        >
+          {running ? 'running' : 'stopped'}
+        </span>
+      </div>
+
+      <div className="space-y-2">
+        <label className="text-[0.875rem] text-[var(--c-text-muted)] block">Local webhook URL</label>
+        <div className="flex items-center gap-2">
+          <code className="flex-1 px-3 py-2 bg-[var(--c-bg-elevated)] border border-[var(--c-border)] rounded-lg text-[0.95rem] font-mono text-[var(--c-text-primary)] truncate">
+            {url}
+          </code>
+          <button
+            type="button"
+            onClick={onCopy}
+            className="shrink-0 px-3 py-2 text-[0.9rem] rounded-md bg-[var(--c-bg-elevated)] text-[var(--c-accent-blue)] border border-[var(--c-border)] hover:bg-[var(--c-border-subtle)] transition-colors"
+          >
+            {copied ? 'Copied' : 'Copy'}
+          </button>
+        </div>
+      </div>
+
+      {!secretConfigured && (
+        <p className="text-[0.875rem] text-amber-400 bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2">
+          No webhook secret configured — set <code className="font-mono">PENPAL_WEBHOOK_SECRET</code> before exposing this URL.
+        </p>
+      )}
+
+      <p className="text-[0.85rem] text-[var(--c-text-muted)] leading-relaxed">
+        Forward this URL to GitHub via ngrok, Cloudflare Tunnel, or router port-forwarding.
+        Set the secret in <code className="px-1 py-0.5 rounded bg-[var(--c-bg-elevated)] font-mono">PENPAL_WEBHOOK_SECRET</code>.
+      </p>
+    </div>
+  )
+}
+
 // ── Concurrency section ────────────────────────────────────────────────────────
 
 function ConcurrencySection() {
@@ -594,6 +679,12 @@ export function SettingsPanel() {
         <section className="mb-8">
           <h2 className="text-[0.9rem] font-semibold text-[var(--c-text-muted)] uppercase tracking-wider mb-4">Sources</h2>
           <SourcesSection />
+        </section>
+
+        {/* Webhook */}
+        <section className="mb-8">
+          <h2 className="text-[0.9rem] font-semibold text-[var(--c-text-muted)] uppercase tracking-wider mb-4">Webhook</h2>
+          <WebhookSection />
         </section>
 
         {/* Concurrency */}

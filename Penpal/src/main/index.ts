@@ -27,6 +27,7 @@ import { registerMcpIpcHandlers } from './mcp-manager'
 import { loadAgentConfigs } from './agents'
 import { registerPtyHandlers, destroyAllPtys, stopPtySweep } from './pty'
 import { startSlackBridge, stopSlackBridge } from './slack-bridge'
+import { startWebhookServer, stopWebhookServer } from './webhook-server'
 import { registerVaultProtocol } from './vault'
 import { startSpawnProxy, stopSpawnProxy } from './spawn-proxy'
 import { startOrchestrator, stopOrchestrator, orchestratorEvents } from './orchestrator'
@@ -179,6 +180,7 @@ app.whenReady().then(() => {
   // 1500ms: network-bound services (Slack websocket, GitHub releases check)
   setTimeout(() => {
     startSlackBridge()
+    startWebhookServer()
     initAutoUpdater()
   }, 1500)
 
@@ -206,6 +208,7 @@ app.on('before-quit', async () => {
   stopPtySweep()
   destroyAllPtys()
   await stopSlackBridge()
+  stopWebhookServer()
   await infraDown()
   stopSpawnProxy()
 })

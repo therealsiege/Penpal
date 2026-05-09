@@ -16,6 +16,7 @@ import { listWorkspaces, cleanupWorkspace } from './workspace-isolation'
 import { getTaskQueue, type TaskStatus } from './dispatch-queue'
 import { getDataDir } from './data-paths'
 import { proxyExecFile } from './spawn-proxy'
+import { getPipelineWorktreePaths } from './github-pipeline'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -100,6 +101,7 @@ async function runTier1(): Promise<number> {
   const now = Date.now()
   const workspaces = listWorkspaces()
   const taskStatusMap = buildTaskStatusMap()
+  const pipelineOwnedPaths = getPipelineWorktreePaths()
 
   for (const ws of workspaces) {
     if (!ws.isolated) continue
@@ -113,6 +115,8 @@ async function runTier1(): Promise<number> {
     // with no matching task are handled by Tier 2 (orphan cleanup) so we
     // don't accidentally race the dispatcher between enqueue and claim.
     if (!status || !TERMINAL_STATUSES.has(status)) continue
+
+    if (pipelineOwnedPaths.has(ws.worktreePath)) continue
 
     const age = now - new Date(ws.createdAt).getTime()
     if (age > config.completedTaskTTL) {

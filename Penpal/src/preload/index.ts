@@ -67,6 +67,7 @@ contextBridge.exposeInMainWorld('api', {
   resumePod: (workflowId: string) => ipcRenderer.invoke('pod:resume', workflowId),
   cancelPod: (workflowId: string) => ipcRenderer.invoke('pod:cancel', workflowId),
   podRetry: (podId: string) => ipcRenderer.invoke('pod:retry', podId),
+  pipelineSweepMerged: () => ipcRenderer.invoke('pipeline:sweep-merged').then(throwOnIpcError),
   mergePr: (prNumber: string, repo: string) => ipcRenderer.invoke('pod:merge-pr', prNumber, repo),
   getPrDiff: (owner: string, repo: string, prNumber: string | number) =>
     ipcRenderer.invoke('pod:get-pr-diff', { owner, repo, prNumber }).then(throwOnIpcError),
@@ -109,6 +110,8 @@ contextBridge.exposeInMainWorld('api', {
   githubRemoveRepo: (owner: string, repo: string) =>
     ipcRenderer.invoke('github:remove-repo', owner, repo),
   githubListRepos: () => ipcRenderer.invoke('github:list-repos'),
+  // Webhook server (instant GitHub issue dispatch)
+  webhookStatus: () => ipcRenderer.invoke('webhook:status'),
   // Linear Issue Poller
   linearPollerStatus: () => ipcRenderer.invoke('linear:status'),
   linearPollNow: () => ipcRenderer.invoke('linear:poll-now'),
@@ -148,8 +151,8 @@ contextBridge.exposeInMainWorld('api', {
     ipcRenderer.invoke('governance:set', partial).then(throwOnIpcError),
   // MCP APIs
   listMcpServers: () => ipcRenderer.invoke('mcp:list'),
-  addMcpServer: (server: any) => ipcRenderer.invoke('mcp:add', server),
-  updateMcpServer: (id: string, updates: any) => ipcRenderer.invoke('mcp:update', id, updates),
+  addMcpServer: (server: Record<string, unknown>) => ipcRenderer.invoke('mcp:add', server),
+  updateMcpServer: (id: string, updates: Record<string, unknown>) => ipcRenderer.invoke('mcp:update', id, updates),
   deleteMcpServer: (id: string) => ipcRenderer.invoke('mcp:delete', id),
   toggleMcpServer: (id: string, enabled: boolean) => ipcRenderer.invoke('mcp:toggle', id, enabled),
   importMcpConfigs: () => ipcRenderer.invoke('mcp:import'),
@@ -248,4 +251,7 @@ contextBridge.exposeInMainWorld('api', {
   replayList: () => ipcRenderer.invoke('replay:list'),
   replayGet: (id: string) => ipcRenderer.invoke('replay:get', id),
   replayDelete: (id: string) => ipcRenderer.invoke('replay:delete', id),
+  reasoningList: () => ipcRenderer.invoke('reasoning:list'),
+  reasoningDelete: (id: string) => ipcRenderer.invoke('reasoning:delete', id),
+  reasoningClear: () => ipcRenderer.invoke('reasoning:clear'),
 })

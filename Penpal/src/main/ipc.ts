@@ -125,7 +125,8 @@ import {
   removeWatchedRepo,
   getWatchedRepos,
 } from './github-issues'
-import { getPipelineIssues, requestPipelineRetry } from './github-pipeline'
+import { getPipelineIssues, requestPipelineRetry, sweepMergedPRs } from './github-pipeline'
+import { getWebhookStatus } from './webhook-server'
 import { getEvalReportAll, getEvalReportAgent, getEvalStats } from './evals'
 import { taskOutcomeCollector } from './evals/collectors/task-outcomes'
 import { podQualityCollector } from './evals/collectors/pod-quality'
@@ -152,6 +153,7 @@ import {
 import type { PreferenceStore } from './preferences'
 import { contextResponse } from './context-response'
 import { getDataDir } from './data-paths'
+import { reasoningBank } from './reasoning-bank'
 
 export const ipcEvents = new EventEmitter()
 
@@ -766,6 +768,11 @@ export function registerIpcHandlers() {
     return requestPipelineRetry(podId)
   }))
 
+  ipcMain.handle('pipeline:sweep-merged', wrapHandler(async () => {
+    const repos = getWatchedRepos().map(r => ({ owner: r.owner, repo: r.repo, localPath: r.localPath }))
+    return sweepMergedPRs(repos)
+  }))
+
   // Retry a failed issue: reset labels to agent-ready so pipeline re-ingests it
   ipcMain.handle('pod:retry-issue', wrapHandler(async (repo: unknown, issueNumber: unknown) => {
     if (typeof repo !== 'string' || !/^[a-zA-Z0-9_.-]+\/[a-zA-Z0-9_.-]+$/.test(repo)) {
@@ -1116,6 +1123,9 @@ export function registerIpcHandlers() {
   }))
   ipcMain.handle('github:list-repos', wrapHandler(() => getWatchedRepos()))
 
+  // ── Webhook server (instant GitHub issue dispatch) ───────────────────────
+  ipcMain.handle('webhook:status', wrapHandler(() => getWebhookStatus()))
+
   // ── Linear issue poller ──────────────────────────────────────────────────
   ipcMain.handle('linear:status', wrapHandler(() => {
     const { getLinearPollerStatus } = require('./linear-poller') as typeof import('./linear-poller')
@@ -1308,6 +1318,23 @@ export function registerIpcHandlers() {
   ipcMain.handle('autopilot:stop', wrapHandler(() => {
     stopAutopilot()
     return getAutopilotStatus()
+  }))
+
+  ipcMain.handle('reasoning:list', wrapHandler(() =>
+    reasoningBank.getAll().sort((a, b) => b.timestamp - a.timestamp),
+  ))
+
+  ipcMain.handle('reasoning:delete', wrapHandler((id: unknown) => {
+    if (typeof id !== 'string') throw new Error('id must be a string')
+    const before = reasoningBank.size()
+    reasoningBank.delete(id)
+    return { ok: reasoningBank.size() < before }
+  }))
+
+  ipcMain.handle('reasoning:clear', wrapHandler(() => {
+    const count = reasoningBank.size()
+    reasoningBank.clear()
+    return { cleared: count }
   }))
 }
 

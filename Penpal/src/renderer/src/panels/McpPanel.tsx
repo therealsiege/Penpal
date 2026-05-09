@@ -20,68 +20,79 @@ export interface McpServer {
 export function McpPanel() {
   const [servers, setServers] = useState<McpServer[]>([])
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const [actionError, setActionError] = useState<string | null>(null)
   const [selectedServer, setSelectedServer] = useState<McpServer | null>(null)
   const [isImporting, setIsImporting] = useState(false)
+  const [pendingId, setPendingId] = useState<string | null>(null)
 
-  // Load servers on mount
-  useEffect(() => {
-    const loadServers = async () => {
-      try {
-        const response = await window.api.listMcpServers()
-        if (response.success && response.data) {
-          setServers(response.data)
-        } else {
-          setError(response.error || 'Failed to load servers')
-        }
-      } catch (err) {
-        setError((err as Error).message)
-      } finally {
-        setLoading(false)
+  const loadServers = async () => {
+    setLoading(true)
+    setLoadError(null)
+    try {
+      const response = await window.api.listMcpServers()
+      if (response.success && response.data) {
+        setServers(response.data)
+      } else {
+        setLoadError(response.error || 'Failed to load servers')
       }
+    } catch (err) {
+      setLoadError((err as Error).message)
+    } finally {
+      setLoading(false)
     }
+  }
 
+  useEffect(() => {
     loadServers()
   }, [])
 
   const handleImport = async () => {
     setIsImporting(true)
+    setActionError(null)
     try {
       const response = await window.api.importMcpConfigs()
       if (response.success) {
-        // Reload servers after import
         const loadResponse = await window.api.listMcpServers()
         if (loadResponse.success && loadResponse.data) {
           setServers(loadResponse.data)
+        } else if (loadResponse.error) {
+          setActionError(loadResponse.error)
         }
       } else {
-        setError(response.error || 'Import failed')
+        setActionError(response.error || 'Import failed')
       }
     } catch (err) {
-      setError((err as Error).message)
+      setActionError((err as Error).message)
     } finally {
       setIsImporting(false)
     }
   }
 
   const toggleServer = async (id: string, enabled: boolean) => {
+    setPendingId(id)
+    setActionError(null)
     try {
       const response = await window.api.toggleMcpServer(id, enabled)
       if (response.success) {
-        setServers(prev => prev.map(server => 
+        setServers(prev => prev.map(server =>
           server.id === id ? { ...server, enabled } : server
         ))
       } else {
-        setError(response.error || 'Failed to toggle server')
+        setActionError(response.error || 'Failed to toggle server')
       }
     } catch (err) {
-      setError((err as Error).message)
+      setActionError((err as Error).message)
+    } finally {
+      setPendingId(null)
     }
   }
 
   const deleteServer = async (id: string) => {
     if (!confirm('Are you sure you want to delete this server?')) return
-    
+
+    setPendingId(id)
+    setActionError(null)
     try {
       const response = await window.api.deleteMcpServer(id)
       if (response.success) {
@@ -90,10 +101,12 @@ export function McpPanel() {
           setSelectedServer(null)
         }
       } else {
-        setError(response.error || 'Failed to delete server')
+        setActionError(response.error || 'Failed to delete server')
       }
     } catch (err) {
-      setError((err as Error).message)
+      setActionError((err as Error).message)
+    } finally {
+      setPendingId(null)
     }
   }
 
@@ -107,11 +120,20 @@ export function McpPanel() {
     )
   }
 
-  if (error) {
+  if (loadError) {
     return (
       <PanelBackground>
         <div className="h-full flex items-center justify-center">
-          <div className="text-[1.1rem] text-[var(--c-text-primary)]">Error: {error}</div>
+          <div className="max-w-md text-center">
+            <div className="text-[1.1rem] text-[var(--c-text-primary)] mb-3">Failed to load MCP servers</div>
+            <div className="text-sm text-[var(--c-text-muted)] mb-4 break-words">{loadError}</div>
+            <button
+              onClick={loadServers}
+              className="px-4 py-2 bg-[var(--c-accent)] text-white rounded-lg hover:bg-[color-mix(in_srgb,var(--c-accent)_90%,transparent)] transition-colors"
+            >
+              Retry
+            </button>
+          </div>
         </div>
       </PanelBackground>
     )
@@ -136,6 +158,18 @@ export function McpPanel() {
             <p className="mb-2">Manage your MCP (Model Context Protocol) servers in one unified place.</p>
             <p>Configs are synced to target files (Claude, Cursor, etc.) when changed.</p>
           </div>
+
+          {actionError && (
+            <div className="mb-6 flex items-start justify-between gap-4 rounded-lg border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-800">
+              <div className="break-words">{actionError}</div>
+              <button
+                onClick={() => setActionError(null)}
+                className="shrink-0 px-2 py-1 text-xs text-red-700 hover:bg-red-100 rounded"
+              >
+                Dismiss
+              </button>
+            </div>
+          )}
 
           <div className="mb-6 bg-[color-mix(in_srgb,var(--c-bg-surface)_85%,transparent)] rounded-lg p-4 border border-[color-mix(in_srgb,var(--c-border)_90%,transparent)]">
             <h2 className="text-[1.2rem] font-semibold text-[var(--c-text-heading)] mb-3">Active Servers ({servers.filter(s => s.enabled).length})</h2>
@@ -185,13 +219,14 @@ export function McpPanel() {
                           e.stopPropagation()
                           toggleServer(server.id, !server.enabled)
                         }}
-                        className={`px-3 py-1 rounded text-xs transition-colors ${
-                          server.enabled 
-                            ? 'bg-red-100 text-red-700 hover:bg-red-200' 
+                        disabled={pendingId === server.id}
+                        className={`px-3 py-1 rounded text-xs transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+                          server.enabled
+                            ? 'bg-red-100 text-red-700 hover:bg-red-200'
                             : 'bg-green-100 text-green-700 hover:bg-green-200'
                         }`}
                       >
-                        {server.enabled ? 'Disable' : 'Enable'}
+                        {pendingId === server.id ? '...' : server.enabled ? 'Disable' : 'Enable'}
                       </button>
                     </div>
                   </div>
@@ -207,11 +242,11 @@ export function McpPanel() {
                 <button
                   onClick={() => {
                     deleteServer(selectedServer.id)
-                    setSelectedServer(null)
                   }}
-                  className="px-3 py-1 bg-red-100 text-red-700 rounded hover:bg-red-200 transition-colors"
+                  disabled={pendingId === selectedServer.id}
+                  className="px-3 py-1 bg-red-100 text-red-700 rounded hover:bg-red-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  Delete
+                  {pendingId === selectedServer.id ? 'Deleting...' : 'Delete'}
                 </button>
               </div>
               
@@ -274,14 +309,25 @@ export function McpPanel() {
 
           <div className="bg-[color-mix(in_srgb,var(--c-bg-surface)_85%,transparent)] rounded-lg p-4 border border-[color-mix(in_srgb,var(--c-border)_90%,transparent)]">
             <h2 className="text-[1.2rem] font-semibold text-[var(--c-text-heading)] mb-3">Add New Server</h2>
-            <p className="text-[var(--c-text-primary)] mb-4">
+            <p className="text-[var(--c-text-primary)] mb-2">
               Add a new MCP server to your configuration. Templates are available to get you started.
             </p>
+            <p className="text-sm text-[var(--c-text-muted)] mb-4">
+              In-app server creation is not yet implemented. For now, add servers directly to <code className="font-mono">~/.mcp.json</code> or <code className="font-mono">~/sidekick/.mcp.json</code> and use Import Existing Configs above.
+            </p>
             <div className="flex gap-4">
-              <button className="px-4 py-2 bg-[var(--c-accent)] text-white rounded-lg hover:bg-[color-mix(in_srgb,var(--c-accent)_90%,transparent)] transition-colors">
+              <button
+                disabled
+                title="Coming soon"
+                className="px-4 py-2 bg-[var(--c-accent)] text-white rounded-lg opacity-50 cursor-not-allowed"
+              >
                 Add from Template
               </button>
-              <button className="px-4 py-2 border border-[var(--c-border)] rounded-lg hover:bg-[color-mix(in_srgb,var(--c-bg-elevated)_85%,transparent)] transition-colors">
+              <button
+                disabled
+                title="Coming soon"
+                className="px-4 py-2 border border-[var(--c-border)] rounded-lg opacity-50 cursor-not-allowed"
+              >
                 Manual Configuration
               </button>
             </div>

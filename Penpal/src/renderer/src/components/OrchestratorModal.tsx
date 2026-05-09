@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useAppearanceStore } from '../stores/appearance-store'
 import type {
   PodWorkflow,
@@ -96,6 +96,133 @@ function formatElapsedMs(ms: number): string {
 type Phase = 'plan' | 'execute' | 'validate'
 const MODEL_OPTIONS = ['opus', 'sonnet', 'haiku', 'ollama:qwen3-coder:30b']
 const TIMEOUT_MULTIPLIERS = [1, 2, 5]
+
+// ── Pod activity hook — polls logs for a single active pod ───────────────────
+
+interface PodLogEntry {
+  podId: string
+  agentRole: 'solver' | 'reviewer' | 'executor' | 'system'
+  stream: 'stdout' | 'stderr' | 'system'
+  line: string
+  timestamp: number
+  seq: number
+}
+
+interface PodActivity {
+  lastLine: PodLogEntry | null
+  added: number
+  removed: number
+}
+
+function usePodActivity(podId: string | undefined, active: boolean): PodActivity {
+  const [activity, setActivity] = useState<PodActivity>({ lastLine: null, added: 0, removed: 0 })
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  useEffect(() => {
+    if (!podId || !active) {
+      setActivity({ lastLine: null, added: 0, removed: 0 })
+      return
+    }
+
+    const fetchLogs = async () => {
+      try {
+        const res = await window.api.getPodLogs(podId) as { backlog?: PodLogEntry[]; error?: string } | undefined
+        const lines = res?.backlog ?? []
+        let added = 0
+        let removed = 0
+        let lastStdout: PodLogEntry | null = null
+        for (const entry of lines) {
+          if (entry.stream === 'stdout' && entry.agentRole !== 'system' && entry.line.trim()) {
+            lastStdout = entry
+          }
+          if (/^\+[^+]/.test(entry.line)) added++
+          else if (/^-[^-]/.test(entry.line)) removed++
+        }
+        setActivity({ lastLine: lastStdout, added, removed })
+      } catch {
+        // silently ignore — non-critical telemetry
+      }
+    }
+
+    void fetchLogs()
+    timerRef.current = setInterval(() => { void fetchLogs() }, 3000)
+    return () => {
+      if (timerRef.current !== null) clearInterval(timerRef.current)
+    }
+  }, [podId, active])
+
+  return activity
+}
+
+// ── Phase elapsed timer — ticks every second ─────────────────────────────────
+
+function usePhaseElapsed(updatedAt: number | undefined, active: boolean): string {
+  const [elapsed, setElapsed] = useState('')
+
+  useEffect(() => {
+    if (!updatedAt || !active) { setElapsed(''); return }
+    const tick = () => setElapsed(formatElapsedMs(Date.now() - updatedAt))
+    tick()
+    const id = setInterval(tick, 1000)
+    return () => clearInterval(id)
+  }, [updatedAt, active])
+
+  return elapsed
+}
+
+// ── PodActivityBar — compact live metadata strip below the card body ──────────
+
+const ROLE_LINE_COLOR: Record<string, string> = {
+  solver:   'text-amber-400',
+  reviewer: 'text-violet-400',
+  executor: 'text-sky-400',
+}
+
+function PodActivityBar({ pod }: { pod: PodWorkflow }) {
+  const active = !['complete', 'failed'].includes(pod.status)
+  const activity = usePodActivity(pod.id, active)
+  const phaseLabel = pod.status
+  const elapsed = usePhaseElapsed(pod.updatedAt, active)
+
+  if (!active) return null
+
+  const roleColor = ROLE_LINE_COLOR[pod.status === 'solving' || pod.status === 'feedback' ? 'solver'
+    : pod.status === 'reviewing' ? 'reviewer'
+    : 'executor'] ?? 'text-[var(--c-text-faint)]'
+
+  const truncated = activity.lastLine
+    ? activity.lastLine.line.slice(0, 80) + (activity.lastLine.line.length > 80 ? '…' : '')
+    : null
+
+  return (
+    <div className="px-4 pb-3 flex flex-col gap-1">
+      <div className="flex items-center gap-2 flex-wrap">
+        {elapsed && (
+          <span className="text-[11px] text-[var(--c-text-faint)] tabular-nums">
+            {phaseLabel} {elapsed}
+          </span>
+        )}
+        {pod.iteration > 1 && (
+          <span className="text-[10px] px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 font-medium">
+            iter {pod.iteration}
+          </span>
+        )}
+        {(activity.added > 0 || activity.removed > 0) && (
+          <span className="text-[11px] font-mono tabular-nums text-[var(--c-text-faint)]">
+            <span className="text-emerald-400">+{activity.added}</span>
+            {' / '}
+            <span className="text-red-400">-{activity.removed}</span>
+          </span>
+        )}
+      </div>
+      {truncated && (
+        <p className={`text-[11px] font-mono truncate leading-snug ${roleColor}`} title={activity.lastLine?.line}>
+          {truncated}
+        </p>
+      )}
+    </div>
+  )
+}
 
 // ── DispatchContent — unified issue + pod board ─────────────────────────────
 
@@ -585,6 +712,10 @@ function IssueCard({
             </div>
           ))}
         </div>
+      )}
+
+      {pod && !['complete', 'failed'].includes(pod.status) && !expanded && (
+        <PodActivityBar pod={pod} />
       )}
 
       {card.taskStatus === 'failed' && (() => {

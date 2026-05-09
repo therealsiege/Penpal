@@ -199,6 +199,19 @@ export class ReasoningBank {
     return [...this.patterns]
   }
 
+  delete(id: string): void {
+    const idx = this.patterns.findIndex(p => p.id === id)
+    if (idx !== -1) {
+      this.patterns.splice(idx, 1)
+      this.save()
+    }
+  }
+
+  clear(): void {
+    this.patterns = []
+    this.save()
+  }
+
   size(): number {
     return this.patterns.length
   }

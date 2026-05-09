@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { usePolling } from '../hooks/usePolling'
 import { PanelBackground } from '../components/PanelBackground'
 import type { EvalAgentReport, EvalStats, SpotCheck, SpotCheckAgreement } from '../types'
@@ -547,6 +547,195 @@ function SpotCheckSection() {
   )
 }
 
+function relativeTime(timestamp: number): string {
+  const diffMs = Date.now() - timestamp
+  const diffSec = Math.floor(diffMs / 1000)
+  if (diffSec < 60) return `${diffSec}s ago`
+  const diffMin = Math.floor(diffSec / 60)
+  if (diffMin < 60) return `${diffMin}m ago`
+  const diffHr = Math.floor(diffMin / 60)
+  if (diffHr < 24) return `${diffHr}h ago`
+  return `${Math.floor(diffHr / 24)}d ago`
+}
+
+const TASK_TYPE_COLORS: Record<string, string> = {
+  feature: 'bg-indigo-900/60 text-indigo-300',
+  fix: 'bg-red-900/60 text-red-300',
+  refactor: 'bg-amber-900/60 text-amber-300',
+  config: 'bg-slate-700/60 text-slate-300',
+  test: 'bg-emerald-900/60 text-emerald-300',
+  docs: 'bg-sky-900/60 text-sky-300',
+  unknown: 'bg-zinc-800/60 text-zinc-400',
+}
+
+function PatternCard({
+  pattern,
+  onDelete,
+}: {
+  pattern: PodPattern
+  onDelete: (id: string) => void
+}) {
+  const [deleting, setDeleting] = useState(false)
+  const summary = pattern.solverSummary.length > 120
+    ? pattern.solverSummary.slice(0, 119) + '…'
+    : pattern.solverSummary
+  const typeColor = TASK_TYPE_COLORS[pattern.taskType] ?? TASK_TYPE_COLORS.unknown
+
+  const handleDelete = useCallback(async () => {
+    setDeleting(true)
+    try {
+      await onDelete(pattern.id)
+    } finally {
+      setDeleting(false)
+    }
+  }, [pattern.id, onDelete])
+
+  return (
+    <div className="rounded-lg border border-[var(--c-border)] bg-[var(--c-bg-surface)]/60 px-4 py-3 flex flex-col gap-2">
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2 min-w-0">
+          <span className={`shrink-0 px-2 py-0.5 rounded-full text-xs font-semibold ${typeColor}`}>
+            {pattern.taskType}
+          </span>
+          <span
+            className={`shrink-0 text-xs font-semibold ${pattern.passed ? 'text-emerald-400' : 'text-red-400'}`}
+          >
+            {pattern.passed ? 'pass' : 'fail'}
+          </span>
+          <span className="text-xs text-[var(--c-text-muted)] shrink-0">
+            {pattern.iterations} iter
+          </span>
+        </div>
+        <div className="flex items-center gap-3 shrink-0">
+          <span className="text-xs text-[var(--c-text-faint)]">{relativeTime(pattern.timestamp)}</span>
+          <button
+            type="button"
+            onClick={handleDelete}
+            disabled={deleting}
+            aria-label={`Delete pattern: ${pattern.task.slice(0, 40)}`}
+            className="text-[var(--c-text-muted)] hover:text-red-400 disabled:opacity-40 transition-colors rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-red-400/50"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="w-3.5 h-3.5" aria-hidden="true">
+              <path fillRule="evenodd" d="M5 3.25V4H2.75a.75.75 0 0 0 0 1.5h.3l.815 8.15A1.5 1.5 0 0 0 5.357 15h5.285a1.5 1.5 0 0 0 1.493-1.35l.815-8.15h.3a.75.75 0 0 0 0-1.5H11v-.75A2.25 2.25 0 0 0 8.75 1h-1.5A2.25 2.25 0 0 0 5 3.25Zm2.25-.75a.75.75 0 0 0-.75.75V4h3v-.75a.75.75 0 0 0-.75-.75h-1.5ZM6.05 6a.75.75 0 0 1 .787.713l.275 5.5a.75.75 0 0 1-1.498.075l-.275-5.5A.75.75 0 0 1 6.05 6Zm3.9 0a.75.75 0 0 1 .712.787l-.275 5.5a.75.75 0 0 1-1.498-.075l.275-5.5a.75.75 0 0 1 .786-.712Z" clipRule="evenodd" />
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      {summary && (
+        <p className="text-xs text-[var(--c-text-secondary)] leading-relaxed">{summary}</p>
+      )}
+    </div>
+  )
+}
+
+function ReasoningPatternsSection() {
+  const [open, setOpen] = useState(false)
+  const [patterns, setPatterns] = useState<PodPattern[]>([])
+  const [loading, setLoading] = useState(false)
+  const [clearing, setClearing] = useState(false)
+  const [clearedCount, setClearedCount] = useState<number | null>(null)
+
+  const fetchPatterns = useCallback(async () => {
+    setLoading(true)
+    try {
+      const result = await window.api.reasoningList()
+      setPatterns(Array.isArray(result) ? result : [])
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (open) {
+      void fetchPatterns()
+    }
+  }, [open, fetchPatterns])
+
+  const handleDelete = useCallback(async (id: string) => {
+    await window.api.reasoningDelete(id)
+    setPatterns(prev => prev.filter(p => p.id !== id))
+  }, [])
+
+  const handleClear = useCallback(async () => {
+    setClearing(true)
+    try {
+      const res = await window.api.reasoningClear()
+      setClearedCount(res.cleared)
+      setPatterns([])
+    } finally {
+      setClearing(false)
+    }
+  }, [])
+
+  return (
+    <div className="flex flex-col gap-3">
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        aria-expanded={open}
+        className="flex items-center justify-between w-full group focus:outline-none focus-visible:ring-2 focus-visible:ring-white/30 rounded"
+      >
+        <h2 className="text-sm font-bold text-[var(--c-text-heading)] tracking-tight">
+          Reasoning Patterns
+        </h2>
+        <span className="text-[var(--c-text-muted)] group-hover:text-[var(--c-text-primary)] transition-colors text-xs">
+          {open ? '▲ collapse' : '▼ expand'}
+        </span>
+      </button>
+
+      {open && (
+        <>
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-[var(--c-text-secondary)]">
+              {loading ? 'Loading…' : (
+                <>
+                  <span className="font-semibold text-[var(--c-text-bright)]">{patterns.length}</span> stored pattern{patterns.length !== 1 ? 's' : ''}
+                </>
+              )}
+              {clearedCount !== null && !loading && patterns.length === 0 && (
+                <span className="ml-2 text-[var(--c-text-muted)]">({clearedCount} cleared)</span>
+              )}
+            </span>
+            {patterns.length > 0 && (
+              <button
+                type="button"
+                onClick={handleClear}
+                disabled={clearing}
+                aria-busy={clearing}
+                aria-label="Clear all reasoning patterns"
+                className="px-3 py-1 rounded bg-red-700 hover:bg-red-600 disabled:opacity-50 text-xs font-semibold text-white transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-red-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
+              >
+                {clearing ? 'Clearing…' : 'Clear All'}
+              </button>
+            )}
+          </div>
+
+          {!loading && patterns.length === 0 ? (
+            <div className="rounded-xl bg-[var(--c-bg-surface)]/50 border border-[var(--c-border-subtle)] px-5 py-6 text-center text-[var(--c-text-muted)] text-sm">
+              No patterns stored yet. Patterns are recorded when pods complete.
+            </div>
+          ) : (
+            <div className="flex flex-col gap-2 max-h-96 overflow-y-auto pr-1">
+              {loading ? (
+                <>
+                  {[0, 1, 2].map(i => (
+                    <div key={i} className="animate-pulse rounded-lg border border-[var(--c-border)] bg-[var(--c-bg-surface)]/60 px-4 py-3 h-16" />
+                  ))}
+                </>
+              ) : (
+                patterns.map(p => (
+                  <PatternCard key={p.id} pattern={p} onDelete={handleDelete} />
+                ))
+              )}
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  )
+}
+
 export function EvalsPanel() {
   const { data: reports, loading: reportsLoading, error: reportsError } = usePolling<EvalAgentReport[]>(
     () => window.api.evalsReportAll(),
@@ -649,6 +838,7 @@ export function EvalsPanel() {
         <DpoPairsSection />
         <PodCombosSection />
         <SpotCheckSection />
+        <ReasoningPatternsSection />
       </div>
     </PanelBackground>
   )

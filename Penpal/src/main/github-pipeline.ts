@@ -30,7 +30,7 @@ const RETRY_BACKOFF_MS = [2 * 60_000, 10 * 60_000, 30 * 60_000, 60 * 60_000] as 
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
-export type PipelineStage = 'executing' | 'done' | 'failed'
+export type PipelineStage = 'executing' | 'done' | 'failed' | 'archived'
 
 export interface PipelineIssue {
   number: number
@@ -55,6 +55,9 @@ export interface PipelineIssue {
   maxRetries?: number
   /** Backoff timestamp — pipeline driver waits until Date.now() >= nextRetryAt before retrying. */
   nextRetryAt?: number
+  prUrl?: string
+  prNumber?: number
+  archivedAt?: number
 }
 
 interface RepoConfig {
@@ -346,13 +349,19 @@ async function createIssueBranch(localPath: string, issueNumber: number, slug: s
   }
 }
 
+interface PushPRResult {
+  created: boolean
+  prUrl?: string
+  prNumber?: number
+}
+
 async function pushBranchAndCreatePR(
   config: RepoConfig,
   localPath: string,
   branch: string,
   issueNumber: number,
   title: string,
-): Promise<boolean> {
+): Promise<PushPRResult> {
   localPath = expandHome(localPath)
   console.log(`[github-pipeline] pushBranchAndCreatePR: cwd=${localPath}, branch=${branch}`)
   try {
@@ -379,7 +388,7 @@ async function pushBranchAndCreatePR(
     console.log(`[github-pipeline] ${branch} is ${ahead} commits ahead of origin/${baseBranch}`)
     if (ahead === 0) {
       console.log(`[github-pipeline] Nothing to push for ${branch}`)
-      return false
+      return { created: false }
     }
 
     await execFileAsync('git', ['push', '-u', 'origin', branch], {
@@ -387,7 +396,7 @@ async function pushBranchAndCreatePR(
     })
     console.log(`[github-pipeline] Pushed ${branch} to origin`)
     const prBody = `Closes #${issueNumber}\n\nAutomated implementation by Penny pod (solver + reviewer + executor).`
-    await execFileAsync('gh', [
+    const { stdout: prOut } = await execFileAsync('gh', [
       'pr', 'create',
       '--repo', `${config.owner}/${config.repo}`,
       '--head', branch,
@@ -396,10 +405,13 @@ async function pushBranchAndCreatePR(
       '--body', prBody,
     ], { cwd: localPath, encoding: 'utf-8', timeout: 30_000 })
     console.log(`[github-pipeline] PR created for ${branch}`)
-    return true
+    const urlMatch = prOut.match(/https:\/\/github\.com\/[^\s]+\/pull\/(\d+)/)
+    const prUrl = urlMatch?.[0]
+    const prNumber = urlMatch?.[1] ? parseInt(urlMatch[1], 10) : undefined
+    return { created: true, prUrl, prNumber }
   } catch (err) {
     console.error(`[github-pipeline] Failed to push/PR for ${branch}:`, formatGitError(err))
-    return false
+    return { created: false }
   }
 }
 
@@ -687,10 +699,22 @@ async function startRetryAttempt(config: RepoConfig, tracked: PipelineIssue): Pr
   }
 }
 
+const MERGED_SWEEP_INTERVAL_MS = 5 * 60_000
+let lastMergedSweep = 0
+let mergedSweepInFlight: Promise<{ swept: number }> | null = null
+
 /** Drive all active pipeline issues. Called every 15s. */
 export async function drivePipeline(repos: RepoConfig[]): Promise<void> {
+  if (Date.now() - lastMergedSweep >= MERGED_SWEEP_INTERVAL_MS && !mergedSweepInFlight) {
+    lastMergedSweep = Date.now()
+    sweepMergedPRs(repos).catch(err =>
+      console.error('[github-pipeline] sweepMergedPRs failed:', err),
+    )
+  }
+
   for (const tracked of state.issues) {
     if (tracked.stage === 'done') continue
+    if (tracked.stage === 'archived') continue
 
     if (tracked.stage === 'failed' && tracked.nextRetryAt != null) {
       const maxRetries = tracked.maxRetries ?? getMaxPodRetries()
@@ -732,22 +756,24 @@ export async function drivePipeline(repos: RepoConfig[]): Promise<void> {
     // ── Pod complete: push + PR ──
     if (pod.status === 'complete') {
       const gitCwd = tracked.worktreePath ?? expandHome(config.localPath)
-      const prCreated = await pushBranchAndCreatePR(
+      const prResult = await pushBranchAndCreatePR(
         config, gitCwd, tracked.branch!, tracked.number,
         `[${tracked.repo.split('/')[1]}#${tracked.number}] ${tracked.title}`,
       )
+      if (prResult.prUrl) tracked.prUrl = prResult.prUrl
+      if (prResult.prNumber !== undefined) tracked.prNumber = prResult.prNumber
       if (tracked.worktreePath) await cleanupWorktree(config.localPath, tracked.worktreePath)
 
       tracked.stage = 'done'
       tracked.updatedAt = Date.now()
-      const doneLabel = prCreated ? 'pr-ready' : 'agent-done'
+      const doneLabel = prResult.created ? 'pr-ready' : 'agent-done'
       await Promise.allSettled([
         setLabel(config, tracked.number, ['agent-executing'], doneLabel),
         addComment(config, tracked.number,
-          `**Implementation complete** (${pod.iteration} iteration${pod.iteration > 1 ? 's' : ''})${prCreated ? '\nA pull request has been created for review.' : ''}`,
+          `**Implementation complete** (${pod.iteration} iteration${pod.iteration > 1 ? 's' : ''})${prResult.created ? '\nA pull request has been created for review.' : ''}`,
         ),
         postPipelineNotification(
-          `:white_check_mark: *${tracked.repo}#${tracked.number}* done (pod ${pod.id})${prCreated ? ' — PR created' : ''}\n<https://github.com/${tracked.repo}/issues/${tracked.number}|View issue>`,
+          `:white_check_mark: *${tracked.repo}#${tracked.number}* done (pod ${pod.id})${prResult.created ? ' — PR created' : ''}\n<https://github.com/${tracked.repo}/issues/${tracked.number}|View issue>`,
           ':white_check_mark:',
         ),
       ])
@@ -820,6 +846,155 @@ export async function drivePipeline(repos: RepoConfig[]): Promise<void> {
 /** Get pipeline issues for dashboard/IPC visibility. */
 export function getPipelineIssues(): PipelineIssue[] {
   return state.issues
+}
+
+/**
+ * Worktree paths owned by tracked pipeline issues that have not yet been
+ * archived. Workspace GC consults this set so it doesn't race the merge
+ * sweep on cleanup.
+ */
+export function getPipelineWorktreePaths(): Set<string> {
+  const paths = new Set<string>()
+  for (const issue of state.issues) {
+    if (issue.stage === 'archived') continue
+    if (!issue.worktreePath) continue
+    paths.add(expandHome(issue.worktreePath))
+  }
+  return paths
+}
+
+interface SweepDeps {
+  now?: () => number
+}
+
+interface PrViewResponse {
+  state?: string
+  mergedAt?: string | null
+}
+
+async function readPrState(repoKey: string, prNumber: number): Promise<PrViewResponse | null> {
+  try {
+    const { stdout } = await proxyExecFile('gh', [
+      'pr', 'view', String(prNumber),
+      '--repo', repoKey,
+      '--json', 'state,mergedAt',
+    ], { timeout: 20_000 })
+    const trimmed = stdout.trim()
+    if (!trimmed) return null
+    return JSON.parse(trimmed) as PrViewResponse
+  } catch (err) {
+    console.error(`[github-pipeline] gh pr view ${repoKey}#${prNumber} failed:`, formatGitError(err))
+    return null
+  }
+}
+
+async function deleteRemoteBranch(repoKey: string, branch: string): Promise<boolean> {
+  try {
+    const refPath = `heads/${branch}`
+    await proxyExecFile('gh', [
+      'api', '-X', 'DELETE',
+      `repos/${repoKey}/git/refs/${refPath}`,
+    ], { timeout: 20_000 })
+    return true
+  } catch (err) {
+    const msg = formatGitError(err)
+    if (msg.includes('Reference does not exist') || msg.includes('Not Found') || msg.includes('422')) {
+      return true
+    }
+    console.error(`[github-pipeline] Failed to delete remote branch ${repoKey}:${branch}:`, msg)
+    return false
+  }
+}
+
+function deriveRepoKey(issue: PipelineIssue): string {
+  return issue.repo
+}
+
+function deriveLocalPath(issue: PipelineIssue, repos: RepoConfig[]): string | null {
+  const cfg = repos.find(r => `${r.owner}/${r.repo}` === issue.repo)
+  if (!cfg) return null
+  return expandHome(cfg.localPath)
+}
+
+function extractPrNumber(issue: PipelineIssue): number | null {
+  if (typeof issue.prNumber === 'number' && Number.isFinite(issue.prNumber)) {
+    return issue.prNumber
+  }
+  if (issue.prUrl) {
+    const m = issue.prUrl.match(/\/pull\/(\d+)/)
+    if (m?.[1]) {
+      const n = parseInt(m[1], 10)
+      if (Number.isFinite(n)) return n
+    }
+  }
+  return null
+}
+
+/**
+ * Sweep tracked pipeline issues whose PRs have been merged or closed.
+ * Merged PRs trigger remote-branch deletion and local worktree cleanup.
+ * Closed PRs are archived without deleting anything.
+ */
+export async function sweepMergedPRs(
+  repos: RepoConfig[],
+  deps: SweepDeps = {},
+): Promise<{ swept: number }> {
+  if (mergedSweepInFlight) return mergedSweepInFlight
+  const nowFn = deps.now ?? Date.now
+
+  const work = (async (): Promise<{ swept: number }> => {
+    const candidates = state.issues.filter(i => i.stage === 'done' && !!i.prUrl)
+    let swept = 0
+
+    for (const tracked of candidates) {
+      try {
+        const repoKey = deriveRepoKey(tracked)
+        const prNumber = extractPrNumber(tracked)
+        if (!prNumber) continue
+
+        const pr = await readPrState(repoKey, prNumber)
+        if (!pr) continue
+
+        const stateLower = (pr.state || '').toLowerCase()
+        const merged = !!pr.mergedAt || stateLower === 'merged'
+        const closed = stateLower === 'closed' && !merged
+        if (!merged && !closed) continue
+
+        if (merged) {
+          if (tracked.branch) {
+            await deleteRemoteBranch(repoKey, tracked.branch).catch(err => {
+              console.error(`[github-pipeline] deleteRemoteBranch error #${tracked.number}:`, err)
+            })
+          }
+          if (tracked.worktreePath) {
+            const localPath = deriveLocalPath(tracked, repos)
+            if (localPath) {
+              await cleanupWorktree(localPath, tracked.worktreePath).catch(err => {
+                console.error(`[github-pipeline] cleanupWorktree error #${tracked.number}:`, err)
+              })
+            }
+          }
+        }
+
+        tracked.stage = 'archived'
+        tracked.archivedAt = nowFn()
+        tracked.updatedAt = nowFn()
+        swept++
+      } catch (err) {
+        console.error(`[github-pipeline] sweep error for ${tracked.repo}#${tracked.number}:`, err)
+      }
+    }
+
+    if (swept > 0) saveState()
+    return { swept }
+  })()
+
+  mergedSweepInFlight = work
+  try {
+    return await work
+  } finally {
+    mergedSweepInFlight = null
+  }
 }
 
 export function requestPipelineRetry(podId: string): { ok: true } | { error: string } {

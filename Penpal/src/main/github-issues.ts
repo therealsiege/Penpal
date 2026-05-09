@@ -635,6 +635,31 @@ export async function pollGithubIssuesNow(): Promise<{ enqueued: number }> {
   return { enqueued: await executePollOnce() }
 }
 
+const WEBHOOK_DEBOUNCE_MS = 5_000
+const lastWebhookTrigger = new Map<string, number>()
+
+export function triggerWebhookPoll(owner: string, repo: string): void {
+  const repoKey = `${owner}/${repo}`
+  const config = REPOS.find(r => r.owner === owner && r.repo === repo)
+  if (!config) {
+    console.log(`[github-issues] webhook ignored — ${repoKey} is not in the watch list`)
+    return
+  }
+
+  const now = Date.now()
+  const last = lastWebhookTrigger.get(repoKey) ?? 0
+  if (now - last < WEBHOOK_DEBOUNCE_MS) {
+    console.log(`[github-issues] webhook debounced for ${repoKey} (${now - last}ms since last)`)
+    return
+  }
+  lastWebhookTrigger.set(repoKey, now)
+
+  console.log(`[github-issues] webhook → polling ${repoKey} now`)
+  executePollOnce().catch(err => {
+    console.error(`[github-issues] webhook-triggered poll failed:`, err)
+  })
+}
+
 /** Consolidate tracked issues — remove duplicates, keep most recent entry per issue. */
 export function consolidateTrackedIssues(): { removed: number } {
   const seen = new Map<string, TrackedIssue>()

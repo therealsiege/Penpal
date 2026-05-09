@@ -2,6 +2,7 @@ import fs from 'fs'
 import path from 'path'
 import os from 'os'
 import { SIDEKICK_ROOT, HOME_DIR } from '../main/paths'
+import { getDataDir } from './data-paths'
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
@@ -34,13 +35,14 @@ function readJsonSafe(filePath: string): Record<string, unknown> | null {
 }
 
 function writeJsonAtomic(filePath: string, data: unknown) {
+  fs.mkdirSync(path.dirname(filePath), { recursive: true })
   const tmpFilePath = `${filePath}.tmp-${Date.now()}`
   fs.writeFileSync(tmpFilePath, JSON.stringify(data, null, 2) + '\n')
   fs.renameSync(tmpFilePath, filePath)
 }
 
 function getMasterConfigPath(): string {
-  return path.join(SIDEKICK_ROOT, '.penpal', 'mcp-servers.json')
+  return path.join(getDataDir(), 'mcp-servers.json')
 }
 
 function getTargetConfigPath(target: 'claude-global' | 'claude-project' | 'cursor' | 'vscode'): string {
@@ -417,9 +419,7 @@ export function syncToTargets(): void {
 /**
  * Perform a health check on an MCP server by spawning it and testing the handshake
  */
-export async function checkServerHealth(server: McpServer): Promise<'healthy' | 'unreachable' | 'never-checked'> {
-  // For now, we just return "never-checked" as a placeholder
-  // In a full implementation, this would actually spawn the server and test connectivity
+export async function checkServerHealth(_server: McpServer): Promise<'healthy' | 'unreachable' | 'never-checked'> {
   return 'never-checked'
 }
 

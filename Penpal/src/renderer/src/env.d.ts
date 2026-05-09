@@ -73,6 +73,7 @@ declare global {
       resumePod: (workflowId: string) => Promise<boolean>
       cancelPod: (workflowId: string) => Promise<boolean>
       podRetry: (podId: string) => Promise<{ ok?: true; error?: string }>
+      pipelineSweepMerged: () => Promise<{ swept: number }>
       mergePr: (prNumber: string, repo: string) => Promise<unknown>
       getPrDiff: (owner: string, repo: string, prNumber: string | number) => Promise<{
         title: string
@@ -153,6 +154,8 @@ declare global {
       githubAddRepo: (owner: string, repo: string, localPath: string) => Promise<{ ok: boolean }>
       githubRemoveRepo: (owner: string, repo: string) => Promise<{ ok: boolean }>
       githubListRepos: () => Promise<{ owner: string; repo: string; localPath: string }[]>
+      // Webhook server (instant GitHub issue dispatch)
+      webhookStatus: () => Promise<{ port: number; running: boolean; url: string; secretConfigured: boolean }>
       // Linear Issue Poller
       linearPollerStatus: () => Promise<{ running: boolean; polling: boolean }>
       linearPollNow: () => Promise<{ enqueued: number }>
@@ -254,7 +257,7 @@ declare global {
       updateMcpServer: (id: string, updates: Partial<Omit<import('./types').ManagedMcpServer, 'id'>>) => Promise<{ success: boolean; data?: import('./types').ManagedMcpServer; error?: string }>
       deleteMcpServer: (id: string) => Promise<{ success: boolean; deleted?: boolean; error?: string }>
       toggleMcpServer: (id: string, enabled: boolean) => Promise<{ success: boolean; toggled?: boolean; error?: string }>
-      importMcpConfigs: () => Promise<{ success: boolean; data?: import('./types').ManagedMcpServer[]; error?: string }>
+      importMcpConfigs: () => Promise<{ success: boolean; data?: { imported: number; conflicts: string[]; duplicates: string[] }; error?: string }>
       getMcpTemplates: () => Promise<{ success: boolean; data?: import('./types').ManagedMcpServer[]; error?: string }>
       syncMcpTargets: () => Promise<{ success: boolean; error?: string }>
       // Session Replay
@@ -272,6 +275,23 @@ declare global {
       autopilotToggle: (taskId: string, enabled: boolean) => Promise<{ toggled: boolean; error?: string }>
       autopilotStart: () => Promise<{ enabled: boolean; scheduledTasks: import('./types').ScheduledTask[]; nextCheck: string | null }>
       autopilotStop: () => Promise<{ enabled: boolean; scheduledTasks: import('./types').ScheduledTask[]; nextCheck: string | null }>
+      reasoningList: () => Promise<PodPattern[]>
+      reasoningDelete: (id: string) => Promise<{ ok: boolean }>
+      reasoningClear: () => Promise<{ cleared: number }>
     }
   }
+}
+
+interface PodPattern {
+  id: string
+  task: string
+  taskType: 'refactor' | 'feature' | 'fix' | 'config' | 'test' | 'docs' | 'unknown'
+  filesModified: string[]
+  durationMs: number
+  iterations: number
+  selfFixes: number
+  passed: boolean
+  solverSummary: string
+  reviewerVerdict: string
+  timestamp: number
 }
