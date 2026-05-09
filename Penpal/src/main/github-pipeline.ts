@@ -23,6 +23,10 @@ import { createPod, getPodStatus, type PodWorkflow } from './pods'
 import { atomicWrite } from './atomic-store'
 import { postPipelineNotification, dmOwner } from './slack-bridge'
 import { getDataDir } from './data-paths'
+import { getMaxConcurrentPods, getMaxPodRetries } from './pod-governance'
+import { getActivePodCount as getActiveTaskCount } from './dispatch-queue'
+
+const RETRY_BACKOFF_MS = [2 * 60_000, 10 * 60_000, 30 * 60_000, 60 * 60_000] as const
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -42,12 +46,15 @@ export interface PipelineIssue {
   branchCreationError?: string
   lastError?: string
   runtimeProfile?: string
+  presetId?: string
   podWorkflowId?: string
   /** Last pod status we saw — used to detect transitions for comments. */
   lastPodStatus?: string
   /** Auto-retry tracking */
   retryCount?: number
   maxRetries?: number
+  /** Backoff timestamp — pipeline driver waits until Date.now() >= nextRetryAt before retrying. */
+  nextRetryAt?: number
 }
 
 interface RepoConfig {
@@ -65,11 +72,21 @@ interface GHIssue {
 
 // ── Concurrency ─────────────────────────────────────────────────────────────
 
-/** Max pods running at once. Set to Infinity to disable the cap. */
-export const MAX_CONCURRENT_PODS = 10
+export function getActivePodCount(repoOrLocalPath?: string): number {
+  const active = state.issues.filter(p => p.stage === 'executing')
+  if (!repoOrLocalPath) return active.length
+  const target = expandHome(repoOrLocalPath)
+  const pipelineCount = active.filter(p => {
+    if (p.repo === repoOrLocalPath) return true
+    if (p.worktreePath && expandHome(p.worktreePath).startsWith(target)) return true
+    return false
+  }).length
+  const taskCount = getActiveTaskCount(target)
+  return pipelineCount + taskCount
+}
 
-export function getActivePodCount(): number {
-  return state.issues.filter(p => p.stage === 'executing').length
+export function getMaxConcurrentPodsForRepo(): number {
+  return getMaxConcurrentPods()
 }
 
 // ── Label helpers ────────────────────────────────────────────────────────────
@@ -463,9 +480,10 @@ function buildPodTask(repoKey: string, issue: GHIssue, branch?: string): string 
 export async function ingestIssue(config: RepoConfig, issue: GHIssue): Promise<PipelineIssue> {
   const repoKey = `${config.owner}/${config.repo}`
 
-  // Concurrency guard — don't launch if already at cap
-  if (getActivePodCount() >= MAX_CONCURRENT_PODS) {
-    console.log(`[github-pipeline] Concurrency cap (${MAX_CONCURRENT_PODS}) reached, deferring #${issue.number}`)
+  const maxConcurrent = getMaxConcurrentPodsForRepo()
+  const repoActive = getActivePodCount(repoKey)
+  if (repoActive >= maxConcurrent) {
+    console.log(`[github-pipeline] Per-repo concurrency cap (${maxConcurrent}) reached for ${repoKey} (${repoActive} active), deferring #${issue.number}`)
     const deferred = state.issues.find(i => i.repo === repoKey && i.number === issue.number)
     if (deferred) return deferred
     return { number: issue.number, repo: repoKey, title: issue.title, body: issue.body || '', stage: 'failed', priority: 'normal', ingestedAt: Date.now(), updatedAt: Date.now() }
@@ -477,10 +495,9 @@ export async function ingestIssue(config: RepoConfig, issue: GHIssue): Promise<P
     return existing
   }
 
-  // Preserve escalated profile from previous retry, then repo-level override, then label-derived
-  // Reset retryCount on manual re-queue so issues get fresh attempts
   const runtimeProfile = existing?.runtimeProfile || config.runtimeProfile || deriveRuntimeProfile(issue.labels)
   const retryCount = 0
+  const maxRetries = getMaxPodRetries()
   const presetId = derivePresetFromLabels(issue.labels)
 
   const entry: PipelineIssue = {
@@ -491,8 +508,9 @@ export async function ingestIssue(config: RepoConfig, issue: GHIssue): Promise<P
     stage: 'executing',
     priority: 'normal',
     runtimeProfile,
+    presetId,
     retryCount,
-    maxRetries: 2,
+    maxRetries,
     ingestedAt: Date.now(),
     updatedAt: Date.now(),
   }
@@ -598,10 +616,95 @@ function podStageLabel(status: string): string {
   }
 }
 
+async function startRetryAttempt(config: RepoConfig, tracked: PipelineIssue): Promise<void> {
+  const slug = tracked.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 40).replace(/-$/, '')
+  const resolvedPath = expandHome(config.localPath)
+
+  if (tracked.worktreePath) {
+    await cleanupWorktree(config.localPath, tracked.worktreePath)
+  }
+  if (tracked.branch) {
+    await execFileAsync('git', ['branch', '-D', tracked.branch], {
+      cwd: resolvedPath, encoding: 'utf-8', timeout: 10_000,
+    }).catch(() => {})
+    await execFileAsync('git', ['worktree', 'prune'], {
+      cwd: resolvedPath, encoding: 'utf-8', timeout: 10_000,
+    }).catch(() => {})
+  }
+
+  tracked.branch = undefined
+  tracked.worktreePath = undefined
+  tracked.podWorkflowId = undefined
+  tracked.lastPodStatus = undefined
+  tracked.nextRetryAt = undefined
+  tracked.stage = 'executing'
+  tracked.updatedAt = Date.now()
+
+  const wt = await createIssueWorktree(resolvedPath, tracked.number, slug)
+  if (wt.ok) {
+    tracked.branch = wt.branch
+    tracked.worktreePath = wt.worktreePath
+  } else {
+    const br = await createIssueBranch(resolvedPath, tracked.number, slug)
+    if (br.ok) {
+      tracked.branch = br.branch
+    } else {
+      tracked.stage = 'failed'
+      tracked.lastError = `Retry branch creation failed: ${br.error}`
+      saveState()
+      return
+    }
+  }
+
+  const podCwd = tracked.worktreePath || resolvedPath
+  const presetId = tracked.presetId || derivePresetFromLabels([])
+  const issueLike: GHIssue = {
+    number: tracked.number,
+    title: tracked.title,
+    body: tracked.body,
+    labels: [],
+  }
+  const task = buildPodTask(tracked.repo, issueLike, tracked.branch)
+
+  try {
+    const wf = createPod(task, {
+      name: `${tracked.repo}#${tracked.number}`,
+      cwd: podCwd,
+      presetId,
+      runtimeProfile: tracked.runtimeProfile,
+      priority: tracked.priority,
+      issueNumber: tracked.number,
+      issueRepo: tracked.repo,
+    })
+    tracked.podWorkflowId = wf.id
+    tracked.lastPodStatus = wf.status
+    saveState()
+    await setLabel(config, tracked.number, ['agent-failed'], 'agent-executing')
+  } catch (err) {
+    tracked.stage = 'failed'
+    tracked.lastError = `Retry pod creation failed: ${(err as Error).message}`
+    saveState()
+  }
+}
+
 /** Drive all active pipeline issues. Called every 15s. */
 export async function drivePipeline(repos: RepoConfig[]): Promise<void> {
   for (const tracked of state.issues) {
-    if (tracked.stage === 'done' || tracked.stage === 'failed') continue
+    if (tracked.stage === 'done') continue
+
+    if (tracked.stage === 'failed' && tracked.nextRetryAt != null) {
+      const maxRetries = tracked.maxRetries ?? getMaxPodRetries()
+      const retries = tracked.retryCount ?? 0
+      if (retries < maxRetries && Date.now() >= tracked.nextRetryAt) {
+        const config = repos.find(r => `${r.owner}/${r.repo}` === tracked.repo)
+        if (!config) continue
+        console.log(`[github-pipeline] Retry kickoff #${tracked.number} (attempt ${retries}/${maxRetries})`)
+        await startRetryAttempt(config, tracked)
+      }
+      continue
+    }
+
+    if (tracked.stage === 'failed') continue
     if (!tracked.podWorkflowId) continue
 
     const config = repos.find(r => `${r.owner}/${r.repo}` === tracked.repo)
@@ -651,75 +754,60 @@ export async function drivePipeline(repos: RepoConfig[]): Promise<void> {
       saveState()
     }
 
-    // ── Pod failed — auto-retry or give up ──
     if (pod.status === 'failed') {
-      if (tracked.worktreePath) await cleanupWorktree(config.localPath, tracked.worktreePath)
-
       const retries = tracked.retryCount ?? 0
-      const maxRetries = tracked.maxRetries ?? 2
+      const maxRetries = tracked.maxRetries ?? getMaxPodRetries()
       const errorMsg = pod.error || 'Pod failed without error message'
       const isBranchError = errorMsg.includes('already exists') || errorMsg.includes('worktree')
 
       if (retries < maxRetries) {
-        // ── Auto-retry: clean up + escalate profile ──
-        tracked.retryCount = retries + 1
-        tracked.lastError = errorMsg
-        tracked.updatedAt = Date.now()
+        const attemptIndex = Math.min(retries, RETRY_BACKOFF_MS.length - 1)
+        const backoffMs = RETRY_BACKOFF_MS[attemptIndex]
+        const nextRetryAt = Date.now() + backoffMs
+        const nextAttempt = retries + 1
 
-        // Escalate profile on retry: economic → sonnet → max
         const prevProfile = tracked.runtimeProfile || 'economic'
         const escalation: Record<string, string> = { haiku: 'sonnet', economic: 'sonnet', sonnet: 'max' }
         const nextProfile = isBranchError ? prevProfile : (escalation[prevProfile] || prevProfile)
         if (nextProfile !== prevProfile) {
           tracked.runtimeProfile = nextProfile
-          console.log(`[github-pipeline] Escalating #${tracked.number} profile: ${prevProfile} → ${nextProfile}`)
         }
 
-        // Clean up stale branch that might block the next attempt
-        if (tracked.branch) {
-          const localPath = expandHome(config.localPath)
-          await execFileAsync('git', ['branch', '-D', tracked.branch], {
-            cwd: localPath, encoding: 'utf-8', timeout: 10_000,
-          }).catch(() => {})
-          await execFileAsync('git', ['worktree', 'prune'], {
-            cwd: localPath, encoding: 'utf-8', timeout: 10_000,
-          }).catch(() => {})
-        }
-
-        // Re-queue: reset stage so ingestIssue picks it up again
+        tracked.retryCount = nextAttempt
+        tracked.lastError = errorMsg
+        tracked.nextRetryAt = nextRetryAt
         tracked.stage = 'failed'
-        tracked.branch = undefined
-        tracked.worktreePath = undefined
-        tracked.podWorkflowId = undefined
+        tracked.lastPodStatus = pod.status
+        tracked.updatedAt = Date.now()
 
-        const escalateNote = nextProfile !== prevProfile ? ` — escalating to **${nextProfile}**` : ''
-        console.log(`[github-pipeline] Auto-retry #${tracked.number} (attempt ${tracked.retryCount}/${maxRetries})${isBranchError ? ' — cleaned stale branch' : ''}${escalateNote}`)
+        const minutes = Math.max(1, Math.round(backoffMs / 60_000))
+        console.log(`[github-pipeline] #${tracked.number} failed — scheduling retry ${nextAttempt}/${maxRetries} in ${minutes}m`)
 
-        await Promise.allSettled([
-          addComment(config, tracked.number,
-            `**Auto-retrying** (attempt ${tracked.retryCount}/${maxRetries})${escalateNote}${isBranchError ? ' — cleaned stale branch/worktree' : ''}\n\n\`\`\`\n${errorMsg.slice(0, 500)}\n\`\`\``,
-          ),
-          setLabel(config, tracked.number, ['agent-executing'], 'agent-ready'),
-        ])
+        await addComment(config, tracked.number,
+          `🔄 Pod failed (attempt ${nextAttempt}/${maxRetries}) — retrying in ${minutes} minute${minutes > 1 ? 's' : ''}.`,
+        )
         saveState()
       } else {
-        // ── Max retries exceeded — give up ──
         tracked.stage = 'failed'
         tracked.lastError = errorMsg
+        tracked.nextRetryAt = undefined
         tracked.updatedAt = Date.now()
+        const totalAttempts = retries + 1
         const errorBody = `\`\`\`\n${errorMsg.slice(0, 1000)}\n\`\`\``
+
+        if (tracked.worktreePath) await cleanupWorktree(config.localPath, tracked.worktreePath)
 
         await Promise.allSettled([
           setLabel(config, tracked.number, ['agent-executing'], 'agent-failed'),
           addComment(config, tracked.number,
-            `**Pod failed** after ${retries + 1} attempts (${pod.iteration}/${pod.maxIterations} iterations)\n\n${errorBody}\n\nTo retry, remove \`agent-failed\` and add \`agent-ready\`.`,
+            `**Pod permanently failed** after ${totalAttempts} attempt${totalAttempts > 1 ? 's' : ''}.\n\n${errorBody}\n\nTo retry, remove \`agent-failed\` and add \`agent-ready\`.`,
           ),
           postPipelineNotification(
-            `:x: *${tracked.repo}#${tracked.number}* pod failed after ${retries + 1} attempts\n<https://github.com/${tracked.repo}/issues/${tracked.number}|View issue>`,
+            `:x: *${tracked.repo}#${tracked.number}* pod failed after ${totalAttempts} attempts\n<https://github.com/${tracked.repo}/issues/${tracked.number}|View issue>`,
             ':x:',
           ),
           dmOwner(
-            `:x: *${tracked.repo}#${tracked.number}* pod failed after ${retries + 1} attempts: ${errorMsg.slice(0, 200)}\n<https://github.com/${tracked.repo}/issues/${tracked.number}|View issue>`,
+            `:x: *${tracked.repo}#${tracked.number}* pod failed after ${totalAttempts} attempts: ${errorMsg.slice(0, 200)}\n<https://github.com/${tracked.repo}/issues/${tracked.number}|View issue>`,
             ':x:',
           ),
         ])
@@ -732,6 +820,23 @@ export async function drivePipeline(repos: RepoConfig[]): Promise<void> {
 /** Get pipeline issues for dashboard/IPC visibility. */
 export function getPipelineIssues(): PipelineIssue[] {
   return state.issues
+}
+
+export function requestPipelineRetry(podId: string): { ok: true } | { error: string } {
+  const tracked = state.issues.find(i => i.podWorkflowId === podId)
+  if (!tracked) return { error: `No pipeline issue found for pod ${podId}` }
+  if (tracked.stage !== 'failed') {
+    return { error: `Pipeline issue is not in failed state (current: ${tracked.stage})` }
+  }
+  const maxRetries = tracked.maxRetries ?? getMaxPodRetries()
+  const retries = tracked.retryCount ?? 0
+  if (retries >= maxRetries) {
+    return { error: `Pipeline issue exhausted retries (${retries}/${maxRetries})` }
+  }
+  tracked.nextRetryAt = Date.now()
+  tracked.updatedAt = Date.now()
+  saveState()
+  return { ok: true }
 }
 
 /** Remove a pipeline issue so it can be re-ingested on the next poll. */

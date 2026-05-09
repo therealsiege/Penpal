@@ -199,6 +199,13 @@ function DispatchContent({ onClose, onNavigate }: { onClose?: () => void; onNavi
     try { await window.api.cancelPod(id); toast('Cancelled', 'success') }
     catch { toast('Failed to cancel', 'error') }
   }, [toast])
+  const handlePodRetryNow = useCallback(async (id: string) => {
+    try {
+      const res = await window.api.podRetry(id) as { ok?: true; error?: string }
+      if (res?.error) toast(res.error, 'error')
+      else toast('Retry scheduled', 'success')
+    } catch { toast('Failed to schedule retry', 'error') }
+  }, [toast])
   const handlePodOverride = useCallback(async (
     wfId: string, phase: string, override: { model?: string; timeoutMultiplier?: number },
   ) => {
@@ -403,6 +410,7 @@ function DispatchContent({ onClose, onNavigate }: { onClose?: () => void; onNavi
                         onPodCancel={handlePodCancel}
                         onPodOverride={handlePodOverride}
                         onViewLogs={handleViewPodLogs}
+                        onPodRetryNow={handlePodRetryNow}
                       />
                     ))}
                   </div>
@@ -446,6 +454,7 @@ function DispatchContent({ onClose, onNavigate }: { onClose?: () => void; onNavi
                   onPodCancel={handlePodCancel}
                   onPodOverride={handlePodOverride}
                   onViewLogs={handleViewPodLogs}
+                  onPodRetryNow={handlePodRetryNow}
                 />
               ))}
             </div>
@@ -478,7 +487,7 @@ function DispatchContent({ onClose, onNavigate }: { onClose?: () => void; onNavi
 // ── IssueCard — GitHub issue enriched with pod workflow ──────────────────────
 
 function IssueCard({
-  card, pod, onRefresh, onPodPause, onPodResume, onPodCancel, onPodOverride, onViewLogs,
+  card, pod, onRefresh, onPodPause, onPodResume, onPodCancel, onPodOverride, onViewLogs, onPodRetryNow,
 }: {
   card: DisplayCard
   pod?: PodWorkflow
@@ -488,6 +497,7 @@ function IssueCard({
   onPodCancel: (id: string) => void
   onPodOverride: (wfId: string, phase: string, override: { model?: string; timeoutMultiplier?: number }) => void
   onViewLogs?: (pod: PodWorkflow) => void
+  onPodRetryNow?: (podId: string) => void
 }) {
   const [expanded, setExpanded] = useState(false)
   const [overrideModel, setOverrideModel] = useState(MODEL_OPTIONS[0])
@@ -576,6 +586,46 @@ function IssueCard({
           ))}
         </div>
       )}
+
+      {card.taskStatus === 'failed' && (() => {
+        const reason = card.failureReason || pod?.error || ''
+        const reasonShort = reason.length > 100 ? reason.slice(0, 100) + '…' : reason
+        const retryCount = card.retryCount ?? 0
+        const maxRetries = card.maxRetries ?? 0
+        const podId = card.podWorkflowId || pod?.id
+        const canRetry = !!podId && !!onPodRetryNow && retryCount < maxRetries
+        return (
+          <div className="px-4 pb-3 flex flex-col gap-2 border-t border-red-500/20">
+            <div className="flex items-center gap-2 mt-2">
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-red-400">Failed</span>
+              {retryCount > 0 && (
+                <span className="text-[11px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                  Attempt {retryCount}{maxRetries > 0 ? `/${maxRetries}` : ''}
+                </span>
+              )}
+              {card.nextRetryAt != null && card.nextRetryAt > Date.now() && (
+                <span className="text-[11px] text-[var(--c-text-faint)]">
+                  next retry in {Math.max(1, Math.round((card.nextRetryAt - Date.now()) / 60_000))}m
+                </span>
+              )}
+            </div>
+            {reasonShort && (
+              <div className="text-[12px] text-red-300 bg-red-500/10 border border-red-500/20 rounded px-2 py-1.5 font-mono break-all">
+                {reasonShort}
+              </div>
+            )}
+            {canRetry && (
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); onPodRetryNow!(podId!) }}
+                className="self-start text-[12px] px-3 py-1 rounded-lg bg-blue-600/70 hover:bg-blue-500 border border-blue-500/40 text-white transition-colors"
+              >
+                Retry Now
+              </button>
+            )}
+          </div>
+        )
+      })()}
 
       {/* Expanded pod detail — phase config + overrides */}
       {expanded && pod && (

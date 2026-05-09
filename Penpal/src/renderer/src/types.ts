@@ -480,6 +480,11 @@ export interface GitHubIssueCard {
   podAgents?: { role: 'solver' | 'reviewer' | 'executor'; agentId: string; active: boolean }[]
   ingestedAt: number
   url: string
+  retryCount?: number
+  maxRetries?: number
+  nextRetryAt?: number
+  failureReason?: string
+  podWorkflowId?: string
 }
 
 /** Main-process GitHub issue poller status (githubPollerStatus IPC). */

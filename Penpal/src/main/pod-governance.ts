@@ -10,6 +10,7 @@
 import fs from 'fs'
 import path from 'path'
 import { execSync } from 'child_process'
+import { atomicWrite } from './atomic-store'
 import { getDataDir } from './data-paths'
 
 // ── Types ───────────────────────────────────────────────────────────────────
@@ -74,7 +75,34 @@ export const DEFAULT_RULES: GovernanceRule[] = [
 
 const RULES_PATH = path.join(getDataDir(), 'governance-rules.json')
 
-export function loadRules(): GovernanceRule[] {
+export const DEFAULT_MAX_CONCURRENT_PODS = 2
+export const MAX_ALLOWED_CONCURRENT_PODS = 8
+export const DEFAULT_MAX_POD_RETRIES = 3
+export const MAX_ALLOWED_POD_RETRIES = 10
+
+export interface GovernanceConfig {
+  rules: GovernanceRule[]
+  maxConcurrentPods: number
+  maxPodRetries: number
+}
+
+function clampConcurrency(value: unknown): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return DEFAULT_MAX_CONCURRENT_PODS
+  const rounded = Math.round(value)
+  if (rounded < 1) return 1
+  if (rounded > MAX_ALLOWED_CONCURRENT_PODS) return MAX_ALLOWED_CONCURRENT_PODS
+  return rounded
+}
+
+function clampRetries(value: unknown): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return DEFAULT_MAX_POD_RETRIES
+  const rounded = Math.round(value)
+  if (rounded < 0) return 0
+  if (rounded > MAX_ALLOWED_POD_RETRIES) return MAX_ALLOWED_POD_RETRIES
+  return rounded
+}
+
+function readGovernanceFile(): unknown {
   try {
     if (fs.existsSync(RULES_PATH)) {
       const raw = fs.readFileSync(RULES_PATH, 'utf-8').trim()
@@ -83,7 +111,61 @@ export function loadRules(): GovernanceRule[] {
   } catch (err) {
     console.warn('[governance] Failed to parse governance-rules.json, using defaults:', err)
   }
-  return DEFAULT_RULES
+  return null
+}
+
+export function loadGovernanceConfig(): GovernanceConfig {
+  const parsed = readGovernanceFile()
+  if (Array.isArray(parsed)) {
+    return {
+      rules: parsed as GovernanceRule[],
+      maxConcurrentPods: DEFAULT_MAX_CONCURRENT_PODS,
+      maxPodRetries: DEFAULT_MAX_POD_RETRIES,
+    }
+  }
+  if (parsed && typeof parsed === 'object') {
+    const obj = parsed as Record<string, unknown>
+    const rules = Array.isArray(obj.rules) ? (obj.rules as GovernanceRule[]) : DEFAULT_RULES
+    const maxConcurrentPods = clampConcurrency(obj.maxConcurrentPods)
+    const maxPodRetries = clampRetries(obj.maxPodRetries)
+    return { rules, maxConcurrentPods, maxPodRetries }
+  }
+  return {
+    rules: DEFAULT_RULES,
+    maxConcurrentPods: DEFAULT_MAX_CONCURRENT_PODS,
+    maxPodRetries: DEFAULT_MAX_POD_RETRIES,
+  }
+}
+
+export function saveGovernanceConfig(partial: Partial<GovernanceConfig>): GovernanceConfig {
+  const current = loadGovernanceConfig()
+  const next: GovernanceConfig = {
+    rules: Array.isArray(partial.rules) ? partial.rules : current.rules,
+    maxConcurrentPods: partial.maxConcurrentPods != null
+      ? clampConcurrency(partial.maxConcurrentPods)
+      : current.maxConcurrentPods,
+    maxPodRetries: partial.maxPodRetries != null
+      ? clampRetries(partial.maxPodRetries)
+      : current.maxPodRetries,
+  }
+  try {
+    atomicWrite(RULES_PATH, next)
+  } catch (err) {
+    console.warn('[governance] Failed to write governance-rules.json:', err)
+  }
+  return next
+}
+
+export function loadRules(): GovernanceRule[] {
+  return loadGovernanceConfig().rules
+}
+
+export function getMaxConcurrentPods(): number {
+  return loadGovernanceConfig().maxConcurrentPods
+}
+
+export function getMaxPodRetries(): number {
+  return loadGovernanceConfig().maxPodRetries
 }
 
 // ── Governance Checks ───────────────────────────────────────────────────────

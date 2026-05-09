@@ -125,7 +125,7 @@ import {
   removeWatchedRepo,
   getWatchedRepos,
 } from './github-issues'
-import { getPipelineIssues } from './github-pipeline'
+import { getPipelineIssues, requestPipelineRetry } from './github-pipeline'
 import { getEvalReportAll, getEvalReportAgent, getEvalStats } from './evals'
 import { taskOutcomeCollector } from './evals/collectors/task-outcomes'
 import { podQualityCollector } from './evals/collectors/pod-quality'
@@ -144,6 +144,11 @@ import {
   removeProfileMcpServer,
   updateAgentTools,
 } from './config-reader'
+import {
+  loadGovernanceConfig,
+  saveGovernanceConfig,
+  type GovernanceConfig,
+} from './pod-governance'
 import type { PreferenceStore } from './preferences'
 import { contextResponse } from './context-response'
 import { getDataDir } from './data-paths'
@@ -756,6 +761,11 @@ export function registerIpcHandlers() {
     return cancelPod(workflowId)
   }))
 
+  ipcMain.handle('pod:retry', wrapHandler((podId: unknown) => {
+    if (typeof podId !== 'string' || !podId) throw new Error('podId must be a non-empty string')
+    return requestPipelineRetry(podId)
+  }))
+
   // Retry a failed issue: reset labels to agent-ready so pipeline re-ingests it
   ipcMain.handle('pod:retry-issue', wrapHandler(async (repo: unknown, issueNumber: unknown) => {
     if (typeof repo !== 'string' || !/^[a-zA-Z0-9_.-]+\/[a-zA-Z0-9_.-]+$/.test(repo)) {
@@ -1164,6 +1174,29 @@ export function registerIpcHandlers() {
     if (typeof agentId !== 'string') throw new Error('agentId must be a string')
     if (!Array.isArray(tools)) throw new Error('tools must be an array')
     return updateAgentTools(agentId, tools as string[])
+  }))
+
+  ipcMain.handle('governance:get', wrapHandler(() => loadGovernanceConfig()))
+
+  ipcMain.handle('governance:set', wrapHandler((partial: unknown) => {
+    if (!partial || typeof partial !== 'object' || Array.isArray(partial)) {
+      throw new Error('governance config must be an object')
+    }
+    const obj = partial as Record<string, unknown>
+    const next: Partial<GovernanceConfig> = {}
+    if (obj.maxConcurrentPods !== undefined) {
+      if (typeof obj.maxConcurrentPods !== 'number') throw new Error('maxConcurrentPods must be a number')
+      next.maxConcurrentPods = obj.maxConcurrentPods
+    }
+    if (obj.maxPodRetries !== undefined) {
+      if (typeof obj.maxPodRetries !== 'number') throw new Error('maxPodRetries must be a number')
+      next.maxPodRetries = obj.maxPodRetries
+    }
+    if (obj.rules !== undefined) {
+      if (!Array.isArray(obj.rules)) throw new Error('rules must be an array')
+      next.rules = obj.rules as GovernanceConfig['rules']
+    }
+    return saveGovernanceConfig(next)
   }))
 
   // ── Session Replay ────────────────────────────────────────────────────

@@ -476,6 +476,15 @@ export function releaseTask(taskId: string, reason?: string): boolean {
   return true
 }
 
+export function getActivePodCount(project: string): number {
+  if (typeof project !== 'string' || project.length === 0) return 0
+  const target = normalizeEnqueueProject(project)
+  return getTasksInternal().filter(t => {
+    if (t.project !== target) return false
+    return t.status === 'assigned' || t.currentStage === 'executing'
+  }).length
+}
+
 export function claimNextTask(
   agentId: string,
   filter?: { project?: string; priority?: TaskPriority },

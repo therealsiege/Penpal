@@ -66,6 +66,7 @@ contextBridge.exposeInMainWorld('api', {
   pausePod: (workflowId: string) => ipcRenderer.invoke('pod:pause', workflowId),
   resumePod: (workflowId: string) => ipcRenderer.invoke('pod:resume', workflowId),
   cancelPod: (workflowId: string) => ipcRenderer.invoke('pod:cancel', workflowId),
+  podRetry: (podId: string) => ipcRenderer.invoke('pod:retry', podId),
   mergePr: (prNumber: string, repo: string) => ipcRenderer.invoke('pod:merge-pr', prNumber, repo),
   getPrDiff: (owner: string, repo: string, prNumber: string | number) =>
     ipcRenderer.invoke('pod:get-pr-diff', { owner, repo, prNumber }).then(throwOnIpcError),
@@ -142,6 +143,9 @@ contextBridge.exposeInMainWorld('api', {
     ipcRenderer.invoke('config:remove-profile-mcp', profile, serverName),
   updateAgentTools: (agentId: string, tools: string[]) =>
     ipcRenderer.invoke('config:update-agent-tools', agentId, tools),
+  governanceGet: () => ipcRenderer.invoke('governance:get').then(throwOnIpcError),
+  governanceSet: (partial: { maxConcurrentPods?: number; maxPodRetries?: number; rules?: unknown[] }) =>
+    ipcRenderer.invoke('governance:set', partial).then(throwOnIpcError),
   // MCP APIs
   listMcpServers: () => ipcRenderer.invoke('mcp:list'),
   addMcpServer: (server: any) => ipcRenderer.invoke('mcp:add', server),

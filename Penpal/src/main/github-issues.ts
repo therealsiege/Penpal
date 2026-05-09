@@ -18,7 +18,7 @@ import os from 'os'
 
 const execFileAsync = promisify(execFile)
 import { getTaskQueue, getTask, type TaskPriority } from './orchestrator'
-import { ingestIssue, drivePipeline, initPipeline, getPipelineIssues, getActivePodCount, MAX_CONCURRENT_PODS } from './github-pipeline'
+import { ingestIssue, drivePipeline, initPipeline, getPipelineIssues, getActivePodCount, getMaxConcurrentPodsForRepo } from './github-pipeline'
 import { getPodStatus } from './pods'
 import { atomicWrite } from './atomic-store'
 import { getAtlasRoot } from './project-paths'
@@ -470,14 +470,15 @@ async function pollOnce(): Promise<number> {
       console.log(`[github-issues] Found ${issues.length} agent-ready issues in ${repoKey}`)
     }
 
+    const maxConcurrent = getMaxConcurrentPodsForRepo()
+
     for (const issue of issues) {
-      // Concurrency cap — skip if at max active pods
-      if (getActivePodCount() >= MAX_CONCURRENT_PODS) {
-        console.log(`[github-issues] Concurrency cap reached (${MAX_CONCURRENT_PODS} active pods), deferring remaining issues`)
+      const repoActive = getActivePodCount(repoKey)
+      if (repoActive >= maxConcurrent) {
+        console.log(`[github-issues] Per-repo concurrency cap (${maxConcurrent}) reached for ${repoKey}, deferring remaining issues`)
         break
       }
 
-      // Already in pipeline? Skip unless terminal
       const pipelineIssues = getPipelineIssues()
       const inPipeline = pipelineIssues.find(p => p.repo === repoKey && p.number === issue.number)
       if (inPipeline && inPipeline.stage !== 'done' && inPipeline.stage !== 'failed') continue
@@ -708,6 +709,12 @@ export interface GitHubIssueCard {
   podAgents?: { role: 'solver' | 'reviewer' | 'executor'; agentId: string; active: boolean }[]
   ingestedAt: number
   url: string
+  /** Pod-pipeline retry tracking — present when the card comes from github-pipeline. */
+  retryCount?: number
+  maxRetries?: number
+  nextRetryAt?: number
+  failureReason?: string
+  podWorkflowId?: string
 }
 
 /** Get kanban-ready cards enriched with live orchestrator task status. */
@@ -756,6 +763,11 @@ export function getGithubIssueCards(): GitHubIssueCard[] {
       taskStage: pi.lastPodStatus || pi.stage, priority: pi.priority,
       assignedAgent: activeAgent, podAgents,
       ingestedAt: pi.ingestedAt, url: `https://github.com/${pi.repo}/issues/${pi.number}`,
+      retryCount: pi.retryCount,
+      maxRetries: pi.maxRetries,
+      nextRetryAt: pi.nextRetryAt,
+      failureReason: pi.lastError,
+      podWorkflowId: pi.podWorkflowId,
     })
   }
 

@@ -72,6 +72,7 @@ declare global {
       pausePod: (workflowId: string) => Promise<boolean>
       resumePod: (workflowId: string) => Promise<boolean>
       cancelPod: (workflowId: string) => Promise<boolean>
+      podRetry: (podId: string) => Promise<{ ok?: true; error?: string }>
       mergePr: (prNumber: string, repo: string) => Promise<unknown>
       getPrDiff: (owner: string, repo: string, prNumber: string | number) => Promise<{
         title: string
@@ -225,6 +226,28 @@ declare global {
       addProfileMcpServer: (profile: string, server: { name: string; command: string; args: string[]; env?: Record<string, string>; cwd?: string }) => Promise<unknown>
       removeProfileMcpServer: (profile: string, serverName: string) => Promise<unknown>
       updateAgentTools: (agentId: string, tools: string[]) => Promise<unknown>
+      governanceGet: () => Promise<{
+        rules: Array<{
+          id: string
+          type: string
+          value: number | string | string[]
+          action: 'warn' | 'pause' | 'fail'
+          message: string
+        }>
+        maxConcurrentPods: number
+        maxPodRetries: number
+      }>
+      governanceSet: (partial: { maxConcurrentPods?: number; maxPodRetries?: number; rules?: unknown[] }) => Promise<{
+        rules: Array<{
+          id: string
+          type: string
+          value: number | string | string[]
+          action: 'warn' | 'pause' | 'fail'
+          message: string
+        }>
+        maxConcurrentPods: number
+        maxPodRetries: number
+      }>
       // MCP Server Management
       listMcpServers: () => Promise<{ success: boolean; data?: import('./types').ManagedMcpServer[]; error?: string }>
       addMcpServer: (server: Omit<import('./types').ManagedMcpServer, 'id'>) => Promise<{ success: boolean; data?: import('./types').ManagedMcpServer; error?: string }>

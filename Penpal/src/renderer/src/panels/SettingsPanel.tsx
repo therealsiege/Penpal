@@ -497,6 +497,82 @@ function SourcesSection() {
   )
 }
 
+// ── Concurrency section ────────────────────────────────────────────────────────
+
+function ConcurrencySection() {
+  const [maxConcurrentPods, setMaxConcurrentPods] = useState<number>(2)
+  const [loaded, setLoaded] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    void window.api.governanceGet()
+      .then(cfg => {
+        if (cancelled) return
+        setMaxConcurrentPods(cfg.maxConcurrentPods)
+        setLoaded(true)
+      })
+      .catch((e: unknown) => {
+        if (cancelled) return
+        setError((e as Error)?.message || 'Failed to load governance config')
+        setLoaded(true)
+      })
+    return () => { cancelled = true }
+  }, [])
+
+  const commit = useCallback(async (next: number) => {
+    const clamped = Math.max(1, Math.min(8, Math.round(next)))
+    setMaxConcurrentPods(clamped)
+    setSaving(true)
+    setError(null)
+    try {
+      const result = await window.api.governanceSet({ maxConcurrentPods: clamped })
+      setMaxConcurrentPods(result.maxConcurrentPods)
+    } catch (e) {
+      setError((e as Error)?.message || 'Failed to save')
+    } finally {
+      setSaving(false)
+    }
+  }, [])
+
+  const sectionCardCls = 'space-y-4 bg-[color-mix(in_srgb,var(--c-bg-surface)_85%,transparent)] rounded-lg p-4 border border-[color-mix(in_srgb,var(--c-border)_90%,transparent)]'
+
+  return (
+    <div className={sectionCardCls}>
+      <div>
+        <p className="text-[1.05rem] text-[var(--c-text-primary)] font-medium">Max parallel pods per repo</p>
+        <p className="text-[0.9rem] text-[var(--c-text-muted)] mt-0.5">
+          How many pod workflows can run simultaneously for a single repository.
+        </p>
+      </div>
+      <div className="flex items-center gap-3">
+        <input
+          type="number"
+          min={1}
+          max={8}
+          step={1}
+          disabled={!loaded || saving}
+          value={maxConcurrentPods}
+          onChange={e => {
+            const n = parseInt(e.target.value, 10)
+            if (Number.isFinite(n)) setMaxConcurrentPods(n)
+          }}
+          onBlur={() => {
+            if (loaded) void commit(maxConcurrentPods)
+          }}
+          className="w-20 px-3 py-2 bg-[var(--c-bg-elevated)] border border-[var(--c-border)] rounded-lg text-[1rem] text-[var(--c-text-primary)] outline-none focus:border-[color-mix(in_srgb,var(--c-accent)_45%,transparent)] disabled:opacity-50"
+        />
+        <span className="text-[0.85rem] text-[var(--c-text-muted)]">range 1–8 · default 2</span>
+        {saving && <span className="text-[0.85rem] text-[var(--c-text-faint)]">saving…</span>}
+      </div>
+      {error && (
+        <p className="text-[0.875rem] text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">{error}</p>
+      )}
+    </div>
+  )
+}
+
 // ── Main panel ─────────────────────────────────────────────────────────────────
 
 export function SettingsPanel() {
@@ -518,6 +594,12 @@ export function SettingsPanel() {
         <section className="mb-8">
           <h2 className="text-[0.9rem] font-semibold text-[var(--c-text-muted)] uppercase tracking-wider mb-4">Sources</h2>
           <SourcesSection />
+        </section>
+
+        {/* Concurrency */}
+        <section className="mb-8">
+          <h2 className="text-[0.9rem] font-semibold text-[var(--c-text-muted)] uppercase tracking-wider mb-4">Concurrency</h2>
+          <ConcurrencySection />
         </section>
 
         {/* Appearance */}
